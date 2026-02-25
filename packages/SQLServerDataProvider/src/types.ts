@@ -7,8 +7,45 @@
  * @module @memberjunction/sqlserver-dataprovider/types
  */
 
-import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
+import { AggregateResult, EntityInfo, ProviderConfigDataBase, RunViewParams, UserInfo } from '@memberjunction/core';
+// Aliased to match the renamed export; the main SQLServerDataProvider file still uses the old name (pre-existing)
+import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import sql from 'mssql';
+
+/**
+ * Holds the output of the SQL-building phase for a RunView call.
+ * Separates SQL construction from execution, enabling batch execution of multiple views.
+ */
+export interface RunViewSQLSpec {
+  /** The main data SELECT query */
+  dataSQL: string;
+  /** Count query — only built when pagination or TOP is used */
+  countSQL: string | null;
+  /** Whether the count query was deemed necessary to run in parallel during build */
+  countIncludedInParallel: boolean;
+  /** Aggregate query — only built when params.Aggregates is provided */
+  aggregateSQL: string | null;
+  /** Validation errors from aggregate expression validation */
+  aggregateValidationErrors: AggregateResult[];
+  /** The resolved EntityInfo for this view */
+  entity: EntityInfo;
+  /** The resolved view entity (may be null for dynamic views) */
+  viewEntity: UserViewEntityExtended | null;
+  /** Original params for post-processing context */
+  params: RunViewParams;
+  /** Timestamp when SQL building started */
+  startTime: Date;
+  /** MaxRows value used (from params or entity default) */
+  maxRowsUsed: number | null;
+  /** Whether this view uses pagination (OFFSET/FETCH) */
+  usingPagination: boolean;
+  /** The UserViewRunID if saveViewResults was used (empty string otherwise) */
+  userViewRunID: string;
+  /** Whether this view used saveViewResults (and thus can't be batched) */
+  hasSaveViewResults: boolean;
+  /** Aggregate query start time for execution timing */
+  aggregateStartTime: number | null;
+}
 
 /**
  * Configuration options for SQL execution with logging support

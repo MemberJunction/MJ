@@ -103,14 +103,15 @@ import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
-import { 
-  ExecuteSQLOptions, 
-  ExecuteSQLBatchOptions, 
-  SQLServerProviderConfigData, 
-  SqlLoggingOptions, 
+import {
+  ExecuteSQLOptions,
+  ExecuteSQLBatchOptions,
+  SQLServerProviderConfigData,
+  SqlLoggingOptions,
   SqlLoggingSession,
   SQLExecutionContext,
-  InternalSQLOptions
+  InternalSQLOptions,
+  RunViewSQLSpec
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
@@ -262,6 +263,9 @@ export class SQLServerDataProvider
 
   // Query cache instance
   private queryCache = new QueryCache();
+
+  // Maximum number of SQL statements to include in a single ExecuteSQLBatch call
+  private static readonly MAX_BATCH_SIZE = 20;
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
@@ -1184,16 +1188,108 @@ export class SQLServerDataProvider
 
   /**
    * Internal implementation of batch query execution.
-   * Runs multiple queries in parallel for efficiency.
+   * Uses ExecuteSQLBatch to combine non-cached queries into a single database roundtrip.
+   * Falls back to individual execution if the batch fails.
    * @param params - Array of query parameters
    * @param contextUser - Optional user context for permissions
    * @returns Array of query results
    */
   protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
-    // Run all queries in parallel
-    const promises = params.map((p) => this.InternalRunQuery(p, contextUser));
-    return Promise.all(promises);
+
+    // Single query doesn't need batching
+    if (params.length <= 1) {
+      return params.length === 1
+        ? [await this.InternalRunQuery(params[0], contextUser)]
+        : [];
+    }
+
+    // Step 1: Validate all queries and process parameters in parallel
+    const prepared = await Promise.all(
+      params.map(async (p, i) => {
+        try {
+          const query = await this.findAndValidateQuery(p, contextUser);
+          const { finalSQL, appliedParameters } = this.processQueryParameters(query, p.Parameters);
+          const cachedResult = this.checkQueryCache(query, p, appliedParameters);
+          return { index: i, query, finalSQL, appliedParameters, cachedResult, error: null as Error | null };
+        } catch (e) {
+          return { index: i, query: null as QueryInfo | null, finalSQL: '', appliedParameters: {} as Record<string, unknown>, cachedResult: null as RunQueryResult | null, error: e as Error };
+        }
+      })
+    );
+
+    // Step 2: Separate cached hits, errors, and queries needing execution
+    const results: RunQueryResult[] = new Array(params.length);
+    const needsExecution: typeof prepared = [];
+
+    for (const item of prepared) {
+      if (item.error) {
+        const errorMessage = item.error instanceof Error ? item.error.message : String(item.error);
+        results[item.index] = {
+          Success: false, QueryID: params[item.index].QueryID,
+          QueryName: params[item.index].QueryName, Results: [],
+          RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: errorMessage,
+        };
+      } else if (item.cachedResult) {
+        results[item.index] = item.cachedResult;
+      } else {
+        needsExecution.push(item);
+      }
+    }
+
+    // Step 3: Batch execute non-cached queries
+    if (needsExecution.length > 0) {
+      try {
+        const sqlStatements = needsExecution.map(item => item.finalSQL);
+        // Chunk into batches of MAX_BATCH_SIZE
+        for (let chunkStart = 0; chunkStart < sqlStatements.length; chunkStart += SQLServerDataProvider.MAX_BATCH_SIZE) {
+          const chunkEnd = Math.min(chunkStart + SQLServerDataProvider.MAX_BATCH_SIZE, sqlStatements.length);
+          const chunkSQL = sqlStatements.slice(chunkStart, chunkEnd);
+          const chunkItems = needsExecution.slice(chunkStart, chunkEnd);
+          const startTime = Date.now();
+
+          const recordsets = await this.ExecuteSQLBatch(chunkSQL, undefined, undefined, contextUser);
+          const executionTime = Date.now() - startTime;
+
+          // Step 4: Post-process each result
+          for (let j = 0; j < chunkItems.length; j++) {
+            const item = chunkItems[j];
+            const rawResult = recordsets[j] || [];
+
+            if (!rawResult) {
+              results[item.index] = {
+                Success: false, QueryID: item.query.ID, QueryName: item.query.Name,
+                Results: [], RowCount: 0, TotalRowCount: 0,
+                ExecutionTime: executionTime, ErrorMessage: 'Error executing query SQL',
+              };
+              continue;
+            }
+
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(rawResult, params[item.index]);
+            this.auditQueryExecution(item.query, params[item.index], item.finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
+            this.cacheQueryResults(item.query, params[item.index].Parameters || {}, rawResult);
+
+            results[item.index] = {
+              Success: true, QueryID: item.query.ID, QueryName: item.query.Name,
+              Results: paginatedResult, RowCount: paginatedResult.length,
+              TotalRowCount: totalRowCount, ExecutionTime: executionTime,
+              ErrorMessage: '', AppliedParameters: item.appliedParameters, CacheHit: false,
+            };
+          }
+        }
+      } catch (batchError) {
+        // Fallback: execute individually
+        LogError(`Batch query execution failed, falling back to individual queries: ${batchError}`);
+        const fallbackResults = await Promise.all(
+          needsExecution.map(item => this.InternalRunQuery(params[item.index], contextUser))
+        );
+        needsExecution.forEach((item, i) => {
+          results[item.index] = fallbackResults[i];
+        });
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -1530,351 +1626,393 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunViewProvider
   /**************************************************************************/
-  protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
-
+  /**
+   * Builds all SQL strings and metadata for a RunView call without executing anything.
+   * This separates SQL construction from execution, enabling batch execution of multiple views.
+   *
+   * Note: When saveViewResults is true, this method DOES execute SQL (via executeSQLForUserViewRunLogging)
+   * as a side effect. The returned spec will have hasSaveViewResults=true in that case.
+   */
+  protected async BuildRunViewSQL(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewSQLSpec> {
     // Log aggregate input for debugging
     if (params?.Aggregates?.length) {
-      LogStatus(`[SQLServerDataProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      LogStatus(`[SQLServerDataProvider] BuildRunViewSQL received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
     }
 
     const startTime = new Date();
-    try {
-      if (params) {
-        const user = contextUser ? contextUser : this.CurrentUser;
-        if (!user) throw new Error(`User not found in metadata and no contextUser provided to RunView()`);
+    const user = contextUser ? contextUser : this.CurrentUser;
+    if (!user) throw new Error(`User not found in metadata and no contextUser provided to RunView()`);
 
-        let viewEntity: any = null,
-          entityInfo: EntityInfo = null;
-        if (params.ViewEntity) viewEntity = params.ViewEntity;
-        else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
-        else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
+    let viewEntity: any = null,
+      entityInfo: EntityInfo = null;
+    if (params.ViewEntity) viewEntity = params.ViewEntity;
+    else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser);
+    else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser);
 
-        if (!viewEntity) {
-          // if we don't have viewEntity, that means it is a dynamic view, so we need EntityName at a minimum
-          if (!params.EntityName || params.EntityName.length === 0) throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
+    if (!viewEntity) {
+      // if we don't have viewEntity, that means it is a dynamic view, so we need EntityName at a minimum
+      if (!params.EntityName || params.EntityName.length === 0) throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
 
-          entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
-          if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
+      entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+      if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
+    } else {
+      entityInfo = this.Entities.find((e) => e.ID === viewEntity.EntityID);
+      if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
+    }
+
+    // check permissions now, this call will throw an error if the user doesn't have permission
+    this.CheckUserReadPermissions(entityInfo.Name, user);
+
+    // get other variaables from params
+    const extraFilter: string = params.ExtraFilter;
+    const userSearchString: string = params.UserSearchString;
+    const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
+    const overrideExcludeFilter: string = params.OverrideExcludeFilter;
+    const saveViewResults: boolean = params.SaveViewResults;
+
+    let topSQL: string = '';
+    // Only use TOP if we're NOT using OFFSET/FETCH pagination
+    const usingPagination = params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0);
+
+    if (params.IgnoreMaxRows === true) {
+      // do nothing, leave it blank, this structure is here to make the code easier to read
+    } else if (usingPagination) {
+      // When using OFFSET/FETCH, don't add TOP clause
+      // do nothing, leave it blank
+    } else if (params.MaxRows && params.MaxRows > 0) {
+      // user provided a max rows, so we use that (but not using pagination)
+      topSQL = 'TOP ' + params.MaxRows;
+    } else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
+      topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
+    }
+
+    const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
+
+    let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
+    // We need countSQL for pagination (to get total count) or when using TOP (to show limited vs total)
+    let countSQL = (usingPagination || (topSQL && topSQL.length > 0)) ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
+    let whereSQL: string = '';
+    let bHasWhere: boolean = false;
+    let userViewRunID: string = '';
+    let hasSaveViewResults = false;
+
+    // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
+    if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
+      const renderedWhere = await this.RenderViewWhereClause(viewEntity, contextUser);
+      whereSQL = `(${renderedWhere})`;
+      bHasWhere = true;
+    }
+
+    // a developer calling the function can provide an additional Extra Filter which is any valid SQL exprssion that can be added to the WHERE clause
+    if (extraFilter && extraFilter.length > 0) {
+      // extra filter is simple- we just AND it to the where clause if it exists, or we add it as a where clause if there was no prior WHERE
+      if (!this.validateUserProvidedSQLClause(extraFilter))
+        throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
+
+      if (bHasWhere) {
+        whereSQL += ` AND (${extraFilter})`;
+      } else {
+        whereSQL = `(${extraFilter})`;
+        bHasWhere = true;
+      }
+    }
+
+    // check for a user provided search string and generate SQL as needed if provided
+    if (userSearchString && userSearchString.length > 0) {
+      if (!this.validateUserProvidedSQLClause(userSearchString))
+        throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
+
+      const sUserSearchSQL: string = this.createViewUserSearchSQL(entityInfo, userSearchString);
+
+      if (sUserSearchSQL.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${sUserSearchSQL})`;
         } else {
-          entityInfo = this.Entities.find((e) => e.ID === viewEntity.EntityID);
-          if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
-        }
-
-        // check permissions now, this call will throw an error if the user doesn't have permission
-        this.CheckUserReadPermissions(entityInfo.Name, user);
-
-        // get other variaables from params
-        const extraFilter: string = params.ExtraFilter;
-        const userSearchString: string = params.UserSearchString;
-        const excludeUserViewRunID: string = params.ExcludeUserViewRunID;
-        const overrideExcludeFilter: string = params.OverrideExcludeFilter;
-        const saveViewResults: boolean = params.SaveViewResults;
-
-        let topSQL: string = '';
-        // Only use TOP if we're NOT using OFFSET/FETCH pagination
-        const usingPagination = params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0);
-        
-        if (params.IgnoreMaxRows === true) {
-          // do nothing, leave it blank, this structure is here to make the code easier to read
-        } else if (usingPagination) {
-          // When using OFFSET/FETCH, don't add TOP clause
-          // do nothing, leave it blank
-        } else if (params.MaxRows && params.MaxRows > 0) {
-          // user provided a max rows, so we use that (but not using pagination)
-          topSQL = 'TOP ' + params.MaxRows;
-        } else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
-          topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
-        }
-
-        const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
-
-        let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
-        // We need countSQL for pagination (to get total count) or when using TOP (to show limited vs total)
-        let countSQL = (usingPagination || (topSQL && topSQL.length > 0)) ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
-        let whereSQL: string = '';
-        let bHasWhere: boolean = false;
-        let userViewRunID: string = '';
-
-        // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
-        if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
-          const renderedWhere = await this.RenderViewWhereClause(viewEntity, contextUser);
-          whereSQL = `(${renderedWhere})`;
+          whereSQL = `(${sUserSearchSQL})`;
           bHasWhere = true;
         }
-
-        // a developer calling the function can provide an additional Extra Filter which is any valid SQL exprssion that can be added to the WHERE clause
-        if (extraFilter && extraFilter.length > 0) {
-          // extra filter is simple- we just AND it to the where clause if it exists, or we add it as a where clause if there was no prior WHERE
-          if (!this.validateUserProvidedSQLClause(extraFilter))
-            throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
-
-          if (bHasWhere) {
-            whereSQL += ` AND (${extraFilter})`;
-          } else {
-            whereSQL = `(${extraFilter})`;
-            bHasWhere = true;
-          }
-        }
-
-        // check for a user provided search string and generate SQL as needed if provided
-        if (userSearchString && userSearchString.length > 0) {
-          if (!this.validateUserProvidedSQLClause(userSearchString))
-            throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
-
-          const sUserSearchSQL: string = this.createViewUserSearchSQL(entityInfo, userSearchString);
-
-          if (sUserSearchSQL.length > 0) {
-            if (bHasWhere) {
-              whereSQL += ` AND (${sUserSearchSQL})`;
-            } else {
-              whereSQL = `(${sUserSearchSQL})`;
-              bHasWhere = true;
-            }
-          }
-        }
-
-        // now, check for an exclude UserViewRunID, or exclusion of ALL prior runs
-        // if provided, we need to exclude the records that were part of that run (or all prior runs)
-        if ((excludeUserViewRunID && excludeUserViewRunID.length > 0) || params.ExcludeDataFromAllPriorViewRuns === true) {
-          let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND`;
-          if (params.ExcludeDataFromAllPriorViewRuns === true)
-            sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
-          else sExcludeSQL += `UserViewRunID=${excludeUserViewRunID})`; // exclude just the run that was provided
-
-          if (overrideExcludeFilter && overrideExcludeFilter.length > 0) {
-            if (!this.validateUserProvidedSQLClause(overrideExcludeFilter))
-              throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
-
-            // add in the OVERRIDE filter with an OR statement, this results in those rows that match the Exclude filter to be included
-            // even if they're in the UserViewRunID that we're excluding
-            sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
-          }
-          if (bHasWhere) {
-            whereSQL += ` AND (${sExcludeSQL})`;
-          } else {
-            whereSQL = `(${sExcludeSQL})`;
-            bHasWhere = true;
-          }
-        }
-
-        // NEXT, apply Row Level Security (RLS)
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-          // user is NOT exempt from RLS, so we need to apply it
-          const rlsWhereClause: string = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-
-          if (rlsWhereClause && rlsWhereClause.length > 0) {
-            if (bHasWhere) {
-              whereSQL += ` AND (${rlsWhereClause})`;
-            } else {
-              whereSQL = `(${rlsWhereClause})`;
-              bHasWhere = true;
-            }
-          }
-        }
-        if (bHasWhere) {
-          viewSQL += ` WHERE ${whereSQL}`;
-          if (countSQL) countSQL += ` WHERE ${whereSQL}`;
-        }
-
-        // figure out the sorting for the view
-        // first check params.OrderBy, that takes first priority
-        // if that's not provided, then we check the view definition for its SortState
-        // if that's not provided we do NOT sort
-        const orderBy: string = params.OrderBy ? params.OrderBy : viewEntity ? viewEntity.OrderByClause : '';
-
-        // if we're saving the view results, we need to wrap the entire SQL statement
-        if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
-          const { executeViewSQL, runID } = await this.executeSQLForUserViewRunLogging(viewEntity.ID, viewEntity.EntityBaseView, whereSQL, orderBy, user);
-          viewSQL = executeViewSQL;
-          userViewRunID = runID;
-        } else if (orderBy && orderBy.length > 0) {
-          // we only add order by if we're not doing run logging. This is becuase the run logging will
-          // add the order by to its SELECT query that pulls from the list of records that were returned
-          // there is no point in ordering the rows as they are saved into an audit list anyway so no order-by above
-          // just here for final step before we execute it.
-          if (!this.validateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
-
-          viewSQL += ` ORDER BY ${orderBy}`;
-        }
-
-        // Apply pagination using OFFSET/FETCH if both MaxRows and StartRow are specified
-        if (params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0) && entityInfo.FirstPrimaryKey) {
-          // If no ORDER BY was already added, add one based on primary key (required for OFFSET/FETCH)
-          if (!orderBy) {
-            viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
-          }
-          viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
-        }
-
-        // Build aggregate SQL if aggregates are requested
-        let aggregateSQL: string | null = null;
-        let aggregateValidationErrors: AggregateResult[] = [];
-        if (params.Aggregates && params.Aggregates.length > 0) {
-          const aggregateBuild = this.buildAggregateSQL(
-            params.Aggregates,
-            entityInfo,
-            entityInfo.SchemaName,
-            entityInfo.BaseView,
-            whereSQL
-          );
-          aggregateSQL = aggregateBuild.aggregateSQL;
-          aggregateValidationErrors = aggregateBuild.validationErrors;
-        }
-
-        // Execute queries in parallel for better performance
-        // - Data query (if not count_only)
-        // - Count query (if needed)
-        // - Aggregate query (if aggregates requested)
-        const queries: Promise<unknown>[] = [];
-        const queryKeys: string[] = [];
-
-        // Data query
-        if (params.ResultType !== 'count_only') {
-          queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
-          queryKeys.push('data');
-        }
-
-        // Count query (run in parallel if we'll need it)
-        const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-        const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
-        if (willNeedCount) {
-          queries.push(this.ExecuteSQL(countSQL, undefined, undefined, contextUser));
-          queryKeys.push('count');
-        }
-
-        // Aggregate query (runs in parallel with data/count queries)
-        const aggregateStartTime = Date.now();
-        if (aggregateSQL) {
-          queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
-          queryKeys.push('aggregate');
-        }
-
-        // Execute all queries in parallel
-        const results = await Promise.all(queries);
-
-        // Map results back to their queries
-        const resultMap: Record<string, unknown> = {};
-        queryKeys.forEach((key, index) => {
-          resultMap[key] = results[index];
-        });
-
-        // Process data results
-        let retData = resultMap['data'] as Record<string, unknown>[] || [];
-
-        // Process rows for datetime conversion and field-level decryption
-        // This is critical for encrypted fields - without this, encrypted data stays encrypted in the UI
-        if (retData.length > 0 && params.ResultType !== 'count_only') {
-          retData = await this.ProcessEntityRows(retData, entityInfo, contextUser);
-        }
-
-        // Process count results - also check if we need count based on result length
-        let rowCount = null;
-        if (willNeedCount && resultMap['count']) {
-          const countResult = resultMap['count'] as { TotalRowCount: number }[];
-          if (countResult && countResult.length > 0) {
-            rowCount = countResult[0].TotalRowCount;
-          }
-        } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
-          // Need to run count query because we hit the limit
-          const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
-          if (countResult && countResult.length > 0) {
-            rowCount = countResult[0].TotalRowCount;
-          }
-        }
-
-        // Process aggregate results
-        let aggregateResults: AggregateResult[] | undefined = undefined;
-        let aggregateExecutionTime: number | undefined = undefined;
-        if (params.Aggregates && params.Aggregates.length > 0) {
-          aggregateExecutionTime = Date.now() - aggregateStartTime;
-
-          if (resultMap['aggregate']) {
-            // Map raw aggregate results back to original expressions
-            const rawAggregateResult = resultMap['aggregate'] as Record<string, unknown>[];
-            if (rawAggregateResult && rawAggregateResult.length > 0) {
-              const row = rawAggregateResult[0];
-              aggregateResults = [];
-              let validExprIndex = 0;
-
-              for (let i = 0; i < params.Aggregates.length; i++) {
-                const agg = params.Aggregates[i];
-                const alias = agg.alias || agg.expression;
-
-                // Check if this expression had a validation error
-                const validationError = aggregateValidationErrors.find(e => e.expression === agg.expression);
-                if (validationError) {
-                  aggregateResults.push(validationError);
-                } else {
-                  // Get the value from the result using the numbered alias
-                  const rawValue = row[`Agg_${validExprIndex}`];
-                  // Cast to AggregateValue - SQL Server returns numbers, strings, dates, or null
-                  const value: AggregateValue = rawValue === undefined ? null : rawValue as AggregateValue;
-                  aggregateResults.push({
-                    expression: agg.expression,
-                    alias: alias,
-                    value: value,
-                    error: undefined
-                  });
-                  validExprIndex++;
-                }
-              }
-            }
-          } else if (aggregateValidationErrors.length > 0) {
-            // All expressions had validation errors
-            aggregateResults = aggregateValidationErrors;
-          }
-        }
-
-        const stopTime = new Date();
-
-        if (
-          params.ForceAuditLog ||
-          (viewEntity?.ID && (extraFilter === undefined || extraFilter === null || extraFilter?.trim().length === 0) && entityInfo.AuditViewRuns)
-        ) {
-          // ONLY LOG TOP LEVEL VIEW EXECUTION - this would be for views with an ID, and don't have ExtraFilter as ExtraFilter
-          // is only used in the system on a tab or just for ad hoc view execution
-
-          // we do NOT want to wait for this, so no await,
-          this.CreateAuditLogRecord(
-            user,
-            'Run View',
-            'Run View',
-            'Success',
-            JSON.stringify({
-              ViewID: viewEntity?.ID,
-              ViewName: viewEntity?.Name,
-              Description: params.AuditLogDescription,
-              RowCount: retData.length,
-              SQL: viewSQL,
-            }),
-            entityInfo.ID,
-            null,
-            params.AuditLogDescription,
-            null
-          );
-        }
-
-        const result: RunViewResult<T> = {
-          RowCount:
-            params.ResultType === 'count_only'
-              ? rowCount
-              : retData.length /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */,
-          TotalRowCount: rowCount ? rowCount : retData.length,
-          Results: retData as T[],
-          UserViewRunID: userViewRunID,
-          ExecutionTime: stopTime.getTime() - startTime.getTime(),
-          Success: true,
-          ErrorMessage: null,
-          AggregateResults: aggregateResults,
-          AggregateExecutionTime: aggregateExecutionTime,
-        };
-
-        return result;
-      } 
-      else {
-        return null;
       }
+    }
+
+    // now, check for an exclude UserViewRunID, or exclusion of ALL prior runs
+    // if provided, we need to exclude the records that were part of that run (or all prior runs)
+    if ((excludeUserViewRunID && excludeUserViewRunID.length > 0) || params.ExcludeDataFromAllPriorViewRuns === true) {
+      let sExcludeSQL: string = `ID NOT IN (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE EntityID='${viewEntity.EntityID}' AND`;
+      if (params.ExcludeDataFromAllPriorViewRuns === true)
+        sExcludeSQL += ` UserViewID=${viewEntity.ID})`; // exclude ALL prior runs for this view, we do NOT need to also add the UserViewRunID even if it was provided because this will automatically filter that out too
+      else sExcludeSQL += `UserViewRunID=${excludeUserViewRunID})`; // exclude just the run that was provided
+
+      if (overrideExcludeFilter && overrideExcludeFilter.length > 0) {
+        if (!this.validateUserProvidedSQLClause(overrideExcludeFilter))
+          throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
+
+        // add in the OVERRIDE filter with an OR statement, this results in those rows that match the Exclude filter to be included
+        // even if they're in the UserViewRunID that we're excluding
+        sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
+      }
+      if (bHasWhere) {
+        whereSQL += ` AND (${sExcludeSQL})`;
+      } else {
+        whereSQL = `(${sExcludeSQL})`;
+        bHasWhere = true;
+      }
+    }
+
+    // NEXT, apply Row Level Security (RLS)
+    if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+      // user is NOT exempt from RLS, so we need to apply it
+      const rlsWhereClause: string = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+
+      if (rlsWhereClause && rlsWhereClause.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${rlsWhereClause})`;
+        } else {
+          whereSQL = `(${rlsWhereClause})`;
+          bHasWhere = true;
+        }
+      }
+    }
+    if (bHasWhere) {
+      viewSQL += ` WHERE ${whereSQL}`;
+      if (countSQL) countSQL += ` WHERE ${whereSQL}`;
+    }
+
+    // figure out the sorting for the view
+    // first check params.OrderBy, that takes first priority
+    // if that's not provided, then we check the view definition for its SortState
+    // if that's not provided we do NOT sort
+    const orderBy: string = params.OrderBy ? params.OrderBy : viewEntity ? viewEntity.OrderByClause : '';
+
+    // if we're saving the view results, we need to wrap the entire SQL statement
+    if (viewEntity?.ID && viewEntity?.ID.length > 0 && saveViewResults && user) {
+      const { executeViewSQL, runID } = await this.executeSQLForUserViewRunLogging(viewEntity.ID, viewEntity.EntityBaseView, whereSQL, orderBy, user);
+      viewSQL = executeViewSQL;
+      userViewRunID = runID;
+      hasSaveViewResults = true;
+    } else if (orderBy && orderBy.length > 0) {
+      // we only add order by if we're not doing run logging. This is becuase the run logging will
+      // add the order by to its SELECT query that pulls from the list of records that were returned
+      // there is no point in ordering the rows as they are saved into an audit list anyway so no order-by above
+      // just here for final step before we execute it.
+      if (!this.validateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+
+      viewSQL += ` ORDER BY ${orderBy}`;
+    }
+
+    // Apply pagination using OFFSET/FETCH if both MaxRows and StartRow are specified
+    if (params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0) && entityInfo.FirstPrimaryKey) {
+      // If no ORDER BY was already added, add one based on primary key (required for OFFSET/FETCH)
+      if (!orderBy) {
+        viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+      }
+      viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
+    }
+
+    // Build aggregate SQL if aggregates are requested
+    let aggregateSQL: string | null = null;
+    let aggregateValidationErrors: AggregateResult[] = [];
+    if (params.Aggregates && params.Aggregates.length > 0) {
+      const aggregateBuild = this.buildAggregateSQL(
+        params.Aggregates,
+        entityInfo,
+        entityInfo.SchemaName,
+        entityInfo.BaseView,
+        whereSQL
+      );
+      aggregateSQL = aggregateBuild.aggregateSQL;
+      aggregateValidationErrors = aggregateBuild.validationErrors;
+    }
+
+    // Determine if count should be run in parallel
+    const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
+    const countIncludedInParallel = !!(countSQL && (usingPagination || params.ResultType === 'count_only'));
+
+    return {
+      dataSQL: viewSQL,
+      countSQL,
+      countIncludedInParallel,
+      aggregateSQL,
+      aggregateValidationErrors,
+      entity: entityInfo,
+      viewEntity,
+      params,
+      startTime,
+      maxRowsUsed,
+      usingPagination: !!usingPagination,
+      userViewRunID,
+      hasSaveViewResults,
+      aggregateStartTime: aggregateSQL ? Date.now() : null,
+    };
+  }
+
+  /**
+   * Post-processes raw SQL results from a RunView execution into a RunViewResult.
+   * Handles datetime conversion, field decryption, count processing, aggregate mapping, and audit logging.
+   */
+  protected async ProcessRunViewResults<T>(
+    spec: RunViewSQLSpec,
+    dataRows: Record<string, unknown>[] | undefined,
+    countRows: { TotalRowCount: number }[] | undefined,
+    aggRows: Record<string, unknown>[] | undefined,
+    contextUser?: UserInfo
+  ): Promise<RunViewResult<T>> {
+    const user = contextUser ? contextUser : this.CurrentUser;
+
+    // Process data results
+    let retData = dataRows || [];
+
+    // Process rows for datetime conversion and field-level decryption
+    // This is critical for encrypted fields - without this, encrypted data stays encrypted in the UI
+    if (retData.length > 0 && spec.params.ResultType !== 'count_only') {
+      retData = await this.ProcessEntityRows(retData, spec.entity, contextUser);
+    }
+
+    // Process count results - also check if we need count based on result length
+    let rowCount = null;
+    if (spec.countIncludedInParallel && countRows) {
+      if (countRows.length > 0) {
+        rowCount = countRows[0].TotalRowCount;
+      }
+    } else if (spec.countSQL && spec.maxRowsUsed && retData.length === spec.maxRowsUsed) {
+      // Need to run count query because we hit the limit (lazy count - post-fetch)
+      const countResult = await this.ExecuteSQL(spec.countSQL, undefined, undefined, contextUser);
+      if (countResult && countResult.length > 0) {
+        rowCount = countResult[0].TotalRowCount;
+      }
+    }
+
+    // Process aggregate results
+    let aggregateResults: AggregateResult[] | undefined = undefined;
+    let aggregateExecutionTime: number | undefined = undefined;
+    if (spec.params.Aggregates && spec.params.Aggregates.length > 0) {
+      aggregateExecutionTime = spec.aggregateStartTime ? Date.now() - spec.aggregateStartTime : undefined;
+
+      if (aggRows && aggRows.length > 0) {
+        // Map raw aggregate results back to original expressions
+        const row = aggRows[0];
+        aggregateResults = [];
+        let validExprIndex = 0;
+
+        for (let i = 0; i < spec.params.Aggregates.length; i++) {
+          const agg = spec.params.Aggregates[i];
+          const alias = agg.alias || agg.expression;
+
+          // Check if this expression had a validation error
+          const validationError = spec.aggregateValidationErrors.find(e => e.expression === agg.expression);
+          if (validationError) {
+            aggregateResults.push(validationError);
+          } else {
+            // Get the value from the result using the numbered alias
+            const rawValue = row[`Agg_${validExprIndex}`];
+            // Cast to AggregateValue - SQL Server returns numbers, strings, dates, or null
+            const value: AggregateValue = rawValue === undefined ? null : rawValue as AggregateValue;
+            aggregateResults.push({
+              expression: agg.expression,
+              alias: alias,
+              value: value,
+              error: undefined
+            });
+            validExprIndex++;
+          }
+        }
+      } else if (spec.aggregateValidationErrors.length > 0) {
+        // All expressions had validation errors
+        aggregateResults = spec.aggregateValidationErrors;
+      }
+    }
+
+    const stopTime = new Date();
+
+    if (
+      spec.params.ForceAuditLog ||
+      (spec.viewEntity?.ID && (spec.params.ExtraFilter === undefined || spec.params.ExtraFilter === null || spec.params.ExtraFilter?.trim().length === 0) && spec.entity.AuditViewRuns)
+    ) {
+      // ONLY LOG TOP LEVEL VIEW EXECUTION - this would be for views with an ID, and don't have ExtraFilter as ExtraFilter
+      // is only used in the system on a tab or just for ad hoc view execution
+
+      // we do NOT want to wait for this, so no await,
+      this.CreateAuditLogRecord(
+        user,
+        'Run View',
+        'Run View',
+        'Success',
+        JSON.stringify({
+          ViewID: spec.viewEntity?.ID,
+          ViewName: spec.viewEntity?.Name,
+          Description: spec.params.AuditLogDescription,
+          RowCount: retData.length,
+          SQL: spec.dataSQL,
+        }),
+        spec.entity.ID,
+        null,
+        spec.params.AuditLogDescription,
+        null
+      );
+    }
+
+    return {
+      RowCount:
+        spec.params.ResultType === 'count_only'
+          ? rowCount
+          : retData.length /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */,
+      TotalRowCount: rowCount ? rowCount : retData.length,
+      Results: retData as T[],
+      UserViewRunID: spec.userViewRunID,
+      ExecutionTime: stopTime.getTime() - spec.startTime.getTime(),
+      Success: true,
+      ErrorMessage: null,
+      AggregateResults: aggregateResults,
+      AggregateExecutionTime: aggregateExecutionTime,
+    };
+  }
+
+  protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
+    // Thin wrapper: Build SQL → Execute → Process results
+    const startTime = new Date();
+    try {
+      if (!params) return null;
+
+      const spec = await this.BuildRunViewSQL(params, contextUser);
+
+      // Execute queries in parallel (same as original behavior)
+      const queries: Promise<unknown>[] = [];
+      const queryKeys: string[] = [];
+
+      // Data query
+      if (params.ResultType !== 'count_only') {
+        queries.push(this.ExecuteSQL(spec.dataSQL, undefined, undefined, contextUser));
+        queryKeys.push('data');
+      }
+
+      // Count query (run in parallel if we'll need it)
+      if (spec.countIncludedInParallel && spec.countSQL) {
+        queries.push(this.ExecuteSQL(spec.countSQL, undefined, undefined, contextUser));
+        queryKeys.push('count');
+      }
+
+      // Aggregate query (runs in parallel with data/count queries)
+      if (spec.aggregateSQL) {
+        queries.push(this.ExecuteSQL(spec.aggregateSQL, undefined, undefined, contextUser));
+        queryKeys.push('aggregate');
+      }
+
+      // Execute all queries in parallel
+      const results = await Promise.all(queries);
+
+      // Map results back to their queries
+      const resultMap: Record<string, unknown> = {};
+      queryKeys.forEach((key, index) => {
+        resultMap[key] = results[index];
+      });
+
+      return this.ProcessRunViewResults<T>(
+        spec,
+        resultMap['data'] as Record<string, unknown>[] | undefined,
+        resultMap['count'] as { TotalRowCount: number }[] | undefined,
+        resultMap['aggregate'] as Record<string, unknown>[] | undefined,
+        contextUser
+      );
     } catch (e) {
       const exceptionStopTime = new Date();
       LogError(e);
@@ -1892,10 +2030,164 @@ export class SQLServerDataProvider
 
   protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunViews()
-    // Note: We call InternalRunView directly since we're already inside the internal flow
-    const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
-    const results = await Promise.all(promises);
-    return results;
+
+    // Single view doesn't need batching
+    if (params.length <= 1) {
+      return params.length === 1
+        ? [await this.InternalRunView<T>(params[0], contextUser)]
+        : [];
+    }
+
+    // Phase 1: Build all SQL specs in parallel (no query execution, except saveViewResults side effects)
+    const specResults = await Promise.all(
+      params.map(p => this.BuildRunViewSQL(p, contextUser).catch(e => e as Error))
+    );
+
+    // Phase 2: Separate batchable vs non-batchable specs
+    const batchableSpecs: { index: number; spec: RunViewSQLSpec }[] = [];
+    const nonBatchableIndices: number[] = [];
+    const errorResults = new Map<number, RunViewResult<T>>();
+
+    for (let i = 0; i < specResults.length; i++) {
+      const spec = specResults[i];
+      if (spec instanceof Error) {
+        // BuildSQL failed for this view — record error result
+        errorResults.set(i, {
+          RowCount: 0, TotalRowCount: 0, Results: [],
+          UserViewRunID: '', ExecutionTime: 0,
+          Success: false, ErrorMessage: spec.message,
+        });
+      } else if (spec.hasSaveViewResults) {
+        // Can't batch views with saveViewResults — fall back to individual
+        nonBatchableIndices.push(i);
+      } else {
+        batchableSpecs.push({ index: i, spec });
+      }
+    }
+
+    // Phase 3: Batch execute batchable views
+    const batchResults = new Map<number, RunViewResult<T>>();
+
+    if (batchableSpecs.length > 0) {
+      try {
+        await this.executeBatchedRunViews<T>(batchableSpecs, batchResults, contextUser);
+      } catch (batchError) {
+        // Fallback: run all batchable specs individually
+        LogError(`Batch execution failed, falling back to individual queries: ${batchError}`);
+        for (const { index } of batchableSpecs) {
+          nonBatchableIndices.push(index);
+        }
+      }
+    }
+
+    // Phase 4: Execute non-batchable views individually (in parallel)
+    if (nonBatchableIndices.length > 0) {
+      const individualResults = await Promise.all(
+        nonBatchableIndices.map(i => this.InternalRunView<T>(params[i], contextUser))
+      );
+      nonBatchableIndices.forEach((origIndex, i) => {
+        batchResults.set(origIndex, individualResults[i]);
+      });
+    }
+
+    // Phase 5: Reassemble results in original order
+    const finalResults: RunViewResult<T>[] = [];
+    for (let i = 0; i < params.length; i++) {
+      finalResults.push(
+        errorResults.get(i) ?? batchResults.get(i) ?? {
+          RowCount: 0, TotalRowCount: 0, Results: [],
+          UserViewRunID: '', ExecutionTime: 0,
+          Success: false, ErrorMessage: 'Unknown error in batch execution',
+        }
+      );
+    }
+    return finalResults;
+  }
+
+  /**
+   * Executes batched RunView SQL specs via ExecuteSQLBatch, chunked by MAX_BATCH_SIZE.
+   * Collects all SQL into a flat array, executes as a single batch per chunk,
+   * then reassembles results and calls ProcessRunViewResults for each view.
+   */
+  private async executeBatchedRunViews<T>(
+    batchableSpecs: { index: number; spec: RunViewSQLSpec }[],
+    results: Map<number, RunViewResult<T>>,
+    contextUser?: UserInfo
+  ): Promise<void> {
+    // Collect all SQL strings into flat arrays with index tracking
+    const allSQL: string[] = [];
+    const resultMap: { specIdx: number; queryType: 'data' | 'count' | 'aggregate' }[] = [];
+
+    for (let i = 0; i < batchableSpecs.length; i++) {
+      const { spec } = batchableSpecs[i];
+
+      // Data query (unless count_only)
+      if (spec.params.ResultType !== 'count_only') {
+        allSQL.push(spec.dataSQL);
+        resultMap.push({ specIdx: i, queryType: 'data' });
+      }
+
+      // Count query (only if it should run in parallel)
+      if (spec.countIncludedInParallel && spec.countSQL) {
+        allSQL.push(spec.countSQL);
+        resultMap.push({ specIdx: i, queryType: 'count' });
+      }
+
+      // Aggregate query
+      if (spec.aggregateSQL) {
+        allSQL.push(spec.aggregateSQL);
+        resultMap.push({ specIdx: i, queryType: 'aggregate' });
+      }
+    }
+
+    // Execute in chunks of MAX_BATCH_SIZE
+    let recordsetOffset = 0;
+    for (let chunkStart = 0; chunkStart < allSQL.length; chunkStart += SQLServerDataProvider.MAX_BATCH_SIZE) {
+      const chunkEnd = Math.min(chunkStart + SQLServerDataProvider.MAX_BATCH_SIZE, allSQL.length);
+      const chunkSQL = allSQL.slice(chunkStart, chunkEnd);
+      const chunkMap = resultMap.slice(chunkStart, chunkEnd);
+
+      const recordsets = await this.ExecuteSQLBatch(chunkSQL, undefined, undefined, contextUser);
+
+      // Distribute recordsets back to per-view buckets
+      const perViewData = new Map<number, {
+        data?: Record<string, unknown>[];
+        count?: { TotalRowCount: number }[];
+        agg?: Record<string, unknown>[];
+      }>();
+
+      for (let j = 0; j < chunkMap.length; j++) {
+        const { specIdx, queryType } = chunkMap[j];
+        if (!perViewData.has(specIdx)) {
+          perViewData.set(specIdx, {});
+        }
+        const bucket = perViewData.get(specIdx);
+        const recordset = recordsets[j];
+
+        if (queryType === 'data') {
+          bucket.data = recordset as Record<string, unknown>[];
+        } else if (queryType === 'count') {
+          bucket.count = recordset as { TotalRowCount: number }[];
+        } else if (queryType === 'aggregate') {
+          bucket.agg = recordset as Record<string, unknown>[];
+        }
+      }
+
+      // Process each view's results
+      for (const [specIdx, bucket] of perViewData) {
+        const { index, spec } = batchableSpecs[specIdx];
+        const viewResult = await this.ProcessRunViewResults<T>(
+          spec,
+          bucket.data,
+          bucket.count,
+          bucket.agg,
+          contextUser
+        );
+        results.set(index, viewResult);
+      }
+
+      recordsetOffset += chunkSQL.length;
+    }
   }
 
   /**
