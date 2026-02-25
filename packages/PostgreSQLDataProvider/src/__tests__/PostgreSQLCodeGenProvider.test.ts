@@ -208,12 +208,14 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('LANGUAGE plpgsql');
         });
 
-        it('should use RETURNING for UUID primary keys', () => {
+        it('should use COALESCE with gen_random_uuid() for UUID primary keys', () => {
             const entity = createMockEntity();
             const sql = provider.generateCRUDCreate(entity);
 
-            expect(sql).toContain('RETURNING');
+            // UUID PKs use pre-INSERT variable assignment instead of RETURNING
+            expect(sql).toContain('COALESCE');
             expect(sql).toContain('gen_random_uuid()');
+            expect(sql).toContain('v_new_id');
         });
 
         it('should generate params with p_ prefix', () => {
@@ -525,6 +527,7 @@ describe('PostgreSQLCodeGenProvider', () => {
                 parentEntity,
                 relatedEntity,
                 fkField,
+                operation: 'update',
             });
 
             expect(sql).toContain('"ParentID" = NULL');
@@ -552,6 +555,7 @@ describe('PostgreSQLCodeGenProvider', () => {
                 parentEntity,
                 relatedEntity,
                 fkField,
+                operation: 'delete',
             });
 
             expect(sql).toContain('PERFORM');
@@ -579,6 +583,7 @@ describe('PostgreSQLCodeGenProvider', () => {
                 parentEntity,
                 relatedEntity,
                 fkField,
+                operation: 'delete',
             });
 
             expect(sql).toContain('WARNING');
