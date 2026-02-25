@@ -24,7 +24,7 @@ export interface InstallConfig {
   /** SQL Server TCP port (default: `1433`). */
   DatabasePort: number;
 
-  /** Target database name (default: `"MemberJunction"`). */
+  /** Target database name (common value: `"MemberJunction"`; no auto-applied default). */
   DatabaseName: string;
 
   /** Whether to trust self-signed TLS certificates (common for local dev instances). */
@@ -34,7 +34,7 @@ export interface InstallConfig {
 
   /**
    * SQL login used by `mj codegen` to read/write schema metadata.
-   * Typically granted `db_owner` role (default: `"MJ_CodeGen"`).
+   * Typically granted `db_owner` role (common value: `"MJ_CodeGen"`; no auto-applied default).
    */
   CodeGenUser: string;
 
@@ -46,7 +46,7 @@ export interface InstallConfig {
   /**
    * SQL login used by MJAPI at runtime for read/write data access.
    * Typically granted `db_datareader`, `db_datawriter`, and `EXECUTE`
-   * (default: `"MJ_Connect"`).
+   * (common value: `"MJ_Connect"`; no auto-applied default).
    */
   APIUser: string;
 

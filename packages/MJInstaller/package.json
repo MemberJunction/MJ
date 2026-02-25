@@ -9,7 +9,9 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f"
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "adm-zip": "^0.5.16"

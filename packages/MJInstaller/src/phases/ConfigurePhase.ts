@@ -498,24 +498,6 @@ ${newUserSection}
 `;
   }
 
-  private buildEnvironmentReplacements(config: InstallConfig): Record<string, string> {
-    const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4200;
-    return {
-      GRAPHQL_URI: `http://localhost:${apiPort}/`,
-      GRAPHQL_WS_URI: `ws://localhost:${apiPort}/`,
-      REDIRECT_URI: `http://localhost:${explorerPort}`,
-      CLIENT_ID: config.AuthProviderValues?.ClientID ?? '',
-      TENANT_ID: config.AuthProviderValues?.TenantID ?? '',
-      CLIENT_AUTHORITY: config.AuthProviderValues?.TenantID
-        ? `https://login.microsoftonline.com/${config.AuthProviderValues.TenantID}`
-        : '',
-      AUTH_TYPE: this.mapAuthType(config.AuthProvider),
-      AUTH0_DOMAIN: config.AuthProviderValues?.Domain ?? '',
-      AUTH0_CLIENTID: config.AuthProviderValues?.ClientID ?? '',
-    };
-  }
-
   // ---------------------------------------------------------------------------
   // Prompt helpers
   // ---------------------------------------------------------------------------

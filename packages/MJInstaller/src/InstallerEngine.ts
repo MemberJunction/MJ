@@ -210,6 +210,17 @@ export class InstallerEngine {
       ...options?.Config,
     };
 
+    // Dry-run: the plan itself is the output, so Run is a no-op
+    if (options?.DryRun) {
+      return {
+        Success: true,
+        DurationMs: 0,
+        Warnings: [],
+        PhasesCompleted: [],
+        PhasesFailed: [],
+      };
+    }
+
     // Reset resolved config — will be populated by the configure phase
     this.resolvedConfig = { ...config };
 
