@@ -235,11 +235,11 @@ export class SQLServerDataProvider
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
   /**************************************************************************/
 
-  protected override QuoteIdentifier(name: string): string {
+  public override QuoteIdentifier(name: string): string {
     return `[${name}]`;
   }
 
-  protected override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+  public override QuoteSchemaAndView(schemaName: string, objectName: string): string {
     return `[${schemaName}].[${objectName}]`;
   }
 

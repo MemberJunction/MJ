@@ -121,12 +121,7 @@ export class SQLCodeGenBase {
                     const whereClause = configInfo.forceRegeneration.entityWhereClause;
                     const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
                     const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-                    const isPG = this._dbProvider.PlatformKey === 'postgresql';
-                    // Quote column names in the WHERE clause for PG compatibility
-                    // Replace unquoted column names like SchemaName with quoted "SchemaName"
-                    const quotedWhereClause = isPG
-                        ? whereClause.replace(/\b(SchemaName|Name|ID|BaseTable|IncludeInAPI|VirtualEntity)\b(?=\s*[=<>!])/g, (match: string) => qi(match))
-                        : whereClause;
+                    const quotedWhereClause = this._dbProvider.quoteSQLForExecution(whereClause);
                     const query = `
                         SELECT ${qi('Name')}
                         FROM ${qs(mjCoreSchema, 'Entity')}

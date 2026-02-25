@@ -71,11 +71,11 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
     // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
     /**************************************************************************/
 
-    protected override QuoteIdentifier(name: string): string {
+    public override QuoteIdentifier(name: string): string {
         return pgDialect.QuoteIdentifier(name);
     }
 
-    protected override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+    public override QuoteSchemaAndView(schemaName: string, objectName: string): string {
         return pgDialect.QuoteSchema(schemaName, objectName);
     }
 

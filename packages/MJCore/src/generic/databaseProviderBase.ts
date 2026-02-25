@@ -111,7 +111,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * dialect convention. SQL Server uses [brackets], PostgreSQL uses "double quotes".
      * @param name The identifier to quote
      */
-    protected abstract QuoteIdentifier(name: string): string;
+    public abstract QuoteIdentifier(name: string): string;
 
     /**
      * Quotes a schema-qualified object name (e.g. schema.viewName) using the provider's
@@ -119,7 +119,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param schemaName The schema name
      * @param objectName The object name (table, view, etc.)
      */
-    protected abstract QuoteSchemaAndView(schemaName: string, objectName: string): string;
+    public abstract QuoteSchemaAndView(schemaName: string, objectName: string): string;
 
     /**
      * Builds a UNION ALL query that checks each child entity's base table for a record
