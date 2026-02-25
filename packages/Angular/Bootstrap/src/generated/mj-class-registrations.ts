@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (285 classes)
+// @memberjunction/core-entities (287 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -298,6 +298,8 @@ import {
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
+    MJTestRunOutputEntity,
+    MJTestRunOutputTypeEntity,
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
@@ -728,6 +730,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
+    MJTestRunOutputEntity,
+    MJTestRunOutputTypeEntity,
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
@@ -851,7 +855,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 386;
+export const CLASS_REGISTRATIONS_COUNT = 388;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
