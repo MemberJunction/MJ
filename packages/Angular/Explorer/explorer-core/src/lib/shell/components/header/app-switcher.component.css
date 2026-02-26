@@ -149,7 +149,7 @@
     right: 0;
     width: 100%;
     min-width: unset;
-    max-height: calc(100vh - 60px);
+    height: calc(100vh - 60px);
     overflow-y: auto;
     border-radius: 0;
     border-top: none;
