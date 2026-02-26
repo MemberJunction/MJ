@@ -3,6 +3,8 @@ import { BaseLMSAction } from '../../base/base-lms.action';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
+import { ActionParam } from '@memberjunction/actions-base';
+import { LWApiEnrollmentStatus, LWApiProgressData, LWApiUser, LearnWorldsUser, LearnWorldsPaginatedResponse } from './interfaces';
 
 /**
  * Base class for all LearnWorlds LMS actions.
@@ -10,213 +12,247 @@ import { BaseAction } from '@memberjunction/actions';
  */
 @RegisterClass(BaseAction, 'LearnWorldsBaseAction')
 export abstract class LearnWorldsBaseAction extends BaseLMSAction {
-    protected lmsProvider = 'LearnWorlds';
-    protected integrationName = 'LearnWorlds';
+  protected lmsProvider = 'LearnWorlds';
+  protected integrationName = 'LearnWorlds';
 
-    /**
-     * LearnWorlds API version
-     */
-    protected apiVersion = 'v2';
+  /**
+   * LearnWorlds API version
+   */
+  protected apiVersion = 'v2';
 
-    /**
-     * Current action parameters (set by the framework)
-     */
-    protected params: any;
+  /**
+   * Current action parameters (set by the framework or by SetCompanyContext)
+   */
+  protected params: ActionParam[] = [];
 
-    /**
-     * Makes an authenticated request to LearnWorlds API
-     */
-    protected async makeLearnWorldsRequest<T = any>(
-        endpoint: string,
-        method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-        body?: any,
-        contextUser?: UserInfo
-    ): Promise<T> {
-        if (!contextUser) {
-            throw new Error('Context user is required for LearnWorlds API calls');
-        }
+  /**
+   * Set the company context for direct (non-framework) calls.
+   * This populates `this.params` so that `makeLearnWorldsRequest` can find the CompanyID.
+   */
+  public SetCompanyContext(companyId: string): void {
+    this.params = [{ Name: 'CompanyID', Type: 'Input', Value: companyId }];
+  }
 
-        // Get company ID from action params
-        const companyId = this.getParamValue(this.params, 'CompanyID');
-        if (!companyId) {
-            throw new Error('CompanyID parameter is required');
-        }
+  /**
+   * Makes an authenticated request to LearnWorlds API
+   */
+  protected async makeLearnWorldsRequest<T = Record<string, unknown>>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    body?: Record<string, unknown> | null,
+    contextUser?: UserInfo,
+  ): Promise<T> {
+    if (!contextUser) {
+      throw new Error('Context user is required for LearnWorlds API calls');
+    }
 
-        // Get the integration credentials
-        const integration = await this.getCompanyIntegration(companyId, contextUser);
-        
-        // Get API credentials (from env vars or database)
-        const credentials = await this.getAPICredentials(integration);
-        
-        if (!credentials.apiKey) {
-            throw new Error('API Key is required for LearnWorlds integration');
-        }
+    // Get company ID from action params
+    const companyId = this.getParamValue(this.params, 'CompanyID') as string | undefined;
+    if (!companyId) {
+      throw new Error('CompanyID parameter is required');
+    }
 
-        // Get the school domain from ExternalSystemID or environment
-        const schoolDomain = integration.ExternalSystemID || this.getCredentialFromEnv(companyId, 'SCHOOL_DOMAIN');
-        if (!schoolDomain) {
-            throw new Error('School domain not found. Set in CompanyIntegration.ExternalSystemID or environment variable');
-        }
+    // Get the integration credentials
+    const integration = await this.getCompanyIntegration(companyId, contextUser);
 
-        // Build the full URL
-        const baseUrl = `https://${schoolDomain}/api/${this.apiVersion}`;
-        const fullUrl = `${baseUrl}/${endpoint}`;
+    // Get API credentials (from env vars or database)
+    const credentials = await this.getAPICredentials(integration);
 
-        // Prepare headers
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${credentials.apiKey}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Lw-Client': 'MemberJunction'
-        };
+    if (!credentials.apiKey) {
+      throw new Error('API Key is required for LearnWorlds integration');
+    }
+
+    // Get the school domain from ExternalSystemID or environment
+    const schoolDomain = integration.ExternalSystemID || this.getCredentialFromEnv(companyId, 'SCHOOL_DOMAIN');
+    if (!schoolDomain) {
+      throw new Error('School domain not found. Set in CompanyIntegration.ExternalSystemID or environment variable');
+    }
+
+    // Build the full URL
+    const baseUrl = `https://${schoolDomain}/api/${this.apiVersion}`;
+    const fullUrl = `${baseUrl}/${endpoint}`;
+
+    // Prepare headers
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${credentials.apiKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'Lw-Client': 'MemberJunction',
+    };
+
+    try {
+      const response = await fetch(fullUrl, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `LearnWorlds API error: ${response.status} ${response.statusText}`;
 
         try {
-            const response = await fetch(fullUrl, {
-                method,
-                headers,
-                body: body ? JSON.stringify(body) : undefined
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                let errorMessage = `LearnWorlds API error: ${response.status} ${response.statusText}`;
-                
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    if (errorJson.error) {
-                        errorMessage = `LearnWorlds API error: ${errorJson.error.message || errorJson.error}`;
-                    } else if (errorJson.message) {
-                        errorMessage = `LearnWorlds API error: ${errorJson.message}`;
-                    }
-                } catch {
-                    errorMessage += ` - ${errorText}`;
-                }
-
-                throw new Error(errorMessage);
-            }
-
-            const result = await response.json();
-            return result as T;
-        } catch (error) {
-            if (error instanceof Error) {
-                throw error;
-            }
-            throw new Error(`LearnWorlds API request failed: ${error}`);
-        }
-    }
-
-    /**
-     * Makes a paginated request to LearnWorlds API
-     */
-    protected async makeLearnWorldsPaginatedRequest<T = any>(
-        endpoint: string,
-        params: Record<string, any> = {},
-        contextUser?: UserInfo
-    ): Promise<T[]> {
-        const results: T[] = [];
-        let page = 1;
-        let hasMore = true;
-        const limit = params.limit || 50;
-
-        while (hasMore) {
-            const queryParams = new URLSearchParams({
-                ...params,
-                page: page.toString(),
-                limit: limit.toString()
-            });
-
-            const response = await this.makeLearnWorldsRequest<{
-                data: T[];
-                meta?: {
-                    page: number;
-                    totalPages: number;
-                    totalItems: number;
-                };
-            }>(`${endpoint}?${queryParams}`, 'GET', undefined, contextUser);
-
-            if (response.data && Array.isArray(response.data)) {
-                results.push(...response.data);
-            }
-
-            // Check if there are more pages
-            if (response.meta && response.meta.page < response.meta.totalPages) {
-                page++;
-            } else {
-                hasMore = false;
-            }
-
-            // Respect max results if specified
-            const maxResults = this.getParamValue(this.params, 'MaxResults');
-            if (maxResults && results.length >= maxResults) {
-                return results.slice(0, maxResults);
-            }
+          const errorJson = JSON.parse(errorText) as { error?: { message?: string }; message?: string };
+          if (errorJson.error) {
+            errorMessage = `LearnWorlds API error: ${errorJson.error.message || String(errorJson.error)}`;
+          } else if (errorJson.message) {
+            errorMessage = `LearnWorlds API error: ${errorJson.message}`;
+          }
+        } catch {
+          errorMessage += ` - ${errorText}`;
         }
 
-        return results;
+        throw new Error(errorMessage);
+      }
+
+      const result = (await response.json()) as T;
+      return result;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`LearnWorlds API request failed: ${error}`);
+    }
+  }
+
+  /**
+   * Makes a paginated request to LearnWorlds API
+   */
+  protected async makeLearnWorldsPaginatedRequest<T = Record<string, unknown>>(
+    endpoint: string,
+    queryParams: Record<string, string | number | boolean> = {},
+    contextUser?: UserInfo,
+  ): Promise<T[]> {
+    const results: T[] = [];
+    let page = 1;
+    let hasMore = true;
+    const limit = (queryParams.limit as number) || 50;
+
+    while (hasMore) {
+      const paginatedParams: Record<string, string> = {};
+      for (const [key, val] of Object.entries(queryParams)) {
+        paginatedParams[key] = String(val);
+      }
+      paginatedParams.page = page.toString();
+      paginatedParams.limit = limit.toString();
+
+      const qs = new URLSearchParams(paginatedParams);
+
+      const response = await this.makeLearnWorldsRequest<LearnWorldsPaginatedResponse<T>>(`${endpoint}?${qs}`, 'GET', undefined, contextUser);
+
+      if (response.data && Array.isArray(response.data)) {
+        results.push(...response.data);
+      }
+
+      // Check if there are more pages
+      if (response.meta && response.meta.page < response.meta.totalPages) {
+        page++;
+      } else {
+        hasMore = false;
+      }
+
+      // Respect max results if specified
+      const maxResults = this.getParamValue(this.params, 'MaxResults') as number | undefined;
+      if (maxResults && results.length >= maxResults) {
+        return results.slice(0, maxResults);
+      }
     }
 
-    /**
-     * Convert LearnWorlds date format to Date object
-     */
-    protected parseLearnWorldsDate(dateString: string | number): Date {
-        // LearnWorlds sometimes returns timestamps as seconds since epoch
-        if (typeof dateString === 'number') {
-            return new Date(dateString * 1000);
-        }
-        return new Date(dateString);
-    }
+    return results;
+  }
 
-    /**
-     * Format date for LearnWorlds API (ISO 8601)
-     */
-    protected formatLearnWorldsDate(date: Date): string {
-        return date.toISOString();
+  /**
+   * Convert LearnWorlds date format to Date object
+   */
+  protected parseLearnWorldsDate(dateString: string | number): Date {
+    // LearnWorlds sometimes returns timestamps as seconds since epoch
+    if (typeof dateString === 'number') {
+      return new Date(dateString * 1000);
     }
+    return new Date(dateString);
+  }
 
-    /**
-     * Map LearnWorlds user status to standard status
-     */
-    protected mapUserStatus(status: string): 'active' | 'inactive' | 'suspended' {
-        const statusMap: Record<string, 'active' | 'inactive' | 'suspended'> = {
-            'active': 'active',
-            'inactive': 'inactive',
-            'suspended': 'suspended',
-            'blocked': 'suspended'
-        };
-        
-        return statusMap[status.toLowerCase()] || 'inactive';
-    }
+  /**
+   * Format date for LearnWorlds API (ISO 8601)
+   */
+  protected formatLearnWorldsDate(date: Date): string {
+    return date.toISOString();
+  }
 
-    /**
-     * Map LearnWorlds enrollment status
-     */
-    protected mapLearnWorldsEnrollmentStatus(enrollment: any): 'active' | 'completed' | 'expired' | 'suspended' {
-        if (enrollment.completed) {
-            return 'completed';
-        }
-        if (enrollment.expired) {
-            return 'expired';
-        }
-        if (enrollment.suspended || !enrollment.active) {
-            return 'suspended';
-        }
-        return 'active';
-    }
+  /**
+   * Map LearnWorlds user status to standard status
+   */
+  protected mapUserStatus(status: string): 'active' | 'inactive' | 'suspended' {
+    const statusMap: Record<string, 'active' | 'inactive' | 'suspended'> = {
+      active: 'active',
+      inactive: 'inactive',
+      suspended: 'suspended',
+      blocked: 'suspended',
+    };
 
-    /**
-     * Calculate progress from LearnWorlds data
-     */
-    protected calculateProgress(progressData: any): {
-        percentage: number;
-        completedUnits: number;
-        totalUnits: number;
-        timeSpent: number;
-    } {
-        return {
-            percentage: progressData.percentage || 0,
-            completedUnits: progressData.completed_units || 0,
-            totalUnits: progressData.total_units || 0,
-            timeSpent: progressData.time_spent || 0
-        };
+    return statusMap[status.toLowerCase()] || 'inactive';
+  }
+
+  /**
+   * Map LearnWorlds enrollment status
+   */
+  protected mapLearnWorldsEnrollmentStatus(enrollment: LWApiEnrollmentStatus): 'active' | 'completed' | 'expired' | 'suspended' {
+    if (enrollment.completed) {
+      return 'completed';
     }
+    if (enrollment.expired) {
+      return 'expired';
+    }
+    if (enrollment.suspended || !enrollment.active) {
+      return 'suspended';
+    }
+    return 'active';
+  }
+
+  /**
+   * Calculate progress from LearnWorlds data
+   */
+  protected calculateProgress(progressData: LWApiProgressData): {
+    percentage: number;
+    completedUnits: number;
+    totalUnits: number;
+    timeSpent: number;
+  } {
+    return {
+      percentage: progressData.percentage || 0,
+      completedUnits: progressData.completed_units || 0,
+      totalUnits: progressData.total_units || 0,
+      timeSpent: progressData.time_spent || 0,
+    };
+  }
+
+  /**
+   * Shared utility: find a LearnWorlds user by email.
+   * Returns the user if found, null if not.
+   */
+  public async FindUserByEmail(email: string, contextUser: UserInfo): Promise<LearnWorldsUser | null> {
+    try {
+      const response = await this.makeLearnWorldsPaginatedRequest<LWApiUser>('users', { search: email, limit: 5 }, contextUser);
+
+      const match = response.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (!match) return null;
+
+      return {
+        id: match.id || match._id || '',
+        email: match.email,
+        username: match.username || match.email,
+        firstName: match.first_name,
+        lastName: match.last_name,
+        fullName: match.full_name || `${match.first_name || ''} ${match.last_name || ''}`.trim(),
+        status: this.mapUserStatus(match.status || 'active'),
+        role: match.role || 'student',
+        createdAt: this.parseLearnWorldsDate(match.created || match.created_at || ''),
+        lastLoginAt: match.last_login ? this.parseLearnWorldsDate(match.last_login) : undefined,
+        tags: match.tags || [],
+        customFields: match.custom_fields || {},
+      };
+    } catch {
+      return null;
+    }
+  }
 }
