@@ -5,7 +5,7 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './SQLServerCodeGenProvider';
+import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';

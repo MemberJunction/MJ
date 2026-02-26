@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './SQLServerCodeGenProvider';
+import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { MJGlobal } from "@memberjunction/global";

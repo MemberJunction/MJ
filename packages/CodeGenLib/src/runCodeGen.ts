@@ -24,8 +24,11 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
-import { SQLServerCodeGenConnection } from './Database/SQLServerCodeGenConnection';
+import { SQLServerCodeGenConnection } from './Database/providers/sqlserver/SQLServerCodeGenConnection';
+import { PostgreSQLCodeGenConnection } from './Database/providers/postgresql/PostgreSQLCodeGenConnection';
 import { CodeGenConnection } from './Database/codeGenDatabaseProvider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
+import pg from 'pg';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -93,13 +96,9 @@ export class RunCodeGenBase {
   }
 
   /**
-   * Sets up PostgreSQL data source using dynamic imports.
+   * Sets up PostgreSQL data source.
    */
   protected async setupPostgreSQLDataSource(): Promise<DataSourceResult> {
-    const pgModule = await import('pg');
-    const pgProviderModule = await import('@memberjunction/postgresql-dataprovider');
-    const { PostgreSQLCodeGenConnection, PostgreSQLDataProvider, PostgreSQLProviderConfigData } = pgProviderModule;
-
     const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
     const pgPort = parseInt(process.env.PG_PORT ?? String(configInfo.dbPort), 10) || 5432;
     const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
@@ -107,7 +106,7 @@ export class RunCodeGenBase {
     const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
     const coreSchema = mj_core_schema();
 
-    const pool = new pgModule.default.Pool({
+    const pool = new pg.Pool({
       host: pgHost,
       port: pgPort,
       database: pgDatabase,
