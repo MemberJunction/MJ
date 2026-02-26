@@ -151,7 +151,15 @@ export interface ProgressDetails {
     completedAt?: string;
   };
   updateType: 'lesson' | 'course';
-  updateResult: Record<string, unknown>;
+  updateResult: ProgressUpdateResult;
+}
+
+/**
+ * Accumulator for progress update results (lesson and/or course)
+ */
+export interface ProgressUpdateResult {
+  lessonProgress?: Record<string, unknown>;
+  courseProgress?: Record<string, unknown>;
 }
 
 export interface ProgressUpdateSummary {

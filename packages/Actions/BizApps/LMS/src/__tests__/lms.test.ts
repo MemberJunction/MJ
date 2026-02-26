@@ -349,14 +349,13 @@ describe('LearnWorldsBaseAction', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null on API error', async () => {
+    it('should re-throw on API error', async () => {
       action.SetCompanyContext('comp-123');
       vi.spyOn(action as never, 'makeLearnWorldsPaginatedRequest').mockRejectedValue(new Error('API error') as never);
 
       const mockCtx = { ID: 'ctx-user' } as unknown as (typeof import('@memberjunction/core'))['UserInfo'];
-      const result = await action.FindUserByEmail('test@example.com', mockCtx as never);
 
-      expect(result).toBeNull();
+      await expect(action.FindUserByEmail('test@example.com', mockCtx as never)).rejects.toThrow('API error');
     });
   });
 });

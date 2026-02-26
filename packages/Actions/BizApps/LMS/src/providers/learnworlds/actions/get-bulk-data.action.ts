@@ -39,7 +39,6 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
 
     const errors: SyncError[] = [];
     let totalApiCalls = 0;
-
     const includeAll = this.shouldIncludeAll(params);
     const maxResults = params.MaxResultsPerEntity ?? 100;
 
@@ -53,29 +52,12 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
 
     // Fetch remaining data types in parallel
     const [coursesResult, bundlesResult, enrollmentsResult, progressResult, certificatesResult, quizResultsResult] = await Promise.all([
-      this.shouldFetch(includeAll, params.IncludeCourses)
-        ? this.fetchCourses(params.CompanyID, maxResults, contextUser, errors)
-        : Promise.resolve(undefined),
-
-      this.shouldFetch(includeAll, params.IncludeBundles)
-        ? this.fetchBundles(params.CompanyID, maxResults, contextUser, errors)
-        : Promise.resolve(undefined),
-
-      this.shouldFetch(includeAll, params.IncludeEnrollments)
-        ? this.fetchEnrollmentsForUsers(params.CompanyID, users || [], maxResults, contextUser, errors)
-        : Promise.resolve(undefined),
-
-      this.shouldFetch(includeAll, params.IncludeProgress)
-        ? this.fetchProgressForUsers(params.CompanyID, users || [], contextUser, errors)
-        : Promise.resolve(undefined),
-
-      this.shouldFetch(includeAll, params.IncludeCertificates)
-        ? this.fetchCertificates(params.CompanyID, maxResults, contextUser, errors)
-        : Promise.resolve(undefined),
-
-      this.shouldFetch(includeAll, params.IncludeQuizResults)
-        ? this.fetchQuizResults(params.CompanyID, maxResults, contextUser, errors)
-        : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeCourses) ? this.fetchCourses(params.CompanyID, maxResults, contextUser, errors) : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeBundles) ? this.fetchBundles(params.CompanyID, maxResults, contextUser, errors) : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeEnrollments) ? this.fetchEnrollmentsForUsers(params.CompanyID, users || [], maxResults, contextUser, errors) : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeProgress) ? this.fetchProgressForUsers(params.CompanyID, users || [], contextUser, errors) : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeCertificates) ? this.fetchCertificates(params.CompanyID, maxResults, contextUser, errors) : Promise.resolve(undefined),
+      this.shouldFetch(includeAll, params.IncludeQuizResults) ? this.fetchQuizResults(params.CompanyID, maxResults, contextUser, errors) : Promise.resolve(undefined),
     ]);
 
     if (coursesResult) totalApiCalls += coursesResult.apiCalls;
@@ -134,13 +116,13 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
     contextUser: UserInfo,
     errors: SyncError[],
   ): Promise<{ data: LearnWorldsUser[]; apiCalls: number }> {
+    const action = new GetLearnWorldsUsersAction();
     try {
-      const action = new GetLearnWorldsUsersAction();
       const result = await action.GetUsers({ CompanyID: companyId, MaxResults: maxResults }, contextUser);
-      return { data: result.Users, apiCalls: 1 };
+      return { data: result.Users, apiCalls: action.ApiCallCount };
     } catch (error) {
       this.collectError(errors, 'user', error);
-      return { data: [], apiCalls: 1 };
+      return { data: [], apiCalls: action.ApiCallCount || 1 };
     }
   }
 
@@ -153,13 +135,13 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
     contextUser: UserInfo,
     errors: SyncError[],
   ): Promise<{ data: LearnWorldsCourse[]; apiCalls: number }> {
+    const action = new GetLearnWorldsCoursesAction();
     try {
-      const action = new GetLearnWorldsCoursesAction();
       const result = await action.GetCourses({ CompanyID: companyId, MaxResults: maxResults }, contextUser);
-      return { data: result.Courses, apiCalls: 1 };
+      return { data: result.Courses, apiCalls: action.ApiCallCount };
     } catch (error) {
       this.collectError(errors, 'course', error);
-      return { data: [], apiCalls: 1 };
+      return { data: [], apiCalls: action.ApiCallCount || 1 };
     }
   }
 
@@ -172,19 +154,43 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
     contextUser: UserInfo,
     errors: SyncError[],
   ): Promise<{ data: LearnWorldsBundle[]; apiCalls: number }> {
+    const action = new GetBundlesAction();
     try {
-      const action = new GetBundlesAction();
       const result = await action.GetBundles({ CompanyID: companyId, MaxResults: maxResults }, contextUser);
-      return { data: result.Bundles, apiCalls: 1 };
+      return { data: result.Bundles, apiCalls: action.ApiCallCount };
     } catch (error) {
       this.collectError(errors, 'bundle', error);
-      return { data: [], apiCalls: 1 };
+      return { data: [], apiCalls: action.ApiCallCount || 1 };
     }
   }
 
   /**
-   * Fetch enrollments for all provided users.
-   * Makes one API call per user to retrieve their enrollments, then flattens results.
+   * Concurrency limit for per-user API calls to avoid overwhelming the API.
+   */
+  private static readonly CONCURRENCY_LIMIT = 5;
+
+  /**
+   * Process items in batches with controlled concurrency.
+   */
+  private async processInBatches<TItem, TResult>(
+    items: TItem[],
+    processFn: (item: TItem) => Promise<TResult>,
+    batchSize: number = GetLearnWorldsBulkDataAction.CONCURRENCY_LIMIT,
+  ): Promise<TResult[]> {
+    const results: TResult[] = [];
+
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map(processFn));
+      results.push(...batchResults);
+    }
+
+    return results;
+  }
+
+  /**
+   * Fetch enrollments for all provided users with controlled concurrency.
+   * Processes users in batches of CONCURRENCY_LIMIT to avoid overwhelming the API.
    */
   private async fetchEnrollmentsForUsers(
     companyId: string,
@@ -199,40 +205,43 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
 
     const allEnrollments: LearnWorldsEnrollment[] = [];
     let apiCalls = 0;
-    const action = new GetUserEnrollmentsAction();
 
-    for (const user of users) {
+    const results = await this.processInBatches(users, async (user) => {
+      const action = new GetUserEnrollmentsAction();
       try {
         const result = await action.GetUserEnrollments(
           { CompanyID: companyId, UserID: user.id, MaxResults: maxResults },
           contextUser,
         );
-        apiCalls++;
-
-        // Map FormattedEnrollment to LearnWorldsEnrollment
-        for (const enrollment of result.Enrollments) {
-          allEnrollments.push({
-            id: enrollment.id,
-            userId: user.id,
-            courseId: enrollment.courseId,
-            enrolledAt: enrollment.enrolledAt || '',
-            startsAt: enrollment.startsAt,
-            expiresAt: enrollment.expiresAt,
-            status: enrollment.status,
-            price: 0,
-            progress: {
-              percentage: enrollment.progress.percentage,
-              completedUnits: enrollment.progress.completedUnits,
-              totalUnits: enrollment.progress.totalUnits,
-              lastAccessedAt: enrollment.progress.lastAccessedAt,
-            },
-            certificateEligible: enrollment.certificateEligible,
-            certificateIssuedAt: enrollment.certificateIssuedAt,
-          });
-        }
+        apiCalls += action.ApiCallCount;
+        return { enrollments: result.Enrollments, userId: user.id, error: null };
       } catch (error) {
-        apiCalls++;
+        apiCalls += action.ApiCallCount || 1;
         this.collectError(errors, 'enrollment', error, user.id);
+        return { enrollments: [], userId: user.id, error };
+      }
+    });
+
+    for (const result of results) {
+      for (const enrollment of result.enrollments) {
+        allEnrollments.push({
+          id: enrollment.id,
+          userId: result.userId,
+          courseId: enrollment.courseId,
+          enrolledAt: enrollment.enrolledAt || '',
+          startsAt: enrollment.startsAt,
+          expiresAt: enrollment.expiresAt,
+          status: enrollment.status,
+          price: 0,
+          progress: {
+            percentage: enrollment.progress.percentage,
+            completedUnits: enrollment.progress.completedUnits,
+            totalUnits: enrollment.progress.totalUnits,
+            lastAccessedAt: enrollment.progress.lastAccessedAt,
+          },
+          certificateEligible: enrollment.certificateEligible,
+          certificateIssuedAt: enrollment.certificateIssuedAt,
+        });
       }
     }
 
@@ -240,8 +249,8 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Fetch learning progress for all provided users.
-   * Makes one API call per user to retrieve their progress, then collects results.
+   * Fetch learning progress for all provided users with controlled concurrency.
+   * Processes users in batches of CONCURRENCY_LIMIT to avoid overwhelming the API.
    */
   private async fetchProgressForUsers(
     companyId: string,
@@ -255,19 +264,26 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
 
     const allProgress: UserLearningProgress[] = [];
     let apiCalls = 0;
-    const action = new GetLearnWorldsUserProgressAction();
 
-    for (const user of users) {
+    const results = await this.processInBatches(users, async (user) => {
+      const action = new GetLearnWorldsUserProgressAction();
       try {
         const result = await action.GetUserProgress(
           { CompanyID: companyId, UserID: user.id },
           contextUser,
         );
-        apiCalls++;
-        allProgress.push(result.UserProgress);
+        apiCalls += action.ApiCallCount;
+        return { progress: result.UserProgress, error: null };
       } catch (error) {
-        apiCalls++;
+        apiCalls += action.ApiCallCount || 1;
         this.collectError(errors, 'progress', error, user.id);
+        return { progress: null, error };
+      }
+    });
+
+    for (const result of results) {
+      if (result.progress) {
+        allProgress.push(result.progress);
       }
     }
 
@@ -283,11 +299,8 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
     contextUser: UserInfo,
     errors: SyncError[],
   ): Promise<{ data: LearnWorldsCertificate[]; apiCalls: number }> {
+    const action = new GetCertificatesAction();
     try {
-      const action = new GetCertificatesAction();
-      // Pass a dummy UserID to satisfy the "at least one of UserID/CourseID" requirement.
-      // The certificates endpoint without a user/course filter returns all certificates.
-      // We pass '*' to indicate all users; if the API rejects this we fall back gracefully.
       const result = await action.GetCertificates(
         { CompanyID: companyId, MaxResults: maxResults, IncludeDownloadLinks: false },
         contextUser,
@@ -307,10 +320,10 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
         completionPercentage: cert.completionPercentage,
       }));
 
-      return { data: certificates, apiCalls: 1 };
+      return { data: certificates, apiCalls: action.ApiCallCount };
     } catch (error) {
       this.collectError(errors, 'certificate', error);
-      return { data: [], apiCalls: 1 };
+      return { data: [], apiCalls: action.ApiCallCount || 1 };
     }
   }
 
@@ -323,17 +336,16 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
     contextUser: UserInfo,
     errors: SyncError[],
   ): Promise<{ data: FormattedQuizResult[]; apiCalls: number }> {
+    const action = new GetQuizResultsAction();
     try {
-      const action = new GetQuizResultsAction();
-      // Use CourseID='*' as a placeholder to satisfy the "at least one identifier" requirement
       const result = await action.GetQuizResults(
         { CompanyID: companyId, MaxResults: maxResults, IncludeQuestions: false, IncludeAnswers: false },
         contextUser,
       );
-      return { data: result.QuizResults, apiCalls: 1 };
+      return { data: result.QuizResults, apiCalls: action.ApiCallCount };
     } catch (error) {
       this.collectError(errors, 'quizResult', error);
-      return { data: [], apiCalls: 1 };
+      return { data: [], apiCalls: action.ApiCallCount || 1 };
     }
   }
 

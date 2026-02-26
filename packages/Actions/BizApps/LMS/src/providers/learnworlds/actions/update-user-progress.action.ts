@@ -3,7 +3,7 @@ import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { UserInfo } from '@memberjunction/core';
-import { UpdateUserProgressParams, UpdateUserProgressResult, ProgressDetails, ProgressUpdateSummary } from '../interfaces';
+import { UpdateUserProgressParams, UpdateUserProgressResult, ProgressDetails, ProgressUpdateSummary, ProgressUpdateResult } from '../interfaces';
 
 // ----------------------------------------------------------------
 // File-local interfaces for raw LearnWorlds API shapes
@@ -36,11 +36,6 @@ interface LWCourseProgressRequest {
   total_time_spent?: number;
 }
 
-/** Accumulator for the update results (lesson and/or course) */
-interface UpdateResultAccumulator {
-  lessonProgress?: Record<string, unknown>;
-  courseProgress?: Record<string, unknown>;
-}
 
 /**
  * Action to update a user's course progress in LearnWorlds
@@ -71,7 +66,7 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     // Get current enrollment first
     const currentEnrollment = await this.fetchCurrentEnrollment(UserID, CourseID, contextUser);
 
-    const updateResult: UpdateResultAccumulator = {};
+    const updateResult: ProgressUpdateResult = {};
 
     // Update lesson progress if lessonId is provided
     if (LessonID) {
@@ -181,7 +176,7 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     return await this.makeLearnWorldsRequest<Record<string, unknown>>(
       `users/${userId}/courses/${courseId}/lessons/${lessonId}/progress`,
       'PUT',
-      body as unknown as Record<string, unknown>,
+      body,
       contextUser,
     );
   }
@@ -207,7 +202,7 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     return await this.makeLearnWorldsRequest<Record<string, unknown>>(
       `users/${userId}/enrollments/${courseId}/progress`,
       'PUT',
-      body as unknown as Record<string, unknown>,
+      body,
       contextUser,
     );
   }
@@ -229,7 +224,7 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
     currentEnrollment: LWEnrollmentProgress,
     updatedProgress: LWEnrollmentProgress,
     updateType: 'lesson' | 'course',
-    updateResult: UpdateResultAccumulator,
+    updateResult: ProgressUpdateResult,
   ): ProgressDetails {
     return {
       userId,
@@ -251,7 +246,7 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
         completedAt: updatedProgress.completed_at,
       },
       updateType,
-      updateResult: updateResult as unknown as Record<string, unknown>,
+      updateResult,
     };
   }
 

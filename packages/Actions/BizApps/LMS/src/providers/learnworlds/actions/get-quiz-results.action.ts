@@ -135,8 +135,8 @@ interface QuizBreakdownEntry {
   results: FormattedQuizResult[];
   stats: {
     attempts: number;
-    averageScore: string;
-    passRate: string;
+    averageScore: number;
+    passRate: number;
   };
 }
 
@@ -494,7 +494,7 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
       correctAnswers: correctCount,
       incorrectAnswers: answers.filter((a) => !a.isCorrect).length,
       totalQuestions: answers.length,
-      accuracyRate: answers.length > 0 ? ((correctCount / answers.length) * 100).toFixed(1) : 0,
+      accuracyRate: answers.length > 0 ? Number(((correctCount / answers.length) * 100).toFixed(1)) : 0,
     };
   }
 
@@ -526,8 +526,8 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
       totalResults,
       passedResults,
       failedResults: totalResults - passedResults,
-      passRate: totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : 0,
-      averageScore: averageScore.toFixed(1),
+      passRate: totalResults > 0 ? Number(((passedResults / totalResults) * 100).toFixed(1)) : 0,
+      averageScore: Number(averageScore.toFixed(1)),
       averageDuration,
       averageDurationText: this.formatDuration(Math.round(averageDuration)),
       dateRange: {
@@ -547,7 +547,7 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
       if (!resultsByQuiz[quizTitle]) {
         resultsByQuiz[quizTitle] = {
           results: [],
-          stats: { attempts: 0, averageScore: '0', passRate: '0' },
+          stats: { attempts: 0, averageScore: 0, passRate: 0 },
         };
       }
       resultsByQuiz[quizTitle].results.push(result);
@@ -562,8 +562,8 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
 
       resultsByQuiz[quizTitle].stats = {
         attempts: qTotal,
-        averageScore: qAvgScore.toFixed(1),
-        passRate: ((qPassed / qTotal) * 100).toFixed(1),
+        averageScore: Number(qAvgScore.toFixed(1)),
+        passRate: Number(((qPassed / qTotal) * 100).toFixed(1)),
       };
     }
 

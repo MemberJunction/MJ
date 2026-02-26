@@ -113,44 +113,6 @@ interface LWApiEnrollmentItem {
   course?: { id?: string };
 }
 
-/**
- * Progress summary shape
- */
-interface ProgressSummary {
-  overview: {
-    totalCourses: number;
-    completedCourses: number;
-    inProgressCourses: number;
-    notStartedCourses: number;
-    overallProgress: string;
-    certificatesEarned: number;
-    totalLearningTime: string;
-  };
-  performance: {
-    averageQuizScore: string;
-    averageCourseProgress: string;
-    completionRate: string;
-  };
-  currentFocus: Array<{
-    courseTitle: string;
-    progress: string;
-    timeSpent: string;
-    estimatedTimeToComplete: string;
-  }>;
-  recentActivity: Array<{
-    courseTitle: string;
-    lastAccessed: Date | undefined;
-    progress: string;
-  }>;
-  achievements: {
-    totalCertificates: number;
-    coursesWithCertificates: Array<{
-      courseTitle: string;
-      completedAt: Date | undefined;
-    }>;
-  };
-}
-
 type LessonType = 'video' | 'text' | 'quiz' | 'assignment' | 'scorm' | 'interactive';
 
 /**

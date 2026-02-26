@@ -63,7 +63,7 @@ export class CreateUserAction extends LearnWorldsBaseAction {
     if (params.Password) userData.password = params.Password;
     if (params.FirstName) userData.first_name = params.FirstName;
     if (params.LastName) userData.last_name = params.LastName;
-    if (sendWelcomeEmail !== undefined) userData.send_welcome_email = sendWelcomeEmail;
+    userData.send_welcome_email = sendWelcomeEmail;
 
     // Add tags if provided (expecting comma-separated string or array)
     if (params.Tags) {

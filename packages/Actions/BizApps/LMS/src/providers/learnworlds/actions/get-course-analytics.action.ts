@@ -3,7 +3,16 @@ import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { UserInfo } from '@memberjunction/core';
-import { GetCourseAnalyticsParams, GetCourseAnalyticsResult, CourseAnalyticsData } from '../interfaces';
+import {
+  GetCourseAnalyticsParams,
+  GetCourseAnalyticsResult,
+  CourseAnalyticsData,
+  TrendDataPoint,
+  CourseAnalyticsSummary,
+  CourseAnalyticsUserBreakdown,
+  CourseAnalyticsModuleStat,
+  CourseAnalyticsLessonStat,
+} from '../interfaces';
 
 // ----------------------------------------------------------------
 // File-local interfaces for raw LearnWorlds API shapes
@@ -14,7 +23,7 @@ interface LWRawAnalyticsData {
   total_enrollments?: number;
   new_enrollments?: number;
   active_students?: number;
-  enrollment_trend?: unknown[];
+  enrollment_trend?: LWRawTrendDataPoint[];
   average_progress?: number;
   completion_rate?: number;
   total_completions?: number;
@@ -25,11 +34,18 @@ interface LWRawAnalyticsData {
   total_time_spent?: number;
   average_session_duration?: number;
   last_activity_date?: string;
-  daily_active_users?: unknown[];
+  daily_active_users?: LWRawTrendDataPoint[];
   average_quiz_score?: number;
   pass_rate?: number;
   certificates_issued?: number;
   average_time_to_complete?: number;
+}
+
+/** Raw trend data point from LearnWorlds API */
+interface LWRawTrendDataPoint {
+  date?: string;
+  value?: number;
+  label?: string;
 }
 
 /** Wrapper for the analytics API response */
@@ -45,8 +61,8 @@ interface LWRawRevenueData {
   currency?: string;
   average_order_value?: number;
   total_orders?: number;
-  revenue_trend?: unknown[];
-  top_markets?: unknown[];
+  revenue_trend?: LWRawTrendDataPoint[];
+  top_markets?: LWRawTrendDataPoint[];
 }
 
 /** Wrapper for the revenue API response */
@@ -93,28 +109,6 @@ interface LWEnrollmentsApiResponse {
   data?: LWRawEnrollmentForBreakdown[] | { data?: LWRawEnrollmentForBreakdown[] };
 }
 
-/** Formatted module stat (returned inside CourseAnalyticsData.moduleStats) */
-interface FormattedModuleStat {
-  moduleId: string;
-  moduleTitle: string;
-  completionRate: number;
-  averageProgress: number;
-  averageTimeSpent: number;
-  averageTimeSpentText: string;
-  studentsStarted: number;
-  studentsCompleted: number;
-  lessons: FormattedLessonStat[];
-}
-
-/** Formatted lesson stat nested inside a module */
-interface FormattedLessonStat {
-  lessonId: string;
-  lessonTitle: string;
-  completionRate: number;
-  averageTimeSpent: number;
-  viewCount: number;
-}
-
 /** Progress distribution buckets for user breakdown */
 interface ProgressBuckets {
   notStarted: number;
@@ -123,37 +117,6 @@ interface ProgressBuckets {
   between50And75: number;
   between75And99: number;
   completed: number;
-}
-
-/** User breakdown result shape */
-interface UserBreakdownResult {
-  total: number;
-  progressDistribution: ProgressBuckets;
-  percentageDistribution: Record<string, string>;
-}
-
-/** Trend data point (used for growth / engagement calculations) */
-interface TrendDataPoint {
-  value?: number;
-}
-
-/** Summary produced alongside the analytics payload */
-interface CourseAnalyticsSummary {
-  courseId: string;
-  period: { from: string; to: string };
-  keyMetrics: {
-    totalEnrollments: number;
-    completionRate: number;
-    averageProgress: number;
-    activeStudents: number;
-    averageTimeSpent: string;
-    certificatesIssued: number;
-  };
-  trends: {
-    enrollmentGrowth: string;
-    engagementTrend: string;
-    completionTrend: string;
-  };
 }
 
 /**
@@ -217,7 +180,7 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
 
     return {
       CourseAnalytics: analytics,
-      Summary: summary as unknown as Record<string, unknown>,
+      Summary: summary,
     };
   }
 
@@ -303,7 +266,7 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
     return undefined;
   }
 
-  private async fetchModuleStats(courseId: string, contextUser: UserInfo): Promise<unknown[] | undefined> {
+  private async fetchModuleStats(courseId: string, contextUser: UserInfo): Promise<CourseAnalyticsModuleStat[] | undefined> {
     const response = await this.makeLearnWorldsRequest<LWModuleStatsApiResponse>(`/courses/${courseId}/modules/analytics`, 'GET', null, contextUser);
 
     if (response.success !== false && response.data) {
@@ -316,14 +279,14 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
     return undefined;
   }
 
-  private async fetchUserBreakdown(courseId: string, contextUser: UserInfo): Promise<Record<string, unknown> | undefined> {
+  private async fetchUserBreakdown(courseId: string, contextUser: UserInfo): Promise<CourseAnalyticsUserBreakdown | undefined> {
     const enrollmentQs = '?' + new URLSearchParams({ limit: '1000', include: 'progress' }).toString();
     const response = await this.makeLearnWorldsRequest<LWEnrollmentsApiResponse>(`/courses/${courseId}/enrollments${enrollmentQs}`, 'GET', null, contextUser);
 
     if (response.success !== false && response.data) {
       const enrollments = Array.isArray(response.data) ? response.data : response.data.data;
       if (enrollments) {
-        return this.calculateUserBreakdown(enrollments) as unknown as Record<string, unknown>;
+        return this.calculateUserBreakdown(enrollments);
       }
     }
 
@@ -378,7 +341,7 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
   // Private helpers – module stats formatting
   // ----------------------------------------------------------------
 
-  private formatModuleStats(modules: LWRawModuleStat[]): FormattedModuleStat[] {
+  private formatModuleStats(modules: LWRawModuleStat[]): CourseAnalyticsModuleStat[] {
     return modules.map((module) => ({
       moduleId: module.id || '',
       moduleTitle: module.title || '',
@@ -402,7 +365,7 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
   // Private helpers – user breakdown
   // ----------------------------------------------------------------
 
-  private calculateUserBreakdown(enrollments: LWRawEnrollmentForBreakdown[]): UserBreakdownResult {
+  private calculateUserBreakdown(enrollments: LWRawEnrollmentForBreakdown[]): CourseAnalyticsUserBreakdown {
     const buckets: ProgressBuckets = {
       notStarted: 0,
       under25: 0,
@@ -443,12 +406,11 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
   // Private helpers – trend calculations
   // ----------------------------------------------------------------
 
-  private calculateGrowthRate(trend: unknown[]): string {
-    const typedTrend = trend as TrendDataPoint[];
-    if (!typedTrend || typedTrend.length < 2) return 'insufficient-data';
+  private calculateGrowthRate(trend: TrendDataPoint[]): string {
+    if (!trend || trend.length < 2) return 'insufficient-data';
 
-    const recent = typedTrend[typedTrend.length - 1]?.value || 0;
-    const previous = typedTrend[typedTrend.length - 2]?.value || 0;
+    const recent = trend[trend.length - 1]?.value || 0;
+    const previous = trend[trend.length - 2]?.value || 0;
 
     if (previous === 0) return 'new';
 
@@ -459,12 +421,11 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
     return 'declining';
   }
 
-  private calculateEngagementTrend(dailyActiveUsers: unknown[]): string {
-    const typedDau = dailyActiveUsers as TrendDataPoint[];
-    if (!typedDau || typedDau.length < 7) return 'insufficient-data';
+  private calculateEngagementTrend(dailyActiveUsers: TrendDataPoint[]): string {
+    if (!dailyActiveUsers || dailyActiveUsers.length < 7) return 'insufficient-data';
 
-    const recentAvg = typedDau.slice(-7).reduce((sum, day) => sum + (day.value || 0), 0) / 7;
-    const previousAvg = typedDau.slice(-14, -7).reduce((sum, day) => sum + (day.value || 0), 0) / 7;
+    const recentAvg = dailyActiveUsers.slice(-7).reduce((sum, day) => sum + (day.value || 0), 0) / 7;
+    const previousAvg = dailyActiveUsers.slice(-14, -7).reduce((sum, day) => sum + (day.value || 0), 0) / 7;
 
     if (previousAvg === 0) return 'new';
 

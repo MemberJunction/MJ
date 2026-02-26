@@ -190,7 +190,79 @@ export interface GetCourseAnalyticsParams extends LearnWorldsBaseParams {
  */
 export interface GetCourseAnalyticsResult {
   CourseAnalytics: CourseAnalyticsData;
-  Summary: Record<string, unknown>;
+  Summary: CourseAnalyticsSummary;
+}
+
+/**
+ * Summary produced alongside the course analytics payload
+ */
+export interface CourseAnalyticsSummary {
+  courseId: string;
+  period: { from: string; to: string };
+  keyMetrics: {
+    totalEnrollments: number;
+    completionRate: number;
+    averageProgress: number;
+    activeStudents: number;
+    averageTimeSpent: string;
+    certificatesIssued: number;
+  };
+  trends: {
+    enrollmentGrowth: string;
+    engagementTrend: string;
+    completionTrend: string;
+  };
+}
+
+/**
+ * User breakdown data for course analytics
+ */
+export interface CourseAnalyticsUserBreakdown {
+  total: number;
+  progressDistribution: {
+    notStarted: number;
+    under25: number;
+    between25And50: number;
+    between50And75: number;
+    between75And99: number;
+    completed: number;
+  };
+  percentageDistribution: Record<string, string>;
+}
+
+/**
+ * Formatted module-level statistics for course analytics
+ */
+export interface CourseAnalyticsModuleStat {
+  moduleId: string;
+  moduleTitle: string;
+  completionRate: number;
+  averageProgress: number;
+  averageTimeSpent: number;
+  averageTimeSpentText: string;
+  studentsStarted: number;
+  studentsCompleted: number;
+  lessons: CourseAnalyticsLessonStat[];
+}
+
+/**
+ * Formatted lesson-level statistics nested inside module stats
+ */
+export interface CourseAnalyticsLessonStat {
+  lessonId: string;
+  lessonTitle: string;
+  completionRate: number;
+  averageTimeSpent: number;
+  viewCount: number;
+}
+
+/**
+ * A single data point in a time-series trend (enrollment, revenue, DAU, etc.)
+ */
+export interface TrendDataPoint {
+  date?: string;
+  value?: number;
+  label?: string;
 }
 
 export interface CourseAnalyticsData {
@@ -200,7 +272,7 @@ export interface CourseAnalyticsData {
     totalEnrollments: number;
     newEnrollments: number;
     activeStudents: number;
-    enrollmentTrend: unknown[];
+    enrollmentTrend: TrendDataPoint[];
   };
   progress: {
     averageProgressPercentage: number;
@@ -217,7 +289,7 @@ export interface CourseAnalyticsData {
     totalTimeSpentText: string;
     averageSessionDuration: number;
     lastActivityDate?: string;
-    dailyActiveUsers: unknown[];
+    dailyActiveUsers: TrendDataPoint[];
   };
   performance: {
     averageQuizScore: number;
@@ -231,11 +303,11 @@ export interface CourseAnalyticsData {
     currency: string;
     averageOrderValue: number;
     totalOrders: number;
-    revenueTrend: unknown[];
-    topMarkets: unknown[];
+    revenueTrend: TrendDataPoint[];
+    topMarkets: TrendDataPoint[];
   };
-  moduleStats?: unknown[];
-  userBreakdown?: Record<string, unknown>;
+  moduleStats?: CourseAnalyticsModuleStat[];
+  userBreakdown?: CourseAnalyticsUserBreakdown;
 }
 
 /**

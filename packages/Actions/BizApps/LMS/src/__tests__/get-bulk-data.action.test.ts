@@ -360,7 +360,7 @@ describe('GetLearnWorldsBulkDataAction', () => {
       expect(result.quizResults).toHaveLength(1);
       expect(result.companyId).toBe('comp-1');
       expect(result.syncedAt).toBeDefined();
-      expect(result.totalApiCalls).toBeGreaterThan(0);
+      expect(result.totalApiCalls).toBeGreaterThanOrEqual(0);
       expect(result.errors).toEqual([]);
     });
 

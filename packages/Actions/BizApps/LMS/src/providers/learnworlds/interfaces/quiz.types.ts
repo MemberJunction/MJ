@@ -83,15 +83,15 @@ export interface QuizMetrics {
   correctAnswers: number;
   incorrectAnswers: number;
   totalQuestions: number;
-  accuracyRate: number | string;
+  accuracyRate: number;
 }
 
 export interface QuizResultsSummary {
   totalResults: number;
   passedResults: number;
   failedResults: number;
-  passRate: number | string;
-  averageScore: string;
+  passRate: number;
+  averageScore: number;
   averageDuration: number;
   averageDurationText: string;
   dateRange: {
@@ -105,8 +105,8 @@ export interface QuizResultsSummary {
       results: FormattedQuizResult[];
       stats: {
         attempts: number;
-        averageScore: string;
-        passRate: string;
+        averageScore: number;
+        passRate: number;
       };
     }
   > | null;
