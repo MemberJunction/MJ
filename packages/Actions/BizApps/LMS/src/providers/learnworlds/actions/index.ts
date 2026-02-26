@@ -17,3 +17,4 @@ export * from './attach-tags.action';
 export * from './detach-tags.action';
 export * from './get-bundles.action';
 export * from './onboard-learner.action';
+export * from './get-bulk-data.action';
