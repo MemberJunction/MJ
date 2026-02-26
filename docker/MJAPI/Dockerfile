@@ -43,7 +43,7 @@ WORKDIR /app
 RUN npm install -g pm2
 
 # Copy package.json and package-lock.json from the root directory
-COPY package.json turbo.json ./
+COPY package.json turbo.json tsconfig.server.json ./
 COPY packages/GeneratedActions/package.json ./packages/GeneratedActions/package.json
 COPY packages/GeneratedEntities/package.json ./packages/GeneratedEntities/package.json
 COPY packages/MJAPI/package.json ./packages/MJAPI/package.json
