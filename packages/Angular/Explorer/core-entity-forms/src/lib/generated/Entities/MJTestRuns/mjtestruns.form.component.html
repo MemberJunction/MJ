@@ -315,6 +315,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- MJ: Test Run Outputs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTestRunOutputs"
+        SectionName="MJ: Test Run Outputs"
+        Icon="fa fa-file-image"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTestRunOutputs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Run Outputs','TestRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Run Outputs')"
+                [AllowLoad]="IsSectionExpanded('mJTestRunOutputs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTestRunOutputs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- MJ: Test Run Feedbacks Section -->
     <mj-collapsible-panel
         SectionKey="mJTestRunFeedbacks"

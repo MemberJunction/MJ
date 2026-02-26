@@ -21,6 +21,7 @@ export class MJTestRunsFormComponent extends BaseFormComponent {
             { sectionKey: 'inputExpectedOutput', sectionName: 'Input & Expected Output', isExpanded: false },
             { sectionKey: 'resultAnalysis', sectionName: 'Result Analysis', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJTestRunOutputs', sectionName: 'MJ: Test Run Outputs', isExpanded: false },
             { sectionKey: 'mJTestRunFeedbacks', sectionName: 'MJ: Test Run Feedbacks', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
