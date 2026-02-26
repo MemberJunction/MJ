@@ -210,18 +210,12 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
    * Extract typed params from framework ActionParam[]
    */
   private extractGetUserProgressParams(params: ActionParam[]): GetUserProgressParams {
-    const companyId = this.getParamValue(params, 'CompanyID') as string;
-    const userId = this.getParamValue(params, 'UserID') as string;
-    const courseId = this.getParamValue(params, 'CourseID') as string | undefined;
-    const includeUnitDetails = (this.getParamValue(params, 'IncludeUnitDetails') ?? false) as boolean;
-    const includeLessonDetails = (this.getParamValue(params, 'IncludeLessonDetails') ?? false) as boolean;
-
     return {
-      CompanyID: companyId,
-      UserID: userId,
-      CourseID: courseId,
-      IncludeUnitDetails: includeUnitDetails,
-      IncludeLessonDetails: includeLessonDetails,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getRequiredStringParam(params, 'UserID'),
+      CourseID: this.getOptionalStringParam(params, 'CourseID'),
+      IncludeUnitDetails: this.getOptionalBooleanParam(params, 'IncludeUnitDetails', false),
+      IncludeLessonDetails: this.getOptionalBooleanParam(params, 'IncludeLessonDetails', false),
     };
   }
 

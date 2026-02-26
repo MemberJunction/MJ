@@ -377,11 +377,6 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
 
     try {
       const bulkParams = this.extractBulkDataParams(Params);
-
-      if (!bulkParams.CompanyID) {
-        return this.buildErrorResult('VALIDATION_ERROR', 'CompanyID is required', Params);
-      }
-
       const result = await this.GetBulkData(bulkParams, ContextUser);
 
       this.setOutputParam(Params, 'SyncPayload', result);
@@ -410,15 +405,15 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
    */
   private extractBulkDataParams(params: ActionParam[]): BulkDataParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      IncludeUsers: this.getParamValue(params, 'IncludeUsers') as boolean | undefined,
-      IncludeCourses: this.getParamValue(params, 'IncludeCourses') as boolean | undefined,
-      IncludeBundles: this.getParamValue(params, 'IncludeBundles') as boolean | undefined,
-      IncludeEnrollments: this.getParamValue(params, 'IncludeEnrollments') as boolean | undefined,
-      IncludeProgress: this.getParamValue(params, 'IncludeProgress') as boolean | undefined,
-      IncludeCertificates: this.getParamValue(params, 'IncludeCertificates') as boolean | undefined,
-      IncludeQuizResults: this.getParamValue(params, 'IncludeQuizResults') as boolean | undefined,
-      MaxResultsPerEntity: this.getParamValue(params, 'MaxResultsPerEntity') as number | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      IncludeUsers: this.getOptionalBooleanParam(params, 'IncludeUsers', undefined),
+      IncludeCourses: this.getOptionalBooleanParam(params, 'IncludeCourses', undefined),
+      IncludeBundles: this.getOptionalBooleanParam(params, 'IncludeBundles', undefined),
+      IncludeEnrollments: this.getOptionalBooleanParam(params, 'IncludeEnrollments', undefined),
+      IncludeProgress: this.getOptionalBooleanParam(params, 'IncludeProgress', undefined),
+      IncludeCertificates: this.getOptionalBooleanParam(params, 'IncludeCertificates', undefined),
+      IncludeQuizResults: this.getOptionalBooleanParam(params, 'IncludeQuizResults', undefined),
+      MaxResultsPerEntity: this.getOptionalNumberParam(params, 'MaxResultsPerEntity', undefined),
     };
   }
 

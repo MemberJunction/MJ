@@ -120,17 +120,16 @@ export class CreateUserAction extends LearnWorldsBaseAction {
    * Extract typed params from the generic ActionParam array
    */
   private extractCreateUserParams(params: ActionParam[]): CreateUserParams {
-    const companyId = this.getParamValue(params, 'CompanyID') as string;
     return {
-      CompanyID: companyId,
-      Email: this.getParamValue(params, 'Email') as string,
-      Username: this.getParamValue(params, 'Username') as string | undefined,
-      Password: this.getParamValue(params, 'Password') as string | undefined,
-      FirstName: this.getParamValue(params, 'FirstName') as string | undefined,
-      LastName: this.getParamValue(params, 'LastName') as string | undefined,
-      Role: (this.getParamValue(params, 'Role') as string | undefined) || 'student',
-      IsActive: this.getParamValue(params, 'IsActive') as boolean | undefined,
-      SendWelcomeEmail: this.getParamValue(params, 'SendWelcomeEmail') as boolean | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      Email: this.getRequiredStringParam(params, 'Email'),
+      Username: this.getOptionalStringParam(params, 'Username'),
+      Password: this.getOptionalStringParam(params, 'Password'),
+      FirstName: this.getOptionalStringParam(params, 'FirstName'),
+      LastName: this.getOptionalStringParam(params, 'LastName'),
+      Role: this.getOptionalStringParam(params, 'Role') || 'student',
+      IsActive: this.getOptionalBooleanParam(params, 'IsActive', undefined),
+      SendWelcomeEmail: this.getOptionalBooleanParam(params, 'SendWelcomeEmail', undefined),
       Tags: this.getParamValue(params, 'Tags') as string | string[] | undefined,
       CustomFields: this.getParamValue(params, 'CustomFields') as Record<string, unknown> | undefined,
       EnrollInCourses: this.getParamValue(params, 'EnrollInCourses') as string | string[] | undefined,

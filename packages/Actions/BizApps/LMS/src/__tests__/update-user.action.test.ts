@@ -292,8 +292,8 @@ describe('UpdateUserAction', () => {
       const result = await action['InternalRunAction'](runParams as unknown as Parameters<(typeof action)['InternalRunAction']>[0]);
 
       expect(result.Success).toBe(false);
-      expect(result.ResultCode).toBe('VALIDATION_ERROR');
-      expect(result.Message).toContain('UserID is required');
+      expect(result.ResultCode).toBe('ERROR');
+      expect(result.Message).toContain("'UserID'");
     });
 
     it('should return error when API call fails', async () => {

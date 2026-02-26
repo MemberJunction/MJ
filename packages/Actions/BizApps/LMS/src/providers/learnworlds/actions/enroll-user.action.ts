@@ -100,9 +100,11 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
     // Format enrollment details
     const enrollmentDetails = this.buildEnrollmentDetails(enrollment, params.UserID, params.CourseID, price);
 
-    // Fetch course title and user name for the summary
-    const courseTitle = await this.fetchCourseTitle(params.CourseID, contextUser);
-    const userName = await this.fetchUserName(params.UserID, contextUser);
+    // Fetch course title and user name in parallel for the summary
+    const [courseTitle, userName] = await Promise.all([
+      this.fetchCourseTitle(params.CourseID, contextUser),
+      this.fetchUserName(params.UserID, contextUser),
+    ]);
 
     // Create summary
     const summary: EnrollUserSummary = {
@@ -149,15 +151,15 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
    */
   private extractEnrollUserParams(params: ActionParam[]): EnrollUserParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      UserID: this.getParamValue(params, 'UserID') as string,
-      CourseID: this.getParamValue(params, 'CourseID') as string,
-      ProductType: this.getParamValue(params, 'ProductType') as 'course' | 'bundle' | undefined,
-      Price: (this.getParamValue(params, 'Price') as number | undefined) ?? 0,
-      Justification: (this.getParamValue(params, 'Justification') as string | undefined) || 'API Enrollment',
-      NotifyUser: this.getParamValue(params, 'NotifyUser') as boolean | undefined,
-      StartDate: this.getParamValue(params, 'StartDate') as string | undefined,
-      ExpiryDate: this.getParamValue(params, 'ExpiryDate') as string | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getRequiredStringParam(params, 'UserID'),
+      CourseID: this.getRequiredStringParam(params, 'CourseID'),
+      ProductType: (this.getOptionalStringParam(params, 'ProductType') || 'course') as 'course' | 'bundle',
+      Price: this.getOptionalNumberParam(params, 'Price', 0),
+      Justification: this.getOptionalStringParam(params, 'Justification') || 'API Enrollment',
+      NotifyUser: this.getOptionalBooleanParam(params, 'NotifyUser', true),
+      StartDate: this.getOptionalStringParam(params, 'StartDate'),
+      ExpiryDate: this.getOptionalStringParam(params, 'ExpiryDate'),
     };
   }
 
@@ -245,8 +247,8 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
       if (courseResponse.success !== false && courseResponse.data) {
         return courseResponse.data.title || 'Unknown Course';
       }
-    } catch {
-      // Swallow -- use default
+    } catch (error) {
+      console.warn(`Failed to fetch course title for ${courseId}:`, error instanceof Error ? error.message : error);
     }
     return 'Unknown Course';
   }
@@ -260,8 +262,8 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
       if (userResponse.success !== false && userResponse.data) {
         return userResponse.data.email || userResponse.data.username || 'Unknown User';
       }
-    } catch {
-      // Swallow -- use default
+    } catch (error) {
+      console.warn(`Failed to fetch user name for ${userId}:`, error instanceof Error ? error.message : error);
     }
     return 'Unknown User';
   }

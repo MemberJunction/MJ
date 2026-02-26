@@ -417,7 +417,7 @@ describe('OnboardLearnerAction', () => {
       expect(result.Message).toContain('0/1 enrollment(s) succeeded');
     });
 
-    it('should return VALIDATION_ERROR when email is missing', async () => {
+    it('should return error when email is missing', async () => {
       const runParams: RunActionParams = {
         Params: [
           { Name: 'CompanyID', Type: 'Input', Value: 'comp-1' },
@@ -429,8 +429,8 @@ describe('OnboardLearnerAction', () => {
       const result = (await action['InternalRunAction'](runParams)) as ActionResultSimple;
 
       expect(result.Success).toBe(false);
-      expect(result.ResultCode).toBe('VALIDATION_ERROR');
-      expect(result.Message).toContain('Email is required');
+      expect(result.ResultCode).toBe('ERROR');
+      expect(result.Message).toContain("'Email'");
     });
 
     it('should return ERROR when OnboardLearner throws', async () => {

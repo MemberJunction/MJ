@@ -212,13 +212,13 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
 
   private extractCourseAnalyticsParams(params: ActionParam[]): GetCourseAnalyticsParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      CourseID: this.getParamValue(params, 'CourseID') as string,
-      DateFrom: this.getParamValue(params, 'DateFrom') as string | undefined,
-      DateTo: this.getParamValue(params, 'DateTo') as string | undefined,
-      IncludeUserBreakdown: this.getParamValue(params, 'IncludeUserBreakdown') as boolean | undefined,
-      IncludeModuleStats: this.getParamValue(params, 'IncludeModuleStats') as boolean | undefined,
-      IncludeRevenue: this.getParamValue(params, 'IncludeRevenue') as boolean | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      CourseID: this.getRequiredStringParam(params, 'CourseID'),
+      DateFrom: this.getOptionalStringParam(params, 'DateFrom'),
+      DateTo: this.getOptionalStringParam(params, 'DateTo'),
+      IncludeUserBreakdown: this.getOptionalBooleanParam(params, 'IncludeUserBreakdown', undefined),
+      IncludeModuleStats: this.getOptionalBooleanParam(params, 'IncludeModuleStats', undefined),
+      IncludeRevenue: this.getOptionalBooleanParam(params, 'IncludeRevenue', undefined),
     };
   }
 
@@ -228,11 +228,13 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
 
   private buildDateQueryString(dateFrom?: string, dateTo?: string): string {
     const queryParams: Record<string, string> = {};
-    if (dateFrom) {
-      queryParams.date_from = new Date(dateFrom).toISOString().split('T')[0];
+    const parsedFrom = this.safeParseDateToISO(dateFrom);
+    if (parsedFrom) {
+      queryParams.date_from = parsedFrom.split('T')[0];
     }
-    if (dateTo) {
-      queryParams.date_to = new Date(dateTo).toISOString().split('T')[0];
+    const parsedTo = this.safeParseDateToISO(dateTo);
+    if (parsedTo) {
+      queryParams.date_to = parsedTo.split('T')[0];
     }
     const keys = Object.keys(queryParams);
     if (keys.length === 0) return '';

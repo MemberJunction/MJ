@@ -92,35 +92,24 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Enrolls the user in all specified courses and bundles, collecting results and errors.
+   * Enrolls the user in all specified courses and bundles in parallel,
+   * collecting results and errors.
    */
   private async enrollInProducts(
     params: OnboardLearnerParams,
     userId: string,
     contextUser: UserInfo,
   ): Promise<{ enrollments: OnboardLearnerEnrollmentResult[]; errors: string[] }> {
-    const enrollments: OnboardLearnerEnrollmentResult[] = [];
-    const errors: string[] = [];
-
-    // Enroll in courses
     const courseIDs = params.CourseIDs || [];
-    for (const courseId of courseIDs) {
-      const result = await this.enrollInSingleProduct(params.CompanyID, userId, courseId, 'course', contextUser);
-      enrollments.push(result);
-      if (result.error) {
-        errors.push(result.error);
-      }
-    }
-
-    // Enroll in bundles
     const bundleIDs = params.BundleIDs || [];
-    for (const bundleId of bundleIDs) {
-      const result = await this.enrollInSingleProduct(params.CompanyID, userId, bundleId, 'bundle', contextUser);
-      enrollments.push(result);
-      if (result.error) {
-        errors.push(result.error);
-      }
-    }
+
+    // Fire all enrollment requests in parallel
+    const coursePromises = courseIDs.map((courseId) => this.enrollInSingleProduct(params.CompanyID, userId, courseId, 'course', contextUser));
+    const bundlePromises = bundleIDs.map((bundleId) => this.enrollInSingleProduct(params.CompanyID, userId, bundleId, 'bundle', contextUser));
+
+    const enrollments = await Promise.all([...coursePromises, ...bundlePromises]);
+
+    const errors = enrollments.filter((e) => e.error).map((e) => e.error!);
 
     return { enrollments, errors };
   }
@@ -201,17 +190,17 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
 
     try {
       const onboardParams: OnboardLearnerParams = {
-        CompanyID: this.getParamValue(Params, 'CompanyID') as string,
-        Email: this.getParamValue(Params, 'Email') as string,
-        FirstName: this.getParamValue(Params, 'FirstName') as string | undefined,
-        LastName: this.getParamValue(Params, 'LastName') as string | undefined,
-        Role: this.getParamValue(Params, 'Role') as string | undefined,
-        Tags: this.getParamValue(Params, 'Tags') as string[] | undefined,
+        CompanyID: this.getRequiredStringParam(Params, 'CompanyID'),
+        Email: this.getRequiredStringParam(Params, 'Email'),
+        FirstName: this.getOptionalStringParam(Params, 'FirstName'),
+        LastName: this.getOptionalStringParam(Params, 'LastName'),
+        Role: this.getOptionalStringParam(Params, 'Role'),
+        Tags: this.getOptionalStringArrayParam(Params, 'Tags'),
         CustomFields: this.getParamValue(Params, 'CustomFields') as Record<string, unknown> | undefined,
-        CourseIDs: this.getParamValue(Params, 'CourseIDs') as string[] | undefined,
-        BundleIDs: this.getParamValue(Params, 'BundleIDs') as string[] | undefined,
-        RedirectTo: this.getParamValue(Params, 'RedirectTo') as string | undefined,
-        SendWelcomeEmail: this.getParamValue(Params, 'SendWelcomeEmail') as boolean | undefined,
+        CourseIDs: this.getOptionalStringArrayParam(Params, 'CourseIDs'),
+        BundleIDs: this.getOptionalStringArrayParam(Params, 'BundleIDs'),
+        RedirectTo: this.getOptionalStringParam(Params, 'RedirectTo'),
+        SendWelcomeEmail: this.getOptionalBooleanParam(Params, 'SendWelcomeEmail', false),
       };
 
       if (!onboardParams.Email) {

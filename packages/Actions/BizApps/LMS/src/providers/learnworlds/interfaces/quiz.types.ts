@@ -66,11 +66,16 @@ export interface FormattedQuestion {
   difficulty: string;
 }
 
+/**
+ * Possible answer value types from quiz responses.
+ */
+export type QuizAnswerValue = string | number | boolean | string[] | undefined;
+
 export interface FormattedAnswer {
   questionNumber: number;
   questionId?: string;
-  userAnswer: unknown;
-  correctAnswer: unknown;
+  userAnswer: QuizAnswerValue;
+  correctAnswer: QuizAnswerValue;
   isCorrect: boolean;
   pointsEarned: number;
   pointsPossible: number;

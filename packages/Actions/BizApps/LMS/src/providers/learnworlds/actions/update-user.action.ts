@@ -119,16 +119,16 @@ export class UpdateUserAction extends LearnWorldsBaseAction {
 
     try {
       const updateParams: UpdateUserParams = {
-        CompanyID: this.getParamValue(Params, 'CompanyID') as string,
-        UserID: this.getParamValue(Params, 'UserID') as string,
-        Email: this.getParamValue(Params, 'Email') as string | undefined,
-        Username: this.getParamValue(Params, 'Username') as string | undefined,
-        Password: this.getParamValue(Params, 'Password') as string | undefined,
-        FirstName: this.getParamValue(Params, 'FirstName') as string | undefined,
-        LastName: this.getParamValue(Params, 'LastName') as string | undefined,
-        Role: this.getParamValue(Params, 'Role') as string | undefined,
-        IsActive: this.getParamValue(Params, 'IsActive') as boolean | undefined,
-        Tags: this.getParamValue(Params, 'Tags') as string[] | undefined,
+        CompanyID: this.getRequiredStringParam(Params, 'CompanyID'),
+        UserID: this.getRequiredStringParam(Params, 'UserID'),
+        Email: this.getOptionalStringParam(Params, 'Email'),
+        Username: this.getOptionalStringParam(Params, 'Username'),
+        Password: this.getOptionalStringParam(Params, 'Password'),
+        FirstName: this.getOptionalStringParam(Params, 'FirstName'),
+        LastName: this.getOptionalStringParam(Params, 'LastName'),
+        Role: this.getOptionalStringParam(Params, 'Role'),
+        IsActive: this.getOptionalBooleanParam(Params, 'IsActive', undefined),
+        Tags: this.getOptionalStringArrayParam(Params, 'Tags'),
         CustomFields: this.getParamValue(Params, 'CustomFields') as Record<string, unknown> | undefined,
       };
 

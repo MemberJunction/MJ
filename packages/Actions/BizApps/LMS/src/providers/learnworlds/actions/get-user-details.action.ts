@@ -151,10 +151,10 @@ export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
    */
   private extractGetUserDetailsParams(params: ActionParam[]): GetUserDetailsParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      UserID: this.getParamValue(params, 'UserID') as string,
-      IncludeEnrollments: (this.getParamValue(params, 'IncludeEnrollments') as boolean | undefined) ?? true,
-      IncludeStats: (this.getParamValue(params, 'IncludeStats') as boolean | undefined) ?? true,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getRequiredStringParam(params, 'UserID'),
+      IncludeEnrollments: this.getOptionalBooleanParam(params, 'IncludeEnrollments', true),
+      IncludeStats: this.getOptionalBooleanParam(params, 'IncludeStats', true),
     };
   }
 

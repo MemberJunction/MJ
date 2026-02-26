@@ -116,9 +116,7 @@ describe('AttachTagsAction', () => {
       expect(result.Message).toContain('user-123');
     });
 
-    it('should return error result when AttachTags throws', async () => {
-      vi.spyOn(action, 'AttachTags').mockRejectedValue(new Error('UserID is required'));
-
+    it('should return error result when required param is missing', async () => {
       const runParams: RunActionParams = {
         Params: [
           { Name: 'CompanyID', Type: 'Input', Value: 'comp-1' },
@@ -133,7 +131,7 @@ describe('AttachTagsAction', () => {
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('ERROR');
       expect(result.Message).toContain('Error attaching tags');
-      expect(result.Message).toContain('UserID is required');
+      expect(result.Message).toContain("'UserID'");
     });
   });
 });

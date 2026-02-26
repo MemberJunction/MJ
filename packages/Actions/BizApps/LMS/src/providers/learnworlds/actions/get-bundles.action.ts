@@ -99,9 +99,9 @@ export class GetBundlesAction extends LearnWorldsBaseAction {
 
     try {
       const bundleParams: GetBundlesParams = {
-        CompanyID: this.getParamValue(Params, 'CompanyID') as string,
-        SearchText: this.getParamValue(Params, 'SearchText') as string | undefined,
-        MaxResults: this.getParamValue(Params, 'MaxResults') as number | undefined,
+        CompanyID: this.getRequiredStringParam(Params, 'CompanyID'),
+        SearchText: this.getOptionalStringParam(Params, 'SearchText'),
+        MaxResults: this.getOptionalNumberParam(Params, 'MaxResults', LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
       };
 
       const result = await this.GetBundles(bundleParams, ContextUser);

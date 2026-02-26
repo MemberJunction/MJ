@@ -617,7 +617,7 @@ describe('GetLearnWorldsBulkDataAction', () => {
       expect(result.Message).toContain('1 error(s)');
     });
 
-    it('should return VALIDATION_ERROR when CompanyID is missing', async () => {
+    it('should return error when CompanyID is missing', async () => {
       const runParams: RunActionParams = {
         Params: [{ Name: 'CompanyID', Type: 'Input', Value: undefined }],
         ContextUser: contextUser,
@@ -626,8 +626,8 @@ describe('GetLearnWorldsBulkDataAction', () => {
       const result = (await action['InternalRunAction'](runParams)) as ActionResultSimple;
 
       expect(result.Success).toBe(false);
-      expect(result.ResultCode).toBe('VALIDATION_ERROR');
-      expect(result.Message).toContain('CompanyID is required');
+      expect(result.ResultCode).toBe('ERROR');
+      expect(result.Message).toContain("'CompanyID'");
     });
 
     it('should return ERROR when GetBulkData throws', async () => {

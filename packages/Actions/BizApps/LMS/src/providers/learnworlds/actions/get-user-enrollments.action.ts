@@ -121,14 +121,14 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
    */
   private extractGetUserEnrollmentsParams(params: ActionParam[]): GetUserEnrollmentsParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      UserID: this.getParamValue(params, 'UserID') as string,
-      Status: this.getParamValue(params, 'Status') as string | undefined,
-      IncludeExpired: (this.getParamValue(params, 'IncludeExpired') || false) as boolean,
-      IncludeCourseDetails: this.getParamValue(params, 'IncludeCourseDetails') !== false,
-      SortBy: (this.getParamValue(params, 'SortBy') || 'enrolled_at') as string,
-      SortOrder: (this.getParamValue(params, 'SortOrder') || 'desc') as 'asc' | 'desc',
-      MaxResults: (this.getParamValue(params, 'MaxResults') || 100) as number,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getRequiredStringParam(params, 'UserID'),
+      Status: this.getOptionalStringParam(params, 'Status'),
+      IncludeExpired: this.getOptionalBooleanParam(params, 'IncludeExpired', false),
+      IncludeCourseDetails: this.getOptionalBooleanParam(params, 'IncludeCourseDetails', true),
+      SortBy: this.getOptionalStringParam(params, 'SortBy') || 'enrolled_at',
+      SortOrder: (this.getOptionalStringParam(params, 'SortOrder') || 'desc') as 'asc' | 'desc',
+      MaxResults: this.getOptionalNumberParam(params, 'MaxResults', LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
     };
   }
 
@@ -143,7 +143,7 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
     maxResults: number,
   ): Record<string, string | number | boolean> {
     const queryParams: Record<string, string | number | boolean> = {
-      limit: Math.min(maxResults, 100),
+      limit: Math.min(maxResults, LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
       sort: sortBy,
       order: sortOrder,
     };
@@ -160,22 +160,38 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Format all raw enrollments into typed FormattedEnrollment[]
+   * Format all raw enrollments into typed FormattedEnrollment[].
+   * When course details are requested, fetches all unique courses in parallel
+   * and attaches results from a lookup map.
    */
   private async formatEnrollments(enrollments: LWApiEnrollmentData[], includeCourseDetails: boolean, contextUser: UserInfo): Promise<FormattedEnrollment[]> {
-    const formattedEnrollments: FormattedEnrollment[] = [];
+    // Build a course details map in one batch to avoid per-item API calls
+    const courseDetailsMap = includeCourseDetails
+      ? await this.fetchCourseDetailsBatch(enrollments, contextUser)
+      : new Map<string, FormattedEnrollment['course']>();
 
-    for (const enrollment of enrollments) {
+    return enrollments.map((enrollment) => {
       const formatted = this.formatSingleEnrollment(enrollment);
-
       if (includeCourseDetails && enrollment.course_id) {
-        formatted.course = await this.fetchCourseDetailsForEnrollment(enrollment.course_id, contextUser);
+        formatted.course = courseDetailsMap.get(enrollment.course_id);
       }
+      return formatted;
+    });
+  }
 
-      formattedEnrollments.push(formatted);
-    }
+  /**
+   * Fetch course details for all unique course IDs in parallel and return a lookup map.
+   */
+  private async fetchCourseDetailsBatch(enrollments: LWApiEnrollmentData[], contextUser: UserInfo): Promise<Map<string, FormattedEnrollment['course']>> {
+    const uniqueCourseIds = [...new Set(enrollments.map((e) => e.course_id).filter((id): id is string => !!id))];
 
-    return formattedEnrollments;
+    const results = await Promise.all(uniqueCourseIds.map((courseId) => this.fetchCourseDetailsForEnrollment(courseId, contextUser)));
+
+    const map = new Map<string, FormattedEnrollment['course']>();
+    uniqueCourseIds.forEach((courseId, index) => {
+      map.set(courseId, results[index]);
+    });
+    return map;
   }
 
   /**

@@ -131,15 +131,15 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
 
   private extractUpdateProgressParams(params: ActionParam[]): UpdateUserProgressParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      UserID: this.getParamValue(params, 'UserID') as string,
-      CourseID: this.getParamValue(params, 'CourseID') as string,
-      LessonID: this.getParamValue(params, 'LessonID') as string | undefined,
-      ProgressPercentage: this.getParamValue(params, 'ProgressPercentage') as number | undefined,
-      Completed: this.getParamValue(params, 'Completed') as boolean | undefined,
-      TimeSpent: this.getParamValue(params, 'TimeSpent') as number | undefined,
-      Score: this.getParamValue(params, 'Score') as number | undefined,
-      Notes: this.getParamValue(params, 'Notes') as string | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getRequiredStringParam(params, 'UserID'),
+      CourseID: this.getRequiredStringParam(params, 'CourseID'),
+      LessonID: this.getOptionalStringParam(params, 'LessonID'),
+      ProgressPercentage: this.getOptionalNumberParam(params, 'ProgressPercentage', undefined),
+      Completed: this.getOptionalBooleanParam(params, 'Completed', undefined),
+      TimeSpent: this.getOptionalNumberParam(params, 'TimeSpent', undefined),
+      Score: this.getOptionalNumberParam(params, 'Score', undefined),
+      Notes: this.getOptionalStringParam(params, 'Notes'),
     };
   }
 

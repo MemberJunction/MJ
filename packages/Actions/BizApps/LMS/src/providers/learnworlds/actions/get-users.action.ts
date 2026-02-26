@@ -107,17 +107,17 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
    */
   private extractGetUsersParams(params: ActionParam[]): GetUsersParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      SearchText: this.getParamValue(params, 'SearchText') as string | undefined,
-      Role: this.getParamValue(params, 'Role') as string | undefined,
-      Status: this.getParamValue(params, 'Status') as string | undefined,
-      Tags: this.getParamValue(params, 'Tags') as string | undefined,
-      CreatedAfter: this.getParamValue(params, 'CreatedAfter') as string | undefined,
-      CreatedBefore: this.getParamValue(params, 'CreatedBefore') as string | undefined,
-      SortBy: (this.getParamValue(params, 'SortBy') as string | undefined) || 'created',
-      SortOrder: (this.getParamValue(params, 'SortOrder') as 'asc' | 'desc' | undefined) || 'desc',
-      IncludeCourseStats: this.getParamValue(params, 'IncludeCourseStats') as boolean | undefined,
-      MaxResults: (this.getParamValue(params, 'MaxResults') as number | undefined) || 100,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      SearchText: this.getOptionalStringParam(params, 'SearchText'),
+      Role: this.getOptionalStringParam(params, 'Role'),
+      Status: this.getOptionalStringParam(params, 'Status'),
+      Tags: this.getOptionalStringParam(params, 'Tags'),
+      CreatedAfter: this.getOptionalStringParam(params, 'CreatedAfter'),
+      CreatedBefore: this.getOptionalStringParam(params, 'CreatedBefore'),
+      SortBy: this.getOptionalStringParam(params, 'SortBy') || 'created',
+      SortOrder: (this.getOptionalStringParam(params, 'SortOrder') || 'desc') as 'asc' | 'desc',
+      IncludeCourseStats: this.getOptionalBooleanParam(params, 'IncludeCourseStats', false),
+      MaxResults: this.getOptionalNumberParam(params, 'MaxResults', LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
     };
   }
 

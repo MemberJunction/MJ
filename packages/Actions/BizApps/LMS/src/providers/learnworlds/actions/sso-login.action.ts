@@ -73,10 +73,10 @@ export class SSOLoginAction extends LearnWorldsBaseAction {
 
     try {
       const ssoParams: SSOLoginParams = {
-        CompanyID: this.getParamValue(Params, 'CompanyID') as string,
-        Email: this.getParamValue(Params, 'Email') as string | undefined,
-        UserID: this.getParamValue(Params, 'UserID') as string | undefined,
-        RedirectTo: this.getParamValue(Params, 'RedirectTo') as string | undefined,
+        CompanyID: this.getRequiredStringParam(Params, 'CompanyID'),
+        Email: this.getOptionalStringParam(Params, 'Email'),
+        UserID: this.getOptionalStringParam(Params, 'UserID'),
+        RedirectTo: this.getOptionalStringParam(Params, 'RedirectTo'),
       };
 
       const result = await this.GenerateSSOUrl(ssoParams, ContextUser);

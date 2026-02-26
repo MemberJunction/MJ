@@ -9,6 +9,7 @@ import {
   FormattedQuizResult,
   FormattedQuestion,
   FormattedAnswer,
+  QuizAnswerValue,
   QuizMetrics,
   QuizResultsSummary,
 } from '../interfaces';
@@ -239,18 +240,18 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
 
   private extractQuizResultsParams(params: ActionParam[]): GetQuizResultsParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      UserID: this.getParamValue(params, 'UserID') as string | undefined,
-      CourseID: this.getParamValue(params, 'CourseID') as string | undefined,
-      QuizID: this.getParamValue(params, 'QuizID') as string | undefined,
-      IncludeQuestions: this.getParamValue(params, 'IncludeQuestions') as boolean | undefined,
-      IncludeAnswers: this.getParamValue(params, 'IncludeAnswers') as boolean | undefined,
-      PassingOnly: this.getParamValue(params, 'PassingOnly') as boolean | undefined,
-      DateFrom: this.getParamValue(params, 'DateFrom') as string | undefined,
-      DateTo: this.getParamValue(params, 'DateTo') as string | undefined,
-      SortBy: this.getParamValue(params, 'SortBy') as string | undefined,
-      SortOrder: this.getParamValue(params, 'SortOrder') as 'asc' | 'desc' | undefined,
-      MaxResults: this.getParamValue(params, 'MaxResults') as number | undefined,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getOptionalStringParam(params, 'UserID'),
+      CourseID: this.getOptionalStringParam(params, 'CourseID'),
+      QuizID: this.getOptionalStringParam(params, 'QuizID'),
+      IncludeQuestions: this.getOptionalBooleanParam(params, 'IncludeQuestions', true),
+      IncludeAnswers: this.getOptionalBooleanParam(params, 'IncludeAnswers', true),
+      PassingOnly: this.getOptionalBooleanParam(params, 'PassingOnly', false),
+      DateFrom: this.getOptionalStringParam(params, 'DateFrom'),
+      DateTo: this.getOptionalStringParam(params, 'DateTo'),
+      SortBy: this.getOptionalStringParam(params, 'SortBy'),
+      SortOrder: (this.getOptionalStringParam(params, 'SortOrder') || 'desc') as 'asc' | 'desc',
+      MaxResults: this.getOptionalNumberParam(params, 'MaxResults', LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
     };
   }
 
@@ -269,7 +270,7 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
     maxResults: number,
   ): LWQuizResultQueryParams {
     const queryParams: LWQuizResultQueryParams = {
-      limit: Math.min(maxResults, 100),
+      limit: Math.min(maxResults, LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
       sort: sortBy,
       order: sortOrder,
     };
@@ -277,11 +278,13 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
     if (passingOnly) {
       queryParams.passed = true;
     }
-    if (dateFrom) {
-      queryParams.completed_after = new Date(dateFrom).toISOString();
+    const parsedFrom = this.safeParseDateToISO(dateFrom);
+    if (parsedFrom) {
+      queryParams.completed_after = parsedFrom;
     }
-    if (dateTo) {
-      queryParams.completed_before = new Date(dateTo).toISOString();
+    const parsedTo = this.safeParseDateToISO(dateTo);
+    if (parsedTo) {
+      queryParams.completed_before = parsedTo;
     }
     if (quizId && userId) {
       queryParams.user_id = userId;
@@ -477,8 +480,8 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
     return answers.map((a, index) => ({
       questionNumber: a.question_number || index + 1,
       questionId: a.question_id,
-      userAnswer: a.user_answer || a.answer || a.selected_answer,
-      correctAnswer: a.correct_answer,
+      userAnswer: this.coerceAnswerValue(a.user_answer || a.answer || a.selected_answer),
+      correctAnswer: this.coerceAnswerValue(a.correct_answer),
       isCorrect: a.is_correct || a.correct || false,
       pointsEarned: a.points_earned || (a.is_correct ? a.points || 1 : 0),
       pointsPossible: a.points_possible || a.points || 1,
@@ -486,6 +489,16 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
       timeSpent: a.time_spent,
       answeredAt: a.answered_at,
     }));
+  }
+
+  /**
+   * Coerce a raw answer value from the API to a typed QuizAnswerValue.
+   */
+  private coerceAnswerValue(value: unknown): QuizAnswerValue {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+    if (Array.isArray(value)) return value.map(String);
+    return String(value);
   }
 
   private calculateQuizMetrics(answers: FormattedAnswer[]): QuizMetrics {

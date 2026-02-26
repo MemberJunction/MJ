@@ -48,9 +48,9 @@ export class DetachTagsAction extends LearnWorldsBaseAction {
 
     try {
       const tagParams: TagParams = {
-        CompanyID: this.getParamValue(Params, 'CompanyID') as string,
-        UserID: this.getParamValue(Params, 'UserID') as string,
-        Tags: this.getParamValue(Params, 'Tags') as string[],
+        CompanyID: this.getRequiredStringParam(Params, 'CompanyID'),
+        UserID: this.getRequiredStringParam(Params, 'UserID'),
+        Tags: this.getOptionalStringArrayParam(Params, 'Tags') || [],
       };
 
       const result = await this.DetachTags(tagParams, ContextUser);

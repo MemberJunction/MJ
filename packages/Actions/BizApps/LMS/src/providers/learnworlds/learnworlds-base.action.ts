@@ -21,6 +21,11 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   protected apiVersion = 'v2';
 
   /**
+   * Maximum number of items per page supported by the LearnWorlds API
+   */
+  protected static readonly LW_MAX_PAGE_SIZE = 100;
+
+  /**
    * Current action parameters (set by the framework or by SetCompanyContext)
    */
   protected params: ActionParam[] = [];
@@ -148,7 +153,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     const results: T[] = [];
     let page = 1;
     let hasMore = true;
-    const limit = (queryParams.limit as number) || 50;
+    const limit = (queryParams.limit as number) || LearnWorldsBaseAction.LW_MAX_PAGE_SIZE;
 
     while (hasMore) {
       const paginatedParams: Record<string, string> = {};
@@ -246,6 +251,79 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
       totalUnits: progressData.total_units || 0,
       timeSpent: progressData.time_spent || 0,
     };
+  }
+
+  /**
+   * Safely parses a date string to ISO format.
+   * Returns undefined if the input is falsy or produces an invalid date.
+   */
+  protected safeParseDateToISO(dateString: string | undefined): string | undefined {
+    if (!dateString) return undefined;
+    const parsed = new Date(dateString);
+    if (isNaN(parsed.getTime())) {
+      console.warn(`Invalid date string "${dateString}" — skipping date filter`);
+      return undefined;
+    }
+    return parsed.toISOString();
+  }
+
+  /**
+   * Gets a required string parameter, throwing if missing or empty.
+   */
+  protected getRequiredStringParam(params: ActionParam[], name: string): string {
+    const value = this.getParamValue(params, name);
+    if (typeof value !== 'string' || !value) {
+      throw new Error(`Required string parameter '${name}' is missing or invalid`);
+    }
+    return value;
+  }
+
+  /**
+   * Gets an optional string parameter.
+   */
+  protected getOptionalStringParam(params: ActionParam[], name: string): string | undefined {
+    const value = this.getParamValue(params, name);
+    if (value === undefined || value === null) return undefined;
+    return typeof value === 'string' ? value : String(value);
+  }
+
+  /**
+   * Gets an optional boolean parameter with a default value.
+   * When defaultValue is undefined, returns undefined if the parameter is missing.
+   */
+  protected getOptionalBooleanParam(params: ActionParam[], name: string, defaultValue: boolean): boolean;
+  protected getOptionalBooleanParam(params: ActionParam[], name: string, defaultValue: boolean | undefined): boolean | undefined;
+  protected getOptionalBooleanParam(params: ActionParam[], name: string, defaultValue: boolean | undefined): boolean | undefined {
+    const value = this.getParamValue(params, name);
+    if (value === undefined || value === null) return defaultValue;
+    if (typeof value === 'boolean') return value;
+    const strVal = String(value).toLowerCase();
+    if (strVal === 'true' || strVal === '1') return true;
+    if (strVal === 'false' || strVal === '0') return false;
+    return defaultValue;
+  }
+
+  /**
+   * Gets an optional number parameter with a default value.
+   * When defaultValue is undefined, returns undefined if the parameter is missing.
+   */
+  protected getOptionalNumberParam(params: ActionParam[], name: string, defaultValue: number): number;
+  protected getOptionalNumberParam(params: ActionParam[], name: string, defaultValue: number | undefined): number | undefined;
+  protected getOptionalNumberParam(params: ActionParam[], name: string, defaultValue: number | undefined): number | undefined {
+    const value = this.getParamValue(params, name);
+    if (value === undefined || value === null) return defaultValue;
+    const parsed = Number(value);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+
+  /**
+   * Gets an optional string array parameter.
+   */
+  protected getOptionalStringArrayParam(params: ActionParam[], name: string): string[] | undefined {
+    const value = this.getParamValue(params, name);
+    if (value === undefined || value === null) return undefined;
+    if (Array.isArray(value)) return value.map(String);
+    return undefined;
   }
 
   /**

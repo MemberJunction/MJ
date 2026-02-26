@@ -209,11 +209,11 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
    */
   private extractGetCourseDetailsParams(params: ActionParam[]): GetCourseDetailsParams {
     return {
-      CompanyID: this.getParamValue(params, 'CompanyID') as string,
-      CourseID: this.getParamValue(params, 'CourseID') as string,
-      IncludeModules: this.getParamValue(params, 'IncludeModules') !== false,
-      IncludeInstructors: this.getParamValue(params, 'IncludeInstructors') !== false,
-      IncludeStats: this.getParamValue(params, 'IncludeStats') !== false,
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      CourseID: this.getRequiredStringParam(params, 'CourseID'),
+      IncludeModules: this.getOptionalBooleanParam(params, 'IncludeModules', true),
+      IncludeInstructors: this.getOptionalBooleanParam(params, 'IncludeInstructors', true),
+      IncludeStats: this.getOptionalBooleanParam(params, 'IncludeStats', true),
     };
   }
 

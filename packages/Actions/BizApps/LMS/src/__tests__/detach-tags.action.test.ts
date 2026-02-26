@@ -115,9 +115,7 @@ describe('DetachTagsAction', () => {
       expect(result.Message).toContain('user-456');
     });
 
-    it('should return error result when DetachTags throws', async () => {
-      vi.spyOn(action, 'DetachTags').mockRejectedValue(new Error('UserID is required'));
-
+    it('should return error result when required param is missing', async () => {
       const runParams: RunActionParams = {
         Params: [
           { Name: 'CompanyID', Type: 'Input', Value: 'comp-1' },
@@ -132,7 +130,7 @@ describe('DetachTagsAction', () => {
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('ERROR');
       expect(result.Message).toContain('Error detaching tags');
-      expect(result.Message).toContain('UserID is required');
+      expect(result.Message).toContain("'UserID'");
     });
   });
 });
