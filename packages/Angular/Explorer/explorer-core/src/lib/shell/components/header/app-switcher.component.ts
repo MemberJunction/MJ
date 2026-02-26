@@ -79,7 +79,7 @@ export class AppSwitcherComponent {
     // Use setTimeout to ensure ViewChild is available
     setTimeout(() => {
       if (this.appConfigDialog) {
-        this.appConfigDialog.open();
+        this.appConfigDialog.Open();
       }
     }, 0);
   }
