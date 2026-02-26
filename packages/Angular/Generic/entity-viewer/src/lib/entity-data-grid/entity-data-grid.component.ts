@@ -15,7 +15,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
-import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -1272,7 +1272,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private _allData: Record<string, unknown>[] = [];
   private _rowDataMap = new Map<string, GridRowData>();
   private _entityInfo: EntityInfo | null = null;
-  private _viewEntity: UserViewEntityExtended | null = null;
+  private _viewEntity: MJUserViewEntityExtended | null = null;
   private _columnStates: ColumnRuntimeState[] = [];
   private _sortState: DataGridSortState[] = [];
   private _filterState: FilterState[] = [];
@@ -1294,7 +1294,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * The loaded view entity if using a stored view (ViewID, ViewName, or ViewEntity in Params).
    * Null for dynamic views or when using legacy entityName input.
    */
-  public get ViewEntity(): UserViewEntityExtended | null {
+  public get ViewEntity(): MJUserViewEntityExtended | null {
     return this._viewEntity;
   }
 
@@ -1493,7 +1493,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // If using a stored view, load the view entity first
       if (this._params.ViewEntity) {
         // ViewEntity was provided directly
-        this._viewEntity = this._params.ViewEntity as UserViewEntityExtended;
+        this._viewEntity = this._params.ViewEntity as MJUserViewEntityExtended;
         this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.ViewID) {
@@ -1559,7 +1559,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Gets a view from the UserViewEngine cache by ID.
    * Returns undefined if not found or engine not initialized.
    */
-  private getViewFromEngine(viewId: string): UserViewEntityExtended | undefined {
+  private getViewFromEngine(viewId: string): MJUserViewEntityExtended | undefined {
     try {
       return UserViewEngine.Instance.GetViewById(viewId);
     } catch {
@@ -1572,7 +1572,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Gets a view from the UserViewEngine cache by name.
    * Returns undefined if not found or engine not initialized.
    */
-  private getViewFromEngineByName(viewName: string): UserViewEntityExtended | undefined {
+  private getViewFromEngineByName(viewName: string): MJUserViewEntityExtended | undefined {
     try {
       return UserViewEngine.Instance.GetViewByName(viewName);
     } catch {
@@ -1588,10 +1588,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    *           3) EntityID lookup
    * Returns null if entity cannot be determined.
    */
-  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended | null): EntityInfo | null {
+  private getEntityInfoFromViewEntity(viewEntity: MJUserViewEntityExtended | null): EntityInfo | null {
     if (!viewEntity) return null;
 
-    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+    // First try: ViewEntityInfo is the preferred source (set by MJUserViewEntityExtended.Load)
     if (viewEntity.ViewEntityInfo) {
       return viewEntity.ViewEntityInfo;
     }
@@ -1733,6 +1733,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           index
         }));
       }
+    } else if (!hasExplicitOrderBy && hasSortFromGridState) {
+      // Apply GridState sort settings to _sortState so the initial data load
+      // includes the correct ORDER BY clause. Without this, _sortState remains
+      // empty and buildOrderByClause() returns '' — causing the SQL to omit
+      // ORDER BY on the first page load.
+      this._sortState = this._gridState!.sortSettings!.map((sortSetting, index) => ({
+        field: sortSetting.field,
+        direction: sortSetting.dir,
+        index: index
+      }));
     }
   }
 
@@ -1852,6 +1862,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
       // Force refresh all cells to apply new highlighting
       this.gridApi.refreshCells({ force: true });
+      // Apply AG Grid quick filter to actually filter rows client-side
+      this.gridApi.setGridOption('quickFilterText', this._filterText || undefined);
     }
   }
 

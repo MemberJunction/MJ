@@ -10,7 +10,7 @@ import {
     MJAIAgentRunStepEntity
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -273,7 +273,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Load agents that have note or example injection enabled.
      * Only extract notes/examples for agents that actually use these features.
      */
-    private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<AIAgentEntityExtended[]> {
+    private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
         const allAgents = AIEngine.Instance.Agents;
         const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
 
@@ -306,7 +306,7 @@ export class MemoryManagerAgent extends BaseAgent {
      */
     private async LoadConversationsWithNewActivity(
         since: Date | null,
-        agentsUsingMemory: AIAgentEntityExtended[],
+        agentsUsingMemory: MJAIAgentEntityExtended[],
         contextUser: UserInfo
     ): Promise<ConversationWithRatings[]> {
         if (agentsUsingMemory.length === 0) {
@@ -396,13 +396,13 @@ export class MemoryManagerAgent extends BaseAgent {
             ID IN (
                 SELECT DISTINCT ar.ID
                 FROM __mj.AIAgentRun ar
-                INNER JOIN __mj.Conversation c ON ar.ConversationID = c.ID
-                INNER JOIN __mj.ConversationDetail cd ON cd.ConversationID = c.ID
-                INNER JOIN __mj.ConversationDetailArtifact cda ON cda.ConversationDetailID = cd.ID
-                INNER JOIN __mj.ArtifactVersion av ON av.ID = cda.ArtifactVersionID
+                INNER JOIN __mj.vwConversations c ON ar.ConversationID = c.ID
+                INNER JOIN __mj.vwConversationDetails cd ON cd.ConversationID = c.ID
+                INNER JOIN __mj.vwConversationDetailArtifacts cda ON cda.ConversationDetailID = cd.ID
+                INNER JOIN __mj.vwArtifactVersions av ON av.ID = cda.ArtifactVersionID
                 WHERE EXISTS (
                     SELECT 1
-                    FROM __mj.ArtifactUse au
+                    FROM __mj.vwArtifactUses au
                     WHERE au.ArtifactVersionID = av.ID
                     ${sinceFilter}
                     GROUP BY au.ArtifactVersionID
@@ -1289,7 +1289,7 @@ export class MemoryManagerAgent extends BaseAgent {
      */
     private async processConsolidationCluster(
         cluster: MJAIAgentNoteEntity[],
-        consolidatePrompt: AIPromptEntityExtended,
+        consolidatePrompt: MJAIPromptEntityExtended,
         aiNoteTypeId: string,
         runner: AIPromptRunner,
         md: Metadata,

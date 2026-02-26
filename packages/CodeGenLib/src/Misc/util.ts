@@ -95,12 +95,14 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
 }
 
 /**
- * Sorts an array of items by Sequence property first, then by __mj_CreatedAt for consistent ordering.
- * This ensures that generated code maintains the same order across multiple runs.
- * @param items - Array of items that have Sequence and optional __mj_CreatedAt properties
+ * Sorts an array of items by Sequence, then by __mj_CreatedAt, then alphabetically by Value
+ * for fully deterministic ordering. This ensures that generated code maintains the same order
+ * across multiple CodeGen runs, even when Sequence values are identical (e.g., all 0) and
+ * CreatedAt timestamps match (e.g., batch-inserted rows).
+ * @param items - Array of items that have Sequence and optional __mj_CreatedAt/Value properties
  * @returns A new sorted array
  */
-export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date }>(items: T[]): T[] {
+export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -108,12 +110,18 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         }
         // Secondary sort by __mj_CreatedAt for consistent ordering
         if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
-            return a.__mj_CreatedAt.getTime() - b.__mj_CreatedAt.getTime();
+            const timeDiff = a.__mj_CreatedAt.getTime() - b.__mj_CreatedAt.getTime();
+            if (timeDiff !== 0) return timeDiff;
         }
         // If one has a date and the other doesn't, prioritize the one with a date
         if (a.__mj_CreatedAt && !b.__mj_CreatedAt) return -1;
         if (!a.__mj_CreatedAt && b.__mj_CreatedAt) return 1;
-        // If neither has a date, maintain original order
+        // Tertiary sort alphabetically by Value to guarantee deterministic order
+        if (a.Value != null && b.Value != null) {
+            return a.Value.localeCompare(b.Value);
+        }
+        if (a.Value != null && b.Value == null) return -1;
+        if (a.Value == null && b.Value != null) return 1;
         return 0;
     });
 }

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panels - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Panels</h1>
+      <p>Panel containers for organizing and grouping related content.</p>
+    </header>
+
+    <!-- Basic Panel -->
+    <section class="section">
+      <h2 class="section-title">Basic Panel</h2>
+      <p class="mj-text-secondary mj-mb-4">Simple panel with header, body, and optional footer.</p>
+      <div class="demo-row">
+        <div class="mj-panel">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">Panel Title</h3>
+          </div>
+          <div class="mj-panel-body">
+            <p>This is the panel body content. You can put any content here including text, forms, tables, and other components.</p>
+          </div>
+          <div class="mj-panel-footer">
+            <span class="mj-text-sm mj-text-secondary">Panel footer with additional information</span>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel"&gt;
+  &lt;div class="mj-panel-header"&gt;
+    &lt;h3 class="mj-panel-title"&gt;Panel Title&lt;/h3&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-panel-body"&gt;
+    &lt;p&gt;Panel content goes here.&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-panel-footer"&gt;Footer content&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Panel with Actions -->
+    <section class="section">
+      <h2 class="section-title">Panel with Header Actions</h2>
+      <p class="mj-text-secondary mj-mb-4">Panel with action buttons in the header.</p>
+      <div class="demo-row">
+        <div class="mj-panel">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">User Settings</h3>
+            <div class="mj-panel-actions">
+              <button class="mj-btn-icon" title="Edit">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button class="mj-btn-icon" title="More options">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mj-panel-body">
+            <p>Panel with action buttons in the header for quick operations.</p>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel"&gt;
+  &lt;div class="mj-panel-header"&gt;
+    &lt;h3 class="mj-panel-title"&gt;User Settings&lt;/h3&gt;
+    &lt;div class="mj-panel-actions"&gt;
+      &lt;button class="mj-btn-icon"&gt;&lt;i class="fa-solid fa-pen"&gt;&lt;/i&gt;&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-panel-body"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Collapsible Panel -->
+    <section class="section">
+      <h2 class="section-title">Collapsible Panel</h2>
+      <p class="mj-text-secondary mj-mb-4">Panels that can be expanded and collapsed.</p>
+      <div class="demo-row">
+        <div class="mj-panel mj-panel-collapsible">
+          <div class="mj-panel-header" data-toggle-panel>
+            <div class="mj-flex mj-items-center mj-gap-2">
+              <i class="fa-solid fa-chevron-down mj-panel-toggle-icon"></i>
+              <h3 class="mj-panel-title">Expanded Panel</h3>
+            </div>
+          </div>
+          <div class="mj-panel-body">
+            <p>This panel is currently expanded. Click the header to collapse it.</p>
+          </div>
+        </div>
+
+        <div class="mj-panel mj-panel-collapsible mj-panel-collapsed">
+          <div class="mj-panel-header" data-toggle-panel>
+            <div class="mj-flex mj-items-center mj-gap-2">
+              <i class="fa-solid fa-chevron-right mj-panel-toggle-icon"></i>
+              <h3 class="mj-panel-title">Collapsed Panel</h3>
+            </div>
+          </div>
+          <div class="mj-panel-body">
+            <p>This content is hidden when collapsed.</p>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel mj-panel-collapsible"&gt;
+  &lt;div class="mj-panel-header" data-toggle-panel&gt;
+    &lt;i class="fa-solid fa-chevron-down mj-panel-toggle-icon"&gt;&lt;/i&gt;
+    &lt;h3 class="mj-panel-title"&gt;Panel Title&lt;/h3&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-panel-body"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- Collapsed state --&gt;
+&lt;div class="mj-panel mj-panel-collapsible mj-panel-collapsed"&gt;...&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Panel with Toolbar -->
+    <section class="section">
+      <h2 class="section-title">Panel with Toolbar</h2>
+      <p class="mj-text-secondary mj-mb-4">Panel with a full toolbar for complex actions.</p>
+      <div class="demo-row">
+        <div class="mj-panel">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">Records</h3>
+          </div>
+          <div class="mj-panel-toolbar">
+            <div class="mj-search-box mj-search-box-sm">
+              <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+              <input type="text" class="mj-search-input" placeholder="Filter...">
+            </div>
+            <div class="mj-flex mj-gap-2">
+              <button class="mj-btn mj-btn-ghost mj-btn-sm">
+                <i class="fa-solid fa-download"></i> Export
+              </button>
+              <button class="mj-btn mj-btn-primary mj-btn-sm">
+                <i class="fa-solid fa-plus"></i> Add
+              </button>
+            </div>
+          </div>
+          <div class="mj-panel-body mj-p-0">
+            <table class="mj-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Item 1</td>
+                  <td><span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span></td>
+                  <td>Jan 15, 2024</td>
+                </tr>
+                <tr>
+                  <td>Item 2</td>
+                  <td><span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending</span></td>
+                  <td>Jan 14, 2024</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel"&gt;
+  &lt;div class="mj-panel-header"&gt;...&lt;/div&gt;
+  &lt;div class="mj-panel-toolbar"&gt;
+    &lt;div class="mj-search-box mj-search-box-sm"&gt;...&lt;/div&gt;
+    &lt;div class="mj-flex mj-gap-2"&gt;
+      &lt;button class="mj-btn mj-btn-primary mj-btn-sm"&gt;Add&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-panel-body mj-p-0"&gt;
+    &lt;table class="mj-table"&gt;...&lt;/table&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Stacked Panel Group -->
+    <section class="section">
+      <h2 class="section-title">Stacked Panel Group</h2>
+      <p class="mj-text-secondary mj-mb-4">Multiple panels stacked vertically for related content.</p>
+      <div class="demo-row">
+        <div class="mj-panel-group">
+          <div class="mj-panel">
+            <div class="mj-panel-header">
+              <h3 class="mj-panel-title">General Information</h3>
+            </div>
+            <div class="mj-panel-body">
+              <p>First panel in the group with general information.</p>
+            </div>
+          </div>
+          <div class="mj-panel">
+            <div class="mj-panel-header">
+              <h3 class="mj-panel-title">Contact Details</h3>
+            </div>
+            <div class="mj-panel-body">
+              <p>Second panel with contact information.</p>
+            </div>
+          </div>
+          <div class="mj-panel">
+            <div class="mj-panel-header">
+              <h3 class="mj-panel-title">Preferences</h3>
+            </div>
+            <div class="mj-panel-body">
+              <p>Third panel with user preferences.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel-group"&gt;
+  &lt;div class="mj-panel"&gt;...&lt;/div&gt;
+  &lt;div class="mj-panel"&gt;...&lt;/div&gt;
+  &lt;div class="mj-panel"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Panel Variants -->
+    <section class="section">
+      <h2 class="section-title">Panel Variants</h2>
+      <p class="mj-text-secondary mj-mb-4">Different visual styles for various contexts.</p>
+      <div class="demo-row">
+        <div class="mj-panel mj-panel-bordered">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">Bordered Panel</h3>
+          </div>
+          <div class="mj-panel-body">
+            <p>Panel with emphasized border styling.</p>
+          </div>
+        </div>
+
+        <div class="mj-panel mj-panel-accent">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">Accent Panel</h3>
+          </div>
+          <div class="mj-panel-body">
+            <p>Panel with app accent color highlight.</p>
+          </div>
+        </div>
+
+        <div class="mj-panel mj-panel-flat">
+          <div class="mj-panel-header">
+            <h3 class="mj-panel-title">Flat Panel</h3>
+          </div>
+          <div class="mj-panel-body">
+            <p>Minimal panel without shadow.</p>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-panel mj-panel-bordered"&gt;...&lt;/div&gt;
+&lt;div class="mj-panel mj-panel-accent"&gt;...&lt;/div&gt;
+&lt;div class="mj-panel mj-panel-flat"&gt;...&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Filter Panel (Dashboard Pattern) -->
+    <section class="section">
+      <h2 class="section-title">Filter Panel (Dashboard Pattern)</h2>
+      <p class="mj-text-secondary mj-mb-4">Slide-in filter panel used in existing AI dashboards. Uses the <code>.filter-panel</code> class pattern.</p>
+      <div class="demo-row" style="flex-direction: row; align-items: flex-start;">
+        <div class="filter-panel" style="position: relative; width: 280px;">
+          <div class="filter-panel-header">
+            <h3>Filters</h3>
+            <button class="mj-btn-icon" title="Close">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="filter-panel-content">
+            <div class="filter-group">
+              <label class="filter-label">Status</label>
+              <select class="mj-select">
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Model</label>
+              <select class="mj-select">
+                <option value="">All Models</option>
+                <option value="gpt4">GPT-4</option>
+                <option value="claude">Claude 3</option>
+                <option value="gemini">Gemini Pro</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Created Date</label>
+              <input type="date" class="mj-input">
+            </div>
+            <div class="mj-flex mj-gap-2 mj-mt-4">
+              <button class="mj-btn mj-btn-primary mj-btn-sm" style="flex: 1;">Apply Filters</button>
+              <button class="mj-btn mj-btn-ghost mj-btn-sm">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="filter-panel"&gt;
+  &lt;div class="filter-panel-header"&gt;
+    &lt;h3&gt;Filters&lt;/h3&gt;
+    &lt;button class="mj-btn-icon"&gt;&lt;i class="fa-solid fa-times"&gt;&lt;/i&gt;&lt;/button&gt;
+  &lt;/div&gt;
+  &lt;div class="filter-panel-content"&gt;
+    &lt;div class="filter-group"&gt;
+      &lt;label class="filter-label"&gt;Status&lt;/label&gt;
+      &lt;select class="mj-select"&gt;...&lt;/select&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Detail Panel (Dashboard Pattern) -->
+    <section class="section">
+      <h2 class="section-title">Detail Panel (Dashboard Pattern)</h2>
+      <p class="mj-text-secondary mj-mb-4">Slide-in detail panel for viewing/editing entity details. Uses the <code>.detail-panel</code> class pattern.</p>
+      <div class="demo-row" style="flex-direction: row; align-items: flex-start;">
+        <div class="detail-panel" style="position: relative; width: 400px; max-height: 500px;">
+          <div class="detail-panel-header">
+            <div class="mj-flex mj-items-center mj-gap-3">
+              <div class="entity-icon" style="width: 40px; height: 40px;">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+              <div>
+                <h3 style="margin: 0; font-size: var(--mj-text-lg);">Customer Support Agent</h3>
+                <span class="status-badge status-active" style="margin-top: 4px;">Active</span>
+              </div>
+            </div>
+            <button class="mj-btn-icon" title="Close">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="detail-panel-content">
+            <div class="mj-form-group">
+              <label class="mj-label">Name</label>
+              <input type="text" class="mj-input" value="Customer Support Agent">
+            </div>
+            <div class="mj-form-group">
+              <label class="mj-label">Description</label>
+              <textarea class="mj-textarea" rows="3">Handles customer inquiries and support tickets with automated responses.</textarea>
+            </div>
+            <div class="mj-form-group">
+              <label class="mj-label">Model</label>
+              <select class="mj-select">
+                <option selected>GPT-4 Turbo</option>
+                <option>Claude 3 Opus</option>
+                <option>Gemini Pro</option>
+              </select>
+            </div>
+          </div>
+          <div class="detail-panel-actions">
+            <button class="mj-btn mj-btn-primary">Save Changes</button>
+            <button class="mj-btn mj-btn-secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="detail-panel"&gt;
+  &lt;div class="detail-panel-header"&gt;
+    &lt;div&gt;...entity info...&lt;/div&gt;
+    &lt;button class="mj-btn-icon"&gt;&lt;i class="fa-solid fa-times"&gt;&lt;/i&gt;&lt;/button&gt;
+  &lt;/div&gt;
+  &lt;div class="detail-panel-content"&gt;
+    &lt;!-- Form fields --&gt;
+  &lt;/div&gt;
+  &lt;div class="detail-panel-actions"&gt;
+    &lt;button class="mj-btn mj-btn-primary"&gt;Save&lt;/button&gt;
+    &lt;button class="mj-btn mj-btn-secondary"&gt;Cancel&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+  <script>
+    // Collapsible panel functionality
+    document.querySelectorAll('.mj-panel-collapsible .mj-panel-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const panel = header.closest('.mj-panel');
+        const isCollapsed = panel.classList.contains('mj-panel-collapsed');
+
+        panel.classList.toggle('mj-panel-collapsed');
+
+        // Update icon
+        const icon = header.querySelector('.mj-panel-toggle-icon');
+        if (icon) {
+          if (panel.classList.contains('mj-panel-collapsed')) {
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+          } else {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-query-viewer",
-  "version": "5.1.0",
+  "version": "5.3.1",
   "description": "MemberJunction: Angular components for viewing and executing stored queries with parameter input, interactive results grid, and entity linking",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -37,13 +37,13 @@
     "ag-grid-community": "^35.0.1"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "5.1.0",
-    "@memberjunction/export-engine": "5.1.0",
-    "@memberjunction/global": "5.1.0",
-    "@memberjunction/core": "5.1.0",
-    "@memberjunction/ng-shared-generic": "5.1.0",
-    "@memberjunction/ng-export-service": "5.1.0",
-    "@memberjunction/ng-notifications": "5.1.0",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/export-engine": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/ng-shared-generic": "5.3.1",
+    "@memberjunction/ng-export-service": "5.3.1",
+    "@memberjunction/ng-notifications": "5.3.1",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
   },

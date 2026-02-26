@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-mistral@5.3.1
+- @memberjunction/ai-openai@5.3.1
+- @memberjunction/ai-vectors-pinecone@5.3.1
+- @memberjunction/ai-vector-sync@5.3.1
+- @memberjunction/actions-apollo@5.3.1
+- @memberjunction/actions-content-autotag@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/scheduled-actions@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-vector-sync@5.3.0
+  - @memberjunction/actions-apollo@5.3.0
+  - @memberjunction/actions-content-autotag@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/scheduled-actions@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/ai-vectors-pinecone@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ai-mistral@5.3.0
+  - @memberjunction/ai-openai@5.3.0
+  - @memberjunction/core@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/ai-vector-sync@5.2.0
+  - @memberjunction/scheduled-actions@5.2.0
+  - @memberjunction/actions-apollo@5.2.0
+  - @memberjunction/actions-content-autotag@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/ai-vectors-pinecone@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/ai-mistral@5.2.0
+  - @memberjunction/ai-openai@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

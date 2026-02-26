@@ -26,8 +26,8 @@ import {
 
 // @memberjunction/actions-base (2 classes)
 import {
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
 } from '@memberjunction/actions-base';
 
 // @memberjunction/actions-bizapps-accounting (8 classes)
@@ -194,11 +194,12 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (3 classes)
+// @memberjunction/ai-agents (4 classes)
 import {
     FlowAgentType,
     LoopAgentType,
     MemoryManagerAgent,
+    QueryBuilderAgent,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/ai-anthropic (1 classes)
@@ -240,13 +241,13 @@ import {
 
 // @memberjunction/ai-core-plus (7 classes)
 import {
-    AIAgentEntityExtended,
-    AIAgentRunEntityExtended,
-    AIAgentRunStepEntityExtended,
-    AIModelEntityExtended,
-    AIPromptCategoryEntityExtended,
-    AIPromptEntityExtended,
-    AIPromptRunEntityExtended,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIPromptCategoryEntityExtended,
+    MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
 // @memberjunction/ai-elevenlabs (1 classes)
@@ -256,7 +257,7 @@ import {
 
 // @memberjunction/ai-engine-base (4 classes)
 import {
-    AICredentialBindingEntityExtended,
+    MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
@@ -449,14 +450,8 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (285 classes)
+// @memberjunction/core-entities (287 classes)
 import {
-    ComponentEntityExtended,
-    DashboardEntityExtended,
-    EntityEntityExtended,
-    EntityFieldEntityExtended,
-    EnvironmentEntityExtended,
-    ListDetailEntityExtended,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -550,6 +545,7 @@ import {
     MJCompanyIntegrationRunEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
+    MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
@@ -579,6 +575,7 @@ import {
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
+    MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardUserPreferenceEntity,
@@ -610,7 +607,9 @@ import {
     MJEntityDocumentSettingEntity,
     MJEntityDocumentTypeEntity,
     MJEntityEntity,
+    MJEntityEntityExtended,
     MJEntityFieldEntity,
+    MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
     MJEntityPermissionEntity,
     MJEntityRecordDocumentEntity,
@@ -618,6 +617,7 @@ import {
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
     MJEnvironmentEntity,
+    MJEnvironmentEntityExtended,
     MJErrorLogEntity,
     MJExplorerNavigationItemEntity,
     MJFileCategoryEntity,
@@ -633,6 +633,7 @@ import {
     MJLibraryItemEntity,
     MJListCategoryEntity,
     MJListDetailEntity,
+    MJListDetailEntityExtended,
     MJListEntity,
     MJListInvitationEntity,
     MJListShareEntity,
@@ -679,10 +680,12 @@ import {
     MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
+    MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJScheduledActionEntity,
+    MJScheduledActionEntityExtended,
     MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -698,11 +701,14 @@ import {
     MJTemplateContentEntity,
     MJTemplateContentTypeEntity,
     MJTemplateEntity,
+    MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
+    MJTestRunOutputEntity,
+    MJTestRunOutputTypeEntity,
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
@@ -719,6 +725,7 @@ import {
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
+    MJUserViewEntityExtended,
     MJUserViewRunDetailEntity,
     MJUserViewRunEntity,
     MJVectorDatabaseEntity,
@@ -732,28 +739,24 @@ import {
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    ResourcePermissionEntityExtended,
-    ScheduledActionEntityExtended,
-    TemplateEntityExtended,
-    UserViewEntityExtended,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/core-entities-server (14 classes)
 import {
-    AIAgentExampleEntityExtended,
-    AIAgentNoteEntityExtended,
-    AIPromptEntityExtendedServer,
-    AIPromptRunEntityServer,
-    ActionEntityServerEntity,
-    ApplicationEntityServerEntity,
-    ArtifactVersionExtended,
-    ComponentEntityExtended_Server,
-    ConversationDetailEntityServer,
-    DuplicateRunEntity_Server,
-    QueryEntityExtended,
-    ReportEntity_Server,
-    TemplateContentEntityExtended,
-    UserViewEntity_Server,
+    MJAIAgentExampleEntityServer,
+    MJAIAgentNoteEntityServer,
+    MJAIPromptEntityServer,
+    MJAIPromptRunEntityServer,
+    MJActionEntityServer,
+    MJApplicationEntityServer,
+    MJArtifactVersionEntityServer,
+    MJComponentEntityServer,
+    MJConversationDetailEntityServer,
+    MJDuplicateRunEntityServer,
+    MJQueryEntityServer,
+    MJReportEntityServer,
+    MJTemplateContentEntityServer,
+    MJUserViewEntityServer,
 } from '@memberjunction/core-entities-server';
 
 // @memberjunction/data-context-server (1 classes)
@@ -763,8 +766,8 @@ import {
 
 // @memberjunction/doc-utils (2 classes)
 import {
-    LibraryEntityExtended,
-    LibraryItemEntityExtended,
+    MJLibraryEntityExtended,
+    MJLibraryItemEntityExtended,
 } from '@memberjunction/doc-utils';
 
 // @memberjunction/encryption (6 classes)
@@ -795,7 +798,7 @@ import {
 
 // @memberjunction/scheduling-engine-base (1 classes)
 import {
-    ScheduledJobEntityExtended,
+    MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
 // @memberjunction/templates (2 classes)
@@ -820,8 +823,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityActionInvocationValidate,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
-    ActionEntityExtended,
-    EntityActionEntityExtended,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
     CreateQuickBooksJournalEntryAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralGLAccountsAction,
@@ -965,6 +968,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FlowAgentType,
     LoopAgentType,
     MemoryManagerAgent,
+    QueryBuilderAgent,
     AnthropicLLM,
     AzureEmbedding,
     AzureLLM,
@@ -974,15 +978,15 @@ export const CLASS_REGISTRATIONS: any[] = [
     FLUXImageGenerator,
     CerebrasLLM,
     CohereReranker,
-    AIAgentEntityExtended,
-    AIAgentRunEntityExtended,
-    AIAgentRunStepEntityExtended,
-    AIModelEntityExtended,
-    AIPromptCategoryEntityExtended,
-    AIPromptEntityExtended,
-    AIPromptRunEntityExtended,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIPromptCategoryEntityExtended,
+    MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
     ElevenLabsAudioGenerator,
-    AICredentialBindingEntityExtended,
+    MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
@@ -1105,12 +1109,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebPageContentAction,
     WebSearchAction,
     XMLParserAction,
-    ComponentEntityExtended,
-    DashboardEntityExtended,
-    EntityEntityExtended,
-    EntityFieldEntityExtended,
-    EnvironmentEntityExtended,
-    ListDetailEntityExtended,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1204,6 +1202,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCompanyIntegrationRunEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
+    MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
@@ -1233,6 +1232,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
+    MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardUserPreferenceEntity,
@@ -1264,7 +1264,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityDocumentSettingEntity,
     MJEntityDocumentTypeEntity,
     MJEntityEntity,
+    MJEntityEntityExtended,
     MJEntityFieldEntity,
+    MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
     MJEntityPermissionEntity,
     MJEntityRecordDocumentEntity,
@@ -1272,6 +1274,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
     MJEnvironmentEntity,
+    MJEnvironmentEntityExtended,
     MJErrorLogEntity,
     MJExplorerNavigationItemEntity,
     MJFileCategoryEntity,
@@ -1287,6 +1290,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJLibraryItemEntity,
     MJListCategoryEntity,
     MJListDetailEntity,
+    MJListDetailEntityExtended,
     MJListEntity,
     MJListInvitationEntity,
     MJListShareEntity,
@@ -1333,10 +1337,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
+    MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJScheduledActionEntity,
+    MJScheduledActionEntityExtended,
     MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1352,11 +1358,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTemplateContentEntity,
     MJTemplateContentTypeEntity,
     MJTemplateEntity,
+    MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
+    MJTestRunOutputEntity,
+    MJTestRunOutputTypeEntity,
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
@@ -1373,6 +1382,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
+    MJUserViewEntityExtended,
     MJUserViewRunDetailEntity,
     MJUserViewRunEntity,
     MJVectorDatabaseEntity,
@@ -1386,27 +1396,23 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    ResourcePermissionEntityExtended,
-    ScheduledActionEntityExtended,
-    TemplateEntityExtended,
-    UserViewEntityExtended,
-    AIAgentExampleEntityExtended,
-    AIAgentNoteEntityExtended,
-    AIPromptEntityExtendedServer,
-    AIPromptRunEntityServer,
-    ActionEntityServerEntity,
-    ApplicationEntityServerEntity,
-    ArtifactVersionExtended,
-    ComponentEntityExtended_Server,
-    ConversationDetailEntityServer,
-    DuplicateRunEntity_Server,
-    QueryEntityExtended,
-    ReportEntity_Server,
-    TemplateContentEntityExtended,
-    UserViewEntity_Server,
+    MJAIAgentExampleEntityServer,
+    MJAIAgentNoteEntityServer,
+    MJAIPromptEntityServer,
+    MJAIPromptRunEntityServer,
+    MJActionEntityServer,
+    MJApplicationEntityServer,
+    MJArtifactVersionEntityServer,
+    MJComponentEntityServer,
+    MJConversationDetailEntityServer,
+    MJDuplicateRunEntityServer,
+    MJQueryEntityServer,
+    MJReportEntityServer,
+    MJTemplateContentEntityServer,
+    MJUserViewEntityServer,
     DataContextItemServer,
-    LibraryEntityExtended,
-    LibraryItemEntityExtended,
+    MJLibraryEntityExtended,
+    MJLibraryItemEntityExtended,
     AWSKMSKeySource,
     AzureKeyVaultKeySource,
     ConfigFileKeySource,
@@ -1421,7 +1427,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     UpdateScheduledJobAction,
     ActionScheduledJobDriver,
     AgentScheduledJobDriver,
-    ScheduledJobEntityExtended,
+    MJScheduledJobEntityExtended,
     AIPromptExtension,
     TemplateEmbedExtension,
     AgentEvalDriver,
@@ -1431,7 +1437,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 610;
+export const CLASS_REGISTRATIONS_COUNT = 613;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

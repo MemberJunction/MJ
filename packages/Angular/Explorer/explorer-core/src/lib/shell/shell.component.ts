@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -135,7 +135,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
-    private commandPaletteService: CommandPaletteService
+    private commandPaletteService: CommandPaletteService,
+    private themeService: ThemeService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1705,7 +1706,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
-      openSettings: () => this.openSettingsDialog()
+      openSettings: () => this.openSettingsDialog(),
+      themePreference: this.themeService.Preference,
+      availableThemes: this.themeService.AvailableThemes,
+      appliedTheme: this.themeService.AppliedTheme
     };
 
     // Initialize menu
@@ -1722,6 +1726,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (this.userMenu) {
         this.userMenu.UpdateContext({
           developerModeEnabled: this.developerModeService.IsEnabled
+        });
+      }
+      this.refreshMenuElements();
+      this.cdr.detectChanges();
+    });
+
+    // Subscribe to theme preference changes to refresh menu
+    this.themeService.Preference$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((pref) => {
+      if (this.userMenu) {
+        this.userMenu.UpdateContext({
+          themePreference: pref,
+          availableThemes: this.themeService.AvailableThemes,
+          appliedTheme: this.themeService.AppliedTheme
         });
       }
       this.refreshMenuElements();
@@ -1753,6 +1772,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (result.message?.startsWith('select-theme-')) {
+      const themeId = result.message.substring('select-theme-'.length);
+      await this.themeService.SetTheme(themeId);
+      // Explicitly update context after SetTheme completes, then fall through
+      // to the standard refresh below (subscription also refreshes, but this
+      // guarantees the menu updates even if the subscription's detectChanges
+      // runs at an awkward point in Angular's change detection cycle)
+      if (this.userMenu) {
+        this.userMenu.UpdateContext({
+          themePreference: this.themeService.Preference,
+          availableThemes: this.themeService.AvailableThemes,
+          appliedTheme: this.themeService.AppliedTheme
+        });
+      }
+    }
+
     if (result.message === 'reset-layout') {
       await this.onResetLayout();
       return;
@@ -1765,6 +1800,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Refresh menu elements (some items may have changed state)
     this.refreshMenuElements();
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Whether the currently applied theme is dark (used by the toggle switch in the template)
+   */
+  get IsDarkMode(): boolean {
+    const theme = this.themeService.GetThemeDefinition(this.themeService.AppliedTheme);
+    return theme?.BaseTheme === 'dark';
   }
 
   /**

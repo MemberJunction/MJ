@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
 import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
@@ -69,6 +69,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   // Cached icon lookups to avoid repeated method calls
   private favoriteIconCache = new Map<string, string>();
   private resourceIconCache = new Map<string, string>();
+
+  // Resolved display names for favorites (keyed by favorite ID)
+  public favoriteDisplayNames = new Map<string, string>();
 
   /**
    * Check if sidebar has any content to show
@@ -214,7 +217,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.showConfigDialog = true;
     setTimeout(() => {
       if (this.appConfigDialog) {
-        this.appConfigDialog.open();
+        this.appConfigDialog.Open();
       }
     }, 0);
   }
@@ -265,7 +268,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Load user favorites from UserInfoEngine (cached)
+   * Load user favorites from UserInfoEngine (cached) and resolve record display names
    */
   private async loadFavorites(): Promise<void> {
     try {
@@ -273,12 +276,87 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
       // Get first 10 favorites (already ordered by __mj_CreatedAt DESC in engine)
       this.favorites = UserInfoEngine.Instance.UserFavorites.slice(0, 10);
+
+      // Batch-resolve record names for all favorites
+      await this.resolveFavoriteNames();
     } catch (error) {
       console.error('Error loading favorites:', error);
     } finally {
       this.favoritesLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Batch-resolve record display names for favorites using GetEntityRecordNames()
+   */
+  private async resolveFavoriteNames(): Promise<void> {
+    const nameInputs: EntityRecordNameInput[] = [];
+    const favoriteIdByKey = new Map<string, string>(); // map key -> favorite ID
+
+    for (const fav of this.favorites) {
+      if (!fav.Entity || !fav.RecordID) continue;
+      const compositeKey = this.buildCompositeKeyForRecord(fav.Entity, fav.RecordID);
+      if (!compositeKey) continue;
+
+      nameInputs.push({ EntityName: fav.Entity, CompositeKey: compositeKey });
+      favoriteIdByKey.set(`${fav.Entity}||${compositeKey.ToConcatenatedString()}`, fav.ID);
+    }
+
+    if (nameInputs.length === 0) return;
+
+    try {
+      const nameResults = await this.metadata.GetEntityRecordNames(nameInputs);
+      for (const result of nameResults) {
+        if (result.Success && result.RecordName) {
+          const key = `${result.EntityName}||${result.CompositeKey.ToConcatenatedString()}`;
+          const favId = favoriteIdByKey.get(key);
+          if (favId) {
+            this.favoriteDisplayNames.set(favId, result.RecordName);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to resolve favorite record names:', error);
+    }
+  }
+
+  /**
+   * Build a CompositeKey for a record. RecordID may be stored as either:
+   * - Concatenated format: "FieldName|Value" or "Field1|Val1||Field2|Val2"
+   * - Plain value: just the raw value (e.g. a GUID)
+   */
+  private buildCompositeKeyForRecord(entityName: string, recordId: string): CompositeKey | null {
+    if (!recordId) return null;
+
+    // If recordId contains '|', it's in concatenated format
+    if (recordId.includes('|')) {
+      try {
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(recordId);
+        if (compositeKey.KeyValuePairs.length > 0) return compositeKey;
+      } catch {
+        // Fall through to entity-based lookup
+      }
+    }
+
+    // Plain value — look up entity primary key field(s) to construct the key
+    const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+    if (!entityInfo) return null;
+
+    const pkField = entityInfo.FirstPrimaryKey;
+    if (!pkField) return null;
+
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+    return compositeKey;
+  }
+
+  /**
+   * Get the display name for a favorite (resolved name or entity name fallback)
+   */
+  getFavoriteDisplayName(favorite: MJUserFavoriteEntity): string {
+    return this.favoriteDisplayNames.get(favorite.ID) || favorite.Entity || favorite.RecordID;
   }
 
   /**
@@ -358,60 +436,39 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Get icon for a resource type (cached)
+   * Get icon for an entity by name, using entity metadata Icon field (cached)
    */
-  getResourceIcon(resourceType: string): string {
-    if (this.resourceIconCache.has(resourceType)) {
-      return this.resourceIconCache.get(resourceType)!;
-    }
+  getEntityIconByName(entityName: string): string {
+    if (!entityName) return 'fa-solid fa-file';
 
-    let icon: string;
-    switch (resourceType) {
-      case 'view':
-        icon = 'fa-solid fa-table';
-        break;
-      case 'dashboard':
-        icon = 'fa-solid fa-gauge-high';
-        break;
-      case 'artifact':
-        icon = 'fa-solid fa-cube';
-        break;
-      case 'report':
-        icon = 'fa-solid fa-chart-bar';
-        break;
-      default:
-        icon = 'fa-solid fa-file';
-    }
+    const cached = this.resourceIconCache.get(entityName);
+    if (cached) return cached;
 
-    this.resourceIconCache.set(resourceType, icon);
+    const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+    const icon = entityInfo ? this.resolveEntityIcon(entityInfo.Icon) : 'fa-solid fa-file';
+
+    this.resourceIconCache.set(entityName, icon);
     return icon;
   }
 
   /**
-   * Get icon for a favorite based on its entity type (cached)
+   * Resolve an entity's Icon field to a full Font Awesome class string
    */
-  getFavoriteIcon(favorite: MJUserFavoriteEntity): string {
-    const cacheKey = favorite.ID;
-    if (this.favoriteIconCache.has(cacheKey)) {
-      return this.favoriteIconCache.get(cacheKey)!;
-    }
+  private resolveEntityIcon(icon: string | undefined): string {
+    if (!icon) return 'fa-solid fa-table';
 
-    let icon: string;
-    const entityName = favorite.Entity?.toLowerCase();
-    if (entityName === 'dashboards') {
-      icon = 'fa-solid fa-gauge-high';
-    } else if (entityName === 'user views') {
-      icon = 'fa-solid fa-table';
-    } else if (entityName === 'reports') {
-      icon = 'fa-solid fa-chart-bar';
-    } else if (entityName?.includes('artifact')) {
-      icon = 'fa-solid fa-cube';
-    } else {
-      icon = 'fa-solid fa-star';
+    // Already has a style prefix
+    if (icon.startsWith('fa-solid') || icon.startsWith('fa-regular') ||
+        icon.startsWith('fa-light') || icon.startsWith('fa-brands') ||
+        icon.startsWith('fa ')) {
+      return icon;
     }
-
-    this.favoriteIconCache.set(cacheKey, icon);
-    return icon;
+    // Has fa- prefix but no style
+    if (icon.startsWith('fa-')) {
+      return `fa-solid ${icon}`;
+    }
+    // Just an icon name like "table" or "users"
+    return `fa-solid fa-${icon}`;
   }
 
   /**

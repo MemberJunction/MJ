@@ -20,7 +20,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
-import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Container component for displaying a list of messages
@@ -39,7 +39,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
-  @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
+  @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
@@ -224,6 +224,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              existing.changeDetectorRef.detectChanges();
               this.cdRef.detectChanges();
             }).catch(err => {
               console.error('Failed to lazy-load artifact:', err);
@@ -246,8 +248,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // This is necessary because we're using OnPush change detection and direct property assignment
           // doesn't trigger ngOnChanges (only reference changes do)
           if (previousMessage && previousMessage.Status !== message.Status) {
-            // Use ChangeDetectorRef from the component instance to force update
-            (instance as any).cdRef?.markForCheck();
+            // Use ComponentRef.changeDetectorRef to force update on dynamic child
+            existing.changeDetectorRef.markForCheck();
           }
         } else {
           // Create new component
@@ -279,6 +281,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              componentRef.changeDetectorRef.detectChanges();
               this.cdRef.detectChanges();
             }).catch(err => {
               console.error('Failed to lazy-load artifact:', err);

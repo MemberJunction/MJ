@@ -1,3 +1,6 @@
+// Design tokens (must be first - provides CSS custom properties)
+@import './tokens';
+
 // Core style imports
 @import './variables';
 @import './typography';
@@ -15,6 +18,9 @@
 
 // Apply our theme overrides to Kendo components
 @import './kendo-theme-override';
+
+// Shared UI patterns (selector lists for consistent styling)
+@import './shared-patterns';
 
 // Import remaining custom styles
 @import './common';

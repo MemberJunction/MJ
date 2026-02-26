@@ -13,9 +13,12 @@
  * complete MJ Explorer experience.
  */
 
+// Design tokens (must be first - provides CSS custom properties)
+@import './styles/tokens';
+@import './styles/md3-theme';
+
 // Core style imports
 @import './styles/variables';
-@import './styles/md3-theme';
 @import './styles/typography';
 
 // Import Kendo theme BEFORE our overrides
@@ -28,6 +31,13 @@
 // Import Golden Layout CSS for tab management (required for mj-shell)
 @import 'golden-layout/dist/css/goldenlayout-base.css';
 @import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+
+// Dark mode override for Golden Layout root background
+[data-theme="dark"] {
+  .lm_goldenlayout {
+    background: var(--mj-bg-page);
+  }
+}
 
 // Apply our theme overrides to Kendo components
 @import './styles/kendo-theme-override';

@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
@@ -85,7 +85,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   private _viewMode: EntityViewMode | null = null;
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
-  private _viewEntity: UserViewEntityExtended | null = null;
+  private _viewEntity: MJUserViewEntityExtended | null = null;
   private _timelineConfig: TimelineState | null = null;
   private _initialized = false;
 
@@ -246,23 +246,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
    */
   @Input()
-  get viewEntity(): UserViewEntityExtended | null {
+  get viewEntity(): MJUserViewEntityExtended | null {
     return this._viewEntity;
   }
-  set viewEntity(value: UserViewEntityExtended | null) {
+  set viewEntity(value: MJUserViewEntityExtended | null) {
     this._viewEntity = value;
 
     if (this._initialized && this._entity && !this._records) {
-      // Apply view's sort state if available
-      if (value) {
-        const viewSortInfo = value.ViewSortInfo;
-        if (viewSortInfo && viewSortInfo.length > 0) {
-          this.internalSortState = {
-            field: viewSortInfo[0].field,
-            direction: viewSortInfo[0].direction === 'Desc' ? 'desc' : 'asc'
-          };
-        }
-      }
+      // Apply view's sort state if available, then reset pagination and reload
+      this.applySortStateFromView(value);
       this.resetPaginationState();
       this.loadData();
     }
@@ -439,7 +431,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /** Cached grid params to avoid recreating object on every change detection */
   private _cachedGridParams: RunViewParams | null = null;
   private _lastGridParamsEntity: string | null = null;
-  private _lastGridParamsViewEntity: UserViewEntityExtended | null = null;
+  private _lastGridParamsViewEntity: MJUserViewEntityExtended | null = null;
 
   /** Pagination state */
   public pagination: PaginationState = {
@@ -543,8 +535,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    *           3) EntityID lookup
    * Returns null if entity cannot be determined.
    */
-  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended): EntityInfo | null {
-    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+  private getEntityInfoFromViewEntity(viewEntity: MJUserViewEntityExtended): EntityInfo | null {
+    // First try: ViewEntityInfo is the preferred source (set by MJUserViewEntityExtended.Load)
     if (viewEntity.ViewEntityInfo) {
       return viewEntity.ViewEntityInfo;
     }
@@ -847,6 +839,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Mark as initialized - setters will now trigger data loading
     this._initialized = true;
 
+    // If viewEntity was set before initialization, extract its sort state now.
+    // The viewEntity setter skips this when _initialized is false.
+    if (this._viewEntity) {
+      this.applySortStateFromView(this._viewEntity);
+    }
+
     // If entity was set before initialization, load data now
     if (this._entity && !this._records) {
       this.loadData();
@@ -861,6 +859,48 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   // ========================================
   // CONFIGURATION
   // ========================================
+
+  /**
+   * Extracts sort state from a view entity, checking ViewSortInfo first then
+   * falling back to GridState.sortSettings. Resets internalSortState if the
+   * view has no sort defined (prevents stale sort from a previous view).
+   */
+  private applySortStateFromView(view: MJUserViewEntityExtended | null): void {
+    if (!view) {
+      this.internalSortState = null;
+      return;
+    }
+
+    // Priority 1: SortState column (via ViewSortInfo)
+    const viewSortInfo = view.ViewSortInfo;
+    if (viewSortInfo && viewSortInfo.length > 0) {
+      this.internalSortState = {
+        field: viewSortInfo[0].field,
+        direction: viewSortInfo[0].direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      };
+      return;
+    }
+
+    // Priority 2: GridState.sortSettings (sort may only be stored here)
+    if (view.GridState) {
+      try {
+        const gridState = JSON.parse(view.GridState) as ViewGridState;
+        if (gridState.sortSettings && gridState.sortSettings.length > 0) {
+          const firstSort = gridState.sortSettings[0];
+          this.internalSortState = {
+            field: firstSort.field,
+            direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+          };
+          return;
+        }
+      } catch {
+        // Invalid GridState JSON — ignore
+      }
+    }
+
+    // No sort defined — reset to prevent stale sort from previous view
+    this.internalSortState = null;
+  }
 
   private applyConfig(): void {
     const config = this.effectiveConfig;

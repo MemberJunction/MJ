@@ -1,5 +1,78 @@
 # @memberjunction/ng-conversations
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/ng-testing@5.3.1
+- @memberjunction/ng-artifacts@5.3.1
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-code-editor@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/ng-markdown@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-tasks@5.3.1
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+- Updated dependencies [7af1846]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-artifacts@5.3.0
+  - @memberjunction/ng-testing@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-tasks@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/ng-markdown@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- 4618227: Fix Angular 21/zone.js 0.15 change detection regressions, improve conversation caching performance, and resolve blank tabs in artifacts and entity viewer
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [4618227]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/graphql-dataprovider@5.2.0
+  - @memberjunction/ai-engine-base@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/ng-tasks@5.2.0
+  - @memberjunction/ng-artifacts@5.2.0
+  - @memberjunction/ng-testing@5.2.0
+  - @memberjunction/ng-base-types@5.2.0
+  - @memberjunction/ng-code-editor@5.2.0
+  - @memberjunction/ng-notifications@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-container-directives@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/ng-markdown@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

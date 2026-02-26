@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/cli
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.3.1
+- @memberjunction/codegen-lib@5.3.1
+- @memberjunction/config@5.3.1
+- @memberjunction/db-auto-doc@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/metadata-sync@5.3.1
+- @memberjunction/query-gen@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+- @memberjunction/server-bootstrap-lite@5.3.1
+- @memberjunction/testing-cli@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [24d54d2]
+  - @memberjunction/codegen-lib@5.3.0
+  - @memberjunction/metadata-sync@5.3.0
+  - @memberjunction/ai-cli@5.3.0
+  - @memberjunction/server-bootstrap-lite@5.3.0
+  - @memberjunction/query-gen@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/testing-cli@5.3.0
+  - @memberjunction/db-auto-doc@5.3.0
+  - @memberjunction/config@5.3.0
+  - @memberjunction/core@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [8d26189]
+  - @memberjunction/codegen-lib@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/server-bootstrap-lite@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/query-gen@5.2.0
+  - @memberjunction/ai-cli@5.2.0
+  - @memberjunction/metadata-sync@5.2.0
+  - @memberjunction/testing-cli@5.2.0
+  - @memberjunction/db-auto-doc@5.2.0
+  - @memberjunction/config@5.2.0
+
 ## 5.1.0
 
 ### Minor Changes

@@ -18,12 +18,28 @@ import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities';
 import _ from 'lodash';
 
 /**
+ * Details about a data source that failed to load
+ */
+export interface FailedDataSource {
+    /** Name of the data source that failed */
+    name: string;
+    /** Entity name if applicable (for RunView sources) */
+    entityName?: string;
+    /** Error message describing the failure */
+    errorMessage: string;
+}
+
+/**
  * Result structure for preloaded data organized by destination
  */
 export interface PreloadedDataResult {
     data: Record<string, unknown>;
     context: Record<string, unknown>;
     payload: Record<string, unknown>;
+    /** Names of sources that loaded successfully */
+    loadedSources: string[];
+    /** Sources that failed to load, with error details */
+    failedSources: FailedDataSource[];
 }
 
 /**
@@ -129,13 +145,15 @@ export class AgentDataPreloader {
                     verboseOnly: true,
                     isVerboseEnabled: IsVerboseLoggingEnabled
                 });
-                return { data: {}, context: {}, payload: {} };
+                return { data: {}, context: {}, payload: {}, loadedSources: [], failedSources: [] };
             }
 
             const result: PreloadedDataResult = {
                 data: {},
                 context: {},
-                payload: {}
+                payload: {},
+                loadedSources: [],
+                failedSources: []
             };
 
             // Execute data sources in order
@@ -158,10 +176,16 @@ export class AgentDataPreloader {
                             _.set(result.payload, path, sourceData);
                             break;
                         default:
+                            result.failedSources.push({
+                                name: source.Name,
+                                entityName: source.EntityName || undefined,
+                                errorMessage: `Unknown destination type '${source.DestinationType}'`
+                            });
                             LogError(`Unknown destination type '${source.DestinationType}' for data source '${source.Name}'`);
                             continue;
                     }
 
+                    result.loadedSources.push(source.Name);
                     LogStatusEx({
                         message: `AgentDataPreloader: Loaded '${source.Name}' → ${source.DestinationType}${path !== source.Name ? `.${path}` : ''} for agent ${agentId}`,
                         verboseOnly: true,
@@ -169,6 +193,11 @@ export class AgentDataPreloader {
                     });
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    result.failedSources.push({
+                        name: source.Name,
+                        entityName: source.EntityName || undefined,
+                        errorMessage
+                    });
                     LogError(`Failed to preload data source '${source.Name}' for agent ${agentId}: ${errorMessage}`, undefined, error);
                     // Continue loading other sources even if one fails
                 }
@@ -180,7 +209,7 @@ export class AgentDataPreloader {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             LogError(`Failed to preload agent data for ${agentId}: ${errorMessage}`, undefined, error);
             // Return empty objects instead of throwing - agent can still run without preloaded data
-            return { data: {}, context: {}, payload: {} };
+            return { data: {}, context: {}, payload: {}, loadedSources: [], failedSources: [{ name: '*', errorMessage }] };
         }
     }
 

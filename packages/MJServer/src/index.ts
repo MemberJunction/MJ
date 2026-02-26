@@ -44,7 +44,7 @@ export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
-export * from './entitySubclasses/entityPermissions.server.js';
+export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
     TokenExpiredError,
@@ -369,6 +369,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     graphqlRootPath,
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
+    // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
+    // Apollo Server's expressMiddleware requires req.body to be defined.
+    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,

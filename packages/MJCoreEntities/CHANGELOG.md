@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- 1692c53: Viewing System fixes for sorting and filtering. Memory manager SQL fix.
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core@5.2.0
+  - @memberjunction/interactive-component-types@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

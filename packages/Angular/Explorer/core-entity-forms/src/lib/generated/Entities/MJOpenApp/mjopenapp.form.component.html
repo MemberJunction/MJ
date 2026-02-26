@@ -188,7 +188,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
                 [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
                 [ShowToolbar]="false"
@@ -213,7 +213,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
                 [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
                 [ShowToolbar]="false"

@@ -47,56 +47,56 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: Function) => {},
 }));
 
-import { LibraryItemEntityExtended, LibraryEntityExtended, DocumentationEngine } from '../Engine';
+import { MJLibraryItemEntityExtended, MJLibraryEntityExtended, DocumentationEngine } from '../Engine';
 
 describe('DocUtils', () => {
-  describe('LibraryItemEntityExtended', () => {
+  describe('MJLibraryItemEntityExtended', () => {
     it('should return correct URL segment for Class type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Class', writable: true });
       expect(item.TypeURLSegment).toBe('classes');
     });
 
     it('should return correct URL segment for Interface type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Interface', writable: true });
       expect(item.TypeURLSegment).toBe('interfaces');
     });
 
     it('should return correct URL segment for Function type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Function', writable: true });
       expect(item.TypeURLSegment).toBe('functions');
     });
 
     it('should return correct URL segment for Module type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Module', writable: true });
       expect(item.TypeURLSegment).toBe('modules');
     });
 
     it('should return correct URL segment for Type type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Type', writable: true });
       expect(item.TypeURLSegment).toBe('types');
     });
 
     it('should return correct URL segment for Variable type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Variable', writable: true });
       expect(item.TypeURLSegment).toBe('variables');
     });
 
     it('should throw for unknown type', () => {
-      const item = new LibraryItemEntityExtended();
+      const item = new MJLibraryItemEntityExtended();
       Object.defineProperty(item, 'Type', { value: 'Unknown', writable: true });
       expect(() => item.TypeURLSegment).toThrow('Unknown type Unknown');
     });
   });
 
-  describe('LibraryEntityExtended', () => {
+  describe('MJLibraryEntityExtended', () => {
     it('should have an empty Items array initially', () => {
-      const lib = new LibraryEntityExtended();
+      const lib = new MJLibraryEntityExtended();
       expect(lib.Items).toEqual([]);
     });
   });

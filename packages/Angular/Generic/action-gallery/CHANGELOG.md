@@ -1,5 +1,39 @@
 # @memberjunction/ng-action-gallery
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-ai-test-harness@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/core@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ng-ai-test-harness@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-container-directives@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

@@ -483,19 +483,105 @@ export class SQLCodeGenBase {
         }
     }
 
-    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
+    /**
+     * Writes a generated SQL file to disk only if the content has changed from the existing file.
+     * Returns true if the file was written (content changed or file is new), false if unchanged.
+     * This avoids false timestamp updates and unnecessary I/O.
+     */
+    protected writeFileIfChanged(filePath: string, newContent: string): boolean {
+        if (fs.existsSync(filePath)) {
+            const existing = fs.readFileSync(filePath, 'utf-8');
+            if (existing === newContent) {
+                return false;
+            }
+        }
+        fs.writeFileSync(filePath, newContent);
+        return true;
+    }
+
+    /**
+     * Fetches the current base view definition from SQL Server and compares it against newly generated SQL.
+     * If the view body has changed (e.g., a virtual field was added to a joined table), the entity is
+     * logged and executed. Unlike adding to modifiedEntityList (which would cause all SPs,
+     * permissions, indexes, etc. to be logged too), this only logs the base view SQL itself.
+     *
+     * Comparison extracts the SELECT body from both the DB definition (CREATE VIEW ... AS <body>)
+     * and the generated SQL, normalizing whitespace for a fair comparison.
+     * @returns true if the base view changed, false otherwise
+     */
+    protected async checkBaseViewChangedInDB(pool: sql.ConnectionPool, entity: EntityInfo, generatedViewSQL: string): Promise<boolean> {
+        // Skip if entity is already tracked as new or modified — those are handled by existing logic
+        if (ManageMetadataBase.newEntityList.includes(entity.Name) ||
+            ManageMetadataBase.modifiedEntityList.includes(entity.Name)) {
+            return false;
+        }
+
+        try {
+            const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+            const result = await pool.request().query(
+                `SELECT OBJECT_DEFINITION(OBJECT_ID('[${entity.SchemaName}].[${viewName}]')) AS ViewDefinition`
+            );
+            const dbDefinition = result.recordset?.[0]?.ViewDefinition;
+            if (!dbDefinition) {
+                // View doesn't exist in DB yet — it's new, will be handled by existing new entity logic
+                return false;
+            }
+
+            // Extract the SELECT body from both: everything after "AS\n" up to the trailing GO/permissions
+            const generatedBody = this.extractViewSelectBody(generatedViewSQL);
+            const dbBody = this.extractViewSelectBody(dbDefinition);
+
+            if (generatedBody !== dbBody) {
+                logStatus(`  Base view changed for ${entity.Name} — logging view SQL`);
+                return true;
+            }
+            return false;
+        }
+        catch (e) {
+            // Non-fatal — if we can't compare, the existing logic still runs
+            logIf(configInfo.verboseOutput, `Could not compare base view for ${entity.Name}: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the SELECT body from a CREATE VIEW statement, normalizing whitespace for comparison.
+     * Handles both DB-stored definitions (CREATE VIEW ... AS SELECT ...) and generated SQL
+     * (which includes DROP VIEW, comment headers, GO, and permissions after the view body).
+     */
+    protected extractViewSelectBody(viewSQL: string): string {
+        // Find the AS keyword that precedes the SELECT — match "AS" on its own line or followed by whitespace+SELECT
+        const asMatch = viewSQL.match(/\bAS\s*\r?\n\s*SELECT\b/i);
+        if (!asMatch || asMatch.index === undefined) {
+            return viewSQL.trim(); // fallback: compare the whole thing
+        }
+
+        // Start from the SELECT keyword
+        let body = viewSQL.substring(asMatch.index + asMatch[0].indexOf('SELECT'));
+
+        // Trim trailing GO and anything after it (permissions, etc.)
+        const goMatch = body.match(/\r?\nGO\b/i);
+        if (goMatch && goMatch.index !== undefined) {
+            body = body.substring(0, goMatch.index);
+        }
+
+        // Normalize whitespace for fair comparison: collapse runs of whitespace to single space
+        return body.replace(/\s+/g, ' ').trim();
+    }
+
+    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false) {
         // Check if we should log this SQL
-        let shouldLog = false;
-        
-        if (logSql) {
+        let shouldLog = forceLog;
+
+        if (!shouldLog && logSql) {
             // Check if entity is in new or modified lists
-            const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) || 
+            const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) ||
                                    !!ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name);
-            
+
             // Check if entity is being regenerated due to cascade dependencies
-            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') && 
+            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') &&
                                                    this.entitiesNeedingDeleteSPRegeneration.has(entity.ID);
-            
+
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
@@ -510,7 +596,7 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spupdate') ||
                   description.toLowerCase().includes('spdelete')))
             );
-            
+
             // Check if entity has RelatedEntityJoinFields configured (requires view regeneration for metadata-only changes)
             const hasRelatedEntityJoinFields = description.toLowerCase().includes('base view') &&
                 entity.Fields.some(f => f.RelatedEntityJoinFieldsConfig !== null);
@@ -526,7 +612,7 @@ export class SQLCodeGenBase {
                 // Always log cascade dependency regenerations
                 shouldLog = true;
             } else if (isForceRegeneration) {
-                // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
+                // For force regeneration, the specific type flags (spCreate, baseViews, etc.)
                 // already filtered this - now we just need to check entity filtering
                 if (this.filterEntitiesQualifiedForRegeneration) {
                     // Only log if entity is in the qualified list
@@ -537,7 +623,7 @@ export class SQLCodeGenBase {
                 }
             }
         }
-        
+
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
             TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
@@ -568,6 +654,10 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
+            // Tracks whether the base view SQL differs from what's in the database.
+            // When true, we force-log the view, its permissions, and all SPs (which compile the view in)
+            // so the migration log script can fully update target databases.
+            let baseViewChanged = false;
             // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
             if (!options.onlyPermissions && !options.entity.VirtualEntity){
                 const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
@@ -575,8 +665,8 @@ export class SQLCodeGenBase {
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
+                    this.writeFileIfChanged(filePath, s);
                     this.logSQLForNewOrModifiedEntity(options.entity, s, 'Index for Foreign Keys for ' + options.entity.BaseTable, options.enableSQLLoggingForNewOrModifiedEntities);
-                    fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
                 sRet += s + '\nGO\n';
@@ -600,8 +690,8 @@ export class SQLCodeGenBase {
                                   this.generateRootIDFunction(options.entity, field);
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
                         if (options.writeFiles) {
+                            this.writeFileIfChanged(filePath, s);
                             this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                            fs.writeFileSync(filePath, s);
                             files.push(filePath);
                         }
                         // Add function SQL to output BEFORE the view
@@ -611,10 +701,16 @@ export class SQLCodeGenBase {
 
                 // Generate the base view (which may reference the TVFs created above)
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
+
+                // Compare generated view SQL against what's currently in the database.
+                // If the SELECT body differs, force-log just this base view via the forceLog flag
+                // so logging stays centralized in logSQLForNewOrModifiedEntity.
+                baseViewChanged = await this.checkBaseViewChangedInDB(options.pool, options.entity, s);
+
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                    fs.writeFileSync(filePath, s)
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
                 sRet += s + '\nGO\n';
@@ -625,9 +721,8 @@ export class SQLCodeGenBase {
                 permissionsSQL += s + '\nGO\n';
             if (options.writeFiles) {
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, true, true));
-                fs.writeFileSync(filePath, s)
-                this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View Permissions SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
+                this.writeFileIfChanged(filePath, s);
+                this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View Permissions SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                 files.push(filePath);
             }
 
@@ -646,10 +741,8 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, s);
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -659,10 +752,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -682,10 +773,8 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-                        fs.writeFileSync(filePath, s);
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -695,10 +784,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -724,10 +811,8 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + await this.generateSPDelete(options.entity, options.pool)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, s);
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -737,10 +822,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -758,9 +841,8 @@ export class SQLCodeGenBase {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     if (options.writeFiles) {
+                        this.writeFileIfChanged(filePath, ft.sql);
                         this.logSQLForNewOrModifiedEntity(options.entity, ft.sql, `Full Text Search SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, ft.sql)
                         files.push(filePath);
                     }
                     sRet += ft.sql + '\nGO\n';
@@ -772,9 +854,8 @@ export class SQLCodeGenBase {
 
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, true, true));
                 if (options.writeFiles) {
+                    this.writeFileIfChanged(filePath, sP);
                     this.logSQLForNewOrModifiedEntity(options.entity, sP, `Full Text Search Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, sP)
                     files.push(filePath);
                 }
 

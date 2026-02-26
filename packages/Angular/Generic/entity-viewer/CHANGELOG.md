@@ -1,5 +1,51 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-export-service@5.3.1
+- @memberjunction/ng-filter-builder@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-timeline@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/export-engine@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- 1692c53: Viewing System fixes for sorting and filtering. Memory manager SQL fix.
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-export-service@5.3.0
+  - @memberjunction/ng-filter-builder@5.3.0
+  - @memberjunction/ng-timeline@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/export-engine@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- 4618227: Fix Angular 21/zone.js 0.15 change detection regressions, improve conversation caching performance, and resolve blank tabs in artifacts and entity viewer
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-filter-builder@5.2.0
+  - @memberjunction/ng-timeline@5.2.0
+  - @memberjunction/ng-export-service@5.2.0
+  - @memberjunction/export-engine@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes

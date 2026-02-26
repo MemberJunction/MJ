@@ -19,8 +19,8 @@ graph TD
     subgraph BasePackage["@memberjunction/actions-base"]
         AEB["ActionEngineBase\n(singleton)"]
         EAEB["EntityActionEngineBase\n(singleton)"]
-        AEX["ActionEntityExtended"]
-        EAEX["EntityActionEntityExtended"]
+        AEX["MJActionEntityExtended"]
+        EAEX["MJEntityActionEntityExtended"]
         RAP["RunActionParams&lt;TContext&gt;"]
         AR["ActionResult / ActionResultSimple"]
         AP["ActionParam"]
@@ -59,7 +59,7 @@ sequenceDiagram
     participant Caller
     participant AEB as ActionEngineBase
     participant DB as Database (via RunView)
-    participant AEX as ActionEntityExtended
+    participant AEX as MJActionEntityExtended
 
     Caller->>AEB: Config(forceRefresh, contextUser)
     AEB->>DB: RunViews (batch load 6 entity types)
@@ -67,7 +67,7 @@ sequenceDiagram
     AEB-->>Caller: Metadata ready
 
     Caller->>AEB: Actions (getter)
-    AEB-->>Caller: ActionEntityExtended[]
+    AEB-->>Caller: MJActionEntityExtended[]
 
     Caller->>AEX: ResultCodes (getter, lazy)
     AEX->>AEB: ActionResultCodes (filtered by ActionID)
@@ -88,8 +88,8 @@ sequenceDiagram
 
 | Export | Description |
 |--------|-------------|
-| `ActionEntityExtended` | Extends `ActionEntity` with lazy-loaded `ResultCodes`, `Params`, `Libraries`, plus computed `IsCoreAction` and `ProgrammaticName` properties. Registered as `'Actions'` in the MJ class factory. |
-| `EntityActionEntityExtended` | Extends `EntityActionEntity` with lazy-loaded `Filters`, `Invocations`, and `Params`. Registered as `'Entity Actions'` in the MJ class factory. |
+| `MJActionEntityExtended` | Extends `ActionEntity` with lazy-loaded `ResultCodes`, `Params`, `Libraries`, plus computed `IsCoreAction` and `ProgrammaticName` properties. Registered as `'Actions'` in the MJ class factory. |
+| `MJEntityActionEntityExtended` | Extends `EntityActionEntity` with lazy-loaded `Filters`, `Invocations`, and `Params`. Registered as `'Entity Actions'` in the MJ class factory. |
 
 ### Parameter and Result Types
 
@@ -126,7 +126,7 @@ async function initialize(contextUser: UserInfo) {
     await engine.Config(false, contextUser);
 
     // Access loaded metadata
-    const allActions = engine.Actions;          // ActionEntityExtended[]
+    const allActions = engine.Actions;          // MJActionEntityExtended[]
     const coreActions = engine.CoreActions;     // Only core MJ actions
     const categories = engine.ActionCategories; // ActionCategoryEntity[]
     const params = engine.ActionParams;         // ActionParamEntity[]
@@ -146,7 +146,7 @@ async function initEntityActions(contextUser: UserInfo) {
     await engine.Config(false, contextUser);
 
     // All entity actions
-    const entityActions = engine.EntityActions; // EntityActionEntityExtended[]
+    const entityActions = engine.EntityActions; // MJEntityActionEntityExtended[]
 
     // Filter by entity name and status
     const customerActions = engine.GetActionsByEntityName('Customers', 'Active');
@@ -163,17 +163,17 @@ async function initEntityActions(contextUser: UserInfo) {
 }
 ```
 
-### Working with ActionEntityExtended
+### Working with MJActionEntityExtended
 
 The extended entity class provides lazy-loaded related data and computed properties.
 
 ```typescript
-import { ActionEngineBase, ActionEntityExtended } from '@memberjunction/actions-base';
+import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 
 const engine = ActionEngineBase.Instance;
 await engine.Config(false, contextUser);
 
-const action: ActionEntityExtended = engine.Actions[0];
+const action: MJActionEntityExtended = engine.Actions[0];
 
 // Computed properties
 console.log(action.IsCoreAction);     // boolean -- is this a core MJ action?
@@ -293,7 +293,7 @@ const generated: GeneratedCode = {
 
 **Singleton engines** -- Both `ActionEngineBase` and `EntityActionEngineBase` use the MJ `BaseEngine` singleton pattern. Always access them via the static `Instance` getter; never construct them directly.
 
-**Lazy-loaded relationships** -- `ActionEntityExtended` and `EntityActionEntityExtended` fetch their related data (params, result codes, filters, invocations, libraries) lazily on first property access and cache the result. This avoids loading relationship data for actions that are never inspected.
+**Lazy-loaded relationships** -- `MJActionEntityExtended` and `MJEntityActionEntityExtended` fetch their related data (params, result codes, filters, invocations, libraries) lazily on first property access and cache the result. This avoids loading relationship data for actions that are never inspected.
 
 **IgnoreMaxRows on Config** -- The engine overrides `LoadMultipleEntityConfigs` to set `IgnoreMaxRows: true`, ensuring all action metadata records are loaded regardless of entity-level `UserViewMaxRows` settings. Action Params in particular can exceed 1000 records.
 

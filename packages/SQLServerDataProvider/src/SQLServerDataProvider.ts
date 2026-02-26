@@ -93,7 +93,7 @@ import {
   MJRecordMergeLogEntity,
   MJUserFavoriteEntity,
   QueryEngine,
-  UserViewEntityExtended,
+  MJUserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
@@ -885,6 +885,12 @@ export class SQLServerDataProvider
   /**************************************************************************/
   protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+
+    // Route ad-hoc SQL queries to dedicated handler
+    if (params.SQL) {
+      return this.ExecuteAdhocSQL(params, contextUser);
+    }
+
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -934,6 +940,60 @@ export class SQLServerDataProvider
         TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Executes an ad-hoc SQL query directly, with security validation.
+   * SQL must be a SELECT or WITH (CTE) statement — mutations are rejected.
+   */
+  protected async ExecuteAdhocSQL(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    try {
+      // Validate SQL security
+      const validator = SQLExpressionValidator.Instance;
+      const validation = validator.validateFullQuery(params.SQL!);
+      if (!validation.valid) {
+        return {
+          Success: false,
+          QueryID: '',
+          QueryName: 'Ad-Hoc Query',
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+          ErrorMessage: validation.error || 'SQL validation failed',
+        };
+      }
+
+      // Execute query and measure performance
+      const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+
+      // Apply pagination if requested
+      const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+
+      return {
+        Success: true,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: paginatedResult,
+        RowCount: paginatedResult.length,
+        TotalRowCount: totalRowCount,
+        ExecutionTime: executionTime,
+        ErrorMessage: '',
+      };
+    } catch (e) {
+      LogError(e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return {
+        Success: false,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: [],
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+        ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
       };
     }
   }
@@ -1418,7 +1478,7 @@ export class SQLServerDataProvider
    * @param viewEntity
    * @param user
    */
-  protected async RenderViewWhereClause(viewEntity: UserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
+  protected async RenderViewWhereClause(viewEntity: MJUserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
     try {
       let sWhere = viewEntity.WhereClause;
       if (sWhere && sWhere.length > 0) {
@@ -2559,7 +2619,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
+  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
     // pass this back as a comma separated list, put square brackets around field names to make sure if they are reserved words or have spaces, that they'll still work.
     if (fieldList.length === 0) return '*';
@@ -2572,7 +2632,7 @@ export class SQLServerDataProvider
         .join(',');
   }
 
-  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
+  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended): EntityFieldInfo[] {
     const fieldList: EntityFieldInfo[] = [];
     try {
       let entityInfo: EntityInfo = null;

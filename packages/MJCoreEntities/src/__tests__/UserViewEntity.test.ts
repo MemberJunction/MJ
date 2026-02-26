@@ -104,7 +104,7 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
 // ============================================================================
 
 import {
-    UserViewEntityExtended,
+    MJUserViewEntityExtended,
     ViewFilterInfo,
     ViewFilterLogicInfo,
     ViewSortInfo,
@@ -112,7 +112,7 @@ import {
     ViewColumnInfo,
     ViewGridState,
     DEFAULT_AGGREGATE_DISPLAY,
-} from '../custom/UserViewEntity';
+} from '../custom/MJUserViewEntityExtended';
 
 import type {
     ViewDisplayState,
@@ -121,11 +121,11 @@ import type {
 } from '../custom/UserViewEntity';
 
 // ============================================================================
-// Helper: create a UserViewEntityExtended with optional initial property values
+// Helper: create a MJUserViewEntityExtended with optional initial property values
 // ============================================================================
 
-function createView(overrides: Record<string, unknown> = {}): UserViewEntityExtended {
-    const view = new UserViewEntityExtended();
+function createView(overrides: Record<string, unknown> = {}): MJUserViewEntityExtended {
+    const view = new MJUserViewEntityExtended();
     // Apply overrides directly to the instance
     for (const [key, value] of Object.entries(overrides)) {
         (view as Record<string, unknown>)[key] = value;
@@ -392,11 +392,11 @@ describe('DEFAULT_AGGREGATE_DISPLAY', () => {
 });
 
 // ============================================================================
-// UserViewEntityExtended
+// MJUserViewEntityExtended
 // ============================================================================
 
-describe('UserViewEntityExtended', () => {
-    let view: UserViewEntityExtended;
+describe('MJUserViewEntityExtended', () => {
+    let view: MJUserViewEntityExtended;
 
     beforeEach(() => {
         view = createView();
@@ -565,6 +565,65 @@ describe('UserViewEntityExtended', () => {
             // direction = 99 - not 1 or 2, so dir = '', desc = false
             view.SortState = JSON.stringify([{ field: 'Name', direction: 99 }]);
             expect(view.OrderByClause).toBe('Name');
+        });
+
+        // GridState.sortSettings fallback tests
+        it('should fall back to GridState.sortSettings when SortState is empty', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'Name', dir: 'asc' }],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('Name');
+        });
+
+        it('should fall back to GridState.sortSettings desc when SortState is empty', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'CreatedAt', dir: 'desc' }],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('CreatedAt DESC');
+        });
+
+        it('should handle multiple sort fields from GridState.sortSettings', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({
+                sortSettings: [
+                    { field: 'Name', dir: 'asc' },
+                    { field: 'CreatedAt', dir: 'desc' }
+                ],
+                columnSettings: []
+            });
+            expect(view.OrderByClause).toBe('Name, CreatedAt DESC');
+        });
+
+        it('should prefer SortState over GridState.sortSettings', () => {
+            view.SortState = JSON.stringify([{ field: 'Name', dir: 'asc' }]);
+            view.GridState = JSON.stringify({
+                sortSettings: [{ field: 'CreatedAt', dir: 'desc' }],
+                columnSettings: []
+            });
+            // SortState takes priority
+            expect(view.OrderByClause).toBe('Name');
+        });
+
+        it('should return empty string when GridState has no sortSettings', () => {
+            view.SortState = null;
+            view.GridState = JSON.stringify({ columnSettings: [] });
+            expect(view.OrderByClause).toBe('');
+        });
+
+        it('should return empty string when GridState is invalid JSON', () => {
+            view.SortState = null;
+            view.GridState = 'not valid json';
+            expect(view.OrderByClause).toBe('');
+        });
+
+        it('should return empty string when GridState is null and SortState is null', () => {
+            view.SortState = null;
+            view.GridState = null;
+            expect(view.OrderByClause).toBe('');
         });
     });
 
@@ -848,7 +907,7 @@ describe('UserViewEntityExtended', () => {
     // ----------------------------------------------------------------
     describe('GenerateWhereClause', () => {
         // Use a test subclass to access the protected method
-        class TestableView extends UserViewEntityExtended {
+        class TestableView extends MJUserViewEntityExtended {
             public TestGenerateWhereClause(filterState: string, entityInfo: Record<string, unknown>): string {
                 return this.GenerateWhereClause(filterState, entityInfo as unknown as never);
             }

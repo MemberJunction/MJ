@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/ng-entity-form-dialog
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.3.1
+- @memberjunction/ng-base-forms@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-shared@5.3.0
+  - @memberjunction/ng-base-forms@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ng-shared@5.2.0
+  - @memberjunction/ng-base-forms@5.2.0
+  - @memberjunction/ng-container-directives@5.2.0
+  - @memberjunction/global@5.2.0
+
 ## 5.1.0
 
 ### Patch Changes
