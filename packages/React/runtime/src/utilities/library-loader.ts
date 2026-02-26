@@ -103,8 +103,8 @@ export class LibraryLoader {
   static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
     // Always load core runtime libraries first
     const coreLibraries = getCoreRuntimeLibraries(debug);
-    const corePromises = coreLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
+    const corePromises = coreLibraries.map(lib =>
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug, lib.fallbackCdnUrls)
     );
     
     const coreResults = await Promise.all(corePromises);
@@ -157,8 +157,8 @@ export class LibraryLoader {
     });
     
     // Load plugin libraries
-    const pluginPromises = pluginLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
+    const pluginPromises = pluginLibraries.map(lib =>
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug, lib.fallbackCdnUrls)
     );
     
     const pluginResults = await Promise.all(pluginPromises);
@@ -219,10 +219,25 @@ export class LibraryLoader {
   }
 
   /**
-   * Load a script from URL
+   * Load a script from URL, with optional fallback CDN URLs.
+   * Tries the primary URL first, then each fallback in order until one succeeds.
    */
-  private static async loadScript(url: string, globalName: string, debug: boolean = false): Promise<any> {
-    // Check if already loaded
+  private static async loadScript(
+    url: string,
+    globalName: string,
+    debug: boolean = false,
+    fallbackUrls?: string[]
+  ): Promise<any> {
+    // Check if the global is already available (loaded by any URL)
+    const existingGlobal = typeof window !== 'undefined' ? (window as any)[globalName] : undefined;
+    if (existingGlobal) {
+      if (debug) {
+        console.log(`✅ Library '${globalName}' already available globally`);
+      }
+      return existingGlobal;
+    }
+
+    // Check if already loaded from this URL
     const existing = this.loadedResources.get(url);
     if (existing) {
       if (debug) {
@@ -231,13 +246,71 @@ export class LibraryLoader {
       return existing.promise;
     }
 
+    // Try the primary URL first
+    try {
+      return await this.loadScriptFromUrl(url, globalName, debug);
+    } catch (primaryError) {
+      // If no fallbacks, rethrow immediately
+      if (!fallbackUrls || fallbackUrls.length === 0) {
+        throw primaryError;
+      }
+
+      // Clean up the failed primary entry so fallbacks can try fresh
+      this.cleanupFailedScript(url);
+
+      if (debug) {
+        console.warn(`⚠️ Primary CDN failed for '${globalName}', trying fallback CDNs...`);
+      }
+
+      // Try each fallback URL in order
+      for (let i = 0; i < fallbackUrls.length; i++) {
+        const fallbackUrl = fallbackUrls[i];
+        try {
+          const result = await this.loadScriptFromUrl(fallbackUrl, globalName, debug);
+          console.log(`✅ Library '${globalName}' loaded from fallback CDN: ${fallbackUrl}`);
+          return result;
+        } catch (fallbackError) {
+          this.cleanupFailedScript(fallbackUrl);
+          if (debug) {
+            console.warn(`⚠️ Fallback CDN ${i + 1}/${fallbackUrls.length} failed for '${globalName}'`);
+          }
+        }
+      }
+
+      // All URLs failed
+      const allUrls = [url, ...fallbackUrls];
+      throw new Error(
+        `Failed to load '${globalName}' from all CDN sources: ${allUrls.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Remove a failed script from the cache and DOM so a fallback URL can be tried.
+   */
+  private static cleanupFailedScript(url: string): void {
+    const failed = this.loadedResources.get(url);
+    if (failed?.element?.parentNode) {
+      failed.element.parentNode.removeChild(failed.element);
+    }
+    this.loadedResources.delete(url);
+  }
+
+  /**
+   * Load a single script from a specific URL. This is the low-level loader
+   * that handles DOM script element creation and global variable detection.
+   */
+  private static loadScriptFromUrl(url: string, globalName: string, debug: boolean = false): Promise<any> {
+    // Check if already cached for this URL
+    const existing = this.loadedResources.get(url);
+    if (existing) {
+      return existing.promise;
+    }
+
     const promise = new Promise((resolve, reject) => {
       // Check if global already exists
       const existingGlobal = (window as any)[globalName];
       if (existingGlobal) {
-        if (debug) {
-          console.log(`✅ Library '${globalName}' already available globally`);
-        }
         resolve(existingGlobal);
         return;
       }
@@ -249,11 +322,12 @@ export class LibraryLoader {
         return;
       }
 
-      // Create new script
+      // Create new script — no crossOrigin attribute so the browser uses standard
+      // "no-cors" mode, which avoids CORS failures when CDN headers are missing
+      // or browser tracking prevention interferes with the response.
       const script = document.createElement('script');
       script.src = url;
       script.async = true;
-      script.crossOrigin = 'anonymous';
 
       const cleanup = () => {
         script.removeEventListener('load', onLoad);
@@ -262,7 +336,7 @@ export class LibraryLoader {
 
       const onLoad = async () => {
         cleanup();
-        
+
         // Use progressive delay if enabled, otherwise use original behavior
         if (LibraryLoader.enableProgressiveDelay) {
           try {
@@ -281,7 +355,7 @@ export class LibraryLoader {
             resolve(global);
           } else {
             // Some libraries may take a moment to initialize
-            const timeoutId = resourceManager.setTimeout(
+            resourceManager.setTimeout(
               LIBRARY_LOADER_COMPONENT_ID,
               () => {
                 const delayedGlobal = (window as any)[globalName];
@@ -317,14 +391,14 @@ export class LibraryLoader {
       // These are harmless and expected when loading minified libraries from CDNs
       // that reference source maps which aren't available. This doesn't affect functionality.
       document.head.appendChild(script);
-      
+
       // Register the script element for cleanup
       resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, script);
     });
 
-    this.loadedResources.set(url, { 
-      element: document.querySelector(`script[src="${url}"]`)!, 
-      promise 
+    this.loadedResources.set(url, {
+      element: document.querySelector(`script[src="${url}"]`)!,
+      promise
     });
 
     return promise;

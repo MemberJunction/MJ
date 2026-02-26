@@ -111,9 +111,6 @@
                 <div
                   class="sidebar-item notification-item"
                   (click)="onNotificationClick(notification)">
-                  <div class="sidebar-item-icon">
-                    <i class="fa-solid fa-bell"></i>
-                  </div>
                   <div class="sidebar-item-info">
                     <span class="sidebar-item-title">{{ notification.Title }}</span>
                     <span class="sidebar-item-subtitle">{{ notification.Message | slice:0:40 }}{{ (notification.Message?.length || 0) > 40 ? '...' : '' }}</span>
@@ -137,10 +134,10 @@
                     class="sidebar-item favorite-item"
                     (click)="onFavoriteClick(favorite)">
                     <div class="sidebar-item-icon">
-                      <i [class]="getFavoriteIcon(favorite)"></i>
+                      <i [class]="getEntityIconByName(favorite.Entity)"></i>
                     </div>
                     <div class="sidebar-item-info">
-                      <span class="sidebar-item-title">{{ favorite.RecordID }}</span>
+                      <span class="sidebar-item-title">{{ getFavoriteDisplayName(favorite) }}</span>
                       <span class="sidebar-item-subtitle">{{ favorite.Entity }}</span>
                     </div>
                   </div>
@@ -169,7 +166,7 @@
                     class="sidebar-item recent-item"
                     (click)="onRecentClick(item)">
                     <div class="sidebar-item-icon">
-                      <i [class]="getResourceIcon(item.resourceType)"></i>
+                      <i [class]="getEntityIconByName(item.entityName)"></i>
                     </div>
                     <div class="sidebar-item-info">
                       <span class="sidebar-item-title">{{ item.recordName || item.recordId }}</span>

@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -495,8 +495,8 @@ export const MJActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -3819,7 +3819,7 @@ export const MJAIModalitySchema = z.object({
         * * Field Name: MIMETypePattern
         * * Display Name: MIME Type Pattern
         * * SQL Data Type: nvarchar(100)
-        * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.`),
+        * * Description: MIME type pattern for this modality (e.g., image/\*, audio/\*, video/\*, text/\*, application/\*). Used for file type validation.`),
     Type: z.union([z.literal('Binary'), z.literal('Content'), z.literal('Structured')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -19675,6 +19675,138 @@ export const MJTestRunFeedbackSchema = z.object({
 export type MJTestRunFeedbackEntityType = z.infer<typeof MJTestRunFeedbackSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Test Run Output Types
+ */
+export const MJTestRunOutputTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this output type represents and when it is used`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJTestRunOutputTypeEntityType = z.infer<typeof MJTestRunOutputTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Run Outputs
+ */
+export const MJTestRunOutputSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TestRunID: z.string().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Foreign key to the parent test run that produced this output`),
+    OutputTypeID: z.string().describe(`
+        * * Field Name: OutputTypeID
+        * * Display Name: Output Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Run Output Types (vwTestRunOutputTypes.ID)
+        * * Description: Foreign key to the output type category (Screenshot, Log, Video, etc.)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Chronological ordering for storyboarding outputs across steps`),
+    StepNumber: z.number().nullable().describe(`
+        * * Field Name: StepNumber
+        * * Display Name: Step Number
+        * * SQL Data Type: int
+        * * Description: Which step produced this output, for step-based tests like Computer Use`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this output (e.g., Step 3 Screenshot)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional context about this output`),
+    MimeType: z.string().nullable().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type of the output data (e.g., image/png, text/plain, application/json, video/mp4)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Size of the output data in bytes`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int
+        * * Description: Width in pixels for image or video outputs`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int
+        * * Description: Height in pixels for image or video outputs`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: decimal(10, 3)
+        * * Description: Duration in seconds for audio or video outputs`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Technical Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with additional metadata about this output (e.g., URL at time of capture, tool calls, error info)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    TestRun: z.string().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OutputType: z.string().describe(`
+        * * Field Name: OutputType
+        * * Display Name: Output Type Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJTestRunOutputEntityType = z.infer<typeof MJTestRunOutputSchema>;
+
+/**
  * zod schema definition for the entity MJ: Test Runs
  */
 export const MJTestRunSchema = z.object({
@@ -23278,17 +23410,17 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -32173,7 +32305,7 @@ export class MJAIModalityEntity extends BaseEntity<MJAIModalityEntityType> {
     * * Field Name: MIMETypePattern
     * * Display Name: MIME Type Pattern
     * * SQL Data Type: nvarchar(100)
-    * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.
+    * * Description: MIME type pattern for this modality (e.g., image/\*, audio/\*, video/\*, text/\*, application/\*). Used for file type validation.
     */
     get MIMETypePattern(): string | null {
         return this.Get('MIMETypePattern');
@@ -73631,6 +73763,350 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
     */
     get ReviewerUser(): string {
         return this.Get('ReviewerUser');
+    }
+}
+
+
+/**
+ * MJ: Test Run Output Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRunOutputType
+ * * Base View: vwTestRunOutputTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Run Output Types')
+export class MJTestRunOutputTypeEntity extends BaseEntity<MJTestRunOutputTypeEntityType> {
+    /**
+    * Loads the MJ: Test Run Output Types record from the database
+    * @param ID: string - primary key value to load the MJ: Test Run Output Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestRunOutputTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this output type represents and when it is used
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Test Run Outputs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRunOutput
+ * * Base View: vwTestRunOutputs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Run Outputs')
+export class MJTestRunOutputEntity extends BaseEntity<MJTestRunOutputEntityType> {
+    /**
+    * Loads the MJ: Test Run Outputs record from the database
+    * @param ID: string - primary key value to load the MJ: Test Run Outputs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestRunOutputEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Foreign key to the parent test run that produced this output
+    */
+    get TestRunID(): string {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeID
+    * * Display Name: Output Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Run Output Types (vwTestRunOutputTypes.ID)
+    * * Description: Foreign key to the output type category (Screenshot, Log, Video, etc.)
+    */
+    get OutputTypeID(): string {
+        return this.Get('OutputTypeID');
+    }
+    set OutputTypeID(value: string) {
+        this.Set('OutputTypeID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Chronological ordering for storyboarding outputs across steps
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StepNumber
+    * * Display Name: Step Number
+    * * SQL Data Type: int
+    * * Description: Which step produced this output, for step-based tests like Computer Use
+    */
+    get StepNumber(): number | null {
+        return this.Get('StepNumber');
+    }
+    set StepNumber(value: number | null) {
+        this.Set('StepNumber', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this output (e.g., Step 3 Screenshot)
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Additional context about this output
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type of the output data (e.g., image/png, text/plain, application/json, video/mp4)
+    */
+    get MimeType(): string | null {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string | null) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Size of the output data in bytes
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    * * Description: Width in pixels for image or video outputs
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    * * Description: Height in pixels for image or video outputs
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: decimal(10, 3)
+    * * Description: Duration in seconds for audio or video outputs
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Technical Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with additional metadata about this output (e.g., URL at time of capture, tool calls, error info)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string {
+        return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: OutputType
+    * * Display Name: Output Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OutputType(): string {
+        return this.Get('OutputType');
     }
 }
 

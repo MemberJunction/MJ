@@ -19,7 +19,7 @@
   width: 100%;
   height: 100%;
   position: relative;
-  background: white;
+  background: var(--mj-bg-surface);
 }
 
 /* Direct content container for single-resource mode */
@@ -30,21 +30,21 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--mj-bg-surface);
   overflow: hidden;
 }
 
 .tab-content-container {
-  background: white;
-  color: #333;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   padding: 20px;
 }
 
 /* Context Menu */
 .context-menu {
   position: fixed;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 150px;
@@ -59,23 +59,23 @@
   padding: 10px 14px;
   cursor: pointer;
   font-size: 13px;
-  color: #424242;
+  color: var(--mj-text-primary);
   transition: background 0.15s;
 }
 
 .context-menu .context-menu-item i {
   width: 16px;
   text-align: center;
-  color: #757575;
+  color: var(--mj-text-secondary);
 }
 
 .context-menu .context-menu-item:hover {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-hover);
 }
 
 .context-menu .context-menu-divider {
   height: 1px;
-  background: #e0e0e0;
+  background: var(--mj-border-default);
   margin: 4px 0;
 }
 
@@ -151,7 +151,7 @@ mj-tab-container .lm_content > * {
 }
 
 mj-tab-container .lm_content {
-  background: white !important;
+  background: var(--mj-bg-surface) !important;
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -159,7 +159,7 @@ mj-tab-container .lm_content {
 }
 
 mj-tab-container .lm_item_container {
-  background: white !important;
+  background: var(--mj-bg-surface) !important;
 }
 
 /* Tab content wrapper - allow scrolling */
@@ -172,8 +172,8 @@ mj-tab-container .lm_header {
   height: 38px !important;
   padding-top: 2px !important;
   padding-left: 4px !important;
-  background: #f5f5f5 !important;
-  border-bottom: 1px solid #ebebeb !important;
+  background: var(--mj-bg-surface-sunken) !important;
+  border-bottom: 1px solid var(--mj-border-default) !important;
   overflow: visible !important;
   box-sizing: border-box !important;
 }
@@ -197,7 +197,7 @@ mj-tab-container .lm_header .lm_tab {
   user-select: none !important;
   background: transparent !important;
   border: none !important;
-  border-bottom: 1px solid #ebebeb !important;
+  border-bottom: 1px solid var(--mj-border-default) !important;
   transition: all 0.15s ease !important;
   position: relative !important;
   z-index: 1 !important;
@@ -219,7 +219,7 @@ mj-tab-container .lm_header .lm_tab::before {
 }
 
 mj-tab-container .lm_header .lm_tab:hover {
-  background: #e8e8e8 !important;
+  background: var(--mj-bg-surface-hover) !important;
 }
 
 mj-tab-container .lm_header .lm_tab:hover .lm_close_tab {
@@ -231,12 +231,12 @@ mj-tab-container .lm_header .lm_tab:hover::before {
 }
 
 mj-tab-container .lm_header .lm_tab.lm_active {
-  background: white !important;
+  background: var(--mj-bg-surface) !important;
   height: 36px !important;
   margin-bottom: -1px !important;
   margin-right: 0 !important;
-  border: 1px solid #ebebeb !important;
-  border-bottom-color: white !important;
+  border: 1px solid var(--mj-border-default) !important;
+  border-bottom-color: var(--mj-bg-surface) !important;
   border-radius: 4px 4px 0 0 !important;
   z-index: 2 !important;
 }
@@ -270,12 +270,12 @@ mj-tab-container .lm_close_tab {
   align-items: center !important;
   justify-content: center !important;
   font-size: 10px !important;
-  color: #757575 !important;
+  color: var(--mj-text-secondary) !important;
 }
 
 mj-tab-container .lm_close_tab:hover {
   opacity: 1 !important;
-  color: #c62828 !important;
+  color: var(--mj-status-error) !important;
 }
 
 /* Show close button on hover (except pinned) */

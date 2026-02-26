@@ -110,17 +110,47 @@
 
             <!-- Entity List (scrollable container) -->
             <div class="entity-list">
-              <!-- Inner content that grows naturally -->
               <div class="entity-list-inner">
-                @for (entity of filteredEntities; track entity.ID) {
-                  <div
-                    class="nav-item entity-item"
-                    [class.selected]="isEntitySelected(entity)"
-                    (click)="onEntityClick(entity)"
-                    [title]="entity.Description || entity.DisplayNameOrName">
-                    <i [class]="getEntityIcon(entity)"></i>
-                    <span class="nav-item-label">{{ entity.DisplayNameOrName }}</span>
-                  </div>
+                @if (hasAppGroups) {
+                  <!-- Grouped by application -->
+                  @for (group of filteredNavGroups; track group.applicationId) {
+                    <div class="nav-app-group">
+                      <div class="nav-app-group-header" (click)="onNavGroupToggle(group.applicationId)">
+                        <i [class]="group.applicationIcon || 'fa-solid fa-folder'" class="nav-app-group-icon"
+                           [style.color]="group.applicationColor || null"></i>
+                        <span class="nav-app-group-name">{{ group.applicationName }}</span>
+                        <span class="nav-app-group-count">{{ group.entities.length }}</span>
+                        <i class="fa-solid fa-chevron-right nav-app-group-chevron"
+                           [class.expanded]="isNavGroupExpanded(group.applicationId)"></i>
+                      </div>
+                      @if (isNavGroupExpanded(group.applicationId)) {
+                        <div class="nav-app-group-entities">
+                          @for (entity of group.entities; track entity.ID) {
+                            <div
+                              class="nav-item entity-item"
+                              [class.selected]="isEntitySelected(entity)"
+                              (click)="onEntityClick(entity)"
+                              [title]="entity.Description || entity.DisplayNameOrName">
+                              <i [class]="getEntityIcon(entity)"></i>
+                              <span class="nav-item-label">{{ entity.DisplayNameOrName }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                } @else {
+                  <!-- Flat list (no groups available) -->
+                  @for (entity of filteredEntities; track entity.ID) {
+                    <div
+                      class="nav-item entity-item"
+                      [class.selected]="isEntitySelected(entity)"
+                      (click)="onEntityClick(entity)"
+                      [title]="entity.Description || entity.DisplayNameOrName">
+                      <i [class]="getEntityIcon(entity)"></i>
+                      <span class="nav-item-label">{{ entity.DisplayNameOrName }}</span>
+                    </div>
+                  }
                 }
 
                 @if (filteredEntities.length === 0 && entitySearchTerm) {

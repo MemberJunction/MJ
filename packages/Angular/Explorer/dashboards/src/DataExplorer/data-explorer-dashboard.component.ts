@@ -6,7 +6,7 @@ import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/oper
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
+import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
 import {
@@ -33,7 +33,7 @@ import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
@@ -119,6 +119,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private allEntities: EntityInfo[] = [];
   // Filtered entities based on entityFilter
   public entities: EntityInfo[] = [];
+  // Application entity groups for the home view (Concept D)
+  public appEntityGroups: AppEntityGroup[] = [];
   // Entity IDs for the current application (loaded when applicationId filter is set)
   private applicationEntityIds: Set<string> = new Set();
   public selectedEntity: EntityInfo | null = null;
@@ -201,42 +203,91 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return "Data Explorer"
   }
 
+  // ========================================
+  // Concept D: Application Groups + Search-First
+  // ========================================
+
   /**
-   * Filtered entities based on entityFilterText (for home screen)
-   * Excludes entities shown in recent or favorites sections
-   * Applies Common/All toggle filtering
+   * Get app entity groups filtered by current entityFilterText and homeViewMode.
+   * When searching, auto-expands groups that contain matches.
    */
-  get filteredEntities(): EntityInfo[] {
-    // Get IDs of entities in recent and favorites to exclude
-    const recentEntityIds = new Set(this.state.recentEntityAccesses.map(r => r.entityId));
-    const favoriteEntityIds = new Set(this.state.favoriteEntities.map(f => f.entityId));
+  get filteredAppEntityGroups(): AppEntityGroup[] {
+    const filterText = this.entityFilterText.toLowerCase().trim();
+    const showFavoritesOnly = this.state.homeViewMode === 'favorites';
 
-    let result = this.entities.filter(e => {
-      // Exclude entities shown in recent or favorites sections
-      if (recentEntityIds.has(e.ID) || favoriteEntityIds.has(e.ID)) {
-        return false;
-      }
+    return this.appEntityGroups
+      .map(group => this.filterGroupEntities(group, filterText, showFavoritesOnly))
+      .filter(group => group.entities.length > 0);
+  }
 
-      // Apply Common/All toggle filter (only if we have DefaultForNewUser info)
-      if (!this.state.showAllEntities && this.stateService.DefaultEntityIds.size > 0) {
-        if (!this.stateService.DefaultEntityIds.has(e.ID)) {
-          return false;
-        }
-      }
+  /**
+   * Filter a single group's entities by text and favorites mode.
+   * Returns a new group with filtered entities and auto-expansion when searching.
+   */
+  private filterGroupEntities(
+    group: AppEntityGroup,
+    filterText: string,
+    showFavoritesOnly: boolean
+  ): AppEntityGroup {
+    let filtered = group.entities;
 
-      return true;
-    });
+    if (showFavoritesOnly) {
+      filtered = filtered.filter(e => this.isEntityFavorited(e));
+    }
 
-    // Apply text filter
-    if (this.entityFilterText && this.entityFilterText.trim() !== '') {
-      const filter = this.entityFilterText.toLowerCase().trim();
+    if (filterText) {
+      filtered = filtered.filter(e =>
+        e.Name.toLowerCase().includes(filterText) ||
+        e.DisplayNameOrName.toLowerCase().includes(filterText) ||
+        (e.Description && e.Description.toLowerCase().includes(filterText))
+      );
+    }
+
+    return {
+      ...group,
+      entities: filtered,
+      isExpanded: filterText ? true : group.isExpanded
+    };
+  }
+
+  /**
+   * Get a flat filtered entity list for single-application mode.
+   * Used when entityFilter.applicationId is set, bypassing app grouping.
+   */
+  get flatFilteredEntities(): EntityInfo[] {
+    let result = this.entities;
+
+    if (this.state.homeViewMode === 'favorites') {
+      result = result.filter(e => this.isEntityFavorited(e));
+    }
+
+    const filterText = this.entityFilterText.toLowerCase().trim();
+    if (filterText) {
       result = result.filter(e =>
-        e.Name.toLowerCase().includes(filter) ||
-        (e.Description && e.Description.toLowerCase().includes(filter))
+        e.Name.toLowerCase().includes(filterText) ||
+        e.DisplayNameOrName.toLowerCase().includes(filterText) ||
+        (e.Description && e.Description.toLowerCase().includes(filterText))
       );
     }
 
     return result;
+  }
+
+  /**
+   * Total count of entities matching current filters (across all groups or flat list)
+   */
+  get filteredEntityCount(): number {
+    if (this.entityFilter?.applicationId) {
+      return this.flatFilteredEntities.length;
+    }
+    return this.filteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
+  }
+
+  /**
+   * Count of applications that have at least one visible entity
+   */
+  get applicationCount(): number {
+    return this.appEntityGroups.filter(g => g.entities.length > 0).length;
   }
 
   /**
@@ -259,50 +310,31 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Check if we should show the Common/All toggle
-   * Only show if we have DefaultForNewUser information
+   * Recent records limited to 3 for the quick access panel
    */
-  get showCommonAllToggle(): boolean {
-    return this.stateService.DefaultEntityIds.size > 0;
+  get quickAccessRecentRecords(): RecentRecordAccess[] {
+    return this.recentRecords.slice(0, 3);
   }
 
   /**
-   * Total count of all entities (for display)
+   * Recent entities limited to 3 for the quick access panel
    */
-  get allEntitiesCount(): number {
-    return this.entities.length;
+  get quickAccessRecentEntities(): EntityInfo[] {
+    return this.recentEntities.slice(0, 3);
   }
 
   /**
-   * Count of common (DefaultForNewUser) entities
+   * Favorite records limited to 3 for the quick access panel
    */
-  get commonEntitiesCount(): number {
-    return this.entities.filter(e => this.stateService.DefaultEntityIds.has(e.ID)).length;
+  get quickAccessFavoriteRecords(): FavoriteRecord[] {
+    return this.favoriteRecords.slice(0, 3);
   }
 
   /**
-   * Check if we have any content for the top two-column section
-   * (recent/favorite entities OR recent/favorite records)
+   * Check if a quick access section is expanded
    */
-  get hasTopSectionContent(): boolean {
-    return this.recentEntities.length > 0 ||
-           this.favoriteEntities.length > 0 ||
-           this.recentRecords.length > 0 ||
-           this.favoriteRecords.length > 0;
-  }
-
-  /**
-   * Check if the left column (records column) has content
-   */
-  get hasRecordsColumnContent(): boolean {
-    return this.recentRecords.length > 0 || this.favoriteRecords.length > 0;
-  }
-
-  /**
-   * Check if the right column (entities column) has content
-   */
-  get hasEntitiesColumnContent(): boolean {
-    return this.recentEntities.length > 0 || this.favoriteEntities.length > 0;
+  public isQuickAccessSectionExpanded(sectionId: string): boolean {
+    return this.state.quickAccessSections[sectionId] !== false;
   }
 
   /**
@@ -787,6 +819,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       // Apply filter to get the final entity list
       this.entities = this.applyEntityFilter(this.allEntities);
+
+      // Build application groups for the home view (Concept D)
+      this.buildAppEntityGroups();
 
       // Only restore entity from persisted state if there's no URL state
       // This prevents race conditions where persisted entity triggers data load
@@ -1728,6 +1763,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onFilterTextChanged(filterText: string): void {
     this.stateService.setSmartFilterPrompt(filterText);
+    this.filterInput$.next(filterText);
   }
 
   // ========================================
@@ -2606,6 +2642,127 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public toggleShowAllEntities(): void {
     this.stateService.toggleShowAllEntities();
+  }
+
+  // ========================================
+  // Concept D: Application Groups + Quick Access Panel
+  // ========================================
+
+  /**
+   * Toggle an application group's expanded/collapsed state
+   */
+  public toggleAppGroup(groupId: string): void {
+    this.stateService.toggleAppGroupExpanded(groupId);
+    // Update local cache for immediate UI response
+    const group = this.appEntityGroups.find(g => g.applicationId === groupId);
+    if (group) {
+      group.isExpanded = !group.isExpanded;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set the home view mode (all vs favorites)
+   */
+  public setHomeViewMode(mode: 'all' | 'favorites'): void {
+    this.stateService.setHomeViewMode(mode);
+  }
+
+  /**
+   * Toggle the quick access (right) panel
+   */
+  public toggleQuickAccessPanel(): void {
+    this.stateService.toggleQuickAccessPanel();
+  }
+
+  /**
+   * Toggle a section in the quick access panel
+   */
+  public toggleQuickAccessSection(sectionId: string): void {
+    this.stateService.toggleQuickAccessSection(sectionId);
+  }
+
+  /**
+   * Build application entity groups from metadata.
+   * Groups entities by their first application membership.
+   * Entities not in any application go into "System & Other".
+   */
+  private buildAppEntityGroups(): void {
+    // Skip grouping when filtered to a single application
+    if (this.entityFilter?.applicationId) {
+      this.appEntityGroups = [];
+      return;
+    }
+
+    const applications = this.metadata.Applications;
+    const entityIdToApp = new Map<string, ApplicationInfo>();
+    const groupMap = new Map<string, AppEntityGroup>();
+
+    // Build entity -> first application mapping
+    for (const app of applications) {
+      for (const appEntity of app.ApplicationEntities) {
+        if (!entityIdToApp.has(appEntity.EntityID)) {
+          entityIdToApp.set(appEntity.EntityID, app);
+        }
+      }
+    }
+
+    // Assign each visible entity to its group
+    const ungroupedEntities: EntityInfo[] = [];
+    for (const entity of this.entities) {
+      const app = entityIdToApp.get(entity.ID);
+      if (app) {
+        this.addEntityToGroup(groupMap, app, entity);
+      } else {
+        ungroupedEntities.push(entity);
+      }
+    }
+
+    // Convert map to sorted array
+    const groups = Array.from(groupMap.values())
+      .sort((a, b) => a.applicationName.localeCompare(b.applicationName));
+
+    // Add "System & Other" catch-all if there are ungrouped entities
+    if (ungroupedEntities.length > 0) {
+      groups.push({
+        applicationId: '__system_other__',
+        applicationName: 'System & Other',
+        applicationIcon: 'fa-solid fa-ellipsis',
+        applicationColor: '#9e9e9e',
+        entities: ungroupedEntities,
+        isExpanded: this.state.expandedAppGroups.includes('__system_other__')
+      });
+    }
+
+    // Apply expanded state from persisted state
+    for (const group of groups) {
+      group.isExpanded = this.state.expandedAppGroups.includes(group.applicationId);
+    }
+
+    this.appEntityGroups = groups;
+  }
+
+  /**
+   * Add an entity to its application group in the map, creating the group if needed
+   */
+  private addEntityToGroup(
+    groupMap: Map<string, AppEntityGroup>,
+    app: ApplicationInfo,
+    entity: EntityInfo
+  ): void {
+    let group = groupMap.get(app.ID);
+    if (!group) {
+      group = {
+        applicationId: app.ID,
+        applicationName: app.Name,
+        applicationIcon: app.Icon || 'fa-solid fa-cube',
+        applicationColor: app.Color,
+        entities: [],
+        isExpanded: false
+      };
+      groupMap.set(app.ID, group);
+    }
+    group.entities.push(entity);
   }
 
   /**
