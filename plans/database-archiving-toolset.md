@@ -28,7 +28,7 @@ flowchart TB
         DD1[DefaultArchiveDriver]
         DD2[CustomEntityDriver]
         DD3[CustomConfigDriver]
-        CF[ClassFactory<br/>@RegisterClass]
+        CF["ClassFactory<br/>@RegisterClass"]
     end
 
     subgraph Storage["Storage Layer (MJStorage)"]
