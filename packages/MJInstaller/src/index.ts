@@ -65,6 +65,9 @@ export {
   type InstallConfig,
   type PartialInstallConfig,
   InstallConfigDefaults,
+  resolveFromEnvironment,
+  loadConfigFile,
+  mergeConfigs,
 } from './models/InstallConfig.js';
 export {
   InstallPlan,

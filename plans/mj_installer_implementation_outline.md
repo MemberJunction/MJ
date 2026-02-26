@@ -18,7 +18,7 @@ graph TD
     subgraph Frontends["Frontends (thin rendering + prompt handling)"]
         CLI["mj install\nmj doctor"]
         VSCode["VSCode Ext\n(future)"]
-        Docker["Docker / CI\n(future)"]
+        Docker["Docker / CI\n(--yes mode)"]
     end
 
     CLI --> Engine
@@ -48,6 +48,7 @@ graph TD
 packages/MJInstaller/
 ├── package.json
 ├── tsconfig.json
+├── vitest.config.ts                    # Vitest configuration
 ├── src/
 │   ├── index.ts                        # Public API exports (all types + classes)
 │   │
@@ -80,8 +81,36 @@ packages/MJInstaller/
 │   ├── events/
 │   │   └── InstallerEvents.ts          # 8 event types + typed emitter
 │   │
-│   └── errors/
-│       └── InstallerError.ts           # Typed errors with phase + code + suggested fix
+│   ├── errors/
+│   │   └── InstallerError.ts           # Typed errors with phase + code + suggested fix
+│   │
+│   └── __tests__/                      # Unit + integration tests
+│       ├── mocks/                      # Shared mock utilities
+│       │   ├── adapters.ts             # Mock FileSystemAdapter + ProcessRunner
+│       │   ├── emitter.ts              # Mock typed event emitter
+│       │   └── fixtures.ts             # Shared test fixtures (config, plan, context)
+│       ├── InstallerEngine.test.ts     # Engine orchestration (41 tests)
+│       ├── InstallerError.test.ts      # Error model (17 tests)
+│       ├── InstallerEvents.test.ts     # Event system (19 tests)
+│       ├── InstallConfig.test.ts       # Config, defaults, env vars, config file (35 tests)
+│       ├── InstallPlan.test.ts         # Plan + Summarize (11 tests)
+│       ├── InstallState.test.ts        # Checkpoint persistence (18 tests)
+│       ├── Diagnostics.test.ts         # Diagnostics model (9 tests)
+│       ├── FileSystemAdapter.test.ts   # Filesystem adapter (40 tests)
+│       ├── GitHubReleaseProvider.test.ts # GitHub adapter (27 tests)
+│       ├── ProcessRunner.test.ts       # Process spawning (32 tests)
+│       ├── SqlServerAdapter.test.ts    # SQL Server adapter (12 tests)
+│       ├── PreflightPhase.test.ts      # Preflight checks (36 tests)
+│       ├── ScaffoldPhase.test.ts       # Download + extract (21 tests)
+│       ├── ConfigurePhase.test.ts      # Config generation (32 tests)
+│       ├── DatabaseProvisionPhase.test.ts # DB provisioning (18 tests)
+│       ├── PlatformCompatPhase.test.ts # Platform fixes (35 tests)
+│       ├── DependencyPhase.test.ts     # npm install/build (22 tests)
+│       ├── MigratePhase.test.ts        # Migration (10 tests)
+│       ├── CodeGenPhase.test.ts        # CodeGen + pipeline (33 tests)
+│       ├── SmokeTestPhase.test.ts      # Smoke tests (24 tests)
+│       └── integration/
+│           └── cross-platform-smoke.ts # CI integration smoke (runs via npx tsx)
 ```
 
 ### Dependencies
@@ -138,6 +167,7 @@ interface RunOptions {
   Verbose?: boolean;      // Verbose logging
   NoResume?: boolean;     // Ignore checkpoint, start fresh
   Config?: PartialInstallConfig;
+  ConfigFile?: string;    // Path to JSON config file
   Fast?: boolean;         // Fast mode
 }
 
@@ -334,6 +364,173 @@ Skippable with `--skip-start` or automatically skipped in `--fast` mode.
 
 ---
 
+## Non-Interactive / CI / Docker Mode
+
+**Flag:** `mj install --yes` (optionally combined with `--config <path>`)
+
+**Purpose:** Run the installer end-to-end in headless environments (Docker containers, GitHub Actions, other CI pipelines) without any interactive prompts. All configuration is injected via environment variables, a JSON config file, or both.
+
+### Configuration Resolution Chain
+
+When the engine runs, configuration is resolved in layers — each layer overrides the previous:
+
+```
+Plan.Config (defaults) → MJ_INSTALL_* env vars → --config file → RunOptions.Config (programmatic)
+```
+
+If `--yes` is set and a field is still unresolved after all layers, the engine uses `InstallConfigDefaults` values. Any prompt that would fire in interactive mode is auto-resolved with its default value (see Prompt Safety Net below).
+
+### Environment Variables
+
+Set `MJ_INSTALL_*` environment variables to inject configuration. Only variables that are set (non-empty) are used — missing variables are skipped.
+
+| Env Var | Config Field | Type |
+|---|---|---|
+| `MJ_INSTALL_DB_HOST` | `DatabaseHost` | string (default: `localhost`) |
+| `MJ_INSTALL_DB_PORT` | `DatabasePort` | number (default: `1433`) |
+| `MJ_INSTALL_DB_NAME` | `DatabaseName` | string |
+| `MJ_INSTALL_DB_TRUST_CERT` | `DatabaseTrustCert` | boolean (`true`/`1`/`yes`) |
+| `MJ_INSTALL_CODEGEN_USER` | `CodeGenUser` | string |
+| `MJ_INSTALL_CODEGEN_PASSWORD` | `CodeGenPassword` | string |
+| `MJ_INSTALL_API_USER` | `APIUser` | string |
+| `MJ_INSTALL_API_PASSWORD` | `APIPassword` | string |
+| `MJ_INSTALL_API_PORT` | `APIPort` | number (default: `4000`) |
+| `MJ_INSTALL_EXPLORER_PORT` | `ExplorerPort` | number (default: `4200`) |
+| `MJ_INSTALL_AUTH_PROVIDER` | `AuthProvider` | `entra` / `auth0` / `none` |
+| `MJ_INSTALL_OPENAI_KEY` | `OpenAIKey` | string |
+| `MJ_INSTALL_ANTHROPIC_KEY` | `AnthropicKey` | string |
+| `MJ_INSTALL_MISTRAL_KEY` | `MistralKey` | string |
+
+**Auth-provider-specific variables** (populate `AuthProviderValues` record):
+
+| Env Var | Key |
+|---|---|
+| `MJ_INSTALL_ENTRA_TENANT_ID` | `TenantID` |
+| `MJ_INSTALL_ENTRA_CLIENT_ID` | `ClientID` |
+| `MJ_INSTALL_AUTH0_DOMAIN` | `Domain` |
+| `MJ_INSTALL_AUTH0_CLIENT_ID` | `ClientID` |
+| `MJ_INSTALL_AUTH0_CLIENT_SECRET` | `ClientSecret` |
+
+### JSON Config File (`--config`)
+
+Pass a JSON file with any `InstallConfig` fields. Unknown keys are silently ignored.
+
+```bash
+mj install --yes --tag v5.2.0 --config mj-install.json
+```
+
+**Example `mj-install.json`:**
+```json
+{
+  "DatabaseHost": "prod-sql.example.com",
+  "DatabaseName": "MemberJunction",
+  "CodeGenUser": "MJ_CodeGen",
+  "CodeGenPassword": "secret123",
+  "APIUser": "MJ_Connect",
+  "APIPassword": "secret456",
+  "AuthProvider": "entra",
+  "AuthProviderValues": {
+    "TenantID": "abc-123",
+    "ClientID": "def-456"
+  }
+}
+```
+
+### Prompt Safety Net
+
+In `--yes` mode, the engine installs a catch-all `prompt` event listener. If any phase emits a prompt that wasn't pre-resolved by the config chain, the safety net:
+
+1. Logs a warning: `"Auto-resolving prompt '<PromptId>' with default '<Default>' (non-interactive mode)"`
+2. Calls `event.Resolve(event.Default ?? '')` to auto-answer with the default value
+
+This prevents indefinite hangs in headless environments. Without `--yes`, prompts are passed through to the frontend as normal.
+
+### Usage Examples
+
+**Docker Compose:**
+```yaml
+services:
+  mj-install:
+    image: node:24
+    environment:
+      MJ_INSTALL_DB_HOST: sql-server
+      MJ_INSTALL_DB_NAME: MemberJunction
+      MJ_INSTALL_CODEGEN_USER: MJ_CodeGen
+      MJ_INSTALL_CODEGEN_PASSWORD: ${CODEGEN_PASSWORD}
+      MJ_INSTALL_API_USER: MJ_Connect
+      MJ_INSTALL_API_PASSWORD: ${API_PASSWORD}
+      MJ_INSTALL_AUTH_PROVIDER: none
+    command: npx mj install --yes --tag v5.2.0 --skip-start
+```
+
+**GitHub Actions CI:**
+```yaml
+- name: Install MJ
+  env:
+    MJ_INSTALL_DB_HOST: localhost
+    MJ_INSTALL_DB_NAME: MemberJunction
+    MJ_INSTALL_CODEGEN_USER: MJ_CodeGen
+    MJ_INSTALL_CODEGEN_PASSWORD: ${{ secrets.CODEGEN_PASSWORD }}
+    MJ_INSTALL_API_USER: MJ_Connect
+    MJ_INSTALL_API_PASSWORD: ${{ secrets.API_PASSWORD }}
+  run: npx mj install --yes --tag v5.2.0 --skip-start --skip-db
+```
+
+**Mixed approach (env vars for secrets, config file for everything else):**
+```bash
+# Secrets via env vars (never in config files)
+export MJ_INSTALL_CODEGEN_PASSWORD="$CODEGEN_PASSWORD"
+export MJ_INSTALL_API_PASSWORD="$API_PASSWORD"
+
+# Everything else via config file
+mj install --yes --tag v5.2.0 --config mj-install.json --skip-start
+```
+
+### Programmatic API
+
+The engine's non-interactive mode is also available programmatically:
+
+```typescript
+import { InstallerEngine, resolveFromEnvironment, loadConfigFile, mergeConfigs } from '@memberjunction/installer';
+
+const engine = new InstallerEngine();
+const plan = await engine.CreatePlan({ Tag: 'v5.2.0', Dir: '/opt/mj' });
+
+// Config can be built manually or loaded from sources
+const config = mergeConfigs(
+  resolveFromEnvironment(),                  // MJ_INSTALL_* env vars
+  await loadConfigFile('./mj-install.json'), // JSON config file
+  { APIPort: 4001 },                        // Programmatic overrides
+);
+
+const result = await engine.Run(plan, {
+  Yes: true,           // Non-interactive mode
+  Config: config,      // Merged config
+  ConfigFile: './mj-install.json',  // Or let the engine load it
+});
+```
+
+### Implementation Details
+
+**Key source files:**
+
+| File | What |
+|---|---|
+| `src/models/InstallConfig.ts` | `resolveFromEnvironment()`, `loadConfigFile()`, `mergeConfigs()` functions + env var mapping tables |
+| `src/models/InstallPlan.ts` | `RunOptions.ConfigFile` property |
+| `src/InstallerEngine.ts` | Config chain resolution in `Run()` + prompt safety net installation |
+| `src/index.ts` | Exports: `resolveFromEnvironment`, `loadConfigFile`, `mergeConfigs` |
+| `MJCLI/.../install/index.ts` | `--config` / `-c` CLI flag → `RunOptions.ConfigFile` |
+
+**Test coverage (40 tests across 2 files):**
+
+| Test File | Tests | What's Tested |
+|---|---|---|
+| `InstallConfig.test.ts` | 28 new | `resolveFromEnvironment` (string/numeric/boolean parsing, auth provider values, isolation), `loadConfigFile` (valid JSON, all known fields, unknown keys, error cases), `mergeConfigs` (override precedence, AuthProviderValues shallow-merge) |
+| `InstallerEngine.test.ts` | 12 new | Config chain resolution (env vars, config file, priority override, log emission), prompt safety net (auto-resolve, warning log, not installed without --yes) |
+
+---
+
 ## Checkpoint / Resume
 
 State file: `.mj-install-state.json` in the install directory.
@@ -375,8 +572,8 @@ State file: `.mj-install-state.json` in the install directory.
 |---|---|---|
 | `--tag <tag>` | `-t` | Release tag (e.g., `v5.1.0`). Omit for interactive selection. |
 | `--dir <path>` | | Target directory (default: `.`) |
-| `--yes` | | Non-interactive mode — auto-answer prompts with defaults/config |
-| `--config <path>` | | Config file path for pre-filling prompts |
+| `--yes` | | Non-interactive mode — resolve config from env vars/config file, auto-answer remaining prompts with defaults |
+| `--config <path>` | `-c` | Path to JSON config file with install settings (see Non-Interactive Mode section) |
 | `--dry-run` | | Show plan without executing |
 | `--verbose` | `-v` | Verbose output (show `step:progress` and `log` verbose messages) |
 | `--skip-start` | | Skip MJAPI/Explorer startup (smoke test phase) |
@@ -396,6 +593,8 @@ mj install --dir /opt/mj --skip-db     # Custom dir, skip DB setup
 mj install --dry-run                    # Show plan only
 mj install --no-resume                  # Fresh start (ignore checkpoint)
 mj install -v                           # Verbose output
+mj install --yes -t v5.2.0 -c config.json  # CI: config from JSON file
+mj install --yes -t v5.2.0 --skip-start    # CI: config from MJ_INSTALL_* env vars
 ```
 
 **Output format (default):**
@@ -478,6 +677,78 @@ TCP connectivity check (raw socket), SQL Server login validation, query executio
 
 ---
 
+## Testing
+
+### Unit Tests (411 tests, 20 files)
+
+All unit tests use **Vitest** with full mocking of external dependencies (no database, no network, no filesystem). Tests run in ~1 second.
+
+**Running tests:**
+```bash
+cd packages/MJInstaller && npm run test        # Run all 411 tests
+cd packages/MJInstaller && npm run test:watch   # Watch mode
+```
+
+**Coverage by area:**
+
+| Area | Files | Tests | What's Tested |
+|---|---|---|---|
+| **Models** | 6 | 110 | InstallConfig defaults/merging/env-vars/config-file-loading, InstallPlan creation/Summarize, InstallState persistence/checkpoint, Diagnostics model, InstallerError codes/suggested fixes, InstallerEvents typed emitter |
+| **Adapters** | 4 | 111 | FileSystemAdapter (ZIP extract, disk space, read/write, search, timestamps), GitHubReleaseProvider (list releases, download, pre-release filtering), ProcessRunner (spawn, timeout, kill, output capture), SqlServerAdapter (TCP check, login validation, query execution) |
+| **Phases** | 9 | 249 | All 9 phases tested individually — preflight checks, scaffold download/extract, configure file generation, database script generation, platform compatibility patches, dependency install/build, migration orchestration, codegen + post-codegen pipeline, smoke test startup/health checks |
+| **Engine** | 1 | 41 | Full orchestration: CreatePlan, Run (success + failure + skip), DryRun early return, Doctor, Resume from checkpoint, event emission, error handling, config chain resolution (env vars + config file + priority override), prompt safety net (auto-resolve in --yes mode) |
+
+**Mock architecture:**
+- `__tests__/mocks/adapters.ts` — shared mock `FileSystemAdapter` and `ProcessRunner` with all methods stubbed
+- `__tests__/mocks/emitter.ts` — mock typed event emitter for capturing engine events
+- `__tests__/mocks/fixtures.ts` — reusable test fixtures (default config, plan inputs, phase context)
+- `InstallerEngine.test.ts` uses `vi.hoisted()` + fake constructor pattern to mock `InstallState` (required because `vi.mock()` factories are hoisted above `const` declarations)
+
+### Cross-Platform CI (GitHub Actions)
+
+**Workflow:** `.github/workflows/installer-platform-test.yml`
+
+Runs automatically on pushes to `feature/mj-install-v2` and PRs to `next`. Also supports manual trigger via `workflow_dispatch`.
+
+**Matrix:** 3 platforms, all tested in parallel with `fail-fast: false`
+
+| Runner | OS | Architecture |
+|---|---|---|
+| `ubuntu-latest` | Linux | x64 |
+| `macos-14` | macOS Sonoma | arm64 (Apple Silicon) |
+| `windows-latest` | Windows Server | x64 |
+
+**What runs per platform:**
+1. `npm ci` — full monorepo install (validates workspace resolution)
+2. `npm run build -w packages/MJInstaller` — TypeScript compilation
+3. `npm run test -w packages/MJInstaller` — all 371 unit tests
+4. `npx tsx .../cross-platform-smoke.ts` — integration smoke test
+
+**Integration smoke test** (`cross-platform-smoke.ts`):
+
+A standalone script (not Vitest — runs via `npx tsx`) that exercises real platform APIs without downloading releases or needing a database:
+
+| Test | What It Validates |
+|---|---|
+| **Doctor diagnostics** | Real `process.platform`, `os.arch()`, `node --version`, `npm --version`, port availability, write permissions |
+| **CreatePlan + Summarize** | Plan generation with skip flags, phase count, summary output |
+| **DryRun** | Early return with `Success=true`, empty phase arrays |
+| **Path handling** | `path.join()` uses correct separators per OS (backslash on Windows, forward slash on Unix) |
+| **Filesystem operations** | Real `mkdir`, `writeFile`, `readFile` round-trip in temp directory |
+
+**What this catches per platform:**
+
+| Code Path | Linux | macOS | Windows |
+|---|---|---|---|
+| `process.platform` detection | `linux` | `darwin` | `win32` |
+| `path.join()` separators | `/` | `/` | `\` |
+| `os.tmpdir()` paths | `/tmp` | `/var/folders/...` | `C:\Users\...\Temp` |
+| `os.arch()` | `x64` | `arm64` (M1/M2) | `x64` |
+| Node/npm version detection | real | real | real |
+| Filesystem temp operations | real | real | real |
+
+---
+
 ## What Has Been Implemented (Done)
 
 - [x] Package skeleton with full directory structure
@@ -497,6 +768,16 @@ TCP connectivity check (raw socket), SQL Server login validation, query executio
 - [x] `InstallPlan.Summarize()` for dry-run display
 - [x] Full `index.ts` public API exports
 - [x] MJInstaller builds clean (`npm run build`)
+- [x] DryRun early return in `InstallerEngine.Run()`
+- [x] 371 unit tests across 20 Vitest test files (models, adapters, phases, engine)
+- [x] Cross-platform CI via GitHub Actions (Ubuntu, macOS arm64, Windows) — all passing
+- [x] Integration smoke test exercising real platform APIs (Doctor, CreatePlan, DryRun, filesystem)
+- [x] Non-interactive mode (`--yes`) with full config chain resolution
+- [x] Environment variable support (`MJ_INSTALL_*` env vars) for CI/Docker config injection
+- [x] JSON config file loading (`--config <path>`) for pre-filling install settings
+- [x] `resolveFromEnvironment()`, `loadConfigFile()`, `mergeConfigs()` utility functions
+- [x] Prompt safety net in `--yes` mode (auto-resolves unexpected prompts with defaults)
+- [x] CLI `--config` / `-c` flag wired through to engine
 
 ## What Remains (Future PRs)
 
@@ -515,9 +796,8 @@ TCP connectivity check (raw socket), SQL Server login validation, query executio
 ### Low Priority / Future Milestones
 
 - [ ] **VSCode extension integration**: Extension imports `InstallerEngine` from published npm package. Event API is the interface boundary. Commands: "MJ: Install", "MJ: Run Doctor", "MJ: Resume Install".
-- [ ] **Docker CI**: `docker/install-test/docker-compose.yml` with SQL Server + headless installer for automated regression testing.
+- [ ] **Docker CI regression suite**: `docker/install-test/docker-compose.yml` with SQL Server + headless installer for automated end-to-end regression testing (non-interactive mode foundation is complete).
 - [ ] **Cross-platform CI lint rule**: Fail CI if any `package.json` script uses Unix-only env var syntax.
-- [ ] **Unit tests**: Add Vitest tests for all phases, adapters, and engine logic.
 - [ ] **`--legacy` flag removal**: The old ZIP-style interactive installer is still reachable via `--legacy` (hidden). Remove after transition period.
 
 ---

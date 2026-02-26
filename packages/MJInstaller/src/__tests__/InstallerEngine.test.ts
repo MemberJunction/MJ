@@ -3,6 +3,24 @@ import { InstallerEngine } from '../InstallerEngine.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import type { InstallState } from '../models/InstallState.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
+import type { PartialInstallConfig } from '../models/InstallConfig.js';
+
+/* ------------------------------------------------------------------ */
+/*  Mock InstallConfig functions (env vars, config file, merge)        */
+/* ------------------------------------------------------------------ */
+
+const mockResolveFromEnv = vi.fn<() => PartialInstallConfig>().mockReturnValue({});
+const mockLoadConfigFile = vi.fn<(path: string) => Promise<PartialInstallConfig>>().mockResolvedValue({});
+
+vi.mock('../models/InstallConfig.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../models/InstallConfig.js')>();
+  return {
+    ...actual,
+    resolveFromEnvironment: (...args: Parameters<typeof actual.resolveFromEnvironment>) => mockResolveFromEnv(...args),
+    loadConfigFile: (...args: Parameters<typeof actual.loadConfigFile>) => mockLoadConfigFile(...args),
+    // mergeConfigs uses the real implementation — it's pure logic with no I/O
+  };
+});
 
 /* ------------------------------------------------------------------ */
 /*  Mock all 9 phase classes + GitHubReleaseProvider + InstallState    */
@@ -158,6 +176,9 @@ describe('InstallerEngine', () => {
     mockInstallStateLoad.mockResolvedValue(null);
     mockStateInstance.GetPhaseStatus.mockReturnValue('pending');
     mockStateInstance.Save.mockResolvedValue(undefined);
+    // Reset config function mocks
+    mockResolveFromEnv.mockReturnValue({});
+    mockLoadConfigFile.mockResolvedValue({});
     engine = new InstallerEngine();
     defaultPhaseResults();
   });
@@ -550,6 +571,188 @@ describe('InstallerEngine', () => {
       const callArgs = mockPlatformRun.mock.calls[0][0];
       // On Windows test env, this should be 'windows'
       expect(['windows', 'macos', 'linux', 'other']).toContain(callArgs.DetectedOS);
+    });
+  });
+
+  // ── Config chain resolution ──────────────────────────────────────
+
+  describe('Config chain (env vars + config file)', () => {
+    it('calls resolveFromEnvironment on Run', async () => {
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      expect(mockResolveFromEnv).toHaveBeenCalledOnce();
+    });
+
+    it('merges env var config into the config chain', async () => {
+      mockResolveFromEnv.mockReturnValue({
+        DatabaseHost: 'env-host',
+        DatabaseName: 'env-db',
+      });
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      // The configure phase should receive the env var values
+      expect(mockConfigureRun).toHaveBeenCalled();
+      const callArgs = mockConfigureRun.mock.calls[0][0];
+      expect(callArgs.Config.DatabaseHost).toBe('env-host');
+      expect(callArgs.Config.DatabaseName).toBe('env-db');
+    });
+
+    it('loads config file when ConfigFile option is provided', async () => {
+      mockLoadConfigFile.mockResolvedValue({
+        DatabaseHost: 'file-host',
+        APIPort: 9090,
+      });
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true, ConfigFile: '/path/to/config.json' });
+
+      expect(mockLoadConfigFile).toHaveBeenCalledWith('/path/to/config.json');
+      const callArgs = mockConfigureRun.mock.calls[0][0];
+      expect(callArgs.Config.DatabaseHost).toBe('file-host');
+      expect(callArgs.Config.APIPort).toBe(9090);
+    });
+
+    it('does not call loadConfigFile when ConfigFile is not provided', async () => {
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      expect(mockLoadConfigFile).not.toHaveBeenCalled();
+    });
+
+    it('config file overrides env var values', async () => {
+      mockResolveFromEnv.mockReturnValue({
+        DatabaseHost: 'env-host',
+        DatabaseName: 'env-db',
+      });
+      mockLoadConfigFile.mockResolvedValue({
+        DatabaseHost: 'file-host', // should override env-host
+      });
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true, ConfigFile: '/config.json' });
+
+      const callArgs = mockConfigureRun.mock.calls[0][0];
+      expect(callArgs.Config.DatabaseHost).toBe('file-host'); // file wins
+      expect(callArgs.Config.DatabaseName).toBe('env-db');     // preserved from env
+    });
+
+    it('RunOptions.Config overrides config file values', async () => {
+      mockLoadConfigFile.mockResolvedValue({
+        DatabaseHost: 'file-host',
+        APIPort: 9090,
+      });
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, {
+        Yes: true,
+        ConfigFile: '/config.json',
+        Config: { DatabaseHost: 'cli-host' }, // should override file-host
+      });
+
+      const callArgs = mockConfigureRun.mock.calls[0][0];
+      expect(callArgs.Config.DatabaseHost).toBe('cli-host'); // CLI wins
+      expect(callArgs.Config.APIPort).toBe(9090);             // preserved from file
+    });
+
+    it('emits log event when env vars are loaded', async () => {
+      mockResolveFromEnv.mockReturnValue({ DatabaseHost: 'host' });
+
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      expect(logMessages.some(m => m.includes('MJ_INSTALL_*'))).toBe(true);
+    });
+
+    it('emits log event when config file is loaded', async () => {
+      mockLoadConfigFile.mockResolvedValue({ DatabaseHost: 'host' });
+
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true, ConfigFile: '/path/to/config.json' });
+
+      expect(logMessages.some(m => m.includes('/path/to/config.json'))).toBe(true);
+    });
+
+    it('does not emit env var log when no env vars are set', async () => {
+      mockResolveFromEnv.mockReturnValue({});
+
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      expect(logMessages.some(m => m.includes('MJ_INSTALL_*'))).toBe(false);
+    });
+  });
+
+  // ── Prompt safety net ────────────────────────────────────────────
+
+  describe('Prompt safety net (--yes mode)', () => {
+    it('auto-resolves unexpected prompts in --yes mode', async () => {
+      // Make configure phase emit a prompt (simulating a missed yes-mode short-circuit)
+      mockConfigureRun.mockImplementation(async (ctx: { Emitter: { Emit: (event: string, payload: Record<string, unknown>) => void } }) => {
+        const answer = await new Promise<string>((resolve) => {
+          ctx.Emitter.Emit('prompt', {
+            Type: 'prompt',
+            PromptId: 'test-prompt',
+            PromptType: 'input',
+            Message: 'Enter something:',
+            Default: 'auto-default',
+            Resolve: resolve,
+          });
+        });
+        return { Config: { DatabaseHost: answer } };
+      });
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      // This should NOT hang — the safety net should auto-resolve the prompt
+      const result = await engine.Run(plan, { Yes: true });
+      expect(result.Success).toBe(true);
+    });
+
+    it('logs a warning when auto-resolving a prompt', async () => {
+      mockConfigureRun.mockImplementation(async (ctx: { Emitter: { Emit: (event: string, payload: Record<string, unknown>) => void } }) => {
+        await new Promise<string>((resolve) => {
+          ctx.Emitter.Emit('prompt', {
+            Type: 'prompt',
+            PromptId: 'unexpected-prompt',
+            PromptType: 'input',
+            Message: 'Surprise!',
+            Default: 'fallback',
+            Resolve: resolve,
+          });
+        });
+        return { Config: {} };
+      });
+
+      const warnings: string[] = [];
+      engine.On('warn', (e) => warnings.push(e.Message));
+
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+
+      expect(warnings.some(w => w.includes('unexpected-prompt'))).toBe(true);
+      expect(warnings.some(w => w.includes('non-interactive mode'))).toBe(true);
+    });
+
+    it('does not install safety net when --yes is not set', async () => {
+      // In interactive mode, a prompt without a handler WOULD hang.
+      // We can't test an actual hang, but we can verify the safety net
+      // listener is NOT installed by checking that prompts are not auto-resolved.
+      // Instead, just verify Run works in interactive mode with phases that
+      // don't emit prompts.
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      const result = await engine.Run(plan); // No Yes option
+      expect(result.Success).toBe(true);
     });
   });
 });

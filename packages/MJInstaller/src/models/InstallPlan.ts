@@ -94,6 +94,12 @@ export interface RunOptions {
   /** Pre-filled configuration for auto-answering prompts in `--yes` mode. */
   Config?: PartialInstallConfig;
   /**
+   * Path to a JSON config file with install settings.
+   * Values from the file override environment variables and defaults,
+   * but are overridden by {@link Config} (programmatic overrides).
+   */
+  ConfigFile?: string;
+  /**
    * Fast mode: skip smoke test and optimize post-codegen steps by
    * quick-checking manifests before running the full rebuild cycle.
    */

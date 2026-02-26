@@ -33,6 +33,10 @@ export default class Install extends Command {
       description: 'Target directory for the installation',
       default: '.',
     }),
+    config: Flags.string({
+      char: 'c',
+      description: 'Path to JSON config file with install settings (database, auth, ports, etc.)',
+    }),
     legacy: Flags.boolean({
       description: 'Use the legacy interactive installer (ZIP-only distribution)',
       hidden: true,
@@ -80,6 +84,7 @@ export default class Install extends Command {
   private async runEngineInstall(flags: {
     tag?: string;
     dir: string;
+    config?: string;
     'dry-run'?: boolean;
     yes?: boolean;
     verbose?: boolean;
@@ -112,6 +117,7 @@ export default class Install extends Command {
       Yes: flags.yes,
       Verbose: flags.verbose,
       NoResume: flags['no-resume'],
+      ConfigFile: flags.config,
       Fast: fast,
     });
 

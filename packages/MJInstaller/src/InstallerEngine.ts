@@ -42,7 +42,7 @@ import { CodeGenPhase } from './phases/CodeGenPhase.js';
 import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
-import { InstallConfigDefaults, type PartialInstallConfig } from './models/InstallConfig.js';
+import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
 import type { VersionInfo } from './models/VersionInfo.js';
 import type { Diagnostics } from './models/Diagnostics.js';
 
@@ -205,10 +205,6 @@ export class InstallerEngine {
     const verbose = options?.Verbose ?? false;
     const yes = options?.Yes ?? false;
     const fast = options?.Fast ?? false;
-    const config: PartialInstallConfig = {
-      ...plan.Config,
-      ...options?.Config,
-    };
 
     // Dry-run: the plan itself is the output, so Run is a no-op
     if (options?.DryRun) {
@@ -219,6 +215,50 @@ export class InstallerEngine {
         PhasesCompleted: [],
         PhasesFailed: [],
       };
+    }
+
+    // ── Config chain: Defaults → Env vars → Config file → Plan → RunOptions ──
+    const configSources: PartialInstallConfig[] = [plan.Config];
+
+    const envConfig = resolveFromEnvironment();
+    if (Object.keys(envConfig).length > 0) {
+      configSources.push(envConfig);
+      this.emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Config: loaded ${Object.keys(envConfig).length} value(s) from MJ_INSTALL_* environment variables`,
+      });
+    }
+
+    if (options?.ConfigFile) {
+      const fileConfig = await loadConfigFile(options.ConfigFile);
+      configSources.push(fileConfig);
+      this.emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Config: loaded ${Object.keys(fileConfig).length} value(s) from ${options.ConfigFile}`,
+      });
+    }
+
+    if (options?.Config) {
+      configSources.push(options.Config);
+    }
+
+    const config = mergeConfigs(...configSources);
+
+    // ── Prompt safety net (non-interactive mode) ──────────────────────────
+    // In --yes mode, install a catch-all listener that auto-resolves any
+    // unexpected prompt with its default value. This prevents indefinite
+    // hangs in Docker/CI if a prompt is emitted that wasn't short-circuited.
+    if (yes) {
+      this.emitter.On('prompt', (event) => {
+        this.emitter.Emit('warn', {
+          Type: 'warn',
+          Phase: 'configure',
+          Message: `Auto-resolving prompt '${event.PromptId}' with default '${event.Default ?? ''}' (non-interactive mode)`,
+        });
+        event.Resolve(event.Default ?? '');
+      });
     }
 
     // Reset resolved config — will be populated by the configure phase
