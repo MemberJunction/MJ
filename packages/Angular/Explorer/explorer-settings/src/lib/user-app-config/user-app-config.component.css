@@ -351,6 +351,43 @@
   flex-shrink: 0;
 }
 
+.app-actions .mj-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.app-actions .mj-btn-ghost {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.app-actions .mj-btn-ghost:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.app-actions .mj-btn-ghost:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.app-actions .mj-btn-sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.app-actions .mj-btn-danger:hover:not(:disabled) {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
 /* Available app items */
 .available-app-item {
   display: flex;
