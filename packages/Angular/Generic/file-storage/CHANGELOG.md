@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-container-directives@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

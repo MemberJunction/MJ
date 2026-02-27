@@ -1,5 +1,15 @@
 # @memberjunction/ng-versions
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/graphql-dataprovider@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

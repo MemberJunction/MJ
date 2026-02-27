@@ -1,5 +1,13 @@
 # @memberjunction/credentials
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

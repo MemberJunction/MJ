@@ -1,5 +1,16 @@
 # @memberjunction/ng-explorer-app
 
+## 5.4.1
+
+### Patch Changes
+
+- 8789e86: moved design tokens + added doc
+  - @memberjunction/ng-explorer-core@5.4.1
+  - @memberjunction/ng-bootstrap@5.4.1
+  - @memberjunction/ng-workspace-initializer@5.4.1
+  - @memberjunction/ng-auth-services@5.4.1
+  - @memberjunction/core@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

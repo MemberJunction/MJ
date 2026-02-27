@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-cli",
   "type": "module",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "description": "MemberJunction Testing Framework CLI - Command-line interface for test execution and management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,12 +21,12 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@memberjunction/global": "5.4.0",
-    "@memberjunction/core": "5.4.0",
-    "@memberjunction/core-entities": "5.4.0",
-    "@memberjunction/testing-engine": "5.4.0",
-    "@memberjunction/testing-engine-base": "5.4.0",
-    "@memberjunction/sqlserver-dataprovider": "5.4.0",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/testing-engine": "5.4.1",
+    "@memberjunction/testing-engine-base": "5.4.1",
+    "@memberjunction/sqlserver-dataprovider": "5.4.1",
     "@oclif/core": "^3.27.0",
     "ora-classic": "^5.4.2",
     "chalk": "^5.6.2",
