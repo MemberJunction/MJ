@@ -14,7 +14,7 @@
  */
 
 // Design tokens (must be first - provides CSS custom properties)
-@import './styles/tokens';
+@import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 @import './styles/md3-theme';
 
 // Core style imports

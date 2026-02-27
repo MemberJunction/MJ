@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "test": "echo \"No tests configured yet\"",
-    "build": "ngc",
+    "build": "npm run clean && ngc && npm run copy-assets",
+    "copy-assets": "cpy 'src/lib/_tokens.scss' dist/lib --flat",
+    "clean": "rimraf dist",
     "test:watch": "vitest"
   },
   "keywords": [
