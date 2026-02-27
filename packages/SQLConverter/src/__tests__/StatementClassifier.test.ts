@@ -597,6 +597,11 @@ CREATE TABLE [__mj].[Action] (ID UNIQUEIDENTIFIER NOT NULL)`;
       expect(classifyBatch('DROP FUNCTION IF EXISTS [__mj].[fnSomeFunc]')).toBe('SKIP_SQLSERVER');
     });
 
+    it('should classify DROP TABLE as SKIP_SQLSERVER', () => {
+      expect(classifyBatch('DROP TABLE #EntityNameMapping;')).toBe('SKIP_SQLSERVER');
+      expect(classifyBatch('DROP TABLE IF EXISTS [__mj].[TempData]')).toBe('SKIP_SQLSERVER');
+    });
+
     it('should classify TRUNCATE as UNKNOWN', () => {
       expect(classifyBatch('TRUNCATE TABLE [__mj].[TempData]')).toBe('UNKNOWN');
     });

@@ -191,4 +191,67 @@ describe('subSplitCompoundBatch', () => {
     expect(result[1]).toMatch(/^GRANT INSERT/);
     expect(result[2]).toMatch(/^GRANT UPDATE/);
   });
+
+  // ============================================================
+  // 14. IF NOT EXISTS (...) CREATE INDEX (no BEGIN/END) → not split
+  // ============================================================
+  it('should not split IF NOT EXISTS condition from its CREATE INDEX body', () => {
+    const batch = [
+      "IF NOT EXISTS (",
+      "    SELECT 1",
+      "    FROM sys.indexes",
+      "    WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID'",
+      "    AND object_id = OBJECT_ID('[__mj].[Entity]')",
+      ")",
+      "CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID ON [__mj].[Entity] ([ParentID]);",
+    ].join('\n');
+    const result = subSplitCompoundBatch(batch);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toContain('IF NOT EXISTS');
+    expect(result[0]).toContain('CREATE INDEX');
+  });
+
+  // ============================================================
+  // 15. IF OBJECT_ID (...) DROP TABLE → not split
+  // ============================================================
+  it('should not split IF OBJECT_ID condition from its DROP body', () => {
+    const batch = [
+      "IF OBJECT_ID('tempdb..#EntityNameMapping') IS NOT NULL",
+      "    DROP TABLE #EntityNameMapping;",
+    ].join('\n');
+    const result = subSplitCompoundBatch(batch);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toContain('IF OBJECT_ID');
+    expect(result[0]).toContain('DROP TABLE');
+  });
+
+  // ============================================================
+  // 16. IF NOT EXISTS with BEGIN/END still handled correctly
+  // ============================================================
+  it('should not split IF NOT EXISTS with BEGIN/END body (existing behavior)', () => {
+    const batch = [
+      "IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Foo')",
+      "BEGIN",
+      "    ALTER TABLE __mj.Foo ADD Bar VARCHAR(50);",
+      "END",
+    ].join('\n');
+    const result = subSplitCompoundBatch(batch);
+    expect(result).toHaveLength(1);
+  });
+
+  // ============================================================
+  // 17. Multiple IF NOT EXISTS blocks → correctly split
+  // ============================================================
+  it('should split multiple IF NOT EXISTS blocks into separate statements', () => {
+    const batch = [
+      "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_A')",
+      "CREATE INDEX IX_A ON __mj.Foo (Col1);",
+      "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_B')",
+      "CREATE INDEX IX_B ON __mj.Foo (Col2);",
+    ].join('\n');
+    const result = subSplitCompoundBatch(batch);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toContain('IX_A');
+    expect(result[1]).toContain('IX_B');
+  });
 });

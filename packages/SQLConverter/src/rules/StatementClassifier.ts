@@ -136,9 +136,11 @@ export function classifyBatch(batch: string): StatementType {
   // Extended properties (add, update, and drop variants)
   if (upper.includes('SP_ADDEXTENDEDPROPERTY') || upper.includes('SP_UPDATEEXTENDEDPROPERTY') || upper.includes('SP_DROPEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
 
-  // DROP VIEW/PROCEDURE/FUNCTION IF EXISTS — skip because ViewRule and
-  // ProcedureToFunctionRule generate their own DROP statements automatically
+  // DROP VIEW/PROCEDURE/FUNCTION — skip because ViewRule and
+  // ProcedureToFunctionRule generate their own DROP statements automatically.
+  // DROP TABLE with temp objects (#name) — SQL Server temp tables don't exist in PG.
   if (/^DROP\s+(?:VIEW|PROCEDURE|PROC|FUNCTION)\s/i.test(upper)) return 'SKIP_SQLSERVER';
+  if (/^DROP\s+TABLE\s/i.test(upper)) return 'SKIP_SQLSERVER';
 
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';

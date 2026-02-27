@@ -84,6 +84,12 @@ function trackLineState(line: string, state: ParseState): ParseState {
  * already handled by preprocessor/postprocessor removal rules. */
 const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+NOT\s+EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s)/i;
 
+/** IF conditionals whose next top-level keyword is the single-statement body.
+ * T-SQL allows IF without BEGIN/END for single-statement bodies:
+ *   IF NOT EXISTS (...) CREATE INDEX ...
+ * The sub-splitter must keep these as one batch. */
+const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|OBJECT_ID|@@)/i;
+
 /**
  * Sub-split a compound batch into individual statements.
  *
@@ -115,14 +121,26 @@ export function subSplitCompoundBatch(batch: string): string[] {
   let hasMultiple = false;
   let state: ParseState = { inString: false, inBlockComment: false };
   let beginDepth = 0;
+  // Track IF conditionals: the next keyword after IF NOT EXISTS / IF OBJECT_ID / IF @@
+  // is the IF body (single-statement form without BEGIN/END), not a new statement
+  let ifBodyPending = false;
 
   for (const line of lines) {
     const stripped = line.trim();
     if (!state.inString && !state.inBlockComment) {
-      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+      if (/^\bBEGIN\b/i.test(stripped)) {
+        beginDepth++;
+        ifBodyPending = false; // body uses BEGIN/END, handled by depth tracking
+      }
       if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
       if (beginDepth === 0 && STMT_KEYWORDS.test(stripped)) {
-        keywordCount++;
+        if (ifBodyPending) {
+          // This keyword is the single-statement body of the IF — don't count
+          ifBodyPending = false;
+        } else {
+          keywordCount++;
+          ifBodyPending = IF_CONDITION_PATTERN.test(stripped);
+        }
       }
     }
     if (keywordCount > 1) {
@@ -140,20 +158,35 @@ export function subSplitCompoundBatch(batch: string): string[] {
   let current: string[] = [];
   state = { inString: false, inBlockComment: false };
   beginDepth = 0;
+  ifBodyPending = false;
 
   for (const line of lines) {
     const stripped = line.trim();
     if (!state.inString && !state.inBlockComment) {
       // Track BEGIN/END depth BEFORE deciding whether to split
-      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+      if (/^\bBEGIN\b/i.test(stripped)) {
+        beginDepth++;
+        ifBodyPending = false; // body uses BEGIN/END, handled by depth tracking
+      }
 
       // Only split at top level (outside BEGIN/END blocks)
       if (beginDepth === 0 && STMT_KEYWORDS.test(stripped) && current.length > 0) {
-        const stmt = current.join('\n').trim();
-        if (stmt) statements.push(stmt);
-        current = [line];
+        if (ifBodyPending) {
+          // This keyword is the single-statement body of the IF — keep together
+          current.push(line);
+          ifBodyPending = false;
+        } else {
+          const stmt = current.join('\n').trim();
+          if (stmt) statements.push(stmt);
+          current = [line];
+          ifBodyPending = IF_CONDITION_PATTERN.test(stripped);
+        }
       } else {
         current.push(line);
+        // Track IF conditions even for the first keyword (when current was empty)
+        if (beginDepth === 0 && IF_CONDITION_PATTERN.test(stripped)) {
+          ifBodyPending = true;
+        }
       }
 
       if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
