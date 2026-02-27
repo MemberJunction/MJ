@@ -123,6 +123,16 @@ describe('AlterTableRule', () => {
     });
   });
 
+  describe('CHECK constraint string literal preservation', () => {
+    it('should not quote PascalCase words inside string literals in CHECK constraints', () => {
+      const sql = `ALTER TABLE [__mj].[EntityRelationship] ADD CONSTRAINT [CK_EntityRelationship_DisplayIconType]
+        CHECK (([DisplayIconType]='None' OR [DisplayIconType]='Custom' OR [DisplayIconType]='Related Entity Icon'))`;
+      const result = convert(sql);
+      expect(result).toContain("'Related Entity Icon'");
+      expect(result).not.toContain('"Entity"');
+    });
+  });
+
   describe('output formatting', () => {
     it('should ensure output ends with semicolon and newline', () => {
       const sql = `ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [PK_Foo] PRIMARY KEY ([ID])`;

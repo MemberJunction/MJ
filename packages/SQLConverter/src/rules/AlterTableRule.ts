@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -114,14 +114,16 @@ export class AlterTableRule implements IConversionRule {
     return sql.replace(
       /(CHECK\s*\()([^;]+)(NOT\s+VALID)?/gi,
       (_match, prefix: string, body: string, notValid: string | undefined) => {
-        // Quote unquoted PascalCase identifiers — skip those already inside quotes
-        const quotedBody = body.replace(
-          /(?<!['"])\b([A-Z][a-zA-Z_]\w*)\b(?!['"])/g,
-          (m: string, name: string) => {
-            if (AlterTableRule.CHECK_KEYWORDS.has(name.toUpperCase())) return m;
-            return `"${name}"`;
-          }
-        );
+        // Use transformCodeOnly to skip string literals and comments
+        const quotedBody = transformCodeOnly(body, (code) => {
+          return code.replace(
+            /(?<!['"])\b([A-Z][a-zA-Z_]\w*)\b(?!['"])/g,
+            (m: string, name: string) => {
+              if (AlterTableRule.CHECK_KEYWORDS.has(name.toUpperCase())) return m;
+              return `"${name}"`;
+            }
+          );
+        });
         return `${prefix}${quotedBody}${notValid || ''}`;
       }
     );

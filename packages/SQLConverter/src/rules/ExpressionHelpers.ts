@@ -83,7 +83,7 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  * Apply a transformation function only to SQL code segments,
  * preserving string literals and comments unchanged.
  */
-function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
   return segmentSQL(sql).map(seg => {
     if (seg.type !== 'code') return seg.text;
     return transform(seg.text);

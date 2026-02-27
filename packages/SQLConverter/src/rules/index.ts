@@ -18,7 +18,7 @@ export {
   convertIdentifiers, convertDateFunctions, convertCharIndex,
   convertStuff, convertStringConcat, convertIIF, convertTopToLimit,
   convertCastTypes, convertConvertFunction, removeNPrefix,
-  removeCollate, convertCommonFunctions,
+  removeCollate, convertCommonFunctions, transformCodeOnly,
 } from './ExpressionHelpers.js';
 
 // Individual conversion rules
