@@ -377,7 +377,22 @@ export function convertStringConcat(
       newCode = newCode.replace(/("(?:\w+)")\s*\+(\s*)$/, '$1 ||$2');
     }
 
-    // Within code segments (no adjacent strings)
+    // Structural string-concat patterns: apply to ALL code segments (regardless of
+    // adjacent strings). These are unambiguously string concat, not numeric addition.
+    // ) + CAST(  — CAST typically produces string results for concatenation
+    newCode = newCode.replace(/\)\s*\+\s*(CAST\s*\()/gi, ') || $1');
+
+    // ) + function_call(  — when preceded by closing paren, likely string concat
+    // Covers patterns like: COALESCE(...) + LTRIM(...), TRIM(...) + REPLACE(...)
+    newCode = newCode.replace(/\)\s*\+\s*((?:COALESCE|LTRIM|RTRIM|TRIM|UPPER|LOWER|SUBSTRING|REPLACE|LEFT|RIGHT|REVERSE|CONCAT)\s*\()/gi, ') || $1');
+
+    // ) + "QuotedCol" — when closing paren is followed by + and a quoted identifier
+    newCode = newCode.replace(/\)\s*\+\s*(\w+\.")/g, ') || $1');
+
+    // "QuotedCol" + func() or "QuotedCol" + COALESCE(
+    newCode = newCode.replace(/("[\w]+")\s*\+\s*((?:COALESCE|LTRIM|RTRIM|TRIM|UPPER|LOWER|SUBSTRING|REPLACE|LEFT|RIGHT|REVERSE|CONCAT|CAST)\s*\()/gi, '$1 || $2');
+
+    // Within code segments (no adjacent strings) — type-aware column checks
     if (!prevIsString && !nextIsString) {
       // ) + colname.qualified
       newCode = newCode.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');

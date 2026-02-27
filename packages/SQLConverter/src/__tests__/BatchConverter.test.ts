@@ -287,7 +287,7 @@ describe('convertFile (BatchConverter)', () => {
   it('should include PG header when IncludeHeader is true', () => {
     const sql = 'SELECT 1;';
     const result = convertFile(makeConfig(sql, { IncludeHeader: true }));
-    expect(result.OutputSQL).toContain('MemberJunction v5.0 PostgreSQL Baseline');
+    expect(result.OutputSQL).toContain('MemberJunction PostgreSQL Migration');
     expect(result.OutputSQL).toContain('CREATE EXTENSION IF NOT EXISTS');
     expect(result.OutputSQL).toContain('pgcrypto');
   });

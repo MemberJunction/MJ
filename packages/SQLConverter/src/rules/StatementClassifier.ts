@@ -64,6 +64,12 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
   if (/^DECLARE\s+@/i.test(upper)) {
+    // DECLARE blocks with EXEC calls to schema procedures → convert as EXEC_BLOCK
+    // These are metadata sync patterns: DECLARE vars, SET values, EXEC spProc
+    if (/\bEXEC\s+\[?\w+\]?\s*\.\s*\[?\w+\]?\s/i.test(upper)) {
+      return 'EXEC_BLOCK';
+    }
+    // DECLARE blocks without EXEC → SQL Server-specific variable declarations
     return 'SKIP_SQLSERVER';
   }
 
@@ -127,8 +133,8 @@ export function classifyBatch(batch: string): StatementType {
   // PRINT
   if (/^PRINT[\s(]/i.test(upper)) return 'SKIP_PRINT';
 
-  // Extended properties
-  if (upper.includes('SP_ADDEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
+  // Extended properties (add, update, and drop variants)
+  if (upper.includes('SP_ADDEXTENDEDPROPERTY') || upper.includes('SP_UPDATEEXTENDEDPROPERTY') || upper.includes('SP_DROPEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
 
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';
@@ -137,7 +143,7 @@ export function classifyBatch(batch: string): StatementType {
   if (isCommentOnly(batch, rawUpper)) return 'COMMENT_ONLY';
 
   // BEGIN TRY wrapping extended properties
-  if (rawUpper.includes('BEGIN TRY') && rawUpper.includes('SP_ADDEXTENDEDPROPERTY')) {
+  if (rawUpper.includes('BEGIN TRY') && (rawUpper.includes('SP_ADDEXTENDEDPROPERTY') || rawUpper.includes('SP_UPDATEEXTENDEDPROPERTY') || rawUpper.includes('SP_DROPEXTENDEDPROPERTY'))) {
     return 'EXTENDED_PROPERTY';
   }
 
@@ -152,11 +158,6 @@ export function classifyBatch(batch: string): StatementType {
 
   // Orphaned control flow fragments from sub-splitting
   if (/^(END|ELSE\s+IF|ELSE)\b/i.test(upper)) {
-    return 'SKIP_SQLSERVER';
-  }
-
-  // Standalone variable declarations (orphaned from IF blocks)
-  if (/^DECLARE\s+@/i.test(upper)) {
     return 'SKIP_SQLSERVER';
   }
 

@@ -126,12 +126,13 @@ export class ViewRule implements IConversionRule {
     result = result.replace(/\bAS\s+(root_\w+)\s+ON\s+TRUE/gi, 'AS "$1" ON TRUE');
     result = result.replace(/\b(root_\w+)\."(\w+)"/g, '"$1"."$2"');
 
-    // CREATE [OR ALTER] VIEW → CREATE OR REPLACE VIEW
-    result = result.replace(/\bCREATE\s+OR\s+ALTER\s+VIEW\b/gi, 'CREATE OR REPLACE VIEW');
-    result = result.replace(/\bCREATE\s+VIEW\b/gi, 'CREATE OR REPLACE VIEW');
+    // CREATE [OR ALTER] VIEW → DROP VIEW IF EXISTS + CREATE VIEW
+    // PostgreSQL's CREATE OR REPLACE VIEW cannot add or reorder columns,
+    // so we must DROP first then CREATE to handle column structure changes.
+    result = result.replace(/\bCREATE\s+OR\s+ALTER\s+VIEW\b/gi, 'CREATE VIEW');
 
     // Strip interior semicolons (only final semicolon should remain)
-    const viewBodyMatch = result.match(/(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+.+?\s+AS\s+)([\s\S]+)/i);
+    const viewBodyMatch = result.match(/(CREATE\s+VIEW\s+.+?\s+AS\s+)([\s\S]+)/i);
     if (viewBodyMatch) {
       const header = viewBodyMatch[1];
       const body = viewBodyMatch[2].replace(/;(?![\s]*$)/g, '');
@@ -140,6 +141,14 @@ export class ViewRule implements IConversionRule {
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
+
+    // Extract view name and prepend DROP VIEW IF EXISTS (after body cleanup)
+    const viewNameMatch = result.match(/\bCREATE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
+    if (viewNameMatch) {
+      const viewName = viewNameMatch[1];
+      result = `DROP VIEW IF EXISTS ${viewName} CASCADE;\n${result}`;
+    }
+
     return result + '\n';
   }
 

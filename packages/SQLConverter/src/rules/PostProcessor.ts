@@ -15,7 +15,9 @@ import { createHash } from 'node:crypto';
 export function postProcess(sql: string): string {
   // Remove any remaining [brackets] that slipped through
   // Preserve PostgreSQL array access like p_Parts[1] (numeric indices)
-  sql = sql.replace(/\[([^\]\d][^\]]*)\]/g, '"$1"');
+  // IMPORTANT: Skip dollar-quoted blocks ($$...$$) and string literals
+  // to avoid corrupting regex patterns like [A-Za-z0-9] inside function bodies
+  sql = replaceBracketsOutsideDollarBlocks(sql);
 
   // Remove any remaining COLLATE clauses
   sql = sql.replace(/\s+COLLATE\s+SQL_Latin1_General_CP1_CI_AS/gi, '');
@@ -270,4 +272,66 @@ function countNetQuotes(line: string): number {
     i++;
   }
   return count;
+}
+
+/**
+ * Replace [bracket] identifiers with "quoted" identifiers, but skip content
+ * inside dollar-quoted blocks ($$...$$, $tag$...$tag$) and single-quoted strings.
+ * This prevents corrupting regex patterns like [A-Za-z0-9] inside function bodies.
+ */
+function replaceBracketsOutsideDollarBlocks(sql: string): string {
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < sql.length) {
+    // Check for dollar-quoted block start: $$ or $tag$
+    if (sql[i] === '$') {
+      const tagMatch = sql.slice(i).match(/^(\$\w*\$)/);
+      if (tagMatch) {
+        const tag = tagMatch[1];
+        const endIdx = sql.indexOf(tag, i + tag.length);
+        if (endIdx >= 0) {
+          // Push the entire dollar-quoted block unchanged
+          result.push(sql.slice(i, endIdx + tag.length));
+          i = endIdx + tag.length;
+          continue;
+        }
+      }
+    }
+
+    // Check for single-quoted string start
+    if (sql[i] === "'") {
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === "'" && j + 1 < sql.length && sql[j + 1] === "'") {
+          j += 2; // Skip doubled quote
+          continue;
+        }
+        if (sql[j] === "'") {
+          j++;
+          break;
+        }
+        j++;
+      }
+      // Push entire string literal unchanged
+      result.push(sql.slice(i, j));
+      i = j;
+      continue;
+    }
+
+    // Check for bracket identifier: [Name] but not [1] (array access)
+    if (sql[i] === '[') {
+      const bracketMatch = sql.slice(i).match(/^\[([^\]\d][^\]]*)\]/);
+      if (bracketMatch) {
+        result.push(`"${bracketMatch[1]}"`);
+        i += bracketMatch[0].length;
+        continue;
+      }
+    }
+
+    result.push(sql[i]);
+    i++;
+  }
+
+  return result.join('');
 }

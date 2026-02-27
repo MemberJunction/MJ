@@ -70,9 +70,11 @@ export class ConditionalDDLRule implements IConversionRule {
     if (closePos < 0) return null;
 
     // The text after the condition should contain CREATE INDEX
-    const rest = sql.slice(closePos + 1);
+    // (with optional BEGIN...END wrapper)
+    let rest = sql.slice(closePos + 1);
+    rest = rest.replace(/^\s*\n\s*BEGIN\s*\n/i, '\n').replace(/\s*\bEND\b\s*;?\s*$/i, '');
     const createMatch = rest.match(
-      /^\s*(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(\S+)\s+ON\s+(\S+)\s*\(([^)]+)\)\s*;?/i
+      /^\s*(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(\S+)\s+ON\s+(\S+)\s*\(([^)]+)\)(\s+WHERE\s+[^;]+?)?\s*;?/i
     );
     if (!createMatch) return null;
 
@@ -80,8 +82,9 @@ export class ConditionalDDLRule implements IConversionRule {
     const indexName = createMatch[2].replace(/^\[|\]$/g, '').replace(/^"|"$/g, '');
     const tableName = createMatch[3];
     const columns = createMatch[4];
+    const whereClause = createMatch[5] ? createMatch[5].trim() : '';
 
-    return `${keyword} IF NOT EXISTS "${indexName}" ON ${tableName} (${columns});`;
+    return `${keyword} IF NOT EXISTS "${indexName}" ON ${tableName} (${columns})${whereClause ? ' ' + whereClause : ''};`;
   }
 
   /** Find matching close paren at depth 0 */

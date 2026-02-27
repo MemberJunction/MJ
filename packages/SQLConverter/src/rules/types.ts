@@ -23,6 +23,7 @@ export type StatementType =
   | 'UNIQUE_CONSTRAINT'
   | 'ENABLE_CONSTRAINT'
   | 'CONDITIONAL_DDL'
+  | 'EXEC_BLOCK'
   | 'GRANT'
   | 'DENY'
   | 'REVOKE'

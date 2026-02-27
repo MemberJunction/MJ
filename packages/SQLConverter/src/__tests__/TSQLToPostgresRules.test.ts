@@ -12,13 +12,14 @@ import { AlterTableRule } from '../rules/AlterTableRule.js';
 import { CreateIndexRule } from '../rules/CreateIndexRule.js';
 import { GrantRule } from '../rules/GrantRule.js';
 import { ExtendedPropertyRule } from '../rules/ExtendedPropertyRule.js';
+import { ExecBlockRule } from '../rules/ExecBlockRule.js';
 
 describe('getTSQLToPostgresRules', () => {
   const rules = getTSQLToPostgresRules();
 
   describe('rule count', () => {
-    it('should return exactly 12 rules', () => {
-      expect(rules).toHaveLength(12);
+    it('should return exactly 13 rules', () => {
+      expect(rules).toHaveLength(13);
     });
   });
 
@@ -31,7 +32,7 @@ describe('getTSQLToPostgresRules', () => {
 
     it('should have specific priority values', () => {
       const priorities = rules.map(r => r.Priority);
-      expect(priorities).toEqual([10, 15, 20, 30, 35, 40, 50, 55, 60, 70, 80, 90]);
+      expect(priorities).toEqual([10, 15, 20, 30, 35, 40, 50, 52, 55, 60, 70, 80, 90]);
     });
   });
 
@@ -90,6 +91,10 @@ describe('getTSQLToPostgresRules', () => {
 
     it('should contain an ExtendedPropertyRule', () => {
       expect(rules.some(r => r instanceof ExtendedPropertyRule)).toBe(true);
+    });
+
+    it('should contain an ExecBlockRule', () => {
+      expect(rules.some(r => r instanceof ExecBlockRule)).toBe(true);
     });
   });
 
@@ -165,6 +170,10 @@ describe('getTSQLToPostgresRules', () => {
 
     it('should cover EXTENDED_PROPERTY', () => {
       expect(rules.some(r => r.AppliesTo.includes('EXTENDED_PROPERTY'))).toBe(true);
+    });
+
+    it('should cover EXEC_BLOCK', () => {
+      expect(rules.some(r => r.AppliesTo.includes('EXEC_BLOCK'))).toBe(true);
     });
   });
 });

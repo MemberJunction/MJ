@@ -45,7 +45,8 @@ export class ProcedureToFunctionRule implements IConversionRule {
     const body = sql.slice(bodyStart).trim();
 
     const pgParams = this.convertProcParams(paramsBlock);
-    const pgBody = this.convertProcBody(body, procName, context);
+    const booleanParams = this.extractBooleanParams(paramsBlock);
+    const pgBody = this.convertProcBody(body, procName, context, booleanParams);
     const returnsClause = this.determineReturnType(body, procName, context);
 
     // If the return type references a view that doesn't exist, skip this procedure
@@ -147,10 +148,37 @@ export class ProcedureToFunctionRule implements IConversionRule {
   }
 
   // ---------------------------------------------------------------------------
+  // Boolean parameter extraction
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Extract parameter names that map to BOOLEAN (from BIT in T-SQL).
+   * Used to fix COALESCE(p_BoolParam, 0) → COALESCE(p_BoolParam, FALSE).
+   */
+  private extractBooleanParams(paramsBlock: string): Set<string> {
+    const boolParams = new Set<string>();
+    if (!paramsBlock.trim()) return boolParams;
+
+    const paramList = splitParams(paramsBlock);
+    for (const rawParam of paramList) {
+      const param = rawParam.trim();
+      if (!param) continue;
+      const m = param.match(/@(\w+)\s+([\w(),\s]+)/i);
+      if (m) {
+        const typeName = m[2].trim().toUpperCase();
+        if (typeName === 'BIT') {
+          boolParams.add(`p_${m[1]}`);
+        }
+      }
+    }
+    return boolParams;
+  }
+
+  // ---------------------------------------------------------------------------
   // Body conversion
   // ---------------------------------------------------------------------------
 
-  private convertProcBody(body: string, _procName: string, context?: ConversionContext): string {
+  private convertProcBody(body: string, _procName: string, context?: ConversionContext, booleanParams?: Set<string>): string {
     let sql = body;
 
     // Remove SET NOCOUNT ON
@@ -246,6 +274,29 @@ export class ProcedureToFunctionRule implements IConversionRule {
 
     // ISNULL → COALESCE
     sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
+
+    // Fix COALESCE for BOOLEAN params: COALESCE(p_BoolParam, 0) → COALESCE(p_BoolParam, FALSE)
+    // Also track declared BOOLEAN variables from the DECLARE block
+    const allBoolVars = new Set<string>(booleanParams ?? []);
+    for (const decl of declares) {
+      const declMatch = decl.trim().match(/^(p_\w+)\s+BOOLEAN\b/i);
+      if (declMatch) {
+        allBoolVars.add(declMatch[1]);
+      }
+    }
+    if (allBoolVars.size > 0) {
+      for (const boolVar of allBoolVars) {
+        const escaped = boolVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        sql = sql.replace(
+          new RegExp(`COALESCE\\(${escaped},\\s*0\\)`, 'gi'),
+          `COALESCE(${boolVar}, FALSE)`
+        );
+        sql = sql.replace(
+          new RegExp(`COALESCE\\(${escaped},\\s*1\\)`, 'gi'),
+          `COALESCE(${boolVar}, TRUE)`
+        );
+      }
+    }
 
     // N'string' → 'string'
     sql = sql.replace(/N'/g, "'");
@@ -464,10 +515,6 @@ export class ProcedureToFunctionRule implements IConversionRule {
     );
     if (viewMatch) {
       const viewName = viewMatch[1];
-      // If the view doesn't exist, skip this procedure entirely
-      if (context.CreatedViews.size > 0 && !context.CreatedViews.has(viewName)) {
-        return `-- SKIPPED: Procedure references non-existent view ${viewName}\n`;
-      }
       return `RETURNS SETOF __mj."${viewName}" AS`;
     }
 

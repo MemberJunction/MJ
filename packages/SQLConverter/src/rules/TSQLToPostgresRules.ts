@@ -19,6 +19,7 @@ import { CreateIndexRule } from './CreateIndexRule.js';
 import { GrantRule } from './GrantRule.js';
 import { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
 import { ConditionalDDLRule } from './ConditionalDDLRule.js';
+import { ExecBlockRule } from './ExecBlockRule.js';
 
 /** Singleton set of T-SQL -> Postgres rules, created once at module load */
 const tsqlToPostgresRules: IConversionRule[] = [
@@ -29,6 +30,7 @@ const tsqlToPostgresRules: IConversionRule[] = [
   new FunctionRule(),            // Priority 35
   new TriggerRule(),             // Priority 40
   new InsertRule(),              // Priority 50
+  new ExecBlockRule(),           // Priority 52 — DECLARE/SET/EXEC metadata sync
   new ConditionalDDLRule(),      // Priority 55
   new AlterTableRule(),          // Priority 60
   new CreateIndexRule(),         // Priority 70
