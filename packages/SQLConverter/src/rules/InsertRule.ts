@@ -5,6 +5,39 @@ import {
   convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
 } from './ExpressionHelpers.js';
 
+/** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
+ *  Returns the bare SQL and the stripped comment text separately. */
+function stripTrailingComments(input: string): { sql: string; comments: string } {
+  let s = input.trimEnd();
+  const commentParts: string[] = [];
+
+  // Iteratively strip trailing block comments then line comments
+  let changed = true;
+  while (changed) {
+    changed = false;
+    // Block comment at the end: /* ... */
+    const blockMatch = s.match(/(\s*\/\*[\s\S]*?\*\/\s*)$/);
+    if (blockMatch) {
+      commentParts.unshift(blockMatch[1].trim());
+      s = s.slice(0, -blockMatch[1].length).trimEnd();
+      changed = true;
+    }
+    // Line comment(s) at the end: lines starting with --
+    while (/\n--[^\n]*$/.test(s) || /^--[^\n]*$/.test(s)) {
+      const lineMatch = s.match(/((?:\n--[^\n]*)+)$/);
+      if (lineMatch) {
+        commentParts.unshift(lineMatch[1].trim());
+        s = s.slice(0, -lineMatch[1].length).trimEnd();
+        changed = true;
+      } else {
+        break;
+      }
+    }
+  }
+
+  return { sql: s, comments: commentParts.join('\n') };
+}
+
 export class InsertRule implements IConversionRule {
   Name = 'InsertRule';
   SourceDialect = 'tsql';
@@ -33,19 +66,14 @@ export class InsertRule implements IConversionRule {
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
     // Ensure semicolon after the actual SQL statement (not after trailing comments).
-    // T-SQL batches may include trailing block comments like /* Set field properties */
-    // that belong to the next batch.  A semicolon placed after the comment leaves the
-    // UPDATE/INSERT/DELETE unterminated.
+    // T-SQL batches may include trailing block comments and/or line comments that
+    // contain semicolons (e.g. -- ${flyway:timestamp};). Strip ALL trailing comments
+    // to find the real end of the SQL statement, add semicolon there, then re-append.
     result = result.trimEnd();
-    const trailingComment = result.match(/(\s*\/\*[\s\S]*?\*\/\s*)$/);
-    if (trailingComment) {
-      const comment = trailingComment[1];
-      const sqlPart = result.slice(0, -comment.length).trimEnd();
-      if (!sqlPart.endsWith(';')) {
-        result = sqlPart + ';\n' + comment.trim();
-      }
-    } else {
-      if (!result.endsWith(';')) result += ';';
+    const { sql: sqlPart, comments: trailingComments } = stripTrailingComments(result);
+    if (!sqlPart.endsWith(';')) {
+      result = sqlPart + ';';
+      if (trailingComments) result += '\n' + trailingComments;
     }
     return result + '\n';
   }
