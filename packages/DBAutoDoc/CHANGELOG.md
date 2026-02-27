@@ -1,5 +1,14 @@
 # @memberjunction/db-auto-doc
 
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/ai-provider-bundle@5.4.0
+- @memberjunction/ai@5.4.0
+- @memberjunction/core@5.4.0
+- @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

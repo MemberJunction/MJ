@@ -1,5 +1,33 @@
 # @memberjunction/ng-bootstrap
 
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [439129c]
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [081d657]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/ng-dashboards@5.4.0
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/ng-core-entity-forms@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-explorer-settings@5.4.0
+  - @memberjunction/ng-explorer-core@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-file-storage@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/ng-artifacts@5.4.0
+  - @memberjunction/ng-dashboard-viewer@5.4.0
+  - @memberjunction/communication-types@5.4.0
+  - @memberjunction/entity-communications-base@5.4.0
+  - @memberjunction/ng-auth-services@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

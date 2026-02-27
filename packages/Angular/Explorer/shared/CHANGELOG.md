@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/entity-communications-base@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

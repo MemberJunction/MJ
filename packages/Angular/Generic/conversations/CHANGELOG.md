@@ -1,5 +1,29 @@
 # @memberjunction/ng-conversations
 
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-testing@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/ng-artifacts@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-tasks@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/ng-container-directives@5.4.0
+  - @memberjunction/ng-markdown@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

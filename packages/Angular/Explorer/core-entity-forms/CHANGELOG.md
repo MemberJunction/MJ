@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-entity-relationship-diagram@5.4.0
+  - @memberjunction/ng-testing@5.4.0
+  - @memberjunction/ng-actions@5.4.0
+  - @memberjunction/ng-ai-test-harness@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-action-gallery@5.4.0
+  - @memberjunction/ng-agents@5.4.0
+  - @memberjunction/ng-base-forms@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-entity-viewer@5.4.0
+  - @memberjunction/ng-flow-editor@5.4.0
+  - @memberjunction/ng-join-grid@5.4.0
+  - @memberjunction/ng-list-management@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/templates-base-types@5.4.0
+  - @memberjunction/ng-link-directives@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/ng-deep-diff@5.4.0
+  - @memberjunction/ng-tabstrip@5.4.0
+  - @memberjunction/ng-timeline@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes
