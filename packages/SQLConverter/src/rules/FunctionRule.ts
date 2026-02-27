@@ -21,8 +21,10 @@ export class FunctionRule implements IConversionRule {
     const handwritten = context.HandWrittenFunctions.get(this.extractFunctionName(upper));
     if (handwritten) return handwritten;
 
-    // Check built-in hand-written functions
-    const builtin = getHandwrittenFunction(upper);
+    // Check built-in hand-written functions (by extracted name, NOT full SQL,
+    // to avoid matching on function names appearing in the body of a different function)
+    const funcName = this.extractFunctionName(upper);
+    const builtin = getHandwrittenFunction(funcName);
     if (builtin) return builtin;
 
     let result = convertIdentifiers(sql);
@@ -170,9 +172,11 @@ export class FunctionRule implements IConversionRule {
   }
 }
 
-/** Hand-written PostgreSQL implementations for utility functions */
-function getHandwrittenFunction(upper: string): string | null {
-  if (upper.includes('STRIPTOALPHANUMERIC') && upper.includes('CREATE FUNCTION')) {
+/** Hand-written PostgreSQL implementations for utility functions.
+ *  Matches on the extracted function name (lowercase) to avoid false positives
+ *  when one function's body references another hand-written function. */
+function getHandwrittenFunction(funcName: string): string | null {
+  if (funcName === 'striptoalphanumeric') {
     return `CREATE OR REPLACE FUNCTION __mj."StripToAlphanumeric"(
     IN "p_InputString" TEXT
 )
@@ -196,7 +200,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('GETPROGRAMMATICNAME') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'getprogrammaticname') {
     return `CREATE OR REPLACE FUNCTION __mj."GetProgrammaticName"(
     IN "p_InputString" TEXT
 )
@@ -227,7 +231,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('TOTITLECASE') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'totitlecase') {
     return `CREATE OR REPLACE FUNCTION __mj."ToTitleCase"(
     IN "p_InputString" TEXT
 )
@@ -241,7 +245,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('TOPROPERCASE') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'topropercase') {
     return `CREATE OR REPLACE FUNCTION __mj."ToProperCase"(
     IN "p_InputString" TEXT
 )
@@ -255,7 +259,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('EXTRACTVERSIONCOMPONENTS') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'extractversioncomponents') {
     return `CREATE OR REPLACE FUNCTION __mj."ExtractVersionComponents"(
     IN "p_VersionString" TEXT
 )
@@ -276,7 +280,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('PARSEEMAIL') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'parseemail') {
     return `CREATE OR REPLACE FUNCTION __mj."parseEmail"(
     IN "p_Email" TEXT
 )
@@ -293,7 +297,7 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('PARSEDOMAIN') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'parsedomain') {
     return `CREATE OR REPLACE FUNCTION __mj."parseDomain"(
     IN "p_url" TEXT
 )
@@ -318,7 +322,44 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
-  if (upper.includes('FNINITIALS') && upper.includes('CREATE FUNCTION')) {
+  if (funcName === 'getclassnameschemaprefix') {
+    return `CREATE OR REPLACE FUNCTION __mj."GetClassNameSchemaPrefix"(
+    IN "p_SchemaName" VARCHAR(255)
+)
+RETURNS VARCHAR(255) AS $$
+DECLARE
+    p_trimmed VARCHAR(255);
+    p_cleaned VARCHAR(255);
+BEGIN
+    p_trimmed := TRIM("p_SchemaName");
+
+    -- Core MJ schema: __mj -> 'MJ'
+    IF LOWER(p_trimmed) = '__mj' THEN
+        RETURN 'MJ';
+    END IF;
+
+    -- Guard: a schema literally named 'MJ' would collide with __mj's prefix
+    IF LOWER(p_trimmed) = 'mj' THEN
+        RETURN 'MJCustom';
+    END IF;
+
+    -- Default: strip to alphanumeric, guard against leading digit
+    p_cleaned := __mj."StripToAlphanumeric"(p_trimmed);
+
+    IF LENGTH(p_cleaned) = 0 OR p_cleaned IS NULL THEN
+        RETURN '';
+    END IF;
+
+    IF LEFT(p_cleaned, 1) ~ '[0-9]' THEN
+        RETURN '_' || p_cleaned;
+    END IF;
+
+    RETURN p_cleaned;
+END;
+$$ LANGUAGE plpgsql;
+`;
+  }
+  if (funcName === 'fninitials') {
     return `CREATE OR REPLACE FUNCTION __mj."fnInitials"(
     IN "p_InputString" TEXT
 )

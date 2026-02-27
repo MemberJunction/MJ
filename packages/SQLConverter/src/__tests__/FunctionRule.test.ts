@@ -124,6 +124,37 @@ END`;
       expect(result).toContain('STRING_TO_ARRAY');
     });
 
+    it('should return hand-written replacement for GetClassNameSchemaPrefix', () => {
+      const sql = `CREATE FUNCTION [__mj].GetClassNameSchemaPrefix(@schemaName NVARCHAR(255))
+RETURNS NVARCHAR(255)
+AS
+BEGIN
+    DECLARE @trimmed NVARCHAR(255) = LTRIM(RTRIM(@schemaName));
+    IF LOWER(@trimmed) = '__mj'
+        RETURN 'MJ';
+    DECLARE @cleaned NVARCHAR(255) = [__mj].StripToAlphanumeric(@trimmed);
+    RETURN @cleaned;
+END;`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE OR REPLACE FUNCTION __mj."GetClassNameSchemaPrefix"');
+      expect(result).toContain('StripToAlphanumeric');
+      expect(result).toContain('LANGUAGE plpgsql');
+    });
+
+    it('should not return StripToAlphanumeric when function body calls StripToAlphanumeric', () => {
+      const sql = `CREATE FUNCTION [__mj].GetClassNameSchemaPrefix(@schemaName NVARCHAR(255))
+RETURNS NVARCHAR(255)
+AS
+BEGIN
+    DECLARE @cleaned NVARCHAR(255) = [__mj].StripToAlphanumeric(@schemaName);
+    RETURN @cleaned;
+END;`;
+      const result = convert(sql);
+      // Must NOT return the StripToAlphanumeric hand-written function
+      expect(result).toContain('GetClassNameSchemaPrefix');
+      expect(result).not.toMatch(/CREATE OR REPLACE FUNCTION __mj\."StripToAlphanumeric"/);
+    });
+
     it('should use context HandWrittenFunctions if set', () => {
       const context = createConversionContext('tsql', 'postgres');
       context.HandWrittenFunctions.set('customfunc', 'CREATE OR REPLACE FUNCTION __mj."CustomFunc"() RETURNS TEXT AS $$ BEGIN RETURN \'custom\'; END; $$ LANGUAGE plpgsql;');
