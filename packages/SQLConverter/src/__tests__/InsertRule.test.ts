@@ -162,4 +162,26 @@ VALUES
       expect(result).toContain('NOW()');
     });
   });
+
+  describe('__mj_ prefixed column quoting', () => {
+    it('should quote __mj_UpdatedAt in UPDATE SET clause', () => {
+      const sql = `UPDATE __mj."Entity" SET "Icon" = 'test', __mj_UpdatedAt = NOW() WHERE "ID" = '123'`;
+      const result = convert(sql);
+      expect(result).toContain('"__mj_UpdatedAt"');
+      expect(result).not.toMatch(/(?<!")__mj_UpdatedAt/);
+    });
+
+    it('should quote __mj_CreatedAt in INSERT column list', () => {
+      const sql = `INSERT INTO __mj."Foo" ("ID", __mj_CreatedAt) VALUES ('1', NOW())`;
+      const result = convert(sql);
+      expect(result).toContain('"__mj_CreatedAt"');
+    });
+
+    it('should not double-quote already-quoted __mj_ columns', () => {
+      const sql = `UPDATE __mj."Entity" SET "__mj_UpdatedAt" = NOW()`;
+      const result = convert(sql);
+      expect(result).toContain('"__mj_UpdatedAt"');
+      expect(result).not.toContain('""__mj_UpdatedAt""');
+    });
+  });
 });

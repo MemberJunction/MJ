@@ -69,6 +69,9 @@ export class InsertRule implements IConversionRule {
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
     result = this.quoteInsertColumnList(result);
+    // Quote __mj_ prefixed columns (e.g. __mj_UpdatedAt, __mj_CreatedAt) — these start
+    // with underscores so quotePascalCaseIdentifiers (which requires [A-Z] start) misses them
+    result = result.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")/g, '"$1"');
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
     // Ensure semicolon after the actual SQL statement (not after trailing comments).
