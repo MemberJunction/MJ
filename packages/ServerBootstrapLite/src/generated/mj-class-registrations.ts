@@ -102,12 +102,16 @@ import {
     WatchNewTypeformResponsesAction,
 } from '@memberjunction/actions-bizapps-formbuilders';
 
-// @memberjunction/actions-bizapps-lms (12 classes)
+// @memberjunction/actions-bizapps-lms (19 classes)
 import {
+    AttachTagsAction,
     CreateUserAction as CreateUserAction_actions_bizapps_lms,
+    DetachTagsAction,
     EnrollUserAction,
+    GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
+    GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
@@ -115,6 +119,9 @@ import {
     GetLearnWorldsUsersAction,
     GetQuizResultsAction,
     GetUserEnrollmentsAction,
+    OnboardLearnerAction,
+    SSOLoginAction,
+    UpdateUserAction,
     UpdateUserProgressAction,
 } from '@memberjunction/actions-bizapps-lms';
 
@@ -885,10 +892,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
+    AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
+    DetachTagsAction,
     EnrollUserAction,
+    GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
+    GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
@@ -896,6 +907,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     GetLearnWorldsUsersAction,
     GetQuizResultsAction,
     GetUserEnrollmentsAction,
+    OnboardLearnerAction,
+    SSOLoginAction,
+    UpdateUserAction,
     UpdateUserProgressAction,
     BufferCreatePostAction,
     BufferDeletePostAction,
@@ -1437,7 +1451,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 613;
+export const CLASS_REGISTRATIONS_COUNT = 620;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
