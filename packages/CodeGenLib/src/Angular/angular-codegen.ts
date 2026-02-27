@@ -810,9 +810,12 @@ ${indentedFormHTML}
             return relatedEntity.DisplayName;
         }
         else {
-            let tabName = relatedEntity.RelatedEntity;
-            
-            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID 
+            // Use the entity's DisplayName (human-friendly) when available, falling back to the technical Name
+            const md = new Metadata();
+            const re = md.EntityByID(relatedEntity.RelatedEntityID);
+            let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
+
+            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID
             const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
             if (relationships.length > 1) {
                 // we have more than one related entity for this entity, so we need to append the field name to the tab name
@@ -820,16 +823,14 @@ ${indentedFormHTML}
                 if (fkeyField) {
                     // if the fkeyField has wrapping [] then remove them
                     fkeyField = fkeyField.trim().replace('[', '').replace(']', '');
-    
+
                     // let's get the actual entityInfo for the related entity so we can get the field and see if it has a display name
-                    const md = new Metadata();
-                    const re = md.EntityByID(relatedEntity.RelatedEntityID);
-                    const f = re.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
+                    const f = re?.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
                     if (f)
                         tabName += ` (${f.DisplayNameOrName})`
                 }
             }
-            return tabName;    
+            return tabName;
         }
       }
       
