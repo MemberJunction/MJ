@@ -45,6 +45,11 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // IF EXISTS (without NOT) — SQL Server pre-flight checks (drop extended property, etc.)
+  if (/^IF\s+EXISTS\s*\(/i.test(upper) && !/^IF\s+NOT\s/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
   // IF NOT EXISTS ... → conditional DDL or SKIP depending on body content
   if (/^IF\s+NOT\s+EXISTS\s*\(/i.test(upper)) {
     // CREATE ROLE conditional: convert to PG-compatible DO block

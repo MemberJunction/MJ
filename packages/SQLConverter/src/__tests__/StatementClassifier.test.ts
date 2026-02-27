@@ -602,6 +602,14 @@ CREATE TABLE [__mj].[Action] (ID UNIQUEIDENTIFIER NOT NULL)`;
       expect(classifyBatch('DROP TABLE IF EXISTS [__mj].[TempData]')).toBe('SKIP_SQLSERVER');
     });
 
+    it('should classify IF EXISTS (without NOT) as SKIP_SQLSERVER', () => {
+      const sql = `IF EXISTS (SELECT * FROM sys.extended_properties WHERE major_id = OBJECT_ID('__mj.Entity'))
+BEGIN
+    EXEC sp_dropextendedproperty @name = N'MS_Description';
+END`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+
     it('should classify TRUNCATE as UNKNOWN', () => {
       expect(classifyBatch('TRUNCATE TABLE [__mj].[TempData]')).toBe('UNKNOWN');
     });

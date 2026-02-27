@@ -82,13 +82,14 @@ function trackLineState(line: string, state: ParseState): ParseState {
  * NOTE: SET is intentionally excluded — it would split UPDATE...SET into two
  * statements. Standalone SET commands (SET NOEXEC, SET ANSI_NULLS, etc.) are
  * already handled by preprocessor/postprocessor removal rules. */
-const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+NOT\s+EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s)/i;
+const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s|DROP\s)/i;
 
 /** IF conditionals whose next top-level keyword is the single-statement body.
  * T-SQL allows IF without BEGIN/END for single-statement bodies:
  *   IF NOT EXISTS (...) CREATE INDEX ...
+ *   IF EXISTS (...) EXEC sp_dropextendedproperty ...
  * The sub-splitter must keep these as one batch. */
-const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|OBJECT_ID|@@)/i;
+const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|@@)/i;
 
 /**
  * Sub-split a compound batch into individual statements.
