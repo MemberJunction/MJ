@@ -19,8 +19,8 @@ export class MJContentItemFormComponent extends BaseFormComponent {
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'sourceInformation', sectionName: 'Source Information', isExpanded: true },
             { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: false },
-            { sectionKey: 'contentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
-            { sectionKey: 'contentItemTags', sectionName: 'Content Item Tags', isExpanded: false }
+            { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
+            { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false }
         ]);
     }
 }

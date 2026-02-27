@@ -101,23 +101,23 @@
 
     <!-- Tagged Items Section -->
     <mj-collapsible-panel
-        SectionKey="taggedItems"
+        SectionKey="mJTaggedItems"
         SectionName="Tagged Items"
         Icon="fa fa-tags"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('taggedItems')"
+        [BadgeCount]="GetSectionRowCount('mJTaggedItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tagged Items','TagID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tagged Items')"
-                [AllowLoad]="IsSectionExpanded('taggedItems')"
+                [AllowLoad]="IsSectionExpanded('mJTaggedItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('taggedItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTaggedItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -126,23 +126,23 @@
 
     <!-- Tags Section -->
     <mj-collapsible-panel
-        SectionKey="tags"
+        SectionKey="mJTags"
         SectionName="Tags"
         Icon="fa fa-tags"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('tags')"
+        [BadgeCount]="GetSectionRowCount('mJTags')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tags')"
-                [AllowLoad]="IsSectionExpanded('tags')"
+                [AllowLoad]="IsSectionExpanded('mJTags')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('tags', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTags', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

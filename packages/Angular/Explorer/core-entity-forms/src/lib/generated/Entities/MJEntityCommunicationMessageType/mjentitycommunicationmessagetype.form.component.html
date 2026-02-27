@@ -86,23 +86,23 @@
 
     <!-- Entity Communication Fields Section -->
     <mj-collapsible-panel
-        SectionKey="entityCommunicationFields"
+        SectionKey="mJEntityCommunicationFields"
         SectionName="Entity Communication Fields"
         Icon="fa fa-comment"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityCommunicationFields')"
+        [BadgeCount]="GetSectionRowCount('mJEntityCommunicationFields')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Communication Fields','EntityCommunicationMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Communication Fields')"
-                [AllowLoad]="IsSectionExpanded('entityCommunicationFields')"
+                [AllowLoad]="IsSectionExpanded('mJEntityCommunicationFields')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityCommunicationFields', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityCommunicationFields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

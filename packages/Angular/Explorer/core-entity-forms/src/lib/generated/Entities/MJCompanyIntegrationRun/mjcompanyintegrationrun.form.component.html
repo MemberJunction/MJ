@@ -160,23 +160,23 @@
 
     <!-- Company Integration Run API Logs Section -->
     <mj-collapsible-panel
-        SectionKey="companyIntegrationRunAPILogs"
+        SectionKey="mJCompanyIntegrationRunAPILogs"
         SectionName="Company Integration Run API Logs"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('companyIntegrationRunAPILogs')"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationRunAPILogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run API Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integration Run API Logs')"
-                [AllowLoad]="IsSectionExpanded('companyIntegrationRunAPILogs')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunAPILogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunAPILogs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunAPILogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -185,23 +185,23 @@
 
     <!-- Company Integration Run Details Section -->
     <mj-collapsible-panel
-        SectionKey="companyIntegrationRunDetails"
+        SectionKey="mJCompanyIntegrationRunDetails"
         SectionName="Company Integration Run Details"
         Icon="fa fa-sync"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('companyIntegrationRunDetails')"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationRunDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run Details','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integration Run Details')"
-                [AllowLoad]="IsSectionExpanded('companyIntegrationRunDetails')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -210,23 +210,23 @@
 
     <!-- Error Logs Section -->
     <mj-collapsible-panel
-        SectionKey="errorLogs"
+        SectionKey="mJErrorLogs"
         SectionName="Error Logs"
         Icon="fa fa-bug"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('errorLogs')"
+        [BadgeCount]="GetSectionRowCount('mJErrorLogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Error Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Error Logs')"
-                [AllowLoad]="IsSectionExpanded('errorLogs')"
+                [AllowLoad]="IsSectionExpanded('mJErrorLogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('errorLogs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJErrorLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -19,8 +19,8 @@ export class MJCommunicationBaseMessageTypeFormComponent extends BaseFormCompone
             { sectionKey: 'messageTypeDetails', sectionName: 'Message Type Details', isExpanded: true },
             { sectionKey: 'supportedFeatures', sectionName: 'Supported Features', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'communicationProviderMessageTypes', sectionName: 'Communication Provider Message Types', isExpanded: false },
-            { sectionKey: 'entityCommunicationMessageTypes', sectionName: 'Entity Communication Message Types', isExpanded: false }
+            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Communication Provider Message Types', isExpanded: false },
+            { sectionKey: 'mJEntityCommunicationMessageTypes', sectionName: 'Entity Communication Message Types', isExpanded: false }
         ]);
     }
 }

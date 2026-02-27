@@ -19,7 +19,7 @@ export class MJUserViewRunFormComponent extends BaseFormComponent {
             { sectionKey: 'viewDefinition', sectionName: 'View Definition', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false }
+            { sectionKey: 'mJUserViewRunDetails', sectionName: 'Details', isExpanded: false }
         ]);
     }
 }

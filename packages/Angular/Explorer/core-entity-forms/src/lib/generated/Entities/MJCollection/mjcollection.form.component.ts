@@ -20,9 +20,9 @@ export class MJCollectionFormComponent extends BaseFormComponent {
             { sectionKey: 'structuralHierarchy', sectionName: 'Structural Hierarchy', isExpanded: true },
             { sectionKey: 'ownershipAccess', sectionName: 'Ownership & Access', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCollectionArtifacts', sectionName: 'MJ: Collection Artifacts', isExpanded: false },
-            { sectionKey: 'mJCollectionPermissions', sectionName: 'MJ: Collection Permissions', isExpanded: false },
-            { sectionKey: 'mJCollections', sectionName: 'MJ: Collections', isExpanded: false }
+            { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
+            { sectionKey: 'mJCollectionPermissions', sectionName: 'Collection Permissions', isExpanded: false },
+            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false }
         ]);
     }
 }

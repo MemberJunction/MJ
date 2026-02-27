@@ -17,9 +17,9 @@ export class MJOpenAppFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJOpenAppDependencies', sectionName: 'MJ: Open App Dependencies', isExpanded: false },
-            { sectionKey: 'mJOpenAppDependencies1', sectionName: 'MJ: Open App Dependencies', isExpanded: false },
-            { sectionKey: 'mJOpenAppInstallHistories', sectionName: 'MJ: Open App Install Histories', isExpanded: false }
+            { sectionKey: 'mJOpenAppDependenciesOpenAppID', sectionName: 'Open App Dependencies (Open App ID)', isExpanded: false },
+            { sectionKey: 'mJOpenAppDependenciesDependsOnAppID', sectionName: 'Open App Dependencies (Depends On App ID)', isExpanded: false },
+            { sectionKey: 'mJOpenAppInstallHistories', sectionName: 'Open App Install Histories', isExpanded: false }
         ]);
     }
 }

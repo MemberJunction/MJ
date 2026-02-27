@@ -102,23 +102,23 @@
 
     <!-- Dashboard Categories Section -->
     <mj-collapsible-panel
-        SectionKey="dashboardCategories"
+        SectionKey="mJDashboardCategories"
         SectionName="Dashboard Categories"
         Icon="fa fa-tachometer-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('dashboardCategories')"
+        [BadgeCount]="GetSectionRowCount('mJDashboardCategories')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Categories')"
-                [AllowLoad]="IsSectionExpanded('dashboardCategories')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategories')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('dashboardCategories', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -127,33 +127,33 @@
 
     <!-- Dashboards Section -->
     <mj-collapsible-panel
-        SectionKey="dashboards"
+        SectionKey="mJDashboards"
         SectionName="Dashboards"
         Icon="fa-solid fa-table-columns"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('dashboards')"
+        [BadgeCount]="GetSectionRowCount('mJDashboards')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboards','CategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboards')"
-                [AllowLoad]="IsSectionExpanded('dashboards')"
+                [AllowLoad]="IsSectionExpanded('mJDashboards')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Dashboard Category Links Section -->
+    <!-- Dashboard Category Links Section -->
     <mj-collapsible-panel
         SectionKey="mJDashboardCategoryLinks"
-        SectionName="MJ: Dashboard Category Links"
+        SectionName="Dashboard Category Links"
         Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
@@ -175,10 +175,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Dashboard Category Permissions Section -->
+    <!-- Dashboard Category Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJDashboardCategoryPermissions"
-        SectionName="MJ: Dashboard Category Permissions"
+        SectionName="Dashboard Category Permissions"
         Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"

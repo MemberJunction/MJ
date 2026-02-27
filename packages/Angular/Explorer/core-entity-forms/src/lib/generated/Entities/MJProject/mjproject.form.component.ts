@@ -20,9 +20,9 @@ export class MJProjectFormComponent extends BaseFormComponent {
             { sectionKey: 'projectHierarchy', sectionName: 'Project Hierarchy', isExpanded: true },
             { sectionKey: 'projectOverview', sectionName: 'Project Overview', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJProjects', sectionName: 'MJ: Projects', isExpanded: false },
-            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false }
+            { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }

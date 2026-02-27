@@ -18,7 +18,7 @@ export class MJOutputTriggerTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'triggerDetails', sectionName: 'Trigger Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false }
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false }
         ]);
     }
 }

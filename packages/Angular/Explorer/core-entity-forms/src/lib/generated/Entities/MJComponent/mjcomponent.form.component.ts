@@ -21,9 +21,9 @@ export class MJComponentFormComponent extends BaseFormComponent {
             { sectionKey: 'developerOwnership', sectionName: 'Developer & Ownership', isExpanded: false },
             { sectionKey: 'registrySynchronization', sectionName: 'Registry & Synchronization', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJComponentDependencies', sectionName: 'MJ: Component Dependencies', isExpanded: false },
-            { sectionKey: 'mJComponentLibraryLinks', sectionName: 'MJ: Component Library Links', isExpanded: false },
-            { sectionKey: 'mJComponentDependencies1', sectionName: 'MJ: Component Dependencies', isExpanded: false }
+            { sectionKey: 'mJComponentDependenciesDependencyComponentID', sectionName: 'Component Dependencies (Dependency Component ID)', isExpanded: false },
+            { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false },
+            { sectionKey: 'mJComponentDependenciesComponentID', sectionName: 'Component Dependencies (Component ID)', isExpanded: false }
         ]);
     }
 }

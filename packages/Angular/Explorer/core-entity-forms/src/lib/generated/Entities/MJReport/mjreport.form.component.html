@@ -218,33 +218,33 @@
 
     <!-- Report Snapshots Section -->
     <mj-collapsible-panel
-        SectionKey="reportSnapshots"
+        SectionKey="mJReportSnapshots"
         SectionName="Report Snapshots"
         Icon="fa fa-camera"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('reportSnapshots')"
+        [BadgeCount]="GetSectionRowCount('mJReportSnapshots')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report Snapshots','ReportID')"
                 [NewRecordValues]="NewRecordValues('MJ: Report Snapshots')"
-                [AllowLoad]="IsSectionExpanded('reportSnapshots')"
+                [AllowLoad]="IsSectionExpanded('mJReportSnapshots')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('reportSnapshots', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJReportSnapshots', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Report Versions Section -->
+    <!-- Report Versions Section -->
     <mj-collapsible-panel
         SectionKey="mJReportVersions"
-        SectionName="MJ: Report Versions"
+        SectionName="Report Versions"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
@@ -266,10 +266,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Report User States Section -->
+    <!-- Report User States Section -->
     <mj-collapsible-panel
         SectionKey="mJReportUserStates"
-        SectionName="MJ: Report User States"
+        SectionName="Report User States"
         Icon="fa fa-chart-line"
         Variant="related-entity"
         [Form]="this"
