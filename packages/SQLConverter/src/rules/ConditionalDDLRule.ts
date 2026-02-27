@@ -81,8 +81,17 @@ export class ConditionalDDLRule implements IConversionRule {
     const keyword = createMatch[1].replace(/\bNONCLUSTERED\s+/i, '');
     const indexName = createMatch[2].replace(/^\[|\]$/g, '').replace(/^"|"$/g, '');
     const tableName = createMatch[3];
-    const columns = createMatch[4];
-    const whereClause = createMatch[5] ? createMatch[5].trim() : '';
+    // Quote PascalCase column names in the column list
+    const columns = createMatch[4].split(',').map(c => {
+      const t = c.trim();
+      if (t.startsWith('"') || !t) return c;
+      if (/[A-Z]/.test(t) && /^[A-Za-z_]\w*$/.test(t)) return c.replace(t, `"${t}"`);
+      return c;
+    }).join(',');
+    // Quote PascalCase identifiers in the WHERE clause
+    const whereClause = createMatch[5]
+      ? this.quotePascalCaseIdentifiers(createMatch[5].trim())
+      : '';
 
     return `${keyword} IF NOT EXISTS "${indexName}" ON ${tableName} (${columns})${whereClause ? ' ' + whereClause : ''};`;
   }
