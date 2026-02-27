@@ -363,7 +363,13 @@ export function convertStringConcat(
 
     if (prevIsString && nextIsString) {
       // Between two string literals: 'a' + 'b' → replace all + with ||
-      newCode = newCode.replace(/\+/g, '||');
+      // But only when the code actually connects the strings with +.
+      // Skip when strings are separated by commas (VALUES list), subqueries, etc.
+      const startsWithPlus = /^\s*\+/.test(newCode);
+      const endsWithPlus = /\+\s*$/.test(newCode);
+      if (startsWithPlus || endsWithPlus) {
+        newCode = newCode.replace(/\+/g, '||');
+      }
     } else if (prevIsString) {
       // After a string literal: 'text' + expr
       // Replace leading + (but not when followed by pure numeric arithmetic)

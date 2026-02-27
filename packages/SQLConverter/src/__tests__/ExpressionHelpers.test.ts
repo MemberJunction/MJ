@@ -379,6 +379,13 @@ describe('convertStringConcat', () => {
     expect(convertStringConcat('i."NavigationBaseURL" + iuf."URLFormat"', tableColumns))
       .toBe('i."NavigationBaseURL" || iuf."URLFormat"');
   });
+
+  it('should not convert arithmetic + to || between string values in a VALUES list', () => {
+    const input = `INSERT INTO t ("A","B","C") VALUES ('uuid1', 'uuid2', (SELECT COALESCE(MAX("Seq"),0)+1 FROM t WHERE "A" = 'uuid3'))`;
+    const result = convertStringConcat(input);
+    expect(result).toContain('+1');
+    expect(result).not.toContain('||1');
+  });
 });
 
 // ---------------------------------------------------------------------------
