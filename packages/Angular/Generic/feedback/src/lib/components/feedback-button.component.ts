@@ -1,4 +1,4 @@
-import { Component, Input, ViewContainerRef } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { FeedbackDialogService } from '../services/feedback-dialog.service';
 
 /**
@@ -22,16 +22,19 @@ export type FeedbackButtonPosition = 'bottom-right' | 'bottom-left' | 'top-right
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-feedback-button',
   template: `
     <button
-      kendoButton
       class="feedback-floating-button"
       [ngClass]="'position-' + Position"
       (click)="OpenFeedbackDialog()"
-      [title]="ButtonText">
+      [title]="ButtonText"
+      type="button">
       <i class="fas fa-comment-dots"></i>
-      <span class="button-label" *ngIf="ShowLabel">{{ ButtonText }}</span>
+      @if (ShowLabel) {
+        <span class="button-label">{{ ButtonText }}</span>
+      }
     </button>
   `,
   styles: [`
@@ -40,23 +43,24 @@ export type FeedbackButtonPosition = 'bottom-right' | 'bottom-left' | 'top-right
       z-index: 9999;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border-radius: 24px;
-      background: #2563eb;
-      color: white;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-3) var(--mj-space-4);
+      border-radius: var(--mj-space-6);
+      background: var(--mj-brand-primary);
+      color: var(--mj-brand-on-primary);
       border: none;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-      transition: all 0.2s ease;
-      font-size: 14px;
-      font-weight: 500;
+      box-shadow: var(--mj-shadow-brand-md);
+      transition: var(--mj-transition-base);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      font-family: var(--mj-font-family);
     }
 
     .feedback-floating-button:hover {
-      background: #1d4ed8;
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+      box-shadow: var(--mj-shadow-lg);
     }
 
     .feedback-floating-button:active {
@@ -73,23 +77,23 @@ export type FeedbackButtonPosition = 'bottom-right' | 'bottom-left' | 'top-right
 
     /* Position variants */
     .position-bottom-right {
-      bottom: 24px;
-      right: 24px;
+      bottom: var(--mj-space-6);
+      right: var(--mj-space-6);
     }
 
     .position-bottom-left {
-      bottom: 24px;
-      left: 24px;
+      bottom: var(--mj-space-6);
+      left: var(--mj-space-6);
     }
 
     .position-top-right {
-      top: 24px;
-      right: 24px;
+      top: var(--mj-space-6);
+      right: var(--mj-space-6);
     }
 
     .position-top-left {
-      top: 24px;
-      left: 24px;
+      top: var(--mj-space-6);
+      left: var(--mj-space-6);
     }
   `]
 })
@@ -126,8 +130,7 @@ export class FeedbackButtonComponent {
   @Input() CurrentPageProvider?: () => string | undefined;
 
   constructor(
-    private dialogService: FeedbackDialogService,
-    private vcr: ViewContainerRef
+    private dialogService: FeedbackDialogService
   ) {}
 
   /**
@@ -135,9 +138,7 @@ export class FeedbackButtonComponent {
    */
   OpenFeedbackDialog(): void {
     const currentPage = this.CurrentPageProvider?.();
-    console.log('[FeedbackButton] currentPage from provider:', currentPage);
     this.dialogService.OpenFeedbackDialog({
-      viewContainerRef: this.vcr,
       currentPage
     });
   }

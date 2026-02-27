@@ -1,255 +1,342 @@
-import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment, CategoryOption, SeverityOption, EnvironmentOption } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, mergeFieldConfig } from '../feedback.config';
 import { DEFAULT_CATEGORIES, DEFAULT_SEVERITIES, DEFAULT_ENVIRONMENTS } from '../feedback.constants';
 import { FeedbackService } from '../services/feedback.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-feedback-form',
   template: `
-    <kendo-dialog
-      [title]="config.title || 'Submit Feedback'"
-      [width]="700"
-      [minHeight]="500"
-      [autoFocusedElement]="'none'"
-      (close)="OnCancel()">
+    <dialog #dialogEl class="mj-dialog" (close)="OnDialogClose()">
+      <div class="mj-dialog-header">
+        <h2 class="mj-dialog-title">{{ config.title || 'Submit Feedback' }}</h2>
+        <button class="mj-dialog-close" (click)="OnCancel()" type="button">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
 
       <!-- Subtitle -->
-      <div class="feedback-subtitle" *ngIf="config.subtitle">
-        {{ config.subtitle }}
-      </div>
-
-      <div class="feedback-form-content" *ngIf="!IsSubmitting && !SubmissionSuccess">
-        <!-- Category -->
-        <div class="feedback-section">
-          <label class="feedback-label">
-            Category <span class="required">*</span>
-          </label>
-          <kendo-dropdownlist
-            [(ngModel)]="Category"
-            [data]="Categories"
-            textField="label"
-            valueField="value"
-            [valuePrimitive]="true"
-            (valueChange)="OnCategoryChange($event)"
-            style="width: 100%;">
-          </kendo-dropdownlist>
-          <div class="category-description" *ngIf="SelectedCategoryDescription">
-            {{ SelectedCategoryDescription }}
-          </div>
+      @if (config.subtitle) {
+        <div class="feedback-subtitle">
+          {{ config.subtitle }}
         </div>
+      }
 
-        <!-- Title -->
-        <div class="feedback-section">
-          <label class="feedback-label">
-            Title <span class="required">*</span>
-          </label>
-          <kendo-textbox
-            [(ngModel)]="Title"
-            (valueChange)="OnFieldChange()"
-            placeholder="Brief summary of your feedback..."
-            [maxlength]="256"
-            style="width: 100%;">
-          </kendo-textbox>
-          <div class="char-count">{{ Title.length }}/256</div>
-        </div>
-
-        <!-- Description -->
-        <div class="feedback-section">
-          <label class="feedback-label">
-            Description <span class="required">*</span>
-          </label>
-          <kendo-textarea
-            [(ngModel)]="Description"
-            (valueChange)="OnFieldChange()"
-            placeholder="Please provide a detailed description..."
-            [rows]="4"
-            [maxlength]="10000"
-            style="width: 100%;">
-          </kendo-textarea>
-          <div class="char-count" [class.warning]="Description.length < 20">
-            {{ Description.length }}/10000 (minimum 20 characters)
-          </div>
-        </div>
-
-        <!-- Bug-specific fields -->
-        <ng-container *ngIf="Category === 'bug'">
-          <!-- Steps to reproduce -->
-          <div class="feedback-section" *ngIf="FieldConfig.showStepsToReproduce">
+      @if (!IsSubmitting && !SubmissionSuccess) {
+        <div class="feedback-form-content">
+          <!-- Category -->
+          <div class="feedback-section">
             <label class="feedback-label">
-              Steps to Reproduce <span class="optional-hint">(recommended)</span>
+              Category <span class="required">*</span>
             </label>
-            <kendo-textarea
-              [(ngModel)]="StepsToReproduce"
-              placeholder="1. Go to...&#10;2. Click on...&#10;3. See error..."
-              [rows]="3"
-              style="width: 100%;">
-            </kendo-textarea>
+            <select
+              class="mj-select"
+              [(ngModel)]="Category"
+              (ngModelChange)="OnCategoryChange($event)">
+              @for (cat of Categories; track cat.value) {
+                <option [value]="cat.value">{{ cat.label }}</option>
+              }
+            </select>
+            @if (SelectedCategoryDescription) {
+              <div class="category-description">
+                {{ SelectedCategoryDescription }}
+              </div>
+            }
           </div>
 
-          <!-- Expected Behavior -->
-          <div class="feedback-section" *ngIf="FieldConfig.showExpectedBehavior">
-            <label class="feedback-label">Expected Behavior</label>
-            <kendo-textarea
-              [(ngModel)]="ExpectedBehavior"
-              placeholder="What should have happened?"
-              [rows]="2"
-              style="width: 100%;">
-            </kendo-textarea>
-          </div>
-
-          <!-- Actual Behavior -->
-          <div class="feedback-section" *ngIf="FieldConfig.showActualBehavior">
-            <label class="feedback-label">Actual Behavior</label>
-            <kendo-textarea
-              [(ngModel)]="ActualBehavior"
-              placeholder="What actually happened?"
-              [rows]="2"
-              style="width: 100%;">
-            </kendo-textarea>
-          </div>
-
-          <!-- Severity -->
-          <div class="feedback-section" *ngIf="FieldConfig.showSeverity">
-            <label class="feedback-label">Severity</label>
-            <kendo-dropdownlist
-              [(ngModel)]="Severity"
-              [data]="Severities"
-              textField="label"
-              valueField="value"
-              [valuePrimitive]="true"
-              style="width: 200px;">
-            </kendo-dropdownlist>
-          </div>
-        </ng-container>
-
-        <!-- Feature-specific fields -->
-        <ng-container *ngIf="Category === 'feature'">
-          <div class="feedback-section" *ngIf="FieldConfig.showUseCase">
+          <!-- Title -->
+          <div class="feedback-section">
             <label class="feedback-label">
-              Use Case <span class="optional-hint">(recommended)</span>
+              Title <span class="required">*</span>
             </label>
-            <kendo-textarea
-              [(ngModel)]="UseCase"
-              placeholder="What problem would this solve? Why is it needed?"
-              [rows]="3"
-              style="width: 100%;">
-            </kendo-textarea>
+            <input
+              type="text"
+              class="mj-input"
+              [(ngModel)]="Title"
+              (input)="OnFieldChange()"
+              placeholder="Brief summary of your feedback..."
+              [maxlength]="256" />
+            <div class="char-count">{{ Title.length }}/256</div>
           </div>
 
-          <div class="feedback-section" *ngIf="FieldConfig.showProposedSolution">
+          <!-- Description -->
+          <div class="feedback-section">
             <label class="feedback-label">
-              Proposed Solution <span class="optional-hint">(optional)</span>
+              Description <span class="required">*</span>
             </label>
-            <kendo-textarea
-              [(ngModel)]="ProposedSolution"
-              placeholder="How might this work?"
-              [rows]="2"
-              style="width: 100%;">
-            </kendo-textarea>
+            <textarea
+              class="mj-textarea"
+              [(ngModel)]="Description"
+              (input)="OnFieldChange()"
+              placeholder="Please provide a detailed description..."
+              rows="4"
+              [maxlength]="10000"></textarea>
+            <div class="char-count" [ngClass]="{'warning': Description.length < 20}">
+              {{ Description.length }}/10000 (minimum 20 characters)
+            </div>
           </div>
-        </ng-container>
 
-        <!-- Environment and Affected Area row -->
-        <div class="feedback-row" *ngIf="FieldConfig.showEnvironment || FieldConfig.showAffectedArea">
-          <div class="feedback-section half" *ngIf="FieldConfig.showEnvironment">
-            <label class="feedback-label">Environment</label>
-            <kendo-dropdownlist
-              [(ngModel)]="Environment"
-              [data]="Environments"
-              textField="label"
-              valueField="value"
-              [valuePrimitive]="true"
-              style="width: 100%;">
-            </kendo-dropdownlist>
-          </div>
-          <div class="feedback-section half" *ngIf="FieldConfig.showAffectedArea && AffectedAreas.length > 0">
-            <label class="feedback-label">Affected Area</label>
-            <kendo-dropdownlist
-              [(ngModel)]="AffectedArea"
-              [data]="AffectedAreas"
-              [valuePrimitive]="true"
-              style="width: 100%;">
-            </kendo-dropdownlist>
-          </div>
-        </div>
+          <!-- Bug-specific fields -->
+          @if (Category === 'bug') {
+            <!-- Steps to reproduce -->
+            @if (FieldConfig.showStepsToReproduce) {
+              <div class="feedback-section">
+                <label class="feedback-label">
+                  Steps to Reproduce <span class="optional-hint">(recommended)</span>
+                </label>
+                <textarea
+                  class="mj-textarea"
+                  [(ngModel)]="StepsToReproduce"
+                  placeholder="1. Go to...&#10;2. Click on...&#10;3. See error..."
+                  rows="3"></textarea>
+              </div>
+            }
 
-        <!-- Contact info row -->
-        <div class="feedback-row" *ngIf="FieldConfig.showName || FieldConfig.showEmail">
-          <div class="feedback-section half" *ngIf="FieldConfig.showName">
-            <label class="feedback-label">Your Name <span class="optional-hint">(optional)</span></label>
-            <kendo-textbox
-              [(ngModel)]="Name"
-              placeholder="John Doe"
-              style="width: 100%;">
-            </kendo-textbox>
-          </div>
-          <div class="feedback-section half" *ngIf="FieldConfig.showEmail">
-            <label class="feedback-label">Email <span class="optional-hint">(for follow-up)</span></label>
-            <kendo-textbox
-              [(ngModel)]="Email"
-              placeholder="john@example.com"
-              style="width: 100%;">
-            </kendo-textbox>
-          </div>
-        </div>
+            <!-- Expected Behavior -->
+            @if (FieldConfig.showExpectedBehavior) {
+              <div class="feedback-section">
+                <label class="feedback-label">Expected Behavior</label>
+                <textarea
+                  class="mj-textarea"
+                  [(ngModel)]="ExpectedBehavior"
+                  placeholder="What should have happened?"
+                  rows="2"></textarea>
+              </div>
+            }
 
-        <!-- Error message -->
-        <div class="feedback-error" *ngIf="ErrorMessage">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ ErrorMessage }}</span>
+            <!-- Actual Behavior -->
+            @if (FieldConfig.showActualBehavior) {
+              <div class="feedback-section">
+                <label class="feedback-label">Actual Behavior</label>
+                <textarea
+                  class="mj-textarea"
+                  [(ngModel)]="ActualBehavior"
+                  placeholder="What actually happened?"
+                  rows="2"></textarea>
+              </div>
+            }
+
+            <!-- Severity -->
+            @if (FieldConfig.showSeverity) {
+              <div class="feedback-section">
+                <label class="feedback-label">Severity</label>
+                <select class="mj-select" [(ngModel)]="Severity" style="width: 200px;">
+                  @for (sev of Severities; track sev.value) {
+                    <option [value]="sev.value">{{ sev.label }}</option>
+                  }
+                </select>
+              </div>
+            }
+          }
+
+          <!-- Feature-specific fields -->
+          @if (Category === 'feature') {
+            @if (FieldConfig.showUseCase) {
+              <div class="feedback-section">
+                <label class="feedback-label">
+                  Use Case <span class="optional-hint">(recommended)</span>
+                </label>
+                <textarea
+                  class="mj-textarea"
+                  [(ngModel)]="UseCase"
+                  placeholder="What problem would this solve? Why is it needed?"
+                  rows="3"></textarea>
+              </div>
+            }
+
+            @if (FieldConfig.showProposedSolution) {
+              <div class="feedback-section">
+                <label class="feedback-label">
+                  Proposed Solution <span class="optional-hint">(optional)</span>
+                </label>
+                <textarea
+                  class="mj-textarea"
+                  [(ngModel)]="ProposedSolution"
+                  placeholder="How might this work?"
+                  rows="2"></textarea>
+              </div>
+            }
+          }
+
+          <!-- Environment and Affected Area row -->
+          @if (FieldConfig.showEnvironment || FieldConfig.showAffectedArea) {
+            <div class="feedback-row">
+              @if (FieldConfig.showEnvironment) {
+                <div class="feedback-section half">
+                  <label class="feedback-label">Environment</label>
+                  <select class="mj-select" [(ngModel)]="Environment">
+                    @for (env of Environments; track env.value) {
+                      <option [value]="env.value">{{ env.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
+              @if (FieldConfig.showAffectedArea && AffectedAreas.length > 0) {
+                <div class="feedback-section half">
+                  <label class="feedback-label">Affected Area</label>
+                  <select class="mj-select" [(ngModel)]="AffectedArea">
+                    @for (area of AffectedAreas; track area) {
+                      <option [value]="area">{{ area }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Contact info row -->
+          @if (FieldConfig.showName || FieldConfig.showEmail) {
+            <div class="feedback-row">
+              @if (FieldConfig.showName) {
+                <div class="feedback-section half">
+                  <label class="feedback-label">Your Name <span class="optional-hint">(optional)</span></label>
+                  <input
+                    type="text"
+                    class="mj-input"
+                    [(ngModel)]="Name"
+                    placeholder="John Doe" />
+                </div>
+              }
+              @if (FieldConfig.showEmail) {
+                <div class="feedback-section half">
+                  <label class="feedback-label">Email <span class="optional-hint">(for follow-up)</span></label>
+                  <input
+                    type="text"
+                    class="mj-input"
+                    [(ngModel)]="Email"
+                    placeholder="john@example.com" />
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Error message -->
+          @if (ErrorMessage) {
+            <div class="feedback-error">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
+            </div>
+          }
         </div>
-      </div>
+      }
 
       <!-- Loading state -->
-      <mj-loading *ngIf="IsSubmitting" text="Submitting your feedback..." size="medium"></mj-loading>
+      @if (IsSubmitting) {
+        <mj-loading text="Submitting your feedback..." size="medium"></mj-loading>
+      }
 
       <!-- Success state -->
-      <div class="feedback-success" *ngIf="SubmissionSuccess">
-        <i class="fas fa-check-circle fa-3x"></i>
-        <h3>{{ config.successMessage || 'Thank you! Your feedback has been submitted.' }}</h3>
-        <p *ngIf="IssueUrl && (config.showIssueLink !== false)">
-          <a [href]="IssueUrl" target="_blank" rel="noopener noreferrer">
-            View Issue #{{ IssueNumber }}
-          </a>
-        </p>
-      </div>
+      @if (SubmissionSuccess) {
+        <div class="feedback-success">
+          <i class="fas fa-check-circle fa-3x"></i>
+          <h3>{{ config.successMessage || 'Thank you! Your feedback has been submitted.' }}</h3>
+          @if (IssueUrl && (config.showIssueLink !== false)) {
+            <p>
+              <a [href]="IssueUrl" target="_blank" rel="noopener noreferrer">
+                View Issue #{{ IssueNumber }}
+              </a>
+            </p>
+          }
+        </div>
+      }
 
-      <kendo-dialog-actions layout="start">
-        <ng-container *ngIf="!SubmissionSuccess">
-          <button kendoButton
-                  [primary]="true"
-                  (click)="OnSubmit()"
-                  [disabled]="!CanSubmit() || IsSubmitting">
+      <div class="mj-dialog-actions">
+        @if (!SubmissionSuccess) {
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="OnSubmit()"
+            [disabled]="!CanSubmit() || IsSubmitting"
+            type="button">
             <i class="fas" [ngClass]="IsSubmitting ? 'fa-spinner fa-spin' : 'fa-paper-plane'"></i>
             {{ IsSubmitting ? 'Submitting...' : (config.submitButtonText || 'Submit') }}
           </button>
-          <button kendoButton (click)="OnCancel()" [disabled]="IsSubmitting">Cancel</button>
-        </ng-container>
-        <ng-container *ngIf="SubmissionSuccess">
-          <button kendoButton [primary]="true" (click)="OnCancel()">Close</button>
-        </ng-container>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+          <button class="mj-btn" (click)="OnCancel()" [disabled]="IsSubmitting" type="button">Cancel</button>
+        }
+        @if (SubmissionSuccess) {
+          <button class="mj-btn mj-btn-primary" (click)="OnCancel()" type="button">Close</button>
+        }
+      </div>
+    </dialog>
   `,
   styles: [`
     :host {
       display: block;
     }
 
-    .feedback-subtitle {
-      color: #64748b;
-      font-size: 14px;
-      margin-bottom: 16px;
-      padding: 0 20px;
+    /* Dialog base */
+    .mj-dialog {
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-xl);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      padding: 0;
+      max-width: 700px;
+      width: 90vw;
     }
 
+    .mj-dialog::backdrop {
+      background: var(--mj-bg-overlay);
+    }
+
+    /* Dialog header */
+    .mj-dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--mj-space-4) var(--mj-space-5);
+      border-bottom: 1px solid var(--mj-border-subtle);
+    }
+
+    .mj-dialog-title {
+      margin: 0;
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-primary);
+    }
+
+    .mj-dialog-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--mj-space-8);
+      height: var(--mj-space-8);
+      border: none;
+      border-radius: var(--mj-radius-md);
+      background: transparent;
+      color: var(--mj-text-muted);
+      cursor: pointer;
+      transition: var(--mj-transition-fast);
+    }
+
+    .mj-dialog-close:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+
+    /* Dialog actions */
+    .mj-dialog-actions {
+      display: flex;
+      gap: var(--mj-space-3);
+      padding: var(--mj-space-4) var(--mj-space-5);
+      border-top: 1px solid var(--mj-border-subtle);
+    }
+
+    /* Subtitle */
+    .feedback-subtitle {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+      margin-bottom: var(--mj-space-4);
+      padding: 0 var(--mj-space-5);
+    }
+
+    /* Form content */
     .feedback-form-content {
-      padding: 0 20px 20px 20px;
+      padding: 0 var(--mj-space-5) var(--mj-space-5) var(--mj-space-5);
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: var(--mj-space-4);
       max-height: 60vh;
       overflow-y: auto;
     }
@@ -257,7 +344,7 @@ import { FeedbackService } from '../services/feedback.service';
     .feedback-section {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: var(--mj-space-1-5);
     }
 
     .feedback-section.half {
@@ -267,83 +354,164 @@ import { FeedbackService } from '../services/feedback.service';
 
     .feedback-row {
       display: flex;
-      gap: 16px;
+      gap: var(--mj-space-4);
     }
 
+    /* Labels */
     .feedback-label {
-      font-weight: 600;
-      font-size: 14px;
-      color: #333;
+      font-weight: var(--mj-font-semibold);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-primary);
     }
 
     .required {
-      color: #dc3545;
+      color: var(--mj-status-error);
     }
 
     .optional-hint {
-      font-weight: 400;
-      font-size: 12px;
-      color: #94a3b8;
+      font-weight: var(--mj-font-normal);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
     }
 
     .category-description {
-      font-size: 12px;
-      color: #64748b;
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-secondary);
       font-style: italic;
     }
 
     .char-count {
-      font-size: 11px;
-      color: #94a3b8;
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
       text-align: right;
     }
 
     .char-count.warning {
-      color: #f59e0b;
+      color: var(--mj-status-warning);
     }
 
+    /* Form controls */
+    .mj-input,
+    .mj-textarea,
+    .mj-select {
+      width: 100%;
+      padding: var(--mj-space-2) var(--mj-space-3);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      font-size: var(--mj-text-sm);
+      font-family: var(--mj-font-family);
+      transition: var(--mj-transition-fast);
+      box-sizing: border-box;
+    }
+
+    .mj-input:focus,
+    .mj-textarea:focus,
+    .mj-select:focus {
+      outline: none;
+      border-color: var(--mj-border-focus);
+      box-shadow: var(--mj-focus-ring);
+    }
+
+    .mj-input::placeholder,
+    .mj-textarea::placeholder {
+      color: var(--mj-text-muted);
+    }
+
+    .mj-textarea {
+      resize: vertical;
+      min-height: var(--mj-space-15);
+    }
+
+    .mj-select {
+      appearance: auto;
+    }
+
+    /* Buttons */
+    .mj-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2) var(--mj-space-4);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      font-family: var(--mj-font-family);
+      cursor: pointer;
+      transition: var(--mj-transition-fast);
+    }
+
+    .mj-btn:hover:not(:disabled) {
+      background: var(--mj-bg-surface-hover);
+    }
+
+    .mj-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .mj-btn-primary {
+      background: var(--mj-brand-primary);
+      color: var(--mj-brand-on-primary);
+      border-color: var(--mj-brand-primary);
+    }
+
+    .mj-btn-primary:hover:not(:disabled) {
+      background: var(--mj-brand-primary-hover);
+      border-color: var(--mj-brand-primary-hover);
+    }
+
+    /* Success state */
     .feedback-success {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
-      padding: 60px 20px;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-15) var(--mj-space-5);
       text-align: center;
     }
 
     .feedback-success i {
-      color: #10b981;
+      color: var(--mj-status-success);
     }
 
     .feedback-success h3 {
-      color: #1e293b;
+      color: var(--mj-text-primary);
       margin: 0;
     }
 
     .feedback-success a {
-      color: #2563eb;
+      color: var(--mj-text-link);
       text-decoration: none;
     }
 
     .feedback-success a:hover {
       text-decoration: underline;
+      color: var(--mj-text-link-hover);
     }
 
+    /* Error state */
     .feedback-error {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      border-radius: 6px;
-      color: #dc2626;
-      font-size: 14px;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-3);
+      background: var(--mj-status-error-bg);
+      border: 1px solid var(--mj-status-error-border);
+      border-radius: var(--mj-radius-md);
+      color: var(--mj-status-error-text);
+      font-size: var(--mj-text-sm);
     }
   `]
 })
-export class FeedbackFormComponent implements OnInit {
+export class FeedbackFormComponent implements OnInit, AfterViewInit {
+  @ViewChild('dialogEl') DialogEl!: ElementRef<HTMLDialogElement>;
+
   // Inputs for pre-filling
   @Input() PrefilledCategory?: FeedbackCategory | string;
   @Input() PrefilledTitle?: string;
@@ -356,6 +524,7 @@ export class FeedbackFormComponent implements OnInit {
   @Output() Success = new EventEmitter<FeedbackResponse>();
   @Output() Error = new EventEmitter<Error>();
   @Output() Cancelled = new EventEmitter<void>();
+  @Output() DialogClosed = new EventEmitter<{ success: boolean }>();
 
   // Form fields
   Category: string = 'bug';
@@ -391,7 +560,6 @@ export class FeedbackFormComponent implements OnInit {
   constructor(
     @Inject(FEEDBACK_CONFIG) public config: FeedbackConfig,
     private feedbackService: FeedbackService,
-    private dialogRef: DialogRef,
     private cdr: ChangeDetectorRef
   ) {
     this.FieldConfig = mergeFieldConfig(config.fields);
@@ -405,6 +573,12 @@ export class FeedbackFormComponent implements OnInit {
     }
     if (this.PrefilledTitle) {
       this.Title = this.PrefilledTitle;
+    }
+  }
+
+  ngAfterViewInit(): void {
+    if (this.DialogEl?.nativeElement) {
+      this.DialogEl.nativeElement.showModal();
     }
   }
 
@@ -459,56 +633,7 @@ export class FeedbackFormComponent implements OnInit {
     this.ErrorMessage = '';
     this.cdr.detectChanges();
 
-    console.log('[FeedbackForm] this.CurrentPage:', this.CurrentPage);
-    const submission: FeedbackSubmission = {
-      title: this.Title.trim(),
-      description: this.Description.trim(),
-      category: this.Category,
-      metadata: this.ContextData,
-      // Current page/view name (for apps where URL doesn't reflect navigation)
-      currentPage: this.CurrentPage
-    };
-    console.log('[FeedbackForm] submission.currentPage:', submission.currentPage);
-
-    // Add category-specific fields
-    if (this.Category === 'bug') {
-      if (this.StepsToReproduce.trim()) {
-        submission.stepsToReproduce = this.StepsToReproduce.trim();
-      }
-      if (this.ExpectedBehavior.trim()) {
-        submission.expectedBehavior = this.ExpectedBehavior.trim();
-      }
-      if (this.ActualBehavior.trim()) {
-        submission.actualBehavior = this.ActualBehavior.trim();
-      }
-      if (this.Severity) {
-        submission.severity = this.Severity;
-      }
-    }
-
-    if (this.Category === 'feature') {
-      if (this.UseCase.trim()) {
-        submission.useCase = this.UseCase.trim();
-      }
-      if (this.ProposedSolution.trim()) {
-        submission.proposedSolution = this.ProposedSolution.trim();
-      }
-    }
-
-    // Add optional fields
-    if (this.Environment && this.FieldConfig.showEnvironment) {
-      submission.environment = this.Environment;
-    }
-    if (this.AffectedArea && this.FieldConfig.showAffectedArea) {
-      submission.affectedArea = this.AffectedArea;
-    }
-    if (this.Name.trim() && this.FieldConfig.showName) {
-      submission.name = this.Name.trim();
-    }
-    if (this.Email.trim() && this.FieldConfig.showEmail) {
-      submission.email = this.Email.trim();
-    }
-
+    const submission = this.buildSubmission();
     this.Submitted.emit(submission);
 
     this.feedbackService.Submit(submission).subscribe({
@@ -530,11 +655,82 @@ export class FeedbackFormComponent implements OnInit {
   }
 
   /**
+   * Build the feedback submission object from current form state
+   */
+  private buildSubmission(): FeedbackSubmission {
+    const submission: FeedbackSubmission = {
+      title: this.Title.trim(),
+      description: this.Description.trim(),
+      category: this.Category,
+      metadata: this.ContextData,
+      currentPage: this.CurrentPage
+    };
+
+    if (this.Category === 'bug') {
+      this.applyBugFields(submission);
+    }
+    if (this.Category === 'feature') {
+      this.applyFeatureFields(submission);
+    }
+    this.applyOptionalFields(submission);
+
+    return submission;
+  }
+
+  private applyBugFields(submission: FeedbackSubmission): void {
+    if (this.StepsToReproduce.trim()) {
+      submission.stepsToReproduce = this.StepsToReproduce.trim();
+    }
+    if (this.ExpectedBehavior.trim()) {
+      submission.expectedBehavior = this.ExpectedBehavior.trim();
+    }
+    if (this.ActualBehavior.trim()) {
+      submission.actualBehavior = this.ActualBehavior.trim();
+    }
+    if (this.Severity) {
+      submission.severity = this.Severity;
+    }
+  }
+
+  private applyFeatureFields(submission: FeedbackSubmission): void {
+    if (this.UseCase.trim()) {
+      submission.useCase = this.UseCase.trim();
+    }
+    if (this.ProposedSolution.trim()) {
+      submission.proposedSolution = this.ProposedSolution.trim();
+    }
+  }
+
+  private applyOptionalFields(submission: FeedbackSubmission): void {
+    if (this.Environment && this.FieldConfig.showEnvironment) {
+      submission.environment = this.Environment;
+    }
+    if (this.AffectedArea && this.FieldConfig.showAffectedArea) {
+      submission.affectedArea = this.AffectedArea;
+    }
+    if (this.Name.trim() && this.FieldConfig.showName) {
+      submission.name = this.Name.trim();
+    }
+    if (this.Email.trim() && this.FieldConfig.showEmail) {
+      submission.email = this.Email.trim();
+    }
+  }
+
+  /**
+   * Handle native dialog close event (e.g., Escape key)
+   */
+  OnDialogClose(): void {
+    this.DialogClosed.emit({ success: this.SubmissionSuccess });
+  }
+
+  /**
    * Cancel and close the dialog
    */
   OnCancel(): void {
     this.Cancelled.emit();
-    this.dialogRef.close({ success: this.SubmissionSuccess });
+    if (this.DialogEl?.nativeElement?.open) {
+      this.DialogEl.nativeElement.close(); // fires native 'close' event → OnDialogClose() → DialogClosed.emit()
+    }
   }
 
   /**

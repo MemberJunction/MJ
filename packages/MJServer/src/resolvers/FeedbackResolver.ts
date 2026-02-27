@@ -214,7 +214,6 @@ export class FeedbackResolver {
     @Ctx() ctx: AppContext
   ): Promise<FeedbackResponseType> {
     try {
-      console.log('[FeedbackResolver] input.CurrentPage:', input.CurrentPage);
       // Get configuration
       const config = this.getConfig();
       if (!config) {
@@ -226,7 +225,6 @@ export class FeedbackResolver {
 
       // Convert input to internal format
       const submission = this.convertInputToSubmission(input, ctx);
-      console.log('[FeedbackResolver] submission.currentPage:', submission.currentPage);
 
       // Validate submission
       const validationResult = FeedbackSubmissionSchema.safeParse(submission);
@@ -348,7 +346,6 @@ export class FeedbackResolver {
 
     const labels = this.buildLabels(submission, config);
     const body = this.formatIssueBody(submission);
-    console.log('[FeedbackResolver] GitHub issue body:', body);
 
     const response = await octokit.issues.create({
       owner: config.owner,
@@ -387,152 +384,159 @@ export class FeedbackResolver {
   }
 
   /**
-   * Format the feedback submission as a GitHub issue body in markdown
+   * Format the feedback submission as a GitHub issue body in markdown.
+   * Orchestrates section-specific formatters and joins them.
    */
   private formatIssueBody(submission: FeedbackSubmission): string {
-    const sections: string[] = [];
+    const sections: string[] = [
+      this.formatDescriptionSection(submission),
+      '---',
+      '',
+      this.formatDetailsTable(submission),
+      this.formatContactSection(submission),
+      this.formatTechnicalDetails(submission),
+      this.formatMetadataSection(submission),
+    ];
 
-    // Description section
-    sections.push('## Description');
-    sections.push('');
-    sections.push(this.sanitizeMarkdown(submission.description));
-    sections.push('');
+    return sections.filter(s => s.length > 0).join('\n');
+  }
 
-    // Bug-specific sections
+  /**
+   * Format the description and category-specific sections (bug/feature)
+   */
+  private formatDescriptionSection(submission: FeedbackSubmission): string {
+    const lines: string[] = [];
+
+    lines.push('## Description', '', this.sanitizeMarkdown(submission.description), '');
+
     if (submission.category === 'bug') {
       if (submission.stepsToReproduce) {
-        sections.push('## Steps to Reproduce');
-        sections.push('');
-        sections.push(this.sanitizeMarkdown(submission.stepsToReproduce));
-        sections.push('');
+        lines.push('## Steps to Reproduce', '', this.sanitizeMarkdown(submission.stepsToReproduce), '');
       }
-
       if (submission.expectedBehavior) {
-        sections.push('## Expected Behavior');
-        sections.push('');
-        sections.push(this.sanitizeMarkdown(submission.expectedBehavior));
-        sections.push('');
+        lines.push('## Expected Behavior', '', this.sanitizeMarkdown(submission.expectedBehavior), '');
       }
-
       if (submission.actualBehavior) {
-        sections.push('## Actual Behavior');
-        sections.push('');
-        sections.push(this.sanitizeMarkdown(submission.actualBehavior));
-        sections.push('');
+        lines.push('## Actual Behavior', '', this.sanitizeMarkdown(submission.actualBehavior), '');
       }
     }
 
-    // Feature-specific sections
     if (submission.category === 'feature') {
       if (submission.useCase) {
-        sections.push('## Use Case');
-        sections.push('');
-        sections.push(this.sanitizeMarkdown(submission.useCase));
-        sections.push('');
+        lines.push('## Use Case', '', this.sanitizeMarkdown(submission.useCase), '');
       }
-
       if (submission.proposedSolution) {
-        sections.push('## Proposed Solution');
-        sections.push('');
-        sections.push(this.sanitizeMarkdown(submission.proposedSolution));
-        sections.push('');
+        lines.push('## Proposed Solution', '', this.sanitizeMarkdown(submission.proposedSolution), '');
       }
     }
 
-    // Divider before metadata
-    sections.push('---');
-    sections.push('');
+    return lines.join('\n');
+  }
 
-    // Submission details table
-    sections.push('### Submission Details');
-    sections.push('');
-    sections.push('| Field | Value |');
-    sections.push('|-------|-------|');
+  /**
+   * Format the submission details markdown table
+   */
+  private formatDetailsTable(submission: FeedbackSubmission): string {
+    const rows: string[] = [];
+    rows.push('### Submission Details', '', '| Field | Value |', '|-------|-------|');
 
     if (submission.appName) {
       const appInfo = submission.appVersion
         ? `${this.sanitizeMarkdown(submission.appName)} v${this.sanitizeMarkdown(submission.appVersion)}`
         : this.sanitizeMarkdown(submission.appName);
-      sections.push(`| **App** | ${appInfo} |`);
+      rows.push(`| **App** | ${appInfo} |`);
     }
 
     const categoryDisplay = categoryLabels[submission.category] || submission.category;
-    sections.push(`| **Category** | ${this.sanitizeMarkdown(categoryDisplay)} |`);
+    rows.push(`| **Category** | ${this.sanitizeMarkdown(categoryDisplay)} |`);
 
     if (submission.severity) {
       const severityDisplay = severityLabels[submission.severity] || submission.severity;
-      sections.push(`| **Severity** | ${this.sanitizeMarkdown(severityDisplay)} |`);
+      rows.push(`| **Severity** | ${this.sanitizeMarkdown(severityDisplay)} |`);
     }
 
     if (submission.environment) {
       const envDisplay = environmentLabels[submission.environment] || submission.environment;
-      sections.push(`| **Environment** | ${this.sanitizeMarkdown(envDisplay)} |`);
+      rows.push(`| **Environment** | ${this.sanitizeMarkdown(envDisplay)} |`);
     }
 
     if (submission.affectedArea) {
-      sections.push(`| **Affected Area** | ${this.sanitizeMarkdown(submission.affectedArea)} |`);
+      rows.push(`| **Affected Area** | ${this.sanitizeMarkdown(submission.affectedArea)} |`);
     }
 
     if (submission.timestamp) {
-      sections.push(`| **Submitted** | ${this.sanitizeMarkdown(submission.timestamp)} |`);
+      rows.push(`| **Submitted** | ${this.sanitizeMarkdown(submission.timestamp)} |`);
     }
 
-    sections.push('');
+    rows.push('');
+    return rows.join('\n');
+  }
 
-    // Contact info section
-    if (submission.name || submission.email) {
-      sections.push('### Contact');
-      sections.push('');
-      const contactParts: string[] = [];
-      if (submission.name) {
-        contactParts.push(this.sanitizeMarkdown(submission.name));
-      }
-      if (submission.email) {
-        contactParts.push(this.sanitizeMarkdown(submission.email));
-      }
-      sections.push(contactParts.join(' — '));
-      sections.push('');
+  /**
+   * Format the contact information section
+   */
+  private formatContactSection(submission: FeedbackSubmission): string {
+    if (!submission.name && !submission.email) {
+      return '';
     }
 
-    // Technical details section
-    if (submission.currentPage || submission.userAgent || submission.screenSize || submission.userId) {
-      sections.push('### Technical Details');
-      sections.push('');
-      sections.push('| Field | Value |');
-      sections.push('|-------|-------|');
-
-      if (submission.currentPage) {
-        sections.push(`| **Page/View** | ${this.sanitizeMarkdown(submission.currentPage)} |`);
-      }
-
-      if (submission.userAgent) {
-        const browserInfo = this.parseUserAgent(submission.userAgent);
-        sections.push(`| **Browser** | ${this.sanitizeMarkdown(browserInfo)} |`);
-      }
-
-      if (submission.screenSize) {
-        sections.push(`| **Screen Size** | ${this.sanitizeMarkdown(submission.screenSize)} |`);
-      }
-
-      if (submission.userId) {
-        sections.push(`| **User ID** | ${this.sanitizeMarkdown(submission.userId)} |`);
-      }
-
-      sections.push('');
+    const contactParts: string[] = [];
+    if (submission.name) {
+      contactParts.push(this.sanitizeMarkdown(submission.name));
+    }
+    if (submission.email) {
+      contactParts.push(this.sanitizeMarkdown(submission.email));
     }
 
-    // Custom metadata
-    if (submission.metadata && Object.keys(submission.metadata).length > 0) {
-      sections.push('<details>');
-      sections.push('<summary>Additional Metadata</summary>');
-      sections.push('');
-      sections.push('```json');
-      sections.push(JSON.stringify(submission.metadata, null, 2));
-      sections.push('```');
-      sections.push('</details>');
+    return ['### Contact', '', contactParts.join(' — '), ''].join('\n');
+  }
+
+  /**
+   * Format the technical details table (page, browser, screen, user)
+   */
+  private formatTechnicalDetails(submission: FeedbackSubmission): string {
+    if (!submission.currentPage && !submission.userAgent && !submission.screenSize && !submission.userId) {
+      return '';
     }
 
-    return sections.join('\n');
+    const rows: string[] = [];
+    rows.push('### Technical Details', '', '| Field | Value |', '|-------|-------|');
+
+    if (submission.currentPage) {
+      rows.push(`| **Page/View** | ${this.sanitizeMarkdown(submission.currentPage)} |`);
+    }
+    if (submission.userAgent) {
+      const browserInfo = this.parseUserAgent(submission.userAgent);
+      rows.push(`| **Browser** | ${this.sanitizeMarkdown(browserInfo)} |`);
+    }
+    if (submission.screenSize) {
+      rows.push(`| **Screen Size** | ${this.sanitizeMarkdown(submission.screenSize)} |`);
+    }
+    if (submission.userId) {
+      rows.push(`| **User ID** | ${this.sanitizeMarkdown(submission.userId)} |`);
+    }
+
+    rows.push('');
+    return rows.join('\n');
+  }
+
+  /**
+   * Format the collapsible metadata JSON section
+   */
+  private formatMetadataSection(submission: FeedbackSubmission): string {
+    if (!submission.metadata || Object.keys(submission.metadata).length === 0) {
+      return '';
+    }
+
+    return [
+      '<details>',
+      '<summary>Additional Metadata</summary>',
+      '',
+      '```json',
+      JSON.stringify(submission.metadata, null, 2),
+      '```',
+      '</details>',
+    ].join('\n');
   }
 
   /**
@@ -542,12 +546,16 @@ export class FeedbackResolver {
     if (!text) return '';
 
     return text
+      .replace(/\\/g, '\\\\')   // backslashes first (before other escapes add more)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
+      .replace(/`/g, '\\`')     // inline code injection
       .replace(/\[/g, '\\[')
       .replace(/\]/g, '\\]')
       .replace(/!\[/g, '!\\[')
+      .replace(/\(/g, '\\(')    // link URL injection
+      .replace(/\)/g, '\\)')
       .replace(/\|/g, '\\|');
   }
 
