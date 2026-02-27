@@ -143,6 +143,10 @@ export class GetCertificatesAction extends LearnWorldsBaseAction {
       queryParams.issued_before = parsedTo;
     }
 
+    // Validate path segments before URL interpolation
+    if (userId) this.validatePathSegment(userId, 'UserID');
+    if (courseId) this.validatePathSegment(courseId, 'CourseID');
+
     // Determine endpoint based on parameters
     const endpoint = this.buildCertificatesEndpoint(userId, courseId);
 

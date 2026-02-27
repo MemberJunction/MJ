@@ -268,7 +268,7 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
       activeEnrollments,
       completedEnrollments,
       expiredEnrollments,
-      inProgressEnrollments: activeEnrollments - completedEnrollments,
+      inProgressEnrollments: Math.max(0, totalEnrollments - completedEnrollments - expiredEnrollments),
       averageProgressPercentage: Math.round(averageProgress * 100) / 100,
       totalTimeSpent,
       totalTimeSpentText: this.formatDuration(totalTimeSpent),

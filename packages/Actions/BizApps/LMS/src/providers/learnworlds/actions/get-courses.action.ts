@@ -152,8 +152,8 @@ export class GetLearnWorldsCoursesAction extends LearnWorldsBaseAction {
       Level: this.getOptionalStringParam(params, 'Level'),
       Language: this.getOptionalStringParam(params, 'Language'),
       OnlyFree: this.getOptionalBooleanParam(params, 'OnlyFree', false),
-      MinPrice: this.getOptionalNumberParam(params, 'MinPrice', 0),
-      MaxPrice: this.getOptionalNumberParam(params, 'MaxPrice', 0),
+      MinPrice: this.getOptionalNumberParam(params, 'MinPrice', undefined),
+      MaxPrice: this.getOptionalNumberParam(params, 'MaxPrice', undefined),
       Tags: this.getOptionalStringParam(params, 'Tags'),
       InstructorID: this.getOptionalStringParam(params, 'InstructorID'),
       CreatedAfter: this.getOptionalStringParam(params, 'CreatedAfter'),
@@ -189,10 +189,10 @@ export class GetLearnWorldsCoursesAction extends LearnWorldsBaseAction {
     if (params.OnlyFree) {
       queryParams.is_free = true;
     }
-    if (params.MinPrice !== null && params.MinPrice !== undefined) {
+    if (params.MinPrice != null && params.MinPrice > 0) {
       queryParams.min_price = params.MinPrice;
     }
-    if (params.MaxPrice !== null && params.MaxPrice !== undefined) {
+    if (params.MaxPrice != null && params.MaxPrice > 0) {
       queryParams.max_price = params.MaxPrice;
     }
     if (params.Tags) {

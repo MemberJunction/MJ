@@ -182,6 +182,11 @@ export class GetQuizResultsAction extends LearnWorldsBaseAction {
     // Build query parameters
     const queryParams = this.buildQuizQueryParams(userId, quizId, passingOnly, dateFrom, dateTo, sortBy, sortOrder, maxResults);
 
+    // Validate path segments before URL interpolation
+    if (userId) this.validatePathSegment(userId, 'UserID');
+    if (courseId) this.validatePathSegment(courseId, 'CourseID');
+    if (quizId) this.validatePathSegment(quizId, 'QuizID');
+
     // Determine endpoint
     const endpoint = this.buildQuizEndpoint(userId, courseId, quizId);
 

@@ -150,6 +150,7 @@ export class GetCourseAnalyticsAction extends LearnWorldsBaseAction {
     if (!courseId) {
       throw new Error('CourseID is required');
     }
+    this.validatePathSegment(courseId, 'CourseID');
 
     // Build date query string
     const queryString = this.buildDateQueryString(dateFrom, dateTo);

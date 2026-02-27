@@ -152,6 +152,7 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
     if (!courseId) {
       throw new Error('CourseID is required');
     }
+    this.validatePathSegment(courseId, 'CourseID');
 
     // Get course details
     const courseResponse = await this.makeLearnWorldsRequest<LWApiCourseResponse>(`/courses/${courseId}`, 'GET', null, contextUser);
