@@ -32,7 +32,7 @@ The `ThemeService` manages theme registration, switching, persistence, and CSS l
 ### Token Layers
 
 All design tokens are defined in:
-> `packages/Angular/Explorer/explorer-app/src/lib/styles/_tokens.scss`
+> `packages/Angular/Generic/shared/src/lib/_tokens.scss`
 
 The file is organized in two blocks:
 

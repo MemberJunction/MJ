@@ -24,6 +24,7 @@
     "@memberjunction/ng-auth-services": "5.3.1",
     "@memberjunction/ng-bootstrap": "5.3.1",
     "@memberjunction/ng-explorer-core": "5.3.1",
+    "@memberjunction/ng-shared-generic": "5.3.1",
     "@memberjunction/ng-workspace-initializer": "5.3.1"
   },
   "peerDependencies": {
