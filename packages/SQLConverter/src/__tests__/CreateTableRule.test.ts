@@ -245,7 +245,25 @@ describe('CreateTableRule', () => {
       const columns = context.TableColumns.get('users');
       expect(columns).toBeDefined();
       expect(columns!.get('id')).toBe('UUID');
+      expect(columns!.get('name')).toBe('VARCHAR(100)');
       expect(columns!.get('isactive')).toBe('BOOLEAN');
+    });
+
+    it('should track all parameterized types (VARCHAR, CHAR, NUMERIC)', () => {
+      const sql = `CREATE TABLE [__mj].[Integration] (
+  [ID] [uniqueidentifier] NOT NULL,
+  [NavigationBaseURL] [nvarchar](500) NULL,
+  [ClassName] [nvarchar](100) NOT NULL,
+  [BatchMaxRequestCount] [int] NOT NULL DEFAULT ((1)),
+  [BatchWaitTimeInMS] [int] NOT NULL DEFAULT ((50))
+)`;
+      const { context } = convertWithContext(sql);
+      const columns = context.TableColumns.get('integration');
+      expect(columns).toBeDefined();
+      expect(columns!.get('id')).toBe('UUID');
+      expect(columns!.get('navigationbaseurl')).toBe('VARCHAR(500)');
+      expect(columns!.get('classname')).toBe('VARCHAR(100)');
+      expect(columns!.get('batchmaxrequestcount')).toBe('INTEGER');
     });
   });
 

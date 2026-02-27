@@ -389,7 +389,7 @@ export class CreateTableRule implements IConversionRule {
     for (const line of lines) {
       const trimmed = line.trim();
       // Match: "ColumnName" TYPE ... or ColumnName TYPE ...
-      const colMatch = trimmed.match(/^"?(\w+)"?\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR\(\d+\)|CHAR\(\d+\)|INTEGER|BIGINT|SMALLINT|DOUBLE PRECISION|REAL|NUMERIC\([^)]+\)|BYTEA|XML|TIME)\b/i);
+      const colMatch = trimmed.match(/^"?(\w+)"?\s+(UUID|BOOLEAN|TIMESTAMPTZ|TEXT|VARCHAR\(\d+\)|CHAR\(\d+\)|INTEGER|BIGINT|SMALLINT|DOUBLE PRECISION|REAL|NUMERIC\([^)]+\)|BYTEA|XML|TIME)(?=[\s,)]|$)/i);
       if (colMatch) {
         columns.set(colMatch[1].toLowerCase(), colMatch[2].toUpperCase());
       }
