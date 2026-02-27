@@ -367,6 +367,18 @@ describe('convertStringConcat', () => {
     expect(convertStringConcat('"NavigationBaseURL" + "URLFormat"', tableColumns))
       .toBe('"NavigationBaseURL" || "URLFormat"');
   });
+
+  it('converts + to || with unquoted table alias prefix (alias."Col" + alias."Col")', () => {
+    const tableColumns = new Map<string, Map<string, string>>();
+    tableColumns.set('integration', new Map([
+      ['navigationbaseurl', 'VARCHAR(500)'],
+    ]));
+    tableColumns.set('integrationurlformat', new Map([
+      ['urlformat', 'VARCHAR(500)'],
+    ]));
+    expect(convertStringConcat('i."NavigationBaseURL" + iuf."URLFormat"', tableColumns))
+      .toBe('i."NavigationBaseURL" || iuf."URLFormat"');
+  });
 });
 
 // ---------------------------------------------------------------------------

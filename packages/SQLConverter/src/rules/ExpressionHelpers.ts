@@ -398,9 +398,10 @@ export function convertStringConcat(
       newCode = newCode.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
 
       // Type-aware: "ColA" + "ColB" → "ColA" || "ColB" when either is a string column
+      // Handles: "Col", "Table"."Col", alias."Col" (unquoted alias prefix)
       if (tableColumns && tableColumns.size > 0) {
         newCode = newCode.replace(
-          /("[\w]+"(?:\."[\w]+")?)\s*\+\s*("[\w]+"(?:\."[\w]+")?)/g,
+          /((?:\w+\.)?(?:"[\w]+"\.)?"[\w]+")\s*\+\s*((?:\w+\.)?(?:"[\w]+"\.)?"[\w]+")/g,
           (match, left: string, right: string) => {
             if (isStringColumn(left, tableColumns) || isStringColumn(right, tableColumns)) {
               return `${left} || ${right}`;
