@@ -165,30 +165,6 @@ export class GetLearnWorldsBulkDataAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Concurrency limit for per-user API calls to avoid overwhelming the API.
-   */
-  private static readonly CONCURRENCY_LIMIT = 5;
-
-  /**
-   * Process items in batches with controlled concurrency.
-   */
-  private async processInBatches<TItem, TResult>(
-    items: TItem[],
-    processFn: (item: TItem) => Promise<TResult>,
-    batchSize: number = GetLearnWorldsBulkDataAction.CONCURRENCY_LIMIT,
-  ): Promise<TResult[]> {
-    const results: TResult[] = [];
-
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize);
-      const batchResults = await Promise.all(batch.map(processFn));
-      results.push(...batchResults);
-    }
-
-    return results;
-  }
-
-  /**
    * Fetch enrollments for all provided users with controlled concurrency.
    * Processes users in batches of CONCURRENCY_LIMIT to avoid overwhelming the API.
    */

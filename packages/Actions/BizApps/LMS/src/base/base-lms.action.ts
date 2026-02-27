@@ -45,6 +45,16 @@ export abstract class BaseLMSAction extends BaseAction {
   private static readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /**
+   * Validates that an integration name contains only safe characters (alphanumeric, spaces, hyphens, underscores).
+   */
+  private validateIntegrationName(name: string): string {
+    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+      throw new Error('Invalid integration name: contains forbidden characters');
+    }
+    return name;
+  }
+
+  /**
    * Gets the company integration record for the specified company and LMS
    */
   protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
@@ -52,6 +62,9 @@ export abstract class BaseLMSAction extends BaseAction {
     if (!BaseLMSAction.uuidRegex.test(companyId)) {
       throw new Error('CompanyID must be a valid UUID');
     }
+
+    // Validate integration name before SQL interpolation
+    const safeIntegrationName = this.validateIntegrationName(this.integrationName);
 
     // Check cache first
     if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
@@ -62,7 +75,7 @@ export abstract class BaseLMSAction extends BaseAction {
     const result = await rv.RunView<MJCompanyIntegrationEntity>(
       {
         EntityName: 'MJ: Company Integrations',
-        ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
+        ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${safeIntegrationName}'`,
         ResultType: 'entity_object',
       },
       contextUser,

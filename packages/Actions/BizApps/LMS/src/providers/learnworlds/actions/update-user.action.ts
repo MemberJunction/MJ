@@ -18,6 +18,8 @@ export class UpdateUserAction extends LearnWorldsBaseAction {
   public async UpdateUser(params: UpdateUserParams, contextUser: UserInfo): Promise<UpdateUserResult> {
     this.SetCompanyContext(params.CompanyID);
 
+    this.validatePathSegment(params.UserID, 'UserID');
+
     const { body, fieldsUpdated } = this.buildUpdateBody(params);
 
     if (fieldsUpdated.length === 0) {
@@ -60,7 +62,7 @@ export class UpdateUserAction extends LearnWorldsBaseAction {
       fieldsUpdated.push('LastName');
     }
     if (params.Role !== undefined) {
-      body.role = params.Role;
+      body.role = this.validateRole(params.Role);
       fieldsUpdated.push('Role');
     }
     if (params.IsActive !== undefined) {

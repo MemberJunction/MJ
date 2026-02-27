@@ -71,6 +71,9 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
       throw new Error('CourseID is required');
     }
 
+    this.validatePathSegment(params.UserID, 'UserID');
+    this.validatePathSegment(params.CourseID, 'CourseID');
+
     const price = params.Price ?? 0;
     const justification = params.Justification || 'API Enrollment';
     const notifyUser = params.NotifyUser !== false;

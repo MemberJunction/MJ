@@ -21,6 +21,16 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   protected apiVersion = 'v2';
 
   /**
+   * Concurrency limit for parallel API calls to avoid overwhelming the API.
+   */
+  protected static readonly CONCURRENCY_LIMIT = 5;
+
+  /**
+   * Allowed user roles in LearnWorlds.
+   */
+  protected static readonly ALLOWED_ROLES: readonly string[] = ['student', 'observer', 'instructor'] as const;
+
+  /**
    * Maximum number of items per page supported by the LearnWorlds API
    */
   protected static readonly LW_MAX_PAGE_SIZE = 100;
@@ -109,6 +119,8 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     if (!schoolDomain) {
       throw new Error('School domain not found. Set in CompanyIntegration.ExternalSystemID or environment variable');
     }
+
+    this.validateSchoolDomain(schoolDomain);
 
     return {
       fullUrl: `https://${schoolDomain}/api/${this.apiVersion}`,
@@ -266,6 +278,112 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     }
     return parsed.toISOString();
   }
+
+  // ----------------------------------------------------------------
+  // Validation helpers
+  // ----------------------------------------------------------------
+
+  /**
+   * Validates that a value is safe to use as a URL path segment.
+   * Rejects values containing path traversal or URL manipulation characters.
+   */
+  protected validatePathSegment(value: string, paramName: string): string {
+    if (value.length === 0) {
+      throw new Error(`${paramName} must not be empty`);
+    }
+    if (/[\/\\?#@%]|\.\./.test(value)) {
+      throw new Error(`Invalid ${paramName}: contains forbidden characters`);
+    }
+    return value;
+  }
+
+  /**
+   * Validates that a school domain is safe to use in URL construction.
+   * Must look like a hostname (alphanumeric + hyphens + dots).
+   */
+  private validateSchoolDomain(domain: string): string {
+    if (/[\/\\?#@\s]/.test(domain)) {
+      throw new Error('Invalid school domain: contains URL-unsafe characters');
+    }
+    if (!/^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(domain)) {
+      throw new Error('Invalid school domain format');
+    }
+    return domain;
+  }
+
+  /**
+   * Validates that a role is in the allowed set.
+   */
+  protected validateRole(role: string): string {
+    const normalizedRole = role.toLowerCase();
+    if (!LearnWorldsBaseAction.ALLOWED_ROLES.includes(normalizedRole)) {
+      throw new Error(`Invalid role '${role}'. Allowed roles: ${LearnWorldsBaseAction.ALLOWED_ROLES.join(', ')}`);
+    }
+    return normalizedRole;
+  }
+
+  /**
+   * Validates that a string is a plausible email address.
+   */
+  protected validateEmail(email: string, paramName: string = 'Email'): string {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error(`Invalid ${paramName} format: '${email}'`);
+    }
+    return email;
+  }
+
+  /**
+   * Validates that a redirect URL is either a relative path or an absolute URL
+   * that belongs to the LearnWorlds school domain and uses http(s).
+   */
+  protected validateRedirectTo(redirectTo: string, schoolDomain?: string): string {
+    // Allow relative paths
+    if (redirectTo.startsWith('/')) {
+      return redirectTo;
+    }
+    // If absolute URL, parse and check against school domain
+    let url: URL;
+    try {
+      url = new URL(redirectTo);
+    } catch {
+      throw new Error('RedirectTo is not a valid URL or relative path');
+    }
+    // Block dangerous protocols
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('RedirectTo must use http or https protocol');
+    }
+    if (schoolDomain && !url.hostname.endsWith('.learnworlds.com') && url.hostname !== schoolDomain) {
+      throw new Error('RedirectTo must be a relative path or a LearnWorlds domain URL');
+    }
+    return redirectTo;
+  }
+
+  // ----------------------------------------------------------------
+  // Batch concurrency helper
+  // ----------------------------------------------------------------
+
+  /**
+   * Processes items in batches with controlled concurrency.
+   * Prevents unbounded parallel API calls from overwhelming the target API.
+   */
+  protected async processInBatches<TItem, TResult>(
+    items: TItem[],
+    processFn: (item: TItem) => Promise<TResult>,
+    batchSize: number = LearnWorldsBaseAction.CONCURRENCY_LIMIT,
+  ): Promise<TResult[]> {
+    const results: TResult[] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map(processFn));
+      results.push(...batchResults);
+    }
+    return results;
+  }
+
+  // ----------------------------------------------------------------
+  // Parameter extraction helpers
+  // ----------------------------------------------------------------
 
   /**
    * Gets a required string parameter, throwing if missing or empty.

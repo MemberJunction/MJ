@@ -78,6 +78,8 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
       throw new Error('UserID is required');
     }
 
+    this.validatePathSegment(userId, 'UserID');
+
     const queryParams = this.buildEnrollmentQueryParams(status, includeExpired, sortBy, sortOrder, maxResults);
 
     const enrollmentsData = await this.makeLearnWorldsPaginatedRequest<LWApiEnrollmentData>(`users/${userId}/enrollments`, queryParams, contextUser);
@@ -180,12 +182,15 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Fetch course details for all unique course IDs in parallel and return a lookup map.
+   * Fetch course details for all unique course IDs with controlled concurrency and return a lookup map.
    */
   private async fetchCourseDetailsBatch(enrollments: LWApiEnrollmentData[], contextUser: UserInfo): Promise<Map<string, FormattedEnrollment['course']>> {
     const uniqueCourseIds = [...new Set(enrollments.map((e) => e.course_id).filter((id): id is string => !!id))];
 
-    const results = await Promise.all(uniqueCourseIds.map((courseId) => this.fetchCourseDetailsForEnrollment(courseId, contextUser)));
+    const results = await this.processInBatches(uniqueCourseIds, (courseId) => {
+      this.validatePathSegment(courseId, 'CourseID');
+      return this.fetchCourseDetailsForEnrollment(courseId, contextUser);
+    });
 
     const map = new Map<string, FormattedEnrollment['course']>();
     uniqueCourseIds.forEach((courseId, index) => {

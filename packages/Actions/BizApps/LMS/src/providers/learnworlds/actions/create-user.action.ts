@@ -46,8 +46,9 @@ export class CreateUserAction extends LearnWorldsBaseAction {
     if (!email) {
       throw new Error('Email is required');
     }
+    this.validateEmail(email);
 
-    const role = params.Role || 'student';
+    const role = this.validateRole(params.Role || 'student');
     const isActive = params.IsActive !== false;
     const sendWelcomeEmail = params.SendWelcomeEmail !== false;
 
@@ -171,6 +172,8 @@ export class CreateUserAction extends LearnWorldsBaseAction {
 
     for (const courseId of courseIds) {
       try {
+        this.validatePathSegment(courseId, 'CourseID');
+
         const enrollBody: Record<string, unknown> = {
           user_id: userId,
           justification: 'Enrolled during user creation',

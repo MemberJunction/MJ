@@ -211,7 +211,7 @@ describe('UpdateUserAction', () => {
         Password: 'newpass',
         FirstName: 'All',
         LastName: 'Fields',
-        Role: 'admin',
+        Role: 'Instructor',
         IsActive: false,
         Tags: ['new-tag', 'another-tag'],
         CustomFields: { department: 'Sales', region: 'NA' },
@@ -225,7 +225,7 @@ describe('UpdateUserAction', () => {
       expect(body.password).toBe('newpass');
       expect(body.first_name).toBe('All');
       expect(body.last_name).toBe('Fields');
-      expect(body.role).toBe('admin');
+      expect(body.role).toBe('instructor');
       expect(body.is_active).toBe(false);
       expect(body.tags).toEqual(['new-tag', 'another-tag']);
       expect(body.custom_fields).toEqual({ department: 'Sales', region: 'NA' });

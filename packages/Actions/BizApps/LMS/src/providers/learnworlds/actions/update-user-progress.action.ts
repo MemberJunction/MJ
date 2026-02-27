@@ -63,6 +63,16 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
       throw new Error('CourseID is required');
     }
 
+    this.validatePathSegment(UserID, 'UserID');
+    this.validatePathSegment(CourseID, 'CourseID');
+    if (LessonID) {
+      this.validatePathSegment(LessonID, 'LessonID');
+    }
+
+    if (ProgressPercentage !== undefined && (ProgressPercentage < 0 || ProgressPercentage > 100)) {
+      throw new Error('ProgressPercentage must be between 0 and 100');
+    }
+
     // Get current enrollment first
     const currentEnrollment = await this.fetchCurrentEnrollment(UserID, CourseID, contextUser);
 

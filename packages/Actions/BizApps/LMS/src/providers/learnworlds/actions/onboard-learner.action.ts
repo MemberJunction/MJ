@@ -23,6 +23,20 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
   public async OnboardLearner(params: OnboardLearnerParams, contextUser: UserInfo): Promise<OnboardLearnerResult> {
     this.SetCompanyContext(params.CompanyID);
 
+    this.validateEmail(params.Email);
+    if (params.Role) {
+      this.validateRole(params.Role);
+    }
+    if (params.CourseIDs) {
+      params.CourseIDs.forEach((id) => this.validatePathSegment(id, 'CourseID'));
+    }
+    if (params.BundleIDs) {
+      params.BundleIDs.forEach((id) => this.validatePathSegment(id, 'BundleID'));
+    }
+    if (params.RedirectTo) {
+      this.validateRedirectTo(params.RedirectTo);
+    }
+
     // Step 1: Find or create the user
     const { userId, isNewUser, loginUrlFallback } = await this.resolveUser(params, contextUser);
 
@@ -103,11 +117,15 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
     const courseIDs = params.CourseIDs || [];
     const bundleIDs = params.BundleIDs || [];
 
-    // Fire all enrollment requests in parallel
-    const coursePromises = courseIDs.map((courseId) => this.enrollInSingleProduct(params.CompanyID, userId, courseId, 'course', contextUser));
-    const bundlePromises = bundleIDs.map((bundleId) => this.enrollInSingleProduct(params.CompanyID, userId, bundleId, 'bundle', contextUser));
+    // Fire enrollment requests with controlled concurrency
+    const allProducts = [
+      ...courseIDs.map((id) => ({ id, type: 'course' as const })),
+      ...bundleIDs.map((id) => ({ id, type: 'bundle' as const })),
+    ];
 
-    const enrollments = await Promise.all([...coursePromises, ...bundlePromises]);
+    const enrollments = await this.processInBatches(allProducts, (product) =>
+      this.enrollInSingleProduct(params.CompanyID, userId, product.id, product.type, contextUser),
+    );
 
     const errors = enrollments.filter((e) => e.error).map((e) => e.error!);
 

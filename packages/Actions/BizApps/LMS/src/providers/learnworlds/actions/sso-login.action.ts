@@ -52,13 +52,14 @@ export class SSOLoginAction extends LearnWorldsBaseAction {
     const body: Record<string, unknown> = {};
 
     if (params.Email) {
+      this.validateEmail(params.Email);
       body.email = params.Email;
     } else if (params.UserID) {
       body.user_id = params.UserID;
     }
 
     if (params.RedirectTo) {
-      body.redirect_to = params.RedirectTo;
+      body.redirect_to = this.validateRedirectTo(params.RedirectTo);
     }
 
     return body;

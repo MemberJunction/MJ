@@ -141,6 +141,11 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
       throw new Error('UserID parameter is required');
     }
 
+    this.validatePathSegment(userId, 'UserID');
+    if (courseId) {
+      this.validatePathSegment(courseId, 'CourseID');
+    }
+
     let userProgress: UserLearningProgress;
 
     if (courseId) {
@@ -269,11 +274,9 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
       contextUser,
     );
 
-    const courseProgressPromises = enrollmentsResponse.data.map((enrollment) =>
+    const courseProgressResults = await this.processInBatches(enrollmentsResponse.data, (enrollment) =>
       this.getCourseProgress(userId, enrollment.course_id || enrollment.course?.id || '', includeUnits, includeLessons, contextUser).catch(() => null),
     );
-
-    const courseProgressResults = await Promise.all(courseProgressPromises);
     const validCourses = courseProgressResults.filter((p): p is CourseProgress => p !== null);
 
     return this.aggregateCourseProgress(userId, validCourses);

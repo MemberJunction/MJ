@@ -30,6 +30,8 @@ export class AttachTagsAction extends LearnWorldsBaseAction {
       throw new Error('At least one tag is required');
     }
 
+    this.validatePathSegment(params.UserID, 'UserID');
+
     const response = await this.makeLearnWorldsRequest<LWApiTagResponse>(`users/${params.UserID}/tags`, 'POST', { tags: params.Tags }, contextUser);
 
     return {
