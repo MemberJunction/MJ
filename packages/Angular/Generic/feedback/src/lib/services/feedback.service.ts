@@ -126,8 +126,7 @@ export class FeedbackService {
    * Convert camelCase submission to PascalCase GraphQL input
    */
   private convertToGraphQLInput(data: FeedbackSubmission): GraphQLFeedbackInput {
-    console.log('[FeedbackService] data.currentPage:', data.currentPage);
-    const result = {
+    return {
       Title: data.title,
       Description: data.description,
       Category: data.category,
@@ -150,8 +149,6 @@ export class FeedbackService {
       Timestamp: data.timestamp,
       Metadata: data.metadata ? JSON.stringify(data.metadata) : undefined
     };
-    console.log('[FeedbackService] GraphQL input CurrentPage:', result.CurrentPage);
-    return result;
   }
 
   /**

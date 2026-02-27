@@ -1,13 +1,6 @@
 import { NgModule, ModuleWithProviders } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-
-// Kendo UI modules
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { FormsModule } from '@angular/forms';
 
 // MemberJunction modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -71,12 +64,6 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
   imports: [
     CommonModule,
     FormsModule,
-    ReactiveFormsModule,
-    DialogModule,
-    ButtonsModule,
-    InputsModule,
-    DropDownsModule,
-    IndicatorsModule,
     SharedGenericModule
   ],
   exports: [

@@ -27,6 +27,7 @@ import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult 
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { MJUserEntity } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FeedbackDialogService } from '@memberjunction/ng-feedback';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -136,7 +137,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    private feedbackDialogService: FeedbackDialogService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -2146,6 +2148,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the feedback dialog with current workspace context
+   */
+  ShowFeedbackDialog(): void {
+    const config = this.workspaceManager.GetConfiguration();
+    const currentPage = config?.tabs
+      ?.map(t => t.title)
+      .filter(Boolean)
+      .join(' \u2192 ') || undefined;
+
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
   }
 
   // ========================================

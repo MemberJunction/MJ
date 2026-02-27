@@ -1,5 +1,5 @@
-import { Injectable, Inject, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { Injectable, Inject, ApplicationRef, ComponentRef, createComponent, EnvironmentInjector, EmbeddedViewRef } from '@angular/core';
+import { Subject, Observable } from 'rxjs';
 import { FeedbackFormComponent } from '../components/feedback-form.component';
 import { FeedbackConfig, FEEDBACK_CONFIG } from '../feedback.config';
 import { FeedbackCategory } from '../feedback.types';
@@ -8,8 +8,6 @@ import { FeedbackCategory } from '../feedback.types';
  * Options for opening the feedback dialog
  */
 export interface FeedbackDialogOptions {
-  /** ViewContainerRef for proper dialog placement */
-  viewContainerRef?: ViewContainerRef;
   /** Pre-select a category */
   prefilledCategory?: FeedbackCategory | string;
   /** Pre-fill the title */
@@ -21,49 +19,60 @@ export interface FeedbackDialogOptions {
 }
 
 /**
+ * Lightweight dialog reference replacing Kendo's DialogRef
+ */
+export class FeedbackDialogRef {
+  private resultSubject = new Subject<{ success: boolean }>();
+
+  /** Observable that emits when the dialog closes */
+  public Result: Observable<{ success: boolean }> = this.resultSubject.asObservable();
+
+  constructor(private destroyFn: () => void) {}
+
+  /** Close the dialog programmatically */
+  Close(): void {
+    this.destroyFn();
+  }
+
+  /** @internal Emit the result and complete */
+  _emitResult(result: { success: boolean }): void {
+    this.resultSubject.next(result);
+    this.resultSubject.complete();
+  }
+}
+
+/**
  * Service for managing the feedback dialog lifecycle
  */
 @Injectable({
   providedIn: 'root'
 })
 export class FeedbackDialogService {
-  private activeDialogs: DialogRef[] = [];
+  private activeDialogRef: FeedbackDialogRef | null = null;
+  private activeComponentRef: ComponentRef<FeedbackFormComponent> | null = null;
 
   constructor(
-    private dialogService: DialogService,
+    private appRef: ApplicationRef,
+    private injector: EnvironmentInjector,
     @Inject(FEEDBACK_CONFIG) private config: FeedbackConfig
   ) {}
 
   /**
    * Open the feedback dialog
    * @param options - Dialog configuration options
-   * @returns DialogRef for the opened dialog
+   * @returns FeedbackDialogRef for the opened dialog
    */
-  public OpenFeedbackDialog(options?: FeedbackDialogOptions): DialogRef {
-    // Close any existing dialogs first
-    this.closeAllDialogs();
+  public OpenFeedbackDialog(options?: FeedbackDialogOptions): FeedbackDialogRef {
+    // Close any existing dialog first
+    this.closeActiveDialog();
 
-    const dialogRef = this.dialogService.open({
-      title: this.config.title || 'Submit Feedback',
-      content: FeedbackFormComponent,
-      width: 700,
-      height: 650,
-      minWidth: 500,
-      minHeight: 500,
-      appendTo: options?.viewContainerRef
+    // Create the component dynamically
+    const componentRef = createComponent(FeedbackFormComponent, {
+      environmentInjector: this.injector
     });
 
-    // Track this dialog
-    this.activeDialogs.push(dialogRef);
-
-    // Remove from tracking when closed
-    dialogRef.result.subscribe(
-      () => this.removeDialog(dialogRef),
-      () => this.removeDialog(dialogRef)
-    );
-
-    // Configure the dialog instance
-    const instance = dialogRef.content.instance as FeedbackFormComponent;
+    // Configure the component instance
+    const instance = componentRef.instance;
 
     if (options?.prefilledCategory) {
       instance.PrefilledCategory = options.prefilledCategory;
@@ -78,9 +87,30 @@ export class FeedbackDialogService {
     }
 
     if (options?.currentPage) {
-      console.log('[FeedbackDialog] Setting CurrentPage on form:', options.currentPage);
       instance.CurrentPage = options.currentPage;
     }
+
+    // Attach to Angular's change detection
+    this.appRef.attachView(componentRef.hostView);
+
+    // Add to DOM
+    const hostElement = (componentRef.hostView as EmbeddedViewRef<unknown>).rootNodes[0] as HTMLElement;
+    document.body.appendChild(hostElement);
+
+    // Create the dialog ref with a cleanup function
+    const dialogRef = new FeedbackDialogRef(() => {
+      this.destroyComponent(componentRef, hostElement);
+    });
+
+    // Listen for dialog close from the form component
+    instance.DialogClosed.subscribe((result: { success: boolean }) => {
+      dialogRef._emitResult(result);
+      this.destroyComponent(componentRef, hostElement);
+    });
+
+    // Track active dialog
+    this.activeDialogRef = dialogRef;
+    this.activeComponentRef = componentRef;
 
     return dialogRef;
   }
@@ -88,7 +118,7 @@ export class FeedbackDialogService {
   /**
    * Open dialog pre-configured for bug reporting
    */
-  public OpenBugReportDialog(options?: Omit<FeedbackDialogOptions, 'prefilledCategory'>): DialogRef {
+  public OpenBugReportDialog(options?: Omit<FeedbackDialogOptions, 'prefilledCategory'>): FeedbackDialogRef {
     return this.OpenFeedbackDialog({
       ...options,
       prefilledCategory: 'bug'
@@ -98,7 +128,7 @@ export class FeedbackDialogService {
   /**
    * Open dialog pre-configured for feature requests
    */
-  public OpenFeatureRequestDialog(options?: Omit<FeedbackDialogOptions, 'prefilledCategory'>): DialogRef {
+  public OpenFeatureRequestDialog(options?: Omit<FeedbackDialogOptions, 'prefilledCategory'>): FeedbackDialogRef {
     return this.OpenFeedbackDialog({
       ...options,
       prefilledCategory: 'feature'
@@ -109,32 +139,43 @@ export class FeedbackDialogService {
    * Close all open feedback dialogs
    */
   public CloseAllDialogs(): void {
-    this.closeAllDialogs();
+    this.closeActiveDialog();
   }
 
   /**
-   * Internal method to close all dialogs
+   * Clean up a component and remove from DOM
    */
-  private closeAllDialogs(): void {
-    while (this.activeDialogs.length > 0) {
-      const dialog = this.activeDialogs.pop();
-      if (dialog) {
-        try {
-          dialog.close();
-        } catch {
-          // Dialog might already be closed
-        }
-      }
+  private destroyComponent(componentRef: ComponentRef<FeedbackFormComponent>, hostElement: HTMLElement): void {
+    if (this.activeComponentRef === componentRef) {
+      this.activeComponentRef = null;
+      this.activeDialogRef = null;
+    }
+    if (!componentRef.hostView.destroyed) {
+      this.appRef.detachView(componentRef.hostView);
+      componentRef.destroy();
+    }
+    if (hostElement.parentNode) {
+      hostElement.parentNode.removeChild(hostElement);
     }
   }
 
   /**
-   * Remove a dialog from tracking
+   * Close the active dialog if one exists
    */
-  private removeDialog(dialogRef: DialogRef): void {
-    const index = this.activeDialogs.indexOf(dialogRef);
-    if (index > -1) {
-      this.activeDialogs.splice(index, 1);
+  private closeActiveDialog(): void {
+    if (this.activeComponentRef && this.activeDialogRef) {
+      try {
+        const instance = this.activeComponentRef.instance;
+        if (instance.DialogEl?.nativeElement?.open) {
+          instance.DialogEl.nativeElement.close();
+        }
+      } catch {
+        // Dialog might already be closed
+      }
+      if (!this.activeComponentRef.hostView.destroyed) {
+        const hostElement = (this.activeComponentRef.hostView as EmbeddedViewRef<unknown>).rootNodes[0] as HTMLElement;
+        this.destroyComponent(this.activeComponentRef, hostElement);
+      }
     }
   }
 }

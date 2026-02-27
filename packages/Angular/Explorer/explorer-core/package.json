@@ -52,6 +52,7 @@
     "@memberjunction/ng-entity-viewer": "5.3.1",
     "@memberjunction/ng-list-detail-grid": "5.3.1",
     "@memberjunction/ng-explorer-settings": "5.3.1",
+    "@memberjunction/ng-feedback": "5.3.1",
     "@memberjunction/ng-file-storage": "5.3.1",
     "@memberjunction/ng-generic-dialog": "5.3.1",
     "@memberjunction/ng-notifications": "5.3.1",
