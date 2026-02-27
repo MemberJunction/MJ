@@ -60,6 +60,12 @@ export class InsertRule implements IConversionRule {
     result = convertCastTypes(result);
     // Convert SELECT TOP N subqueries to SELECT ... LIMIT N
     result = convertTopToLimit(result);
+    // Quote bare schema.Name references (e.g. __mj.vwFoo → __mj."vwFoo")
+    const schema = context.Schema;
+    if (schema) {
+      const bareSchemaRef = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+      result = result.replace(bareSchemaRef, `${schema}."$1"`);
+    }
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
     result = this.quoteInsertColumnList(result);
