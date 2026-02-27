@@ -30,15 +30,15 @@
       "Status": "Approved",
       "QualityRank": 9,
       "ExecutionCostRank": 3,
-      "UsesTemplate": true
+      "UsesTemplate": false
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "23F8423E-F36B-1410-8D9C-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-17T00:09:26.825Z",
-      "checksum": "857e76035d5ea6be171b01ca2823580b8bc2a1e58a8d5d1a8fdfe367efb7d482"
+      "lastModified": "2026-02-27T22:37:52.531Z",
+      "checksum": "220493daf62cbec2f5b0e258251b235d2151e4ec35131285b3cf6bb4a777b1d1"
     }
   }
 ]
