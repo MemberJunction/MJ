@@ -351,4 +351,89 @@ describe('convertFile (BatchConverter)', () => {
     const result = convertFile(makeConfig(sql));
     expect(result.Stats.Skipped).toBeGreaterThanOrEqual(1);
   });
+
+  // ============================================================
+  // 23. Temp table # prefix conversion
+  // ============================================================
+  it('should convert CREATE TABLE #name to CREATE TEMP TABLE', () => {
+    const sql = [
+      'CREATE TABLE #TempMapping (',
+      '  OldName NVARCHAR(255) NOT NULL,',
+      '  NewName NVARCHAR(255) NOT NULL',
+      ');',
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).toContain('CREATE TEMP TABLE');
+    expect(result.OutputSQL).not.toContain('#TempMapping');
+  });
+
+  it('should convert INSERT INTO #name without the # prefix', () => {
+    const sql = [
+      "CREATE TABLE #TempMapping (",
+      "  OldName NVARCHAR(255) NOT NULL",
+      ");",
+      "GO",
+      "INSERT INTO #TempMapping (OldName) VALUES ('test');",
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).not.toContain('#TempMapping');
+    expect(result.OutputSQL).toContain('"TempMapping"');
+  });
+
+  // ============================================================
+  // 24. DO block injection for cursor+dynamic SQL migration
+  // ============================================================
+  it('should inject PG DO block for temp procedure with cursor pattern', () => {
+    const sql = [
+      "CREATE TABLE #NameMap (",
+      "  OldName NVARCHAR(255) NOT NULL,",
+      "  NewName NVARCHAR(255) NOT NULL",
+      ");",
+      "GO",
+      "INSERT INTO #NameMap (OldName, NewName) VALUES ('Old1', 'New1');",
+      "GO",
+      "CREATE PROCEDURE #UpdateRefs",
+      "  @SchemaName NVARCHAR(128),",
+      "  @TableName NVARCHAR(128),",
+      "  @ColumnName NVARCHAR(128)",
+      "AS BEGIN",
+      "  DECLARE @OldName NVARCHAR(255), @NewName NVARCHAR(255);",
+      "  DECLARE entity_cursor CURSOR FOR SELECT OldName, NewName FROM #NameMap;",
+      "  OPEN entity_cursor;",
+      "  FETCH NEXT FROM entity_cursor INTO @OldName, @NewName;",
+      "  WHILE @@FETCH_STATUS = 0 BEGIN",
+      `    SET @SQL = N'UPDATE ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +`,
+      `      ' SET ' + QUOTENAME(@ColumnName) + ' = REPLACE(' + QUOTENAME(@ColumnName) +`,
+      `      ', ''"Entity":"'' + @pOld + ''"'', ''"Entity":"'' + @pNew + ''"'')'`,
+      `    EXEC sp_executesql @SQL, N'@pOld NVARCHAR(255), @pNew NVARCHAR(255)', @OldName, @NewName;`,
+      `    SET @SQL = N'UPDATE ' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) +`,
+      `      ' SET ' + QUOTENAME(@ColumnName) + ' = REPLACE(' + QUOTENAME(@ColumnName) +`,
+      `      ', ''"EntityName":"'' + @pOld + ''"'', ''"EntityName":"'' + @pNew + ''"'')'`,
+      `    EXEC sp_executesql @SQL, N'@pOld NVARCHAR(255), @pNew NVARCHAR(255)', @OldName, @NewName;`,
+      "    FETCH NEXT FROM entity_cursor INTO @OldName, @NewName;",
+      "  END",
+      "  CLOSE entity_cursor;",
+      "  DEALLOCATE entity_cursor;",
+      "END",
+      "GO",
+      "EXEC #UpdateRefs '__mj', 'Workspace', 'Configuration'",
+      "GO",
+      "EXEC #UpdateRefs '__mj', 'Dashboard', 'UIConfigDetails'",
+      "GO",
+    ].join('\n');
+
+    const result = convertFile(makeConfig(sql));
+
+    // Should contain the injected DO block
+    expect(result.OutputSQL).toContain('DO $$');
+    expect(result.OutputSQL).toContain('FOR map_rec IN SELECT "OldName", "NewName"');
+    // Should reference both target tables
+    expect(result.OutputSQL).toContain("'Workspace'");
+    expect(result.OutputSQL).toContain("'Dashboard'");
+    // Should have the JSON key patterns
+    expect(result.OutputSQL).toContain('"Entity":"');
+    expect(result.OutputSQL).toContain('"EntityName":"');
+    // Should include cleanup
+    expect(result.OutputSQL).toContain('DROP TABLE IF EXISTS');
+  });
 });

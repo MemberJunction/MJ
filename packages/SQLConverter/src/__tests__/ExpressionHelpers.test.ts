@@ -48,6 +48,36 @@ describe('convertIdentifiers', () => {
   it('handles empty string', () => {
     expect(convertIdentifiers('')).toBe('');
   });
+
+  it('converts CREATE TABLE #name to CREATE TEMP TABLE "name"', () => {
+    expect(convertIdentifiers('CREATE TABLE #EntityNameMapping ('))
+      .toBe('CREATE TEMP TABLE "EntityNameMapping" (');
+  });
+
+  it('strips # from INSERT INTO #name', () => {
+    expect(convertIdentifiers('INSERT INTO #EntityNameMapping (OldName)'))
+      .toBe('INSERT INTO "EntityNameMapping" (OldName)');
+  });
+
+  it('strips # from SELECT FROM #name', () => {
+    expect(convertIdentifiers('SELECT * FROM #EntityNameMapping'))
+      .toBe('SELECT * FROM "EntityNameMapping"');
+  });
+
+  it('strips # from DROP TABLE #name', () => {
+    expect(convertIdentifiers('DROP TABLE #EntityNameMapping'))
+      .toBe('DROP TABLE "EntityNameMapping"');
+  });
+
+  it('does not strip # inside string literals', () => {
+    const input = "SELECT '#notTempTable' FROM users";
+    expect(convertIdentifiers(input)).toBe(input);
+  });
+
+  it('handles both brackets and # in the same statement', () => {
+    expect(convertIdentifiers('INSERT INTO #EntityNameMapping ([OldName], [NewName])'))
+      .toBe('INSERT INTO "EntityNameMapping" ("OldName", "NewName")');
+  });
 });
 
 // ---------------------------------------------------------------------------

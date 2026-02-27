@@ -143,6 +143,10 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     }
   }
 
+  // Inject hand-written PG blocks for complex migration patterns
+  // (cursor + dynamic SQL + temp procedures that can't be auto-converted)
+  injectTempProcReplacements(processedSQL, groups);
+
   // Assemble output in proper order
   log('Assembling output...');
   const outputParts: string[] = [];
@@ -379,6 +383,126 @@ function updateStats(batchType: StatementType, stats: ConversionStats): void {
     case 'CREATE_INDEX': stats.IndexesCreated++; break;
     case 'EXTENDED_PROPERTY': stats.CommentsConverted++; break;
   }
+}
+
+/**
+ * Detect migrations that use temp procedures with cursors and dynamic SQL
+ * (patterns too complex for auto-conversion) and inject hand-written PG
+ * DO blocks as replacements.
+ *
+ * Currently handles:
+ *   - Entity name reference fix migration (cursor over temp table doing
+ *     REPLACE on JSON columns via dynamic SQL + sp_executesql)
+ */
+function injectTempProcReplacements(sql: string, groups: OutputGroups): void {
+  // Detect: temp procedure doing cursor-based REPLACE on entity name patterns
+  const procMatch = sql.match(/CREATE\s+PROCEDURE\s+#(\w+)\s/i);
+  if (!procMatch) return;
+
+  const procName = procMatch[1];
+
+  // Extract EXEC calls to this temp procedure: EXEC #ProcName 'schema', 'table', 'column'
+  const execRegex = new RegExp(
+    `EXEC\\s+#${procName}\\s+'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'`,
+    'gi'
+  );
+  const targets: Array<{ schema: string; table: string; column: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = execRegex.exec(sql)) !== null) {
+    targets.push({ schema: m[1], table: m[2], column: m[3] });
+  }
+  if (targets.length === 0) return;
+
+  // Detect the temp table used by the procedure
+  const tempTableMatch = sql.match(/CREATE\s+TABLE\s+#(\w+)/i);
+  if (!tempTableMatch) return;
+  const tempTable = tempTableMatch[1];
+
+  // Detect JSON key patterns from the procedure body (e.g., "Entity", "EntityName", "entity", "entityName")
+  const keyPatterns = extractJsonKeyPatterns(sql);
+  if (keyPatterns.length === 0) return;
+
+  // Build the VALUES list for the table/column targets
+  const valuesStr = targets
+    .map(t => `        ('${t.schema}', '${t.table}', '${t.column}')`)
+    .join(',\n');
+
+  // Build the REPLACE blocks for each JSON key pattern
+  const replaceBlocks = keyPatterns
+    .map(
+      (key, idx) => `
+            -- Pattern ${idx + 1}: "${key}":"OldName"
+            EXECUTE format(
+                'UPDATE %I.%I SET %I = REPLACE(%I, $1, $2) WHERE %I LIKE $3',
+                tbl_rec.schema_name, tbl_rec.table_name,
+                tbl_rec.column_name, tbl_rec.column_name, tbl_rec.column_name
+            ) USING
+                '"${key}":"' || map_rec."OldName" || '"',
+                '"${key}":"' || map_rec."NewName" || '"',
+                '%"${key}":"' || map_rec."OldName" || '"%';
+            GET DIAGNOSTICS v_update_count = ROW_COUNT;
+            v_total := v_total + v_update_count;`
+    )
+    .join('\n');
+
+  const doBlock = `
+-- PG equivalent of T-SQL cursor + dynamic SQL procedure (#${procName}).
+-- Loops through entity name mappings and replaces old names with new names
+-- in JSON configuration columns across multiple tables.
+DO $$
+DECLARE
+    tbl_rec RECORD;
+    map_rec RECORD;
+    v_update_count INTEGER;
+    v_total INTEGER;
+BEGIN
+    FOR tbl_rec IN
+        SELECT * FROM (VALUES
+${valuesStr}
+        ) AS t(schema_name, table_name, column_name)
+    LOOP
+        -- Check if column exists
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = tbl_rec.schema_name
+              AND table_name = tbl_rec.table_name
+              AND column_name = tbl_rec.column_name
+        ) THEN
+            RAISE NOTICE '  SKIPPED: %.%.% does not exist', tbl_rec.schema_name, tbl_rec.table_name, tbl_rec.column_name;
+            CONTINUE;
+        END IF;
+
+        v_total := 0;
+        FOR map_rec IN SELECT "OldName", "NewName" FROM "${tempTable}" LOOP
+${replaceBlocks}
+        END LOOP;
+
+        RAISE NOTICE '  %.%.%: Updated % rows', tbl_rec.schema_name, tbl_rec.table_name, tbl_rec.column_name, v_total;
+    END LOOP;
+END $$;
+`;
+
+  groups.Data.push(doBlock);
+  groups.Data.push(`\nDROP TABLE IF EXISTS "${tempTable}";\n`);
+}
+
+/** Extract JSON key patterns from the procedure body.
+ *  Looks for REPLACE patterns like: ''"Entity":"'' + @pOld
+ *  (T-SQL uses doubled single quotes '' inside string literals) */
+function extractJsonKeyPatterns(sql: string): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  // Match 1-2 single quotes, then "Key":"  then 1-2 single quotes, then + @p
+  const pattern = /'{1,2}"(\w+)":"'{1,2}\s*\+\s*@p/g;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(sql)) !== null) {
+    const key = m[1];
+    if (!seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+  }
+  return keys;
 }
 
 /** Print a formatted conversion report */

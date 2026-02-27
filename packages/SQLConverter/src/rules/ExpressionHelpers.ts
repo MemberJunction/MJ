@@ -91,9 +91,14 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
 }
 
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
+ *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */
 export function convertIdentifiers(sql: string): string {
   return transformCodeOnly(sql, (code) => {
+    // Temp table: CREATE TABLE #name → CREATE TEMP TABLE "name"
+    code = code.replace(/\bCREATE\s+TABLE\s+#(\w+)/gi, 'CREATE TEMP TABLE "$1"');
+    // Strip # from remaining temp object references: #name → "name"
+    code = code.replace(/(?<!["\w])#(\w+)/g, '"$1"');
     // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
     code = code.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
     // Replace remaining [Name] with "Name"
