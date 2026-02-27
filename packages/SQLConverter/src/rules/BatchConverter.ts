@@ -147,6 +147,11 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   // (cursor + dynamic SQL + temp procedures that can't be auto-converted)
   injectTempProcReplacements(processedSQL, groups);
 
+  // Topologically sort views so dependencies (referenced views) come before dependents
+  if (groups.Views.length > 1) {
+    groups.Views = topologicallySortViews(groups.Views, schema);
+  }
+
   // Assemble output in proper order
   log('Assembling output...');
   const outputParts: string[] = [];
@@ -503,6 +508,79 @@ function extractJsonKeyPatterns(sql: string): string[] {
     }
   }
   return keys;
+}
+
+/**
+ * Topologically sort view SQL blocks so that views referenced by other views
+ * come before the views that reference them. This prevents CASCADE drops from
+ * breaking dependent views and ensures CREATE VIEW statements succeed.
+ *
+ * Each entry in `views` is a full SQL block like:
+ *   DROP VIEW IF EXISTS schema."vwFoo" CASCADE;\nCREATE VIEW schema."vwFoo" AS ...
+ *
+ * Strategy:
+ *   1. Parse each block to extract its view name and referenced views
+ *   2. Topological sort (Kahn's algorithm) so dependencies come first
+ *   3. Return reordered blocks
+ */
+function topologicallySortViews(views: string[], schema: string): string[] {
+  // Parse each view block
+  const parsed = views.map((block, idx) => {
+    const nameMatch = block.match(/CREATE\s+VIEW\s+(?:\w+\.)?"?(\w+)"?/i);
+    const viewName = nameMatch ? nameMatch[1].toLowerCase() : `__unnamed_${idx}`;
+    // Find referenced views: schema."vwXxx" in FROM/JOIN clauses (excluding DROP/CREATE lines)
+    const deps = new Set<string>();
+    const refRegex = new RegExp(`(?:FROM|JOIN)\\s+(?:${schema}\\.)?(?:"(vw\\w+)"|(vw\\w+))`, 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = refRegex.exec(block)) !== null) {
+      const dep = (m[1] || m[2]).toLowerCase();
+      if (dep !== viewName) deps.add(dep);
+    }
+    return { block, viewName, deps };
+  });
+
+  // Build adjacency map and in-degree count
+  const nameToIndex = new Map<string, number>();
+  parsed.forEach((v, i) => nameToIndex.set(v.viewName, i));
+
+  const inDegree = new Array(parsed.length).fill(0);
+  const adjList: number[][] = parsed.map(() => []);
+
+  for (let i = 0; i < parsed.length; i++) {
+    for (const dep of parsed[i].deps) {
+      const depIdx = nameToIndex.get(dep);
+      if (depIdx !== undefined) {
+        adjList[depIdx].push(i); // depIdx must come before i
+        inDegree[i]++;
+      }
+    }
+  }
+
+  // Kahn's algorithm
+  const queue: number[] = [];
+  for (let i = 0; i < inDegree.length; i++) {
+    if (inDegree[i] === 0) queue.push(i);
+  }
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    sorted.push(parsed[node].block);
+    for (const neighbor of adjList[node]) {
+      inDegree[neighbor]--;
+      if (inDegree[neighbor] === 0) queue.push(neighbor);
+    }
+  }
+
+  // If we couldn't sort all (cycle), append remaining in original order
+  if (sorted.length < parsed.length) {
+    const sortedSet = new Set(sorted);
+    for (const v of parsed) {
+      if (!sortedSet.has(v.block)) sorted.push(v.block);
+    }
+  }
+
+  return sorted;
 }
 
 /** Print a formatted conversion report */

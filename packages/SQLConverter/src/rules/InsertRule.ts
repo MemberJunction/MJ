@@ -32,9 +32,21 @@ export class InsertRule implements IConversionRule {
     result = this.quoteInsertColumnList(result);
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
-    // Ensure semicolon
+    // Ensure semicolon after the actual SQL statement (not after trailing comments).
+    // T-SQL batches may include trailing block comments like /* Set field properties */
+    // that belong to the next batch.  A semicolon placed after the comment leaves the
+    // UPDATE/INSERT/DELETE unterminated.
     result = result.trimEnd();
-    if (!result.endsWith(';')) result += ';';
+    const trailingComment = result.match(/(\s*\/\*[\s\S]*?\*\/\s*)$/);
+    if (trailingComment) {
+      const comment = trailingComment[1];
+      const sqlPart = result.slice(0, -comment.length).trimEnd();
+      if (!sqlPart.endsWith(';')) {
+        result = sqlPart + ';\n' + comment.trim();
+      }
+    } else {
+      if (!result.endsWith(';')) result += ';';
+    }
     return result + '\n';
   }
 
