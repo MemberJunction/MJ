@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -28,7 +28,7 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' 
---     AND object_id = OBJECT_ID('"__mj"."Entity"')
+--     AND object_id = OBJECT_ID('[__mj].[Entity]')
 -- )
 
 
@@ -61,7 +61,7 @@ BEGIN
     END IF;
     FOR p_i IN 1..LENGTH("p_InputString") LOOP
         p_c := SUBSTRING("p_InputString" FROM p_i FOR 1);
-        IF p_c ~ '"A-Za-z0-9"' THEN
+        IF p_c ~ '[A-Za-z0-9]' THEN
             p_Result := p_Result || p_c;
         END IF;
     END LOOP;
@@ -118,7 +118,8 @@ LEFT OUTER JOIN
 WHERE
     con.contype = 'c';
 
-CREATE OR REPLACE VIEW __mj."vwEntities"
+DROP VIEW IF EXISTS __mj."vwEntities" CASCADE;
+CREATE VIEW __mj."vwEntities"
 AS SELECT
     e.*,
     /* CodeName: Derived from entity Name with clean prefix handling.
@@ -282,40 +283,40 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_NameSuffix,
                 p_Description,
-                COALESCE(p_AutoUpdateDescription, 1),
+                COALESCE(p_AutoUpdateDescription, TRUE),
                 p_BaseView,
-                COALESCE(p_BaseViewGenerated, 1),
-                COALESCE(p_VirtualEntity, 0),
-                COALESCE(p_TrackRecordChanges, 1),
-                COALESCE(p_AuditRecordAccess, 1),
-                COALESCE(p_AuditViewRuns, 1),
-                COALESCE(p_IncludeInAPI, 0),
-                COALESCE(p_AllowAllRowsAPI, 0),
-                COALESCE(p_AllowUpdateAPI, 0),
-                COALESCE(p_AllowCreateAPI, 0),
-                COALESCE(p_AllowDeleteAPI, 0),
-                COALESCE(p_CustomResolverAPI, 0),
-                COALESCE(p_AllowUserSearchAPI, 0),
-                COALESCE(p_FullTextSearchEnabled, 0),
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
                 p_FullTextCatalog,
-                COALESCE(p_FullTextCatalogGenerated, 1),
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
                 p_FullTextIndex,
-                COALESCE(p_FullTextIndexGenerated, 1),
+                COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
-                COALESCE(p_FullTextSearchFunctionGenerated, 1),
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
                 p_UserViewMaxRows,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
-                COALESCE(p_spCreateGenerated, 1),
-                COALESCE(p_spUpdateGenerated, 1),
-                COALESCE(p_spDeleteGenerated, 1),
-                COALESCE(p_CascadeDeletes, 0),
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
                 COALESCE(p_DeleteType, 'Hard'),
-                COALESCE(p_AllowRecordMerge, 0),
+                COALESCE(p_AllowRecordMerge, FALSE),
                 p_spMatch,
                 COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
-                COALESCE(p_UserFormGenerated, 1),
+                COALESCE(p_UserFormGenerated, TRUE),
                 p_EntityObjectSubclassName,
                 p_EntityObjectSubclassImport,
                 p_PreferredCommunicationField,
@@ -394,40 +395,40 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_NameSuffix,
                 p_Description,
-                COALESCE(p_AutoUpdateDescription, 1),
+                COALESCE(p_AutoUpdateDescription, TRUE),
                 p_BaseView,
-                COALESCE(p_BaseViewGenerated, 1),
-                COALESCE(p_VirtualEntity, 0),
-                COALESCE(p_TrackRecordChanges, 1),
-                COALESCE(p_AuditRecordAccess, 1),
-                COALESCE(p_AuditViewRuns, 1),
-                COALESCE(p_IncludeInAPI, 0),
-                COALESCE(p_AllowAllRowsAPI, 0),
-                COALESCE(p_AllowUpdateAPI, 0),
-                COALESCE(p_AllowCreateAPI, 0),
-                COALESCE(p_AllowDeleteAPI, 0),
-                COALESCE(p_CustomResolverAPI, 0),
-                COALESCE(p_AllowUserSearchAPI, 0),
-                COALESCE(p_FullTextSearchEnabled, 0),
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
                 p_FullTextCatalog,
-                COALESCE(p_FullTextCatalogGenerated, 1),
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
                 p_FullTextIndex,
-                COALESCE(p_FullTextIndexGenerated, 1),
+                COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
-                COALESCE(p_FullTextSearchFunctionGenerated, 1),
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
                 p_UserViewMaxRows,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
-                COALESCE(p_spCreateGenerated, 1),
-                COALESCE(p_spUpdateGenerated, 1),
-                COALESCE(p_spDeleteGenerated, 1),
-                COALESCE(p_CascadeDeletes, 0),
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
                 COALESCE(p_DeleteType, 'Hard'),
-                COALESCE(p_AllowRecordMerge, 0),
+                COALESCE(p_AllowRecordMerge, FALSE),
                 p_spMatch,
                 COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
-                COALESCE(p_UserFormGenerated, 1),
+                COALESCE(p_UserFormGenerated, TRUE),
                 p_EntityObjectSubclassName,
                 p_EntityObjectSubclassImport,
                 p_PreferredCommunicationField,
@@ -6545,6 +6546,8 @@ COMMENT ON COLUMN __mj."vwEntities"."CodeName" IS 'Schema-aware programmatic cod
 COMMENT ON COLUMN __mj."vwEntities"."BaseTableCodeName" IS 'Programmatic name derived solely from BaseTable + NameSuffix, intentionally schema-unaware. Unlike ClassName (which incorporates the schema prefix), BaseTableCodeName always matches the raw SQL table name. Used for SQL generation, table references, and cases where the physical table identity is needed without schema disambiguation.';
 
 COMMENT ON COLUMN __mj."Entity"."Name" IS 'The canonical, unique name for this entity. For entities in schemas with an EntityNamePrefix configured (e.g., "MJ: " for the core schema), the Name includes the prefix: "MJ: AI Models", "MJ: Users", etc. This is the value used in GetEntityObject(), RunView({ EntityName }), and @RegisterClass decorators. The DisplayName column provides the shorter, UI-friendly alternative without the prefix.';
+
+COMMENT ON COLUMN __mj."Entity"."DisplayName" IS 'User-friendly display name shown in the Explorer UI and other interfaces. When set, this is used instead of the entity Name for display purposes. Typically contains the entity name without the schema prefix — e.g., "AI Models" when Name is "MJ: AI Models". If NULL, the UI falls back to using the full Name.';
 
 
 -- ===================== Other =====================

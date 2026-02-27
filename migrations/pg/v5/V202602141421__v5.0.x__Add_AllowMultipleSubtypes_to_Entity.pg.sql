@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -37,7 +37,7 @@ ADD AllowMultipleSubtypes BOOLEAN NOT NULL
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' 
---     AND object_id = OBJECT_ID('"__mj"."Entity"')
+--     AND object_id = OBJECT_ID('[__mj].[Entity]')
 -- )
 
 
@@ -187,40 +187,40 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_NameSuffix,
                 p_Description,
-                COALESCE(p_AutoUpdateDescription, 1),
+                COALESCE(p_AutoUpdateDescription, TRUE),
                 p_BaseView,
-                COALESCE(p_BaseViewGenerated, 1),
-                COALESCE(p_VirtualEntity, 0),
-                COALESCE(p_TrackRecordChanges, 1),
-                COALESCE(p_AuditRecordAccess, 1),
-                COALESCE(p_AuditViewRuns, 1),
-                COALESCE(p_IncludeInAPI, 0),
-                COALESCE(p_AllowAllRowsAPI, 0),
-                COALESCE(p_AllowUpdateAPI, 0),
-                COALESCE(p_AllowCreateAPI, 0),
-                COALESCE(p_AllowDeleteAPI, 0),
-                COALESCE(p_CustomResolverAPI, 0),
-                COALESCE(p_AllowUserSearchAPI, 0),
-                COALESCE(p_FullTextSearchEnabled, 0),
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
                 p_FullTextCatalog,
-                COALESCE(p_FullTextCatalogGenerated, 1),
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
                 p_FullTextIndex,
-                COALESCE(p_FullTextIndexGenerated, 1),
+                COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
-                COALESCE(p_FullTextSearchFunctionGenerated, 1),
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
                 p_UserViewMaxRows,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
-                COALESCE(p_spCreateGenerated, 1),
-                COALESCE(p_spUpdateGenerated, 1),
-                COALESCE(p_spDeleteGenerated, 1),
-                COALESCE(p_CascadeDeletes, 0),
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
                 COALESCE(p_DeleteType, 'Hard'),
-                COALESCE(p_AllowRecordMerge, 0),
+                COALESCE(p_AllowRecordMerge, FALSE),
                 p_spMatch,
                 COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
-                COALESCE(p_UserFormGenerated, 1),
+                COALESCE(p_UserFormGenerated, TRUE),
                 p_EntityObjectSubclassName,
                 p_EntityObjectSubclassImport,
                 p_PreferredCommunicationField,
@@ -235,7 +235,7 @@ IF p_ID IS NOT NULL THEN
                 p_RowCountRunAt,
                 COALESCE(p_Status, 'Active'),
                 p_DisplayName,
-                COALESCE(p_AllowMultipleSubtypes, 0)
+                COALESCE(p_AllowMultipleSubtypes, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -301,40 +301,40 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_NameSuffix,
                 p_Description,
-                COALESCE(p_AutoUpdateDescription, 1),
+                COALESCE(p_AutoUpdateDescription, TRUE),
                 p_BaseView,
-                COALESCE(p_BaseViewGenerated, 1),
-                COALESCE(p_VirtualEntity, 0),
-                COALESCE(p_TrackRecordChanges, 1),
-                COALESCE(p_AuditRecordAccess, 1),
-                COALESCE(p_AuditViewRuns, 1),
-                COALESCE(p_IncludeInAPI, 0),
-                COALESCE(p_AllowAllRowsAPI, 0),
-                COALESCE(p_AllowUpdateAPI, 0),
-                COALESCE(p_AllowCreateAPI, 0),
-                COALESCE(p_AllowDeleteAPI, 0),
-                COALESCE(p_CustomResolverAPI, 0),
-                COALESCE(p_AllowUserSearchAPI, 0),
-                COALESCE(p_FullTextSearchEnabled, 0),
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
                 p_FullTextCatalog,
-                COALESCE(p_FullTextCatalogGenerated, 1),
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
                 p_FullTextIndex,
-                COALESCE(p_FullTextIndexGenerated, 1),
+                COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
-                COALESCE(p_FullTextSearchFunctionGenerated, 1),
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
                 p_UserViewMaxRows,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
-                COALESCE(p_spCreateGenerated, 1),
-                COALESCE(p_spUpdateGenerated, 1),
-                COALESCE(p_spDeleteGenerated, 1),
-                COALESCE(p_CascadeDeletes, 0),
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
                 COALESCE(p_DeleteType, 'Hard'),
-                COALESCE(p_AllowRecordMerge, 0),
+                COALESCE(p_AllowRecordMerge, FALSE),
                 p_spMatch,
                 COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
-                COALESCE(p_UserFormGenerated, 1),
+                COALESCE(p_UserFormGenerated, TRUE),
                 p_EntityObjectSubclassName,
                 p_EntityObjectSubclassImport,
                 p_PreferredCommunicationField,
@@ -349,7 +349,7 @@ IF p_ID IS NOT NULL THEN
                 p_RowCountRunAt,
                 COALESCE(p_Status, 'Active'),
                 p_DisplayName,
-                COALESCE(p_AllowMultipleSubtypes, 0)
+                COALESCE(p_AllowMultipleSubtypes, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields

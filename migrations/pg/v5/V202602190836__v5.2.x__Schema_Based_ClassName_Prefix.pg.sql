@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -23,21 +23,10 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.indexes
-        WHERE name = 'UQ_SchemaInfo_EntityNamePrefixSuffix'
-        AND object_id = "OBJECT_ID"('"__mj"."SchemaInfo"')
-    ) THEN
-        CREATE UNIQUE INDEX IF NOT EXISTS "UQ_SchemaInfo_EntityNamePrefixSuffix"
-        ON "__mj"."SchemaInfo" (
-        "EntityNamePrefix",
-        "EntityNameSuffix"
-        )
-        WHERE "EntityNamePrefix" IS NOT NULL;
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "UQ_SchemaInfo_EntityNamePrefixSuffix" ON "__mj"."SchemaInfo" (
+        EntityNamePrefix,
+        EntityNameSuffix
+    ) WHERE E;
 
 
 -- ===================== Helper Functions (fn*) =====================
@@ -56,7 +45,7 @@ BEGIN
     END IF;
     FOR p_i IN 1..LENGTH("p_InputString") LOOP
         p_c := SUBSTRING("p_InputString" FROM p_i FOR 1);
-        IF p_c ~ '"A-Za-z0-9"' THEN
+        IF p_c ~ '[A-Za-z0-9]' THEN
             p_Result := p_Result || p_c;
         END IF;
     END LOOP;
@@ -67,7 +56,8 @@ $$ LANGUAGE plpgsql;
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW __mj."vwEntities"
+DROP VIEW IF EXISTS __mj."vwEntities" CASCADE;
+CREATE VIEW __mj."vwEntities"
 AS SELECT
     e.*,
     /* CodeName: Schema-prefixed programmatic name derived from entity Name.
@@ -76,8 +66,7 @@ AS SELECT
        Example: schema '__mj', name 'MJ: AI Models' -> 'MJAIModels'
        Example: schema 'sales', name 'Invoice' -> 'salesInvoice' */
     __mj."GetProgrammaticName"(
-        __mj."GetClassNameSchemaPrefix"(e."SchemaName") +
-        REPLACE(
+        __mj."GetClassNameSchemaPrefix"(e."SchemaName") || REPLACE(
             CASE WHEN si."EntityNamePrefix" IS NOT NULL THEN REPLACE(e."Name", si."EntityNamePrefix", '') ELSE e."Name" END,
             ' ',
             ''
@@ -90,9 +79,7 @@ AS SELECT
        Example: schema 'sales', table 'Invoice' -> 'salesInvoice' -> class salesInvoiceEntity
        This prevents cross-schema collisions and aligns with GraphQL type naming. */
     __mj."GetProgrammaticName"(
-        __mj."GetClassNameSchemaPrefix"(e."SchemaName") +
-        e."BaseTable" +
-        COALESCE(e."NameSuffix", '')
+        __mj."GetClassNameSchemaPrefix"(e."SchemaName") || e."BaseTable" || COALESCE(e."NameSuffix", '')
     ) AS "ClassName",
     __mj."GetProgrammaticName"(e."BaseTable" || COALESCE(e."NameSuffix", '')) AS "BaseTableCodeName",
     par."Name" "ParentEntity",
@@ -127,7 +114,43 @@ ON
 
 -- ===================== Comments =====================
 
+-- Extended property (could not parse)
+-- -- Drop old description if it exists, then re-add
+-- IF EXISTS (
+--     SELECT 1 FROM sys.extended_properties ep
+--     INNER JOIN sys.views v ON ep.major_id = v.object_id
+--     INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+--     INNER JOIN sys.columns c ON c.object_id = v.object_id AND ep.minor_id = c.column_id
+--     WHERE s.name = '__mj' AND v.name = 'vwEntities' AND c.name = 'ClassName'
+--       AND ep.name = 'MS_Description'
+-- )
+-- BEGIN
+--     EXEC sp_dropextendedproperty
+--         @name = N'MS_Description',
+--         @level0type = N'SCHEMA', @level0name = N'__mj',
+--         @level1type = N'VIEW',   @level1name = N'vwEntities',
+--         @level2type = N'COLUMN', @level2name = N'ClassName';
+-- END
+
 COMMENT ON COLUMN __mj."vwEntities"."ClassName" IS 'Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().';
+
+-- Extended property (could not parse)
+-- -- Update CodeName description too
+-- IF EXISTS (
+--     SELECT 1 FROM sys.extended_properties ep
+--     INNER JOIN sys.views v ON ep.major_id = v.object_id
+--     INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+--     INNER JOIN sys.columns c ON c.object_id = v.object_id AND ep.minor_id = c.column_id
+--     WHERE s.name = '__mj' AND v.name = 'vwEntities' AND c.name = 'CodeName'
+--       AND ep.name = 'MS_Description'
+-- )
+-- BEGIN
+--     EXEC sp_dropextendedproperty
+--         @name = N'MS_Description',
+--         @level0type = N'SCHEMA', @level0name = N'__mj',
+--         @level1type = N'VIEW',   @level1name = N'vwEntities',
+--         @level2type = N'COLUMN', @level2name = N'CodeName';
+-- END
 
 COMMENT ON COLUMN __mj."vwEntities"."CodeName" IS 'Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.';
 
@@ -137,6 +160,4 @@ COMMENT ON COLUMN __mj."vwEntities"."CodeName" IS 'Schema-based programmatic cod
 -- TODO: Review this batch
 DROP VIEW IF EXISTS "__mj".vwEntities;
 
--- Drop old description if it exists, then re-add
--- SKIPPED: SQL Server IF EXISTS check-- Update CodeName description too
--- SKIPPED: SQL Server IF EXISTS check/* SQL text to recompile all views */
+/* SQL text to recompile all views */

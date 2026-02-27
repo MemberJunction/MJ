@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions

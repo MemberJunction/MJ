@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -93,7 +93,7 @@ ALTER TABLE __mj."TestRunOutputType" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEF
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID' 
---     AND object_id = OBJECT_ID('"__mj"."TestRunOutput"')
+--     AND object_id = OBJECT_ID('[__mj].[TestRunOutput]')
 -- )
 
 
@@ -106,7 +106,7 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID ON __mj."Tes
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID' 
---     AND object_id = OBJECT_ID('"__mj"."TestRunOutput"')
+--     AND object_id = OBJECT_ID('[__mj].[TestRunOutput]')
 -- )
 
 
@@ -120,13 +120,15 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID ON __mj."
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW __mj."vwTestRunOutputTypes"
+DROP VIEW IF EXISTS __mj."vwTestRunOutputTypes" CASCADE;
+CREATE VIEW __mj."vwTestRunOutputTypes"
 AS SELECT
     t.*
 FROM
     __mj."TestRunOutputType" AS t;
 
-CREATE OR REPLACE VIEW __mj."vwTestRunOutputs"
+DROP VIEW IF EXISTS __mj."vwTestRunOutputs" CASCADE;
+CREATE VIEW __mj."vwTestRunOutputs"
 AS SELECT
     t.*,
     "MJTestRun_TestRunID"."Test" AS "TestRun",

@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -57,7 +57,7 @@ CREATE TABLE __mj."OpenApp" (
  CONSTRAINT CK_OpenApp_Status CHECK ("Status" IN (
  'Active', 'Disabled', 'Error', 'Installing', 'Upgrading', 'Removing', 'Removed'
  )),
- CONSTRAINT CK_OpenApp_Name CHECK ("Name" ~ '^[a-z0-9-]+$')
+ CONSTRAINT CK_OpenApp_Name CHECK ("Name" NOT LIKE '%[^a-z0-9-]%')
 );
 
 -----------------------------------------------------------------------
@@ -142,7 +142,7 @@ ALTER TABLE __mj."OpenAppInstallHistory" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID' 
---     AND object_id = OBJECT_ID('"__mj"."OpenAppDependency"')
+--     AND object_id = OBJECT_ID('[__mj].[OpenAppDependency]')
 -- )
 
 
@@ -155,7 +155,7 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID ON __mj.
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID' 
---     AND object_id = OBJECT_ID('"__mj"."OpenAppDependency"')
+--     AND object_id = OBJECT_ID('[__mj].[OpenAppDependency]')
 -- )
 
 
@@ -168,7 +168,7 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID ON 
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID' 
---     AND object_id = OBJECT_ID('"__mj"."OpenAppInstallHistory"')
+--     AND object_id = OBJECT_ID('[__mj].[OpenAppInstallHistory]')
 -- )
 
 
@@ -181,7 +181,7 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID ON _
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID' 
---     AND object_id = OBJECT_ID('"__mj"."OpenAppInstallHistory"')
+--     AND object_id = OBJECT_ID('[__mj].[OpenAppInstallHistory]')
 -- )
 
 
@@ -194,7 +194,7 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUser
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID' 
---     AND object_id = OBJECT_ID('"__mj"."OpenApp"')
+--     AND object_id = OBJECT_ID('[__mj].[OpenApp]')
 -- )
 
 
@@ -208,7 +208,8 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID ON __mj."O
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW __mj."vwOpenAppDependencies"
+DROP VIEW IF EXISTS __mj."vwOpenAppDependencies" CASCADE;
+CREATE VIEW __mj."vwOpenAppDependencies"
 AS SELECT
     o.*,
     "MJOpenApp_OpenAppID"."Name" AS "OpenApp",
@@ -224,7 +225,8 @@ LEFT OUTER JOIN
   ON
     o."DependsOnAppID" = "MJOpenApp_DependsOnAppID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwOpenApps"
+DROP VIEW IF EXISTS __mj."vwOpenApps" CASCADE;
+CREATE VIEW __mj."vwOpenApps"
 AS SELECT
     o.*,
     "MJUser_InstalledByUserID"."Name" AS "InstalledByUser"
@@ -235,7 +237,8 @@ INNER JOIN
   ON
     o."InstalledByUserID" = "MJUser_InstalledByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwOpenAppInstallHistories"
+DROP VIEW IF EXISTS __mj."vwOpenAppInstallHistories" CASCADE;
+CREATE VIEW __mj."vwOpenAppInstallHistories"
 AS SELECT
     o.*,
     "MJOpenApp_OpenAppID"."Name" AS "OpenApp",
@@ -620,7 +623,7 @@ IF p_ID IS NOT NULL THEN
                 p_DurationSeconds,
                 p_StartedAt,
                 p_EndedAt,
-                COALESCE(p_Success, 1),
+                COALESCE(p_Success, TRUE),
                 p_ErrorMessage,
                 p_ErrorPhase
             );
@@ -654,7 +657,7 @@ IF p_ID IS NOT NULL THEN
                 p_DurationSeconds,
                 p_StartedAt,
                 p_EndedAt,
-                COALESCE(p_Success, 1),
+                COALESCE(p_Success, TRUE),
                 p_ErrorMessage,
                 p_ErrorPhase
             );

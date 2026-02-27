@@ -1,6 +1,6 @@
 -- ============================================================================
--- MemberJunction v5.0 PostgreSQL Baseline
--- Deterministically converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
@@ -28,7 +28,7 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 --     SELECT 1
 --     FROM sys.indexes
 --     WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' 
---     AND object_id = OBJECT_ID('"__mj"."Entity"')
+--     AND object_id = OBJECT_ID('[__mj].[Entity]')
 -- )
 
 
@@ -50,7 +50,8 @@ CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_Entity_ParentID ON __mj."Entity" ("P
 
 -- ===================== Views =====================
 
-CREATE OR REPLACE VIEW __mj."vwActionAuthorizations"
+DROP VIEW IF EXISTS __mj."vwActionAuthorizations" CASCADE;
+CREATE VIEW __mj."vwActionAuthorizations"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action",
@@ -66,7 +67,8 @@ INNER JOIN
   ON
     a."AuthorizationID" = "MJAuthorization_AuthorizationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionContexts"
+DROP VIEW IF EXISTS __mj."vwActionContexts" CASCADE;
+CREATE VIEW __mj."vwActionContexts"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action",
@@ -82,7 +84,8 @@ LEFT OUTER JOIN
   ON
     a."ContextTypeID" = "MJActionContextType_ContextTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionCategories"
+DROP VIEW IF EXISTS __mj."vwActionCategories" CASCADE;
+CREATE VIEW __mj."vwActionCategories"
 AS SELECT
     a.*,
     "MJActionCategory_ParentID"."Name" AS "Parent",
@@ -95,7 +98,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJActionCategory_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnActionCategoryParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAccessControlRules"
+DROP VIEW IF EXISTS __mj."vwAccessControlRules" CASCADE;
+CREATE VIEW __mj."vwAccessControlRules"
 AS SELECT
     a.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -111,7 +115,8 @@ INNER JOIN
   ON
     a."GrantedByUserID" = "MJUser_GrantedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionExecutionLogs"
+DROP VIEW IF EXISTS __mj."vwActionExecutionLogs" CASCADE;
+CREATE VIEW __mj."vwActionExecutionLogs"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action",
@@ -127,7 +132,8 @@ INNER JOIN
   ON
     a."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionResultCodes"
+DROP VIEW IF EXISTS __mj."vwActionResultCodes" CASCADE;
+CREATE VIEW __mj."vwActionResultCodes"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action"
@@ -138,7 +144,8 @@ INNER JOIN
   ON
     a."ActionID" = "MJAction_ActionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionParams"
+DROP VIEW IF EXISTS __mj."vwActionParams" CASCADE;
+CREATE VIEW __mj."vwActionParams"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action"
@@ -149,7 +156,8 @@ INNER JOIN
   ON
     a."ActionID" = "MJAction_ActionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActionLibraries"
+DROP VIEW IF EXISTS __mj."vwActionLibraries" CASCADE;
+CREATE VIEW __mj."vwActionLibraries"
 AS SELECT
     a.*,
     "MJAction_ActionID"."Name" AS "Action",
@@ -165,7 +173,8 @@ INNER JOIN
   ON
     a."LibraryID" = "MJLibrary_LibraryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentConfigurations"
+DROP VIEW IF EXISTS __mj."vwAIAgentConfigurations" CASCADE;
+CREATE VIEW __mj."vwAIAgentConfigurations"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -181,7 +190,8 @@ LEFT OUTER JOIN
   ON
     a."AIConfigurationID" = "MJAIConfiguration_AIConfigurationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentArtifactTypes"
+DROP VIEW IF EXISTS __mj."vwAIAgentArtifactTypes" CASCADE;
+CREATE VIEW __mj."vwAIAgentArtifactTypes"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -197,7 +207,8 @@ INNER JOIN
   ON
     a."ArtifactTypeID" = "MJArtifactType_ArtifactTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentActions"
+DROP VIEW IF EXISTS __mj."vwAIAgentActions" CASCADE;
+CREATE VIEW __mj."vwAIAgentActions"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -218,7 +229,8 @@ LEFT OUTER JOIN
   ON
     a."CompactPromptID" = "MJAIPrompt_CompactPromptID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIActions"
+DROP VIEW IF EXISTS __mj."vwAIActions" CASCADE;
+CREATE VIEW __mj."vwAIActions"
 AS SELECT
     a.*,
     "MJAIModel_DefaultModelID"."Name" AS "DefaultModel"
@@ -229,7 +241,8 @@ LEFT OUTER JOIN
   ON
     a."DefaultModelID" = "MJAIModel_DefaultModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwActions"
+DROP VIEW IF EXISTS __mj."vwActions" CASCADE;
+CREATE VIEW __mj."vwActions"
 AS SELECT
     a.*,
     "MJActionCategory_CategoryID"."Name" AS "Category",
@@ -257,7 +270,8 @@ LEFT OUTER JOIN
     a."DefaultCompactPromptID" = "MJAIPrompt_DefaultCompactPromptID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnActionParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentLearningCycles"
+DROP VIEW IF EXISTS __mj."vwAIAgentLearningCycles" CASCADE;
+CREATE VIEW __mj."vwAIAgentLearningCycles"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent"
@@ -268,7 +282,8 @@ INNER JOIN
   ON
     a."AgentID" = "MJAIAgent_AgentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentExamples"
+DROP VIEW IF EXISTS __mj."vwAIAgentExamples" CASCADE;
+CREATE VIEW __mj."vwAIAgentExamples"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -314,7 +329,8 @@ LEFT OUTER JOIN
   ON
     a."PrimaryScopeEntityID" = "MJEntity_PrimaryScopeEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentDataSources"
+DROP VIEW IF EXISTS __mj."vwAIAgentDataSources" CASCADE;
+CREATE VIEW __mj."vwAIAgentDataSources"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent"
@@ -325,7 +341,8 @@ INNER JOIN
   ON
     a."AgentID" = "MJAIAgent_AgentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentModalities"
+DROP VIEW IF EXISTS __mj."vwAIAgentModalities" CASCADE;
+CREATE VIEW __mj."vwAIAgentModalities"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -341,7 +358,8 @@ INNER JOIN
   ON
     a."ModalityID" = "MJAIModality_ModalityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentModels"
+DROP VIEW IF EXISTS __mj."vwAIAgentModels" CASCADE;
+CREATE VIEW __mj."vwAIAgentModels"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -357,7 +375,8 @@ LEFT OUTER JOIN
   ON
     a."ModelID" = "MJAIModel_ModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentPrompts"
+DROP VIEW IF EXISTS __mj."vwAIAgentPrompts" CASCADE;
+CREATE VIEW __mj."vwAIAgentPrompts"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -378,7 +397,8 @@ LEFT OUTER JOIN
   ON
     a."ConfigurationID" = "MJAIConfiguration_ConfigurationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentNotes"
+DROP VIEW IF EXISTS __mj."vwAIAgentNotes" CASCADE;
+CREATE VIEW __mj."vwAIAgentNotes"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -429,7 +449,8 @@ LEFT OUTER JOIN
   ON
     a."PrimaryScopeEntityID" = "MJEntity_PrimaryScopeEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentRelationships"
+DROP VIEW IF EXISTS __mj."vwAIAgentRelationships" CASCADE;
+CREATE VIEW __mj."vwAIAgentRelationships"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -445,7 +466,8 @@ INNER JOIN
   ON
     a."SubAgentID" = "MJAIAgent_SubAgentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentPermissions"
+DROP VIEW IF EXISTS __mj."vwAIAgentPermissions" CASCADE;
+CREATE VIEW __mj."vwAIAgentPermissions"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -466,7 +488,8 @@ LEFT OUTER JOIN
   ON
     a."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentRequests"
+DROP VIEW IF EXISTS __mj."vwAIAgentRequests" CASCADE;
+CREATE VIEW __mj."vwAIAgentRequests"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -487,7 +510,8 @@ LEFT OUTER JOIN
   ON
     a."ResponseByUserID" = "MJUser_ResponseByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentRunMedias"
+DROP VIEW IF EXISTS __mj."vwAIAgentRunMedias" CASCADE;
+CREATE VIEW __mj."vwAIAgentRunMedias"
 AS SELECT
     a.*,
     "MJAIAgentRun_AgentRunID"."RunName" AS "AgentRun",
@@ -513,7 +537,8 @@ LEFT OUTER JOIN
   ON
     a."FileID" = "MJFile_FileID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentRuns"
+DROP VIEW IF EXISTS __mj."vwAIAgentRuns" CASCADE;
+CREATE VIEW __mj."vwAIAgentRuns"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -583,7 +608,8 @@ LEFT OUTER JOIN
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIAgentRunParentRunID_GetRootID"(a."ID", a."ParentRunID")) AS "root_ParentRunID" ON TRUE
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIAgentRunLastRunID_GetRootID"(a."ID", a."LastRunID")) AS "root_LastRunID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentRunSteps"
+DROP VIEW IF EXISTS __mj."vwAIAgentRunSteps" CASCADE;
+CREATE VIEW __mj."vwAIAgentRunSteps"
 AS SELECT
     a.*,
     "MJAIAgentRun_AgentRunID"."RunName" AS "AgentRun",
@@ -601,7 +627,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJAIAgentRunStep_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIAgentRunStepParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentStepPaths"
+DROP VIEW IF EXISTS __mj."vwAIAgentStepPaths" CASCADE;
+CREATE VIEW __mj."vwAIAgentStepPaths"
 AS SELECT
     a.*,
     "MJAIAgentStep_OriginStepID"."Name" AS "OriginStep",
@@ -617,7 +644,8 @@ INNER JOIN
   ON
     a."DestinationStepID" = "MJAIAgentStep_DestinationStepID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIArchitectures"
+DROP VIEW IF EXISTS __mj."vwAIArchitectures" CASCADE;
+CREATE VIEW __mj."vwAIArchitectures"
 AS SELECT
     a.*,
     "MJAIArchitecture_ParentArchitectureID"."Name" AS "ParentArchitecture",
@@ -630,7 +658,8 @@ LEFT OUTER JOIN
     a."ParentArchitectureID" = "MJAIArchitecture_ParentArchitectureID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIArchitectureParentArchitectureID_GetRootID"(a."ID", a."ParentArchitectureID")) AS "root_ParentArchitectureID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentSteps"
+DROP VIEW IF EXISTS __mj."vwAIAgentSteps" CASCADE;
+CREATE VIEW __mj."vwAIAgentSteps"
 AS SELECT
     a.*,
     "MJAIAgent_AgentID"."Name" AS "Agent",
@@ -656,7 +685,8 @@ LEFT OUTER JOIN
   ON
     a."PromptID" = "MJAIPrompt_PromptID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgentTypes"
+DROP VIEW IF EXISTS __mj."vwAIAgentTypes" CASCADE;
+CREATE VIEW __mj."vwAIAgentTypes"
 AS SELECT
     a.*,
     "MJAIPrompt_SystemPromptID"."Name" AS "SystemPrompt"
@@ -667,7 +697,8 @@ LEFT OUTER JOIN
   ON
     a."SystemPromptID" = "MJAIPrompt_SystemPromptID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIAgents"
+DROP VIEW IF EXISTS __mj."vwAIAgents" CASCADE;
+CREATE VIEW __mj."vwAIAgents"
 AS SELECT
     a.*,
     "MJAIAgent_ParentID"."Name" AS "Parent",
@@ -705,7 +736,8 @@ LEFT OUTER JOIN
     a."AttachmentStorageProviderID" = "MJFileStorageProvider_AttachmentStorageProviderID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIAgentParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIConfigurationParams"
+DROP VIEW IF EXISTS __mj."vwAIConfigurationParams" CASCADE;
+CREATE VIEW __mj."vwAIConfigurationParams"
 AS SELECT
     a.*,
     "MJAIConfiguration_ConfigurationID"."Name" AS "Configuration"
@@ -716,7 +748,8 @@ INNER JOIN
   ON
     a."ConfigurationID" = "MJAIConfiguration_ConfigurationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIConfigurations"
+DROP VIEW IF EXISTS __mj."vwAIConfigurations" CASCADE;
+CREATE VIEW __mj."vwAIConfigurations"
 AS SELECT
     a.*,
     "MJAIPrompt_DefaultPromptForContextCompressionID"."Name" AS "DefaultPromptForContextCompression",
@@ -744,7 +777,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJAIConfiguration_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIConfigurationParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIModelActions"
+DROP VIEW IF EXISTS __mj."vwAIModelActions" CASCADE;
+CREATE VIEW __mj."vwAIModelActions"
 AS SELECT
     a.*,
     "MJAIModel_AIModelID"."Name" AS "AIModel",
@@ -760,7 +794,8 @@ INNER JOIN
   ON
     a."AIActionID" = "MJAIAction_AIActionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAICredentialBindings"
+DROP VIEW IF EXISTS __mj."vwAICredentialBindings" CASCADE;
+CREATE VIEW __mj."vwAICredentialBindings"
 AS SELECT
     a.*,
     "MJCredential_CredentialID"."Name" AS "Credential",
@@ -786,7 +821,8 @@ LEFT OUTER JOIN
   ON
     a."AIPromptModelID" = "MJAIPromptModel_AIPromptModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIModelArchitectures"
+DROP VIEW IF EXISTS __mj."vwAIModelArchitectures" CASCADE;
+CREATE VIEW __mj."vwAIModelArchitectures"
 AS SELECT
     a.*,
     "MJAIModel_ModelID"."Name" AS "Model",
@@ -802,7 +838,8 @@ INNER JOIN
   ON
     a."ArchitectureID" = "MJAIArchitecture_ArchitectureID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIModelCosts"
+DROP VIEW IF EXISTS __mj."vwAIModelCosts" CASCADE;
+CREATE VIEW __mj."vwAIModelCosts"
 AS SELECT
     a.*,
     "MJAIModel_ModelID"."Name" AS "Model",
@@ -828,7 +865,8 @@ INNER JOIN
   ON
     a."UnitTypeID" = "MJAIModelPriceUnitType_UnitTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIModelModalities"
+DROP VIEW IF EXISTS __mj."vwAIModelModalities" CASCADE;
+CREATE VIEW __mj."vwAIModelModalities"
 AS SELECT
     a.*,
     "MJAIModel_ModelID"."Name" AS "Model",
@@ -844,7 +882,8 @@ INNER JOIN
   ON
     a."ModalityID" = "MJAIModality_ModalityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIModelTypes"
+DROP VIEW IF EXISTS __mj."vwAIModelTypes" CASCADE;
+CREATE VIEW __mj."vwAIModelTypes"
 AS SELECT
     a.*,
     "MJAIModality_DefaultInputModalityID"."Name" AS "DefaultInputModality",
@@ -860,7 +899,8 @@ INNER JOIN
   ON
     a."DefaultOutputModalityID" = "MJAIModality_DefaultOutputModalityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIPromptCategories"
+DROP VIEW IF EXISTS __mj."vwAIPromptCategories" CASCADE;
+CREATE VIEW __mj."vwAIPromptCategories"
 AS SELECT
     a.*,
     "MJAIPromptCategory_ParentID"."Name" AS "Parent",
@@ -873,7 +913,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJAIPromptCategory_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIPromptCategoryParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIPromptRunMedias"
+DROP VIEW IF EXISTS __mj."vwAIPromptRunMedias" CASCADE;
+CREATE VIEW __mj."vwAIPromptRunMedias"
 AS SELECT
     a.*,
     "MJAIPromptRun_PromptRunID"."RunName" AS "PromptRun",
@@ -894,7 +935,8 @@ LEFT OUTER JOIN
   ON
     a."FileID" = "MJFile_FileID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIPromptModels"
+DROP VIEW IF EXISTS __mj."vwAIPromptModels" CASCADE;
+CREATE VIEW __mj."vwAIPromptModels"
 AS SELECT
     a.*,
     "MJAIPrompt_PromptID"."Name" AS "Prompt",
@@ -920,7 +962,8 @@ LEFT OUTER JOIN
   ON
     a."ConfigurationID" = "MJAIConfiguration_ConfigurationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIModelVendors"
+DROP VIEW IF EXISTS __mj."vwAIModelVendors" CASCADE;
+CREATE VIEW __mj."vwAIModelVendors"
 AS SELECT
     a.*,
     "MJAIModel_ModelID"."Name" AS "Model",
@@ -941,7 +984,8 @@ INNER JOIN
   ON
     a."TypeID" = "MJAIVendorTypeDefinition_TypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIPromptRuns"
+DROP VIEW IF EXISTS __mj."vwAIPromptRuns" CASCADE;
+CREATE VIEW __mj."vwAIPromptRuns"
 AS SELECT
     a.*,
     "MJAIPrompt_PromptID"."Name" AS "Prompt",
@@ -1011,7 +1055,8 @@ LEFT OUTER JOIN
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIPromptRunParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIPromptRunRerunFromPromptRunID_GetRootID"(a."ID", a."RerunFromPromptRunID")) AS "root_RerunFromPromptRunID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIResultCaches"
+DROP VIEW IF EXISTS __mj."vwAIResultCaches" CASCADE;
+CREATE VIEW __mj."vwAIResultCaches"
 AS SELECT
     a.*,
     "MJAIPrompt_AIPromptID"."Name" AS "AIPrompt",
@@ -1047,7 +1092,8 @@ LEFT OUTER JOIN
   ON
     a."PromptRunID" = "MJAIPromptRun_PromptRunID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIPrompts"
+DROP VIEW IF EXISTS __mj."vwAIPrompts" CASCADE;
+CREATE VIEW __mj."vwAIPrompts"
 AS SELECT
     a.*,
     "MJTemplate_TemplateID"."Name" AS "Template",
@@ -1080,7 +1126,8 @@ LEFT OUTER JOIN
     a."ResultSelectorPromptID" = "MJAIPrompt_ResultSelectorPromptID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIPromptResultSelectorPromptID_GetRootID"(a."ID", a."ResultSelectorPromptID")) AS "root_ResultSelectorPromptID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAIVendorTypes"
+DROP VIEW IF EXISTS __mj."vwAIVendorTypes" CASCADE;
+CREATE VIEW __mj."vwAIVendorTypes"
 AS SELECT
     a.*,
     "MJAIVendor_VendorID"."Name" AS "Vendor",
@@ -1096,7 +1143,8 @@ INNER JOIN
   ON
     a."TypeID" = "MJAIVendorTypeDefinition_TypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAIVendors"
+DROP VIEW IF EXISTS __mj."vwAIVendors" CASCADE;
+CREATE VIEW __mj."vwAIVendors"
 AS SELECT
     a.*,
     "MJCredentialType_CredentialTypeID"."Name" AS "CredentialType"
@@ -1107,7 +1155,8 @@ LEFT OUTER JOIN
   ON
     a."CredentialTypeID" = "MJCredentialType_CredentialTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIApplicationScopes"
+DROP VIEW IF EXISTS __mj."vwAPIApplicationScopes" CASCADE;
+CREATE VIEW __mj."vwAPIApplicationScopes"
 AS SELECT
     a.*,
     "MJAPIApplication_ApplicationID"."Name" AS "Application",
@@ -1123,7 +1172,8 @@ INNER JOIN
   ON
     a."ScopeID" = "MJAPIScope_ScopeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIKeyApplications"
+DROP VIEW IF EXISTS __mj."vwAPIKeyApplications" CASCADE;
+CREATE VIEW __mj."vwAPIKeyApplications"
 AS SELECT
     a.*,
     "MJAPIKey_APIKeyID"."Label" AS "APIKey",
@@ -1139,7 +1189,8 @@ INNER JOIN
   ON
     a."ApplicationID" = "MJAPIApplication_ApplicationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIKeyScopes"
+DROP VIEW IF EXISTS __mj."vwAPIKeyScopes" CASCADE;
+CREATE VIEW __mj."vwAPIKeyScopes"
 AS SELECT
     a.*,
     "MJAPIKey_APIKeyID"."Label" AS "APIKey",
@@ -1155,7 +1206,8 @@ INNER JOIN
   ON
     a."ScopeID" = "MJAPIScope_ScopeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIKeyUsageLogs"
+DROP VIEW IF EXISTS __mj."vwAPIKeyUsageLogs" CASCADE;
+CREATE VIEW __mj."vwAPIKeyUsageLogs"
 AS SELECT
     a.*,
     "MJAPIKey_APIKeyID"."Label" AS "APIKey",
@@ -1171,7 +1223,8 @@ LEFT OUTER JOIN
   ON
     a."ApplicationID" = "MJAPIApplication_ApplicationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIKeys"
+DROP VIEW IF EXISTS __mj."vwAPIKeys" CASCADE;
+CREATE VIEW __mj."vwAPIKeys"
 AS SELECT
     a.*,
     "MJUser_UserID"."Name" AS "User",
@@ -1187,7 +1240,8 @@ INNER JOIN
   ON
     a."CreatedByUserID" = "MJUser_CreatedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAPIScopes"
+DROP VIEW IF EXISTS __mj."vwAPIScopes" CASCADE;
+CREATE VIEW __mj."vwAPIScopes"
 AS SELECT
     a.*,
     "MJAPIScope_ParentID"."Name" AS "Parent",
@@ -1200,7 +1254,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJAPIScope_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAPIScopeParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwApplicationSettings"
+DROP VIEW IF EXISTS __mj."vwApplicationSettings" CASCADE;
+CREATE VIEW __mj."vwApplicationSettings"
 AS SELECT
     a.*,
     "MJApplication_ApplicationID"."Name" AS "Application"
@@ -1211,7 +1266,8 @@ INNER JOIN
   ON
     a."ApplicationID" = "MJApplication_ApplicationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwArtifactTypes"
+DROP VIEW IF EXISTS __mj."vwArtifactTypes" CASCADE;
+CREATE VIEW __mj."vwArtifactTypes"
 AS SELECT
     a.*,
     "MJArtifactType_ParentID"."Name" AS "Parent",
@@ -1224,7 +1280,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJArtifactType_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnArtifactTypeParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwArtifactPermissions"
+DROP VIEW IF EXISTS __mj."vwArtifactPermissions" CASCADE;
+CREATE VIEW __mj."vwArtifactPermissions"
 AS SELECT
     a.*,
     "MJArtifact_ArtifactID"."Name" AS "Artifact",
@@ -1245,7 +1302,8 @@ LEFT OUTER JOIN
   ON
     a."SharedByUserID" = "MJUser_SharedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwArtifactUses"
+DROP VIEW IF EXISTS __mj."vwArtifactUses" CASCADE;
+CREATE VIEW __mj."vwArtifactUses"
 AS SELECT
     a.*,
     "MJArtifactVersion_ArtifactVersionID"."Name" AS "ArtifactVersion",
@@ -1261,7 +1319,8 @@ INNER JOIN
   ON
     a."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwArtifactVersions"
+DROP VIEW IF EXISTS __mj."vwArtifactVersions" CASCADE;
+CREATE VIEW __mj."vwArtifactVersions"
 AS SELECT
     a.*,
     "MJArtifact_ArtifactID"."Name" AS "Artifact",
@@ -1277,7 +1336,8 @@ INNER JOIN
   ON
     a."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwArtifactVersionAttributes"
+DROP VIEW IF EXISTS __mj."vwArtifactVersionAttributes" CASCADE;
+CREATE VIEW __mj."vwArtifactVersionAttributes"
 AS SELECT
     a.*,
     "MJArtifactVersion_ArtifactVersionID"."Name" AS "ArtifactVersion"
@@ -1288,7 +1348,8 @@ INNER JOIN
   ON
     a."ArtifactVersionID" = "MJArtifactVersion_ArtifactVersionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwArtifacts"
+DROP VIEW IF EXISTS __mj."vwArtifacts" CASCADE;
+CREATE VIEW __mj."vwArtifacts"
 AS SELECT
     a.*,
     "MJEnvironment_EnvironmentID"."Name" AS "Environment",
@@ -1309,7 +1370,8 @@ INNER JOIN
   ON
     a."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAuditLogTypes"
+DROP VIEW IF EXISTS __mj."vwAuditLogTypes" CASCADE;
+CREATE VIEW __mj."vwAuditLogTypes"
 AS SELECT
     a.*,
     "MJAuditLogType_ParentID"."Name" AS "Parent",
@@ -1327,7 +1389,8 @@ LEFT OUTER JOIN
     a."AuthorizationID" = "MJAuthorization_AuthorizationID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAuditLogTypeParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwAuditLogs"
+DROP VIEW IF EXISTS __mj."vwAuditLogs" CASCADE;
+CREATE VIEW __mj."vwAuditLogs"
 AS SELECT
     a.*,
     "MJUser_UserID"."Name" AS "User",
@@ -1353,7 +1416,8 @@ LEFT OUTER JOIN
   ON
     a."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAuthorizationRoles"
+DROP VIEW IF EXISTS __mj."vwAuthorizationRoles" CASCADE;
+CREATE VIEW __mj."vwAuthorizationRoles"
 AS SELECT
     a.*,
     "MJAuthorization_AuthorizationID"."Name" AS "Authorization",
@@ -1369,7 +1433,8 @@ INNER JOIN
   ON
     a."RoleID" = "MJRole_RoleID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwAuthorizations"
+DROP VIEW IF EXISTS __mj."vwAuthorizations" CASCADE;
+CREATE VIEW __mj."vwAuthorizations"
 AS SELECT
     a.*,
     "MJAuthorization_ParentID"."Name" AS "Parent",
@@ -1382,7 +1447,8 @@ LEFT OUTER JOIN
     a."ParentID" = "MJAuthorization_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAuthorizationParentID_GetRootID"(a."ID", a."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwCollectionPermissions"
+DROP VIEW IF EXISTS __mj."vwCollectionPermissions" CASCADE;
+CREATE VIEW __mj."vwCollectionPermissions"
 AS SELECT
     c.*,
     "MJCollection_CollectionID"."Name" AS "Collection",
@@ -1403,7 +1469,8 @@ LEFT OUTER JOIN
   ON
     c."SharedByUserID" = "MJUser_SharedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCollectionArtifacts"
+DROP VIEW IF EXISTS __mj."vwCollectionArtifacts" CASCADE;
+CREATE VIEW __mj."vwCollectionArtifacts"
 AS SELECT
     c.*,
     "MJCollection_CollectionID"."Name" AS "Collection",
@@ -1419,7 +1486,8 @@ INNER JOIN
   ON
     c."ArtifactVersionID" = "MJArtifactVersion_ArtifactVersionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCollections"
+DROP VIEW IF EXISTS __mj."vwCollections" CASCADE;
+CREATE VIEW __mj."vwCollections"
 AS SELECT
     c.*,
     "MJEnvironment_EnvironmentID"."Name" AS "Environment",
@@ -1442,7 +1510,8 @@ LEFT OUTER JOIN
     c."OwnerID" = "MJUser_OwnerID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnCollectionParentID_GetRootID"(c."ID", c."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwCommunicationProviderMessageTypes"
+DROP VIEW IF EXISTS __mj."vwCommunicationProviderMessageTypes" CASCADE;
+CREATE VIEW __mj."vwCommunicationProviderMessageTypes"
 AS SELECT
     c.*,
     "MJCommunicationProvider_CommunicationProviderID"."Name" AS "CommunicationProvider",
@@ -1458,7 +1527,8 @@ INNER JOIN
   ON
     c."CommunicationBaseMessageTypeID" = "MJCommunicationBaseMessageType_CommunicationBaseMessageTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCommunicationLogs"
+DROP VIEW IF EXISTS __mj."vwCommunicationLogs" CASCADE;
+CREATE VIEW __mj."vwCommunicationLogs"
 AS SELECT
     c.*,
     "MJCommunicationProvider_CommunicationProviderID"."Name" AS "CommunicationProvider",
@@ -1479,7 +1549,8 @@ LEFT OUTER JOIN
   ON
     c."CommunicationRunID" = "MJCommunicationRun_CommunicationRunID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCommunicationRuns"
+DROP VIEW IF EXISTS __mj."vwCommunicationRuns" CASCADE;
+CREATE VIEW __mj."vwCommunicationRuns"
 AS SELECT
     c.*,
     "MJUser_UserID"."Name" AS "User"
@@ -1490,7 +1561,8 @@ INNER JOIN
   ON
     c."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationRecordMaps"
+DROP VIEW IF EXISTS __mj."vwCompanyIntegrationRecordMaps" CASCADE;
+CREATE VIEW __mj."vwCompanyIntegrationRecordMaps"
 AS SELECT
     c.*,
     "MJCompanyIntegration_CompanyIntegrationID"."Name" AS "CompanyIntegration",
@@ -1506,7 +1578,8 @@ INNER JOIN
   ON
     c."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationRunAPILogs"
+DROP VIEW IF EXISTS __mj."vwCompanyIntegrationRunAPILogs" CASCADE;
+CREATE VIEW __mj."vwCompanyIntegrationRunAPILogs"
 AS SELECT
     c.*,
     "MJCompanyIntegrationRun_CompanyIntegrationRunID"."Integration" AS "CompanyIntegrationRun"
@@ -1517,7 +1590,8 @@ INNER JOIN
   ON
     c."CompanyIntegrationRunID" = "MJCompanyIntegrationRun_CompanyIntegrationRunID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwComponentLibraryLinks"
+DROP VIEW IF EXISTS __mj."vwComponentLibraryLinks" CASCADE;
+CREATE VIEW __mj."vwComponentLibraryLinks"
 AS SELECT
     c.*,
     "MJComponent_ComponentID"."Name" AS "Component",
@@ -1533,7 +1607,8 @@ INNER JOIN
   ON
     c."LibraryID" = "MJComponentLibrary_LibraryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwComponentDependencies"
+DROP VIEW IF EXISTS __mj."vwComponentDependencies" CASCADE;
+CREATE VIEW __mj."vwComponentDependencies"
 AS SELECT
     c.*,
     "MJComponent_ComponentID"."Name" AS "Component",
@@ -1549,7 +1624,8 @@ INNER JOIN
   ON
     c."DependencyComponentID" = "MJComponent_DependencyComponentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentItemAttributes"
+DROP VIEW IF EXISTS __mj."vwContentItemAttributes" CASCADE;
+CREATE VIEW __mj."vwContentItemAttributes"
 AS SELECT
     c.*,
     "MJContentItem_ContentItemID"."Name" AS "ContentItem"
@@ -1560,7 +1636,8 @@ INNER JOIN
   ON
     c."ContentItemID" = "MJContentItem_ContentItemID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentItemTags"
+DROP VIEW IF EXISTS __mj."vwContentItemTags" CASCADE;
+CREATE VIEW __mj."vwContentItemTags"
 AS SELECT
     c.*,
     "MJContentItem_ItemID"."Name" AS "Item"
@@ -1571,7 +1648,8 @@ INNER JOIN
   ON
     c."ItemID" = "MJContentItem_ItemID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwComponents"
+DROP VIEW IF EXISTS __mj."vwComponents" CASCADE;
+CREATE VIEW __mj."vwComponents"
 AS SELECT
     c.*,
     "MJComponentRegistry_SourceRegistryID"."Name" AS "SourceRegistry"
@@ -1582,7 +1660,8 @@ LEFT OUTER JOIN
   ON
     c."SourceRegistryID" = "MJComponentRegistry_SourceRegistryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentItems"
+DROP VIEW IF EXISTS __mj."vwContentItems" CASCADE;
+CREATE VIEW __mj."vwContentItems"
 AS SELECT
     c.*,
     "MJContentSource_ContentSourceID"."Name" AS "ContentSource",
@@ -1608,7 +1687,8 @@ INNER JOIN
   ON
     c."ContentFileTypeID" = "MJContentFileType_ContentFileTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentProcessRuns"
+DROP VIEW IF EXISTS __mj."vwContentProcessRuns" CASCADE;
+CREATE VIEW __mj."vwContentProcessRuns"
 AS SELECT
     c.*,
     "MJContentSource_SourceID"."Name" AS "Source"
@@ -1619,7 +1699,8 @@ INNER JOIN
   ON
     c."SourceID" = "MJContentSource_SourceID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentSourceParams"
+DROP VIEW IF EXISTS __mj."vwContentSourceParams" CASCADE;
+CREATE VIEW __mj."vwContentSourceParams"
 AS SELECT
     c.*,
     "MJContentSource_ContentSourceID"."Name" AS "ContentSource"
@@ -1630,7 +1711,8 @@ INNER JOIN
   ON
     c."ContentSourceID" = "MJContentSource_ContentSourceID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentSources"
+DROP VIEW IF EXISTS __mj."vwContentSources" CASCADE;
+CREATE VIEW __mj."vwContentSources"
 AS SELECT
     c.*,
     "MJContentType_ContentTypeID"."Name" AS "ContentType",
@@ -1651,7 +1733,8 @@ INNER JOIN
   ON
     c."ContentFileTypeID" = "MJContentFileType_ContentFileTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwContentTypes"
+DROP VIEW IF EXISTS __mj."vwContentTypes" CASCADE;
+CREATE VIEW __mj."vwContentTypes"
 AS SELECT
     c.*,
     "MJAIModel_AIModelID"."Name" AS "AIModel"
@@ -1662,7 +1745,8 @@ INNER JOIN
   ON
     c."AIModelID" = "MJAIModel_AIModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationArtifactPermissions"
+DROP VIEW IF EXISTS __mj."vwConversationArtifactPermissions" CASCADE;
+CREATE VIEW __mj."vwConversationArtifactPermissions"
 AS SELECT
     c.*,
     "MJConversationArtifact_ConversationArtifactID"."Name" AS "ConversationArtifact"
@@ -1673,7 +1757,8 @@ INNER JOIN
   ON
     c."ConversationArtifactID" = "MJConversationArtifact_ConversationArtifactID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationArtifactVersions"
+DROP VIEW IF EXISTS __mj."vwConversationArtifactVersions" CASCADE;
+CREATE VIEW __mj."vwConversationArtifactVersions"
 AS SELECT
     c.*,
     "MJConversationArtifact_ConversationArtifactID"."Name" AS "ConversationArtifact"
@@ -1684,7 +1769,8 @@ INNER JOIN
   ON
     c."ConversationArtifactID" = "MJConversationArtifact_ConversationArtifactID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationArtifacts"
+DROP VIEW IF EXISTS __mj."vwConversationArtifacts" CASCADE;
+CREATE VIEW __mj."vwConversationArtifacts"
 AS SELECT
     c.*,
     "MJConversation_ConversationID"."Name" AS "Conversation",
@@ -1700,7 +1786,8 @@ INNER JOIN
   ON
     c."ArtifactTypeID" = "MJArtifactType_ArtifactTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationDetails"
+DROP VIEW IF EXISTS __mj."vwConversationDetails" CASCADE;
+CREATE VIEW __mj."vwConversationDetails"
 AS SELECT
     c.*,
     "MJConversation_ConversationID"."Name" AS "Conversation",
@@ -1743,7 +1830,8 @@ LEFT OUTER JOIN
     c."TestRunID" = "MJTestRun_TestRunID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnConversationDetailParentID_GetRootID"(c."ID", c."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwConversationDetailArtifacts"
+DROP VIEW IF EXISTS __mj."vwConversationDetailArtifacts" CASCADE;
+CREATE VIEW __mj."vwConversationDetailArtifacts"
 AS SELECT
     c.*,
     "MJConversationDetail_ConversationDetailID"."Message" AS "ConversationDetail",
@@ -1759,7 +1847,8 @@ INNER JOIN
   ON
     c."ArtifactVersionID" = "MJArtifactVersion_ArtifactVersionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationDetailRatings"
+DROP VIEW IF EXISTS __mj."vwConversationDetailRatings" CASCADE;
+CREATE VIEW __mj."vwConversationDetailRatings"
 AS SELECT
     c.*,
     "MJConversationDetail_ConversationDetailID"."Message" AS "ConversationDetail",
@@ -1775,7 +1864,8 @@ INNER JOIN
   ON
     c."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversationDetailAttachments"
+DROP VIEW IF EXISTS __mj."vwConversationDetailAttachments" CASCADE;
+CREATE VIEW __mj."vwConversationDetailAttachments"
 AS SELECT
     c.*,
     "MJConversationDetail_ConversationDetailID"."Message" AS "ConversationDetail",
@@ -1796,7 +1886,8 @@ LEFT OUTER JOIN
   ON
     c."FileID" = "MJFile_FileID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwConversations"
+DROP VIEW IF EXISTS __mj."vwConversations" CASCADE;
+CREATE VIEW __mj."vwConversations"
 AS SELECT
     c.*,
     "MJUser_UserID"."Name" AS "User",
@@ -1832,7 +1923,8 @@ LEFT OUTER JOIN
   ON
     c."TestRunID" = "MJTestRun_TestRunID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwCredentialCategories"
+DROP VIEW IF EXISTS __mj."vwCredentialCategories" CASCADE;
+CREATE VIEW __mj."vwCredentialCategories"
 AS SELECT
     c.*,
     "MJCredentialCategory_ParentID"."Name" AS "Parent",
@@ -1845,7 +1937,8 @@ LEFT OUTER JOIN
     c."ParentID" = "MJCredentialCategory_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnCredentialCategoryParentID_GetRootID"(c."ID", c."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwCredentials"
+DROP VIEW IF EXISTS __mj."vwCredentials" CASCADE;
+CREATE VIEW __mj."vwCredentials"
 AS SELECT
     c.*,
     "MJCredentialType_CredentialTypeID"."Name" AS "CredentialType",
@@ -1861,7 +1954,8 @@ LEFT OUTER JOIN
   ON
     c."CategoryID" = "MJCredentialCategory_CategoryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboardCategories"
+DROP VIEW IF EXISTS __mj."vwDashboardCategories" CASCADE;
+CREATE VIEW __mj."vwDashboardCategories"
 AS SELECT
     d.*,
     "MJDashboardCategory_ParentID"."Name" AS "Parent",
@@ -1879,7 +1973,8 @@ INNER JOIN
     d."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnDashboardCategoryParentID_GetRootID"(d."ID", d."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwDashboardCategoryLinks"
+DROP VIEW IF EXISTS __mj."vwDashboardCategoryLinks" CASCADE;
+CREATE VIEW __mj."vwDashboardCategoryLinks"
 AS SELECT
     d.*,
     "MJDashboard_DashboardID"."Name" AS "Dashboard",
@@ -1900,7 +1995,8 @@ LEFT OUTER JOIN
   ON
     d."DashboardCategoryID" = "MJDashboardCategory_DashboardCategoryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboardCategoryPermissions"
+DROP VIEW IF EXISTS __mj."vwDashboardCategoryPermissions" CASCADE;
+CREATE VIEW __mj."vwDashboardCategoryPermissions"
 AS SELECT
     d.*,
     "MJDashboardCategory_DashboardCategoryID"."Name" AS "DashboardCategory",
@@ -1921,7 +2017,8 @@ LEFT OUTER JOIN
   ON
     d."SharedByUserID" = "MJUser_SharedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboardPermissions"
+DROP VIEW IF EXISTS __mj."vwDashboardPermissions" CASCADE;
+CREATE VIEW __mj."vwDashboardPermissions"
 AS SELECT
     d.*,
     "MJDashboard_DashboardID"."Name" AS "Dashboard",
@@ -1942,7 +2039,8 @@ LEFT OUTER JOIN
   ON
     d."SharedByUserID" = "MJUser_SharedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboardUserPreferences"
+DROP VIEW IF EXISTS __mj."vwDashboardUserPreferences" CASCADE;
+CREATE VIEW __mj."vwDashboardUserPreferences"
 AS SELECT
     d.*,
     "MJUser_UserID"."Name" AS "User",
@@ -1963,7 +2061,8 @@ LEFT OUTER JOIN
   ON
     d."ApplicationID" = "MJApplication_ApplicationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboardUserStates"
+DROP VIEW IF EXISTS __mj."vwDashboardUserStates" CASCADE;
+CREATE VIEW __mj."vwDashboardUserStates"
 AS SELECT
     d.*,
     "MJDashboard_DashboardID"."Name" AS "Dashboard",
@@ -1979,7 +2078,8 @@ INNER JOIN
   ON
     d."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDashboards"
+DROP VIEW IF EXISTS __mj."vwDashboards" CASCADE;
+CREATE VIEW __mj."vwDashboards"
 AS SELECT
     d.*,
     "MJUser_UserID"."Name" AS "User",
@@ -2005,7 +2105,8 @@ INNER JOIN
   ON
     d."EnvironmentID" = "MJEnvironment_EnvironmentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDataContextItems"
+DROP VIEW IF EXISTS __mj."vwDataContextItems" CASCADE;
+CREATE VIEW __mj."vwDataContextItems"
 AS SELECT
     d.*,
     "MJDataContext_DataContextID"."Name" AS "DataContext",
@@ -2031,7 +2132,8 @@ LEFT OUTER JOIN
   ON
     d."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDataContexts"
+DROP VIEW IF EXISTS __mj."vwDataContexts" CASCADE;
+CREATE VIEW __mj."vwDataContexts"
 AS SELECT
     d.*,
     "MJUser_UserID"."Name" AS "User"
@@ -2042,7 +2144,8 @@ INNER JOIN
   ON
     d."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDatasetItems"
+DROP VIEW IF EXISTS __mj."vwDatasetItems" CASCADE;
+CREATE VIEW __mj."vwDatasetItems"
 AS SELECT
     d.*,
     "MJDataset_DatasetID"."Name" AS "Dataset",
@@ -2058,7 +2161,8 @@ INNER JOIN
   ON
     d."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDuplicateRunDetails"
+DROP VIEW IF EXISTS __mj."vwDuplicateRunDetails" CASCADE;
+CREATE VIEW __mj."vwDuplicateRunDetails"
 AS SELECT
     d.*,
     "MJDuplicateRun_DuplicateRunID"."Entity" AS "DuplicateRun"
@@ -2069,7 +2173,8 @@ INNER JOIN
   ON
     d."DuplicateRunID" = "MJDuplicateRun_DuplicateRunID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDuplicateRunDetailMatches"
+DROP VIEW IF EXISTS __mj."vwDuplicateRunDetailMatches" CASCADE;
+CREATE VIEW __mj."vwDuplicateRunDetailMatches"
 AS SELECT
     d.*,
     "MJDuplicateRunDetail_DuplicateRunDetailID"."RecordID" AS "DuplicateRunDetail",
@@ -2085,7 +2190,8 @@ LEFT OUTER JOIN
   ON
     d."RecordMergeLogID" = "MJRecordMergeLog_RecordMergeLogID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwDuplicateRuns"
+DROP VIEW IF EXISTS __mj."vwDuplicateRuns" CASCADE;
+CREATE VIEW __mj."vwDuplicateRuns"
 AS SELECT
     d.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2111,7 +2217,8 @@ LEFT OUTER JOIN
   ON
     d."ApprovedByUserID" = "MJUser_ApprovedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEmployeeCompanyIntegrations"
+DROP VIEW IF EXISTS __mj."vwEmployeeCompanyIntegrations" CASCADE;
+CREATE VIEW __mj."vwEmployeeCompanyIntegrations"
 AS SELECT
     e.*,
     "MJEmployee_EmployeeID"."FirstLast" AS "Employee",
@@ -2127,7 +2234,8 @@ INNER JOIN
   ON
     e."CompanyIntegrationID" = "MJCompanyIntegration_CompanyIntegrationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEmployeeRoles"
+DROP VIEW IF EXISTS __mj."vwEmployeeRoles" CASCADE;
+CREATE VIEW __mj."vwEmployeeRoles"
 AS SELECT
     e.*,
     "MJEmployee_EmployeeID"."FirstLast" AS "Employee",
@@ -2143,7 +2251,8 @@ INNER JOIN
   ON
     e."RoleID" = "MJRole_RoleID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEmployeeSkills"
+DROP VIEW IF EXISTS __mj."vwEmployeeSkills" CASCADE;
+CREATE VIEW __mj."vwEmployeeSkills"
 AS SELECT
     e.*,
     "MJEmployee_EmployeeID"."FirstLast" AS "Employee",
@@ -2159,7 +2268,8 @@ INNER JOIN
   ON
     e."SkillID" = "MJSkill_SkillID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEncryptionKeys"
+DROP VIEW IF EXISTS __mj."vwEncryptionKeys" CASCADE;
+CREATE VIEW __mj."vwEncryptionKeys"
 AS SELECT
     e.*,
     "MJEncryptionKeySource_EncryptionKeySourceID"."Name" AS "EncryptionKeySource",
@@ -2175,7 +2285,8 @@ INNER JOIN
   ON
     e."EncryptionAlgorithmID" = "MJEncryptionAlgorithm_EncryptionAlgorithmID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityActionInvocations"
+DROP VIEW IF EXISTS __mj."vwEntityActionInvocations" CASCADE;
+CREATE VIEW __mj."vwEntityActionInvocations"
 AS SELECT
     e.*,
     "MJEntityAction_EntityActionID"."Action" AS "EntityAction",
@@ -2191,7 +2302,8 @@ INNER JOIN
   ON
     e."InvocationTypeID" = "MJEntityActionInvocationType_InvocationTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityActionFilters"
+DROP VIEW IF EXISTS __mj."vwEntityActionFilters" CASCADE;
+CREATE VIEW __mj."vwEntityActionFilters"
 AS SELECT
     e.*,
     "MJEntityAction_EntityActionID"."Action" AS "EntityAction",
@@ -2207,7 +2319,8 @@ INNER JOIN
   ON
     e."ActionFilterID" = "MJActionFilter_ActionFilterID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityActionParams"
+DROP VIEW IF EXISTS __mj."vwEntityActionParams" CASCADE;
+CREATE VIEW __mj."vwEntityActionParams"
 AS SELECT
     e.*,
     "MJEntityAction_EntityActionID"."Action" AS "EntityAction",
@@ -2223,7 +2336,8 @@ INNER JOIN
   ON
     e."ActionParamID" = "MJActionParam_ActionParamID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityCommunicationFields"
+DROP VIEW IF EXISTS __mj."vwEntityCommunicationFields" CASCADE;
+CREATE VIEW __mj."vwEntityCommunicationFields"
 AS SELECT
     e.*,
     "MJEntityCommunicationMessageType_EntityCommunicationMessageTypeID"."BaseMessageType" AS "EntityCommunicationMessageType"
@@ -2234,7 +2348,8 @@ INNER JOIN
   ON
     e."EntityCommunicationMessageTypeID" = "MJEntityCommunicationMessageType_EntityCommunicationMessageTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityActions"
+DROP VIEW IF EXISTS __mj."vwEntityActions" CASCADE;
+CREATE VIEW __mj."vwEntityActions"
 AS SELECT
     e.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2250,7 +2365,8 @@ INNER JOIN
   ON
     e."ActionID" = "MJAction_ActionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityAIActions"
+DROP VIEW IF EXISTS __mj."vwEntityAIActions" CASCADE;
+CREATE VIEW __mj."vwEntityAIActions"
 AS SELECT
     e.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2276,7 +2392,8 @@ LEFT OUTER JOIN
   ON
     e."OutputEntityID" = "MJEntity_OutputEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityCommunicationMessageTypes"
+DROP VIEW IF EXISTS __mj."vwEntityCommunicationMessageTypes" CASCADE;
+CREATE VIEW __mj."vwEntityCommunicationMessageTypes"
 AS SELECT
     e.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2292,7 +2409,8 @@ INNER JOIN
   ON
     e."BaseMessageTypeID" = "MJCommunicationBaseMessageType_BaseMessageTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityDocumentRuns"
+DROP VIEW IF EXISTS __mj."vwEntityDocumentRuns" CASCADE;
+CREATE VIEW __mj."vwEntityDocumentRuns"
 AS SELECT
     e.*,
     "MJEntityDocument_EntityDocumentID"."Name" AS "EntityDocument"
@@ -2303,7 +2421,8 @@ INNER JOIN
   ON
     e."EntityDocumentID" = "MJEntityDocument_EntityDocumentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityDocumentSettings"
+DROP VIEW IF EXISTS __mj."vwEntityDocumentSettings" CASCADE;
+CREATE VIEW __mj."vwEntityDocumentSettings"
 AS SELECT
     e.*,
     "MJEntityDocument_EntityDocumentID"."Name" AS "EntityDocument"
@@ -2314,7 +2433,8 @@ INNER JOIN
   ON
     e."EntityDocumentID" = "MJEntityDocument_EntityDocumentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityDocuments"
+DROP VIEW IF EXISTS __mj."vwEntityDocuments" CASCADE;
+CREATE VIEW __mj."vwEntityDocuments"
 AS SELECT
     e.*,
     "MJEntityDocumentType_TypeID"."Name" AS "Type",
@@ -2345,7 +2465,8 @@ INNER JOIN
   ON
     e."AIModelID" = "MJAIModel_AIModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntityRecordDocuments"
+DROP VIEW IF EXISTS __mj."vwEntityRecordDocuments" CASCADE;
+CREATE VIEW __mj."vwEntityRecordDocuments"
 AS SELECT
     e.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2366,7 +2487,8 @@ INNER JOIN
   ON
     e."VectorIndexID" = "MJVectorIndex_VectorIndexID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwEntitySettings"
+DROP VIEW IF EXISTS __mj."vwEntitySettings" CASCADE;
+CREATE VIEW __mj."vwEntitySettings"
 AS SELECT
     e.*,
     "MJEntity_EntityID"."Name" AS "Entity"
@@ -2377,7 +2499,8 @@ INNER JOIN
   ON
     e."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwFileCategories"
+DROP VIEW IF EXISTS __mj."vwFileCategories" CASCADE;
+CREATE VIEW __mj."vwFileCategories"
 AS SELECT
     f.*,
     "MJFileCategory_ParentID"."Name" AS "Parent",
@@ -2390,7 +2513,8 @@ LEFT OUTER JOIN
     f."ParentID" = "MJFileCategory_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnFileCategoryParentID_GetRootID"(f."ID", f."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwErrorLogs"
+DROP VIEW IF EXISTS __mj."vwErrorLogs" CASCADE;
+CREATE VIEW __mj."vwErrorLogs"
 AS SELECT
     e.*,
     "MJCompanyIntegrationRun_CompanyIntegrationRunID"."Integration" AS "CompanyIntegrationRun",
@@ -2406,7 +2530,8 @@ LEFT OUTER JOIN
   ON
     e."CompanyIntegrationRunDetailID" = "MJCompanyIntegrationRunDetail_CompanyIntegrationRunDetailID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwFileEntityRecordLinks"
+DROP VIEW IF EXISTS __mj."vwFileEntityRecordLinks" CASCADE;
+CREATE VIEW __mj."vwFileEntityRecordLinks"
 AS SELECT
     f.*,
     "MJFile_FileID"."Name" AS "File",
@@ -2422,7 +2547,8 @@ INNER JOIN
   ON
     f."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwFiles"
+DROP VIEW IF EXISTS __mj."vwFiles" CASCADE;
+CREATE VIEW __mj."vwFiles"
 AS SELECT
     f.*,
     "MJFileCategory_CategoryID"."Name" AS "Category",
@@ -2438,7 +2564,8 @@ INNER JOIN
   ON
     f."ProviderID" = "MJFileStorageProvider_ProviderID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwFileStorageAccounts"
+DROP VIEW IF EXISTS __mj."vwFileStorageAccounts" CASCADE;
+CREATE VIEW __mj."vwFileStorageAccounts"
 AS SELECT
     f.*,
     "MJFileStorageProvider_ProviderID"."Name" AS "Provider",
@@ -2454,7 +2581,8 @@ INNER JOIN
   ON
     f."CredentialID" = "MJCredential_CredentialID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwGeneratedCodeCategories"
+DROP VIEW IF EXISTS __mj."vwGeneratedCodeCategories" CASCADE;
+CREATE VIEW __mj."vwGeneratedCodeCategories"
 AS SELECT
     g.*,
     "MJGeneratedCodeCategory_ParentID"."Name" AS "Parent",
@@ -2467,7 +2595,8 @@ LEFT OUTER JOIN
     g."ParentID" = "MJGeneratedCodeCategory_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnGeneratedCodeCategoryParentID_GetRootID"(g."ID", g."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwGeneratedCodes"
+DROP VIEW IF EXISTS __mj."vwGeneratedCodes" CASCADE;
+CREATE VIEW __mj."vwGeneratedCodes"
 AS SELECT
     g.*,
     "MJGeneratedCodeCategory_CategoryID"."Name" AS "Category",
@@ -2488,7 +2617,8 @@ LEFT OUTER JOIN
   ON
     g."LinkedEntityID" = "MJEntity_LinkedEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwLibraryItems"
+DROP VIEW IF EXISTS __mj."vwLibraryItems" CASCADE;
+CREATE VIEW __mj."vwLibraryItems"
 AS SELECT
     l.*,
     "MJLibrary_LibraryID"."Name" AS "Library"
@@ -2499,7 +2629,8 @@ INNER JOIN
   ON
     l."LibraryID" = "MJLibrary_LibraryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwListCategories"
+DROP VIEW IF EXISTS __mj."vwListCategories" CASCADE;
+CREATE VIEW __mj."vwListCategories"
 AS SELECT
     l.*,
     "MJListCategory_ParentID"."Name" AS "Parent",
@@ -2517,7 +2648,8 @@ INNER JOIN
     l."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnListCategoryParentID_GetRootID"(l."ID", l."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwListInvitations"
+DROP VIEW IF EXISTS __mj."vwListInvitations" CASCADE;
+CREATE VIEW __mj."vwListInvitations"
 AS SELECT
     l.*,
     "MJList_ListID"."Name" AS "List",
@@ -2533,7 +2665,8 @@ INNER JOIN
   ON
     l."CreatedByUserID" = "MJUser_CreatedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwLists"
+DROP VIEW IF EXISTS __mj."vwLists" CASCADE;
+CREATE VIEW __mj."vwLists"
 AS SELECT
     l.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2559,7 +2692,8 @@ LEFT OUTER JOIN
   ON
     l."CompanyIntegrationID" = "MJCompanyIntegration_CompanyIntegrationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwListDetails"
+DROP VIEW IF EXISTS __mj."vwListDetails" CASCADE;
+CREATE VIEW __mj."vwListDetails"
 AS SELECT
     l.*,
     "MJList_ListID"."Name" AS "List"
@@ -2570,7 +2704,8 @@ INNER JOIN
   ON
     l."ListID" = "MJList_ListID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwListShares"
+DROP VIEW IF EXISTS __mj."vwListShares" CASCADE;
+CREATE VIEW __mj."vwListShares"
 AS SELECT
     l.*,
     "MJList_ListID"."Name" AS "List",
@@ -2586,7 +2721,8 @@ INNER JOIN
   ON
     l."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPServerConnectionPermissions"
+DROP VIEW IF EXISTS __mj."vwMCPServerConnectionPermissions" CASCADE;
+CREATE VIEW __mj."vwMCPServerConnectionPermissions"
 AS SELECT
     m.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2607,7 +2743,8 @@ LEFT OUTER JOIN
   ON
     m."RoleID" = "MJRole_RoleID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPServerConnectionTools"
+DROP VIEW IF EXISTS __mj."vwMCPServerConnectionTools" CASCADE;
+CREATE VIEW __mj."vwMCPServerConnectionTools"
 AS SELECT
     m.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2623,7 +2760,8 @@ INNER JOIN
   ON
     m."MCPServerToolID" = "MJMCPServerTool_MCPServerToolID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPServers"
+DROP VIEW IF EXISTS __mj."vwMCPServers" CASCADE;
+CREATE VIEW __mj."vwMCPServers"
 AS SELECT
     m.*,
     "MJCredentialType_CredentialTypeID"."Name" AS "CredentialType"
@@ -2634,7 +2772,8 @@ LEFT OUTER JOIN
   ON
     m."CredentialTypeID" = "MJCredentialType_CredentialTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPServerConnections"
+DROP VIEW IF EXISTS __mj."vwMCPServerConnections" CASCADE;
+CREATE VIEW __mj."vwMCPServerConnections"
 AS SELECT
     m.*,
     "MJMCPServer_MCPServerID"."Name" AS "MCPServer",
@@ -2655,7 +2794,8 @@ LEFT OUTER JOIN
   ON
     m."CompanyID" = "MJCompany_CompanyID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPServerTools"
+DROP VIEW IF EXISTS __mj."vwMCPServerTools" CASCADE;
+CREATE VIEW __mj."vwMCPServerTools"
 AS SELECT
     m.*,
     "MJMCPServer_MCPServerID"."Name" AS "MCPServer",
@@ -2676,7 +2816,8 @@ LEFT OUTER JOIN
   ON
     m."GeneratedActionCategoryID" = "MJActionCategory_GeneratedActionCategoryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwMCPToolExecutionLogs"
+DROP VIEW IF EXISTS __mj."vwMCPToolExecutionLogs" CASCADE;
+CREATE VIEW __mj."vwMCPToolExecutionLogs"
 AS SELECT
     m.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2697,7 +2838,8 @@ INNER JOIN
   ON
     m."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwOAuthTokens"
+DROP VIEW IF EXISTS __mj."vwOAuthTokens" CASCADE;
+CREATE VIEW __mj."vwOAuthTokens"
 AS SELECT
     o.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2713,7 +2855,8 @@ LEFT OUTER JOIN
   ON
     o."CredentialID" = "MJCredential_CredentialID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwOAuthAuthorizationStates"
+DROP VIEW IF EXISTS __mj."vwOAuthAuthorizationStates" CASCADE;
+CREATE VIEW __mj."vwOAuthAuthorizationStates"
 AS SELECT
     o.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2729,7 +2872,8 @@ INNER JOIN
   ON
     o."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwOAuthClientRegistrations"
+DROP VIEW IF EXISTS __mj."vwOAuthClientRegistrations" CASCADE;
+CREATE VIEW __mj."vwOAuthClientRegistrations"
 AS SELECT
     o.*,
     "MJMCPServerConnection_MCPServerConnectionID"."Name" AS "MCPServerConnection",
@@ -2745,7 +2889,8 @@ INNER JOIN
   ON
     o."MCPServerID" = "MJMCPServer_MCPServerID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwPublicLinks"
+DROP VIEW IF EXISTS __mj."vwPublicLinks" CASCADE;
+CREATE VIEW __mj."vwPublicLinks"
 AS SELECT
     p.*,
     "MJUser_UserID"."Name" AS "User"
@@ -2756,7 +2901,8 @@ INNER JOIN
   ON
     p."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueries"
+DROP VIEW IF EXISTS __mj."vwQueries" CASCADE;
+CREATE VIEW __mj."vwQueries"
 AS SELECT
     q.*,
     "MJQueryCategory_CategoryID"."Name" AS "Category",
@@ -2772,7 +2918,8 @@ LEFT OUTER JOIN
   ON
     q."EmbeddingModelID" = "MJAIModel_EmbeddingModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwProjects"
+DROP VIEW IF EXISTS __mj."vwProjects" CASCADE;
+CREATE VIEW __mj."vwProjects"
 AS SELECT
     p.*,
     "MJEnvironment_EnvironmentID"."Name" AS "Environment",
@@ -2790,7 +2937,8 @@ LEFT OUTER JOIN
     p."ParentID" = "MJProject_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnProjectParentID_GetRootID"(p."ID", p."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwQueryCategories"
+DROP VIEW IF EXISTS __mj."vwQueryCategories" CASCADE;
+CREATE VIEW __mj."vwQueryCategories"
 AS SELECT
     q.*,
     "MJQueryCategory_ParentID"."Name" AS "Parent",
@@ -2808,7 +2956,8 @@ INNER JOIN
     q."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnQueryCategoryParentID_GetRootID"(q."ID", q."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwQueryEntities"
+DROP VIEW IF EXISTS __mj."vwQueryEntities" CASCADE;
+CREATE VIEW __mj."vwQueryEntities"
 AS SELECT
     q.*,
     "MJQuery_QueryID"."Name" AS "Query",
@@ -2824,7 +2973,8 @@ INNER JOIN
   ON
     q."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueryFields"
+DROP VIEW IF EXISTS __mj."vwQueryFields" CASCADE;
+CREATE VIEW __mj."vwQueryFields"
 AS SELECT
     q.*,
     "MJQuery_QueryID"."Name" AS "Query",
@@ -2840,7 +2990,8 @@ LEFT OUTER JOIN
   ON
     q."SourceEntityID" = "MJEntity_SourceEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueueTasks"
+DROP VIEW IF EXISTS __mj."vwQueueTasks" CASCADE;
+CREATE VIEW __mj."vwQueueTasks"
 AS SELECT
     q.*,
     "MJQueue_QueueID"."Name" AS "Queue"
@@ -2851,7 +3002,8 @@ INNER JOIN
   ON
     q."QueueID" = "MJQueue_QueueID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueryParameters"
+DROP VIEW IF EXISTS __mj."vwQueryParameters" CASCADE;
+CREATE VIEW __mj."vwQueryParameters"
 AS SELECT
     q.*,
     "MJQuery_QueryID"."Name" AS "Query"
@@ -2862,7 +3014,8 @@ INNER JOIN
   ON
     q."QueryID" = "MJQuery_QueryID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueryPermissions"
+DROP VIEW IF EXISTS __mj."vwQueryPermissions" CASCADE;
+CREATE VIEW __mj."vwQueryPermissions"
 AS SELECT
     q.*,
     "MJQuery_QueryID"."Name" AS "Query",
@@ -2878,7 +3031,8 @@ INNER JOIN
   ON
     q."RoleID" = "MJRole_RoleID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecommendationItems"
+DROP VIEW IF EXISTS __mj."vwRecommendationItems" CASCADE;
+CREATE VIEW __mj."vwRecommendationItems"
 AS SELECT
     r.*,
     "MJRecommendation_RecommendationID"."SourceEntityRecordID" AS "Recommendation",
@@ -2894,7 +3048,8 @@ INNER JOIN
   ON
     r."DestinationEntityID" = "MJEntity_DestinationEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwQueues"
+DROP VIEW IF EXISTS __mj."vwQueues" CASCADE;
+CREATE VIEW __mj."vwQueues"
 AS SELECT
     q.*,
     "MJQueueType_QueueTypeID"."Name" AS "QueueType"
@@ -2905,7 +3060,8 @@ INNER JOIN
   ON
     q."QueueTypeID" = "MJQueueType_QueueTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecommendationRuns"
+DROP VIEW IF EXISTS __mj."vwRecommendationRuns" CASCADE;
+CREATE VIEW __mj."vwRecommendationRuns"
 AS SELECT
     r.*,
     "MJRecommendationProvider_RecommendationProviderID"."Name" AS "RecommendationProvider",
@@ -2921,7 +3077,8 @@ INNER JOIN
   ON
     r."RunByUserID" = "MJUser_RunByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecommendations"
+DROP VIEW IF EXISTS __mj."vwRecommendations" CASCADE;
+CREATE VIEW __mj."vwRecommendations"
 AS SELECT
     r.*,
     "MJRecommendationRun_RecommendationRunID"."RecommendationProvider" AS "RecommendationRun",
@@ -2937,7 +3094,8 @@ INNER JOIN
   ON
     r."SourceEntityID" = "MJEntity_SourceEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecordChanges"
+DROP VIEW IF EXISTS __mj."vwRecordChanges" CASCADE;
+CREATE VIEW __mj."vwRecordChanges"
 AS SELECT
     r.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -2963,7 +3121,8 @@ LEFT OUTER JOIN
   ON
     r."IntegrationID" = "MJIntegration_IntegrationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecordChangeReplayRuns"
+DROP VIEW IF EXISTS __mj."vwRecordChangeReplayRuns" CASCADE;
+CREATE VIEW __mj."vwRecordChangeReplayRuns"
 AS SELECT
     r.*,
     "MJUser_UserID"."Name" AS "User"
@@ -2974,7 +3133,8 @@ INNER JOIN
   ON
     r."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecordLinks"
+DROP VIEW IF EXISTS __mj."vwRecordLinks" CASCADE;
+CREATE VIEW __mj."vwRecordLinks"
 AS SELECT
     r.*,
     "MJEntity_SourceEntityID"."Name" AS "SourceEntity",
@@ -2990,7 +3150,8 @@ INNER JOIN
   ON
     r."TargetEntityID" = "MJEntity_TargetEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecordMergeDeletionLogs"
+DROP VIEW IF EXISTS __mj."vwRecordMergeDeletionLogs" CASCADE;
+CREATE VIEW __mj."vwRecordMergeDeletionLogs"
 AS SELECT
     r.*,
     "MJRecordMergeLog_RecordMergeLogID"."SurvivingRecordID" AS "RecordMergeLog"
@@ -3001,7 +3162,8 @@ INNER JOIN
   ON
     r."RecordMergeLogID" = "MJRecordMergeLog_RecordMergeLogID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwRecordMergeLogs"
+DROP VIEW IF EXISTS __mj."vwRecordMergeLogs" CASCADE;
+CREATE VIEW __mj."vwRecordMergeLogs"
 AS SELECT
     r.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -3022,7 +3184,8 @@ LEFT OUTER JOIN
   ON
     r."ApprovedByUserID" = "MJUser_ApprovedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwReportCategories"
+DROP VIEW IF EXISTS __mj."vwReportCategories" CASCADE;
+CREATE VIEW __mj."vwReportCategories"
 AS SELECT
     r.*,
     "MJReportCategory_ParentID"."Name" AS "Parent",
@@ -3040,7 +3203,8 @@ INNER JOIN
     r."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnReportCategoryParentID_GetRootID"(r."ID", r."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwReportSnapshots"
+DROP VIEW IF EXISTS __mj."vwReportSnapshots" CASCADE;
+CREATE VIEW __mj."vwReportSnapshots"
 AS SELECT
     r.*,
     "MJReport_ReportID"."Name" AS "Report",
@@ -3056,7 +3220,8 @@ INNER JOIN
   ON
     r."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwReportUserStates"
+DROP VIEW IF EXISTS __mj."vwReportUserStates" CASCADE;
+CREATE VIEW __mj."vwReportUserStates"
 AS SELECT
     r.*,
     "MJReport_ReportID"."Name" AS "Report",
@@ -3072,7 +3237,8 @@ INNER JOIN
   ON
     r."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwReportVersions"
+DROP VIEW IF EXISTS __mj."vwReportVersions" CASCADE;
+CREATE VIEW __mj."vwReportVersions"
 AS SELECT
     r.*,
     "MJReport_ReportID"."Name" AS "Report"
@@ -3083,7 +3249,8 @@ INNER JOIN
   ON
     r."ReportID" = "MJReport_ReportID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwReports"
+DROP VIEW IF EXISTS __mj."vwReports" CASCADE;
+CREATE VIEW __mj."vwReports"
 AS SELECT
     r.*,
     "MJReportCategory_CategoryID"."Name" AS "Category",
@@ -3139,7 +3306,8 @@ INNER JOIN
   ON
     r."EnvironmentID" = "MJEnvironment_EnvironmentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwResourcePermissions"
+DROP VIEW IF EXISTS __mj."vwResourcePermissions" CASCADE;
+CREATE VIEW __mj."vwResourcePermissions"
 AS SELECT
     r.*,
     "MJResourceType_ResourceTypeID"."Name" AS "ResourceType",
@@ -3160,7 +3328,8 @@ LEFT OUTER JOIN
   ON
     r."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwResourceLinks"
+DROP VIEW IF EXISTS __mj."vwResourceLinks" CASCADE;
+CREATE VIEW __mj."vwResourceLinks"
 AS SELECT
     r.*,
     "MJUser_UserID"."Name" AS "User",
@@ -3176,7 +3345,8 @@ INNER JOIN
   ON
     r."ResourceTypeID" = "MJResourceType_ResourceTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwResourceTypes"
+DROP VIEW IF EXISTS __mj."vwResourceTypes" CASCADE;
+CREATE VIEW __mj."vwResourceTypes"
 AS SELECT
     r.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -3192,7 +3362,8 @@ LEFT OUTER JOIN
   ON
     r."CategoryEntityID" = "MJEntity_CategoryEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwScheduledActions"
+DROP VIEW IF EXISTS __mj."vwScheduledActions" CASCADE;
+CREATE VIEW __mj."vwScheduledActions"
 AS SELECT
     s.*,
     "MJUser_CreatedByUserID"."Name" AS "CreatedByUser",
@@ -3208,7 +3379,8 @@ INNER JOIN
   ON
     s."ActionID" = "MJAction_ActionID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwScheduledActionParams"
+DROP VIEW IF EXISTS __mj."vwScheduledActionParams" CASCADE;
+CREATE VIEW __mj."vwScheduledActionParams"
 AS SELECT
     s.*,
     "MJScheduledAction_ScheduledActionID"."Name" AS "ScheduledAction",
@@ -3224,7 +3396,8 @@ INNER JOIN
   ON
     s."ActionParamID" = "MJActionParam_ActionParamID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwScheduledJobRuns"
+DROP VIEW IF EXISTS __mj."vwScheduledJobRuns" CASCADE;
+CREATE VIEW __mj."vwScheduledJobRuns"
 AS SELECT
     s.*,
     "MJScheduledJob_ScheduledJobID"."Name" AS "ScheduledJob",
@@ -3240,7 +3413,8 @@ LEFT OUTER JOIN
   ON
     s."ExecutedByUserID" = "MJUser_ExecutedByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwScheduledJobs"
+DROP VIEW IF EXISTS __mj."vwScheduledJobs" CASCADE;
+CREATE VIEW __mj."vwScheduledJobs"
 AS SELECT
     s.*,
     "MJScheduledJobType_JobTypeID"."Name" AS "JobType",
@@ -3261,7 +3435,8 @@ LEFT OUTER JOIN
   ON
     s."NotifyUserID" = "MJUser_NotifyUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTaggedItems"
+DROP VIEW IF EXISTS __mj."vwTaggedItems" CASCADE;
+CREATE VIEW __mj."vwTaggedItems"
 AS SELECT
     t.*,
     "MJTag_TagID"."Name" AS "Tag",
@@ -3277,7 +3452,8 @@ INNER JOIN
   ON
     t."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwSkills"
+DROP VIEW IF EXISTS __mj."vwSkills" CASCADE;
+CREATE VIEW __mj."vwSkills"
 AS SELECT
     s.*,
     "MJSkill_ParentID"."Name" AS "Parent",
@@ -3290,7 +3466,8 @@ LEFT OUTER JOIN
     s."ParentID" = "MJSkill_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnSkillParentID_GetRootID"(s."ID", s."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwTags"
+DROP VIEW IF EXISTS __mj."vwTags" CASCADE;
+CREATE VIEW __mj."vwTags"
 AS SELECT
     t.*,
     "MJTag_ParentID"."Name" AS "Parent",
@@ -3303,7 +3480,8 @@ LEFT OUTER JOIN
     t."ParentID" = "MJTag_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnTagParentID_GetRootID"(t."ID", t."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwTaskDependencies"
+DROP VIEW IF EXISTS __mj."vwTaskDependencies" CASCADE;
+CREATE VIEW __mj."vwTaskDependencies"
 AS SELECT
     t.*,
     "MJTask_TaskID"."Name" AS "Task",
@@ -3319,7 +3497,8 @@ INNER JOIN
   ON
     t."DependsOnTaskID" = "MJTask_DependsOnTaskID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTemplateCategories"
+DROP VIEW IF EXISTS __mj."vwTemplateCategories" CASCADE;
+CREATE VIEW __mj."vwTemplateCategories"
 AS SELECT
     t.*,
     "MJTemplateCategory_ParentID"."Name" AS "Parent",
@@ -3337,7 +3516,8 @@ INNER JOIN
     t."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnTemplateCategoryParentID_GetRootID"(t."ID", t."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwTasks"
+DROP VIEW IF EXISTS __mj."vwTasks" CASCADE;
+CREATE VIEW __mj."vwTasks"
 AS SELECT
     t.*,
     "MJTask_ParentID"."Name" AS "Parent",
@@ -3380,7 +3560,8 @@ LEFT OUTER JOIN
     t."AgentID" = "MJAIAgent_AgentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnTaskParentID_GetRootID"(t."ID", t."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwTemplateContents"
+DROP VIEW IF EXISTS __mj."vwTemplateContents" CASCADE;
+CREATE VIEW __mj."vwTemplateContents"
 AS SELECT
     t.*,
     "MJTemplate_TemplateID"."Name" AS "Template",
@@ -3396,7 +3577,8 @@ INNER JOIN
   ON
     t."TypeID" = "MJTemplateContentType_TypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTemplateParams"
+DROP VIEW IF EXISTS __mj."vwTemplateParams" CASCADE;
+CREATE VIEW __mj."vwTemplateParams"
 AS SELECT
     t.*,
     "MJTemplate_TemplateID"."Name" AS "Template",
@@ -3417,7 +3599,8 @@ LEFT OUTER JOIN
   ON
     t."TemplateContentID" = "MJTemplateContent_TemplateContentID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestRubrics"
+DROP VIEW IF EXISTS __mj."vwTestRubrics" CASCADE;
+CREATE VIEW __mj."vwTestRubrics"
 AS SELECT
     t.*,
     "MJTestType_TypeID"."Name" AS "Type"
@@ -3428,7 +3611,8 @@ INNER JOIN
   ON
     t."TypeID" = "MJTestType_TypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTemplates"
+DROP VIEW IF EXISTS __mj."vwTemplates" CASCADE;
+CREATE VIEW __mj."vwTemplates"
 AS SELECT
     t.*,
     "MJTemplateCategory_CategoryID"."Name" AS "Category",
@@ -3444,7 +3628,8 @@ INNER JOIN
   ON
     t."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestRuns"
+DROP VIEW IF EXISTS __mj."vwTestRuns" CASCADE;
+CREATE VIEW __mj."vwTestRuns"
 AS SELECT
     t.*,
     "MJTest_TestID"."Name" AS "Test",
@@ -3470,7 +3655,8 @@ LEFT OUTER JOIN
   ON
     t."TargetLogEntityID" = "MJEntity_TargetLogEntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestRunFeedbacks"
+DROP VIEW IF EXISTS __mj."vwTestRunFeedbacks" CASCADE;
+CREATE VIEW __mj."vwTestRunFeedbacks"
 AS SELECT
     t.*,
     "MJTestRun_TestRunID"."Test" AS "TestRun",
@@ -3486,7 +3672,8 @@ INNER JOIN
   ON
     t."ReviewerUserID" = "MJUser_ReviewerUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestSuiteTests"
+DROP VIEW IF EXISTS __mj."vwTestSuiteTests" CASCADE;
+CREATE VIEW __mj."vwTestSuiteTests"
 AS SELECT
     t.*,
     "MJTestSuite_SuiteID"."Name" AS "Suite",
@@ -3502,7 +3689,8 @@ INNER JOIN
   ON
     t."TestID" = "MJTest_TestID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestSuiteRuns"
+DROP VIEW IF EXISTS __mj."vwTestSuiteRuns" CASCADE;
+CREATE VIEW __mj."vwTestSuiteRuns"
 AS SELECT
     t.*,
     "MJTestSuite_SuiteID"."Name" AS "Suite",
@@ -3518,7 +3706,8 @@ INNER JOIN
   ON
     t."RunByUserID" = "MJUser_RunByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTests"
+DROP VIEW IF EXISTS __mj."vwTests" CASCADE;
+CREATE VIEW __mj."vwTests"
 AS SELECT
     t.*,
     "MJTestType_TypeID"."Name" AS "Type"
@@ -3529,7 +3718,8 @@ INNER JOIN
   ON
     t."TypeID" = "MJTestType_TypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwTestSuites"
+DROP VIEW IF EXISTS __mj."vwTestSuites" CASCADE;
+CREATE VIEW __mj."vwTestSuites"
 AS SELECT
     t.*,
     "MJTestSuite_ParentID"."Name" AS "Parent",
@@ -3542,7 +3732,8 @@ LEFT OUTER JOIN
     t."ParentID" = "MJTestSuite_ParentID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnTestSuiteParentID_GetRootID"(t."ID", t."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwUserNotificationTypes"
+DROP VIEW IF EXISTS __mj."vwUserNotificationTypes" CASCADE;
+CREATE VIEW __mj."vwUserNotificationTypes"
 AS SELECT
     u.*,
     "MJTemplate_EmailTemplateID"."Name" AS "EmailTemplate",
@@ -3558,7 +3749,8 @@ LEFT OUTER JOIN
   ON
     u."SMSTemplateID" = "MJTemplate_SMSTemplateID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserApplications"
+DROP VIEW IF EXISTS __mj."vwUserApplications" CASCADE;
+CREATE VIEW __mj."vwUserApplications"
 AS SELECT
     u.*,
     "MJUser_UserID"."Name" AS "User",
@@ -3574,7 +3766,8 @@ INNER JOIN
   ON
     u."ApplicationID" = "MJApplication_ApplicationID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserNotificationPreferences"
+DROP VIEW IF EXISTS __mj."vwUserNotificationPreferences" CASCADE;
+CREATE VIEW __mj."vwUserNotificationPreferences"
 AS SELECT
     u.*,
     "MJUser_UserID"."Name" AS "User",
@@ -3590,7 +3783,8 @@ INNER JOIN
   ON
     u."NotificationTypeID" = "MJUserNotificationType_NotificationTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserRoles"
+DROP VIEW IF EXISTS __mj."vwUserRoles" CASCADE;
+CREATE VIEW __mj."vwUserRoles"
 AS SELECT
     u.*,
     "MJUser_UserID"."Name" AS "User",
@@ -3606,7 +3800,8 @@ INNER JOIN
   ON
     u."RoleID" = "MJRole_RoleID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserNotifications"
+DROP VIEW IF EXISTS __mj."vwUserNotifications" CASCADE;
+CREATE VIEW __mj."vwUserNotifications"
 AS SELECT
     u.*,
     "MJUser_UserID"."Name" AS "User",
@@ -3627,7 +3822,8 @@ LEFT OUTER JOIN
   ON
     u."NotificationTypeID" = "MJUserNotificationType_NotificationTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserViewCategories"
+DROP VIEW IF EXISTS __mj."vwUserViewCategories" CASCADE;
+CREATE VIEW __mj."vwUserViewCategories"
 AS SELECT
     u.*,
     "MJUserViewCategory_ParentID"."Name" AS "Parent",
@@ -3650,7 +3846,8 @@ INNER JOIN
     u."UserID" = "MJUser_UserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnUserViewCategoryParentID_GetRootID"(u."ID", u."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwUserSettings"
+DROP VIEW IF EXISTS __mj."vwUserSettings" CASCADE;
+CREATE VIEW __mj."vwUserSettings"
 AS SELECT
     u.*,
     "MJUser_UserID"."Name" AS "User"
@@ -3661,7 +3858,8 @@ INNER JOIN
   ON
     u."UserID" = "MJUser_UserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwUserViewRuns"
+DROP VIEW IF EXISTS __mj."vwUserViewRuns" CASCADE;
+CREATE VIEW __mj."vwUserViewRuns"
 AS SELECT
     u.*,
     "MJUserView_UserViewID"."Name" AS "UserView",
@@ -3677,7 +3875,8 @@ INNER JOIN
   ON
     u."RunByUserID" = "MJUser_RunByUserID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwVectorIndexes"
+DROP VIEW IF EXISTS __mj."vwVectorIndexes" CASCADE;
+CREATE VIEW __mj."vwVectorIndexes"
 AS SELECT
     v.*,
     "MJVectorDatabase_VectorDatabaseID"."Name" AS "VectorDatabase",
@@ -3693,7 +3892,8 @@ INNER JOIN
   ON
     v."EmbeddingModelID" = "MJAIModel_EmbeddingModelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwVersionLabelRestores"
+DROP VIEW IF EXISTS __mj."vwVersionLabelRestores" CASCADE;
+CREATE VIEW __mj."vwVersionLabelRestores"
 AS SELECT
     v.*,
     "MJVersionLabel_VersionLabelID"."Name" AS "VersionLabel",
@@ -3714,7 +3914,8 @@ LEFT OUTER JOIN
   ON
     v."PreRestoreLabelID" = "MJVersionLabel_PreRestoreLabelID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwVersionLabelItems"
+DROP VIEW IF EXISTS __mj."vwVersionLabelItems" CASCADE;
+CREATE VIEW __mj."vwVersionLabelItems"
 AS SELECT
     v.*,
     "MJVersionLabel_VersionLabelID"."Name" AS "VersionLabel",
@@ -3735,7 +3936,8 @@ INNER JOIN
   ON
     v."EntityID" = "MJEntity_EntityID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwVersionLabels"
+DROP VIEW IF EXISTS __mj."vwVersionLabels" CASCADE;
+CREATE VIEW __mj."vwVersionLabels"
 AS SELECT
     v.*,
     "MJEntity_EntityID"."Name" AS "Entity",
@@ -3758,7 +3960,8 @@ INNER JOIN
     v."CreatedByUserID" = "MJUser_CreatedByUserID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnVersionLabelParentID_GetRootID"(v."ID", v."ParentID")) AS "root_ParentID" ON TRUE;
 
-CREATE OR REPLACE VIEW __mj."vwWorkspaceItems"
+DROP VIEW IF EXISTS __mj."vwWorkspaceItems" CASCADE;
+CREATE VIEW __mj."vwWorkspaceItems"
 AS SELECT
     w.*,
     "MJWorkspace_WorkspaceID"."Name" AS "Workspace",
@@ -3774,7 +3977,8 @@ INNER JOIN
   ON
     w."ResourceTypeID" = "MJResourceType_ResourceTypeID"."ID";
 
-CREATE OR REPLACE VIEW __mj."vwWorkspaces"
+DROP VIEW IF EXISTS __mj."vwWorkspaces" CASCADE;
+CREATE VIEW __mj."vwWorkspaces"
 AS SELECT
     w.*,
     "MJUser_UserID"."Name" AS "User"
@@ -4130,11 +4334,11 @@ IF p_ID IS NOT NULL THEN
                 p_RecordID,
                 p_GranteeType,
                 p_GranteeID,
-                COALESCE(p_CanRead, 0),
-                COALESCE(p_CanCreate, 0),
-                COALESCE(p_CanUpdate, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, FALSE),
+                COALESCE(p_CanCreate, FALSE),
+                COALESCE(p_CanUpdate, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_ExpiresAt,
                 p_GrantedByUserID
             );
@@ -4160,11 +4364,11 @@ IF p_ID IS NOT NULL THEN
                 p_RecordID,
                 p_GranteeType,
                 p_GranteeID,
-                COALESCE(p_CanRead, 0),
-                COALESCE(p_CanCreate, 0),
-                COALESCE(p_CanUpdate, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, FALSE),
+                COALESCE(p_CanCreate, FALSE),
+                COALESCE(p_CanUpdate, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_ExpiresAt,
                 p_GrantedByUserID
             );
@@ -4401,7 +4605,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_ActionID,
                 p_ResultCode,
-                COALESCE(p_IsSuccess, 0),
+                COALESCE(p_IsSuccess, FALSE),
                 p_Description
             );
     ELSE
@@ -4417,7 +4621,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_ActionID,
                 p_ResultCode,
-                COALESCE(p_IsSuccess, 0),
+                COALESCE(p_IsSuccess, FALSE),
                 p_Description
             );
     END IF;
@@ -4519,9 +4723,9 @@ IF p_ID IS NOT NULL THEN
                 p_DefaultValue,
                 p_Type,
                 p_ValueType,
-                COALESCE(p_IsArray, 0),
+                COALESCE(p_IsArray, FALSE),
                 p_Description,
-                COALESCE(p_IsRequired, 1),
+                COALESCE(p_IsRequired, TRUE),
                 p_MediaModality
             );
     ELSE
@@ -4545,9 +4749,9 @@ IF p_ID IS NOT NULL THEN
                 p_DefaultValue,
                 p_Type,
                 p_ValueType,
-                COALESCE(p_IsArray, 0),
+                COALESCE(p_IsArray, FALSE),
                 p_Description,
-                COALESCE(p_IsRequired, 1),
+                COALESCE(p_IsRequired, TRUE),
                 p_MediaModality
             );
     END IF;
@@ -4755,7 +4959,7 @@ IF p_ID IS NOT NULL THEN
                 p_DisplayName,
                 p_Description,
                 p_AIConfigurationID,
-                COALESCE(p_IsDefault, 0),
+                COALESCE(p_IsDefault, FALSE),
                 COALESCE(p_Priority, 100),
                 COALESCE(p_Status, 'Active')
             );
@@ -4779,7 +4983,7 @@ IF p_ID IS NOT NULL THEN
                 p_DisplayName,
                 p_Description,
                 p_AIConfigurationID,
-                COALESCE(p_IsDefault, 0),
+                COALESCE(p_IsDefault, FALSE),
                 COALESCE(p_Priority, 100),
                 COALESCE(p_Status, 'Active')
             );
@@ -5126,7 +5330,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_DefaultPrompt,
                 p_DefaultModelID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -5144,7 +5348,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_DefaultPrompt,
                 p_DefaultModelID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -5276,8 +5480,8 @@ IF p_ID IS NOT NULL THEN
                 p_CodeApprovalComments,
                 p_CodeApprovedByUserID,
                 p_CodeApprovedAt,
-                COALESCE(p_CodeLocked, 0),
-                COALESCE(p_ForceCodeGeneration, 0),
+                COALESCE(p_CodeLocked, FALSE),
+                COALESCE(p_ForceCodeGeneration, FALSE),
                 p_RetentionPeriod,
                 COALESCE(p_Status, 'Pending'),
                 p_DriverClass,
@@ -5324,8 +5528,8 @@ IF p_ID IS NOT NULL THEN
                 p_CodeApprovalComments,
                 p_CodeApprovedByUserID,
                 p_CodeApprovedAt,
-                COALESCE(p_CodeLocked, 0),
-                COALESCE(p_ForceCodeGeneration, 0),
+                COALESCE(p_CodeLocked, FALSE),
+                COALESCE(p_ForceCodeGeneration, FALSE),
                 p_RetentionPeriod,
                 COALESCE(p_Status, 'Pending'),
                 p_DriverClass,
@@ -5840,7 +6044,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Type, 'Example'),
                 p_ExampleInput,
                 p_ExampleOutput,
-                COALESCE(p_IsAutoGenerated, 0),
+                COALESCE(p_IsAutoGenerated, FALSE),
                 p_SourceConversationID,
                 p_SourceConversationDetailID,
                 p_SourceAIAgentRunID,
@@ -5890,7 +6094,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Type, 'Example'),
                 p_ExampleInput,
                 p_ExampleOutput,
-                COALESCE(p_IsAutoGenerated, 0),
+                COALESCE(p_IsAutoGenerated, FALSE),
                 p_SourceConversationID,
                 p_SourceConversationDetailID,
                 p_SourceAIAgentRunID,
@@ -6241,7 +6445,7 @@ IF p_ID IS NOT NULL THEN
                 p_AgentID,
                 p_ModalityID,
                 p_Direction,
-                COALESCE(p_IsAllowed, 1),
+                COALESCE(p_IsAllowed, TRUE),
                 p_MaxSizeBytes,
                 p_MaxCountPerMessage
             );
@@ -6261,7 +6465,7 @@ IF p_ID IS NOT NULL THEN
                 p_AgentID,
                 p_ModalityID,
                 p_Direction,
-                COALESCE(p_IsAllowed, 1),
+                COALESCE(p_IsAllowed, TRUE),
                 p_MaxSizeBytes,
                 p_MaxCountPerMessage
             );
@@ -6628,7 +6832,7 @@ IF p_ID IS NOT NULL THEN
                 p_Note,
                 p_UserID,
                 COALESCE(p_Type, 'Preference'),
-                COALESCE(p_IsAutoGenerated, 0),
+                COALESCE(p_IsAutoGenerated, FALSE),
                 p_Comments,
                 COALESCE(p_Status, 'Active'),
                 p_SourceConversationID,
@@ -6676,7 +6880,7 @@ IF p_ID IS NOT NULL THEN
                 p_Note,
                 p_UserID,
                 COALESCE(p_Type, 'Preference'),
-                COALESCE(p_IsAutoGenerated, 0),
+                COALESCE(p_IsAutoGenerated, FALSE),
                 p_Comments,
                 COALESCE(p_Status, 'Active'),
                 p_SourceConversationID,
@@ -6952,10 +7156,10 @@ IF p_ID IS NOT NULL THEN
                 p_AgentID,
                 p_RoleID,
                 p_UserID,
-                COALESCE(p_CanView, 0),
-                COALESCE(p_CanRun, 0),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
+                COALESCE(p_CanView, FALSE),
+                COALESCE(p_CanRun, FALSE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
                 p_Comments
             );
     ELSE
@@ -6976,10 +7180,10 @@ IF p_ID IS NOT NULL THEN
                 p_AgentID,
                 p_RoleID,
                 p_UserID,
-                COALESCE(p_CanView, 0),
-                COALESCE(p_CanRun, 0),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
+                COALESCE(p_CanView, FALSE),
+                COALESCE(p_CanRun, FALSE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
                 p_Comments
             );
     END IF;
@@ -8822,7 +9026,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_StepType,
-                COALESCE(p_StartingStep, 0),
+                COALESCE(p_StartingStep, FALSE),
                 p_TimeoutSeconds,
                 COALESCE(p_RetryCount, 0),
                 COALESCE(p_OnErrorBehavior, 'fail'),
@@ -8870,7 +9074,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_StepType,
-                COALESCE(p_StartingStep, 0),
+                COALESCE(p_StartingStep, FALSE),
                 p_TimeoutSeconds,
                 COALESCE(p_RetryCount, 0),
                 COALESCE(p_OnErrorBehavior, 'fail'),
@@ -9044,12 +9248,12 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_SystemPromptID,
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 p_AgentPromptPlaceholder,
                 p_DriverClass,
                 p_UIFormSectionKey,
                 p_UIFormKey,
-                COALESCE(p_UIFormSectionExpandedByDefault, 1),
+                COALESCE(p_UIFormSectionExpandedByDefault, TRUE),
                 p_PromptParamsSchema
             );
     ELSE
@@ -9072,12 +9276,12 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_SystemPromptID,
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 p_AgentPromptPlaceholder,
                 p_DriverClass,
                 p_UIFormSectionKey,
                 p_UIFormKey,
-                COALESCE(p_UIFormSectionExpandedByDefault, 1),
+                COALESCE(p_UIFormSectionExpandedByDefault, TRUE),
                 p_PromptParamsSchema
             );
     END IF;
@@ -9288,10 +9492,10 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_LogoURL,
                 p_ParentID,
-                COALESCE(p_ExposeAsAction, 0),
+                COALESCE(p_ExposeAsAction, FALSE),
                 COALESCE(p_ExecutionOrder, 0),
                 COALESCE(p_ExecutionMode, 'Sequential'),
-                COALESCE(p_EnableContextCompression, 0),
+                COALESCE(p_EnableContextCompression, FALSE),
                 p_ContextCompressionMessageThreshold,
                 p_ContextCompressionPromptID,
                 p_ContextCompressionMessageRetentionCount,
@@ -9300,8 +9504,8 @@ IF p_ID IS NOT NULL THEN
                 p_DriverClass,
                 p_IconClass,
                 COALESCE(p_ModelSelectionMode, 'Agent Type'),
-                COALESCE(p_PayloadDownstreamPaths, '""*""'),
-                COALESCE(p_PayloadUpstreamPaths, '""*""'),
+                COALESCE(p_PayloadDownstreamPaths, '["*"]'),
+                COALESCE(p_PayloadUpstreamPaths, '["*"]'),
                 p_PayloadSelfReadPaths,
                 p_PayloadSelfWritePaths,
                 p_PayloadScope,
@@ -9324,13 +9528,13 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ArtifactCreationMode, 'Always'),
                 p_FunctionalRequirements,
                 p_TechnicalDesign,
-                COALESCE(p_InjectNotes, 1),
+                COALESCE(p_InjectNotes, TRUE),
                 COALESCE(p_MaxNotesToInject, 5),
                 COALESCE(p_NoteInjectionStrategy, 'Relevant'),
-                COALESCE(p_InjectExamples, 0),
+                COALESCE(p_InjectExamples, FALSE),
                 COALESCE(p_MaxExamplesToInject, 3),
                 COALESCE(p_ExampleInjectionStrategy, 'Semantic'),
-                COALESCE(p_IsRestricted, 0),
+                COALESCE(p_IsRestricted, FALSE),
                 COALESCE(p_MessageMode, 'None'),
                 p_MaxMessages,
                 p_AttachmentStorageProviderID,
@@ -9340,7 +9544,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeConfig,
                 p_NoteRetentionDays,
                 p_ExampleRetentionDays,
-                COALESCE(p_AutoArchiveEnabled, 1),
+                COALESCE(p_AutoArchiveEnabled, TRUE),
                 p_RerankerConfiguration
             );
     ELSE
@@ -9412,10 +9616,10 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_LogoURL,
                 p_ParentID,
-                COALESCE(p_ExposeAsAction, 0),
+                COALESCE(p_ExposeAsAction, FALSE),
                 COALESCE(p_ExecutionOrder, 0),
                 COALESCE(p_ExecutionMode, 'Sequential'),
-                COALESCE(p_EnableContextCompression, 0),
+                COALESCE(p_EnableContextCompression, FALSE),
                 p_ContextCompressionMessageThreshold,
                 p_ContextCompressionPromptID,
                 p_ContextCompressionMessageRetentionCount,
@@ -9424,8 +9628,8 @@ IF p_ID IS NOT NULL THEN
                 p_DriverClass,
                 p_IconClass,
                 COALESCE(p_ModelSelectionMode, 'Agent Type'),
-                COALESCE(p_PayloadDownstreamPaths, '""*""'),
-                COALESCE(p_PayloadUpstreamPaths, '""*""'),
+                COALESCE(p_PayloadDownstreamPaths, '["*"]'),
+                COALESCE(p_PayloadUpstreamPaths, '["*"]'),
                 p_PayloadSelfReadPaths,
                 p_PayloadSelfWritePaths,
                 p_PayloadScope,
@@ -9448,13 +9652,13 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ArtifactCreationMode, 'Always'),
                 p_FunctionalRequirements,
                 p_TechnicalDesign,
-                COALESCE(p_InjectNotes, 1),
+                COALESCE(p_InjectNotes, TRUE),
                 COALESCE(p_MaxNotesToInject, 5),
                 COALESCE(p_NoteInjectionStrategy, 'Relevant'),
-                COALESCE(p_InjectExamples, 0),
+                COALESCE(p_InjectExamples, FALSE),
                 COALESCE(p_MaxExamplesToInject, 3),
                 COALESCE(p_ExampleInjectionStrategy, 'Semantic'),
-                COALESCE(p_IsRestricted, 0),
+                COALESCE(p_IsRestricted, FALSE),
                 COALESCE(p_MessageMode, 'None'),
                 p_MaxMessages,
                 p_AttachmentStorageProviderID,
@@ -9464,7 +9668,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeConfig,
                 p_NoteRetentionDays,
                 p_ExampleRetentionDays,
-                COALESCE(p_AutoArchiveEnabled, 1),
+                COALESCE(p_AutoArchiveEnabled, TRUE),
                 p_RerankerConfiguration
             );
     END IF;
@@ -10562,7 +10766,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_Name,
                 p_Description,
-                COALESCE(p_IsDefault, 0),
+                COALESCE(p_IsDefault, FALSE),
                 COALESCE(p_Status, 'Active'),
                 p_DefaultPromptForContextCompressionID,
                 p_DefaultPromptForContextSummarizationID,
@@ -10588,7 +10792,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_Name,
                 p_Description,
-                COALESCE(p_IsDefault, 0),
+                COALESCE(p_IsDefault, FALSE),
                 COALESCE(p_Status, 'Active'),
                 p_DefaultPromptForContextCompressionID,
                 p_DefaultPromptForContextSummarizationID,
@@ -10667,7 +10871,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_AIModelID,
                 p_AIActionID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -10681,7 +10885,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_AIModelID,
                 p_AIActionID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -10777,7 +10981,7 @@ IF p_ID IS NOT NULL THEN
                 p_AIModelVendorID,
                 p_AIPromptModelID,
                 COALESCE(p_Priority, 0),
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -10799,7 +11003,7 @@ IF p_ID IS NOT NULL THEN
                 p_AIModelVendorID,
                 p_AIPromptModelID,
                 COALESCE(p_Priority, 0),
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -11617,8 +11821,8 @@ IF p_ID IS NOT NULL THEN
                 p_ModelID,
                 p_ModalityID,
                 p_Direction,
-                COALESCE(p_IsSupported, 1),
-                COALESCE(p_IsRequired, 0),
+                COALESCE(p_IsSupported, TRUE),
+                COALESCE(p_IsRequired, FALSE),
                 p_SupportedFormats,
                 p_MaxSizeBytes,
                 p_MaxCountPerMessage,
@@ -11645,8 +11849,8 @@ IF p_ID IS NOT NULL THEN
                 p_ModelID,
                 p_ModalityID,
                 p_Direction,
-                COALESCE(p_IsSupported, 1),
-                COALESCE(p_IsRequired, 0),
+                COALESCE(p_IsSupported, TRUE),
+                COALESCE(p_IsRequired, FALSE),
                 p_SupportedFormats,
                 p_MaxSizeBytes,
                 p_MaxCountPerMessage,
@@ -12316,8 +12520,8 @@ IF p_ID IS NOT NULL THEN
                 p_MaxInputTokens,
                 p_MaxOutputTokens,
                 COALESCE(p_SupportedResponseFormats, 'Any'),
-                COALESCE(p_SupportsEffortLevel, 0),
-                COALESCE(p_SupportsStreaming, 0),
+                COALESCE(p_SupportsEffortLevel, FALSE),
+                COALESCE(p_SupportsStreaming, FALSE),
                 p_TypeID
             );
     ELSE
@@ -12350,8 +12554,8 @@ IF p_ID IS NOT NULL THEN
                 p_MaxInputTokens,
                 p_MaxOutputTokens,
                 COALESCE(p_SupportedResponseFormats, 'Any'),
-                COALESCE(p_SupportsEffortLevel, 0),
-                COALESCE(p_SupportsStreaming, 0),
+                COALESCE(p_SupportsEffortLevel, FALSE),
+                COALESCE(p_SupportsStreaming, FALSE),
                 p_TypeID
             );
     END IF;
@@ -12624,7 +12828,7 @@ IF p_ID IS NOT NULL THEN
                 p_TokensPrompt,
                 p_TokensCompletion,
                 p_TotalCost,
-                COALESCE(p_Success, 0),
+                COALESCE(p_Success, FALSE),
                 p_ErrorMessage,
                 p_ParentID,
                 COALESCE(p_RunType, 'Single'),
@@ -12670,16 +12874,16 @@ IF p_ID IS NOT NULL THEN
                 p_RerunFromPromptRunID,
                 p_ModelSelection,
                 COALESCE(p_Status, 'Pending'),
-                COALESCE(p_Cancelled, 0),
+                COALESCE(p_Cancelled, FALSE),
                 p_CancellationReason,
                 p_ModelPowerRank,
                 p_SelectionStrategy,
-                COALESCE(p_CacheHit, 0),
+                COALESCE(p_CacheHit, FALSE),
                 p_CacheKey,
                 p_JudgeID,
                 p_JudgeScore,
-                COALESCE(p_WasSelectedResult, 0),
-                COALESCE(p_StreamingEnabled, 0),
+                COALESCE(p_WasSelectedResult, FALSE),
+                COALESCE(p_StreamingEnabled, FALSE),
                 p_FirstTokenTime,
                 p_ErrorDetails,
                 p_ChildPromptID,
@@ -12794,7 +12998,7 @@ IF p_ID IS NOT NULL THEN
                 p_TokensPrompt,
                 p_TokensCompletion,
                 p_TotalCost,
-                COALESCE(p_Success, 0),
+                COALESCE(p_Success, FALSE),
                 p_ErrorMessage,
                 p_ParentID,
                 COALESCE(p_RunType, 'Single'),
@@ -12840,16 +13044,16 @@ IF p_ID IS NOT NULL THEN
                 p_RerunFromPromptRunID,
                 p_ModelSelection,
                 COALESCE(p_Status, 'Pending'),
-                COALESCE(p_Cancelled, 0),
+                COALESCE(p_Cancelled, FALSE),
                 p_CancellationReason,
                 p_ModelPowerRank,
                 p_SelectionStrategy,
-                COALESCE(p_CacheHit, 0),
+                COALESCE(p_CacheHit, FALSE),
                 p_CacheKey,
                 p_JudgeID,
                 p_JudgeScore,
-                COALESCE(p_WasSelectedResult, 0),
-                COALESCE(p_StreamingEnabled, 0),
+                COALESCE(p_WasSelectedResult, FALSE),
+                COALESCE(p_StreamingEnabled, FALSE),
                 p_FirstTokenTime,
                 p_ErrorDetails,
                 p_ChildPromptID,
@@ -13348,14 +13552,14 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_RetryDelayMS, 0),
                 COALESCE(p_RetryStrategy, 'Fixed'),
                 p_ResultSelectorPromptID,
-                COALESCE(p_EnableCaching, 0),
+                COALESCE(p_EnableCaching, FALSE),
                 p_CacheTTLSeconds,
                 COALESCE(p_CacheMatchType, 'Exact'),
                 p_CacheSimilarityThreshold,
-                COALESCE(p_CacheMustMatchModel, 1),
-                COALESCE(p_CacheMustMatchVendor, 1),
-                COALESCE(p_CacheMustMatchAgent, 0),
-                COALESCE(p_CacheMustMatchConfig, 0),
+                COALESCE(p_CacheMustMatchModel, TRUE),
+                COALESCE(p_CacheMustMatchVendor, TRUE),
+                COALESCE(p_CacheMustMatchAgent, FALSE),
+                COALESCE(p_CacheMustMatchConfig, FALSE),
                 COALESCE(p_PromptRole, 'System'),
                 COALESCE(p_PromptPosition, 'First'),
                 p_Temperature,
@@ -13452,14 +13656,14 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_RetryDelayMS, 0),
                 COALESCE(p_RetryStrategy, 'Fixed'),
                 p_ResultSelectorPromptID,
-                COALESCE(p_EnableCaching, 0),
+                COALESCE(p_EnableCaching, FALSE),
                 p_CacheTTLSeconds,
                 COALESCE(p_CacheMatchType, 'Exact'),
                 p_CacheSimilarityThreshold,
-                COALESCE(p_CacheMustMatchModel, 1),
-                COALESCE(p_CacheMustMatchVendor, 1),
-                COALESCE(p_CacheMustMatchAgent, 0),
-                COALESCE(p_CacheMustMatchConfig, 0),
+                COALESCE(p_CacheMustMatchModel, TRUE),
+                COALESCE(p_CacheMustMatchVendor, TRUE),
+                COALESCE(p_CacheMustMatchAgent, FALSE),
+                COALESCE(p_CacheMustMatchConfig, FALSE),
                 COALESCE(p_PromptRole, 'System'),
                 COALESCE(p_PromptPosition, 'First'),
                 p_Temperature,
@@ -15184,7 +15388,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeID,
                 p_ResourcePattern,
                 COALESCE(p_PatternType, 'Include'),
-                COALESCE(p_IsDeny, 0),
+                COALESCE(p_IsDeny, FALSE),
                 COALESCE(p_Priority, 0)
             );
     ELSE
@@ -15204,7 +15408,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeID,
                 p_ResourcePattern,
                 COALESCE(p_PatternType, 'Include'),
-                COALESCE(p_IsDeny, 0),
+                COALESCE(p_IsDeny, FALSE),
                 COALESCE(p_Priority, 0)
             );
     END IF;
@@ -15394,7 +15598,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeID,
                 p_ResourcePattern,
                 COALESCE(p_PatternType, 'Include'),
-                COALESCE(p_IsDeny, 0),
+                COALESCE(p_IsDeny, FALSE),
                 COALESCE(p_Priority, 0)
             );
     ELSE
@@ -15414,7 +15618,7 @@ IF p_ID IS NOT NULL THEN
                 p_ScopeID,
                 p_ResourcePattern,
                 COALESCE(p_PatternType, 'Include'),
-                COALESCE(p_IsDeny, 0),
+                COALESCE(p_IsDeny, FALSE),
                 COALESCE(p_Priority, 0)
             );
     END IF;
@@ -15820,7 +16024,7 @@ IF p_ID IS NOT NULL THEN
                 p_ParentID,
                 p_FullPath,
                 p_ResourceType,
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 p_UIConfig
             );
     ELSE
@@ -15844,7 +16048,7 @@ IF p_ID IS NOT NULL THEN
                 p_ParentID,
                 p_FullPath,
                 p_ResourceType,
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 p_UIConfig
             );
     END IF;
@@ -16055,7 +16259,7 @@ INSERT INTO
             p_Name,
                 p_Description,
                 p_ContentType,
-                COALESCE(p_IsEnabled, 1),
+                COALESCE(p_IsEnabled, TRUE),
                 p_ParentID,
                 p_ExtractRules,
                 p_DriverClass,
@@ -16161,10 +16365,10 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_ArtifactID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     ELSE
@@ -16183,10 +16387,10 @@ IF p_ID IS NOT NULL THEN
             (
                 p_ArtifactID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     END IF;
@@ -17102,8 +17306,8 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_ParentID,
                 p_Name,
-                COALESCE(p_IsActive, 1),
-                COALESCE(p_UseAuditLog, 1),
+                COALESCE(p_IsActive, TRUE),
+                COALESCE(p_UseAuditLog, TRUE),
                 p_Description
             );
     ELSE
@@ -17120,8 +17324,8 @@ IF p_ID IS NOT NULL THEN
             (
                 p_ParentID,
                 p_Name,
-                COALESCE(p_IsActive, 1),
-                COALESCE(p_UseAuditLog, 1),
+                COALESCE(p_IsActive, TRUE),
+                COALESCE(p_UseAuditLog, TRUE),
                 p_Description
             );
     END IF;
@@ -17218,10 +17422,10 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_CollectionID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanShare, 0),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanShare, FALSE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
                 p_SharedByUserID
             );
     ELSE
@@ -17240,10 +17444,10 @@ IF p_ID IS NOT NULL THEN
             (
                 p_CollectionID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanShare, 0),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanShare, FALSE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
                 p_SharedByUserID
             );
     END IF;
@@ -18049,7 +18253,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_CompanyIntegrationRunID,
                 COALESCE(p_ExecutedAt, NOW()),
-                COALESCE(p_IsSuccess, 0),
+                COALESCE(p_IsSuccess, FALSE),
                 p_RequestMethod,
                 p_URL,
                 p_Parameters
@@ -18069,7 +18273,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_CompanyIntegrationRunID,
                 COALESCE(p_ExecutedAt, NOW()),
-                COALESCE(p_IsSuccess, 0),
+                COALESCE(p_IsSuccess, FALSE),
                 p_RequestMethod,
                 p_URL,
                 p_Parameters
@@ -18603,13 +18807,13 @@ IF p_ID IS NOT NULL THEN
                 p_TechnicalDesign,
                 p_FunctionalRequirementsVector,
                 p_TechnicalDesignVector,
-                COALESCE(p_HasCustomProps, 0),
-                COALESCE(p_HasCustomEvents, 0),
-                COALESCE(p_RequiresData, 0),
+                COALESCE(p_HasCustomProps, FALSE),
+                COALESCE(p_HasCustomEvents, FALSE),
+                COALESCE(p_RequiresData, FALSE),
                 COALESCE(p_DependencyCount, 0),
                 p_TechnicalDesignVectorEmbeddingModelID,
                 p_FunctionalRequirementsVectorEmbeddingModelID,
-                COALESCE(p_HasRequiredCustomProps, 0)
+                COALESCE(p_HasRequiredCustomProps, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -18663,13 +18867,13 @@ IF p_ID IS NOT NULL THEN
                 p_TechnicalDesign,
                 p_FunctionalRequirementsVector,
                 p_TechnicalDesignVector,
-                COALESCE(p_HasCustomProps, 0),
-                COALESCE(p_HasCustomEvents, 0),
-                COALESCE(p_RequiresData, 0),
+                COALESCE(p_HasCustomProps, FALSE),
+                COALESCE(p_HasCustomEvents, FALSE),
+                COALESCE(p_RequiresData, FALSE),
                 COALESCE(p_DependencyCount, 0),
                 p_TechnicalDesignVectorEmbeddingModelID,
                 p_FunctionalRequirementsVectorEmbeddingModelID,
-                COALESCE(p_HasRequiredCustomProps, 0)
+                COALESCE(p_HasRequiredCustomProps, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -19901,7 +20105,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Role, current_user),
                 p_Message,
                 p_Error,
-                COALESCE(p_HiddenToUser, 0),
+                COALESCE(p_HiddenToUser, FALSE),
                 p_UserRating,
                 p_UserFeedback,
                 p_ReflectionInsights,
@@ -19910,7 +20114,7 @@ IF p_ID IS NOT NULL THEN
                 p_ArtifactID,
                 p_ArtifactVersionID,
                 p_CompletionTime,
-                COALESCE(p_IsPinned, 0),
+                COALESCE(p_IsPinned, FALSE),
                 p_ParentID,
                 p_AgentID,
                 COALESCE(p_Status, 'Complete'),
@@ -19919,7 +20123,7 @@ IF p_ID IS NOT NULL THEN
                 p_ResponseForm,
                 p_ActionableCommands,
                 p_AutomaticCommands,
-                COALESCE(p_OriginalMessageChanged, 0)
+                COALESCE(p_OriginalMessageChanged, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -19957,7 +20161,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Role, current_user),
                 p_Message,
                 p_Error,
-                COALESCE(p_HiddenToUser, 0),
+                COALESCE(p_HiddenToUser, FALSE),
                 p_UserRating,
                 p_UserFeedback,
                 p_ReflectionInsights,
@@ -19966,7 +20170,7 @@ IF p_ID IS NOT NULL THEN
                 p_ArtifactID,
                 p_ArtifactVersionID,
                 p_CompletionTime,
-                COALESCE(p_IsPinned, 0),
+                COALESCE(p_IsPinned, FALSE),
                 p_ParentID,
                 p_AgentID,
                 COALESCE(p_Status, 'Complete'),
@@ -19975,7 +20179,7 @@ IF p_ID IS NOT NULL THEN
                 p_ResponseForm,
                 p_ActionableCommands,
                 p_AutomaticCommands,
-                COALESCE(p_OriginalMessageChanged, 0)
+                COALESCE(p_OriginalMessageChanged, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -20474,14 +20678,14 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 COALESCE(p_Type, 'Skip'),
-                COALESCE(p_IsArchived, 0),
+                COALESCE(p_IsArchived, FALSE),
                 p_LinkedEntityID,
                 p_LinkedRecordID,
                 p_DataContextID,
                 COALESCE(p_Status, 'Available'),
                 CASE p_EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE COALESCE(p_EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 p_ProjectID,
-                COALESCE(p_IsPinned, 0),
+                COALESCE(p_IsPinned, FALSE),
                 p_TestRunID
             );
     ELSE
@@ -20510,14 +20714,14 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 COALESCE(p_Type, 'Skip'),
-                COALESCE(p_IsArchived, 0),
+                COALESCE(p_IsArchived, FALSE),
                 p_LinkedEntityID,
                 p_LinkedRecordID,
                 p_DataContextID,
                 COALESCE(p_Status, 'Available'),
                 CASE p_EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE COALESCE(p_EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 p_ProjectID,
-                COALESCE(p_IsPinned, 0),
+                COALESCE(p_IsPinned, FALSE),
                 p_TestRunID
             );
     END IF;
@@ -21457,8 +21661,8 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_Values,
-                COALESCE(p_IsDefault, 0),
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsDefault, FALSE),
+                COALESCE(p_IsActive, TRUE),
                 p_ExpiresAt,
                 p_LastValidatedAt,
                 p_LastUsedAt,
@@ -21487,8 +21691,8 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_Values,
-                COALESCE(p_IsDefault, 0),
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsDefault, FALSE),
+                COALESCE(p_IsActive, TRUE),
                 p_ExpiresAt,
                 p_LastValidatedAt,
                 p_LastUsedAt,
@@ -21817,10 +22021,10 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_DashboardCategoryID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanAddRemove, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanAddRemove, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     ELSE
@@ -21839,10 +22043,10 @@ IF p_ID IS NOT NULL THEN
             (
                 p_DashboardCategoryID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanAddRemove, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanAddRemove, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     END IF;
@@ -21943,10 +22147,10 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_DashboardID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     ELSE
@@ -21965,10 +22169,10 @@ IF p_ID IS NOT NULL THEN
             (
                 p_DashboardID,
                 p_UserID,
-                COALESCE(p_CanRead, 1),
-                COALESCE(p_CanEdit, 0),
-                COALESCE(p_CanDelete, 0),
-                COALESCE(p_CanShare, 0),
+                COALESCE(p_CanRead, TRUE),
+                COALESCE(p_CanEdit, FALSE),
+                COALESCE(p_CanDelete, FALSE),
+                COALESCE(p_CanShare, FALSE),
                 p_SharedByUserID
             );
     END IF;
@@ -23247,7 +23451,7 @@ IF p_ID IS NOT NULL THEN
                 p_EmployeeID,
                 p_CompanyIntegrationID,
                 p_ExternalSystemRecordID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -23263,7 +23467,7 @@ IF p_ID IS NOT NULL THEN
                 p_EmployeeID,
                 p_CompanyIntegrationID,
                 p_ExternalSystemRecordID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -23552,7 +23756,7 @@ IF p_ID IS NOT NULL THEN
                 p_KeyLookupValue,
                 COALESCE(p_KeyVersion, '1'),
                 COALESCE(p_Marker, '$ENC$'),
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 COALESCE(p_Status, 'Active'),
                 p_ActivatedAt,
                 p_ExpiresAt
@@ -23582,7 +23786,7 @@ IF p_ID IS NOT NULL THEN
                 p_KeyLookupValue,
                 COALESCE(p_KeyVersion, '1'),
                 COALESCE(p_Marker, '$ENC$'),
-                COALESCE(p_IsActive, 1),
+                COALESCE(p_IsActive, TRUE),
                 COALESCE(p_Status, 'Active'),
                 p_ActivatedAt,
                 p_ExpiresAt
@@ -23662,9 +23866,430 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
--- SKIPPED: Procedure references non-existent view vwEntities
+CREATE OR REPLACE FUNCTION __mj."spCreateEntity"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_ParentID UUID DEFAULT NULL,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_NameSuffix VARCHAR(255) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_AutoUpdateDescription BOOLEAN DEFAULT NULL,
+    IN p_BaseView VARCHAR(255) DEFAULT NULL,
+    IN p_BaseViewGenerated BOOLEAN DEFAULT NULL,
+    IN p_VirtualEntity BOOLEAN DEFAULT NULL,
+    IN p_TrackRecordChanges BOOLEAN DEFAULT NULL,
+    IN p_AuditRecordAccess BOOLEAN DEFAULT NULL,
+    IN p_AuditViewRuns BOOLEAN DEFAULT NULL,
+    IN p_IncludeInAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowAllRowsAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowUpdateAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowCreateAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowDeleteAPI BOOLEAN DEFAULT NULL,
+    IN p_CustomResolverAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowUserSearchAPI BOOLEAN DEFAULT NULL,
+    IN p_FullTextSearchEnabled BOOLEAN DEFAULT NULL,
+    IN p_FullTextCatalog VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextCatalogGenerated BOOLEAN DEFAULT NULL,
+    IN p_FullTextIndex VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextIndexGenerated BOOLEAN DEFAULT NULL,
+    IN p_FullTextSearchFunction VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextSearchFunctionGenerated BOOLEAN DEFAULT NULL,
+    IN p_UserViewMaxRows INTEGER DEFAULT NULL,
+    IN p_spCreate VARCHAR(255) DEFAULT NULL,
+    IN p_spUpdate VARCHAR(255) DEFAULT NULL,
+    IN p_spDelete VARCHAR(255) DEFAULT NULL,
+    IN p_spCreateGenerated BOOLEAN DEFAULT NULL,
+    IN p_spUpdateGenerated BOOLEAN DEFAULT NULL,
+    IN p_spDeleteGenerated BOOLEAN DEFAULT NULL,
+    IN p_CascadeDeletes BOOLEAN DEFAULT NULL,
+    IN p_DeleteType VARCHAR(10) DEFAULT NULL,
+    IN p_AllowRecordMerge BOOLEAN DEFAULT NULL,
+    IN p_spMatch VARCHAR(255) DEFAULT NULL,
+    IN p_RelationshipDefaultDisplayType VARCHAR(20) DEFAULT NULL,
+    IN p_UserFormGenerated BOOLEAN DEFAULT NULL,
+    IN p_EntityObjectSubclassName VARCHAR(255) DEFAULT NULL,
+    IN p_EntityObjectSubclassImport VARCHAR(255) DEFAULT NULL,
+    IN p_PreferredCommunicationField VARCHAR(255) DEFAULT NULL,
+    IN p_Icon VARCHAR(500) DEFAULT NULL,
+    IN p_ScopeDefault VARCHAR(100) DEFAULT NULL,
+    IN p_RowsToPackWithSchema VARCHAR(20) DEFAULT NULL,
+    IN p_RowsToPackSampleMethod VARCHAR(20) DEFAULT NULL,
+    IN p_RowsToPackSampleCount INTEGER DEFAULT NULL,
+    IN p_RowsToPackSampleOrder TEXT DEFAULT NULL,
+    IN p_AutoRowCountFrequency INTEGER DEFAULT NULL,
+    IN p_RowCount BIGINT DEFAULT NULL,
+    IN p_RowCountRunAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_Status VARCHAR(25) DEFAULT NULL,
+    IN p_DisplayName VARCHAR(255) DEFAULT NULL,
+    IN p_AllowMultipleSubtypes BOOLEAN DEFAULT NULL
+)
+RETURNS SETOF __mj."vwEntities" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."Entity"
+            (
+                "ID",
+                "ParentID",
+                "Name",
+                "NameSuffix",
+                "Description",
+                "AutoUpdateDescription",
+                "BaseView",
+                "BaseViewGenerated",
+                "VirtualEntity",
+                "TrackRecordChanges",
+                "AuditRecordAccess",
+                "AuditViewRuns",
+                "IncludeInAPI",
+                "AllowAllRowsAPI",
+                "AllowUpdateAPI",
+                "AllowCreateAPI",
+                "AllowDeleteAPI",
+                "CustomResolverAPI",
+                "AllowUserSearchAPI",
+                "FullTextSearchEnabled",
+                "FullTextCatalog",
+                "FullTextCatalogGenerated",
+                "FullTextIndex",
+                "FullTextIndexGenerated",
+                "FullTextSearchFunction",
+                "FullTextSearchFunctionGenerated",
+                "UserViewMaxRows",
+                "spCreate",
+                "spUpdate",
+                "spDelete",
+                "spCreateGenerated",
+                "spUpdateGenerated",
+                "spDeleteGenerated",
+                "CascadeDeletes",
+                "DeleteType",
+                "AllowRecordMerge",
+                "spMatch",
+                "RelationshipDefaultDisplayType",
+                "UserFormGenerated",
+                "EntityObjectSubclassName",
+                "EntityObjectSubclassImport",
+                "PreferredCommunicationField",
+                "Icon",
+                "ScopeDefault",
+                "RowsToPackWithSchema",
+                "RowsToPackSampleMethod",
+                "RowsToPackSampleCount",
+                "RowsToPackSampleOrder",
+                "AutoRowCountFrequency",
+                "RowCount",
+                "RowCountRunAt",
+                "Status",
+                "DisplayName",
+                "AllowMultipleSubtypes"
+            )
+        VALUES
+            (
+                p_ID,
+                p_ParentID,
+                p_Name,
+                p_NameSuffix,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                p_BaseView,
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_FullTextCatalog,
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
+                p_FullTextIndex,
+                COALESCE(p_FullTextIndexGenerated, TRUE),
+                p_FullTextSearchFunction,
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
+                p_UserViewMaxRows,
+                p_spCreate,
+                p_spUpdate,
+                p_spDelete,
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
+                COALESCE(p_DeleteType, 'Hard'),
+                COALESCE(p_AllowRecordMerge, FALSE),
+                p_spMatch,
+                COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
+                COALESCE(p_UserFormGenerated, TRUE),
+                p_EntityObjectSubclassName,
+                p_EntityObjectSubclassImport,
+                p_PreferredCommunicationField,
+                p_Icon,
+                p_ScopeDefault,
+                COALESCE(p_RowsToPackWithSchema, 'None'),
+                COALESCE(p_RowsToPackSampleMethod, 'random'),
+                COALESCE(p_RowsToPackSampleCount, 0),
+                p_RowsToPackSampleOrder,
+                p_AutoRowCountFrequency,
+                p_RowCount,
+                p_RowCountRunAt,
+                COALESCE(p_Status, 'Active'),
+                p_DisplayName,
+                COALESCE(p_AllowMultipleSubtypes, FALSE)
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."Entity"
+            (
+                "ParentID",
+                "Name",
+                "NameSuffix",
+                "Description",
+                "AutoUpdateDescription",
+                "BaseView",
+                "BaseViewGenerated",
+                "VirtualEntity",
+                "TrackRecordChanges",
+                "AuditRecordAccess",
+                "AuditViewRuns",
+                "IncludeInAPI",
+                "AllowAllRowsAPI",
+                "AllowUpdateAPI",
+                "AllowCreateAPI",
+                "AllowDeleteAPI",
+                "CustomResolverAPI",
+                "AllowUserSearchAPI",
+                "FullTextSearchEnabled",
+                "FullTextCatalog",
+                "FullTextCatalogGenerated",
+                "FullTextIndex",
+                "FullTextIndexGenerated",
+                "FullTextSearchFunction",
+                "FullTextSearchFunctionGenerated",
+                "UserViewMaxRows",
+                "spCreate",
+                "spUpdate",
+                "spDelete",
+                "spCreateGenerated",
+                "spUpdateGenerated",
+                "spDeleteGenerated",
+                "CascadeDeletes",
+                "DeleteType",
+                "AllowRecordMerge",
+                "spMatch",
+                "RelationshipDefaultDisplayType",
+                "UserFormGenerated",
+                "EntityObjectSubclassName",
+                "EntityObjectSubclassImport",
+                "PreferredCommunicationField",
+                "Icon",
+                "ScopeDefault",
+                "RowsToPackWithSchema",
+                "RowsToPackSampleMethod",
+                "RowsToPackSampleCount",
+                "RowsToPackSampleOrder",
+                "AutoRowCountFrequency",
+                "RowCount",
+                "RowCountRunAt",
+                "Status",
+                "DisplayName",
+                "AllowMultipleSubtypes"
+            )
+        VALUES
+            (
+                p_ParentID,
+                p_Name,
+                p_NameSuffix,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                p_BaseView,
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_FullTextCatalog,
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
+                p_FullTextIndex,
+                COALESCE(p_FullTextIndexGenerated, TRUE),
+                p_FullTextSearchFunction,
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
+                p_UserViewMaxRows,
+                p_spCreate,
+                p_spUpdate,
+                p_spDelete,
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
+                COALESCE(p_DeleteType, 'Hard'),
+                COALESCE(p_AllowRecordMerge, FALSE),
+                p_spMatch,
+                COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
+                COALESCE(p_UserFormGenerated, TRUE),
+                p_EntityObjectSubclassName,
+                p_EntityObjectSubclassImport,
+                p_PreferredCommunicationField,
+                p_Icon,
+                p_ScopeDefault,
+                COALESCE(p_RowsToPackWithSchema, 'None'),
+                COALESCE(p_RowsToPackSampleMethod, 'random'),
+                COALESCE(p_RowsToPackSampleCount, 0),
+                p_RowsToPackSampleOrder,
+                p_AutoRowCountFrequency,
+                p_RowCount,
+                p_RowCountRunAt,
+                COALESCE(p_Status, 'Active'),
+                p_DisplayName,
+                COALESCE(p_AllowMultipleSubtypes, FALSE)
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: Procedure references non-existent view vwEntities
+CREATE OR REPLACE FUNCTION __mj."spUpdateEntity"(
+    IN p_ID UUID,
+    IN p_ParentID UUID,
+    IN p_Name VARCHAR(255),
+    IN p_NameSuffix VARCHAR(255),
+    IN p_Description TEXT,
+    IN p_AutoUpdateDescription BOOLEAN,
+    IN p_BaseView VARCHAR(255),
+    IN p_BaseViewGenerated BOOLEAN,
+    IN p_VirtualEntity BOOLEAN,
+    IN p_TrackRecordChanges BOOLEAN,
+    IN p_AuditRecordAccess BOOLEAN,
+    IN p_AuditViewRuns BOOLEAN,
+    IN p_IncludeInAPI BOOLEAN,
+    IN p_AllowAllRowsAPI BOOLEAN,
+    IN p_AllowUpdateAPI BOOLEAN,
+    IN p_AllowCreateAPI BOOLEAN,
+    IN p_AllowDeleteAPI BOOLEAN,
+    IN p_CustomResolverAPI BOOLEAN,
+    IN p_AllowUserSearchAPI BOOLEAN,
+    IN p_FullTextSearchEnabled BOOLEAN,
+    IN p_FullTextCatalog VARCHAR(255),
+    IN p_FullTextCatalogGenerated BOOLEAN,
+    IN p_FullTextIndex VARCHAR(255),
+    IN p_FullTextIndexGenerated BOOLEAN,
+    IN p_FullTextSearchFunction VARCHAR(255),
+    IN p_FullTextSearchFunctionGenerated BOOLEAN,
+    IN p_UserViewMaxRows INTEGER,
+    IN p_spCreate VARCHAR(255),
+    IN p_spUpdate VARCHAR(255),
+    IN p_spDelete VARCHAR(255),
+    IN p_spCreateGenerated BOOLEAN,
+    IN p_spUpdateGenerated BOOLEAN,
+    IN p_spDeleteGenerated BOOLEAN,
+    IN p_CascadeDeletes BOOLEAN,
+    IN p_DeleteType VARCHAR(10),
+    IN p_AllowRecordMerge BOOLEAN,
+    IN p_spMatch VARCHAR(255),
+    IN p_RelationshipDefaultDisplayType VARCHAR(20),
+    IN p_UserFormGenerated BOOLEAN,
+    IN p_EntityObjectSubclassName VARCHAR(255),
+    IN p_EntityObjectSubclassImport VARCHAR(255),
+    IN p_PreferredCommunicationField VARCHAR(255),
+    IN p_Icon VARCHAR(500),
+    IN p_ScopeDefault VARCHAR(100),
+    IN p_RowsToPackWithSchema VARCHAR(20),
+    IN p_RowsToPackSampleMethod VARCHAR(20),
+    IN p_RowsToPackSampleCount INTEGER,
+    IN p_RowsToPackSampleOrder TEXT,
+    IN p_AutoRowCountFrequency INTEGER,
+    IN p_RowCount BIGINT,
+    IN p_RowCountRunAt TIMESTAMPTZ,
+    IN p_Status VARCHAR(25),
+    IN p_DisplayName VARCHAR(255),
+    IN p_AllowMultipleSubtypes BOOLEAN
+)
+RETURNS SETOF __mj."vwEntities" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."Entity"
+    SET
+        "ParentID" = p_ParentID,
+        "Name" = p_Name,
+        "NameSuffix" = p_NameSuffix,
+        "Description" = p_Description,
+        "AutoUpdateDescription" = p_AutoUpdateDescription,
+        "BaseView" = p_BaseView,
+        "BaseViewGenerated" = p_BaseViewGenerated,
+        "VirtualEntity" = p_VirtualEntity,
+        "TrackRecordChanges" = p_TrackRecordChanges,
+        "AuditRecordAccess" = p_AuditRecordAccess,
+        "AuditViewRuns" = p_AuditViewRuns,
+        "IncludeInAPI" = p_IncludeInAPI,
+        "AllowAllRowsAPI" = p_AllowAllRowsAPI,
+        "AllowUpdateAPI" = p_AllowUpdateAPI,
+        "AllowCreateAPI" = p_AllowCreateAPI,
+        "AllowDeleteAPI" = p_AllowDeleteAPI,
+        "CustomResolverAPI" = p_CustomResolverAPI,
+        "AllowUserSearchAPI" = p_AllowUserSearchAPI,
+        "FullTextSearchEnabled" = p_FullTextSearchEnabled,
+        "FullTextCatalog" = p_FullTextCatalog,
+        "FullTextCatalogGenerated" = p_FullTextCatalogGenerated,
+        "FullTextIndex" = p_FullTextIndex,
+        "FullTextIndexGenerated" = p_FullTextIndexGenerated,
+        "FullTextSearchFunction" = p_FullTextSearchFunction,
+        "FullTextSearchFunctionGenerated" = p_FullTextSearchFunctionGenerated,
+        "UserViewMaxRows" = p_UserViewMaxRows,
+        "spCreate" = p_spCreate,
+        "spUpdate" = p_spUpdate,
+        "spDelete" = p_spDelete,
+        "spCreateGenerated" = p_spCreateGenerated,
+        "spUpdateGenerated" = p_spUpdateGenerated,
+        "spDeleteGenerated" = p_spDeleteGenerated,
+        "CascadeDeletes" = p_CascadeDeletes,
+        "DeleteType" = p_DeleteType,
+        "AllowRecordMerge" = p_AllowRecordMerge,
+        "spMatch" = p_spMatch,
+        "RelationshipDefaultDisplayType" = p_RelationshipDefaultDisplayType,
+        "UserFormGenerated" = p_UserFormGenerated,
+        "EntityObjectSubclassName" = p_EntityObjectSubclassName,
+        "EntityObjectSubclassImport" = p_EntityObjectSubclassImport,
+        "PreferredCommunicationField" = p_PreferredCommunicationField,
+        "Icon" = p_Icon,
+        "ScopeDefault" = p_ScopeDefault,
+        "RowsToPackWithSchema" = p_RowsToPackWithSchema,
+        "RowsToPackSampleMethod" = p_RowsToPackSampleMethod,
+        "RowsToPackSampleCount" = p_RowsToPackSampleCount,
+        "RowsToPackSampleOrder" = p_RowsToPackSampleOrder,
+        "AutoRowCountFrequency" = p_AutoRowCountFrequency,
+        "RowCount" = p_RowCount,
+        "RowCountRunAt" = p_RowCountRunAt,
+        "Status" = p_Status,
+        "DisplayName" = p_DisplayName,
+        "AllowMultipleSubtypes" = p_AllowMultipleSubtypes
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntity"(
     IN p_ID UUID
@@ -24248,7 +24873,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserMessage,
                 COALESCE(p_OutputType, 'FIeld'),
                 p_OutputField,
-                COALESCE(p_SkipIfOutputFieldNotEmpty, 1),
+                COALESCE(p_SkipIfOutputFieldNotEmpty, TRUE),
                 p_OutputEntityID,
                 p_Comments
             );
@@ -24280,7 +24905,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserMessage,
                 COALESCE(p_OutputType, 'FIeld'),
                 p_OutputField,
-                COALESCE(p_SkipIfOutputFieldNotEmpty, 1),
+                COALESCE(p_SkipIfOutputFieldNotEmpty, TRUE),
                 p_OutputEntityID,
                 p_Comments
             );
@@ -24384,7 +25009,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_EntityID,
                 p_BaseMessageTypeID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -24398,7 +25023,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_EntityID,
                 p_BaseMessageTypeID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -26561,9 +27186,9 @@ IF p_ID IS NOT NULL THEN
                 p_MCPServerConnectionID,
                 p_UserID,
                 p_RoleID,
-                COALESCE(p_CanExecute, 1),
-                COALESCE(p_CanModify, 0),
-                COALESCE(p_CanViewCredentials, 0)
+                COALESCE(p_CanExecute, TRUE),
+                COALESCE(p_CanModify, FALSE),
+                COALESCE(p_CanViewCredentials, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -26581,9 +27206,9 @@ IF p_ID IS NOT NULL THEN
                 p_MCPServerConnectionID,
                 p_UserID,
                 p_RoleID,
-                COALESCE(p_CanExecute, 1),
-                COALESCE(p_CanModify, 0),
-                COALESCE(p_CanViewCredentials, 0)
+                COALESCE(p_CanExecute, TRUE),
+                COALESCE(p_CanModify, FALSE),
+                COALESCE(p_CanViewCredentials, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -26677,7 +27302,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_MCPServerConnectionID,
                 p_MCPServerToolID,
-                COALESCE(p_IsEnabled, 1),
+                COALESCE(p_IsEnabled, TRUE),
                 p_DefaultInputValues,
                 p_MaxCallsPerMinute
             );
@@ -26695,7 +27320,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_MCPServerConnectionID,
                 p_MCPServerToolID,
-                COALESCE(p_IsEnabled, 1),
+                COALESCE(p_IsEnabled, TRUE),
                 p_DefaultInputValues,
                 p_MaxCallsPerMinute
             );
@@ -26842,7 +27467,7 @@ IF p_ID IS NOT NULL THEN
                 p_OAuthMetadataCacheTTLMinutes,
                 p_OAuthClientID,
                 p_OAuthClientSecretEncrypted,
-                COALESCE(p_OAuthRequirePKCE, 1)
+                COALESCE(p_OAuthRequirePKCE, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -26894,7 +27519,7 @@ IF p_ID IS NOT NULL THEN
                 p_OAuthMetadataCacheTTLMinutes,
                 p_OAuthClientID,
                 p_OAuthClientSecretEncrypted,
-                COALESCE(p_OAuthRequirePKCE, 1)
+                COALESCE(p_OAuthRequirePKCE, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -27047,11 +27672,11 @@ IF p_ID IS NOT NULL THEN
                 p_CustomHeaderName,
                 p_CompanyID,
                 COALESCE(p_Status, 'Active'),
-                COALESCE(p_AutoSyncTools, 1),
-                COALESCE(p_AutoGenerateActions, 0),
-                COALESCE(p_LogToolCalls, 1),
-                COALESCE(p_LogInputParameters, 1),
-                COALESCE(p_LogOutputContent, 1),
+                COALESCE(p_AutoSyncTools, TRUE),
+                COALESCE(p_AutoGenerateActions, FALSE),
+                COALESCE(p_LogToolCalls, TRUE),
+                COALESCE(p_LogInputParameters, TRUE),
+                COALESCE(p_LogOutputContent, TRUE),
                 p_MaxOutputLogSize,
                 p_LastConnectedAt,
                 p_LastErrorMessage,
@@ -27087,11 +27712,11 @@ IF p_ID IS NOT NULL THEN
                 p_CustomHeaderName,
                 p_CompanyID,
                 COALESCE(p_Status, 'Active'),
-                COALESCE(p_AutoSyncTools, 1),
-                COALESCE(p_AutoGenerateActions, 0),
-                COALESCE(p_LogToolCalls, 1),
-                COALESCE(p_LogInputParameters, 1),
-                COALESCE(p_LogOutputContent, 1),
+                COALESCE(p_AutoSyncTools, TRUE),
+                COALESCE(p_AutoGenerateActions, FALSE),
+                COALESCE(p_LogToolCalls, TRUE),
+                COALESCE(p_LogInputParameters, TRUE),
+                COALESCE(p_LogOutputContent, TRUE),
                 p_MaxOutputLogSize,
                 p_LastConnectedAt,
                 p_LastErrorMessage,
@@ -27389,11 +28014,11 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_StartedAt, NOW()),
                 p_EndedAt,
                 p_DurationMs,
-                COALESCE(p_Success, 0),
+                COALESCE(p_Success, FALSE),
                 p_ErrorMessage,
                 p_InputParameters,
                 p_OutputContent,
-                COALESCE(p_OutputTruncated, 0)
+                COALESCE(p_OutputTruncated, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -27421,11 +28046,11 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_StartedAt, NOW()),
                 p_EndedAt,
                 p_DurationMs,
-                COALESCE(p_Success, 0),
+                COALESCE(p_Success, FALSE),
                 p_ErrorMessage,
                 p_InputParameters,
                 p_OutputContent,
-                COALESCE(p_OutputTruncated, 0)
+                COALESCE(p_OutputTruncated, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -28042,7 +28667,7 @@ IF p_ID IS NOT NULL THEN
                 p_MaxViews,
                 COALESCE(p_CurrentViews, 0),
                 p_UserID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -28068,7 +28693,7 @@ IF p_ID IS NOT NULL THEN
                 p_MaxViews,
                 COALESCE(p_CurrentViews, 0),
                 p_UserID,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -28206,8 +28831,8 @@ IF p_ID IS NOT NULL THEN
                 p_QualityRank,
                 p_ExecutionCostRank,
                 p_UsesTemplate,
-                COALESCE(p_AuditQueryRuns, 0),
-                COALESCE(p_CacheEnabled, 0),
+                COALESCE(p_AuditQueryRuns, FALSE),
+                COALESCE(p_CacheEnabled, FALSE),
                 p_CacheTTLMinutes,
                 p_CacheMaxSize,
                 p_EmbeddingVector,
@@ -28252,8 +28877,8 @@ IF p_ID IS NOT NULL THEN
                 p_QualityRank,
                 p_ExecutionCostRank,
                 p_UsesTemplate,
-                COALESCE(p_AuditQueryRuns, 0),
-                COALESCE(p_CacheEnabled, 0),
+                COALESCE(p_AuditQueryRuns, FALSE),
+                COALESCE(p_CacheEnabled, FALSE),
                 p_CacheTTLMinutes,
                 p_CacheMaxSize,
                 p_EmbeddingVector,
@@ -28363,7 +28988,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_Color,
                 p_Icon,
-                COALESCE(p_IsArchived, 0)
+                COALESCE(p_IsArchived, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -28385,7 +29010,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_Color,
                 p_Icon,
-                COALESCE(p_IsArchived, 0)
+                COALESCE(p_IsArchived, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -28489,10 +29114,10 @@ IF p_ID IS NOT NULL THEN
                 p_ParentID,
                 p_Description,
                 p_UserID,
-                COALESCE(p_DefaultCacheEnabled, 0),
+                COALESCE(p_DefaultCacheEnabled, FALSE),
                 p_DefaultCacheTTLMinutes,
                 p_DefaultCacheMaxSize,
-                COALESCE(p_CacheInheritanceEnabled, 1)
+                COALESCE(p_CacheInheritanceEnabled, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -28513,10 +29138,10 @@ IF p_ID IS NOT NULL THEN
                 p_ParentID,
                 p_Description,
                 p_UserID,
-                COALESCE(p_DefaultCacheEnabled, 0),
+                COALESCE(p_DefaultCacheEnabled, FALSE),
                 p_DefaultCacheTTLMinutes,
                 p_DefaultCacheMaxSize,
-                COALESCE(p_CacheInheritanceEnabled, 1)
+                COALESCE(p_CacheInheritanceEnabled, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -28853,9 +29478,9 @@ IF p_ID IS NOT NULL THEN
                 p_SQLFullType,
                 p_SourceEntityID,
                 p_SourceFieldName,
-                COALESCE(p_IsComputed, 0),
+                COALESCE(p_IsComputed, FALSE),
                 p_ComputationDescription,
-                COALESCE(p_IsSummary, 0),
+                COALESCE(p_IsSummary, FALSE),
                 p_SummaryDescription,
                 COALESCE(p_DetectionMethod, 'Manual'),
                 p_AutoDetectConfidenceScore
@@ -28889,9 +29514,9 @@ IF p_ID IS NOT NULL THEN
                 p_SQLFullType,
                 p_SourceEntityID,
                 p_SourceFieldName,
-                COALESCE(p_IsComputed, 0),
+                COALESCE(p_IsComputed, FALSE),
                 p_ComputationDescription,
-                COALESCE(p_IsSummary, 0),
+                COALESCE(p_IsSummary, FALSE),
                 p_SummaryDescription,
                 COALESCE(p_DetectionMethod, 'Manual'),
                 p_AutoDetectConfidenceScore
@@ -29510,7 +30135,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_QueueTypeID,
-                COALESCE(p_IsActive, 0),
+                COALESCE(p_IsActive, FALSE),
                 p_ProcessPID,
                 p_ProcessPlatform,
                 p_ProcessVersion,
@@ -29550,7 +30175,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_QueueTypeID,
-                COALESCE(p_IsActive, 0),
+                COALESCE(p_IsActive, FALSE),
                 p_ProcessPID,
                 p_ProcessPlatform,
                 p_ProcessVersion,
@@ -30857,7 +31482,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_Configuration,
-                COALESCE(p_DataContextUpdated, 0)
+                COALESCE(p_DataContextUpdated, FALSE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -30877,7 +31502,7 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_Configuration,
-                COALESCE(p_DataContextUpdated, 0)
+                COALESCE(p_DataContextUpdated, FALSE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -32049,11 +32674,11 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_RunCount, 0),
                 COALESCE(p_SuccessCount, 0),
                 COALESCE(p_FailureCount, 0),
-                COALESCE(p_NotifyOnSuccess, 0),
-                COALESCE(p_NotifyOnFailure, 1),
+                COALESCE(p_NotifyOnSuccess, FALSE),
+                COALESCE(p_NotifyOnFailure, TRUE),
                 p_NotifyUserID,
-                COALESCE(p_NotifyViaEmail, 0),
-                COALESCE(p_NotifyViaInApp, 1),
+                COALESCE(p_NotifyViaEmail, FALSE),
+                COALESCE(p_NotifyViaInApp, TRUE),
                 p_LockToken,
                 p_LockedAt,
                 p_LockedByInstance,
@@ -32107,11 +32732,11 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_RunCount, 0),
                 COALESCE(p_SuccessCount, 0),
                 COALESCE(p_FailureCount, 0),
-                COALESCE(p_NotifyOnSuccess, 0),
-                COALESCE(p_NotifyOnFailure, 1),
+                COALESCE(p_NotifyOnSuccess, FALSE),
+                COALESCE(p_NotifyOnFailure, TRUE),
                 p_NotifyUserID,
-                COALESCE(p_NotifyViaEmail, 0),
-                COALESCE(p_NotifyViaInApp, 1),
+                COALESCE(p_NotifyViaEmail, FALSE),
+                COALESCE(p_NotifyViaInApp, TRUE),
                 p_LockToken,
                 p_LockedAt,
                 p_LockedByInstance,
@@ -32922,7 +33547,7 @@ IF p_ID IS NOT NULL THEN
                 p_TypeID,
                 p_TemplateText,
                 p_Priority,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -32940,7 +33565,7 @@ IF p_ID IS NOT NULL THEN
                 p_TypeID,
                 p_TemplateText,
                 p_Priority,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -33051,7 +33676,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 COALESCE(p_Type, 'Scalar'),
                 p_DefaultValue,
-                COALESCE(p_IsRequired, 0),
+                COALESCE(p_IsRequired, FALSE),
                 p_LinkedParameterName,
                 p_LinkedParameterField,
                 p_ExtraFilter,
@@ -33085,7 +33710,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 COALESCE(p_Type, 'Scalar'),
                 p_DefaultValue,
-                COALESCE(p_IsRequired, 0),
+                COALESCE(p_IsRequired, FALSE),
                 p_LinkedParameterName,
                 p_LinkedParameterField,
                 p_ExtraFilter,
@@ -33337,7 +33962,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_ActiveAt,
                 p_DisabledAt,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -33361,7 +33986,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_ActiveAt,
                 p_DisabledAt,
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -34558,9 +35183,9 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_Name,
                 p_Description,
-                COALESCE(p_DefaultInApp, 1),
-                COALESCE(p_DefaultEmail, 0),
-                COALESCE(p_DefaultSMS, 0),
+                COALESCE(p_DefaultInApp, TRUE),
+                COALESCE(p_DefaultEmail, FALSE),
+                COALESCE(p_DefaultSMS, FALSE),
                 p_AllowUserPreference,
                 p_EmailTemplateID,
                 p_SMSTemplateID,
@@ -34590,9 +35215,9 @@ IF p_ID IS NOT NULL THEN
             (
                 p_Name,
                 p_Description,
-                COALESCE(p_DefaultInApp, 1),
-                COALESCE(p_DefaultEmail, 0),
-                COALESCE(p_DefaultSMS, 0),
+                COALESCE(p_DefaultInApp, TRUE),
+                COALESCE(p_DefaultEmail, FALSE),
+                COALESCE(p_DefaultSMS, FALSE),
                 p_AllowUserPreference,
                 p_EmailTemplateID,
                 p_SMSTemplateID,
@@ -34704,7 +35329,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_ApplicationID,
                 COALESCE(p_Sequence, 0),
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -34720,7 +35345,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_ApplicationID,
                 COALESCE(p_Sequence, 0),
-                COALESCE(p_IsActive, 1)
+                COALESCE(p_IsActive, TRUE)
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -35031,7 +35656,7 @@ IF p_ID IS NOT NULL THEN
                 p_Message,
                 p_ResourceTypeID,
                 p_ResourceConfiguration,
-                COALESCE(p_Unread, 1),
+                COALESCE(p_Unread, TRUE),
                 p_ReadAt,
                 p_ResourceRecordID,
                 p_NotificationTypeID
@@ -35057,7 +35682,7 @@ IF p_ID IS NOT NULL THEN
                 p_Message,
                 p_ResourceTypeID,
                 p_ResourceConfiguration,
-                COALESCE(p_Unread, 1),
+                COALESCE(p_Unread, TRUE),
                 p_ReadAt,
                 p_ResourceRecordID,
                 p_NotificationTypeID
@@ -44281,9 +44906,9 @@ WHERE
 -- CHECK constraint for MJ: Open Apps: Field: Name was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function;
 
 INSERT INTO __mj."GeneratedCode" ("CategoryID", "GeneratedByModelID", "GeneratedAt", "Language", "Status", "Source", "Code", "Description", "Name", "LinkedEntityID", "LinkedRecordPrimaryKey")
-                      VALUES ((SELECT "ID" FROM __mj.vwGeneratedCodeCategories WHERE "Name"='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', NOW(), 'TypeScript','Approved', '(NOT "Name" like ''%"^a-z0-9-"%'')', 'public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
+                      VALUES ((SELECT "ID" FROM __mj.vwGeneratedCodeCategories WHERE "Name"='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', NOW(), 'TypeScript','Approved', '(NOT [Name] like ''%[^a-z0-9-]%'')', 'public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
 	// The regex checks that the entire string consists only of lowercase letters, digits, or hyphens
-	const regex = /^"a-z0-9-"+$/;
+	const regex = /^[a-z0-9-]+$/;
 	if (this."Name" != null && !regex.test(this."Name")) {
 		result."Errors".push(new ValidationErrorInfo(
 			"Name",
@@ -53419,14 +54044,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integ
 ----- CREATE PROCEDURE FOR Entity
 ------------------------------------------------------------
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"
-    
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate Permissions for MJ: Entities */;
 
-/* spCreate Permissions for MJ: Entities */
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -53439,13 +54060,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integ
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR Entity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -53458,7 +54076,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integ
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR Entity
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Entities */;
