@@ -1,0 +1,11 @@
+UPDATE er
+SET 
+	er.DisplayName = NULL 
+FROM 
+	${flyway:defaultSchema}.EntityRelationship er
+INNER JOIN ${flyway:defaultSchema}.Entity e1 ON er.EntityID = e1.ID
+INNER JOIN ${flyway:defaultSchema}.Entity e2 ON er.RelatedEntityID = e2.ID
+WHERE 
+	e1.SchemaName = '${flyway:defaultSchema}'
+	AND e2.SchemaName = '${flyway:defaultSchema}'
+	AND er.DisplayName IS NOT NULL
