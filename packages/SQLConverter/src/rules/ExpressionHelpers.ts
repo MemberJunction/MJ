@@ -530,14 +530,29 @@ function splitTopLevelCommas(str: string): string[] {
 /**
  * Convert SELECT TOP N ... to SELECT ... LIMIT N.
  * Moves TOP N from after SELECT to LIMIT N at end of statement.
+ * Skips matches inside string literals and comments.
  */
 export function convertTopToLimit(sql: string): string {
+  // Build protected ranges from string literals and comments
+  const segments = segmentSQL(sql);
+  const protectedRanges: Array<{ start: number; end: number }> = [];
+  let pos = 0;
+  for (const seg of segments) {
+    if (seg.type !== 'code') {
+      protectedRanges.push({ start: pos, end: pos + seg.text.length });
+    }
+    pos += seg.text.length;
+  }
+
   // Find all SELECT TOP N patterns
   const topPattern = /\bSELECT\s+(DISTINCT\s+)?TOP\s+(\d+)\s/gi;
   let match: RegExpExecArray | null;
   const replacements: Array<{ start: number; end: number; selectPrefix: string; distinct: string; n: string }> = [];
 
   while ((match = topPattern.exec(sql)) !== null) {
+    // Skip matches inside string literals or comments
+    if (protectedRanges.some(r => match!.index >= r.start && match!.index < r.end)) continue;
+
     replacements.push({
       start: match.index,
       end: match.index + match[0].length,

@@ -442,6 +442,13 @@ describe('convertTopToLimit', () => {
     const input = 'SELECT * FROM t';
     expect(convertTopToLimit(input)).toBe(input);
   });
+
+  it('should not convert TOP inside string literals', () => {
+    const input = `INSERT INTO t ("Col") VALUES ('SELECT TOP 10 Name FROM Users')`;
+    const result = convertTopToLimit(input);
+    expect(result).not.toContain('LIMIT');
+    expect(result).toContain('SELECT TOP 10 Name FROM Users');
+  });
 });
 
 // ---------------------------------------------------------------------------
