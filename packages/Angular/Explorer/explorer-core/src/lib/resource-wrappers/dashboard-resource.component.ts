@@ -128,7 +128,6 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             flex-direction: column;
             height: 100%;
             width: 100%;
-            background: #f5f5f5;
         }
         .dashboard-resource-container {
             flex: 1;

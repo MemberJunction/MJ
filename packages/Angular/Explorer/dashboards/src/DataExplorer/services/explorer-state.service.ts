@@ -566,6 +566,47 @@ export class ExplorerStateService {
     this.updateState({ showAllEntities: !this.state$.value.showAllEntities });
   }
 
+  // ========================================
+  // Concept D: Application Groups + Quick Access
+  // ========================================
+
+  /**
+   * Toggle the quick access (right) panel open/closed
+   */
+  toggleQuickAccessPanel(): void {
+    this.updateState({ quickAccessPanelOpen: !this.state$.value.quickAccessPanelOpen });
+  }
+
+  /**
+   * Toggle a quick access section's expanded state
+   */
+  toggleQuickAccessSection(sectionId: string): void {
+    const sections = { ...this.state$.value.quickAccessSections };
+    sections[sectionId] = sections[sectionId] === false; // default to expanded (true)
+    this.updateState({ quickAccessSections: sections });
+  }
+
+  /**
+   * Toggle an application group's expanded/collapsed state
+   */
+  toggleAppGroupExpanded(appId: string): void {
+    const expanded = [...this.state$.value.expandedAppGroups];
+    const index = expanded.indexOf(appId);
+    if (index >= 0) {
+      expanded.splice(index, 1);
+    } else {
+      expanded.push(appId);
+    }
+    this.updateState({ expandedAppGroups: expanded });
+  }
+
+  /**
+   * Set the home view mode (all vs favorites)
+   */
+  setHomeViewMode(mode: 'all' | 'favorites'): void {
+    this.updateState({ homeViewMode: mode });
+  }
+
   /**
    * Track entity access - called when user navigates to an entity
    */
@@ -785,10 +826,11 @@ export class ExplorerStateService {
           recentRecords.push(recordAccess);
 
           // Build composite key for batch name lookup
-          const compositeKey = this.buildCompositeKeyForEntity(entity, log.RecordID);
+          const compositeKey = this.buildCompositeKeyForRecord(entity.Name, log.RecordID);
           if (compositeKey) {
             recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
-            recordIndexMap.set(`${entity.Name}|${log.RecordID}`, index);
+            // Use the canonical concatenated string as the map key for consistent matching
+            recordIndexMap.set(`${entity.Name}||${compositeKey.ToConcatenatedString()}`, index);
           }
         }
       }
@@ -799,8 +841,7 @@ export class ExplorerStateService {
           const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
           for (const nameResult of nameResults) {
             if (nameResult.Success && nameResult.RecordName) {
-              const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
-              const key = `${nameResult.EntityName}|${pkValue}`;
+              const key = `${nameResult.EntityName}||${nameResult.CompositeKey.ToConcatenatedString()}`;
               const index = recordIndexMap.get(key);
               if (index !== undefined) {
                 recentRecords[index].recordName = nameResult.RecordName;
@@ -820,37 +861,35 @@ export class ExplorerStateService {
   }
 
   /**
-   * Build a CompositeKey for a given entity and record ID.
-   * Assumes single primary key field named ID for most entities.
+   * Build a CompositeKey for a record. RecordID may be stored as either:
+   * - Concatenated format: "FieldName|Value" or "Field1|Val1||Field2|Val2"
+   * - Plain value: just the raw value (e.g. a GUID)
+   * Detects the format and constructs the key accordingly.
    */
-  private buildCompositeKeyForEntity(entity: { Name: string; ID: string }, recordId: string): CompositeKey | null {
-    try {
-      const entityInfo = this.metadata.Entities.find(e => e.Name === entity.Name);
-      if (!entityInfo) return null;
+  private buildCompositeKeyForRecord(entityName: string, recordId: string): CompositeKey | null {
+    if (!recordId) return null;
 
-      const pkFields = entityInfo.PrimaryKeys;
-      if (pkFields.length === 0) return null;
-
-      const compositeKey = new CompositeKey();
-      // For single PK, use the recordId directly
-      if (pkFields.length === 1) {
-        compositeKey.KeyValuePairs = [{
-          FieldName: pkFields[0].Name,
-          Value: recordId
-        }];
-      } else {
-        // For composite keys, we'd need to parse the recordId
-        // For now, assume the recordId is already in the correct format
-        // This is a simplified approach - composite keys would need more handling
-        compositeKey.KeyValuePairs = [{
-          FieldName: pkFields[0].Name,
-          Value: recordId
-        }];
+    // If recordId contains '|', it's in concatenated format
+    if (recordId.includes('|')) {
+      try {
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(recordId);
+        if (compositeKey.KeyValuePairs.length > 0) return compositeKey;
+      } catch {
+        // Fall through to entity-based lookup
       }
-      return compositeKey;
-    } catch {
-      return null;
     }
+
+    // Plain value — look up entity primary key field(s) to construct the key
+    const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+    if (!entityInfo) return null;
+
+    const pkField = entityInfo.FirstPrimaryKey;
+    if (!pkField) return null;
+
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+    return compositeKey;
   }
 
   /**
@@ -950,10 +989,11 @@ export class ExplorerStateService {
           favoriteRecords.push(favoriteRecord);
 
           // Build composite key for batch name lookup
-          const compositeKey = this.buildCompositeKeyForEntity(entity, fav.RecordID);
+          const compositeKey = this.buildCompositeKeyForRecord(entity.Name, fav.RecordID);
           if (compositeKey) {
             recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
-            recordIndexMap.set(`${entity.Name}|${fav.RecordID}`, index);
+            // Use the canonical concatenated string as the map key for consistent matching
+            recordIndexMap.set(`${entity.Name}||${compositeKey.ToConcatenatedString()}`, index);
           }
         }
       }
@@ -964,8 +1004,7 @@ export class ExplorerStateService {
           const nameResults = await this.metadata.GetEntityRecordNames(recordNameInputs);
           for (const nameResult of nameResults) {
             if (nameResult.Success && nameResult.RecordName) {
-              const pkValue = nameResult.CompositeKey.KeyValuePairs[0]?.Value?.toString();
-              const key = `${nameResult.EntityName}|${pkValue}`;
+              const key = `${nameResult.EntityName}||${nameResult.CompositeKey.ToConcatenatedString()}`;
               const index = recordIndexMap.get(key);
               if (index !== undefined) {
                 favoriteRecords[index].recordName = nameResult.RecordName;

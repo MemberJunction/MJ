@@ -96,12 +96,12 @@ export class DeveloperModeService {
         this._currentUser = user;
 
         // Check if user has a developer role
-        const hasDeveloperRole = await this.CheckDeveloperRole(user);
+        const hasDeveloperRole = await this.checkDeveloperRole(user);
         this._isDeveloper$.next(hasDeveloperRole);
 
         // Load saved preference from User Settings (only if user is a developer)
         if (hasDeveloperRole) {
-            const savedState = await this.LoadSetting();
+            const savedState = await this.loadSetting();
             this._isEnabled$.next(savedState);
         } else {
             // Non-developers always have dev mode disabled
@@ -124,7 +124,7 @@ export class DeveloperModeService {
 
         const newState = !this.IsEnabled;
         this._isEnabled$.next(newState);
-        await this.SaveSetting(newState);
+        await this.saveSetting(newState);
 
         return newState;
     }
@@ -135,7 +135,7 @@ export class DeveloperModeService {
     public async Enable(): Promise<void> {
         if (this.IsDeveloper) {
             this._isEnabled$.next(true);
-            await this.SaveSetting(true);
+            await this.saveSetting(true);
         }
     }
 
@@ -144,7 +144,7 @@ export class DeveloperModeService {
      */
     public async Disable(): Promise<void> {
         this._isEnabled$.next(false);
-        await this.SaveSetting(false);
+        await this.saveSetting(false);
     }
 
     /**
@@ -160,7 +160,7 @@ export class DeveloperModeService {
     /**
      * Load the developer mode setting from User Settings entity
      */
-    private async LoadSetting(): Promise<boolean> {
+    private async loadSetting(): Promise<boolean> {
         try {
             const engine = UserInfoEngine.Instance;
             const settingValue = engine.GetSetting(DEVELOPER_MODE_SETTING_KEY);
@@ -174,7 +174,7 @@ export class DeveloperModeService {
     /**
      * Save the developer mode setting to User Settings entity
      */
-    private async SaveSetting(enabled: boolean): Promise<void> {
+    private async saveSetting(enabled: boolean): Promise<void> {
         try {
             const engine = UserInfoEngine.Instance;
             await engine.SetSetting(DEVELOPER_MODE_SETTING_KEY, String(enabled));
@@ -186,7 +186,7 @@ export class DeveloperModeService {
     /**
      * Check if user has a developer role by querying User Roles entity
      */
-    private async CheckDeveloperRole(user: MJUserEntity): Promise<boolean> {
+    private async checkDeveloperRole(user: MJUserEntity): Promise<boolean> {
         try {
             const rv = new RunView();
 

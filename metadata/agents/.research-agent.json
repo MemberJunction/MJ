@@ -35,7 +35,7 @@
             "Name": "ALL_ENTITIES",
             "Description": "Complete list of all entities in the system for schema exploration and research",
             "SourceType": "RunView",
-            "EntityName": "Entities",
+            "EntityName": "MJ: Entities",
             "OrderBy": "Name ASC",
             "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
             "ResultType": "simple",
@@ -50,8 +50,8 @@
             "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.188Z",
-            "checksum": "3e8e70d0cc217bd99e9406edb2470637059b904da4fc6e08f16c4ee12f8643aa"
+            "lastModified": "2026-02-25T23:25:50.117Z",
+            "checksum": "bba158c2c079b16504175a9cb0e16bd25892cb6863e16ce82a49286791b0a0ee"
           }
         }
       ],

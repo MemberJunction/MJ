@@ -544,6 +544,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Public mutation for regular users to run AI agents with authentication.
+     * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
@@ -562,12 +563,33 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
+
+        if (fireAndForget) {
+            // Fire-and-forget mode: start execution in background, return immediately.
+            // The client will receive the result via WebSocket PubSub completion event.
+            this.executeAgentInBackground(
+                p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                conversationDetailId, createArtifacts || false, createNotification || false,
+                sourceArtifactId, sourceArtifactVersionId
+            );
+
+            LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+
+            return {
+                success: true,
+                result: JSON.stringify({ accepted: true, fireAndForget: true })
+            };
+        }
+
+        // Synchronous mode (default): wait for execution to complete
         return this.executeAIAgent(
             p,
             dataSource,

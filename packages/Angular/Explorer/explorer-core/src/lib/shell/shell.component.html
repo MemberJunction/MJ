@@ -116,18 +116,32 @@
               <!-- Menu Item -->
               @if (!isMenuDivider(element)) {
                 @if (asMenuItem(element); as item) {
-                  <div class="user-menu-item"
-                    [class.disabled]="!item.enabled"
-                    [class.danger]="item.cssClass === 'danger'"
-                    [style.color]="item.color || null"
-                    [title]="item.tooltip || ''"
-                    (click)="item.enabled && onUserMenuItemClick(item.id)">
-                    <i [class]="item.icon"></i>
-                    <span class="menu-label">{{ item.label }}</span>
-                    @if (item.shortcut) {
-                      <span class="menu-shortcut">{{ item.shortcut }}</span>
-                    }
-                  </div>
+                  @if (item.id === 'toggle-theme') {
+                    <div class="user-menu-item theme-toggle-item"
+                      [title]="item.tooltip || ''"
+                      (click)="onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      <div class="theme-toggle-track" [class.dark]="IsDarkMode">
+                        <div class="theme-toggle-thumb">
+                          <i [class]="IsDarkMode ? 'fa-solid fa-moon' : 'fa-solid fa-sun'" class="theme-toggle-icon"></i>
+                        </div>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="user-menu-item"
+                      [class.disabled]="!item.enabled"
+                      [class.danger]="item.cssClass === 'danger'"
+                      [style.color]="item.color || null"
+                      [title]="item.tooltip || ''"
+                      (click)="item.enabled && onUserMenuItemClick(item.id)">
+                      <i [class]="item.icon"></i>
+                      <span class="menu-label">{{ item.label }}</span>
+                      @if (item.shortcut) {
+                        <span class="menu-shortcut">{{ item.shortcut }}</span>
+                      }
+                    </div>
+                  }
                 }
               }
             }

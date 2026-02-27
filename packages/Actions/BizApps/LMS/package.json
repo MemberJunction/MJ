@@ -9,7 +9,8 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
-    "test": "echo \"No tests yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",

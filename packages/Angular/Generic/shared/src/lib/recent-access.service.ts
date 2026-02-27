@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView, CompositeKey, LogError } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey, LogError, EntityRecordNameInput } from '@memberjunction/core';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -175,6 +175,9 @@ export class RecentAccessService {
         });
       }
 
+      // Batch-resolve record names for all items
+      await this.resolveRecordNames(items, md);
+
       this._recentItems$.next(items);
       this._isLoaded = true;
 
@@ -192,6 +195,73 @@ export class RecentAccessService {
    */
   public async refreshRecentItems(): Promise<void> {
     await this.loadRecentItems(15, true);
+  }
+
+  /**
+   * Batch-resolve record names for a list of recent access items using GetEntityRecordNames().
+   * Mutates the items in-place to set recordName where resolved.
+   */
+  private async resolveRecordNames(items: RecentAccessItem[], md: Metadata): Promise<void> {
+    const nameInputs: EntityRecordNameInput[] = [];
+    const indexMap = new Map<string, number>();
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const compositeKey = this.buildCompositeKeyForRecord(item.entityName, item.recordId, md);
+      if (!compositeKey) continue;
+
+      nameInputs.push({ EntityName: item.entityName, CompositeKey: compositeKey });
+      indexMap.set(`${item.entityName}||${compositeKey.ToConcatenatedString()}`, i);
+    }
+
+    if (nameInputs.length === 0) return;
+
+    try {
+      const nameResults = await md.GetEntityRecordNames(nameInputs);
+      for (const result of nameResults) {
+        if (result.Success && result.RecordName) {
+          const key = `${result.EntityName}||${result.CompositeKey.ToConcatenatedString()}`;
+          const index = indexMap.get(key);
+          if (index !== undefined) {
+            items[index].recordName = result.RecordName;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('RecentAccessService: Failed to resolve record names', error);
+    }
+  }
+
+  /**
+   * Build a CompositeKey for a record. RecordID may be stored as either:
+   * - Concatenated format: "FieldName|Value" or "Field1|Val1||Field2|Val2"
+   * - Plain value: just the raw value (e.g. a GUID)
+   * Detects the format and constructs the key accordingly.
+   */
+  private buildCompositeKeyForRecord(entityName: string, recordId: string, md: Metadata): CompositeKey | null {
+    if (!recordId) return null;
+
+    // If recordId contains '|', it's in concatenated format
+    if (recordId.includes('|')) {
+      try {
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(recordId);
+        if (compositeKey.KeyValuePairs.length > 0) return compositeKey;
+      } catch {
+        // Fall through to entity-based lookup
+      }
+    }
+
+    // Plain value — look up entity primary key field(s) to construct the key
+    const entityInfo = md.Entities.find(e => e.Name === entityName);
+    if (!entityInfo) return null;
+
+    const pkField = entityInfo.FirstPrimaryKey;
+    if (!pkField) return null;
+
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+    return compositeKey;
   }
 
   /**
