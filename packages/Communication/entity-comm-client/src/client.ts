@@ -2,7 +2,7 @@ import { LogError, Metadata, RunViewParams } from "@memberjunction/core";
 import { EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { Message } from "@memberjunction/communication-types";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
-import { CommunicationProviderMessageTypeEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJCommunicationProviderMessageTypeEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export class EntityCommunicationsEngineClient extends EntityCommunicationsEngineBase {
     /**
@@ -88,7 +88,7 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
         }
     }
 
-    protected getMessageTypeValues(messageType: CommunicationProviderMessageTypeEntity) {
+    protected getMessageTypeValues(messageType: MJCommunicationProviderMessageTypeEntity) {
         if (!messageType)
             return undefined;
 
@@ -106,7 +106,7 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
         };
     }
 
-    protected getTemplateValues(template: TemplateEntityExtended) {
+    protected getTemplateValues(template: MJTemplateEntityExtended) {
         if (!template){
             return undefined;
         }
@@ -127,17 +127,6 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
           User: template.User,
         };
     }
-}
-
-/**
- * Stub function to prevent tree-shaking of EntityCommunicationsEngineClient in production builds.
- * Call this function early in your application initialization (before using the client)
- * to ensure the class and its inherited Config() method are not removed by the bundler.
- */
-export function LoadEntityCommunicationsEngineClient(): void {
-    // Reference the class and its Instance/Config to prevent tree-shaking
-    const _instance = EntityCommunicationsEngineClient.Instance;
-    const _config = _instance.Config;
 }
 
 type Scalar = string | number | boolean | null | undefined;

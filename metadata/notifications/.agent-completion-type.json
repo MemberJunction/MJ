@@ -1,0 +1,24 @@
+{
+  "entityName": "MJ: User Notification Types",
+  "primaryKey": {
+    "ID": "1523E018-CD35-4A64-AB00-F86DD3AEBA0C"
+  },
+  "sync": {
+    "lastModified": "2026-02-13T21:09:21.804Z",
+    "checksum": "b370223fc1e1c8b35602d9e062c8e55fa930b16052eb72e3a36158d1702bc42f"
+  },
+  "fields": {
+    "Name": "Agent Completion",
+    "Description": "Notifications sent when an AI agent completes a task and creates an artifact",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "EmailTemplateID": "@lookup:MJ: Templates.Name=Agent Completion - Email",
+    "SMSTemplateID": "@lookup:MJ: Templates.Name=Agent Completion - SMS",
+    "Icon": "fa-robot",
+    "Color": "#4CAF50",
+    "AutoExpireDays": 7,
+    "Priority": 10
+  }
+}

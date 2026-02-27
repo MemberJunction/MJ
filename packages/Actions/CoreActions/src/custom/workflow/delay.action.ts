@@ -184,10 +184,3 @@ export class DelayAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the DelayAction class is included in the bundle
- */
-export function LoadDelayAction() {
-    // Stub function to prevent tree shaking
-}

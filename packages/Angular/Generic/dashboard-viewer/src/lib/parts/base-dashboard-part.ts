@@ -1,5 +1,5 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive, OnInit, OnDestroy } from '@angular/core';
-import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import {
     PanelConfig,
     DashboardPanel,
@@ -8,7 +8,8 @@ import {
     OpenEntityRecordNavRequest,
     OpenDashboardNavRequest,
     OpenQueryNavRequest,
-    OpenApplicationNavRequest
+    OpenApplicationNavRequest,
+    OpenNavItemNavRequest
 } from '../models/dashboard-types';
 
 /**
@@ -18,7 +19,7 @@ export interface PartConfigureEvent {
     /** The panel requesting configuration */
     Panel: DashboardPanel;
     /** The part type */
-    PartType: DashboardPartTypeEntity;
+    PartType: MJDashboardPartTypeEntity;
 }
 
 /**
@@ -77,7 +78,7 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
     /**
      * The part type metadata
      */
-    @Input() PartType: DashboardPartTypeEntity | null = null;
+    @Input() PartType: MJDashboardPartTypeEntity | null = null;
 
     /**
      * Whether the dashboard is in edit mode
@@ -312,6 +313,27 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
             sourcePanelId: this.Panel?.id ?? '',
             applicationId,
             resourceName,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to a specific nav item within an application.
+     * Supports setting URL query parameters after navigation.
+     */
+    public RequestOpenNavItem(
+        navItemName: string,
+        appName?: string,
+        queryParams?: Record<string, string>,
+        openInNewTab = false
+    ): void {
+        const request: OpenNavItemNavRequest = {
+            type: 'OpenNavItem',
+            sourcePanelId: this.Panel?.id ?? '',
+            appName,
+            navItemName,
+            queryParams,
             openInNewTab
         };
         this.emitNavigationRequest(request);

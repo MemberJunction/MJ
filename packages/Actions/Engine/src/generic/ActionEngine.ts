@@ -1,8 +1,8 @@
 import { LogError, Metadata } from "@memberjunction/core";
-import { ActionExecutionLogEntity, ActionFilterEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
  
 
@@ -56,8 +56,8 @@ export class ActionEngineServer extends ActionEngineBase {
    }
    
 
-   protected GetActionParamsForAction(action: ActionEntityExtended): ActionParam[] {
-      const params: ActionParam[] = action.Params.map((param: ActionParamEntity) => {
+   protected GetActionParamsForAction(action: MJActionEntityExtended): ActionParam[] {
+      const params: ActionParam[] = action.Params.map((param: MJActionParamEntity) => {
          let value: any = null;
          switch (param.ValueType) {
             case 'Scalar':
@@ -119,7 +119,7 @@ export class ActionEngineServer extends ActionEngineBase {
     * 
     * @param filter 
     */
-   protected async RunSingleFilter(params: RunActionParams, filter: ActionFilterEntity): Promise<boolean> {
+   protected async RunSingleFilter(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean> {
       return true;
       // temp stub above, replace with code that will run the filter      
    }
@@ -128,7 +128,7 @@ export class ActionEngineServer extends ActionEngineBase {
       // this is where the actual action code will be implemented
       // first, let's get the right BaseAction derived sub-class for this particular action
       // using ClassFactory
-      let logEntry: ActionExecutionLogEntity | undefined;
+      let logEntry: MJActionExecutionLogEntity | undefined;
       if(!params.SkipActionLog){
          logEntry = await this.StartActionLog(params);
       }
@@ -142,7 +142,7 @@ export class ActionEngineServer extends ActionEngineBase {
          // we now have the action class for this particular action, so run it
          const simpleResult: ActionResultSimple = await action.Run(params);
 
-         const resultCodeEntity: ActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
+         const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
          const result: ActionResult = {
             RunParams: params,
@@ -179,10 +179,10 @@ export class ActionEngineServer extends ActionEngineBase {
       }
    }
 
-   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<ActionExecutionLogEntity> {
+   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = new Metadata();
-      const logEntity = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this.ContextUser);
+      const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
@@ -200,7 +200,7 @@ export class ActionEngineServer extends ActionEngineBase {
 
       return logEntity;
    }
-   protected async EndActionLog(logEntity: ActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
+   protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
       // this is where the log entry for the action run will be created
       logEntity.EndedAt = new Date();
       logEntity.Params = JSON.stringify(params.Params);
@@ -214,9 +214,9 @@ export class ActionEngineServer extends ActionEngineBase {
       }
    }
 
-   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
+   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<MJActionExecutionLogEntity> {
       // don't do the initial save
-      const logEntity: ActionExecutionLogEntity = await this.StartActionLog(params, false); 
+      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false); 
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
    }

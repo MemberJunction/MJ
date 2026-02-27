@@ -1,12 +1,12 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { FileEntity, FileSchema, FileStorageProviderEntity } from '@memberjunction/core-entities';
+import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
 import { FileInfo, SelectEvent } from '@progress/kendo-angular-upload';
 import { z } from 'zod';
 
-export type FileUploadEvent = { success: true; file: FileEntity } | { success: false; file: FileInfo };
+export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileInfo };
 
 const FileFieldsFragment = gql`
   fragment FileFields on MJFile_ {
@@ -42,7 +42,7 @@ const FileUploadMutationSchema = z.object({
   CreateMJFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
-    File: FileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
+    File: MJFileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
@@ -50,6 +50,7 @@ type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
 type UploadTuple = [FileInfo, ApiFile, string];
 
 @Component({
+  standalone: false,
   selector: 'mj-files-file-upload',
   templateUrl: './file-upload.html',
   styleUrls: ['./file-upload.css'],
@@ -77,8 +78,8 @@ export class FileUploadComponent implements OnInit {
 
   async Refresh() {
     const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
-    const provider: FileStorageProviderEntity | undefined = viewResults.Results[0];
+    const viewResults = await rv.RunView({ EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
+    const provider: MJFileStorageProviderEntity | undefined = viewResults.Results[0];
     if (typeof provider?.ID === 'string') {
       this.defaultProviderID = provider.ID;
     }
@@ -96,7 +97,7 @@ export class FileUploadComponent implements OnInit {
     if (cancelled) {
       const [file, fileRecord] = cancelled;
 
-      const fileEntity: FileEntity = await this.md.GetEntityObject('Files');
+      const fileEntity: MJFileEntity = await this.md.GetEntityObject('MJ: Files');
       await fileEntity.LoadFromData(fileRecord);
       await fileEntity.Delete();
 
@@ -156,7 +157,7 @@ export class FileUploadComponent implements OnInit {
       });
 
       // now update that file to set status
-      const fileEntity: FileEntity = await this.md.GetEntityObject('Files');
+      const fileEntity: MJFileEntity = await this.md.GetEntityObject('MJ: Files');
       await fileEntity.LoadFromData(fileRecord);
       fileEntity.Status = 'Uploaded';
       await fileEntity.Save();

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 
 /**
  * Reusable task widget component that displays task information
@@ -11,6 +11,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
  * - Tasks tab (full task list with filters)
  */
 @Component({
+  standalone: false,
   selector: 'mj-task-widget',
   template: `
     <div
@@ -18,10 +19,10 @@ import { TaskEntity } from '@memberjunction/core-entities';
       [class.clickable]="clickable"
       [class.compact]="compact"
       (click)="onTaskClick()">
-
+    
       <!-- Status Indicator -->
       <div class="task-status-indicator" [attr.data-status]="task.Status"></div>
-
+    
       <!-- Task Content -->
       <div class="task-main">
         <!-- Header Row -->
@@ -29,9 +30,11 @@ import { TaskEntity } from '@memberjunction/core-entities';
           <div class="task-title">{{ task.Name }}</div>
           <div class="task-badges">
             <!-- Type Badge -->
-            <span class="badge badge-type" *ngIf="task.Type">
-              {{ task.Type }}
-            </span>
+            @if (task.Type) {
+              <span class="badge badge-type">
+                {{ task.Type }}
+              </span>
+            }
             <!-- Status Badge -->
             <span
               class="badge badge-status"
@@ -40,73 +43,91 @@ import { TaskEntity } from '@memberjunction/core-entities';
             </span>
           </div>
         </div>
-
+    
         <!-- Description -->
-        <div class="task-description" *ngIf="!compact && task.Description">
-          {{ task.Description }}
-        </div>
-
-        <!-- Progress Bar (if in progress or has completion %) -->
-        <div class="task-progress-container" *ngIf="showProgress && task.PercentComplete != null">
-          <div class="progress-bar">
-            <div
-              class="progress-fill"
-              [style.width.%]="task.PercentComplete"
-              [attr.data-status]="task.Status">
-            </div>
+        @if (!compact && task.Description) {
+          <div class="task-description">
+            {{ task.Description }}
           </div>
-          <span class="progress-text">{{ task.PercentComplete }}%</span>
-        </div>
-
+        }
+    
+        <!-- Progress Bar (if in progress or has completion %) -->
+        @if (showProgress && task.PercentComplete != null) {
+          <div class="task-progress-container">
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                [style.width.%]="task.PercentComplete"
+                [attr.data-status]="task.Status">
+              </div>
+            </div>
+            <span class="progress-text">{{ task.PercentComplete }}%</span>
+          </div>
+        }
+    
         <!-- Meta Information -->
         <div class="task-meta">
           <!-- Assignment -->
-          <span class="meta-item" *ngIf="task.User">
-            <i class="fas fa-user"></i>
-            <span class="meta-label">User:</span>
-            <span class="meta-value">{{ task.User }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.Agent">
-            <i class="fas fa-robot"></i>
-            <span class="meta-label">Agent:</span>
-            <span class="meta-value">{{ task.Agent }}</span>
-          </span>
-
-          <!-- Timestamps -->
-          <span class="meta-item" *ngIf="task.StartedAt">
-            <i class="fas fa-play-circle"></i>
-            <span class="meta-label">Started:</span>
-            <span class="meta-value">{{ formatDate(task.StartedAt) }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.CompletedAt">
-            <i class="fas fa-check-circle"></i>
-            <span class="meta-label">Completed:</span>
-            <span class="meta-value">{{ formatDate(task.CompletedAt) }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.DueAt && !task.CompletedAt">
-            <i class="fas fa-calendar-alt"></i>
-            <span class="meta-label">Due:</span>
-            <span class="meta-value" [class.overdue]="isOverdue(task.DueAt)">
-              {{ formatDate(task.DueAt) }}
+          @if (task.User) {
+            <span class="meta-item">
+              <i class="fas fa-user"></i>
+              <span class="meta-label">User:</span>
+              <span class="meta-value">{{ task.User }}</span>
             </span>
-          </span>
-
+          }
+          @if (task.Agent) {
+            <span class="meta-item">
+              <i class="fas fa-robot"></i>
+              <span class="meta-label">Agent:</span>
+              <span class="meta-value">{{ task.Agent }}</span>
+            </span>
+          }
+    
+          <!-- Timestamps -->
+          @if (task.StartedAt) {
+            <span class="meta-item">
+              <i class="fas fa-play-circle"></i>
+              <span class="meta-label">Started:</span>
+              <span class="meta-value">{{ formatDate(task.StartedAt) }}</span>
+            </span>
+          }
+          @if (task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-check-circle"></i>
+              <span class="meta-label">Completed:</span>
+              <span class="meta-value">{{ formatDate(task.CompletedAt) }}</span>
+            </span>
+          }
+          @if (task.DueAt && !task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-calendar-alt"></i>
+              <span class="meta-label">Due:</span>
+              <span class="meta-value" [class.overdue]="isOverdue(task.DueAt)">
+                {{ formatDate(task.DueAt) }}
+              </span>
+            </span>
+          }
+    
           <!-- Duration (for completed tasks) -->
-          <span class="meta-item" *ngIf="showDuration && task.StartedAt && task.CompletedAt">
-            <i class="fas fa-clock"></i>
-            <span class="meta-label">Duration:</span>
-            <span class="meta-value">{{ getDuration(task.StartedAt, task.CompletedAt) }}</span>
-          </span>
-
+          @if (showDuration && task.StartedAt && task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-clock"></i>
+              <span class="meta-label">Duration:</span>
+              <span class="meta-value">{{ getDuration(task.StartedAt, task.CompletedAt) }}</span>
+            </span>
+          }
+    
           <!-- Elapsed time (for active tasks) -->
-          <span class="meta-item meta-elapsed" *ngIf="isActive && task.StartedAt && !task.CompletedAt">
-            <i class="fas fa-hourglass-half"></i>
-            <span class="meta-value">{{ getElapsedTime(task.StartedAt) }}</span>
-          </span>
+          @if (isActive && task.StartedAt && !task.CompletedAt) {
+            <span class="meta-item meta-elapsed">
+              <i class="fas fa-hourglass-half"></i>
+              <span class="meta-value">{{ getElapsedTime(task.StartedAt) }}</span>
+            </span>
+          }
         </div>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .task-widget {
       display: flex;
@@ -328,12 +349,12 @@ import { TaskEntity } from '@memberjunction/core-entities';
   `]
 })
 export class TaskWidgetComponent {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() clickable: boolean = false;
   @Input() compact: boolean = false;
   @Input() showProgress: boolean = true;
   @Input() showDuration: boolean = true;
-  @Output() taskClick = new EventEmitter<TaskEntity>();
+  @Output() taskClick = new EventEmitter<MJTaskEntity>();
 
   get isActive(): boolean {
     return this.task.Status === 'In Progress';

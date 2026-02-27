@@ -1,8 +1,8 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptModelEntity } from '@memberjunction/core-entities';
+import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
-import { AIModelEntityExtended, AIPromptEntityExtended, TemplateMessageRole } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended, MJAIPromptEntityExtended, TemplateMessageRole } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { v4 as uuidv4 } from 'uuid';
@@ -32,9 +32,9 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks to be processed
    */
   public createExecutionPlan(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -123,9 +123,9 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array containing single execution task
    */
   private createSingleExecutionPlan(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -178,9 +178,9 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks for parallel processing
    */
   private createStaticCountPlan(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -249,9 +249,9 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks for parallel processing
    */
   private createConfigParamPlan(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -330,9 +330,9 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks organized by execution groups
    */
   private createModelSpecificPlan(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     renderedPrompt: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -395,14 +395,14 @@ export class ExecutionPlanner {
    * @param promptModels - Associated model configurations
    * @param allModels - All available models
    * @param configurationId - Configuration ID
-   * @returns AIModelEntityExtended | null - The selected model or null if none suitable
+   * @returns MJAIModelEntityExtended | null - The selected model or null if none suitable
    */
   private selectBestModel(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     configurationId?: string,
-  ): AIModelEntityExtended | null {
+  ): MJAIModelEntityExtended | null {
     // First try to use prompt-specific models
     const availablePromptModels = promptModels.filter(
       (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
@@ -452,14 +452,14 @@ export class ExecutionPlanner {
    * @param promptModels - Associated model configurations
    * @param allModels - All available models
    * @param configurationId - Configuration ID
-   * @returns AIModelEntityExtended[] - Array of suitable models
+   * @returns MJAIModelEntityExtended[] - Array of suitable models
    */
   private getAvailableModels(
-    prompt: AIPromptEntityExtended,
-    promptModels: AIPromptModelEntity[],
-    allModels: AIModelEntityExtended[],
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
     configurationId?: string,
-  ): AIModelEntityExtended[] {
+  ): MJAIModelEntityExtended[] {
     const availablePromptModels = promptModels.filter(
       (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
     );
@@ -468,7 +468,7 @@ export class ExecutionPlanner {
       // Use prompt-specific models
       const models = availablePromptModels
         .map((pm) => allModels.find((m) => m.ID === pm.ModelID && m.IsActive))
-        .filter((m) => m !== undefined) as AIModelEntityExtended[];
+        .filter((m) => m !== undefined) as MJAIModelEntityExtended[];
 
       // Sort by priority from prompt models
       models.sort((a, b) => {
@@ -492,7 +492,7 @@ export class ExecutionPlanner {
    * @param promptModel - The prompt model configuration
    * @returns number - Number of parallel executions for this model
    */
-  private getModelParallelCount(promptModel: AIPromptModelEntity): number {
+  private getModelParallelCount(promptModel: MJAIPromptModelEntity): number {
     switch (promptModel.ParallelizationMode) {
       case 'StaticCount':
         return promptModel.ParallelCount || 1;
@@ -591,7 +591,7 @@ export class ExecutionPlanner {
   /**
    * Selects vendor information for a model, preferring inference providers
    */
-  private selectVendorForModel(model: AIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
+  private selectVendorForModel(model: MJAIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
     // Find the inference provider type from vendor type definitions
     const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
       vt => vt.Name === 'Inference Provider'

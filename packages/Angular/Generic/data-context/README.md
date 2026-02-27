@@ -1,20 +1,34 @@
 # @memberjunction/ng-data-context
 
-Angular component package for displaying and editing MemberJunction Data Contexts - collections of data items from different sources that can be used together for analysis, reporting, or other data operations.
+Angular components for managing MemberJunction Data Contexts -- reusable collections of data sources (views, queries, raw SQL) that can be composed and referenced by reports, dashboards, and AI prompts.
 
 ## Overview
 
-This package provides Angular components to display Data Contexts and their associated items in a clean, user-friendly interface. Data Contexts in MemberJunction are powerful constructs that allow users to group related data from various sources (SQL queries, views, entities, etc.) into a single logical unit.
+The `@memberjunction/ng-data-context` package provides an interactive component for creating, editing, and previewing data contexts. A data context defines one or more data source items (entity views, stored queries, or raw SQL statements) along with optional filters, and packages them into a named, reusable unit. The package includes both an inline component and a dialog wrapper.
 
-## Features
+```mermaid
+graph TD
+    A[DataContextModule] --> B[DataContextComponent]
+    A --> C[DataContextDialogComponent]
 
-- **Display Data Context Details**: View comprehensive information about a data context including ID, name, and description
-- **View Data Context Items**: Display all items within a data context in a sortable, scrollable grid format
-- **Dialog Wrapper**: Ready-to-use dialog component for popup displays
-- **Metadata Provider Integration**: Seamlessly integrates with MemberJunction's metadata system
-- **Loading State Management**: Built-in loading indicators for better user experience
-- **Virtual Scrolling**: Efficiently handle large datasets with Kendo Grid's virtual scrolling
-- **Responsive Design**: Components adapt to different screen sizes
+    B --> D["Data Source Items"]
+    D --> D1["Entity Views"]
+    D --> D2["Stored Queries"]
+    D --> D3["Raw SQL"]
+    D --> D4["Entity Records"]
+
+    B --> E["Item Configuration"]
+    E --> E1["Filters"]
+    E --> E2["Preview"]
+    E --> E3["Virtual Scrolling"]
+
+    C --> B
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 
@@ -30,38 +44,31 @@ npm install @memberjunction/ng-data-context
 import { DataContextModule } from '@memberjunction/ng-data-context';
 
 @NgModule({
-  imports: [
-    DataContextModule,
-    // other imports
-  ],
-  // ...
+  imports: [DataContextModule]
 })
 export class YourModule { }
 ```
 
-### Basic Component Usage
+### Inline Component
 
 ```html
-<!-- Display a data context using its ID -->
 <mj-data-context
   [dataContextId]="'your-data-context-id'"
   [Provider]="customMetadataProvider">
 </mj-data-context>
 ```
 
-### Dialog Component Usage
+### Dialog Component
 
 ```html
-<!-- Show data context in a dialog -->
 <mj-data-context-dialog
-  *ngIf="showDataContextDialog"
   [dataContextId]="selectedDataContextId"
   [Provider]="metadataProvider"
-  (dialogClosed)="showDataContextDialog = false">
+  (dialogClosed)="onDialogClosed()">
 </mj-data-context-dialog>
 ```
 
-### Complete TypeScript Example
+### Complete Example
 
 ```typescript
 import { Component } from '@angular/core';
@@ -70,82 +77,57 @@ import { IMetadataProvider, Metadata } from '@memberjunction/core';
 @Component({
   selector: 'app-data-context-viewer',
   template: `
-    <div class="data-context-container">
-      <h2>Data Context Viewer</h2>
-      
-      <!-- Inline component usage -->
-      <mj-data-context
-        [dataContextId]="selectedDataContextId"
-        [Provider]="metadataProvider">
-      </mj-data-context>
-      
-      <!-- Dialog trigger button -->
-      <button (click)="showDialog()">View in Dialog</button>
-      
-      <!-- Dialog component -->
+    <mj-data-context
+      [dataContextId]="selectedDataContextId"
+      [Provider]="metadataProvider">
+    </mj-data-context>
+
+    <button (click)="showDialog()">View in Dialog</button>
+
+    @if (isDialogVisible) {
       <mj-data-context-dialog
-        *ngIf="isDialogVisible"
         [dataContextId]="selectedDataContextId"
         [Provider]="metadataProvider"
         (dialogClosed)="onDialogClose()">
       </mj-data-context-dialog>
-    </div>
-  `,
-  styles: [`
-    .data-context-container {
-      padding: 20px;
     }
-  `]
+  `
 })
 export class DataContextViewerComponent {
   isDialogVisible = false;
   selectedDataContextId = '12345-67890-abcdef';
   metadataProvider: IMetadataProvider;
-  
+
   constructor() {
-    // Use the global metadata provider or inject your own
     this.metadataProvider = Metadata.Provider;
   }
-  
+
   showDialog(): void {
     this.isDialogVisible = true;
   }
-  
+
   onDialogClose(): void {
     this.isDialogVisible = false;
-    // Additional cleanup or refresh logic here
   }
 }
 ```
 
 ## API Reference
 
-### DataContextComponent
+### DataContextComponent (`mj-data-context`)
 
-The main component for displaying a data context and its items.
-
-**Selector**: `mj-data-context`
+Main component for displaying a data context and its items.
 
 #### Inputs
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `dataContextId` | `string` | Yes | - | The ID of the data context to display |
-| `Provider` | `IMetadataProvider \| null` | No | `Metadata.Provider` | Custom metadata provider. If not provided, uses the global MemberJunction metadata provider |
+| `Provider` | `IMetadataProvider \| null` | No | `Metadata.Provider` | Custom metadata provider |
 
-#### Properties
+### DataContextDialogComponent (`mj-data-context-dialog`)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `dataContextRecord` | `DataContextEntity \| undefined` | The loaded data context entity |
-| `dataContextItems` | `any[]` | Array of data context items |
-| `showLoader` | `boolean` | Loading state indicator |
-
-### DataContextDialogComponent
-
-Dialog wrapper component that displays the DataContextComponent in a Kendo dialog.
-
-**Selector**: `mj-data-context-dialog`
+Dialog wrapper displaying the DataContextComponent in a Kendo dialog.
 
 #### Inputs
 
@@ -160,105 +142,55 @@ Dialog wrapper component that displays the DataContextComponent in a Kendo dialo
 |--------|------|-------------|
 | `dialogClosed` | `EventEmitter<void>` | Emitted when the dialog is closed |
 
-### DataContextModule
-
-The NgModule that exports both components.
-
-**Exports**:
-- `DataContextComponent`
-- `DataContextDialogComponent`
-
 ## Data Context Structure
 
 A data context in MemberJunction consists of:
 
-1. **Context Record** (`DataContextEntity`)
-   - `ID`: Unique identifier
-   - `Name`: Display name
-   - `Description`: Detailed description
-   - Additional metadata fields
+1. **Context Record** (`DataContextEntity`) -- ID, Name, Description, and metadata
+2. **Context Items** (`Data Context Items` entity) with the following types:
+   - `SQL` -- Direct SQL query
+   - `View` -- Reference to a saved view
+   - `Query` -- Reference to a stored query
+   - `Entity` -- Reference to an entity
+   - `Record` -- Specific record reference
 
-2. **Context Items** (`Data Context Items` entity)
-   - `Type`: The type of data item (SQL, View, Query, Entity, Record)
-   - `SQL`: Direct SQL query (if applicable)
-   - `ViewID`: Reference to a view
-   - `QueryID`: Reference to a saved query
-   - `EntityID`: Reference to an entity
-   - `RecordID`: Specific record reference
+## Features
 
-## Grid Features
-
-The component uses Kendo Grid with the following features enabled:
-- **Virtual Scrolling**: Efficiently handles large datasets
-- **Sorting**: Click column headers to sort
-- **Resizable Columns**: Drag column borders to resize
-- **Keyboard Navigation**: Navigate cells with keyboard
-- **Page Size**: Default 100 items per virtual page
-
-## Styling
-
-The components use Kendo UI for Angular styling. You can override styles by targeting the component selectors:
-
-```css
-/* Custom styling example */
-mj-data-context {
-  /* Your custom styles */
-}
-
-.kendo-grid-container {
-  height: 500px; /* Adjust grid height */
-}
-```
+- **Multi-source composition**: Combine entity views, stored queries, raw SQL, and specific records into a single named context
+- **Virtual scrolling**: Efficient handling of large datasets via Kendo Grid
+- **Column sorting and resizing**: Interactive grid features
+- **Metadata integration**: Uses MemberJunction's metadata system for entity loading
+- **Loading state management**: Built-in loading indicators
+- **Custom provider support**: Works with custom metadata providers for multi-tenant scenarios
+- **Error handling**: Logs errors via MemberJunction's `LogError` function
 
 ## Dependencies
 
 ### Runtime Dependencies
-- `@memberjunction/core` (v2.43.0): Core MemberJunction functionality
-- `@memberjunction/core-entities` (v2.43.0): Entity type definitions
-- `@memberjunction/global` (v2.43.0): Global utilities
-- `tslib` (^2.3.0): TypeScript runtime helpers
+
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/core` | Core MemberJunction framework |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Global utilities |
+| `@memberjunction/ng-container-directives` | Container directives |
+| `@memberjunction/ng-shared` | Shared Angular utilities |
+| `@progress/kendo-angular-grid` | Grid with virtual scrolling |
+| `@progress/kendo-angular-indicators` | Loading indicators |
+| `@progress/kendo-angular-dialog` | Dialog component |
+| `@progress/kendo-angular-buttons` | Button components |
 
 ### Peer Dependencies
-- `@angular/common` (18.0.2)
-- `@angular/core` (18.0.2)
-- `@progress/kendo-angular-grid` (16.2.0)
-- `@progress/kendo-angular-indicators` (16.2.0)
-- `@progress/kendo-angular-dialog` (imported via module)
-- `@progress/kendo-angular-buttons` (imported via module)
 
-## Integration with MemberJunction
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
 
-This package integrates seamlessly with other MemberJunction packages:
-
-- Uses the MemberJunction metadata system for entity loading
-- Leverages `RunView` for efficient data retrieval
-- Compatible with MemberJunction's security and permission system
-- Works with custom metadata providers for multi-tenant scenarios
-
-## Build and Development
-
-To build this package individually:
+## Build
 
 ```bash
 cd packages/Angular/Generic/data-context
 npm run build
 ```
-
-The package uses Angular CLI's `ngc` compiler for building the library.
-
-## Error Handling
-
-The component includes built-in error handling:
-- Logs errors using MemberJunction's `LogError` function
-- Hides the loader on error
-- Gracefully handles missing or invalid data context IDs
-
-## Best Practices
-
-1. **Provider Usage**: Only provide a custom `Provider` if you need to override the global metadata provider
-2. **Dialog Management**: Always handle the `dialogClosed` event to properly manage dialog state
-3. **Performance**: The virtual scrolling is optimized for datasets up to several thousand items
-4. **Error Handling**: Monitor console logs for any data loading errors
 
 ## License
 

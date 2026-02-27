@@ -2,92 +2,10 @@
  * Unit tests for AI Prompt Model Selection with Configuration Inheritance
  * Tests the inheritance-aware model selection functions in AIPromptRunner
  *
- * Run with: node tests/prompt-model-selection.test.js
+ * Converted from custom TestRunner to Vitest format
  */
 
-// Simple test runner
-class TestRunner {
-    constructor() {
-        this.passed = 0;
-        this.failed = 0;
-        this.tests = [];
-    }
-
-    test(name, fn) {
-        this.tests.push({ name, fn });
-    }
-
-    assertEqual(actual, expected, message) {
-        const actualStr = JSON.stringify(actual);
-        const expectedStr = JSON.stringify(expected);
-
-        if (actualStr === expectedStr) {
-            console.log(`  ✅ ${message}`);
-            this.passed++;
-            return true;
-        } else {
-            console.log(`  ❌ ${message}`);
-            console.log(`     Expected: ${expectedStr}`);
-            console.log(`     Actual:   ${actualStr}`);
-            this.failed++;
-            return false;
-        }
-    }
-
-    assertTrue(condition, message) {
-        if (condition) {
-            console.log(`  ✅ ${message}`);
-            this.passed++;
-            return true;
-        } else {
-            console.log(`  ❌ ${message}`);
-            this.failed++;
-            return false;
-        }
-    }
-
-    assertArrayOrder(array, expectedIds, message) {
-        const actualIds = array.map(item => item.ID || item.id);
-        if (JSON.stringify(actualIds) === JSON.stringify(expectedIds)) {
-            console.log(`  ✅ ${message}`);
-            this.passed++;
-            return true;
-        } else {
-            console.log(`  ❌ ${message}`);
-            console.log(`     Expected order: ${JSON.stringify(expectedIds)}`);
-            console.log(`     Actual order:   ${JSON.stringify(actualIds)}`);
-            this.failed++;
-            return false;
-        }
-    }
-
-    async run() {
-        console.log('\n🧪 Running AI Prompt Model Selection Tests\n');
-        console.log('='.repeat(70));
-
-        for (const test of this.tests) {
-            console.log(`\n📋 ${test.name}`);
-            try {
-                await test.fn();
-            } catch (error) {
-                console.log(`  ❌ Test threw unexpected error: ${error.message}`);
-                console.log(`     Stack: ${error.stack}`);
-                this.failed++;
-            }
-        }
-
-        console.log('\n' + '='.repeat(70));
-        console.log(`\n📊 Results: ${this.passed} passed, ${this.failed} failed\n`);
-
-        if (this.failed === 0) {
-            console.log('✨ All tests passed!\n');
-            process.exit(0);
-        } else {
-            console.log('💥 Some tests failed!\n');
-            process.exit(1);
-        }
-    }
-}
+import { describe, it, expect } from 'vitest';
 
 /**
  * Mock AIEngine for testing prompt model selection logic
@@ -277,389 +195,373 @@ function calculateFallbackPriorities(engine, promptId, configurationId) {
     return results;
 }
 
-// Create test runner and mock engine
-const runner = new TestRunner();
+// Create mock engine for tests
 const engine = new MockAIEngine();
 
 // ============================================================================
 // Test Suite: filterPromptModelsByConfiguration
 // ============================================================================
 
-runner.test('filterPromptModelsByConfiguration: No config - returns only null-config models', () => {
-    engine.setConfigurations([
-        { ID: 'config-a', Name: 'Config A', ParentID: null }
-    ]);
+describe('filterPromptModelsByConfiguration', () => {
+    it('No config - returns only null-config models', () => {
+        engine.setConfigurations([
+            { ID: 'config-a', Name: 'Config A', ParentID: null }
+        ]);
 
-    const allModels = [
-        { ID: 'pm1', ConfigurationID: 'config-a', ModelID: 'model-1' },
-        { ID: 'pm2', ConfigurationID: null, ModelID: 'model-2' },
-        { ID: 'pm3', ConfigurationID: 'config-b', ModelID: 'model-3' }
-    ];
+        const allModels = [
+            { ID: 'pm1', ConfigurationID: 'config-a', ModelID: 'model-1' },
+            { ID: 'pm2', ConfigurationID: null, ModelID: 'model-2' },
+            { ID: 'pm3', ConfigurationID: 'config-b', ModelID: 'model-3' }
+        ];
 
-    const filtered = filterPromptModelsByConfiguration(engine, allModels, undefined);
+        const filtered = filterPromptModelsByConfiguration(engine, allModels, undefined);
 
-    runner.assertEqual(filtered.length, 1, 'Should return only 1 model');
-    runner.assertEqual(filtered[0].ID, 'pm2', 'Should return the null-config model');
-});
+        expect(filtered.length).toBe(1);
+        expect(filtered[0].ID).toBe('pm2');
+    });
 
-runner.test('filterPromptModelsByConfiguration: With config - returns config and null-config models', () => {
-    engine.setConfigurations([
-        { ID: 'config-a', Name: 'Config A', ParentID: null }
-    ]);
+    it('With config - returns config and null-config models', () => {
+        engine.setConfigurations([
+            { ID: 'config-a', Name: 'Config A', ParentID: null }
+        ]);
 
-    const allModels = [
-        { ID: 'pm1', ConfigurationID: 'config-a', ModelID: 'model-1' },
-        { ID: 'pm2', ConfigurationID: null, ModelID: 'model-2' },
-        { ID: 'pm3', ConfigurationID: 'config-b', ModelID: 'model-3' }
-    ];
+        const allModels = [
+            { ID: 'pm1', ConfigurationID: 'config-a', ModelID: 'model-1' },
+            { ID: 'pm2', ConfigurationID: null, ModelID: 'model-2' },
+            { ID: 'pm3', ConfigurationID: 'config-b', ModelID: 'model-3' }
+        ];
 
-    const filtered = filterPromptModelsByConfiguration(engine, allModels, 'config-a');
+        const filtered = filterPromptModelsByConfiguration(engine, allModels, 'config-a');
 
-    runner.assertEqual(filtered.length, 2, 'Should return 2 models');
-    runner.assertTrue(
-        filtered.some(m => m.ID === 'pm1'),
-        'Should include config-a model'
-    );
-    runner.assertTrue(
-        filtered.some(m => m.ID === 'pm2'),
-        'Should include null-config model'
-    );
-});
+        expect(filtered.length).toBe(2);
+        expect(filtered.some(m => m.ID === 'pm1')).toBe(true);
+        expect(filtered.some(m => m.ID === 'pm2')).toBe(true);
+    });
 
-runner.test('filterPromptModelsByConfiguration: With inheritance - returns chain and null-config models', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('With inheritance - returns chain and null-config models', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    const allModels = [
-        { ID: 'pm1', ConfigurationID: 'child', ModelID: 'model-1' },
-        { ID: 'pm2', ConfigurationID: 'parent', ModelID: 'model-2' },
-        { ID: 'pm3', ConfigurationID: null, ModelID: 'model-3' },
-        { ID: 'pm4', ConfigurationID: 'unrelated', ModelID: 'model-4' }
-    ];
+        const allModels = [
+            { ID: 'pm1', ConfigurationID: 'child', ModelID: 'model-1' },
+            { ID: 'pm2', ConfigurationID: 'parent', ModelID: 'model-2' },
+            { ID: 'pm3', ConfigurationID: null, ModelID: 'model-3' },
+            { ID: 'pm4', ConfigurationID: 'unrelated', ModelID: 'model-4' }
+        ];
 
-    const filtered = filterPromptModelsByConfiguration(engine, allModels, 'child');
+        const filtered = filterPromptModelsByConfiguration(engine, allModels, 'child');
 
-    runner.assertEqual(filtered.length, 3, 'Should return 3 models (child, parent, null)');
-    runner.assertTrue(filtered.some(m => m.ID === 'pm1'), 'Should include child config model');
-    runner.assertTrue(filtered.some(m => m.ID === 'pm2'), 'Should include parent config model');
-    runner.assertTrue(filtered.some(m => m.ID === 'pm3'), 'Should include null-config model');
+        expect(filtered.length).toBe(3);
+        expect(filtered.some(m => m.ID === 'pm1')).toBe(true);
+        expect(filtered.some(m => m.ID === 'pm2')).toBe(true);
+        expect(filtered.some(m => m.ID === 'pm3')).toBe(true);
+    });
 });
 
 // ============================================================================
 // Test Suite: sortPromptModelsForSpecificStrategy
 // ============================================================================
 
-runner.test('sortPromptModelsForSpecificStrategy: No config - sort by priority only', () => {
-    const models = [
-        { ID: 'pm1', Priority: 10, ConfigurationID: null },
-        { ID: 'pm2', Priority: 30, ConfigurationID: null },
-        { ID: 'pm3', Priority: 20, ConfigurationID: null }
-    ];
+describe('sortPromptModelsForSpecificStrategy', () => {
+    it('No config - sort by priority only', () => {
+        const models = [
+            { ID: 'pm1', Priority: 10, ConfigurationID: null },
+            { ID: 'pm2', Priority: 30, ConfigurationID: null },
+            { ID: 'pm3', Priority: 20, ConfigurationID: null }
+        ];
 
-    const sorted = sortPromptModelsForSpecificStrategy(engine, models, undefined);
+        const sorted = sortPromptModelsForSpecificStrategy(engine, models, undefined);
+        const sortedIds = sorted.map(item => item.ID);
 
-    runner.assertArrayOrder(sorted, ['pm2', 'pm3', 'pm1'], 'Should sort by priority DESC');
-});
+        expect(sortedIds).toEqual(['pm2', 'pm3', 'pm1']);
+    });
 
-runner.test('sortPromptModelsForSpecificStrategy: With config - child before parent before null', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('With config - child before parent before null', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    const models = [
-        { ID: 'pm-null', Priority: 100, ConfigurationID: null },
-        { ID: 'pm-parent', Priority: 50, ConfigurationID: 'parent' },
-        { ID: 'pm-child', Priority: 10, ConfigurationID: 'child' }
-    ];
+        const models = [
+            { ID: 'pm-null', Priority: 100, ConfigurationID: null },
+            { ID: 'pm-parent', Priority: 50, ConfigurationID: 'parent' },
+            { ID: 'pm-child', Priority: 10, ConfigurationID: 'child' }
+        ];
 
-    const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sortedIds = sorted.map(item => item.ID);
 
-    runner.assertArrayOrder(
-        sorted,
-        ['pm-child', 'pm-parent', 'pm-null'],
-        'Should sort child first, then parent, then null (regardless of priority)'
-    );
-});
+        expect(sortedIds).toEqual(['pm-child', 'pm-parent', 'pm-null']);
+    });
 
-runner.test('sortPromptModelsForSpecificStrategy: Same config level - sort by priority', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('Same config level - sort by priority', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    const models = [
-        { ID: 'pm-child-low', Priority: 10, ConfigurationID: 'child' },
-        { ID: 'pm-child-high', Priority: 50, ConfigurationID: 'child' },
-        { ID: 'pm-parent', Priority: 100, ConfigurationID: 'parent' }
-    ];
+        const models = [
+            { ID: 'pm-child-low', Priority: 10, ConfigurationID: 'child' },
+            { ID: 'pm-child-high', Priority: 50, ConfigurationID: 'child' },
+            { ID: 'pm-parent', Priority: 100, ConfigurationID: 'parent' }
+        ];
 
-    const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sortedIds = sorted.map(item => item.ID);
 
-    runner.assertArrayOrder(
-        sorted,
-        ['pm-child-high', 'pm-child-low', 'pm-parent'],
-        'Should sort by priority within same config level'
-    );
-});
+        expect(sortedIds).toEqual(['pm-child-high', 'pm-child-low', 'pm-parent']);
+    });
 
-runner.test('sortPromptModelsForSpecificStrategy: Three-level inheritance', () => {
-    engine.setConfigurations([
-        { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
-        { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('Three-level inheritance', () => {
+        engine.setConfigurations([
+            { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
+            { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    const models = [
-        { ID: 'pm-null', Priority: 100, ConfigurationID: null },
-        { ID: 'pm-grandparent', Priority: 80, ConfigurationID: 'grandparent' },
-        { ID: 'pm-parent', Priority: 60, ConfigurationID: 'parent' },
-        { ID: 'pm-child', Priority: 40, ConfigurationID: 'child' }
-    ];
+        const models = [
+            { ID: 'pm-null', Priority: 100, ConfigurationID: null },
+            { ID: 'pm-grandparent', Priority: 80, ConfigurationID: 'grandparent' },
+            { ID: 'pm-parent', Priority: 60, ConfigurationID: 'parent' },
+            { ID: 'pm-child', Priority: 40, ConfigurationID: 'child' }
+        ];
 
-    const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sorted = sortPromptModelsForSpecificStrategy(engine, models, 'child');
+        const sortedIds = sorted.map(item => item.ID);
 
-    runner.assertArrayOrder(
-        sorted,
-        ['pm-child', 'pm-parent', 'pm-grandparent', 'pm-null'],
-        'Should sort by chain position: child -> parent -> grandparent -> null'
-    );
+        expect(sortedIds).toEqual(['pm-child', 'pm-parent', 'pm-grandparent', 'pm-null']);
+    });
 });
 
 // ============================================================================
 // Test Suite: getPromptModelsForConfiguration
 // ============================================================================
 
-runner.test('getPromptModelsForConfiguration: Child has models - returns child models only', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+describe('getPromptModelsForConfiguration', () => {
+    it('Child has models - returns child models only', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'model-1' },
-        { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-2' },
-        { ID: 'pm3', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-3' }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'model-1' },
+            { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-2' },
+            { ID: 'pm3', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-3' }
+        ]);
 
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
 
-    runner.assertEqual(result.length, 1, 'Should return 1 model from child config');
-    runner.assertEqual(result[0].ID, 'pm1', 'Should return child config model');
-});
+        expect(result.length).toBe(1);
+        expect(result[0].ID).toBe('pm1');
+    });
 
-runner.test('getPromptModelsForConfiguration: Child empty - falls back to parent', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('Child empty - falls back to parent', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-1' },
-        { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-2' }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-1' },
+            { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-2' }
+        ]);
 
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
 
-    runner.assertEqual(result.length, 1, 'Should return 1 model from parent config');
-    runner.assertEqual(result[0].ID, 'pm1', 'Should return parent config model');
-});
+        expect(result.length).toBe(1);
+        expect(result[0].ID).toBe('pm1');
+    });
 
-runner.test('getPromptModelsForConfiguration: Chain empty - falls back to null-config', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('Chain empty - falls back to null-config', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-1' },
-        { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'unrelated', ModelID: 'model-2' }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-1' },
+            { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'unrelated', ModelID: 'model-2' }
+        ]);
 
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
 
-    runner.assertEqual(result.length, 1, 'Should return 1 model from null-config');
-    runner.assertEqual(result[0].ID, 'pm1', 'Should return null-config model');
-});
+        expect(result.length).toBe(1);
+        expect(result[0].ID).toBe('pm1');
+    });
 
-runner.test('getPromptModelsForConfiguration: No config specified - returns null-config models', () => {
-    engine.setConfigurations([]);
-    engine.setPromptModels([
-        { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'some-config', ModelID: 'model-1' },
-        { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-2' }
-    ]);
+    it('No config specified - returns null-config models', () => {
+        engine.setConfigurations([]);
+        engine.setPromptModels([
+            { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'some-config', ModelID: 'model-1' },
+            { ID: 'pm2', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-2' }
+        ]);
 
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', undefined);
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', undefined);
 
-    runner.assertEqual(result.length, 1, 'Should return 1 null-config model');
-    runner.assertEqual(result[0].ID, 'pm2', 'Should return null-config model');
-});
+        expect(result.length).toBe(1);
+        expect(result[0].ID).toBe('pm2');
+    });
 
-runner.test('getPromptModelsForConfiguration: Only returns Active/Preview models', () => {
-    engine.setConfigurations([
-        { ID: 'config-a', Name: 'Config A', ParentID: null }
-    ]);
+    it('Only returns Active/Preview models', () => {
+        engine.setConfigurations([
+            { ID: 'config-a', Name: 'Config A', ParentID: null }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'config-a', ModelID: 'model-1' },
-        { ID: 'pm2', PromptID: 'prompt-1', Status: 'Preview', ConfigurationID: 'config-a', ModelID: 'model-2' },
-        { ID: 'pm3', PromptID: 'prompt-1', Status: 'Disabled', ConfigurationID: 'config-a', ModelID: 'model-3' },
-        { ID: 'pm4', PromptID: 'prompt-1', Status: 'Deprecated', ConfigurationID: 'config-a', ModelID: 'model-4' }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm1', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'config-a', ModelID: 'model-1' },
+            { ID: 'pm2', PromptID: 'prompt-1', Status: 'Preview', ConfigurationID: 'config-a', ModelID: 'model-2' },
+            { ID: 'pm3', PromptID: 'prompt-1', Status: 'Disabled', ConfigurationID: 'config-a', ModelID: 'model-3' },
+            { ID: 'pm4', PromptID: 'prompt-1', Status: 'Deprecated', ConfigurationID: 'config-a', ModelID: 'model-4' }
+        ]);
 
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'config-a');
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'config-a');
 
-    runner.assertEqual(result.length, 2, 'Should return 2 models (Active and Preview)');
-    runner.assertTrue(result.some(m => m.ID === 'pm1'), 'Should include Active model');
-    runner.assertTrue(result.some(m => m.ID === 'pm2'), 'Should include Preview model');
+        expect(result.length).toBe(2);
+        expect(result.some(m => m.ID === 'pm1')).toBe(true);
+        expect(result.some(m => m.ID === 'pm2')).toBe(true);
+    });
 });
 
 // ============================================================================
-// Test Suite: calculateFallbackPriorities (addConfigurationFallbackCandidates logic)
+// Test Suite: calculateFallbackPriorities
 // ============================================================================
 
-runner.test('calculateFallbackPriorities: Parent configs get decreasing priority', () => {
-    engine.setConfigurations([
-        { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
-        { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+describe('calculateFallbackPriorities', () => {
+    it('Parent configs get decreasing priority', () => {
+        engine.setConfigurations([
+            { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
+            { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm-gp', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'grandparent', ModelID: 'model-gp', Priority: 10 },
-        { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 20 }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm-gp', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'grandparent', ModelID: 'model-gp', Priority: 10 },
+            { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 20 }
+        ]);
 
-    const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
+        const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
 
-    // Parent is at chain level 1, so base priority = 3000 - (1 * 500) = 2500
-    // Grandparent is at chain level 2, so base priority = 3000 - (2 * 500) = 2000
-    const parentEntry = result.find(r => r.configId === 'parent');
-    const grandparentEntry = result.find(r => r.configId === 'grandparent');
+        const parentEntry = result.find(r => r.configId === 'parent');
+        const grandparentEntry = result.find(r => r.configId === 'grandparent');
 
-    runner.assertEqual(parentEntry.basePriority, 2500, 'Parent (level 1) should have base priority 2500');
-    runner.assertEqual(grandparentEntry.basePriority, 2000, 'Grandparent (level 2) should have base priority 2000');
-    runner.assertTrue(
-        parentEntry.effectivePriority > grandparentEntry.effectivePriority,
-        'Parent should have higher effective priority than grandparent'
-    );
-});
+        expect(parentEntry.basePriority).toBe(2500);
+        expect(grandparentEntry.basePriority).toBe(2000);
+        expect(parentEntry.effectivePriority).toBeGreaterThan(grandparentEntry.effectivePriority);
+    });
 
-runner.test('calculateFallbackPriorities: NULL config models get lowest priority', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('NULL config models get lowest priority', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 10 },
-        { ID: 'pm-null', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-null', Priority: 100 }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 10 },
+            { ID: 'pm-null', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: null, ModelID: 'model-null', Priority: 100 }
+        ]);
 
-    const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
+        const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
 
-    const parentEntry = result.find(r => r.configId === 'parent');
-    const nullEntry = result.find(r => r.configId === null);
+        const parentEntry = result.find(r => r.configId === 'parent');
+        const nullEntry = result.find(r => r.configId === null);
 
-    runner.assertEqual(nullEntry.basePriority, 1000, 'NULL config should have base priority 1000');
-    runner.assertTrue(
-        parentEntry.effectivePriority > nullEntry.effectivePriority,
-        'Parent should have higher priority than NULL config even with lower model priority'
-    );
-});
+        expect(nullEntry.basePriority).toBe(1000);
+        expect(parentEntry.effectivePriority).toBeGreaterThan(nullEntry.effectivePriority);
+    });
 
-runner.test('calculateFallbackPriorities: Excludes child config (handled separately)', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+    it('Excludes child config (handled separately)', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    engine.setPromptModels([
-        { ID: 'pm-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'model-c', Priority: 50 },
-        { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 10 }
-    ]);
+        engine.setPromptModels([
+            { ID: 'pm-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'model-c', Priority: 50 },
+            { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'model-p', Priority: 10 }
+        ]);
 
-    const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
+        const result = calculateFallbackPriorities(engine, 'prompt-1', 'child');
 
-    runner.assertEqual(result.length, 1, 'Should only include parent (child excluded as it is direct config)');
-    runner.assertEqual(result[0].configId, 'parent', 'Should only contain parent config model');
+        expect(result.length).toBe(1);
+        expect(result[0].configId).toBe('parent');
+    });
 });
 
 // ============================================================================
 // Test Suite: Integration scenarios
 // ============================================================================
 
-runner.test('Integration: Model override - child overrides parent model selection', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
+describe('Integration scenarios', () => {
+    it('Model override - child overrides parent model selection', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
 
-    // Parent has Claude, child overrides with GPT-4
-    engine.setPromptModels([
-        { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
-        { ID: 'pm-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4', Priority: 20 }
-    ]);
+        // Parent has Claude, child overrides with GPT-4
+        engine.setPromptModels([
+            { ID: 'pm-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
+            { ID: 'pm-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4', Priority: 20 }
+        ]);
 
-    // When using child config, should get child's model first
-    const childModels = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
-    runner.assertEqual(childModels.length, 1, 'Child config should return 1 model');
-    runner.assertEqual(childModels[0].ModelID, 'gpt-4', 'Child config should use GPT-4');
+        // When using child config, should get child's model first
+        const childModels = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+        expect(childModels.length).toBe(1);
+        expect(childModels[0].ModelID).toBe('gpt-4');
 
-    // When using parent config, should get parent's model
-    const parentModels = getPromptModelsForConfiguration(engine, 'prompt-1', 'parent');
-    runner.assertEqual(parentModels.length, 1, 'Parent config should return 1 model');
-    runner.assertEqual(parentModels[0].ModelID, 'claude-3', 'Parent config should use Claude');
+        // When using parent config, should get parent's model
+        const parentModels = getPromptModelsForConfiguration(engine, 'prompt-1', 'parent');
+        expect(parentModels.length).toBe(1);
+        expect(parentModels[0].ModelID).toBe('claude-3');
+    });
+
+    it('Fallback chain - child inherits from grandparent when parent empty', () => {
+        engine.setConfigurations([
+            { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
+            { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
+
+        // Only grandparent has model config for this prompt
+        engine.setPromptModels([
+            { ID: 'pm-gp', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'grandparent', ModelID: 'claude-3', Priority: 10 }
+        ]);
+
+        const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+
+        expect(result.length).toBe(1);
+        expect(result[0].ConfigurationID).toBe('grandparent');
+    });
+
+    it('Mixed inheritance - some prompts override, others inherit', () => {
+        engine.setConfigurations([
+            { ID: 'parent', Name: 'Parent', ParentID: null },
+            { ID: 'child', Name: 'Child', ParentID: 'parent' }
+        ]);
+
+        engine.setPromptModels([
+            // Prompt 1: Child overrides parent
+            { ID: 'pm1-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
+            { ID: 'pm1-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4', Priority: 10 },
+            // Prompt 2: Only parent has config (child inherits)
+            { ID: 'pm2-parent', PromptID: 'prompt-2', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
+            // Prompt 3: Only child has config (no inheritance needed)
+            { ID: 'pm3-child', PromptID: 'prompt-3', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4-turbo', Priority: 10 }
+        ]);
+
+        // Prompt 1: Child should get its own model
+        const prompt1Models = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
+        expect(prompt1Models[0].ModelID).toBe('gpt-4');
+
+        // Prompt 2: Child should inherit from parent
+        const prompt2Models = getPromptModelsForConfiguration(engine, 'prompt-2', 'child');
+        expect(prompt2Models[0].ModelID).toBe('claude-3');
+
+        // Prompt 3: Child should use its own model
+        const prompt3Models = getPromptModelsForConfiguration(engine, 'prompt-3', 'child');
+        expect(prompt3Models[0].ModelID).toBe('gpt-4-turbo');
+    });
 });
-
-runner.test('Integration: Fallback chain - child inherits from grandparent when parent empty', () => {
-    engine.setConfigurations([
-        { ID: 'grandparent', Name: 'Grandparent', ParentID: null },
-        { ID: 'parent', Name: 'Parent', ParentID: 'grandparent' },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
-
-    // Only grandparent has model config for this prompt
-    engine.setPromptModels([
-        { ID: 'pm-gp', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'grandparent', ModelID: 'claude-3', Priority: 10 }
-    ]);
-
-    const result = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
-
-    runner.assertEqual(result.length, 1, 'Should find grandparent model');
-    runner.assertEqual(result[0].ConfigurationID, 'grandparent', 'Should return grandparent config model');
-});
-
-runner.test('Integration: Mixed inheritance - some prompts override, others inherit', () => {
-    engine.setConfigurations([
-        { ID: 'parent', Name: 'Parent', ParentID: null },
-        { ID: 'child', Name: 'Child', ParentID: 'parent' }
-    ]);
-
-    engine.setPromptModels([
-        // Prompt 1: Child overrides parent
-        { ID: 'pm1-parent', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
-        { ID: 'pm1-child', PromptID: 'prompt-1', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4', Priority: 10 },
-        // Prompt 2: Only parent has config (child inherits)
-        { ID: 'pm2-parent', PromptID: 'prompt-2', Status: 'Active', ConfigurationID: 'parent', ModelID: 'claude-3', Priority: 10 },
-        // Prompt 3: Only child has config (no inheritance needed)
-        { ID: 'pm3-child', PromptID: 'prompt-3', Status: 'Active', ConfigurationID: 'child', ModelID: 'gpt-4-turbo', Priority: 10 }
-    ]);
-
-    // Prompt 1: Child should get its own model
-    const prompt1Models = getPromptModelsForConfiguration(engine, 'prompt-1', 'child');
-    runner.assertEqual(prompt1Models[0].ModelID, 'gpt-4', 'Prompt 1 should use child override');
-
-    // Prompt 2: Child should inherit from parent
-    const prompt2Models = getPromptModelsForConfiguration(engine, 'prompt-2', 'child');
-    runner.assertEqual(prompt2Models[0].ModelID, 'claude-3', 'Prompt 2 should inherit parent model');
-
-    // Prompt 3: Child should use its own model
-    const prompt3Models = getPromptModelsForConfiguration(engine, 'prompt-3', 'child');
-    runner.assertEqual(prompt3Models[0].ModelID, 'gpt-4-turbo', 'Prompt 3 should use child model');
-});
-
-// Run all tests
-runner.run();

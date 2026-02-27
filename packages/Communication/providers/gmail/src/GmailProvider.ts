@@ -39,7 +39,7 @@ import {
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
-import * as googleApis from 'googleapis';
+import googleApis from 'googleapis';
 
 /**
  * Credentials for Gmail provider using OAuth2.
@@ -47,7 +47,7 @@ import * as googleApis from 'googleapis';
  *
  * @remarks
  * **TEMPORARY INTERFACE**: This interface is part of the interim credential solution for 2.x patch release.
- * In MemberJunction 3.0, this will be integrated with the comprehensive credential management system.
+ * In a future release, this will be integrated with the comprehensive credential management system.
  */
 export interface GmailCredentials extends ProviderCredentialsBase {
   /** Google OAuth2 Client ID */
@@ -1373,8 +1373,4 @@ export class GmailProvider extends BaseCommunicationProvider {
 
     return null;
   }
-}
-
-export function LoadProvider() {
-  // do nothing, this prevents tree shaking from removing this class
 }

@@ -11,11 +11,11 @@ import {
   SimpleChanges,
   DoCheck
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
@@ -43,6 +43,7 @@ export interface MessageAttachment {
  * This component is created dynamically via ViewContainerRef.createComponent()
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
   styleUrls: [
@@ -51,27 +52,27 @@ export interface MessageAttachment {
   ]
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges, DoCheck {
-  @Input() public message!: ConversationDetailEntity;
-  @Input() public conversation!: ConversationEntity | null;
+  @Input() public message!: MJConversationDetailEntity;
+  @Input() public conversation!: MJConversationEntity | null;
   @Input() public currentUser!: UserInfo;
-  @Input() public allMessages!: ConversationDetailEntity[];
+  @Input() public allMessages!: MJConversationDetailEntity[];
   @Input() public isProcessing: boolean = false;
-  @Input() public artifact?: ArtifactEntity;
-  @Input() public artifactVersion?: ArtifactVersionEntity;
-  @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
+  @Input() public artifact?: MJArtifactEntity;
+  @Input() public artifactVersion?: MJArtifactVersionEntity;
+  @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
-  @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public retryClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public testFeedbackClicked = new EventEmitter<ConversationDetailEntity>();
+  @Output() public pinClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public testFeedbackClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
-  @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
@@ -89,7 +90,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
-  public detailTasks: TaskEntity[] = [];
+  public detailTasks: MJTaskEntity[] = [];
   private tasksLoaded: boolean = false;
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
@@ -913,7 +914,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public onArtifactActionPerformed(event: {action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}): void {
+  public onArtifactActionPerformed(event: {action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}): void {
     // Handle artifact actions from inline-artifact component
     if (event.action === 'open') {
       this.artifactClicked.emit({
@@ -1012,7 +1013,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TaskEntity>(
+      const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
@@ -1136,14 +1137,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     ]);
 
     this.openEntityRecord.emit({
-      entityName: 'AI Agents',
+      entityName: 'MJ: AI Agents',
       compositeKey
     });
   }
 
   /**
    * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from ConversationDetailEntity
+   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
    */
   public get suggestedResponses(): SuggestedResponse[] {
     try {
@@ -1176,7 +1177,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get agent response form from message
-   * Uses ResponseForm property from ConversationDetailEntity
+   * Uses ResponseForm property from MJConversationDetailEntity
    */
   public get responseForm(): AgentResponseForm | null {
     try {
@@ -1197,7 +1198,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get actionable commands from message
-   * Uses ActionableCommands property from ConversationDetailEntity
+   * Uses ActionableCommands property from MJConversationDetailEntity
    */
   public get actionableCommands(): ActionableCommand[] {
     try {

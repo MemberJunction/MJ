@@ -1,0 +1,90 @@
+[
+  {
+    "fields": {
+      "Name": "rerank-v3.5",
+      "Description": "Cohere Rerank v3.5 - Latest semantic reranking model with state-of-the-art performance for English content. Optimized for RAG retrieval quality improvement.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 100,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v3.5",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E0BEEDA5-7189-4E6A-9B60-BA65FA41B85F"
+          },
+          "sync": {
+            "lastModified": "2026-01-28T22:07:13.542Z",
+            "checksum": "14b98f65c79421d2d27df9d51999b428c8841fe7273df5c6c297a1c759d9064a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1AF4B81D-B7A2-41E4-8514-E72A619E63DE"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:08:31.455Z",
+      "checksum": "e2e0872917c631bf49aa95a112e34233f1e43b21f18c2356b0ded52bd70e2435"
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-multilingual-v3.0",
+      "Description": "Cohere Rerank Multilingual v3.0 - Semantic reranking model supporting 100+ languages for global RAG deployments.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 80,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-multilingual-v3.0",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A7F3B2C1-8D4E-4F5A-9C6B-1E2F3A4B5C6D"
+          },
+          "sync": {
+            "lastModified": "2026-01-28T22:07:13.541Z",
+            "checksum": "aeabe80be67ab25dfdcb74e5d2bdf4f2754692e047525391cda40fd9bd7beab1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2E8F662B-3842-41E1-87BF-3C14541BF93B"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:08:31.458Z",
+      "checksum": "9e41002d02f78716a1e15c6d1fa367b913503b2b65f8f40a509dab7e8d0747f4"
+    }
+  }
+]

@@ -1,7 +1,7 @@
 import { GetSignedUrlConfig, Storage } from '@google-cloud/storage';
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileStorageBase,
@@ -10,32 +10,33 @@ import {
   GetObjectParams,
   GetObjectMetadataParams,
   StorageListResult,
-  StorageObjectMetadata
+  StorageObjectMetadata,
+  StorageProviderConfig,
 } from '../generic/FileStorageBase';
 import { getProviderConfig } from '../config';
 
 /**
  * Google Cloud Storage implementation of the FileStorageBase interface.
- * 
+ *
  * This class provides methods for interacting with Google Cloud Storage as a file storage provider.
  * It implements all the abstract methods defined in FileStorageBase and handles Google-specific
  * authentication, authorization, and file operations.
- * 
+ *
  * It requires the following environment variables to be set:
  * - STORAGE_GOOGLE_KEY_JSON: A JSON object containing Google Cloud service account credentials
  * - STORAGE_GOOGLE_BUCKET_NAME: The GCS bucket name
- * 
+ *
  * @example
  * ```typescript
  * // Create an instance of GoogleFileStorage
  * const gcsStorage = new GoogleFileStorage();
- * 
+ *
  * // Generate a pre-authenticated upload URL
  * const { UploadUrl } = await gcsStorage.CreatePreAuthUploadUrl('documents/report.pdf');
- * 
+ *
  * // Generate a pre-authenticated download URL
  * const downloadUrl = await gcsStorage.CreatePreAuthDownloadUrl('documents/report.pdf');
- * 
+ *
  * // List files in a directory
  * const files = await gcsStorage.ListObjects('documents/');
  * ```
@@ -44,16 +45,16 @@ import { getProviderConfig } from '../config';
 export class GoogleFileStorage extends FileStorageBase {
   /** The name of this storage provider, used in error messages */
   protected readonly providerName = 'Google Cloud Storage';
-  
+
   /** The GCS bucket name */
   private _bucket: string;
-  
+
   /** The Google Cloud Storage client instance */
   private _client: Storage;
 
   /**
    * Creates a new instance of GoogleFileStorage.
-   * 
+   *
    * Initializes the connection to Google Cloud Storage using environment variables.
    * Throws an error if any required environment variables are missing.
    */
@@ -89,20 +90,106 @@ export class GoogleFileStorage extends FileStorageBase {
   }
 
   /**
+   * Initialize Google Cloud Storage provider.
+   *
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * const storage = new GoogleFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * const storage = new GoogleFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'GCS Account',
+   *   keyJSON: '{"type":"service_account",...}',
+   *   projectID: 'my-project',
+   *   defaultBucket: 'my-bucket'
+   * });
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
+   */
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    await super.initialize(config);
+
+    if (!config) {
+      return; // Constructor already handled config from env/file
+    }
+
+    // Override with provided values
+    const gcsConfig = config as any;
+    let credentials;
+
+    if (gcsConfig.keyJSON) {
+      credentials = typeof gcsConfig.keyJSON === 'string' ? JSON.parse(gcsConfig.keyJSON) : gcsConfig.keyJSON;
+    } else if (gcsConfig.keyFilename) {
+      this._client = new Storage({ keyFilename: gcsConfig.keyFilename });
+      if (gcsConfig.defaultBucket) {
+        this._bucket = gcsConfig.defaultBucket;
+      }
+      return;
+    }
+
+    if (credentials) {
+      const storageOptions: { credentials?: object; projectId?: string } = { credentials };
+      if (gcsConfig.projectID) {
+        storageOptions.projectId = gcsConfig.projectID;
+      }
+      this._client = new Storage(storageOptions);
+    }
+
+    if (gcsConfig.defaultBucket) {
+      this._bucket = gcsConfig.defaultBucket;
+    }
+  }
+
+  /**
    * Checks if Google Cloud Storage provider is properly configured.
    * Returns true if service account credentials and bucket name are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._client && this._bucket);
+    const hasClient = !!this._client;
+    const hasBucket = !!this._bucket;
+
+    const isConfigured = hasClient && hasBucket;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasClient) missing.push('Service Account Credentials');
+      if (!hasBucket) missing.push('Bucket Name');
+
+      console.error(
+        `❌ Google Cloud Storage provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_GOOGLE_KEY_JSON='{"type":"service_account",...}'\n` +
+        `  export STORAGE_GOOGLE_BUCKET_NAME="my-bucket"\n` +
+        `  const storage = new GoogleFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new GoogleFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    keyJSON: '{"type":"service_account",...}',\n` +
+        `    projectID: "my-project",\n` +
+        `    defaultBucket: "my-bucket"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
    * Normalizes directory paths to ensure they end with a slash.
-   * 
+   *
    * This is a helper method used internally to ensure consistency in
    * directory path representation. Google Cloud Storage doesn't have actual
    * directories, so we use a trailing slash to simulate them.
-   * 
+   *
    * @param path - The directory path to normalize
    * @returns The normalized path with a trailing slash
    * @private
@@ -110,20 +197,20 @@ export class GoogleFileStorage extends FileStorageBase {
   private _normalizeDirectoryPath(path: string): string {
     return path.endsWith('/') ? path : path + '/';
   }
-  
+
   /**
    * Converts metadata to a string map for consistent handling.
-   * 
+   *
    * This is a helper method used internally to ensure that all metadata
    * values are strings, as required by the StorageObjectMetadata type.
-   * 
+   *
    * @param metadata - The metadata object to convert
    * @returns A record with string keys and string values
    * @private
    */
   private _convertMetadataToStringMap(metadata: any): Record<string, string> {
     if (!metadata) return {};
-    
+
     const result: Record<string, string> = {};
     for (const key in metadata) {
       result[key] = String(metadata[key]);
@@ -133,19 +220,19 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Creates a pre-authenticated upload URL for an object in Google Cloud Storage.
-   * 
+   *
    * This method generates a signed URL that allows for uploading an object
    * to GCS without needing Google Cloud credentials. The URL is valid for
    * 10 minutes and includes the content type based on the file extension.
-   * 
+   *
    * @param objectName - The name of the object to upload (including any path/directory)
    * @returns A Promise resolving to an object with the upload URL
-   * 
+   *
    * @example
    * ```typescript
    * // Generate a pre-authenticated upload URL for a PDF file
    * const { UploadUrl } = await gcsStorage.CreatePreAuthUploadUrl('documents/report.pdf');
-   * 
+   *
    * // The URL can be used with fetch or other HTTP clients to upload the file
    * console.log(UploadUrl);
    * ```
@@ -156,7 +243,7 @@ export class GoogleFileStorage extends FileStorageBase {
       version: 'v4',
       action: 'write',
       expires: Date.now() + 10 * 60 * 1000, // 10 mins
-      contentType: mime.lookup(objectName) || 'application/octet-stream'
+      contentType: mime.lookup(objectName) || 'application/octet-stream',
     } as const;
 
     const [UploadUrl] = await file.getSignedUrl(options);
@@ -166,19 +253,19 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Creates a pre-authenticated download URL for an object in Google Cloud Storage.
-   * 
+   *
    * This method generates a signed URL that allows for downloading an object
    * from GCS without needing Google Cloud credentials. The URL is valid for
    * 10 minutes and can be shared with clients.
-   * 
+   *
    * @param objectName - The name of the object to download (including any path/directory)
    * @returns A Promise resolving to the download URL
-   * 
+   *
    * @example
    * ```typescript
    * // Generate a pre-authenticated download URL for a PDF file
    * const downloadUrl = await gcsStorage.CreatePreAuthDownloadUrl('documents/report.pdf');
-   * 
+   *
    * // The URL can be shared with users or used in applications for direct download
    * console.log(downloadUrl);
    * ```
@@ -198,15 +285,15 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Moves an object from one location to another within Google Cloud Storage.
-   * 
+   *
    * Unlike some other storage providers, GCS has a native rename operation
    * that can be used to efficiently move objects without needing to copy
    * and delete. This method leverages that capability.
-   * 
+   *
    * @param oldObjectName - The current name/path of the object
    * @param newObjectName - The new name/path for the object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Move a file from drafts to published folder
@@ -214,7 +301,7 @@ export class GoogleFileStorage extends FileStorageBase {
    *   'drafts/report.docx',
    *   'published/final-report.docx'
    * );
-   * 
+   *
    * if (success) {
    *   console.log('File successfully moved');
    * } else {
@@ -235,19 +322,19 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Deletes an object from Google Cloud Storage.
-   * 
+   *
    * This method attempts to delete the specified object. It uses the
    * ignoreNotFound option to ensure it returns true even if the object
    * didn't exist.
-   * 
+   *
    * @param objectName - The name of the object to delete (including any path/directory)
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Delete a temporary file
    * const deleted = await gcsStorage.DeleteObject('temp/report-draft.pdf');
-   * 
+   *
    * if (deleted) {
    *   console.log('File successfully deleted');
    * } else {
@@ -268,29 +355,29 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Lists objects with the specified prefix in Google Cloud Storage.
-   * 
+   *
    * This method returns a list of objects (files) and prefixes (directories)
    * under the specified path prefix. It uses the GCS getFiles API which
    * supports delimiter-based hierarchy simulation.
-   * 
+   *
    * Note: This implementation fetches metadata for each file, which can be
    * inefficient for directories with many files. In a production environment,
    * you might want to optimize this for large directories.
-   * 
+   *
    * @param prefix - The path prefix to list objects from (e.g., 'documents/')
    * @param delimiter - The character used to simulate directory structure, defaults to '/'
    * @returns A Promise resolving to a StorageListResult containing objects and prefixes
-   * 
+   *
    * @example
    * ```typescript
    * // List all files and directories in the documents folder
    * const result = await gcsStorage.ListObjects('documents/');
-   * 
+   *
    * // Process files
    * for (const file of result.objects) {
    *   console.log(`File: ${file.name}, Size: ${file.size}, Type: ${file.contentType}`);
    * }
-   * 
+   *
    * // Process subdirectories
    * for (const dir of result.prefixes) {
    *   console.log(`Directory: ${dir}`);
@@ -301,25 +388,25 @@ export class GoogleFileStorage extends FileStorageBase {
     try {
       const options = {
         prefix: prefix,
-        delimiter: delimiter
+        delimiter: delimiter,
       };
 
       const [files, , apiResponse] = await this._client.bucket(this._bucket).getFiles(options);
-      
+
       const objects: StorageObjectMetadata[] = [];
       let prefixes: string[] = [];
-      
+
       // Process files (objects)
       for (const file of files) {
         const [metadata] = await file.getMetadata();
-        
+
         // Skip directory placeholders when listing their contents
         if (file.name === prefix) continue;
-        
+
         const pathParts = file.name.split('/');
         const name = pathParts[pathParts.length - 1];
         const path = pathParts.slice(0, -1).join('/');
-        
+
         objects.push({
           name,
           path,
@@ -330,15 +417,15 @@ export class GoogleFileStorage extends FileStorageBase {
           isDirectory: file.name.endsWith('/'),
           etag: String(metadata.etag),
           cacheControl: String(metadata.cacheControl || ''),
-          customMetadata: this._convertMetadataToStringMap(metadata.metadata)
+          customMetadata: this._convertMetadataToStringMap(metadata.metadata),
         });
       }
-      
+
       // Extract directory prefixes
       if (apiResponse && (apiResponse as any).prefixes) {
         prefixes = (apiResponse as any).prefixes;
       }
-      
+
       return { objects, prefixes };
     } catch (e) {
       console.error('Error listing objects in Google storage', { prefix, bucket: this._bucket });
@@ -349,19 +436,19 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Creates a directory (virtual) in Google Cloud Storage.
-   * 
+   *
    * Since GCS doesn't have a native directory concept, this method creates
    * a zero-byte object with a trailing slash to simulate a directory.
    * The object has a special content type to indicate it's a directory.
-   * 
+   *
    * @param directoryPath - The path of the directory to create
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Create a new directory structure
    * const created = await gcsStorage.CreateDirectory('documents/reports/annual/');
-   * 
+   *
    * if (created) {
    *   console.log('Directory created successfully');
    * } else {
@@ -372,15 +459,15 @@ export class GoogleFileStorage extends FileStorageBase {
   public async CreateDirectory(directoryPath: string): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       // GCS doesn't have real directories, so we create a zero-byte file with the directory name
       const file = this._client.bucket(this._bucket).file(directoryPath);
       await file.save('', {
         metadata: {
-          contentType: 'application/x-directory'
-        }
+          contentType: 'application/x-directory',
+        },
       });
-      
+
       return true;
     } catch (e) {
       console.error('Error creating directory in Google storage', { directoryPath, bucket: this._bucket });
@@ -391,20 +478,20 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Deletes a directory (virtual) and optionally its contents from Google Cloud Storage.
-   * 
+   *
    * For non-recursive deletion, this method simply deletes the directory
    * placeholder object. For recursive deletion, it lists all objects with
    * the directory path as prefix and deletes them in parallel.
-   * 
+   *
    * @param directoryPath - The path of the directory to delete
    * @param recursive - If true, deletes all contents recursively (default: false)
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Delete an empty directory
    * const deleted = await gcsStorage.DeleteDirectory('documents/temp/');
-   * 
+   *
    * // Delete a directory and all its contents
    * const recursivelyDeleted = await gcsStorage.DeleteDirectory('documents/old_projects/', true);
    * ```
@@ -412,23 +499,23 @@ export class GoogleFileStorage extends FileStorageBase {
   public async DeleteDirectory(directoryPath: string, recursive = false): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       if (!recursive) {
         // Just delete the directory placeholder
         return this.DeleteObject(directoryPath);
       }
-      
+
       // For recursive delete, list all files under this prefix and delete them
       const options = {
-        prefix: directoryPath
+        prefix: directoryPath,
       };
-      
+
       const [files] = await this._client.bucket(this._bucket).getFiles(options);
-      
+
       // Delete all files concurrently
-      const deletePromises = files.map(file => file.delete());
+      const deletePromises = files.map((file) => file.delete());
       await Promise.all(deletePromises);
-      
+
       return true;
     } catch (e) {
       console.error('Error deleting directory from Google storage', { directoryPath, recursive, bucket: this._bucket });
@@ -491,7 +578,7 @@ export class GoogleFileStorage extends FileStorageBase {
         isDirectory: objectName.endsWith('/'),
         etag: String(metadata.etag || ''),
         cacheControl: String(metadata.cacheControl || ''),
-        customMetadata: this._convertMetadataToStringMap(metadata.metadata)
+        customMetadata: this._convertMetadataToStringMap(metadata.metadata),
       };
     } catch (e) {
       console.error('Error getting object metadata from Google storage', { objectName, bucket: this._bucket });
@@ -548,16 +635,16 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Uploads data to an object in Google Cloud Storage.
-   * 
+   *
    * This method directly uploads a Buffer of data to an object with the specified name.
    * It's useful for server-side operations where you already have the data in memory.
-   * 
+   *
    * @param objectName - The name to assign to the uploaded object
    * @param data - The Buffer containing the data to upload
    * @param contentType - Optional MIME type for the object (inferred from name if not provided)
    * @param metadata - Optional key-value pairs of custom metadata to associate with the object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Upload a text file
@@ -568,7 +655,7 @@ export class GoogleFileStorage extends FileStorageBase {
    *   'text/plain',
    *   { author: 'John Doe', department: 'Engineering' }
    * );
-   * 
+   *
    * if (uploaded) {
    *   console.log('File uploaded successfully');
    * } else {
@@ -576,25 +663,20 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async PutObject(
-    objectName: string, 
-    data: Buffer, 
-    contentType?: string, 
-    metadata?: Record<string, string>
-  ): Promise<boolean> {
+  public async PutObject(objectName: string, data: Buffer, contentType?: string, metadata?: Record<string, string>): Promise<boolean> {
     try {
       const file = this._client.bucket(this._bucket).file(objectName);
-      
+
       // Determine content type based on file extension if not provided
       const effectiveContentType = contentType || mime.lookup(objectName) || 'application/octet-stream';
-      
+
       await file.save(data, {
         metadata: {
           contentType: effectiveContentType,
-          metadata
-        }
+          metadata,
+        },
       });
-      
+
       return true;
     } catch (e) {
       console.error('Error putting object to Google storage', { objectName, bucket: this._bucket });
@@ -605,14 +687,14 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Copies an object within Google Cloud Storage.
-   * 
+   *
    * This method creates a copy of an object at a new location without removing the original.
    * It uses the GCS copy API, which allows for efficient copying within the same bucket.
-   * 
+   *
    * @param sourceObjectName - The name of the object to copy
    * @param destinationObjectName - The name to assign to the copied object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Create a backup copy of an important file
@@ -620,7 +702,7 @@ export class GoogleFileStorage extends FileStorageBase {
    *   'documents/contract.pdf',
    *   'backups/contract_2024-05-16.pdf'
    * );
-   * 
+   *
    * if (copied) {
    *   console.log('File copied successfully');
    * } else {
@@ -632,14 +714,14 @@ export class GoogleFileStorage extends FileStorageBase {
     try {
       const sourceFile = this._client.bucket(this._bucket).file(sourceObjectName);
       const destinationFile = this._client.bucket(this._bucket).file(destinationObjectName);
-      
+
       await sourceFile.copy(destinationFile);
       return true;
     } catch (e) {
-      console.error('Error copying object in Google storage', { 
-        sourceObjectName, 
-        destinationObjectName, 
-        bucket: this._bucket 
+      console.error('Error copying object in Google storage', {
+        sourceObjectName,
+        destinationObjectName,
+        bucket: this._bucket,
       });
       console.error(e);
       return false;
@@ -648,18 +730,18 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Checks if an object exists in Google Cloud Storage.
-   * 
+   *
    * This method verifies the existence of an object without downloading
    * its content. This is efficient for validation purposes.
-   * 
+   *
    * @param objectName - The name of the object to check
    * @returns A Promise resolving to a boolean indicating if the object exists
-   * 
+   *
    * @example
    * ```typescript
    * // Check if a file exists before attempting to use it
    * const exists = await gcsStorage.ObjectExists('documents/report.pdf');
-   * 
+   *
    * if (exists) {
    *   console.log('File exists, proceeding with download');
    *   const content = await gcsStorage.GetObject('documents/report.pdf');
@@ -683,24 +765,24 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Checks if a directory (virtual) exists in Google Cloud Storage.
-   * 
+   *
    * Since GCS doesn't have a native directory concept, this method checks for either:
    * 1. The existence of a directory placeholder object (zero-byte object with trailing slash)
    * 2. The existence of any objects with the directory path as a prefix
-   * 
+   *
    * @param directoryPath - The path of the directory to check
    * @returns A Promise resolving to a boolean indicating if the directory exists
-   * 
+   *
    * @example
    * ```typescript
    * // Check if a directory exists before trying to save files to it
    * const exists = await gcsStorage.DirectoryExists('documents/reports/');
-   * 
+   *
    * if (!exists) {
    *   console.log('Directory does not exist, creating it first');
    *   await gcsStorage.CreateDirectory('documents/reports/');
    * }
-   * 
+   *
    * // Now safe to use the directory
    * await gcsStorage.PutObject('documents/reports/new-report.pdf', fileData);
    * ```
@@ -718,7 +800,7 @@ export class GoogleFileStorage extends FileStorageBase {
       // Method 2: Check if any objects with this prefix exist
       const options = {
         prefix: directoryPath,
-        maxResults: 1
+        maxResults: 1,
       };
 
       const [files] = await this._client.bucket(this._bucket).getFiles(options);
@@ -744,10 +826,7 @@ export class GoogleFileStorage extends FileStorageBase {
    * @param options - Search options (not used)
    * @throws UnsupportedOperationError always
    */
-  public async SearchFiles(
-    query: string,
-    options?: FileSearchOptions
-  ): Promise<FileSearchResultSet> {
+  public async SearchFiles(query: string, options?: FileSearchOptions): Promise<FileSearchResultSet> {
     this.throwUnsupportedOperationError('SearchFiles');
   }
 }

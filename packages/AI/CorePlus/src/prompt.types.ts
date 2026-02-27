@@ -1,19 +1,57 @@
 /**
  * @fileoverview Type definitions for AI prompt execution results.
- * 
+ *
  * This module contains type definitions for prompt execution results that are
  * shared between AI packages to avoid circular dependencies.
- * 
+ *
  * @module @memberjunction/ai
  * @author MemberJunction.com
  * @since 2.50.0
  */
 
-import { AIPromptRunEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
-import { AIPromptEntityExtended } from './AIPromptExtended';
-import { AIModelEntityExtended } from './AIModelExtended';
+import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
+import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
+
+/**
+ * Modality types for multi-modal outputs
+ */
+export type MediaModality = 'Image' | 'Audio' | 'Video';
+
+/**
+ * Represents a media item generated during prompt execution.
+ * This is stored in AIPromptRunMedia for complete audit trail.
+ */
+export interface PromptRunMediaReference {
+    /** ID of the AIPromptRunMedia record */
+    id: string;
+    /** The modality type */
+    modality: MediaModality;
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+    /** Original filename if available */
+    fileName?: string;
+    /** File size in bytes */
+    fileSizeBytes?: number;
+    /** Width in pixels (for images/video) */
+    width?: number;
+    /** Height in pixels (for images/video) */
+    height?: number;
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+    /** Base64 encoded data (for inline storage) */
+    inlineData?: string;
+    /** URL if available (some providers return URLs) */
+    url?: string;
+    /** Base64 encoded thumbnail */
+    thumbnailBase64?: string;
+    /** Provider-specific metadata (seed, revisedPrompt, etc.) */
+    metadata?: Record<string, unknown>;
+    /** Display order when multiple media are generated */
+    displayOrder: number;
+}
 
 
 /**
@@ -118,7 +156,7 @@ export interface AIPromptRunResult<T = unknown> {
   /**
    * The AIPromptRun entity that was created for tracking
    */
-  promptRun?: AIPromptRunEntity;
+  promptRun?: MJAIPromptRunEntity;
 
   /**
    * Total execution time in milliseconds
@@ -237,6 +275,14 @@ export interface AIPromptRunResult<T = unknown> {
    * Model selection information for debugging and analysis
    */
   modelSelectionInfo?: AIModelSelectionInfo;
+
+  /**
+   * Media generated during this prompt execution.
+   * Contains references to AIPromptRunMedia records with full metadata.
+   * This provides complete audit trail of all generated media.
+   * @since 3.1.0
+   */
+  media?: PromptRunMediaReference[];
 }
 
 /**
@@ -244,13 +290,13 @@ export interface AIPromptRunResult<T = unknown> {
  */
 export class AIModelSelectionInfo {
   /** The configuration entity that was used, if any */
-  aiConfiguration?: AIConfigurationEntity;
+  aiConfiguration?: MJAIConfigurationEntity;
   /** All models that were considered for selection */
   modelsConsidered: Array<{
     /** The model entity */
-    model: AIModelEntityExtended;
+    model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
-    vendor?: AIVendorEntity;
+    vendor?: MJAIVendorEntity;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -259,9 +305,9 @@ export class AIModelSelectionInfo {
     unavailableReason?: string;
   }>;
   /** The model entity that was selected */
-  modelSelected: AIModelEntityExtended;
+  modelSelected: MJAIModelEntityExtended;
   /** The vendor entity that was selected, if applicable */
-  vendorSelected?: AIVendorEntity;
+  vendorSelected?: MJAIVendorEntity;
   /** Reason for the selection */
   selectionReason: string;
   /** Whether a fallback model was used */
@@ -287,7 +333,7 @@ export class AIPromptParams {
    * The AI prompt to execute.
    * Note: Get prompts from AIEngine.Instance.Prompts after calling AIEngine.Config()
    */
-  prompt: AIPromptEntityExtended;
+  prompt: MJAIPromptEntityExtended;
 
   /**
    * Data context for template rendering and prompt execution
@@ -421,7 +467,7 @@ export class AIPromptParams {
    * selection configuration instead of the parent prompt's configuration.
    * If not specified, the main prompt's model selection will be used.
    */
-  modelSelectionPrompt?: AIPromptEntityExtended;
+  modelSelectionPrompt?: MJAIPromptEntityExtended;
 
   /**
    * Optional runtime override for prompt execution.

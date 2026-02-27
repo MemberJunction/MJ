@@ -21,7 +21,7 @@ export {
 
 // Re-export entity types for convenience
 export {
-    CredentialEntity,
-    CredentialTypeEntity,
-    CredentialCategoryEntity
+    MJCredentialEntity,
+    MJCredentialTypeEntity,
+    MJCredentialCategoryEntity
 } from '@memberjunction/core-entities';

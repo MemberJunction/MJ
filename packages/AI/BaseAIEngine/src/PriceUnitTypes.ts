@@ -1,4 +1,4 @@
-import { AIModelCostEntity } from "@memberjunction/core-entities";
+import { MJAIModelCostEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
@@ -14,14 +14,14 @@ export abstract class BasePriceUnitType {
      * @returns The calculated cost
      */
     abstract CalculateNormalizedCost(
-        activeCost: AIModelCostEntity,
+        activeCost: MJAIModelCostEntity,
         inputTokens: number,
         outputTokens: number
     ): number 
 
     protected InternalCalculateNormalizedCost(
         divisor: number,
-        activeCost: AIModelCostEntity,
+        activeCost: MJAIModelCostEntity,
         inputTokens: number,
         outputTokens: number
     ): number {
@@ -43,7 +43,7 @@ export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
      * @returns The calculated cost
      */
     CalculateNormalizedCost(
-        activeCost: AIModelCostEntity,
+        activeCost: MJAIModelCostEntity,
         inputTokens: number,
         outputTokens: number
     ): number {
@@ -63,7 +63,7 @@ export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
      * @returns The calculated cost
      */
     CalculateNormalizedCost(
-        activeCost: AIModelCostEntity,
+        activeCost: MJAIModelCostEntity,
         inputTokens: number,
         outputTokens: number
     ): number {
@@ -82,15 +82,11 @@ export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
      * @returns The calculated cost
      */
     CalculateNormalizedCost(
-        activeCost: AIModelCostEntity,
+        activeCost: MJAIModelCostEntity,
         inputTokens: number,
         outputTokens: number
     ): number {
         const divisor = 100000; // Prices are per hundred thousand tokens
         return this.InternalCalculateNormalizedCost(divisor, activeCost, inputTokens, outputTokens);
     }
-}
-
-export function LoadPriceUnitTypes() {
-    // tree shaking avoidance
 }

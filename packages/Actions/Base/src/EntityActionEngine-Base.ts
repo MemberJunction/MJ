@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { ActionExecutionLogEntity, ActionResultCodeEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, RunActionParams } from "./ActionEngine-Base";
-import { EntityActionEntityExtended } from "./EntityActionEntity-Extended";
+import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 
 /**
  * Parameters type for invoking an entity action
@@ -10,12 +10,12 @@ export class EntityActionInvocationParams {
     /**
      * The entity action to be invoked
      */
-    public EntityAction: EntityActionEntityExtended;
+    public EntityAction: MJEntityActionEntityExtended;
 
     /**
      * The type of entity/action invocation to be performed
      */
-    public InvocationType: EntityActionInvocationTypeEntity;
+    public InvocationType: MJEntityActionInvocationTypeEntity;
 
     /**
      * The user context for the invocation.  
@@ -52,15 +52,15 @@ export class EntityActionResult {
     public Success: boolean;
  
     /**
-     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the ActionResultCodeEntity
+     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
      */
-    public Result?: ActionResultCodeEntity;
+    public Result?: MJActionResultCodeEntity;
  
     /**
      * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
      * Note that the log entry will be created 
      */
-    public LogEntry?: ActionExecutionLogEntity;
+    public LogEntry?: MJActionExecutionLogEntity;
  
     /**
      * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
@@ -83,11 +83,11 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
  
     // internal instance properties used for the singleton pattern
-    private _EntityActions: EntityActionEntityExtended[] = [];
-    private _EntityActionParams: EntityActionParamEntity[] = [];
-    private _EntityActionInvocationTypes: EntityActionInvocationTypeEntity[] = [];
-    private _EntityActionFilters: EntityActionFilterEntity[] = [];
-    private _EntityActionInvocations: EntityActionInvocationEntity[] = [];
+    private _EntityActions: MJEntityActionEntityExtended[] = [];
+    private _EntityActionParams: MJEntityActionParamEntity[] = [];
+    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];
+    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];
+    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -98,27 +98,27 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Entity Action Invocation Types',
+                EntityName: 'MJ: Entity Action Invocation Types',
                 PropertyName: '_EntityActionInvocationTypes',
                 CacheLocal: true
             },
             {
-                EntityName: 'Entity Action Filters',
+                EntityName: 'MJ: Entity Action Filters',
                 PropertyName: '_EntityActionFilters',
                 CacheLocal: true
             },
             {
-                EntityName: 'Entity Action Invocations',
+                EntityName: 'MJ: Entity Action Invocations',
                 PropertyName: '_EntityActionInvocations',
                 CacheLocal: true
             },
             {
-                EntityName: 'Entity Actions', // sub-class for this will handle dynamic loading of filters, invocations, and params when needed by callers of those read-only properties
+                EntityName: 'MJ: Entity Actions', // sub-class for this will handle dynamic loading of filters, invocations, and params when needed by callers of those read-only properties
                 PropertyName: '_EntityActions',
                 CacheLocal: true
             },
             {
-                EntityName: 'Entity Action Params',
+                EntityName: 'MJ: Entity Action Params',
                 PropertyName: '_EntityActionParams',
                 CacheLocal: true
             }
@@ -128,67 +128,67 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
 
     /**
-     * List of all the EntityActionInvocationTypeEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
+     * List of all the MJEntityActionInvocationTypeEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get InvocationTypes(): EntityActionInvocationTypeEntity[] {
+    public get InvocationTypes(): MJEntityActionInvocationTypeEntity[] {
         return this._EntityActionInvocationTypes;
     }
 
     /**
-     * List of all the EntityActionFilterEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
+     * List of all the MJEntityActionFilterEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get Filters(): EntityActionFilterEntity[] {
+    public get Filters(): MJEntityActionFilterEntity[] {
         return this._EntityActionFilters;
     }
 
     /**
-     * List of all the EntityActionInvocationEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
+     * List of all the MJEntityActionInvocationEntity objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get Invocations(): EntityActionInvocationEntity[] {
+    public get Invocations(): MJEntityActionInvocationEntity[] {
         return this._EntityActionInvocations;
     }
 
     /** 
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get EntityActions(): EntityActionEntityExtended[] {
+    public get EntityActions(): MJEntityActionEntityExtended[] {
         return this._EntityActions;
     }
 
     /**
      * List of all of the Entity Action Params that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
-    public get Params(): EntityActionParamEntity[] {   
+    public get Params(): MJEntityActionParamEntity[] {   
         return this._EntityActionParams;
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity name
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity name
      * @param entityName 
      * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityExtended[] {
+    public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
         return this._EntityActions.filter(e => (!status || e.Status === status) && e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase());
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity ID
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity ID
      * @param entityID 
      * @returns 
      */
-    public GetActionsByEntityID(entityID: string): EntityActionEntityExtended[] {
+    public GetActionsByEntityID(entityID: string): MJEntityActionEntityExtended[] {
         return this._EntityActions.filter(e => e.EntityID === entityID);
     }
 
     /**
-     * Helper method to get the EntityActionEntityExtended object for a given entity name and invocation type
+     * Helper method to get the MJEntityActionEntityExtended object for a given entity name and invocation type
      * @param entityName 
      * @param invocationType 
      * @param status Optional, if provided will filter the results based on the status
      * @returns 
      */
-    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): EntityActionEntityExtended[] {
+    public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
         const entityActions = this.GetActionsByEntityName(entityName, status);
         // now extract the ones that have the right invocation type
         return entityActions.filter(e => { 

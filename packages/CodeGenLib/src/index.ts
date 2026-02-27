@@ -37,9 +37,6 @@
  * ```
  */
 
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-LoadAIProviders(); // Ensure all AI providers are loaded
-
 // Configuration exports
 export { initializeConfig } from './Config/config'
 export * from './Config/config'
@@ -68,6 +65,14 @@ export * from './Misc/status_logging'
 export * from './Misc/system_integrity';
 export * from './Misc/runCommand'
 export * from './Misc/util'
+
+// Manifest generation
+export * from './Manifest/GenerateClassRegistrationsManifest'
+
+// Entity name scanning
+export * from './EntityNameScanner/EntityNameScanner'
+export * from './EntityNameScanner/MetadataNameScanner'
+export * from './EntityNameScanner/HtmlEntityNameScanner'
 
 // Main runner
 export * from './runCodeGen'

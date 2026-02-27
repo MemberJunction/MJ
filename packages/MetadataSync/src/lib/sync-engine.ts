@@ -873,7 +873,7 @@ export class SyncEngine {
    * 
    * @example
    * ```typescript
-   * const entityInfo = syncEngine.getEntityInfo('AI Prompts');
+   * const entityInfo = syncEngine.getEntityInfo('MJ: AI Prompts');
    * if (entityInfo) {
    *   console.log(`Primary keys: ${entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ')}`);
    * }
@@ -895,7 +895,7 @@ export class SyncEngine {
    * 
    * @example
    * ```typescript
-   * const entity = await syncEngine.createEntityObject('AI Prompts');
+   * const entity = await syncEngine.createEntityObject('MJ: AI Prompts');
    * entity.NewRecord();
    * entity.Set('Name', 'My Prompt');
    * await entity.Save();

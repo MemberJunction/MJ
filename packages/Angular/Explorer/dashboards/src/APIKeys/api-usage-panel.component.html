@@ -1,0 +1,360 @@
+<div class="usage-panel">
+  @if (IsLoading) {
+    <mj-loading text="Loading usage analytics..."></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <!-- Header -->
+    <div class="panel-header">
+      <div class="header-left">
+        <h3 class="panel-title">
+          <i class="fa-solid fa-chart-line"></i>
+          API Usage Analytics
+        </h3>
+        <p class="panel-subtitle">Monitor API key usage, performance, and trends</p>
+      </div>
+      <div class="time-filters">
+        <button class="time-btn" [class.active]="TimeRange === 'day'"
+        (click)="setTimeRange('day')">24 Hours</button>
+        <button class="time-btn" [class.active]="TimeRange === 'week'"
+        (click)="setTimeRange('week')">7 Days</button>
+        <button class="time-btn" [class.active]="TimeRange === 'month'"
+        (click)="setTimeRange('month')">30 Days</button>
+        <button class="time-btn" [class.active]="TimeRange === 'all'"
+        (click)="setTimeRange('all')">All Time</button>
+      </div>
+    </div>
+    <!-- Summary KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon requests">
+          <i class="fa-solid fa-arrow-right-arrow-left"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{formatNumber(TotalRequests)}}</div>
+          <div class="kpi-label">Total Requests</div>
+        </div>
+      </div>
+      <div class="kpi-card" [class.success]="SuccessRate >= 95">
+        <div class="kpi-icon success-rate">
+          <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{SuccessRate}}%</div>
+          <div class="kpi-label">Success Rate</div>
+        </div>
+      </div>
+      <div class="kpi-card" [class.warning]="TotalErrors > 0">
+        <div class="kpi-icon errors">
+          <i class="fa-solid fa-circle-exclamation"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{formatNumber(TotalErrors)}}</div>
+          <div class="kpi-label">Errors</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon response-time">
+          <i class="fa-solid fa-gauge-high"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{AvgResponseTime}}ms</div>
+          <div class="kpi-label">Avg Response Time</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon keys">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{UniqueKeys}}</div>
+          <div class="kpi-label">Active Keys</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon endpoints">
+          <i class="fa-solid fa-code-branch"></i>
+        </div>
+        <div class="kpi-content">
+          <div class="kpi-value">{{UniqueEndpoints}}</div>
+          <div class="kpi-label">Unique Endpoints</div>
+        </div>
+      </div>
+    </div>
+    <!-- Usage Chart -->
+    <div class="chart-section">
+      <div class="chart-header">
+        <h4>Request Volume</h4>
+        <div class="chart-legend">
+          <span class="legend-item">
+            <span class="legend-color requests"></span> Requests
+          </span>
+          <span class="legend-item">
+            <span class="legend-color errors"></span> Errors
+          </span>
+        </div>
+      </div>
+      @if (TimeBuckets.length > 0) {
+        <div class="chart-container">
+          <div class="chart-bars">
+            @for (bucket of TimeBuckets; track bucket) {
+              <div class="bar-group" [title]="bucket.requests + ' requests, ' + bucket.errors + ' errors'">
+                <div class="bar-wrapper">
+                  <div class="bar requests-bar"
+                    [style.height.%]="getBarHeight(bucket.requests)">
+                    @if (bucket.errors > 0) {
+                      <div class="bar errors-bar"
+                        [style.height.%]="getErrorBarHeight(bucket)"
+                        >
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="bar-label">{{bucket.label}}</div>
+              </div>
+            }
+          </div>
+          <div class="chart-y-axis">
+            <span>{{formatNumber(MaxRequests)}}</span>
+            <span>{{formatNumber(Math.round(MaxRequests / 2))}}</span>
+            <span>0</span>
+          </div>
+        </div>
+      }
+      @if (TimeBuckets.length === 0) {
+        <div class="empty-chart">
+          <i class="fa-solid fa-chart-area"></i>
+          <span>No usage data available</span>
+        </div>
+      }
+    </div>
+    <!-- Breakdown Grid -->
+    <div class="breakdown-grid">
+      <!-- Top Endpoints -->
+      <div class="breakdown-card">
+        <div class="breakdown-header">
+          <h4>
+            <i class="fa-solid fa-code-branch"></i>
+            Top Endpoints
+          </h4>
+        </div>
+        <div class="breakdown-content">
+          @if (TopEndpoints.length > 0) {
+            <div class="endpoint-list">
+              @for (ep of TopEndpoints; track ep) {
+                <div class="endpoint-item"
+                  (click)="drillDownEndpoint(ep)">
+                  <div class="endpoint-info">
+                    <span class="method-badge" [ngClass]="getMethodClass(ep.method)">
+                      {{ep.method}}
+                    </span>
+                    <span class="endpoint-path">{{ep.endpoint}}</span>
+                  </div>
+                  <div class="endpoint-stats">
+                    <span class="endpoint-requests">{{formatNumber(ep.requests)}}</span>
+                    <span class="endpoint-time">{{ep.avgResponseTime}}ms</span>
+                    <span class="endpoint-error" [class.has-errors]="ep.errorRate > 0">
+                      {{ep.errorRate}}% err
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+          @if (TopEndpoints.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-code-branch"></i>
+              <span>No endpoint data</span>
+            </div>
+          }
+        </div>
+      </div>
+      <!-- Top Keys -->
+      <div class="breakdown-card">
+        <div class="breakdown-header">
+          <h4>
+            <i class="fa-solid fa-key"></i>
+            Most Active Keys
+          </h4>
+        </div>
+        <div class="breakdown-content">
+          @if (TopKeys.length > 0) {
+            <div class="key-list">
+              @for (key of TopKeys; track key) {
+                <div class="key-item"
+                  (click)="drillDownKey(key)">
+                  <div class="key-info">
+                    <span class="key-label">{{key.label}}</span>
+                    <span class="key-last-used">{{formatDate(key.lastUsed)}}</span>
+                  </div>
+                  <div class="key-requests">{{formatNumber(key.requests)}}</div>
+                </div>
+              }
+            </div>
+          }
+          @if (TopKeys.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-key"></i>
+              <span>No key data</span>
+            </div>
+          }
+        </div>
+      </div>
+      <!-- Status Distribution -->
+      <div class="breakdown-card">
+        <div class="breakdown-header">
+          <h4>
+            <i class="fa-solid fa-circle-half-stroke"></i>
+            Status Distribution
+          </h4>
+        </div>
+        <div class="breakdown-content">
+          @if (StatusGroups.length > 0) {
+            <div class="status-distribution">
+              <div class="status-bar">
+                @for (group of StatusGroups; track group) {
+                  <div class="status-segment"
+                    [style.width.%]="group.percentage"
+                    [style.backgroundColor]="group.color"
+                    [title]="group.label + ': ' + group.count + ' (' + group.percentage + '%)'">
+                  </div>
+                }
+              </div>
+              <div class="status-legend">
+                @for (group of StatusGroups; track group) {
+                  <div class="status-legend-item">
+                    <span class="status-color" [style.backgroundColor]="group.color"></span>
+                    <span class="status-label">{{group.label}}</span>
+                    <span class="status-count">{{formatNumber(group.count)}} ({{group.percentage}}%)</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+          @if (StatusGroups.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-circle-half-stroke"></i>
+              <span>No status data</span>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+    <!-- Recent Logs -->
+    <div class="logs-section">
+      <div class="logs-header">
+        <h4>
+          <i class="fa-solid fa-list"></i>
+          Recent Requests
+        </h4>
+      </div>
+      @if (RecentLogs.length > 0) {
+        <div class="logs-table">
+          <div class="logs-table-header">
+            <span class="col-time">Time</span>
+            <span class="col-key">API Key</span>
+            <span class="col-method">Method</span>
+            <span class="col-endpoint">Endpoint</span>
+            <span class="col-status">Status</span>
+            <span class="col-duration">Duration</span>
+          </div>
+          <div class="logs-table-body">
+            @for (log of RecentLogs; track log) {
+              <div class="log-row">
+                <span class="col-time">{{formatDate(log.timestamp)}}</span>
+                <span class="col-key">{{log.keyLabel}}</span>
+                <span class="col-method">
+                  <span class="method-badge" [ngClass]="getMethodClass(log.method)">
+                    {{log.method}}
+                  </span>
+                </span>
+                <span class="col-endpoint">{{log.endpoint}}</span>
+                <span class="col-status" [ngClass]="getStatusClass(log.statusCode)">
+                  {{log.statusCode}}
+                </span>
+                <span class="col-duration">{{log.responseTime}}ms</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+      @if (RecentLogs.length === 0) {
+        <div class="empty-state large">
+          <i class="fa-solid fa-inbox"></i>
+          <span>No requests logged yet</span>
+          <p>API usage will appear here once keys are used</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Drill-down Panel -->
+  @if (ShowLogsPanel) {
+    <kendo-window
+      [width]="800"
+      [minWidth]="600"
+      [height]="500"
+      [minHeight]="400"
+      [resizable]="true"
+      [draggable]="true"
+      [top]="80"
+      (close)="closeLogsPanel()">
+      <kendo-window-titlebar>
+        <div class="drilldown-title">
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
+          <span>Request Details</span>
+          @if (LogsFilter.endpoint) {
+            <span class="filter-badge">
+              {{LogsFilter.endpoint}}
+            </span>
+          }
+          @if (LogsFilter.keyId) {
+            <span class="filter-badge">
+              Key: {{KeyMap.get(LogsFilter.keyId) || 'Unknown'}}
+            </span>
+          }
+        </div>
+        <button kendoButton fillMode="flat" (click)="closeLogsPanel()" class="window-close-btn">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </kendo-window-titlebar>
+      <div class="drilldown-content">
+        @if (IsLoadingLogs) {
+          <mj-loading text="Loading requests..."></mj-loading>
+        }
+        @if (!IsLoadingLogs) {
+          <div class="drilldown-logs">
+            <div class="logs-table">
+              <div class="logs-table-header">
+                <span class="col-time">Time</span>
+                <span class="col-key">API Key</span>
+                <span class="col-method">Method</span>
+                <span class="col-endpoint">Endpoint</span>
+                <span class="col-status">Status</span>
+                <span class="col-duration">Duration</span>
+              </div>
+              <div class="logs-table-body scrollable">
+                @for (log of RecentLogs; track log) {
+                  <div class="log-row">
+                    <span class="col-time">{{formatDate(log.timestamp)}}</span>
+                    <span class="col-key">{{log.keyLabel}}</span>
+                    <span class="col-method">
+                      <span class="method-badge" [ngClass]="getMethodClass(log.method)">
+                        {{log.method}}
+                      </span>
+                    </span>
+                    <span class="col-endpoint">{{log.endpoint}}</span>
+                    <span class="col-status" [ngClass]="getStatusClass(log.statusCode)">
+                      {{log.statusCode}}
+                    </span>
+                    <span class="col-duration">{{log.responseTime}}ms</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </kendo-window>
+  }
+</div>

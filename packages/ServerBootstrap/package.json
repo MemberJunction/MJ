@@ -1,14 +1,27 @@
 {
   "name": "@memberjunction/server-bootstrap",
-  "version": "3.0.0",
+  "version": "5.3.1",
   "description": "MemberJunction Server Bootstrap - Encapsulates all server initialization logic",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mj-class-registrations": {
+      "types": "./dist/mj-class-registrations.d.ts",
+      "default": "./dist/mj-class-registrations.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
+    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -18,15 +31,51 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/server": "3.0.0",
+    "@memberjunction/actions": "5.3.1",
+    "@memberjunction/actions-apollo": "5.3.1",
+    "@memberjunction/actions-base": "5.3.1",
+    "@memberjunction/actions-bizapps-accounting": "5.3.1",
+    "@memberjunction/actions-bizapps-crm": "5.3.1",
+    "@memberjunction/actions-bizapps-formbuilders": "5.3.1",
+    "@memberjunction/actions-bizapps-lms": "5.3.1",
+    "@memberjunction/actions-bizapps-social": "5.3.1",
+    "@memberjunction/ai-agent-manager": "5.3.1",
+    "@memberjunction/ai-agents": "5.3.1",
+    "@memberjunction/ai-core-plus": "5.3.1",
+    "@memberjunction/ai-engine-base": "5.3.1",
+    "@memberjunction/ai-provider-bundle": "5.3.1",
+    "@memberjunction/ai-reranker": "5.3.1",
+    "@memberjunction/communication-ms-graph": "5.3.1",
+    "@memberjunction/communication-sendgrid": "5.3.1",
+    "@memberjunction/communication-types": "5.3.1",
+    "@memberjunction/content-autotagging": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/core-actions": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/core-entities-server": "5.3.1",
+    "@memberjunction/data-context-server": "5.3.1",
+    "@memberjunction/doc-utils": "5.3.1",
+    "@memberjunction/encryption": "5.3.1",
+    "@memberjunction/entity-communications-base": "5.3.1",
+    "@memberjunction/queue": "5.3.1",
+    "@memberjunction/scheduling-actions": "5.3.1",
+    "@memberjunction/scheduling-engine": "5.3.1",
+    "@memberjunction/scheduling-engine-base": "5.3.1",
+    "@memberjunction/server": "5.3.1",
+    "@memberjunction/storage": "5.3.1",
+    "@memberjunction/templates": "5.3.1",
+    "@memberjunction/testing-engine": "5.3.1",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.4.5"
+    "@types/node": "^24.10.11",
+    "typescript": "^5.9.3"
   },
   "files": [
     "dist/**/*"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

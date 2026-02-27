@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Get Storage Upload URL',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'AWS S3 Storage'
  *   }, {
  *     Name: 'ObjectName',
@@ -27,7 +27,7 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
      * Generate a pre-authenticated upload URL
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required - Name/path of the object to upload
      *
      * @returns Operation result with:
@@ -73,7 +73,4 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
             );
         }
     }
-}
-export function LoadGetUploadUrlAction() {
-    // Stub function to prevent tree shaking
 }

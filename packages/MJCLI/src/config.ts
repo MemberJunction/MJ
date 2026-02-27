@@ -1,10 +1,10 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import { FlywayConfig } from 'node-flyway/dist/types/types';
+import type { SkywayConfig } from '@memberjunction/skyway-core';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
-import { mergeConfigs } from '@memberjunction/config';
+import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
@@ -18,13 +18,14 @@ const DEFAULT_CLI_CONFIG = {
   dbHost: process.env.DB_HOST ?? 'localhost',
   dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
   dbDatabase: process.env.DB_DATABASE ?? '',
-  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' || process.env.DB_TRUST_SERVER_CERTIFICATE === '1',
+  dbEncrypt: process.env.DB_ENCRYPT !== undefined ? parseBooleanEnv(process.env.DB_ENCRYPT) : true,
+  dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   coreSchema: '__mj',
   cleanDisabled: true,
-  baselineVersion: '202601122300',
   baselineOnMigrate: true,
+  transactionMode: 'per-migration' as const,
   mjRepoUrl: MJ_REPO_URL,
   migrationsLocation: 'filesystem:./migrations',
 };
@@ -43,6 +44,42 @@ const result = searchResult
   ? { ...searchResult, config: mergedConfig }
   : { config: mergedConfig, filepath: '', isEmpty: false };
 
+// Schema placeholder configuration for cross-schema references
+const schemaPlaceholderSchema = z.object({
+  schema: z.string(),
+  placeholder: z.string(),
+});
+
+// Schema for dynamic package entries managed by `mj app install/remove`
+const dynamicPackageEntrySchema = z.object({
+  PackageName: z.string(),
+  StartupExport: z.string(),
+  AppName: z.string(),
+  Enabled: z.boolean().default(true),
+});
+
+// Schema for Open App configuration section
+const openAppsConfigSchema = z.object({
+  github: z.object({
+    token: z.string().optional(),
+  }).optional(),
+  registries: z.array(z.object({
+    name: z.string(),
+    url: z.string().url(),
+    token: z.string().optional(),
+  })).optional(),
+  codeGenExclusions: z.object({
+    includeAppSchemas: z.boolean().default(false),
+    overrideApps: z.array(z.string()).default([]),
+  }).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+}).optional();
+
+// Schema for dynamic packages section
+const dynamicPackagesSchema = z.object({
+  server: z.array(dynamicPackageEntrySchema).optional(),
+}).optional();
+
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
@@ -51,12 +88,19 @@ const mjConfigSchema = z.object({
   codeGenLogin: z.string(),
   codeGenPassword: z.string(),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
+  dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202601122300'),
+  baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  SQLOutput: z.object({
+    schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
+  }).passthrough().optional(),
+  openApps: openAppsConfigSchema,
+  dynamicPackages: dynamicPackagesSchema,
 });
 
 // Schema for non-database commands (all fields optional)
@@ -67,12 +111,19 @@ const mjConfigSchemaOptional = z.object({
   codeGenLogin: z.string().optional(),
   codeGenPassword: z.string().optional(),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
+  dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202601122300'),
+  baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  SQLOutput: z.object({
+    schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
+  }).passthrough().optional(),
+  openApps: openAppsConfigSchema,
+  dynamicPackages: dynamicPackagesSchema,
 });
 
 // Don't validate at module load - let commands decide when they need validated config
@@ -119,15 +170,28 @@ export const updatedConfig = (): MJConfig | undefined => {
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 
-export const createFlywayUrl = (mjConfig: MJConfig) => {
-  return `jdbc:sqlserver://${mjConfig.dbHost}:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
-    mjConfig.dbTrustServerCertificate ? '; trustServerCertificate=true' : ''
-  }`;
-};
+/**
+ * Builds a SkywayConfig from the MJ CLI config and optional overrides.
+ *
+ * Handles:
+ * - Database connection mapping (MJConfig fields → Skyway DatabaseConfig)
+ * - Migration location resolution (local dir, remote git tag)
+ * - Placeholder mapping (schemaPlaceholders, legacy mjSchema, flyway:defaultSchema)
+ * - Baseline configuration
+ */
+export const getSkywayConfig = async (
+  mjConfig: MJConfig,
+  tag?: string,
+  schema?: string,
+  dir?: string
+): Promise<SkywayConfig> => {
+  const targetSchema = schema || mjConfig.coreSchema;
 
-export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise<FlywayConfig> => {
   let location = mjConfig.migrationsLocation;
 
+  if (dir && !tag) {
+    location = dir.startsWith('filesystem:') ? dir : `filesystem:${dir}`;
+  }
   if (tag) {
     // when tag is set, we want to fetch migrations from the github repo using the tag specified
     // we save those to a tmp dir and set that tmp dir as the migration location
@@ -138,18 +202,58 @@ export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise
     await git.raw(['sparse-checkout', 'set', 'migrations']);
 
     location = `filesystem:${tmp}`;
+
+    if (dir) {
+      const subPath = dir.replace(/^filesystem:/, '').replace(/^\.\//, '');
+      location = `filesystem:${tmp}/${subPath}`;
+    }
+  }
+
+  // Strip filesystem: prefix — Skyway uses plain filesystem paths
+  const cleanLocation = location.replace(/^filesystem:/, '');
+
+  // Build placeholders
+  const placeholders: Record<string, string> = {};
+
+  // Always provide the flyway:defaultSchema built-in so existing migration SQL works unchanged
+  placeholders['flyway:defaultSchema'] = targetSchema;
+
+  const schemaPlaceholders = mjConfig.SQLOutput?.schemaPlaceholders;
+
+  if (schemaPlaceholders && schemaPlaceholders.length > 0) {
+    // Use schemaPlaceholders from config (supports BCSaaS and other extensions)
+    for (const { schema: schemaName, placeholder } of schemaPlaceholders) {
+      const cleanPlaceholder = placeholder.replace(/^\$\{|\}$/g, '');
+      // Skip Flyway built-in placeholders (already handled above)
+      if (cleanPlaceholder.startsWith('flyway:')) continue;
+      placeholders[cleanPlaceholder] = schemaName;
+    }
+  } else if (schema && schema !== mjConfig.coreSchema) {
+    // Legacy behavior: Add mjSchema placeholder for non-core schemas
+    placeholders['mjSchema'] = mjConfig.coreSchema;
   }
 
   return {
-    url: createFlywayUrl(mjConfig),
-    user: mjConfig.codeGenLogin,
-    password: mjConfig.codeGenPassword,
-    migrationLocations: [location],
-    advanced: {
-      schemas: [mjConfig.coreSchema],
-      cleanDisabled: mjConfig.cleanDisabled === false ? false : undefined,
-      baselineVersion: mjConfig.baselineVersion,
-      baselineOnMigrate: mjConfig.baselineOnMigrate,
+    Database: {
+      Server: mjConfig.dbHost,
+      Port: mjConfig.dbPort,
+      Database: mjConfig.dbDatabase,
+      User: mjConfig.codeGenLogin,
+      Password: mjConfig.codeGenPassword,
+      Options: {
+        Encrypt: mjConfig.dbEncrypt,
+        TrustServerCertificate: mjConfig.dbTrustServerCertificate,
+      },
     },
+    Migrations: {
+      Locations: [cleanLocation],
+      DefaultSchema: targetSchema,
+      // Only pass BaselineVersion if explicitly set in config;
+      // when omitted, Skyway auto-detects the latest B__baseline file.
+      ...(mjConfig.baselineVersion ? { BaselineVersion: mjConfig.baselineVersion } : {}),
+      BaselineOnMigrate: mjConfig.baselineOnMigrate,
+    },
+    TransactionMode: mjConfig.transactionMode,
+    Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
   };
 };

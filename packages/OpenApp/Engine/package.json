@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/open-app-engine",
+  "version": "5.3.1",
+  "description": "MemberJunction: MJ Open App Engine - packaging, distribution, and installation system for MJ Open Apps.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "semver": "^7.7.1",
+    "simple-git": "^3.27.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.5.8",
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.16",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

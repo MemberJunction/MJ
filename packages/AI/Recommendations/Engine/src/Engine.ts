@@ -1,5 +1,5 @@
 import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError, IMetadataProvider, BaseEnginePropertyConfig } from '@memberjunction/core';
-import { ListDetailEntityType, ListEntity, ListEntityType, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity } from '@memberjunction/core-entities';
+import { MJListDetailEntityType, MJListEntity, MJListEntityType, MJRecommendationEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
@@ -8,13 +8,13 @@ import { RecommendationRequest, RecommendationResult } from './generic/types';
  * Engine class to be used for running all recommendation requests
  */
 export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBase> {
-  private _RecommendationProviders: RecommendationProviderEntity[] = [];
+  private _RecommendationProviders: MJRecommendationProviderEntity[] = [];
 
   public static get Instance(): RecommendationEngineBase {
     return super.getInstance<RecommendationEngineBase>();
   }
 
-  public get RecommendationProviders(): RecommendationProviderEntity[] {
+  public get RecommendationProviders(): MJRecommendationProviderEntity[] {
     return this._RecommendationProviders;
   }
 
@@ -22,7 +22,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     const params: Array<Partial<BaseEnginePropertyConfig>> = [
       {
         PropertyName: '_RecommendationProviders',
-        EntityName: 'Recommendation Providers',
+        EntityName: 'MJ: Recommendation Providers',
         CacheLocal: true
       },
     ];
@@ -33,7 +33,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   public async Recommend<T>(request: RecommendationRequest<T>): Promise<RecommendationResult> {
     super.TryThrowIfNotLoaded();
 
-    let provider: RecommendationProviderEntity = request.Provider;
+    let provider: MJRecommendationProviderEntity = request.Provider;
     if (!provider){
       if(this.RecommendationProviders.length == 0) {
         throw new Error('No recommendation provider provider and no provider found in metadata');
@@ -52,7 +52,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`Could not find driver for provider: ${provider.Name}`);
     }
 
-    const recommendations: RecommendationEntity[] = await this.GetRecommendationEntities(request);
+    const recommendations: MJRecommendationEntity[] = await this.GetRecommendationEntities(request);
     LogStatus(`Processing ${recommendations.length} recommendations`);
 
     if(recommendations.length == 0) {
@@ -65,7 +65,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     request.Recommendations = recommendations;
 
     // load the run
-    const recommendationRunEntity = await new Metadata().GetEntityObject<RecommendationRunEntity>('Recommendation Runs', request.CurrentUser);
+    const recommendationRunEntity = await new Metadata().GetEntityObject<MJRecommendationRunEntity>('MJ: Recommendation Runs', request.CurrentUser);
     recommendationRunEntity.NewRecord();
 
     // update status for current run
@@ -81,7 +81,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     if(request.CreateErrorList){
-      const errorList: ListEntity | null = await this.CreateRecommendationErrorList(recommendationRunEntity.ID, recommendations[0].SourceEntityID, request.CurrentUser);
+      const errorList: MJListEntity | null = await this.CreateRecommendationErrorList(recommendationRunEntity.ID, recommendations[0].SourceEntityID, request.CurrentUser);
       if(errorList){
         request.ErrorListID = errorList.ID;
       }
@@ -101,9 +101,9 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recommendResult;
   }
 
-  private async GetRecommendationEntities(request: RecommendationRequest): Promise<RecommendationEntity[]> {
+  private async GetRecommendationEntities(request: RecommendationRequest): Promise<MJRecommendationEntity[]> {
     if(request.Recommendations){
-      const invalidEntities: RecommendationEntity[] = request.Recommendations.filter((r) => !this.IsNullOrUndefined(r.RecommendationRunID) || r.IsSaved);
+      const invalidEntities: MJRecommendationEntity[] = request.Recommendations.filter((r) => !this.IsNullOrUndefined(r.RecommendationRunID) || r.IsSaved);
       if(invalidEntities.length > 0){
         throw new Error(`Recommendation entities must be new, not saved and have their RecommendationRunID not set. Invalid entities: ${invalidEntities.map((r) => r.ID).join(',')}`);
       }
@@ -129,18 +129,18 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
   }
 
-  private async GetRecommendationsByListID(listID: string, currentUser?: UserInfo): Promise<RecommendationEntity[]> {
+  private async GetRecommendationsByListID(listID: string, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
     const rv: RunView = new RunView();
     const md: Metadata = new Metadata();
 
     const rvListDetailsResult = await rv.RunViews([
       { /* Getting the List to get the entity name */
-        EntityName: 'Lists',
+        EntityName: 'MJ: Lists',
         ExtraFilter: `ID = '${listID}'`,
         ResultType: 'simple'
       },
       { /* Getting the List Details to get the record IDs */
-        EntityName: 'List Details',
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listID}'`,
         ResultType: 'simple',
         IgnoreMaxRows: true,
@@ -156,7 +156,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`No list found with ID: ${listID}`);
     }
 
-    const list: ListEntityType = listViewResult.Results[0];
+    const list: MJListEntityType = listViewResult.Results[0];
     const entityName: string = list.Entity;
     LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
 
@@ -174,7 +174,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       return [];
     }
 
-    const recordIDs: string = listDetailsResult.Results.map((ld: ListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
+    const recordIDs: string = listDetailsResult.Results.map((ld: MJListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
     const rvEntityResult = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
@@ -185,9 +185,9 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`Error getting entity records for listID: ${listID}: ${rvEntityResult.ErrorMessage}`);
     }
 
-    let recommendations: RecommendationEntity[] = [];
+    let recommendations: MJRecommendationEntity[] = [];
     for(const entity of rvEntityResult.Results) {
-      const recommendationEntity: RecommendationEntity = await md.GetEntityObject<RecommendationEntity>('Recommendations', currentUser);
+      const recommendationEntity: MJRecommendationEntity = await md.GetEntityObject<MJRecommendationEntity>('MJ: Recommendations', currentUser);
       recommendationEntity.NewRecord();
       recommendationEntity.SourceEntityID = entityID;
       recommendationEntity.SourceEntityRecordID = entity.ID;
@@ -197,7 +197,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recommendations;
   }
 
-  private async GetRecommendationsByRecordIDs(entityName: string, recordIDs: Array<string | number>, currentUser?: UserInfo): Promise<RecommendationEntity[]> {
+  private async GetRecommendationsByRecordIDs(entityName: string, recordIDs: Array<string | number>, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
     const md: Metadata = new Metadata();
     const rv: RunView = new RunView();
 
@@ -219,9 +219,9 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`Error getting entity records for entity: ${entityName}: ${rvEntityResult.ErrorMessage}`);
     }
 
-    let recommendations: RecommendationEntity[] = [];
+    let recommendations: MJRecommendationEntity[] = [];
     for(const entity of rvEntityResult.Results) {
-      const recommendationEntity: RecommendationEntity = await md.GetEntityObject<RecommendationEntity>('Recommendations', currentUser);
+      const recommendationEntity: MJRecommendationEntity = await md.GetEntityObject<MJRecommendationEntity>('MJ: Recommendations', currentUser);
       recommendationEntity.NewRecord();
       recommendationEntity.SourceEntityID = entity.ID;
       recommendations.push(recommendationEntity);
@@ -230,9 +230,9 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recommendations;
   }
 
-  private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<ListEntity | null> {
+  private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<MJListEntity | null> {
     const md: Metadata = new Metadata();
-    const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists', currentUser);
+    const list: MJListEntity = await md.GetEntityObject<MJListEntity>('MJ: Lists', currentUser);
     list.Name = `Recommendation Run ${recommendationRunID} Errors`;
     list.EntityID = entityID;
     list.UserID = currentUser ? currentUser.ID : super.ContextUser.ID;

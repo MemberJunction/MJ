@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Move Storage Object',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Box.com'
  *   }, {
  *     Name: 'SourceObjectName',
@@ -30,7 +30,7 @@ export class MoveObjectAction extends BaseFileStorageAction {
      * Move/rename a file object
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - SourceObjectName: Required - Source file path
      *   - DestinationObjectName: Required - Destination file path
      *
@@ -80,7 +80,4 @@ export class MoveObjectAction extends BaseFileStorageAction {
             );
         }
     }
-}
-export function LoadMoveObjectAction() {
-    // Stub function to prevent tree shaking
 }

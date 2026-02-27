@@ -1,9 +1,9 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationDetailAttachmentEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -12,6 +12,7 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse } from '@memberjunction/global';
 import { getAttachmentService } from '@memberjunction/aiengine';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -206,12 +207,12 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Validate the agent entity
      */
-    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntityExtended> {
+    private async validateAgent(agentId: string, currentUser: any): Promise<MJAIAgentEntityExtended> {
         // Use AIEngine to get cached agent data
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntityExtended) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.Agents.find((a: MJAIAgentEntityExtended) => a.ID === agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);
@@ -432,9 +433,6 @@ export class RunAIAgentResolver extends ResolverBase {
 
             const executionTime = Date.now() - startTime;
 
-            // Publish final events
-            this.publishFinalEvents(pubSub, sessionId, userPayload, result);
-
             // Create notification if enabled and artifact was created successfully
             if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
                 await this.createCompletionNotification(
@@ -454,6 +452,9 @@ export class RunAIAgentResolver extends ResolverBase {
             // Create sanitized payload for JSON serialization
             const sanitizedResult = this.sanitizeAgentResult(result);
             const returnResult = JSON.stringify(sanitizedResult);
+
+            // Publish final events with enriched result data for fire-and-forget clients
+            this.publishFinalEvents(pubSub, sessionId, userPayload, result, returnResult);
 
             // Log completion
             if (result.success) {
@@ -490,9 +491,17 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Publish final streaming events (partial result and completion)
+     * Publish final streaming events (partial result and completion).
+     * The completion event includes the full result JSON so clients using
+     * fire-and-forget mode can receive the result via WebSocket.
      */
-    private publishFinalEvents(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, result: ExecuteAgentResult) {
+    private publishFinalEvents(
+        pubSub: PubSubEngine,
+        sessionId: string,
+        userPayload: UserPayload,
+        result: ExecuteAgentResult,
+        resultJson?: string
+    ) {
         if (result.agentRun) {
             // Get the last step from agent run
             let lastStep = 'Completed';
@@ -518,15 +527,19 @@ export class RunAIAgentResolver extends ResolverBase {
             this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
-        // Publish completion with conversationDetailId for client-side routing
-        const completeMsg: AgentExecutionStreamMessage = {
+        // Publish completion with conversationDetailId for client-side routing.
+        // Include result data so fire-and-forget clients can receive the full result via WebSocket.
+        const completionData: Record<string, unknown> = {
             sessionId,
             agentRunId: result.agentRun?.ID || 'unknown',
             type: 'complete',
             timestamp: new Date(),
-            conversationDetailId: result.agentRun?.ConversationDetailID
+            conversationDetailId: result.agentRun?.ConversationDetailID,
+            success: result.success,
+            errorMessage: result.agentRun?.ErrorMessage || undefined,
+            result: resultJson || undefined
         };
-        this.PublishStreamingUpdate(pubSub, completeMsg, userPayload);
+        this.PublishStreamingUpdate(pubSub, completionData, userPayload);
     }
 
     /**
@@ -551,6 +564,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
             p,
@@ -626,7 +642,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Notification includes navigation link back to the conversation
      */
     private async createCompletionNotification(
-        agentRun: AIAgentRunEntityExtended,
+        agentRun: MJAIAgentRunEntityExtended,
         artifactInfo: { artifactId: string; versionId: string; versionNumber: number },
         conversationDetailId: string,
         contextUser: UserInfo,
@@ -642,62 +658,71 @@ export class RunAIAgentResolver extends ResolverBase {
             const agentName = agent?.Name || 'Agent';
 
             // Load conversation detail to get conversation info
-            const detail = await md.GetEntityObject<ConversationDetailEntity>(
-                'Conversation Details',
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
                 contextUser
             );
             if (!(await detail.Load(conversationDetailId))) {
                 throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
             }
 
-            // Create notification entity
-            const notification = await md.GetEntityObject<UserNotificationEntity>(
-                'User Notifications',
-                contextUser
-            );
-
-            notification.UserID = contextUser.ID;
-            notification.Title = `${agentName} completed your request`;
+            // Build conversation URL for email/SMS templates
+            const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
+            const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
-            if (artifactInfo.versionNumber > 1) {
-                notification.Message = `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`;
-            } else {
-                notification.Message = `${agentName} has finished processing and created a new artifact`;
+            const message = artifactInfo.versionNumber > 1
+                ? `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`
+                : `${agentName} has finished processing and created a new artifact`;
+
+            // Use unified notification engine (Config called to ensure loaded)
+            const notificationEngine = NotificationEngine.Instance;
+            await notificationEngine.Config(false, contextUser);
+            const result = await notificationEngine.SendNotification({
+                userId: contextUser.ID,
+                typeNameOrId: 'Agent Completion',
+                title: `${agentName} completed your request`,
+                message: message,
+                resourceConfiguration: {
+                    type: 'conversation',
+                    conversationId: detail.ConversationID,
+                    messageId: conversationDetailId,
+                    artifactId: artifactInfo.artifactId,
+                    versionId: artifactInfo.versionId,
+                    versionNumber: artifactInfo.versionNumber
+                },
+                templateData: {
+                    agentName: agentName,
+                    artifactTitle: artifactInfo.artifactId,
+                    conversationUrl: conversationUrl,
+                    versionNumber: artifactInfo.versionNumber > 1 ? artifactInfo.versionNumber : undefined
+                }
+            }, contextUser);
+
+            if (result.success && result.inAppNotificationId) {
+                const channels = [];
+                if (result.deliveryChannels.inApp) channels.push('InApp');
+                if (result.deliveryChannels.email) channels.push('Email');
+                if (result.deliveryChannels.sms) channels.push('SMS');
+                const channelList = channels.length > 0 ? channels.join(', ') : 'None';
+                LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
+
+                // Publish real-time notification event so client updates immediately
+                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    userPayload: JSON.stringify(userPayload),
+                    message: JSON.stringify({
+                        type: 'notification',
+                        notificationId: result.inAppNotificationId,
+                        action: 'create',
+                        title: `${agentName} completed your request`,
+                        message: message
+                    })
+                });
+
+                LogStatus(`📡 Published notification event to client`);
+            } else if (!result.success) {
+                LogError(`Notification failed: ${result.errors?.join(', ')}`);
             }
-
-            // Store navigation configuration as JSON
-            // Client will parse this to navigate to the conversation with artifact visible
-            notification.ResourceConfiguration = JSON.stringify({
-                type: 'conversation',
-                conversationId: detail.ConversationID,
-                messageId: conversationDetailId,
-                artifactId: artifactInfo.artifactId,
-                versionNumber: artifactInfo.versionNumber
-            });
-
-            notification.Unread = true;  // Default unread
-            // ResourceTypeID and ResourceRecordID left null - using custom navigation
-
-            if (!(await notification.Save())) {
-                throw new Error('Failed to save notification');
-            }
-
-            LogStatus(`📬 Created notification ${notification.ID} for user ${contextUser.ID}`);
-
-            // Publish real-time notification event so client updates immediately
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                userPayload: JSON.stringify(userPayload),
-                message: JSON.stringify({
-                    type: 'notification',
-                    notificationId: notification.ID,
-                    action: 'create',
-                    title: notification.Title,
-                    message: notification.Message
-                })
-            });
-
-            LogStatus(`📡 Published notification event to client`);
 
         } catch (error) {
             LogError(`Failed to create completion notification: ${(error as Error).message}`);
@@ -729,8 +754,12 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
     ): Promise<AIAgentRunResult> {
+        // Check API key scope authorization for agent execution
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 
@@ -753,7 +782,25 @@ export class RunAIAgentResolver extends ResolverBase {
             // Convert to JSON string for the existing executeAIAgent method
             const messagesJson = JSON.stringify(messages);
 
-            // Delegate to existing implementation
+            if (fireAndForget) {
+                // Fire-and-forget mode: start execution in background, return immediately.
+                // The client will receive the result via WebSocket PubSub completion event.
+                this.executeAgentInBackground(
+                    p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                    data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                    conversationDetailId, createArtifacts || false, createNotification || false,
+                    sourceArtifactId, sourceArtifactVersionId
+                );
+
+                LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+
+                return {
+                    success: true,
+                    result: JSON.stringify({ accepted: true, fireAndForget: true })
+                };
+            }
+
+            // Synchronous mode (default): wait for execution to complete
             return this.executeAIAgent(
                 p,
                 dataSource,
@@ -786,6 +833,58 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * Execute agent in background (fire-and-forget).
+     * Handles errors by publishing error completion events via PubSub,
+     * so the client receives them via WebSocket even though the HTTP response
+     * has already been sent.
+     */
+    private executeAgentInBackground(
+        p: DatabaseProviderBase,
+        dataSource: unknown,
+        agentId: string,
+        userPayload: UserPayload,
+        messagesJson: string,
+        sessionId: string,
+        pubSub: PubSubEngine,
+        data?: string,
+        payload?: string,
+        lastRunId?: string,
+        autoPopulateLastRunPayload?: boolean,
+        configurationId?: string,
+        conversationDetailId?: string,
+        createArtifacts: boolean = false,
+        createNotification: boolean = false,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): void {
+        // Execute in background - errors are handled within, not propagated
+        this.executeAIAgent(
+            p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+            data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
+            configurationId, conversationDetailId, createArtifacts, createNotification,
+            sourceArtifactId, sourceArtifactVersionId
+        ).catch((error: unknown) => {
+            // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
+            // so this would only fire for truly unexpected errors).
+            const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
+            LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
+
+            // Publish error completion event so the client knows the agent failed
+            const errorCompletionData: Record<string, unknown> = {
+                sessionId,
+                agentRunId: 'unknown',
+                type: 'complete',
+                timestamp: new Date(),
+                conversationDetailId,
+                success: false,
+                errorMessage,
+                result: JSON.stringify({ success: false, errorMessage })
+            };
+            this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+        });
+    }
+
+    /**
      * Load conversation history with attachments from database.
      * Builds ChatMessage[] with multimodal content blocks for attachments.
      */
@@ -799,8 +898,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const attachmentService = getAttachmentService();
 
         // Load the current conversation detail to get the conversation ID
-        const currentDetail = await md.GetEntityObject<ConversationDetailEntity>(
-            'Conversation Details',
+        const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+            'MJ: Conversation Details',
             contextUser
         );
         if (!await currentDetail.Load(conversationDetailId)) {
@@ -810,8 +909,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const conversationId = currentDetail.ConversationID;
 
         // Load recent conversation details (messages) for this conversation
-        const detailsResult = await rv.RunView<ConversationDetailEntity>({
-            EntityName: 'Conversation Details',
+        const detailsResult = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
             ExtraFilter: `ConversationID='${conversationId}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: maxMessages,
@@ -886,7 +985,7 @@ export class RunAIAgentResolver extends ResolverBase {
     private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
         const roleLower = (role || '').toLowerCase();
         if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent') return 'assistant';
+        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
         if (roleLower === 'system') return 'system';
         return 'user'; // Default to user
     }

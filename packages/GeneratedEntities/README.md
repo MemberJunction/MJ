@@ -1,10 +1,34 @@
-# MemberJunction Generated Entities
+# @memberjunction/generated-entities
 
-This package contains automatically generated TypeScript entity classes that provide strongly-typed representations of database tables in the MemberJunction ecosystem.
+CodeGen-produced entity subclasses for MemberJunction. Contains auto-generated TypeScript classes with Zod schemas for every entity in the database, providing strongly-typed getters/setters, validation, and class registration.
 
 ## Overview
 
-`mj_generatedentities` contains entity subclasses that are generated and maintained by MemberJunction's code generation system. These entities map directly to database tables and views, providing type-safe access to your data while abstracting away the complexity of data access.
+This package contains entity subclasses that are generated and maintained by MemberJunction's code generation system. These entities map directly to database tables and views, providing type-safe access to your data while abstracting away the complexity of data access.
+
+```mermaid
+graph TD
+    A["CodeGen"] -->|generates| B["entity_subclasses.ts"]
+    B --> C["Entity Class A<br/>@RegisterClass"]
+    B --> D["Entity Class B<br/>@RegisterClass"]
+    B --> E["Entity Class N<br/>@RegisterClass"]
+
+    F["Metadata.GetEntityObject()"] -->|class factory| C
+    F -->|class factory| D
+    F -->|class factory| E
+
+    C --> G["Zod Schema<br/>(Validation)"]
+    C --> H["Typed Getters/Setters"]
+    C --> I["Foreign Key Relations"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style G fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 Key features:
 - **Type-safe data access**: All entity properties are strongly typed to match database columns
@@ -12,7 +36,7 @@ Key features:
 - **Schema validation**: Uses Zod for runtime validation of entity data
 - **Extensible**: Base classes for extending with custom business logic
 - **MemberJunction integration**: Works seamlessly with MemberJunction's data context and API
-- **Webpack tree-shaking support**: Includes `LoadGeneratedEntities()` function to ensure proper bundling
+- **ESBuild tree-shaking support**: Includes `LoadGeneratedEntities()` function to ensure proper bundling
 
 ## Installation
 
@@ -64,9 +88,9 @@ const md = new Metadata();
 const entity = await md.GetEntityObject<UserEntity>('Users');
 ```
 
-### Loading Generated Entities for Webpack
+### Loading Generated Entities for ESBuild
 
-To ensure generated entities are included in webpack builds (avoiding tree-shaking issues):
+To ensure generated entities are included in ESBuild builds (avoiding tree-shaking issues):
 
 ```typescript
 import { LoadGeneratedEntities } from 'mj_generatedentities';

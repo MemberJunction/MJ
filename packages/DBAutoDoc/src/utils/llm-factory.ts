@@ -12,14 +12,17 @@ import { MJGlobal } from '@memberjunction/global';
  * Provider name to LLM driver class name mapping
  */
 const PROVIDER_TO_DRIVER_CLASS: Record<string, string> = {
+  'gemini': 'GeminiLLM',
   'openai': 'OpenAILLM',
   'anthropic': 'AnthropicLLM',
   'groq': 'GroqLLM',
   'mistral': 'MistralLLM',
-  'gemini': 'GeminiLLM',
   'vertex': 'VertexLLM',
   'azure': 'AzureLLM',
-  'lmstudio': 'LMStudioLLM'
+  'cerebras': 'CerebrasLLM',
+  'openrouter': 'OpenRouterLLM',
+  'xai': 'xAILLM',
+  'bedrock': 'BedrockLLM'
 };
 
 /**

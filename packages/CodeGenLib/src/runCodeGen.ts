@@ -12,7 +12,7 @@ import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberj
 import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
-import { logError, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
@@ -24,10 +24,10 @@ import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 import { AIEngine } from '@memberjunction/aiengine';
 
-LoadCoreEntitiesServerSubClasses(); // Load the core entities server subclasses to ensure they are registered and not tree shaken
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 /** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;
@@ -237,10 +237,35 @@ export class RunCodeGenBase {
         }
       }
 
-      const coreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
+      // Apply excludeSchemas filter to all entities before splitting into core/non-core
+      // This ensures TypeScript, Angular, and GraphQL generators respect schema exclusions
+      // (SQL generation already applies this filter internally in sql_codegen.ts)
+      const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
+      const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
+      const includedEntities = apiEntities.filter(
+        (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
+      );
+
+      // Log excluded schemas if any entities were filtered out
+      const excludedCount = apiEntities.length - includedEntities.length;
+      if (excludedCount > 0) {
+        const excludedBySchema = apiEntities
+          .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
+          .reduce((acc, e) => {
+            const schema = e.SchemaName.trim();
+            acc[schema] = (acc[schema] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+        const schemaDetails = Object.entries(excludedBySchema)
+          .map(([schema, count]) => `${schema}: ${count}`)
+          .join(', ');
+        logStatus(`Excluded ${excludedCount} entities from code generation by schema: ${schemaDetails}`);
+      }
+
+      const coreEntities = includedEntities.filter(
         (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
       );
-      const nonCoreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
+      const nonCoreEntities = includedEntities.filter(
         (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
       );
 
@@ -273,7 +298,8 @@ export class RunCodeGenBase {
         // generate the GraphQL server code
         if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, 'mj_generatedentities', false)) {
+        const entityPackageName = configInfo.entityPackageName || 'mj_generatedentities';
+        if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
           failSpinner('Error generating GraphQL Resolver code');
           return;
         } else if (isVerbose) {

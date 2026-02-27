@@ -2,7 +2,8 @@ import {
     Component,
     OnInit,
     OnDestroy,
-    ChangeDetectionStrategy
+    ChangeDetectionStrategy,
+    inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
@@ -15,11 +16,12 @@ import {
     CompositeKey,
     RunView
 } from '@memberjunction/core';
-import { EntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
+import { SharedService } from '@memberjunction/ng-shared';
+import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
 
 export type ExplorerSection =
     | 'overview'
@@ -57,6 +59,34 @@ export interface FieldGroup {
 }
 
 /**
+ * Represents a group of fields organized by their source entity in an IS-A hierarchy.
+ */
+export interface ISAFieldGroup {
+    /** The source entity name (e.g., "Products", "Meetings") */
+    EntityName: string;
+    /** The EntityInfo for the source entity */
+    EntityInfo: EntityInfo | null;
+    /** Label like "Own Fields" or "Inherited from Products" */
+    Label: string;
+    /** Hierarchy level: 0 = own, 1 = parent, 2 = grandparent, etc. */
+    Level: number;
+    /** Fields belonging to this group */
+    Fields: EntityFieldInfo[];
+    /** Whether this group is expanded in the UI */
+    Expanded: boolean;
+}
+
+/**
+ * Record count for a child entity type
+ */
+export interface ChildEntityCount {
+    EntityName: string;
+    EntityInfo: EntityInfo;
+    RecordCount: number | null;
+    IsLoading: boolean;
+}
+
+/**
  * Grouped outgoing relationship - an entity this entity references via FK fields
  */
 export interface GroupedOutgoingRelationship {
@@ -89,16 +119,19 @@ export interface GroupedIncomingRelationship {
  * - Visual ERD integration for relationship exploration
  * - Slide-in detail panels for contextual information
  */
-@RegisterClass(BaseFormComponent, 'Entities')
+@RegisterClass(BaseFormComponent, 'MJ: Entities')
 @Component({
+  standalone: false,
     selector: 'mj-entity-form',
     templateUrl: './entity-form.component.html',
     styleUrls: ['./entity-form.component.css', '../../../shared/form-styles.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class EntityFormComponentExtended extends EntityFormComponent implements OnInit, OnDestroy {
+export class MJEntityFormComponentExtended extends MJEntityFormComponent implements OnInit, OnDestroy {
+    private sharedService = inject(SharedService);
+
     /** The Entity record being displayed */
-    public record!: EntityEntity;
+    public record!: MJEntityEntity;
 
     /** Runtime EntityInfo metadata (populated from record.ID) */
     public entity: EntityInfo | null = null;
@@ -129,7 +162,6 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
 
-
     /** Computed statistics for the entity */
     public stats: EntityStats = {
         fieldCount: 0,
@@ -153,6 +185,15 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
     /** Field view mode: grouped by category or flat list */
     public fieldViewMode: 'grouped' | 'list' = 'grouped';
+
+    /** IS-A field groups organized by source entity */
+    public isaFieldGroups: ISAFieldGroup[] = [];
+
+    /** Child entity record counts for the IS-A parent type summary */
+    public childEntityCounts: ChildEntityCount[] = [];
+
+    /** Whether the IS-A field inspector panel is expanded */
+    public isaFieldInspectorExpanded = true;
 
     /** Field list sort configuration */
     public fieldListSortColumn: string = 'Sequence';
@@ -231,11 +272,17 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             if (this.entity) {
                 this.computeStats();
                 this.buildFieldGroups();
+                this.buildISAFieldGroups();
                 this.buildRelationships();
                 this.updateNavBadges();
 
                 // Load row count asynchronously (don't block UI)
                 this.loadRowCountAsync();
+
+                // Load IS-A child entity counts asynchronously
+                if (this.IsParentType) {
+                    this.loadChildEntityCounts();
+                }
             } else {
                 this.explorerError = `Entity metadata not found for: ${this.record?.Name || 'Unknown'}`;
             }
@@ -417,6 +464,87 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
                 this.expandedFieldGroups.add(group.id);
             }
         }
+    }
+
+    /**
+     * Builds field groups organized by source entity in the IS-A hierarchy.
+     * Own fields first, then parent fields, then grandparent, etc.
+     */
+    private buildISAFieldGroups(): void {
+        if (!this.entity) return;
+
+        const groups: ISAFieldGroup[] = [];
+        const allFields = this.entity.Fields;
+
+        // Own fields (non-virtual, or virtual but NOT inherited from parent)
+        const ownFields = allFields.filter(f => !this.IsInheritedField(f));
+        groups.push({
+            EntityName: this.entity.Name,
+            EntityInfo: this.entity,
+            Label: 'Own Fields',
+            Level: 0,
+            Fields: ownFields.sort((a, b) => a.Sequence - b.Sequence),
+            Expanded: true
+        });
+
+        // Parent chain fields, grouped by source entity
+        if (this.IsChildType) {
+            for (let i = 0; i < this.ParentChain.length; i++) {
+                const parent = this.ParentChain[i];
+                const parentFields = allFields.filter(f => {
+                    const source = this.GetISAFieldSource(f);
+                    return source === parent.Name;
+                });
+
+                if (parentFields.length > 0) {
+                    const levelLabel = i === 0 ? 'parent' : i === 1 ? 'grandparent' : `ancestor level ${i + 1}`;
+                    groups.push({
+                        EntityName: parent.Name,
+                        EntityInfo: parent,
+                        Label: `Inherited from ${parent.Name} (${levelLabel})`,
+                        Level: i + 1,
+                        Fields: parentFields.sort((a, b) => a.Sequence - b.Sequence),
+                        Expanded: true
+                    });
+                }
+            }
+        }
+
+        this.isaFieldGroups = groups;
+    }
+
+    /**
+     * Loads record counts for each IS-A child entity type asynchronously.
+     */
+    private async loadChildEntityCounts(): Promise<void> {
+        if (!this.entity || !this.IsParentType) return;
+
+        // Initialize with loading state
+        this.childEntityCounts = this.ChildEntities.map(child => ({
+            EntityName: child.Name,
+            EntityInfo: child,
+            RecordCount: null,
+            IsLoading: true
+        }));
+        this.cdr.markForCheck();
+
+        // Load counts in parallel using count_only for efficiency
+        const rv = new RunView();
+        const countPromises = this.ChildEntities.map(async (child, index) => {
+            const result = await rv.RunView({
+                EntityName: child.Name,
+                ExtraFilter: '',
+                ResultType: 'count_only'
+            });
+
+            if (this.childEntityCounts[index]) {
+                this.childEntityCounts[index].RecordCount = result?.TotalRowCount ?? 0;
+                this.childEntityCounts[index].IsLoading = false;
+            }
+        });
+
+        await Promise.all(countPromises);
+        this.cdr.markForCheck();
     }
 
     private buildRelationships(): void {
@@ -679,6 +807,107 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
     // === Computed Getters ===
 
+    // === IS-A Type Relationship Computed Properties ===
+
+    /** Whether this entity is a virtual entity (read-only view) */
+    public get IsVirtualEntity(): boolean {
+        return this.entity?.VirtualEntity === true;
+    }
+
+    /** Whether this entity is a child type in an IS-A relationship */
+    public get IsChildType(): boolean {
+        return this.entity?.IsChildType === true;
+    }
+
+    /** Whether this entity is a parent type in an IS-A relationship */
+    public get IsParentType(): boolean {
+        return this.entity?.IsParentType === true;
+    }
+
+    /** Whether this entity allows overlapping subtypes (multiple children per parent record) */
+    public get HasOverlappingSubtypes(): boolean {
+        return this.entity?.HasOverlappingSubtypes === true;
+    }
+
+    /** The parent chain for IS-A child entities */
+    public get ParentChain(): EntityInfo[] {
+        return this.entity?.ParentChain ?? [];
+    }
+
+    /** Child entities for IS-A parent entities */
+    public get ChildEntities(): EntityInfo[] {
+        return this.entity?.ChildEntities ?? [];
+    }
+
+    /** Whether this entity has any IS-A relationship (parent or child) */
+    public get HasISARelationship(): boolean {
+        return this.IsChildType || this.IsParentType;
+    }
+
+    /** IS-A breadcrumb string: "Webinar IS-A Meeting IS-A Product" */
+    public get IsaBreadcrumb(): string {
+        if (!this.entity?.IsChildType) return '';
+        const chain = [this.entity, ...this.entity.ParentChain];
+        return chain.map(e => e.Name).join(' IS-A ');
+    }
+
+    /** Number of fields inherited from parent entities */
+    public get InheritedFieldCount(): number {
+        return this.entity?.AllParentFields?.length ?? 0;
+    }
+
+    /** Navigate to an entity record in the Entity Explorer */
+    public NavigateToEntity(entityInfo: EntityInfo): void {
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityInfo.ID }]);
+        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+    }
+
+    /**
+     * Returns the source entity name for an IS-A inherited field, or null if the
+     * field is owned by this entity. Used for displaying field source badges.
+     */
+    public GetISAFieldSource(field: EntityFieldInfo): string | null {
+        if (!this.IsChildType || !field.IsVirtual || !field.AllowUpdateAPI) return null;
+        for (const parent of this.ParentChain) {
+            const parentField = parent.Fields.find(
+                pf => pf.Name === field.Name && !pf.IsVirtual
+            );
+            if (parentField) return parent.Name;
+        }
+        return this.ParentChain[0]?.Name ?? null;
+    }
+
+    /**
+     * Returns true if the given field is inherited from a parent entity via IS-A.
+     */
+    public IsInheritedField(field: EntityFieldInfo): boolean {
+        return this.GetISAFieldSource(field) !== null;
+    }
+
+    /** All entities available as potential IS-A parents (excluding self and descendants) */
+    public get AvailableParentEntities(): EntityInfo[] {
+        if (!this.entity) return [];
+        const md = new Metadata();
+        const descendantIds = new Set<string>();
+        const collectDescendants = (e: EntityInfo): void => {
+            descendantIds.add(e.ID);
+            for (const child of e.ChildEntities) {
+                collectDescendants(child);
+            }
+        };
+        collectDescendants(this.entity);
+        return md.Entities
+            .filter(e => !descendantIds.has(e.ID) && e.ID !== this.entity!.ID && !e.VirtualEntity)
+            .sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+
+    /** Sibling entities that share the same parent type */
+    public get SiblingEntities(): EntityInfo[] {
+        if (!this.IsChildType || !this.entity?.ParentEntityInfo) return [];
+        return this.entity.ParentEntityInfo.ChildEntities
+            .filter(e => e.ID !== this.entity!.ID);
+    }
+
     public get statusClass(): string {
         if (!this.entity) return '';
         switch (this.entity.Status) {
@@ -746,7 +975,7 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         const related = this.getRelatedEntity(field);
         if (related) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 
@@ -756,7 +985,7 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     public openRelatedEntityFromField(entityId: string): void {
         if (entityId) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
-            this.sharedService.OpenEntityRecord('Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
 
@@ -809,8 +1038,4 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             return value;
         }
     }
-}
-
-export function LoadEntityFormComponentExtended() {
-    // Prevents tree-shaking
 }

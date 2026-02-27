@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "MCP",
+      "Description": "Model Context Protocol (MCP) server tools exposed as Actions",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2B6A76B-AE11-42D6-9090-D7C5ECFD550C"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:08:32.016Z",
+      "checksum": "242b0dc4a4d3928f8b6eda9f0e3013e425ef4eec690fff643134f8e1d6331173"
+    }
+  }
+]

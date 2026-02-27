@@ -1,6 +1,6 @@
 import { ElementRef, Injectable } from '@angular/core';
 import { LogError, Metadata } from '@memberjunction/core';
-import { UserInfoEngine, UserNotificationEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
@@ -22,7 +22,7 @@ export class MJNotificationService {
   tabChange$ = this.tabChange.asObservable();
 
   // Observable for notification changes
-  private static _notifications$ = new BehaviorSubject<UserNotificationEntity[]>([]);
+  private static _notifications$ = new BehaviorSubject<MJUserNotificationEntity[]>([]);
   private static _unreadCount$ = new BehaviorSubject<number>(0);
 
   constructor(private notificationService: NotificationService) {
@@ -96,11 +96,11 @@ export class MJNotificationService {
     return MJNotificationService._instance;
   }
  
-  private static _userNotifications: UserNotificationEntity[] = [];
-  public static get UserNotifications(): UserNotificationEntity[] {
+  private static _userNotifications: MJUserNotificationEntity[] = [];
+  public static get UserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService._userNotifications;
   }
-  public static get UnreadUserNotifications(): UserNotificationEntity[] {
+  public static get UnreadUserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService._userNotifications.filter(n => n.Unread);
   }
   public static get UnreadUserNotificationCount(): number {
@@ -110,7 +110,7 @@ export class MJNotificationService {
   /**
    * Observable that emits the full list of user notifications whenever they change
    */
-  public static get Notifications$(): Observable<UserNotificationEntity[]> {
+  public static get Notifications$(): Observable<MJUserNotificationEntity[]> {
     return MJNotificationService._notifications$.asObservable();
   }
 
@@ -124,7 +124,7 @@ export class MJNotificationService {
   /**
    * Instance method to access Notifications$ observable
    */
-  public get notifications$(): Observable<UserNotificationEntity[]> {
+  public get notifications$(): Observable<MJUserNotificationEntity[]> {
     return MJNotificationService.Notifications$;
   }
 
@@ -145,9 +145,9 @@ export class MJNotificationService {
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<MJUserNotificationEntity> {
     const md = new Metadata();
-    const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
+    const notification = <MJUserNotificationEntity>await md.GetEntityObject('MJ: User Notifications');
     notification.Title = title;
     notification.Message = message;
     if (resourceTypeId)

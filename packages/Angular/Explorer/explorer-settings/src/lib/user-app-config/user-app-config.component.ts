@@ -1,9 +1,8 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, NgZone, ElementRef, inject } from '@angular/core';
 import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
-import { ApplicationManager, BaseApplication, UserAppConfig } from '@memberjunction/ng-base-application';
+import { MJUserApplicationEntity } from '@memberjunction/core-entities';
+import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
-import { DragEndEvent } from '@progress/kendo-angular-sortable';
 
 /**
  * Represents an app item in the configuration UI
@@ -17,156 +16,89 @@ interface AppConfigItem {
 }
 
 /**
+ * Result shape for the lightweight user-application query (simple ResultType)
+ */
+interface UserAppRow {
+  ID: string;
+  ApplicationID: string;
+  Sequence: number;
+  IsActive: boolean;
+}
+
+/**
  * Full-screen modal dialog for configuring user's application visibility and order.
  * Allows users to:
  * - Select which applications to show in the app switcher
- * - Reorder applications via drag-and-drop
+ * - Reorder applications via drag-and-drop (desktop)
+ * - Toggle apps on/off in a single list (mobile)
  */
 @Component({
+  standalone: false,
   selector: 'mj-user-app-config',
   templateUrl: './user-app-config.component.html',
   styleUrls: ['./user-app-config.component.css']
 })
 export class UserAppConfigComponent {
-  @Input() showDialog = false;
-  @Output() showDialogChange = new EventEmitter<boolean>();
-  @Output() configSaved = new EventEmitter<void>();
+  private appManager = inject(ApplicationManager);
+  private sharedService = inject(SharedService);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
+  private el = inject(ElementRef);
 
-  // All available apps from the system
-  allApps: AppConfigItem[] = [];
+  private _showDialog = false;
 
-  // User's selected apps (active and ordered)
-  activeApps: AppConfigItem[] = [];
+  @Input()
+  set ShowDialog(value: boolean) {
+    if (value !== this._showDialog) {
+      this._showDialog = value;
+    }
+  }
+  get ShowDialog(): boolean {
+    return this._showDialog;
+  }
 
-  // Available apps not yet selected
-  availableApps: AppConfigItem[] = [];
+  @Output() ShowDialogChange = new EventEmitter<boolean>();
+  @Output() ConfigSaved = new EventEmitter<void>();
 
-  isLoading = false;
-  isSaving = false;
-  errorMessage = '';
+  AllApps: AppConfigItem[] = [];
+  ActiveApps: AppConfigItem[] = [];
+  AvailableApps: AppConfigItem[] = [];
 
-  // Panel collapse state (for mobile)
-  availablePanelCollapsed = false;
-  selectedPanelCollapsed = false;
+  IsLoading = false;
+  IsSaving = false;
+  ErrorMessage = '';
 
-  constructor(
-    private appManager: ApplicationManager,
-    private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
-  ) {}
+  AvailablePanelCollapsed = false;
+  SelectedPanelCollapsed = false;
+
+  DraggedItem: AppConfigItem | null = null;
+  DraggedIndex = -1;
+  DropTargetIndex = -1;
 
   /**
    * Opens the dialog and loads user's app configuration
    */
-  async open(): Promise<void> {
-    this.showDialog = true;
-    this.showDialogChange.emit(true);
-    this.errorMessage = '';
+  async Open(): Promise<void> {
+    this._showDialog = true;
+    this.ShowDialogChange.emit(true);
+    this.ErrorMessage = '';
     await this.loadConfiguration();
   }
 
   /**
    * Closes the dialog without saving
    */
-  close(): void {
-    this.showDialog = false;
-    this.showDialogChange.emit(false);
-  }
-
-  /**
-   * Loads the user's current app configuration
-   */
-  private async loadConfiguration(): Promise<void> {
-    this.isLoading = true;
-    this.errorMessage = '';
-
-    try {
-      const md = new Metadata();
-      const rv = new RunView();
-
-      // Load all system apps from ApplicationManager
-      const systemApps = this.appManager.GetAllSystemApps();
-
-      // Load user's UserApplication records
-      const userAppsResult = await rv.RunView<UserApplicationEntity>({
-        EntityName: 'User Applications',
-        ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
-        OrderBy: 'Sequence, Application',
-        ResultType: 'entity_object'
-      });
-
-      const userApps: UserApplicationEntity[] = userAppsResult.Success ? userAppsResult.Results : [];
-
-      // Build app config items
-      this.allApps = this.buildAppConfigItems(systemApps, userApps);
-
-      // Separate into active (selected) and available (unselected)
-      this.refreshAppLists();
-
-    } catch (error) {
-      this.errorMessage = 'Failed to load app configuration. Please try again.';
-      LogError('Error loading app configuration:', undefined, error instanceof Error ? error.message : String(error));
-    } finally {
-      this.isLoading = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  /**
-   * Builds app config items by matching system apps with user's UserApplication records
-   */
-  private buildAppConfigItems(systemApps: BaseApplication[], userApps: UserApplicationEntity[]): AppConfigItem[] {
-    const items: AppConfigItem[] = [];
-
-    for (const app of systemApps) {
-      const userApp = userApps.find(ua => ua.ApplicationID === app.ID);
-
-      items.push({
-        app,
-        userAppId: userApp?.ID || null,
-        sequence: userApp?.Sequence ?? 999, // Default high sequence for unselected
-        isActive: userApp?.IsActive ?? false,
-        isDirty: false
-      });
-    }
-
-    return items;
-  }
-
-  /**
-   * Separates apps into active and available lists based on isActive state
-   */
-  private refreshAppLists(): void {
-    this.activeApps = this.allApps
-      .filter(item => item.isActive)
-      .sort((a, b) => a.sequence - b.sequence);
-
-    this.availableApps = this.allApps
-      .filter(item => !item.isActive)
-      .sort((a, b) => a.app.Name.localeCompare(b.app.Name));
-  }
-
-  /**
-   * Handles drag-and-drop reordering of active apps
-   */
-  onDragEnd(event: DragEndEvent): void {
-    if (event.index >= 0) {
-      // Update sequences based on new order
-      this.activeApps.forEach((item, index) => {
-        if (item.sequence !== index) {
-          item.sequence = index;
-          item.isDirty = true;
-        }
-      });
-    }
+  Close(): void {
+    this._showDialog = false;
+    this.ShowDialogChange.emit(false);
   }
 
   /**
    * Adds an app to the user's active list
    */
-  addApp(item: AppConfigItem): void {
+  AddApp(item: AppConfigItem): void {
     item.isActive = true;
-    item.sequence = this.activeApps.length;
+    item.sequence = this.ActiveApps.length;
     item.isDirty = true;
     this.refreshAppLists();
   }
@@ -174,124 +106,324 @@ export class UserAppConfigComponent {
   /**
    * Removes an app from the user's active list
    */
-  removeApp(item: AppConfigItem): void {
+  RemoveApp(item: AppConfigItem): void {
     item.isActive = false;
     item.sequence = 999;
     item.isDirty = true;
     this.refreshAppLists();
 
-    // Resequence remaining active apps
-    this.activeApps.forEach((activeItem, index) => {
-      if (activeItem.sequence !== index) {
-        activeItem.sequence = index;
-        activeItem.isDirty = true;
-      }
-    });
+    this.resequenceActiveApps();
+  }
+
+  /**
+   * Toggles an app between active and inactive
+   */
+  ToggleApp(item: AppConfigItem): void {
+    if (item.isActive) {
+      this.RemoveApp(item);
+    } else {
+      this.AddApp(item);
+    }
   }
 
   /**
    * Moves an app up in the order
    */
-  moveUp(item: AppConfigItem): void {
-    const index = this.activeApps.indexOf(item);
+  MoveUp(item: AppConfigItem): void {
+    const index = this.ActiveApps.indexOf(item);
     if (index > 0) {
-      // Swap with previous item
-      const prevItem = this.activeApps[index - 1];
-
-      // Swap sequences
-      const tempSeq = item.sequence;
-      item.sequence = prevItem.sequence;
-      prevItem.sequence = tempSeq;
-
-      item.isDirty = true;
-      prevItem.isDirty = true;
-
-      // Re-sort and create new array reference to trigger change detection
-      this.activeApps = [...this.activeApps].sort((a, b) => a.sequence - b.sequence);
+      this.swapSequences(item, this.ActiveApps[index - 1]);
+      this.ActiveApps = [...this.ActiveApps].sort((a, b) => a.sequence - b.sequence);
     }
   }
 
   /**
    * Moves an app down in the order
    */
-  moveDown(item: AppConfigItem): void {
-    const index = this.activeApps.indexOf(item);
-    if (index < this.activeApps.length - 1) {
-      // Swap with next item
-      const nextItem = this.activeApps[index + 1];
-
-      // Swap sequences
-      const tempSeq = item.sequence;
-      item.sequence = nextItem.sequence;
-      nextItem.sequence = tempSeq;
-
-      item.isDirty = true;
-      nextItem.isDirty = true;
-
-      // Re-sort and create new array reference to trigger change detection
-      this.activeApps = [...this.activeApps].sort((a, b) => a.sequence - b.sequence);
+  MoveDown(item: AppConfigItem): void {
+    const index = this.ActiveApps.indexOf(item);
+    if (index < this.ActiveApps.length - 1) {
+      this.swapSequences(item, this.ActiveApps[index + 1]);
+      this.ActiveApps = [...this.ActiveApps].sort((a, b) => a.sequence - b.sequence);
     }
   }
 
   /**
    * Checks if there are any unsaved changes
    */
-  hasChanges(): boolean {
-    return this.allApps.some(item => item.isDirty);
+  HasChanges(): boolean {
+    return this.AllApps.some(item => item.isDirty);
   }
 
   /**
    * Saves the user's app configuration
    */
-  async save(): Promise<void> {
-    if (!this.hasChanges()) {
-      this.close();
+  async Save(): Promise<void> {
+    if (!this.HasChanges()) {
+      this.Close();
       return;
     }
 
-    this.isSaving = true;
-    this.errorMessage = '';
+    this.IsSaving = true;
+    this.ErrorMessage = '';
 
     try {
       const md = new Metadata();
-      const rv = new RunView();
 
-      // Process each app config item
-      for (const item of this.allApps) {
+      for (const item of this.AllApps) {
         if (!item.isDirty) continue;
 
         if (item.userAppId) {
-          // Update existing UserApplication record
           await this.updateUserApplication(md, item);
         } else if (item.isActive) {
-          // Create new UserApplication record (only if active)
           await this.createUserApplication(md, item);
         }
-        // If not active and no existing record, nothing to do
       }
 
-      // Reload the ApplicationManager to reflect changes
       LogStatus('User app configuration saved, reloading ApplicationManager...');
       await this.appManager.ReloadUserApplications();
 
       this.sharedService.CreateSimpleNotification('App configuration saved successfully!', 'success', 3000);
-      this.configSaved.emit();
-      this.close();
+      this.ConfigSaved.emit();
+      this.Close();
 
     } catch (error) {
-      this.errorMessage = 'Failed to save configuration. Please try again.';
+      this.ErrorMessage = 'Failed to save configuration. Please try again.';
       LogError('Error saving app configuration:', undefined, error instanceof Error ? error.message : String(error));
     } finally {
-      this.isSaving = false;
-      this.cdr.detectChanges();
+      this.ngZone.run(() => {
+        this.IsSaving = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 
   /**
-   * Updates an existing UserApplication record
+   * Resets all changes and reloads the configuration
    */
+  async Reset(): Promise<void> {
+    await this.loadConfiguration();
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Drag-and-drop handlers (desktop only)
+  // ---------------------------------------------------------------------------
+
+  OnDragStart(event: DragEvent, item: AppConfigItem, index: number): void {
+    this.DraggedItem = item;
+    this.DraggedIndex = index;
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', index.toString());
+    }
+  }
+
+  OnDragOver(event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  OnDragEnter(event: DragEvent, index: number): void {
+    event.preventDefault();
+    this.DropTargetIndex = index;
+  }
+
+  OnDragEnd(): void {
+    this.DraggedItem = null;
+    this.DraggedIndex = -1;
+    this.DropTargetIndex = -1;
+  }
+
+  OnDrop(event: DragEvent): void {
+    event.preventDefault();
+
+    if (this.DraggedIndex >= 0 && this.DropTargetIndex >= 0 && this.DraggedIndex !== this.DropTargetIndex) {
+      const [movedItem] = this.ActiveApps.splice(this.DraggedIndex, 1);
+      this.ActiveApps.splice(this.DropTargetIndex, 0, movedItem);
+      this.resequenceActiveApps();
+      this.cdr.detectChanges();
+    }
+
+    this.OnDragEnd();
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Touch drag-and-drop handlers (mobile)
+  // ---------------------------------------------------------------------------
+
+  TouchDragIndex = -1;
+  TouchDropIndex = -1;
+  TouchDragActive = false;
+
+  private touchStartY = 0;
+  private touchCurrentY = 0;
+  private touchRowHeight = 0;
+  private touchDragElement: HTMLElement | null = null;
+  private touchScrollContainer: HTMLElement | null = null;
+
+  OnTouchDragStart(event: TouchEvent, index: number): void {
+    const touch = event.touches[0];
+    const row = (event.target as HTMLElement).closest('.mobile-app-row') as HTMLElement | null;
+    if (!row) return;
+
+    event.preventDefault();
+    this.TouchDragIndex = index;
+    this.TouchDropIndex = index;
+    this.TouchDragActive = true;
+    this.touchStartY = touch.clientY;
+    this.touchCurrentY = touch.clientY;
+    this.touchDragElement = row;
+    this.touchRowHeight = row.offsetHeight;
+    this.touchScrollContainer = this.el.nativeElement.querySelector('.mobile-list');
+
+    row.classList.add('touch-dragging');
+  }
+
+  OnTouchDragMove(event: TouchEvent): void {
+    if (!this.TouchDragActive || !this.touchDragElement) return;
+
+    event.preventDefault();
+    const touch = event.touches[0];
+    this.touchCurrentY = touch.clientY;
+    const deltaY = this.touchCurrentY - this.touchStartY;
+
+    this.touchDragElement.style.transform = `translateY(${deltaY}px)`;
+    this.touchDragElement.style.zIndex = '100';
+
+    this.updateTouchDropTarget(deltaY);
+    this.autoScrollIfNeeded();
+  }
+
+  OnTouchDragEnd(): void {
+    if (!this.TouchDragActive) return;
+
+    if (this.touchDragElement) {
+      this.touchDragElement.style.transform = '';
+      this.touchDragElement.style.zIndex = '';
+      this.touchDragElement.classList.remove('touch-dragging');
+    }
+
+    if (this.TouchDragIndex >= 0 && this.TouchDropIndex >= 0 && this.TouchDragIndex !== this.TouchDropIndex) {
+      const [movedItem] = this.ActiveApps.splice(this.TouchDragIndex, 1);
+      this.ActiveApps.splice(this.TouchDropIndex, 0, movedItem);
+      this.resequenceActiveApps();
+    }
+
+    this.resetTouchDragState();
+    this.cdr.detectChanges();
+  }
+
+  private updateTouchDropTarget(deltaY: number): void {
+    const rowsToMove = Math.round(deltaY / this.touchRowHeight);
+    const newIndex = Math.max(0, Math.min(this.ActiveApps.length - 1, this.TouchDragIndex + rowsToMove));
+    this.TouchDropIndex = newIndex;
+  }
+
+  private autoScrollIfNeeded(): void {
+    if (!this.touchScrollContainer) return;
+
+    const rect = this.touchScrollContainer.getBoundingClientRect();
+    const edgeZone = 40;
+
+    if (this.touchCurrentY < rect.top + edgeZone) {
+      this.touchScrollContainer.scrollTop -= 8;
+    } else if (this.touchCurrentY > rect.bottom - edgeZone) {
+      this.touchScrollContainer.scrollTop += 8;
+    }
+  }
+
+  private resetTouchDragState(): void {
+    this.TouchDragIndex = -1;
+    this.TouchDropIndex = -1;
+    this.TouchDragActive = false;
+    this.touchDragElement = null;
+    this.touchScrollContainer = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Private helpers
+  // ---------------------------------------------------------------------------
+
+  private async loadConfiguration(): Promise<void> {
+    this.IsLoading = true;
+    this.ErrorMessage = '';
+
+    try {
+      const md = new Metadata();
+      const rv = new RunView();
+      const systemApps = this.appManager.GetAllSystemApps();
+
+      const userAppsResult = await rv.RunView<UserAppRow>({
+        EntityName: 'MJ: User Applications',
+        Fields: ['ID', 'ApplicationID', 'Sequence', 'IsActive'],
+        ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
+        OrderBy: 'Sequence, Application',
+        ResultType: 'simple'
+      });
+
+      if (!userAppsResult.Success) {
+        throw new Error(userAppsResult.ErrorMessage);
+      }
+
+      this.AllApps = this.buildAppConfigItems(systemApps, userAppsResult.Results);
+      this.refreshAppLists();
+
+    } catch (error) {
+      this.ErrorMessage = 'Failed to load app configuration. Please try again.';
+      LogError('Error loading app configuration:', undefined, error instanceof Error ? error.message : String(error));
+    } finally {
+      this.ngZone.run(() => {
+        this.IsLoading = false;
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  private buildAppConfigItems(systemApps: BaseApplication[], userApps: UserAppRow[]): AppConfigItem[] {
+    return systemApps.map(app => {
+      const userApp = userApps.find(ua => ua.ApplicationID === app.ID);
+      return {
+        app,
+        userAppId: userApp?.ID ?? null,
+        sequence: userApp?.Sequence ?? 999,
+        isActive: userApp?.IsActive ?? false,
+        isDirty: false
+      };
+    });
+  }
+
+  private refreshAppLists(): void {
+    this.ActiveApps = this.AllApps
+      .filter(item => item.isActive)
+      .sort((a, b) => a.sequence - b.sequence);
+
+    this.AvailableApps = this.AllApps
+      .filter(item => !item.isActive)
+      .sort((a, b) => a.app.Name.localeCompare(b.app.Name));
+  }
+
+  private resequenceActiveApps(): void {
+    this.ActiveApps.forEach((item, index) => {
+      if (item.sequence !== index) {
+        item.sequence = index;
+        item.isDirty = true;
+      }
+    });
+  }
+
+  private swapSequences(a: AppConfigItem, b: AppConfigItem): void {
+    const tempSeq = a.sequence;
+    a.sequence = b.sequence;
+    b.sequence = tempSeq;
+    a.isDirty = true;
+    b.isDirty = true;
+  }
+
   private async updateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.userAppId!);
 
     userApp.Sequence = item.sequence;
@@ -306,11 +438,8 @@ export class UserAppConfigComponent {
     LogStatus(`Updated UserApplication for ${item.app.Name}: sequence=${item.sequence}, isActive=${item.isActive}`);
   }
 
-  /**
-   * Creates a new UserApplication record
-   */
   private async createUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 
     userApp.UserID = md.CurrentUser.ID;
@@ -326,12 +455,5 @@ export class UserAppConfigComponent {
     item.userAppId = userApp.ID;
     item.isDirty = false;
     LogStatus(`Created UserApplication for ${item.app.Name}: sequence=${item.sequence}`);
-  }
-
-  /**
-   * Resets all changes and reloads the configuration
-   */
-  async reset(): Promise<void> {
-    await this.loadConfiguration();
   }
 }

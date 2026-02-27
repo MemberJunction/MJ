@@ -1,5 +1,4 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
 import {
   ViewColumnPinned as CoreViewColumnPinned,
   ViewGridSortSetting as CoreViewGridSortSetting,
@@ -101,8 +100,8 @@ export interface GridColumnDef {
  * Event emitted when a record is selected (clicked)
  */
 export interface RecordSelectedEvent {
-  /** The selected entity record */
-  record: BaseEntity;
+  /** The selected record (plain object from ResultType: 'simple') */
+  record: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -113,8 +112,8 @@ export interface RecordSelectedEvent {
  * Event emitted when a record should be opened (double-click or open button)
  */
 export interface RecordOpenedEvent {
-  /** The entity record to open */
-  record: BaseEntity;
+  /** The record to open (may be undefined for FK navigation where record isn't loaded) */
+  record?: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -132,7 +131,7 @@ export interface DataLoadedEvent {
   /** Time taken to load in milliseconds */
   loadTime: number;
   /** The loaded records - allows parent to access records for state restoration */
-  records: BaseEntity[];
+  records: Record<string, unknown>[];
 }
 
 /**
@@ -203,32 +202,11 @@ export interface LoadMoreEvent {
 }
 
 /**
- * Column configuration from a User View's GridState
- * This is an alias to ViewGridColumnSetting from core-entities for backward compatibility
- * @deprecated Use ViewGridColumnSetting from @memberjunction/core-entities directly
- */
-export type ViewColumnConfig = ViewGridColumnSetting;
-
-/**
- * Sort configuration from a User View's GridState
- * This is an alias to ViewGridSortSetting from core-entities for backward compatibility
- * @deprecated Use ViewGridSortSetting from @memberjunction/core-entities directly
- */
-export type ViewSortConfig = ViewGridSortSetting;
-
-/**
- * Grid state configuration from a User View
- * This is an alias to ViewGridState from core-entities for backward compatibility
- * @deprecated Use ViewGridState from @memberjunction/core-entities directly
- */
-export type ViewGridStateConfig = ViewGridState;
-
-/**
  * Event emitted when grid state changes (column resize, reorder, etc.)
  */
 export interface GridStateChangedEvent {
   /** The updated grid state */
-  gridState: ViewGridStateConfig;
+  gridState: ViewGridState;
   /** What changed: 'columns', 'sort', 'filter' */
   changeType: 'columns' | 'sort' | 'filter';
 }
@@ -387,6 +365,12 @@ export interface CardState {
 export interface GridDisplayState {
   /** Row height preference */
   rowHeight?: 'compact' | 'normal' | 'comfortable';
+  /**
+   * Enable text wrapping in grid cells
+   * When true, long text will wrap to multiple lines and rows will auto-size
+   * @default false
+   */
+  wrapText?: boolean;
 }
 
 /**
@@ -413,6 +397,50 @@ export interface ViewDisplayState {
 /**
  * Default configuration values
  */
+/**
+ * Summary of what a view configuration includes, for preview in Quick Save dialog
+ */
+export interface ViewConfigSummary {
+  /** Number of visible columns */
+  ColumnCount: number;
+  /** Number of active filters */
+  FilterCount: number;
+  /** Number of sort levels */
+  SortCount: number;
+  /** Whether smart filter is active */
+  SmartFilterActive: boolean;
+  /** Smart filter prompt text (if active) */
+  SmartFilterPrompt: string;
+  /** Number of enabled aggregates */
+  AggregateCount: number;
+}
+
+/**
+ * Event emitted by QuickSaveDialog when user saves
+ */
+export interface QuickSaveEvent {
+  /** View name */
+  Name: string;
+  /** View description (optional) */
+  Description: string;
+  /** Whether the view is shared */
+  IsShared: boolean;
+  /** Whether to save as new (true) or update existing (false) */
+  SaveAsNew: boolean;
+}
+
+/**
+ * Result of a view save operation (for notification display)
+ */
+export interface ViewSaveResult {
+  /** Whether the save succeeded */
+  Success: boolean;
+  /** Error message (on failure) */
+  ErrorMessage?: string;
+  /** Whether this was a new view or update */
+  IsNew: boolean;
+}
+
 export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   showFilter: true,
   showViewModeToggle: true,

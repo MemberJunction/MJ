@@ -13,6 +13,7 @@ import {
     SkipAPIAnalysisCompleteResponse,
     SkipAPIClarifyingQuestionResponse,
     SkipRequestPhase,
+    SkipResponsePhase,
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
     SkipEntityInfo,
@@ -27,7 +28,9 @@ import {
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo } from '@memberjunction/core';
-import { sendPostRequest } from '../util.js';
+import { request as httpRequest } from 'http';
+import { request as httpsRequest } from 'https';
+import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -171,6 +174,20 @@ export interface SkipCallResult {
 }
 
 /**
+ * Shape of a single SSE event received from the Skip API stream.
+ * Skip sends two formats:
+ * - Wrapped: `{type: 'status_update'|'streaming'|'complete', value: SkipAPIResponse}`
+ * - Flat (queue): `{responsePhase: 'queued'|'error', message: '...', error: '...'}`
+ */
+interface SkipStreamMessage {
+    type?: string;
+    value?: SkipAPIResponse;
+    responsePhase?: string;
+    message?: string;
+    error?: string;
+}
+
+/**
  * Skip TypeScript SDK
  * Provides a clean interface for calling the Skip SaaS API
  */
@@ -201,19 +218,34 @@ export class SkipSDK {
             // Build the Skip API request
             const skipRequest = await this.buildSkipRequest(options);
 
-            // Call Skip API with streaming support
-            const responses = await sendPostRequest(
+            // Call Skip API with SSE streaming support
+            const responses = await this.sendSSERequest(
                 this.config.apiUrl,
                 skipRequest,
-                true, // useCompression
                 this.buildHeaders(),
-                (streamMessage: any) => {
+                (streamMessage: SkipStreamMessage) => {
                     // Handle streaming status updates
+                    // Queue messages come as flat objects: {responsePhase: 'queued'|'error', message: '...', error: '...'}
+                    // Skip API messages come wrapped: {type: 'status_update', value: {responsePhase: '...', messages: [...]}}
                     if (streamMessage.type === 'status_update' && options.onStatusUpdate) {
                         const statusContent = streamMessage.value?.messages?.[0]?.content;
                         const responsePhase = streamMessage.value?.responsePhase;
                         if (statusContent) {
                             options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === SkipResponsePhase.queued && options.onStatusUpdate) {
+                        // Handle queue progress messages
+                        const statusContent = streamMessage.message;
+                        const responsePhase = streamMessage.responsePhase;
+                        if (statusContent) {
+                            options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === 'error') {
+                        // Queue error messages - log but don't throw (final response will handle error)
+                        // Note: 'error' is not in SkipResponsePhase enum - it's a queue-specific error state
+                        LogError(`[SkipSDK] Queue error: ${streamMessage.error || 'Unknown error'}`);
+                        if (options.onStatusUpdate) {
+                            options.onStatusUpdate(`Error: ${streamMessage.error || 'Request failed'}`, 'error');
                         }
                     }
                 }
@@ -238,9 +270,22 @@ export class SkipSDK {
 
         } catch (error) {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
+
+            // Provide user-friendly error messages for common failures
+            let userFriendlyError = String(error);
+            const errorStr = String(error).toLowerCase();
+
+            if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
+                userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
+            } else if (errorStr.includes('econnrefused') || errorStr.includes('enotfound')) {
+                userFriendlyError = 'Unable to connect to the Skip analysis service. The service may be temporarily unavailable.';
+            } else if (errorStr.includes('timeout')) {
+                userFriendlyError = 'The Skip analysis service took too long to respond. Please try again.';
+            }
+
             return {
                 success: false,
-                error: String(error)
+                error: userFriendlyError
             };
         }
     }
@@ -617,6 +662,116 @@ export class SkipSDK {
             'x-api-key': this.config.apiKey || '',
             'Content-Type': 'application/json'
         };
+    }
+
+    /**
+     * Send an SSE-aware POST request to the Skip API.
+     * Replaces sendPostRequest for SSE format: parses `data: {json}\n\n` events
+     * instead of NDJSON `{json}\n` lines. This is required because Azure Container
+     * Apps' Envoy proxy buffers NDJSON responses but streams SSE responses.
+     */
+    private async sendSSERequest(
+        url: string,
+        payload: SkipAPIRequest,
+        headers: Record<string, string>,
+        streamCallback?: (event: SkipStreamMessage) => void
+    ): Promise<SkipStreamMessage[]> {
+        // Gzip the request body
+        const compressed = await new Promise<Buffer>((resolve, reject) => {
+            gzipCompress(JSON.stringify(payload), (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
+        });
+
+        return new Promise((resolve, reject) => {
+            try {
+                const parsedUrl = new URL(url);
+                const options = {
+                    hostname: parsedUrl.hostname,
+                    port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                    path: parsedUrl.pathname,
+                    method: 'POST' as const,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Encoding': 'gzip',
+                        ...headers
+                    }
+                };
+
+                const requestFn = parsedUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+                const events: SkipStreamMessage[] = [];
+                let buffer = '';
+                let streamEnded = false;
+
+                const parseSSELine = (line: string): void => {
+                    if (line.trim() === '') return;           // Skip empty lines (SSE event delimiters)
+                    if (!line.startsWith('data: ')) return;   // Skip non-data SSE fields
+                    const jsonStr = line.slice(6);
+                    if (!jsonStr.trim()) return;
+
+                    try {
+                        const event = JSON.parse(jsonStr) as SkipStreamMessage;
+                        events.push(event);
+                        streamCallback?.(event);
+                    } catch (e) {
+                        LogError(`[SkipSDK] SSE parse error: ${e}`);
+                    }
+                };
+
+                const handleStreamEnd = (): void => {
+                    if (streamEnded) return;
+                    streamEnded = true;
+                    // Try to parse any remaining data in buffer
+                    if (buffer.trim()) {
+                        parseSSELine(buffer);
+                    }
+                    resolve(events);
+                };
+
+                const req = requestFn(options, (res) => {
+                    const gunzip = createGunzip();
+                    const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
+
+                    stream.on('data', (chunk: Buffer) => {
+                        buffer += chunk.toString();
+                        let boundary: number;
+                        while ((boundary = buffer.indexOf('\n')) !== -1) {
+                            const line = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 1);
+                            parseSSELine(line);
+                        }
+                    });
+
+                    stream.on('end', handleStreamEnd);
+
+                    stream.on('close', () => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream closed prematurely for ${url}`);
+                            handleStreamEnd();
+                        }
+                    });
+
+                    stream.on('error', (e: Error) => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream error for ${url}: ${e.message}`);
+                            reject(new Error(`SSE stream error: ${e.message}`));
+                        }
+                    });
+                });
+
+                req.on('error', (e: Error) => {
+                    LogError(`[SkipSDK] SSE request error for ${url}: ${e.message}`);
+                    reject(new Error(`HTTP request failed to ${url}: ${e.message}`));
+                });
+
+                req.write(compressed);
+                req.end();
+            } catch (e) {
+                LogError(`[SkipSDK] sendSSERequest error: ${e}`);
+                reject(e);
+            }
+        });
     }
 
     /**

@@ -19,30 +19,41 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'app-review-status-indicator',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Badge mode: single status -->
-    <span class="review-indicator badge" *ngIf="mode === 'badge'" [class]="getStatusClass()">
-      <i [class]="getStatusIcon()"></i>
-      <span class="text" *ngIf="showText">{{ getStatusText() }}</span>
-    </span>
-
+    @if (mode === 'badge') {
+      <span class="review-indicator badge" [class]="getStatusClass()">
+        <i [class]="getStatusIcon()"></i>
+        @if (showText) {
+          <span class="text">{{ getStatusText() }}</span>
+        }
+      </span>
+    }
+    
     <!-- Count mode: X/Y reviewed -->
-    <span class="review-indicator count" *ngIf="mode === 'count'" [class]="getCountClass()">
-      <i [class]="getCountIcon()"></i>
-      <span class="numbers">{{ reviewedCount }}/{{ totalCount }}</span>
-      <span class="label" *ngIf="showLabel">reviewed</span>
-    </span>
-
+    @if (mode === 'count') {
+      <span class="review-indicator count" [class]="getCountClass()">
+        <i [class]="getCountIcon()"></i>
+        <span class="numbers">{{ reviewedCount }}/{{ totalCount }}</span>
+        @if (showLabel) {
+          <span class="label">reviewed</span>
+        }
+      </span>
+    }
+    
     <!-- Progress mode: visual bar -->
-    <div class="review-indicator progress" *ngIf="mode === 'progress'">
-      <div class="progress-bar">
-        <div class="progress-fill" [style.width.%]="getPercentage()"></div>
+    @if (mode === 'progress') {
+      <div class="review-indicator progress">
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="getPercentage()"></div>
+        </div>
+        <span class="progress-text">{{ reviewedCount }}/{{ totalCount }}</span>
       </div>
-      <span class="progress-text">{{ reviewedCount }}/{{ totalCount }}</span>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .review-indicator {
       display: inline-flex;

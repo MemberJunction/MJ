@@ -2,31 +2,19 @@ import { Command, Flags } from '@oclif/core';
 import { select } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import {
-  PullService,
-  ValidationService,
-  FormattingService,
-  loadMJConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager,
-  findEntityDirectories,
-  loadEntityConfig,
-  FileBackupManager
-} from '@memberjunction/metadata-sync';
+import fs from 'fs';
+import path from 'path';
 
 export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
   
   static examples = [
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts"`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts" --filter="CategoryID='customer-service-id'"`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Agents" --merge-strategy=overwrite`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts" --filter="CategoryID='customer-service-id'"`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Actions" --target-dir=./custom-actions --no-validate`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
-    `<%= config.bin %> <%= command.id %> --entity="AI Prompts" --exclude-fields=InternalNotes,DebugInfo`,
+    `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts" --exclude-fields=InternalNotes,DebugInfo`,
   ];
   
   static flags = {
@@ -51,9 +39,15 @@ export default class Pull extends Command {
   };
   
   async run(): Promise<void> {
+    const {
+      PullService, ValidationService, FormattingService,
+      loadMJConfig, initializeProvider, getSyncEngine, getSystemUser,
+      resetSyncEngine, configManager, loadEntityConfig, FileBackupManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Pull);
     const spinner = ora();
-    let backupManager: FileBackupManager | null = null;
+    let backupManager: InstanceType<typeof FileBackupManager> | null = null;
     
     try {
       // Load MJ config first
@@ -80,7 +74,7 @@ export default class Pull extends Command {
       }
       
       // Find entity directories
-      const entityDirectories = await this.findEntityDirectories(flags.entity);
+      const entityDirectories = await this.findEntityDirectories(flags.entity, configManager, loadEntityConfig);
       
       if (entityDirectories.length === 0) {
         this.error(`No directories found for entity "${flags.entity}". Make sure the entity configuration exists in a .mj-sync.json file.`);
@@ -231,7 +225,7 @@ export default class Pull extends Command {
       
       // Context information
       this.log(`\nContext:`);
-      this.log(`- Working directory: ${configManager.getOriginalCwd()}`);
+      this.log(`- Working directory: ${process.cwd()}`);
       this.log(`- Entity: ${flags.entity || 'not specified'}`);
       this.log(`- Filter: ${flags.filter || 'none'}`);
       
@@ -242,19 +236,23 @@ export default class Pull extends Command {
     }
   }
   
-  private async findEntityDirectories(entityName: string): Promise<string[]> {
+  private async findEntityDirectories(
+    entityName: string,
+    configMgr: { getOriginalCwd(): string },
+    loadConfig: (dir: string) => Promise<{ entity: string } | null>,
+  ): Promise<string[]> {
     try {
-      const workingDir = configManager.getOriginalCwd();
-      
+      const workingDir = configMgr.getOriginalCwd();
+
       // Search recursively for all directories with .mj-sync.json files
       const allDirs = this.findAllEntityDirectoriesRecursive(workingDir);
-      
+
       // Filter directories that match the requested entity
       const entityDirs: string[] = [];
-      
+
       for (const dir of allDirs) {
         try {
-          const config = await loadEntityConfig(dir);
+          const config = await loadConfig(dir);
           if (config && config.entity === entityName) {
             entityDirs.push(dir);
           }
@@ -262,7 +260,7 @@ export default class Pull extends Command {
           this.warn(`Skipping directory ${dir}: invalid configuration (${error})`);
         }
       }
-      
+
       return entityDirs;
     } catch (error) {
       this.error(`Failed to find entity directories: ${error}`);
@@ -270,8 +268,6 @@ export default class Pull extends Command {
   }
 
   private findAllEntityDirectoriesRecursive(dir: string): string[] {
-    const fs = require('fs');
-    const path = require('path');
     const directories: string[] = [];
     
     try {

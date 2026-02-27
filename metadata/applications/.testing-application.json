@@ -9,16 +9,23 @@
     "DefaultNavItems": [
       {
         "Label": "Overview",
-        "Icon": "fa-solid fa-chart-line",
+        "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "TestingOverviewResource",
+        "DriverClass": "TestingDashboardTabResource",
         "isDefault": true
       },
       {
-        "Label": "Execution",
+        "Label": "Explorer",
+        "Icon": "fa-solid fa-compass",
+        "ResourceType": "Custom",
+        "DriverClass": "TestingExplorerResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Runs",
         "Icon": "fa-solid fa-play-circle",
         "ResourceType": "Custom",
-        "DriverClass": "TestingExecutionResource",
+        "DriverClass": "TestingRunsResource",
         "isDefault": false
       },
       {
@@ -29,28 +36,20 @@
         "isDefault": false
       },
       {
-        "Label": "Version",
-        "Icon": "fa-solid fa-code-compare",
-        "ResourceType": "Custom",
-        "DriverClass": "TestingVersionResource",
-        "isDefault": false,
-        "Status": "Pending"
-      },
-      {
-        "Label": "Feedback",
+        "Label": "Review",
         "Icon": "fa-solid fa-clipboard-check",
         "ResourceType": "Custom",
-        "DriverClass": "TestingFeedbackResource",
+        "DriverClass": "TestingReviewResource",
         "isDefault": false
       }
     ]
   },
   "relatedEntities": {
-    "Application Entities": [
+    "MJ: Application Entities": [
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Types",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Types",
           "Sequence": 1,
           "DefaultForNewUser": true
         },
@@ -58,14 +57,14 @@
           "ID": "E0BD9634-6C52-4B4B-BED9-553696470E50"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.253Z",
-          "checksum": "01c0e6aab8c3557a729dfc0998680e9032d196307da12f11af37a1a193c0f6fb"
+          "lastModified": "2026-02-13T21:09:36.845Z",
+          "checksum": "6287f887b5fac81b08fb04c2fda43d13e1bf74f65766338cdc36ba72fe819827"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Tests",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tests",
           "Sequence": 2,
           "DefaultForNewUser": true
         },
@@ -73,14 +72,14 @@
           "ID": "B90C960B-E411-4C18-9376-3E3961C2C2C8"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.254Z",
-          "checksum": "6d84cf098ebeac4430fada7292e2369e786719cb263f75c7e3e10f0d68286295"
+          "lastModified": "2026-02-13T21:09:36.846Z",
+          "checksum": "19f8612c6d6f3ca8fdf935827409961e78356f71bc4ef2d0d1e8a22c75b3c98b"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Suites",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Suites",
           "Sequence": 3,
           "DefaultForNewUser": true
         },
@@ -88,14 +87,14 @@
           "ID": "00DC4190-9485-4BDA-8E8B-F5A74AE662A0"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.256Z",
-          "checksum": "d10c415516154408f0c470e2215a9c5b9ea99d7f0f946e8f751d3d1ccd0d0362"
+          "lastModified": "2026-02-13T21:09:36.847Z",
+          "checksum": "c446d32cbeb01fa58ce8cdd3146f903a615fead7458a9fc087f2b2c3ba283d4b"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Suite Tests",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Suite Tests",
           "Sequence": 4,
           "DefaultForNewUser": true
         },
@@ -103,14 +102,14 @@
           "ID": "2C8EC61E-B12A-4A92-971F-6327628CBDC2"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.257Z",
-          "checksum": "f49a0413d04668579c8e6946201e061b22f9163c006db949685ed5c12a4b59c1"
+          "lastModified": "2026-02-13T21:09:36.848Z",
+          "checksum": "266b12b4deab9769c9e5b6b5431c9af347fd3a9b59149fd408ece3556a5270b5"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Runs",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Runs",
           "Sequence": 5,
           "DefaultForNewUser": true
         },
@@ -118,14 +117,14 @@
           "ID": "3E4C05EA-CB2B-4192-8DDE-8B03FA234E1F"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.258Z",
-          "checksum": "f57af4788d79f9fd7ba327cc56882183bcf3ed0b2a4b843202350e5701d9f80c"
+          "lastModified": "2026-02-13T21:09:36.849Z",
+          "checksum": "8edd2e576b0a2499b86091c4404b5bbdc41545a0fff1638272a8e53163533b7f"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Suite Runs",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Suite Runs",
           "Sequence": 6,
           "DefaultForNewUser": true
         },
@@ -133,14 +132,14 @@
           "ID": "D67C40D7-AC10-4C4A-8619-902C4101A263"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.259Z",
-          "checksum": "38135ab7bb25cce8c21593203107aa6f6a3c3b6b7482989a14b8c88ac770b1f7"
+          "lastModified": "2026-02-13T21:09:36.850Z",
+          "checksum": "96dddf0da6fe61e656706babb66432307b63b55643e1ab6c95815211b3ac54df"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Run Feedbacks",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Run Feedbacks",
           "Sequence": 7,
           "DefaultForNewUser": true
         },
@@ -148,14 +147,14 @@
           "ID": "15FBB64B-7173-40CB-8DA9-488CB20B669D"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.260Z",
-          "checksum": "93e39d05821f435ee661d46f731596f1c5520f61e04d005cf16553ed22d003d9"
+          "lastModified": "2026-02-13T21:09:36.851Z",
+          "checksum": "5cff8a1c0de66dc65405492e1c8631bb759984bb49b56318a852fa9582f0d6c0"
         }
       },
       {
         "fields": {
           "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:Entities.Name=MJ: Test Rubrics",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Rubrics",
           "Sequence": 8,
           "DefaultForNewUser": true
         },
@@ -163,8 +162,8 @@
           "ID": "F3DC86D9-5698-4492-A5D9-FC6EA8C65024"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.261Z",
-          "checksum": "07f7baf57c63108e28816f132cb3e785a7cb908c58adaf8feae3e0642bf94882"
+          "lastModified": "2026-02-13T21:09:36.852Z",
+          "checksum": "b9c7030f5231a7c8c6050388487084cbeef67ac627a3c24b5811e8b0dc0c3dea"
         }
       }
     ]
@@ -173,7 +172,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2026-01-06T15:18:04.175Z",
-    "checksum": "f150fafe7fcaa7f04eafb3e1a573b416b0601aec5ba6331b5fbfd6fac1605e0c"
+    "lastModified": "2026-02-01T14:16:21.898Z",
+    "checksum": "a25f7dab9ad59332ae24c0d8d18bed43a215424a9f42ad4985616334858fa67d"
   }
 }

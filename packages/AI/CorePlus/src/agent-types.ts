@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -18,15 +18,204 @@ import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
-import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
-import { AIAgentEntityExtended } from './AIAgentExtended';
-import { AIPromptEntityExtended } from './AIPromptExtended';
+import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
+import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
+import { MediaModality } from './prompt.types';
+
+/**
+ * Value type for secondary scope dimensions.
+ * Supports strings, numbers, booleans, and string arrays (for multi-valued dimensions).
+ */
+export type SecondaryScopeValue = string | number | boolean | string[];
+
+/**
+ * Configuration for secondary scope dimensions on an AI Agent.
+ *
+ * Defines what secondary scope dimensions are valid for an agent and how they
+ * should behave for memory retrieval and storage. This configuration is stored
+ * in the `SecondaryScopeConfig` JSON field on the AIAgent entity.
+ *
+ * @since 2.131.0
+ *
+ * @example Customer Service App (entity-backed dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "ContactID", "entityId": "uuid-for-contacts", "inheritanceMode": "cascading"},
+ *         {"name": "TeamID", "entityId": "uuid-for-teams", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": false
+ * }
+ * ```
+ *
+ * @example Analytics App (arbitrary value dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "Region", "inheritanceMode": "cascading"},
+ *         {"name": "DealStage", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": true
+ * }
+ * ```
+ */
+export interface SecondaryScopeConfig {
+    /**
+     * Array of dimension definitions.
+     * Each dimension defines a scope key that can be provided at runtime via
+     * `ExecuteAgentParams.SecondaryScopes`.
+     */
+    dimensions: SecondaryDimension[];
+
+    /**
+     * Default inheritance mode for dimensions that don't specify one.
+     * - 'cascading': Notes without a dimension match queries with that dimension (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value or be absent
+     * @default 'cascading'
+     */
+    defaultInheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Whether to allow secondary-only scoping (no primary scope required).
+     * When true, the agent can function with only secondary dimensions provided
+     * in `ExecuteAgentParams.SecondaryScopes` without requiring `PrimaryScopeRecordID`.
+     * @default false
+     */
+    allowSecondaryOnly?: boolean;
+
+    /**
+     * Whether to validate runtime scope values against this config.
+     * When true, extra dimensions not defined in `dimensions` array will cause validation errors.
+     * When false, extra dimensions are accepted and stored but may not be used in filtering.
+     * @default false
+     */
+    strictValidation?: boolean;
+}
+
+/**
+ * Definition of a single secondary scope dimension.
+ *
+ * Secondary dimensions allow fine-grained scoping beyond the primary scope level.
+ * Each dimension can be configured for validation, inheritance behavior, and defaults.
+ *
+ * @since 2.131.0
+ */
+export interface SecondaryDimension {
+    /**
+     * Dimension name/key (e.g., "ContactID", "TeamName", "Region").
+     * This is the key used in `ExecuteAgentParams.SecondaryScopes` and stored
+     * in the `SecondaryScopes` JSON field on notes/examples/runs.
+     */
+    name: string;
+
+    /**
+     * Optional MemberJunction Entity ID for validation.
+     * When provided, runtime values can be validated as existing records in that entity.
+     * When null/omitted, the dimension accepts any string value (useful for non-entity
+     * dimensions like "Region", "DealStage", "ProductLine", etc.).
+     */
+    entityId?: string | null;
+
+    /**
+     * Whether this dimension is required at runtime.
+     * When true, `ExecuteAgentParams.SecondaryScopes` must include this dimension
+     * or have a `defaultValue` defined.
+     * @default false
+     */
+    required?: boolean;
+
+    /**
+     * Inheritance mode for this specific dimension, overrides `defaultInheritanceMode`.
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval).
+     *   For example, if querying with ContactID=123, notes without any ContactID will match.
+     * - 'strict': Notes must exactly match the provided dimension value.
+     *   Notes without the dimension do NOT match queries that include it.
+     */
+    inheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Default value if not provided at runtime.
+     * Only used when `required=false`. If the dimension is not in the runtime scope
+     * and a defaultValue is set, this value will be used.
+     */
+    defaultValue?: string | null;
+
+    /**
+     * Human-readable description of this dimension for documentation.
+     */
+    description?: string;
+}
 
 // Import loop operation types from their dedicated modules
 // These are in separate files so they can be @include'd in prompt templates
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+
+/**
+ * Represents a media output that an agent has explicitly promoted to its outputs.
+ * This is the interface used in ExecuteAgentResult.mediaOutputs.
+ *
+ * Media can come from two sources:
+ * 1. Promoted from a prompt run (has promptRunMediaId)
+ * 2. Generated directly by agent code (has data or url)
+ *
+ * @since 3.1.0
+ */
+export interface MediaOutput {
+    /** Reference to source AIPromptRunMedia (if promoted from prompt execution) */
+    promptRunMediaId?: string;
+
+    /** The modality type */
+    modality: MediaModality;
+
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+
+    /** Base64 encoded data (only if NOT from prompt run) */
+    data?: string;
+
+    /** URL if available (some providers return URLs) */
+    url?: string;
+
+    /** Width in pixels (for images/video) */
+    width?: number;
+
+    /** Height in pixels (for images/video) */
+    height?: number;
+
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+
+    /** Agent-provided label for UI display */
+    label?: string;
+
+    /** Provider-specific metadata */
+    metadata?: Record<string, unknown>;
+
+    /**
+     * Placeholder reference ID for the ${media:xxx} pattern.
+     * Used to look up media when resolving placeholders in agent output.
+     * @since 3.1.0
+     */
+    refId?: string;
+
+    /**
+     * Controls whether this media should be persisted to the database.
+     * Default behavior (undefined or true): media is persisted to AIAgentRunMedia and ConversationDetailAttachment.
+     * Set to false for intercepted/working media that shouldn't be saved (e.g., generated but not used in output).
+     * @since 3.1.0
+     */
+    persist?: boolean;
+
+    /**
+     * Agent notes describing what this media represents.
+     * Used for internal tracking, debugging, and can be persisted for audit purposes.
+     * @since 3.1.0
+     */
+    description?: string;
+}
 
 
 /**
@@ -120,7 +309,7 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
      * and then continue with the retry.
      */
-    step: AIAgentRunEntityExtended['FinalStep']
+    step: MJAIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** 
@@ -182,6 +371,13 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Media outputs to promote to the agent's final outputs.
+     * When set, these media items will be added to the agent's mediaOutputs collection
+     * and stored in AIAgentRunMedia.
+     * @since 3.1.0
+     */
+    promoteMediaOutputs?: MediaOutput[];
 }
 
 /**
@@ -205,7 +401,7 @@ export type ExecuteAgentResult<P = any> = {
      * - Use agentRun.CancellationReason for cancellation reason
      * - Use agentRun.Steps for the execution step history
      */
-    agentRun: AIAgentRunEntityExtended;
+    agentRun: MJAIAgentRunEntityExtended;
     /**
      * The artifact type ID for the returned payload.
      * This identifies what type of artifact the payload represents (e.g., JSON, Markdown, HTML).
@@ -239,9 +435,22 @@ export type ExecuteAgentResult<P = any> = {
      * Includes the notes and examples that were retrieved and used for context.
      */
     memoryContext?: {
-        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
-        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+        notes: any[]; // MJAIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // MJAIAgentExampleEntity[] - using any to avoid circular dependency
     };
+
+    /**
+     * Multi-modal outputs generated by the agent.
+     * Contains media that the agent explicitly promoted to its outputs.
+     * This flows to ConversationDetailAttachment for UI display.
+     *
+     * Media items with `refId` are used for placeholder resolution (${media:xxx}).
+     * Media items with `persist: false` are excluded from database persistence.
+     * Sub-agents return their mediaOutputs to parents for bubbling up.
+     *
+     * @since 3.1.0
+     */
+    mediaOutputs?: MediaOutput[];
 }
 
 /**
@@ -351,7 +560,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  */
 export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
     /** The agent entity to execute, containing all metadata and configuration */
-    agent: AIAgentEntityExtended;
+    agent: MJAIAgentEntityExtended;
     /** Array of chat messages representing the conversation history */
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
@@ -360,6 +569,42 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     userId?: string;
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
+    /**
+     * Primary scope entity name (e.g., 'Organizations', 'Skip Tenants').
+     * Resolved to PrimaryScopeEntityID on the AIAgentRun record.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
+     *
+     * @since 2.132.0
+     */
+    PrimaryScopeEntityName?: string;
+    /**
+     * Primary scope record ID — the actual record ID within the primary entity.
+     * Stored as an indexed column on AIAgentRun/AIAgentNote for fast filtering.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
+     *
+     * @since 2.132.0
+     */
+    PrimaryScopeRecordID?: string;
+    /**
+     * Arbitrary key/value dimensions for external-app scoping.
+     * Stored as JSON in the SecondaryScopes column on AIAgentRun/AIAgentNote.
+     * Used by external applications (Skip, Izzy, etc.) to segment agent memory
+     * by custom dimensions. MJ's own chat infrastructure does not use this.
+     *
+     * @since 2.132.0
+     *
+     * @example
+     * ```typescript
+     * params.SecondaryScopes = {
+     *     ContactID: 'contact-456',
+     *     TeamID: 'team-alpha',
+     *     Region: 'EMEA'
+     * };
+     * ```
+     */
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -377,7 +622,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
-    parentRun?: AIAgentRunEntityExtended;
+    parentRun?: MJAIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
@@ -801,11 +1046,11 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of AIAgentEntityExtended objects representing sub-agents */
+    /** JSON stringified array of MJAIAgentEntityExtended objects representing sub-agents */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of ActionEntity objects representing available actions */
+    /** JSON stringified array of MJActionEntity objects representing available actions */
     actionDetails: string;
 }
 
@@ -818,11 +1063,11 @@ export type AgentConfiguration = {
     /** Error message if configuration failed */
     errorMessage?: string;
     /** The loaded agent type entity */
-    agentType?: AIAgentTypeEntity;
+    agentType?: MJAIAgentTypeEntity;
     /** The loaded system prompt entity */
-    systemPrompt?: AIPromptEntityExtended;
+    systemPrompt?: MJAIPromptEntityExtended;
     /** The loaded child prompt entity */
-    childPrompt?: AIPromptEntityExtended;
+    childPrompt?: MJAIPromptEntityExtended;
 }
 
 /**

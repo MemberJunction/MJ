@@ -220,10 +220,3 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadWatchNewTypeformResponsesAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

@@ -2,41 +2,31 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { MJGlobal } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
-import { FileStorageProviderEntity } from "@memberjunction/core-entities";
-import { FileStorageBase } from "@memberjunction/storage";
+import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 import { BaseAction } from "@memberjunction/actions";
 
 /**
- * Action that retrieves a list of active and available file storage providers.
+ * Action that retrieves a list of configured file storage accounts.
  *
- * This action returns storage providers that are:
- * 1. Marked as IsActive=true in the database
- * 2. Actually available/configured in the running environment
+ * This action returns storage accounts that are configured in the enterprise model,
+ * along with their associated provider information. Storage accounts link to
+ * providers (Google Drive, Dropbox, etc.) and credentials managed at the org level.
  *
- * This is useful for AI agents (particularly Research Agent) to discover
- * what storage providers are available before attempting to search or access files.
- *
- * Providers are configured in the File Storage Providers entity and can include:
- * - Google Drive
- * - SharePoint
- * - Dropbox
- * - Box
- * - AWS S3
- * - Azure Blob Storage
- * - Google Cloud Storage
+ * This is useful for AI agents to discover what storage accounts are available
+ * before attempting to search or access files.
  *
  * @example
  * ```typescript
- * // Get all available storage providers
+ * // Get all available storage accounts
  * await runAction({
- *   ActionName: 'List Storage Providers',
+ *   ActionName: 'List Storage Accounts',
  *   Params: []
  * });
  *
- * // Get only providers that support search
+ * // Get only accounts that support search
  * await runAction({
- *   ActionName: 'List Storage Providers',
+ *   ActionName: 'List Storage Accounts',
  *   Params: [{
  *     Name: 'SearchSupportedOnly',
  *     Value: true
@@ -44,49 +34,68 @@ import { BaseAction } from "@memberjunction/actions";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "List Storage Providers")
-export class ListStorageProvidersAction extends BaseFileStorageAction {
+@RegisterClass(BaseAction, "List Storage Accounts")
+export class ListStorageAccountsAction extends BaseFileStorageAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        // Optional parameter to filter only providers that support search
+        // Optional parameter to filter only accounts whose provider supports search
         const searchSupportedOnly = this.getBooleanParam(params, "searchsupportedonly", false);
 
         try {
-            // Build filter for active providers, optionally filtering for search support
-            let extraFilter = "IsActive=1";
-            if (searchSupportedOnly) {
-                extraFilter += " AND SupportsSearch=1";
-            }
-
-            // Query for active file storage providers from database
             const rv = new RunView();
-            const result = await rv.RunView<FileStorageProviderEntity>({
-                EntityName: 'File Storage Providers',
-                ExtraFilter: extraFilter,
-                OrderBy: 'Priority, Name',
-                ResultType: 'entity_object'
-            }, params.ContextUser);
 
-            if (!result.Success) {
+            // Load accounts and providers in parallel
+            const [accountsResult, providersResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: File Storage Accounts',
+                    ExtraFilter: '',
+                    OrderBy: 'Name',
+                    ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'MJ: File Storage Providers',
+                    ExtraFilter: 'IsActive=1',
+                    OrderBy: 'Name',
+                    ResultType: 'entity_object'
+                }
+            ], params.ContextUser);
+
+            if (!accountsResult.Success) {
                 return this.createErrorResult(
-                    `Failed to retrieve storage providers: ${result.ErrorMessage}`,
+                    `Failed to retrieve storage accounts: ${accountsResult.ErrorMessage}`,
                     "QUERY_FAILED"
                 );
             }
 
-            const dbProviders = result.Results || [];
-            const availableProviders: Array<{
+            if (!providersResult.Success) {
+                return this.createErrorResult(
+                    `Failed to retrieve storage providers: ${providersResult.ErrorMessage}`,
+                    "QUERY_FAILED"
+                );
+            }
+
+            const accounts = accountsResult.Results as MJFileStorageAccountEntity[] || [];
+            const providers = providersResult.Results as MJFileStorageProviderEntity[] || [];
+
+            // Create provider lookup map
+            const providerMap = new Map<string, MJFileStorageProviderEntity>();
+            providers.forEach(p => providerMap.set(p.ID, p));
+
+            const availableAccounts: Array<{
                 Name: string;
                 Description: string;
-                ServerDriverKey: string;
+                ProviderName: string;
+                ProviderType: string;
                 SupportsSearch: boolean;
-                IsConfigured: boolean;
-                ConfigurationError?: string;
+                HasCredential: boolean;
             }> = [];
 
-            // Check which providers are actually available in the running environment
-            for (const provider of dbProviders) {
-                // Get SupportsSearch from database column (using Get() until CodeGen regenerates entity class)
+            for (const account of accounts) {
+                const provider = providerMap.get(account.ProviderID);
+                if (!provider) {
+                    continue; // Skip accounts with inactive/missing providers
+                }
+
                 const supportsSearch = provider.Get('SupportsSearch') ?? false;
 
                 // Skip if filtering for search-only and this provider doesn't support it
@@ -94,95 +103,47 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
                     continue;
                 }
 
-                try {
-                    // Instantiate the provider and check if it's properly configured
-                    const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-                        FileStorageBase,
-                        provider.ServerDriverKey
-                    );
-
-                    if (driver) {
-                        // Provider is registered - check if it has required configuration
-                        const isConfigured = driver.IsConfigured;
-
-                        availableProviders.push({
-                            Name: provider.Name,
-                            Description: provider.Description || '',
-                            ServerDriverKey: provider.ServerDriverKey,
-                            SupportsSearch: supportsSearch,
-                            IsConfigured: isConfigured,
-                            ConfigurationError: isConfigured ? undefined : 'Missing required configuration (API keys, credentials, etc.)'
-                        });
-                    } else {
-                        // Provider exists in DB but not registered in class factory
-                        availableProviders.push({
-                            Name: provider.Name,
-                            Description: provider.Description || '',
-                            ServerDriverKey: provider.ServerDriverKey,
-                            SupportsSearch: supportsSearch,
-                            IsConfigured: false,
-                            ConfigurationError: 'Provider not registered in class factory'
-                        });
-                    }
-                } catch (error) {
-                    // Provider exists in DB but failed to instantiate
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    availableProviders.push({
-                        Name: provider.Name,
-                        Description: provider.Description || '',
-                        ServerDriverKey: provider.ServerDriverKey,
-                        SupportsSearch: supportsSearch,
-                        IsConfigured: false,
-                        ConfigurationError: `Instantiation failed: ${errorMessage}`
-                    });
-                }
+                availableAccounts.push({
+                    Name: account.Name,
+                    Description: account.Description || '',
+                    ProviderName: provider.Name,
+                    ProviderType: provider.ServerDriverKey,
+                    SupportsSearch: supportsSearch,
+                    HasCredential: !!account.CredentialID
+                });
             }
 
             // Calculate counts
-            const configuredProviders = availableProviders.filter(p => p.IsConfigured);
-            const searchSupportedCount = configuredProviders.filter(p => p.SupportsSearch).length;
-            const totalCount = availableProviders.length;
-            const configuredCount = configuredProviders.length;
+            const searchSupportedCount = availableAccounts.filter(a => a.SupportsSearch).length;
+            const totalCount = availableAccounts.length;
 
-            // Create detailed result message with provider list
-            let message = `Found ${totalCount} active storage provider(s) in database`;
-            if (configuredCount < totalCount) {
-                message += `, ${configuredCount} configured and available`;
-            } else {
-                message += `, all configured and available`;
-            }
+            // Create detailed result message
+            let message = `Found ${totalCount} storage account(s)`;
             if (searchSupportedOnly) {
                 message += ` with search support`;
             } else {
                 message += ` (${searchSupportedCount} support search)`;
             }
 
-            // Add provider details to message for LLM visibility
-            message += '\n\nAvailable Providers:';
-            for (const provider of availableProviders) {
-                message += `\n- ${provider.Name}`;
-                if (provider.IsConfigured) {
-                    message += ` (Configured, ${provider.SupportsSearch ? 'Supports Search' : 'No Search Support'})`;
-                } else {
-                    message += ` (Not Configured: ${provider.ConfigurationError})`;
+            // Add account details to message for LLM visibility
+            message += '\n\nAvailable Storage Accounts:';
+            for (const account of availableAccounts) {
+                message += `\n- ${account.Name} (${account.ProviderName})`;
+                if (account.SupportsSearch) {
+                    message += ' - Supports Search';
                 }
             }
 
-            // Build output parameters array per ActionResultSimple spec
+            // Build output parameters array
             const outputParams: ActionParam[] = [
                 {
-                    Name: 'Providers',
-                    Value: availableProviders,
+                    Name: 'Accounts',
+                    Value: availableAccounts,
                     Type: 'Output'
                 },
                 {
                     Name: 'TotalCount',
                     Value: totalCount,
-                    Type: 'Output'
-                },
-                {
-                    Name: 'ConfiguredCount',
-                    Value: configuredCount,
                     Type: 'Output'
                 },
                 {
@@ -192,7 +153,6 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
                 }
             ];
 
-            // Return results
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
@@ -203,17 +163,9 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             return this.createErrorResult(
-                `Failed to list storage providers: ${errorMessage}`,
+                `Failed to list storage accounts: ${errorMessage}`,
                 "LIST_FAILED"
             );
         }
     }
-}
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadListStorageProvidersAction() {
-    // This function call ensures the class decorator executes
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseFileStorageAction, "List Storage Providers");
 }

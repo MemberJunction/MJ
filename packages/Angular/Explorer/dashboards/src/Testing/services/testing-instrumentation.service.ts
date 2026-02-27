@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 export interface TestingDashboardKPIs {
@@ -839,7 +839,7 @@ export class TestingInstrumentationService {
 
   async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
     try {
-      const feedback = await this.metadata.GetEntityObject<TestRunFeedbackEntity>('MJ: Test Run Feedbacks');
+      const feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>('MJ: Test Run Feedbacks');
       feedback.TestRunID = testRunID;
       feedback.Rating = rating;
       feedback.IsCorrect = isCorrect;
@@ -962,7 +962,7 @@ export class TestingInstrumentationService {
     const rv = new RunView();
 
     // Load test runs with additional fields for evaluation
-    type TestRunExtended = {
+    type MJTestRunExtended = {
       ID: string;
       TestID: string;
       Test: string;
@@ -997,7 +997,7 @@ export class TestingInstrumentationService {
       }
     ]);
 
-    const testRuns = (testRunsResult.Results || []) as TestRunExtended[];
+    const testRuns = (testRunsResult.Results || []) as MJTestRunExtended[];
     const feedbacks = (feedbackResult.Results || []) as TestRunFeedbackSimple[];
 
     // Create feedback lookup map

@@ -1,7 +1,7 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAIPromptTypeEntity, MJAIPromptCategoryEntity, MJTemplateEntity, MJTemplateContentEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -9,34 +9,46 @@ import { SharedService, BaseResourceComponent, NavigationService } from '@member
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
-  Template: string; // From AIPromptEntityExtended (view field)
-  TemplateEntity?: TemplateEntity; // Our added field for the actual template entity
-  TemplateContents?: TemplateContentEntity[];
+interface PromptWithTemplate extends Omit<MJAIPromptEntityExtended, 'Template'> {
+  Template: string; // From MJAIPromptEntityExtended (view field)
+  MJTemplateEntity?: MJTemplateEntity; // Our added field for the actual template entity
+  TemplateContents?: MJTemplateContentEntity[];
   CategoryName?: string;
   TypeName?: string;
 }
 
 /**
- * Tree-shaking prevention function - ensures component is included in builds
+ * User preferences for the Prompt Management dashboard
  */
-export function LoadAIPromptsResource() {
-  // Force inclusion in production builds
+interface PromptManagementUserPreferences {
+  viewMode: 'grid' | 'list' | 'priority-matrix';
+  showFilters: boolean;
+  searchTerm: string;
+  selectedCategory: string;
+  selectedType: string;
+  selectedStatus: string;
+  sortColumn: string;
+  sortDirection: 'asc' | 'desc';
 }
-
 /**
  * AI Prompts Resource - displays AI prompt management
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
+  standalone: false,
   selector: 'app-prompt-management',
   templateUrl: './prompt-management.component.html',
   styleUrls: ['./prompt-management.component.css']
 })
 export class PromptManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+
+  // Settings persistence
+  private readonly USER_SETTINGS_KEY = 'AI.Prompts.UserPreferences';
+  private settingsPersistSubject = new Subject<void>();
+  private settingsLoaded = false;
 
   // View state
   public viewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';
@@ -47,8 +59,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   // Data
   public prompts: PromptWithTemplate[] = [];
   public filteredPrompts: PromptWithTemplate[] = [];
-  public categories: AIPromptCategoryEntity[] = [];
-  public types: AIPromptTypeEntity[] = [];
+  public categories: MJAIPromptCategoryEntity[] = [];
+  public types: MJAIPromptTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -77,7 +89,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
-  public selectedPromptForTest: AIPromptEntityExtended | null = null;
+  public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -86,22 +98,22 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
   /** Check if user can create AI Prompts */
   public get UserCanCreatePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Create');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Create');
   }
 
   /** Check if user can read AI Prompts */
   public get UserCanReadPrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Read');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Read');
   }
 
   /** Check if user can update AI Prompts */
   public get UserCanUpdatePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Update');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Update');
   }
 
   /** Check if user can delete AI Prompts */
   public get UserCanDeletePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Delete');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Delete');
   }
 
   /**
@@ -163,16 +175,29 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
+
+    // Set up debounced settings persistence
+    this.settingsPersistSubject.pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.persistUserPreferences();
+    });
   }
 
   ngOnInit(): void {
+    // Load saved user preferences first
+    this.loadUserPreferences();
+
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
 
+    // Apply initial state from resource configuration if provided (overrides saved prefs)
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
@@ -194,7 +219,95 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     ).subscribe(searchTerm => {
       this.searchTerm = searchTerm;
       this.applyFilters();
+      this.saveUserPreferencesDebounced();
     });
+  }
+
+  // ========================================
+  // User Settings Persistence
+  // ========================================
+
+  /**
+   * Load saved user preferences from the UserInfoEngine
+   */
+  private loadUserPreferences(): void {
+    try {
+      const savedPrefs = UserInfoEngine.Instance.GetSetting(this.USER_SETTINGS_KEY);
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs) as PromptManagementUserPreferences;
+        this.applyUserPreferencesFromStorage(prefs);
+      }
+    } catch (error) {
+      console.warn('[PromptManagement] Failed to load user preferences:', error);
+    } finally {
+      this.settingsLoaded = true;
+    }
+  }
+
+  /**
+   * Apply loaded preferences to component state
+   */
+  private applyUserPreferencesFromStorage(prefs: PromptManagementUserPreferences): void {
+    if (prefs.viewMode) {
+      this.viewMode = prefs.viewMode;
+    }
+    if (prefs.showFilters !== undefined) {
+      this.showFilters = prefs.showFilters;
+    }
+    if (prefs.searchTerm) {
+      this.searchTerm = prefs.searchTerm;
+    }
+    if (prefs.selectedCategory) {
+      this.selectedCategory = prefs.selectedCategory;
+    }
+    if (prefs.selectedType) {
+      this.selectedType = prefs.selectedType;
+    }
+    if (prefs.selectedStatus) {
+      this.selectedStatus = prefs.selectedStatus;
+    }
+    if (prefs.sortColumn) {
+      this.sortColumn = prefs.sortColumn;
+    }
+    if (prefs.sortDirection) {
+      this.sortDirection = prefs.sortDirection;
+    }
+  }
+
+  /**
+   * Get current preferences as an object for saving
+   */
+  private getCurrentPreferences(): PromptManagementUserPreferences {
+    return {
+      viewMode: this.viewMode,
+      showFilters: this.showFilters,
+      searchTerm: this.searchTerm,
+      selectedCategory: this.selectedCategory,
+      selectedType: this.selectedType,
+      selectedStatus: this.selectedStatus,
+      sortColumn: this.sortColumn,
+      sortDirection: this.sortDirection
+    };
+  }
+
+  /**
+   * Persist user preferences to storage (debounced)
+   */
+  private saveUserPreferencesDebounced(): void {
+    if (!this.settingsLoaded) return; // Don't save during initial load
+    this.settingsPersistSubject.next();
+  }
+
+  /**
+   * Actually persist user preferences to the UserInfoEngine
+   */
+  private async persistUserPreferences(): Promise<void> {
+    try {
+      const prefs = this.getCurrentPreferences();
+      await UserInfoEngine.Instance.SetSetting(this.USER_SETTINGS_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.warn('[PromptManagement] Failed to persist user preferences:', error);
+    }
   }
 
   private startLoadingMessages(): void {
@@ -218,12 +331,12 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       this.types = AIEngineBase.Instance.PromptTypes;
 
       // Get cached data from TemplateEngineBase
-      const templates = TemplateEngineBase.Instance.Templates as TemplateEntity[];
+      const templates = TemplateEngineBase.Instance.Templates as MJTemplateEntity[];
       const templateContents = TemplateEngineBase.Instance.TemplateContents;
       
       // Create lookup maps
       const templateMap = new Map(templates.map(t => [t.ID, t]));
-      const templateContentMap = new Map<string, TemplateContentEntity[]>();
+      const templateContentMap = new Map<string, MJTemplateContentEntity[]>();
       
       templateContents.forEach(tc => {
         const contents = templateContentMap.get(tc.TemplateID) || [];
@@ -239,7 +352,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
-        (prompt as any).TemplateEntity = template;
+        (prompt as any).MJTemplateEntity = template;
         (prompt as any).TemplateContents = template ? (templateContentMap.get(template.ID) || []) : [];
         (prompt as any).CategoryName = prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized';
         (prompt as any).TypeName = prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped';
@@ -276,15 +389,18 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
   public toggleFilters(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleFilterPanel(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public setViewMode(mode: 'grid' | 'list' | 'priority-matrix'): void {
     this.viewMode = mode;
     this.expandedPromptId = null;
+    this.saveUserPreferencesDebounced();
   }
 
   public togglePromptExpansion(promptId: string): void {
@@ -327,6 +443,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
     // Apply sorting
     this.filteredPrompts = this.applySorting(this.filteredPrompts);
+    this.cdr.detectChanges();
   }
 
   /**
@@ -342,6 +459,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       this.sortDirection = 'asc';
     }
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   /**
@@ -386,21 +504,24 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   public onCategoryChange(categoryId: string): void {
     this.selectedCategory = categoryId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onTypeChange(typeId: string): void {
     this.selectedType = typeId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onStatusChange(status: string): void {
     this.selectedStatus = status;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public openPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
-    this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
   }
 
   /**
@@ -453,7 +574,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   public createNewPrompt(): void {
     // Use the standard MemberJunction pattern to open a new AI Prompt form
     // Empty CompositeKey indicates a new record
-    this.navigationService.OpenEntityRecord('AI Prompts', new CompositeKey([]));
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', new CompositeKey([]));
   }
 
   public getPromptIcon(prompt: PromptWithTemplate): string {
@@ -478,9 +599,9 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
            this.selectedStatus !== 'all';
   }
 
-  public get filteredPromptsAsEntities(): AIPromptEntityExtended[] {
-    // The prompts are already AIPromptEntityExtended instances with extra properties
-    return this.filteredPrompts as AIPromptEntityExtended[];
+  public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
+    // The prompts are already MJAIPromptEntityExtended instances with extra properties
+    return this.filteredPrompts as MJAIPromptEntityExtended[];
   }
 
   public clearFilters(): void {
@@ -490,6 +611,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     this.selectedStatus = 'all';
     this.searchSubject.next('');
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   // BaseResourceComponent abstract method implementations

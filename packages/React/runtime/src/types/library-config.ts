@@ -23,7 +23,10 @@ export interface ExternalLibraryConfig {
   
   /** CDN URL for the library JavaScript */
   cdnUrl: string;
-  
+
+  /** Fallback CDN URLs to try if the primary cdnUrl fails (tried in order) */
+  fallbackCdnUrls?: string[];
+
   /** Optional CDN URL for library CSS */
   cdnCssUrl?: string;
   

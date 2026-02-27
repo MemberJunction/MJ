@@ -17,6 +17,7 @@ export interface EntityDetailsOpenRecordEvent {
  * a detailed view of the currently selected entity.
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.css']
@@ -90,7 +91,7 @@ export class EntityDetailsComponent implements OnChanges {
   public onOpenEntity(): void {
     if (this.selectedEntity) {
       this.openRecord.emit({
-        EntityName: 'Entities',
+        EntityName: 'MJ: Entities',
         RecordID: this.selectedEntity.ID
       });
     }

@@ -1,4 +1,5 @@
 import {
+  AggregateExpression,
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
@@ -16,10 +17,11 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { AuditLogEntity, ErrorLogEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { PubSubEngine } from 'type-graphql';
+import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
@@ -266,9 +268,14 @@ export class ResolverBase {
 
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewByNameGeneric received aggregates: viewName=${viewInput.ViewName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<UserViewEntityExtended>({
-        EntityName: 'User Views',
+      const result = await rv.RunView<MJUserViewEntityExtended>({
+        EntityName: 'MJ: User Views',
         ExtraFilter: "Name='" + viewInput.ViewName + "'",
       }, userPayload.userRecord);
       if (result && result.Success && result.Results.length > 0) {
@@ -290,7 +297,8 @@ export class ResolverBase {
           viewInput.ResultType,
           userPayload,
           viewInput.MaxRows,
-          viewInput.StartRow
+          viewInput.StartRow,
+          viewInput.Aggregates
         );
       }
       else {
@@ -305,8 +313,13 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewByIDGeneric received aggregates: viewID=${viewInput.ViewID}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const contextUser = this.GetUserFromPayload(userPayload);
-      const viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+      const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
       await viewInfo.Load(viewInput.ViewID);
       return this.RunViewGenericInternal(
         provider,
@@ -325,7 +338,8 @@ export class ResolverBase {
         viewInput.ResultType,
         userPayload,
         viewInput.MaxRows,
-        viewInput.StartRow
+        viewInput.StartRow,
+        viewInput.Aggregates
       );
     } catch (err) {
       console.log(err);
@@ -335,16 +349,21 @@ export class ResolverBase {
 
   async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
+      // Log aggregate input for debugging
+      if (viewInput.Aggregates?.length) {
+        LogStatus(`[ResolverBase] RunDynamicViewGeneric received aggregates: entityName=${viewInput.EntityName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const md = provider;
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
-      const viewInfo: UserViewEntityExtended = {
+      const viewInfo: MJUserViewEntityExtended = {
         ID: '',
         Entity: viewInput.EntityName,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
-      } as UserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
+      } as MJUserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
         provider,
@@ -363,7 +382,8 @@ export class ResolverBase {
         viewInput.ResultType,
         userPayload,
         viewInput.MaxRows,
-        viewInput.StartRow
+        viewInput.StartRow,
+        viewInput.Aggregates
       );
     } catch (err) {
       console.log(err);
@@ -381,12 +401,12 @@ export class ResolverBase {
     let params: RunViewGenericParams[] = [];
     for (const viewInput of viewInputs) {
       try {
-        let viewInfo: UserViewEntityExtended | null = null;
+        let viewInfo: MJUserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'MJ: User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+          viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
         } else if (viewInput.EntityName) {
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -400,7 +420,7 @@ export class ResolverBase {
             Entity: viewInput.EntityName,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
-          } as UserViewEntityExtended;
+          } as MJUserViewEntityExtended;
         } else {
           throw new Error('Unable to determine input type');
         }
@@ -422,7 +442,8 @@ export class ResolverBase {
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
-          userPayload, 
+          userPayload,
+          aggregates: viewInput.Aggregates,
         });
       } catch (err) {
         LogError(err);
@@ -484,7 +505,7 @@ export class ResolverBase {
     if (!userPayload) {
       throw new Error(`userPayload is null`);
     }
-    
+
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
@@ -496,9 +517,82 @@ export class ResolverBase {
       if (!userPermissions.CanRead) {
         throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
       }
-    } 
+    }
     else {
       throw new Error(`Entity not found in metadata`);
+    }
+  }
+
+  /**
+   * Checks API key scope authorization. Only performs check if request
+   * was authenticated via API key (apiKeyHash present in userPayload).
+   * For OAuth/JWT auth, this is a no-op.
+   *
+   * @param scopePath - The scope path (e.g., 'entity:read', 'agent:execute')
+   * @param resource - The resource name (e.g., entity name, agent name)
+   * @param userPayload - The user payload from context
+   * @throws AuthorizationError if API key lacks required scope
+   */
+  protected async CheckAPIKeyScopeAuthorization(
+    scopePath: string,
+    resource: string,
+    userPayload: UserPayload
+  ): Promise<void> {
+    // Skip scope check for OAuth/JWT auth (no API key)
+    if (!userPayload.apiKeyHash) {
+      return;
+    }
+
+    // Get system user for authorization call
+    // NOTE: We use system user here because Authorize() needs to run internal
+    // database queries (loading scope rules, logging decisions). The system user
+    // ensures these queries work regardless of what permissions the API key's
+    // user has. The API key's associated user (in userPayload.userRecord) is
+    // used later when the actual operation executes - their permissions are
+    // the ultimate ceiling that scopes can only narrow, never expand.
+    const systemUser = UserCache.Instance.Users.find(u => u.Type === 'System');
+    if (!systemUser) {
+      throw new Error('System user not found');
+    }
+
+    const apiKeyEngine = GetAPIKeyEngine();
+
+    // Check for full_access scope first (god power - bypasses all other checks)
+    const fullAccessResult = await apiKeyEngine.Authorize(
+      userPayload.apiKeyHash,
+      'MJAPI',
+      'full_access',
+      '*',
+      systemUser,
+      { endpoint: '/graphql', method: 'POST' }
+    );
+
+    if (fullAccessResult.Allowed) {
+      // full_access granted - skip specific scope check
+      return;
+    }
+
+    // Check specific scope
+    const result = await apiKeyEngine.Authorize(
+      userPayload.apiKeyHash,
+      'MJAPI',
+      scopePath,
+      resource,
+      systemUser,
+      {
+        endpoint: '/graphql',
+        method: 'POST'
+      }
+    );
+
+    if (!result.Allowed) {
+      // Provide specific, actionable error message
+      throw new AuthorizationError(
+        `Access denied. This API key requires the '${scopePath}' scope ` +
+        `for resource '${resource}' to perform this operation. ` +
+        `Please update the API key's scopes or use an API key with appropriate permissions. ` +
+        `Denial reason: ${result.Reason}`
+      );
     }
   }
 
@@ -509,7 +603,7 @@ export class ResolverBase {
    */
   protected async RunViewGenericInternal(
     provider: DatabaseProviderBase,
-    viewInfo: UserViewEntityExtended,
+    viewInfo: MJUserViewEntityExtended,
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
@@ -524,10 +618,14 @@ export class ResolverBase {
     resultType: string | undefined,
     userPayload: UserPayload | null,
     maxRows: number | undefined,
-    startRow: number | undefined
+    startRow: number | undefined,
+    aggregates?: AggregateExpression[]
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
 
       const md = provider
       const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
@@ -559,6 +657,11 @@ export class ResolverBase {
         }
       }
 
+      // Log aggregate request for debugging
+      if (aggregates?.length) {
+        LogStatus(`[ResolverBase] RunViewGenericInternal with aggregates: entityName=${viewInfo.Entity}, viewName=${viewInfo.Name}, aggregateCount=${aggregates.length}, aggregates=${JSON.stringify(aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+      }
+
       const result = await rv.RunView(
         {
           ViewID: viewInfo.ID,
@@ -578,9 +681,15 @@ export class ResolverBase {
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
+          Aggregates: aggregates,
         },
         user
       );
+
+      // Log aggregate results for debugging
+      if (aggregates?.length) {
+        LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
+      }
 
       // Process results for GraphQL transport
       const mapper = new FieldMapper();
@@ -682,6 +791,7 @@ export class ResolverBase {
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
+          Aggregates: param.aggregates,
         });
       }
 
@@ -769,7 +879,7 @@ export class ResolverBase {
       if (!userInfo) throw new Error(`User ${userPayload?.email} not found in metadata`);
       if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
 
-      const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
@@ -875,6 +985,9 @@ export class ResolverBase {
   }
 
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    // Check API key scope authorization for entity create operations
+    await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
+
     if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -907,6 +1020,9 @@ export class ResolverBase {
   protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    // Check API key scope authorization for entity update operations
+    await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
+
     if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const userInfo = this.GetUserFromPayload(userPayload);
@@ -1139,7 +1255,7 @@ export class ResolverBase {
         // Create ErrorLog record in the database
         try {
           const md = new Metadata();
-          const errorLogEntity = await md.GetEntityObject<ErrorLogEntity>('Error Logs', contextUser);
+          const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
           errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
           errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
           errorLogEntity.Status = 'Warning';
@@ -1169,6 +1285,9 @@ export class ResolverBase {
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
+    // Check API key scope authorization for entity delete operations
+    await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
+
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));

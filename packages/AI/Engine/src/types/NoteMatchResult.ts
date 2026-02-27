@@ -1,4 +1,4 @@
-import { AIAgentNoteEntity } from '@memberjunction/core-entities';
+import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 
 /**
  * Metadata stored with each note embedding in the vector service.
@@ -11,7 +11,7 @@ export interface NoteEmbeddingMetadata {
     companyId: string | null;
     type: string;
     noteText: string;
-    noteEntity: AIAgentNoteEntity;
+    noteEntity: MJAIAgentNoteEntity;
 }
 
 /**
@@ -19,6 +19,6 @@ export interface NoteEmbeddingMetadata {
  * Returns full entity object to avoid database round-trip.
  */
 export interface NoteMatchResult {
-    note: AIAgentNoteEntity;
+    note: MJAIAgentNoteEntity;
     similarity: number;
 }

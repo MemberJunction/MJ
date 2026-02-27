@@ -1,0 +1,66 @@
+@if (IsLoading) {
+  <div class="loading-container">
+    <mj-loading text="Loading account info..."></mj-loading>
+  </div>
+}
+
+@if (ErrorMessage && !IsLoading) {
+  <div class="error-message">
+    <i class="fa-solid fa-exclamation-circle"></i>
+    <span>{{ ErrorMessage }}</span>
+  </div>
+}
+
+@if (CurrentUser && !IsLoading) {
+  <div class="account-info">
+    <div class="info-row">
+      <div class="info-label">
+        <i class="fa-solid fa-user"></i>
+        <span>Full Name</span>
+      </div>
+      <div class="info-value">{{ CurrentUser.Name || 'Not set' }}</div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-label">
+        <i class="fa-solid fa-envelope"></i>
+        <span>Email</span>
+      </div>
+      <div class="info-value">{{ CurrentUser.Email || 'Not set' }}</div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-label">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>Account Type</span>
+      </div>
+      <div class="info-value">
+        <span class="type-badge" [class]="'type-' + (CurrentUser.Type || 'user').toLowerCase()">
+          {{ CurrentUser.Type || 'User' }}
+        </span>
+      </div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-label">
+        <i class="fa-solid fa-calendar-plus"></i>
+        <span>Account Created</span>
+      </div>
+      <div class="info-value">{{ FormatDate(CurrentUser.__mj_CreatedAt) }}</div>
+    </div>
+
+    @if (CurrentUser.IsActive !== undefined) {
+      <div class="info-row">
+        <div class="info-label">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Status</span>
+        </div>
+        <div class="info-value">
+          <span class="status-badge" [class.active]="CurrentUser.IsActive" [class.inactive]="!CurrentUser.IsActive">
+            {{ CurrentUser.IsActive ? 'Active' : 'Inactive' }}
+          </span>
+        </div>
+      </div>
+    }
+  </div>
+}

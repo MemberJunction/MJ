@@ -1,0 +1,17 @@
+{
+  "source:string:!empty": "query",
+  "title:string:!empty": "Descriptive title",
+  "plan:string?": "Optional markdown plan",
+  "columns:[0+]": [
+    {
+      "field:string:!empty": "ColumnName",
+      "headerName?": "Display Name"
+    }
+  ],
+  "rows:[0+]": [],
+  "metadata?": {
+    "sql:string?": "SELECT ...",
+    "rowCount:number?": 0,
+    "executionTimeMs:number?": 0
+  }
+}

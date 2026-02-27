@@ -1,5 +1,5 @@
 import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager } from '@memberjunction/core';
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 
 /**
  * Result of parameter validation
@@ -141,7 +141,9 @@ export class QueryParameterProcessor {
                                 errors.push(`Parameter '${paramDef.Name}' must be a valid date`);
                                 continue;
                             }
-                            validatedParams[paramDef.Name] = date;
+                            // Store as ISO string for SQL compatibility - Date.toString() produces
+                            // format like "Mon Jan 26 2026..." which SQL Server cannot parse
+                            validatedParams[paramDef.Name] = date.toISOString();
                             break;
                         case 'boolean':
                             // Convert to 0/1 for SQL Server bit fields

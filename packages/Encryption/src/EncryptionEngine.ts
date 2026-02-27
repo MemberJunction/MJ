@@ -587,11 +587,11 @@ export class EncryptionEngine extends EncryptionEngineBase {
         const cipherOptions: crypto.CipherGCMOptions | undefined =
             keyConfig.algorithm.isAEAD ? { authTagLength: 16 } : undefined;
 
-        // Create cipher
+        // Create cipher - use Uint8Array.from() for TS 5.9 Buffer compatibility
         const cipher = crypto.createCipheriv(
             keyConfig.algorithm.nodeCryptoName,
-            keyMaterial,
-            iv,
+            Uint8Array.from(keyMaterial),
+            Uint8Array.from(iv),
             cipherOptions
         );
 
@@ -602,9 +602,9 @@ export class EncryptionEngine extends EncryptionEngineBase {
 
         // Encrypt
         const ciphertext = Buffer.concat([
-            cipher.update(data),
+            cipher.update(Uint8Array.from(data)),
             cipher.final()
-        ]);
+        ] as unknown as Uint8Array[]);
 
         // Build the serialized format
         const parts: string[] = [
@@ -649,11 +649,11 @@ export class EncryptionEngine extends EncryptionEngineBase {
         const decipherOptions: crypto.CipherGCMOptions | undefined =
             keyConfig.algorithm.isAEAD ? { authTagLength: 16 } : undefined;
 
-        // Create decipher
+        // Create decipher - use Uint8Array.from() for TS 5.9 Buffer compatibility
         const decipher = crypto.createDecipheriv(
             keyConfig.algorithm.nodeCryptoName,
-            keyMaterial,
-            iv,
+            Uint8Array.from(keyMaterial),
+            Uint8Array.from(iv),
             decipherOptions
         );
 
@@ -667,7 +667,7 @@ export class EncryptionEngine extends EncryptionEngineBase {
             }
 
             const authTag = Buffer.from(parsed.authTag, 'base64');
-            (decipher as crypto.DecipherGCM).setAuthTag(authTag);
+            (decipher as crypto.DecipherGCM).setAuthTag(Uint8Array.from(authTag));
         }
 
         // Decode ciphertext
@@ -676,9 +676,9 @@ export class EncryptionEngine extends EncryptionEngineBase {
         // Decrypt
         try {
             const plaintext = Buffer.concat([
-                decipher.update(ciphertext),
+                decipher.update(Uint8Array.from(ciphertext)),
                 decipher.final()
-            ]);
+            ] as unknown as Uint8Array[]);
 
             return plaintext.toString('utf8');
         } catch (err) {

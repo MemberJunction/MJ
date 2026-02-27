@@ -11,8 +11,8 @@ import {
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
 import {
-    TestEntity,
-    TestRunEntity
+    MJTestEntity,
+    MJTestRunEntity
 } from '@memberjunction/core-entities';
 import {
     DriverExecutionContext,
@@ -96,7 +96,7 @@ export abstract class BaseTestDriver {
      * @param test - The test being validated
      * @returns Validation result with errors and warnings
      */
-    public async Validate(test: TestEntity): Promise<ValidationResult> {
+    public async Validate(test: MJTestEntity): Promise<ValidationResult> {
         const errors: ValidationError[] = [];
         const warnings: ValidationWarning[] = [];
 
@@ -115,7 +115,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'input',
-                    message: `InputDefinition is not valid JSON: ${error.message}`,
+                    message: `InputDefinition is not valid JSON: ${(error as Error).message}`,
                     field: 'InputDefinition',
                     suggestion: 'Fix JSON syntax errors'
                 });
@@ -135,7 +135,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'expected-outcome',
-                    message: `ExpectedOutcomes is not valid JSON: ${error.message}`,
+                    message: `ExpectedOutcomes is not valid JSON: ${(error as Error).message}`,
                     field: 'ExpectedOutcomes',
                     suggestion: 'Fix JSON syntax errors'
                 });
@@ -155,7 +155,7 @@ export abstract class BaseTestDriver {
             } catch (error) {
                 errors.push({
                     category: 'configuration',
-                    message: `Configuration is not valid JSON: ${error.message}`,
+                    message: `Configuration is not valid JSON: ${(error as Error).message}`,
                     field: 'Configuration',
                     suggestion: 'Fix JSON syntax errors'
                 });
@@ -236,7 +236,7 @@ export abstract class BaseTestDriver {
      * @throws Error if configuration is missing or invalid
      * @protected
      */
-    protected parseConfig<T>(test: TestEntity): T {
+    protected parseConfig<T>(test: MJTestEntity): T {
         if (!test.Configuration) {
             throw new Error('Configuration is required for test execution');
         }
@@ -258,7 +258,7 @@ export abstract class BaseTestDriver {
      * @throws Error if input definition is missing or invalid
      * @protected
      */
-    protected parseInputDefinition<T>(test: TestEntity): T {
+    protected parseInputDefinition<T>(test: MJTestEntity): T {
         if (!test.InputDefinition) {
             throw new Error('InputDefinition is required for test execution');
         }
@@ -280,7 +280,7 @@ export abstract class BaseTestDriver {
      * @throws Error if expected outcomes is missing or invalid
      * @protected
      */
-    protected parseExpectedOutcomes<T>(test: TestEntity): T {
+    protected parseExpectedOutcomes<T>(test: MJTestEntity): T {
         if (!test.ExpectedOutcomes) {
             throw new Error('ExpectedOutcomes is required for test execution');
         }
@@ -346,7 +346,7 @@ export abstract class BaseTestDriver {
      * @returns Timeout in milliseconds
      * @protected
      */
-    protected getEffectiveTimeout(test: TestEntity, config?: { maxExecutionTime?: number }): number {
+    protected getEffectiveTimeout(test: MJTestEntity, config?: { maxExecutionTime?: number }): number {
         // Priority 1: JSON config maxExecutionTime (backward compatibility)
         if (config?.maxExecutionTime != null && config.maxExecutionTime > 0) {
             return config.maxExecutionTime;

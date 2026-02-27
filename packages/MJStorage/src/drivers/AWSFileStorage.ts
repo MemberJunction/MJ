@@ -6,12 +6,12 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
-  S3Client
+  S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
@@ -20,35 +20,49 @@ import {
   GetObjectParams,
   GetObjectMetadataParams,
   StorageListResult,
-  StorageObjectMetadata
+  StorageObjectMetadata,
 } from '../generic/FileStorageBase';
 import { getProviderConfig } from '../config';
 
+import { StorageProviderConfig } from '../generic/FileStorageBase';
+
+/**
+ * Configuration interface for AWS S3 file storage.
+ * Extends StorageProviderConfig to include accountId and accountName.
+ */
+interface AWSS3Config extends StorageProviderConfig {
+  region?: string;
+  accessKeyID?: string;
+  secretAccessKey?: string;
+  defaultBucket?: string;
+  keyPrefix?: string;
+}
+
 /**
  * AWS S3 implementation of the FileStorageBase interface.
- * 
+ *
  * This class provides methods for interacting with Amazon S3 as a file storage provider.
  * It implements all the abstract methods defined in FileStorageBase and handles AWS-specific
  * authentication, authorization, and file operations.
- * 
+ *
  * It requires the following environment variables to be set:
  * - STORAGE_AWS_REGION: The AWS region (e.g., 'us-east-1')
  * - STORAGE_AWS_BUCKET_NAME: The S3 bucket name
  * - STORAGE_AWS_ACCESS_KEY_ID: The AWS access key ID
  * - STORAGE_AWS_SECRET_ACCESS_KEY: The AWS secret access key
  * - STORAGE_AWS_KEY_PREFIX: (Optional) Prefix for all object keys, defaults to '/'
- * 
+ *
  * @example
  * ```typescript
  * // Create an instance of AWSFileStorage
  * const s3Storage = new AWSFileStorage();
- * 
+ *
  * // Generate a pre-authenticated upload URL
  * const { UploadUrl } = await s3Storage.CreatePreAuthUploadUrl('documents/report.pdf');
- * 
+ *
  * // Generate a pre-authenticated download URL
  * const downloadUrl = await s3Storage.CreatePreAuthDownloadUrl('documents/report.pdf');
- * 
+ *
  * // List files in a directory
  * const files = await s3Storage.ListObjects('documents/');
  * ```
@@ -57,7 +71,7 @@ import { getProviderConfig } from '../config';
 export class AWSFileStorage extends FileStorageBase {
   /** The name of this storage provider, used in error messages */
   protected readonly providerName = 'AWS S3';
-  
+
   /** The S3 bucket name */
   private _bucket: string;
 
@@ -78,7 +92,7 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Creates a new instance of AWSFileStorage.
-   * 
+   *
    * Initializes the connection to AWS S3 using environment variables.
    * Throws an error if any required environment variables are missing.
    */
@@ -108,20 +122,113 @@ export class AWSFileStorage extends FileStorageBase {
   }
 
   /**
+   * Initialize AWS S3 storage provider.
+   *
+   * **Always call this method** after creating an instance.
+   *
+   * @example Simple Deployment (Environment Variables)
+   * ```typescript
+   * const storage = new AWSFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/');
+   * ```
+   *
+   * @example Multi-Tenant (Database Credentials)
+   * ```typescript
+   * const storage = new AWSFileStorage();
+   * await storage.initialize({
+   *   accountId: '12345',
+   *   accountName: 'AWS Account',
+   *   accessKeyID: '...',     // From database
+   *   secretAccessKey: '...',
+   *   region: 'us-east-1',
+   *   defaultBucket: 'bucket'
+   * });
+   * await storage.ListObjects('/');
+   * ```
+   *
+   * @param config - Optional. Omit to use env vars, provide to override with database creds.
+   */
+  public async initialize(config?: AWSS3Config): Promise<void> {
+    // Always call super to store accountId and accountName
+    await super.initialize(config);
+
+    if (!config) {
+      return; // Nothing to do, constructor already handled config from env/file
+    }
+
+    // Update configuration with provided values
+    const region = config.region || (this._client.config.region as string);
+    this._accessKeyId = config.accessKeyID || this._accessKeyId;
+    this._secretAccessKey = config.secretAccessKey || this._secretAccessKey;
+    this._bucketName = config.defaultBucket || this._bucketName;
+    this._bucket = this._bucketName;
+
+    if (config.keyPrefix) {
+      this._keyPrefix = config.keyPrefix.endsWith('/') ? config.keyPrefix : `${config.keyPrefix}/`;
+    }
+
+    // Reinitialize the S3 client with new credentials
+    const credentials = {
+      accessKeyId: this._accessKeyId,
+      secretAccessKey: this._secretAccessKey,
+    };
+
+    this._client = new S3Client({ region, credentials });
+  }
+
+  /**
    * Checks if AWS S3 provider is properly configured.
    * Returns true if access credentials and bucket name are present.
+   * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
-    return !!(this._accessKeyId && this._secretAccessKey && this._bucketName);
+    const hasAccessKey = !!this._accessKeyId;
+    const hasSecretKey = !!this._secretAccessKey;
+    const hasBucket = !!this._bucketName;
+    const hasRegion = !!this._client?.config?.region;
+
+    const isConfigured = hasAccessKey && hasSecretKey && hasBucket && hasRegion;
+
+    if (!isConfigured) {
+      const missing: string[] = [];
+      if (!hasAccessKey) missing.push('Access Key ID');
+      if (!hasSecretKey) missing.push('Secret Access Key');
+      if (!hasBucket) missing.push('Bucket Name');
+      if (!hasRegion) missing.push('Region');
+
+      console.error(
+        `❌ AWS S3 provider not configured. Missing: ${missing.join(', ')}\n\n` +
+        `Configuration Options:\n\n` +
+        `Option 1: Environment Variables\n` +
+        `  export STORAGE_AWS_ACCESS_KEY_ID="AKIA..."\n` +
+        `  export STORAGE_AWS_SECRET_ACCESS_KEY="..."\n` +
+        `  export STORAGE_AWS_BUCKET_NAME="my-bucket"\n` +
+        `  export STORAGE_AWS_REGION="us-east-1"\n` +
+        `  const storage = new AWSFileStorage();\n` +
+        `  await storage.initialize(); // No config needed\n\n` +
+        `Option 2: Database Credentials (Multi-Tenant)\n` +
+        `  const storage = new AWSFileStorage();\n` +
+        `  await storage.initialize({\n` +
+        `    accountId: "...",\n` +
+        `    accessKeyID: "...",\n` +
+        `    secretAccessKey: "...",\n` +
+        `    region: "us-east-1",\n` +
+        `    defaultBucket: "my-bucket"\n` +
+        `  });\n`
+      );
+    }
+
+    return isConfigured;
   }
 
   /**
    * Normalizes the object name by ensuring it has the proper key prefix.
-   * 
+   *
    * This is a helper method used internally to ensure all object keys have
    * the configured prefix. It handles cases where the object name already
    * includes the prefix or has leading slashes.
-   * 
+   *
    * @param objectName - The object name to normalize
    * @returns The normalized object name with the proper prefix
    * @private
@@ -130,7 +237,7 @@ export class AWSFileStorage extends FileStorageBase {
     if (objectName.startsWith(this._keyPrefix)) {
       return objectName;
     }
-    
+
     // Remove any leading slash from the object name to avoid double slashes
     const cleanObjectName = objectName.startsWith('/') ? objectName.substring(1) : objectName;
     return `${this._keyPrefix}${cleanObjectName}`;
@@ -138,11 +245,11 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Removes the prefix from a key to get the relative object name.
-   * 
+   *
    * This is a helper method used internally to convert a full S3 key
-   * (including the prefix) back to the relative object name that 
+   * (including the prefix) back to the relative object name that
    * clients will recognize.
-   * 
+   *
    * @param key - The full key including the prefix
    * @returns The object name without the prefix
    * @private
@@ -156,33 +263,33 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Creates a pre-authenticated upload URL for an object in S3.
-   * 
+   *
    * This method generates a pre-signed URL that allows for uploading
    * an object to S3 without needing AWS credentials. The URL is valid
    * for 10 minutes and includes the content type based on the file extension.
-   * 
+   *
    * @param objectName - The name of the object to upload (including any path/directory)
    * @returns A Promise resolving to an object with the upload URL
-   * 
+   *
    * @example
    * ```typescript
    * // Generate a pre-authenticated upload URL for a PDF file
    * const { UploadUrl } = await s3Storage.CreatePreAuthUploadUrl('documents/report.pdf');
-   * 
+   *
    * // The URL can be used with fetch or other HTTP clients to upload the file
    * console.log(UploadUrl);
    * ```
    */
   public async CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload> {
     const key = this._normalizeKey(objectName);
-    
+
     // Determine content type based on file extension
     const contentType = mime.lookup(objectName) || 'application/octet-stream';
-    
-    const command = new PutObjectCommand({ 
-      Bucket: this._bucket, 
+
+    const command = new PutObjectCommand({
+      Bucket: this._bucket,
       Key: key,
-      ContentType: contentType
+      ContentType: contentType,
     });
 
     const UploadUrl = await getSignedUrl(this._client, command, { expiresIn: 10 * 60 }); // 10 minutes
@@ -191,19 +298,19 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Creates a pre-authenticated download URL for an object in S3.
-   * 
+   *
    * This method generates a pre-signed URL that allows for downloading
    * an object from S3 without needing AWS credentials. The URL is valid
    * for 10 minutes and can be shared with clients.
-   * 
+   *
    * @param objectName - The name of the object to download (including any path/directory)
    * @returns A Promise resolving to the download URL
-   * 
+   *
    * @example
    * ```typescript
    * // Generate a pre-authenticated download URL for a PDF file
    * const downloadUrl = await s3Storage.CreatePreAuthDownloadUrl('documents/report.pdf');
-   * 
+   *
    * // The URL can be shared with users or used in applications for direct download
    * console.log(downloadUrl);
    * ```
@@ -217,16 +324,16 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Moves an object from one location to another within S3.
-   * 
+   *
    * Since S3 doesn't provide a native move operation, this method
    * implements move as a copy followed by a delete operation.
    * It first copies the object to the new location, and if successful,
    * deletes the object from the original location.
-   * 
+   *
    * @param oldObjectName - The current name/path of the object
    * @param newObjectName - The new name/path for the object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Move a file from drafts to published folder
@@ -234,7 +341,7 @@ export class AWSFileStorage extends FileStorageBase {
    *   'drafts/report.docx',
    *   'published/final-report.docx'
    * );
-   * 
+   *
    * if (success) {
    *   console.log('File successfully moved');
    * } else {
@@ -243,29 +350,28 @@ export class AWSFileStorage extends FileStorageBase {
    * ```
    */
   public async MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean> {
-    return this.CopyObject(oldObjectName, newObjectName)
-      .then(copied => {
-        if (copied) {
-          return this.DeleteObject(oldObjectName);
-        }
-        return false;
-      });
+    return this.CopyObject(oldObjectName, newObjectName).then((copied) => {
+      if (copied) {
+        return this.DeleteObject(oldObjectName);
+      }
+      return false;
+    });
   }
 
   /**
    * Deletes an object from S3.
-   * 
+   *
    * This method attempts to delete the specified object. It returns true
    * if the operation was successful, false otherwise.
-   * 
+   *
    * @param objectName - The name of the object to delete (including any path/directory)
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Delete a temporary file
    * const deleted = await s3Storage.DeleteObject('temp/report-draft.pdf');
-   * 
+   *
    * if (deleted) {
    *   console.log('File successfully deleted');
    * } else {
@@ -288,25 +394,25 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Lists objects with the specified prefix in S3.
-   * 
+   *
    * This method returns a list of objects (files) and common prefixes (directories)
    * under the specified path prefix. It uses the S3 ListObjectsV2 API which supports
    * delimiter-based hierarchy simulation.
-   * 
+   *
    * @param prefix - The path prefix to list objects from (e.g., 'documents/')
    * @param delimiter - The character used to simulate directory structure, defaults to '/'
    * @returns A Promise resolving to a StorageListResult containing objects and prefixes
-   * 
+   *
    * @example
    * ```typescript
    * // List all files and directories in the documents folder
    * const result = await s3Storage.ListObjects('documents/');
-   * 
+   *
    * // Process files
    * for (const file of result.objects) {
    *   console.log(`File: ${file.name}, Size: ${file.size}, Type: ${file.contentType}`);
    * }
-   * 
+   *
    * // Process subdirectories
    * for (const dir of result.prefixes) {
    *   console.log(`Directory: ${dir}`);
@@ -315,16 +421,16 @@ export class AWSFileStorage extends FileStorageBase {
    */
   public async ListObjects(prefix: string, delimiter = '/'): Promise<StorageListResult> {
     const normalizedPrefix = this._normalizeKey(prefix);
-    
+
     const command = new ListObjectsV2Command({
       Bucket: this._bucket,
       Prefix: normalizedPrefix,
-      Delimiter: delimiter
+      Delimiter: delimiter,
     });
 
     try {
       const response = await this._client.send(command);
-      
+
       const objects: StorageObjectMetadata[] = [];
       const prefixes: string[] = [];
 
@@ -332,10 +438,10 @@ export class AWSFileStorage extends FileStorageBase {
       if (response.Contents) {
         for (const item of response.Contents) {
           if (!item.Key) continue;
-          
+
           // Skip the directory placeholder object itself
           if (item.Key === normalizedPrefix) continue;
-          
+
           const relativePath = this._removePrefix(item.Key);
           const pathParts = relativePath.split('/');
           const name = pathParts[pathParts.length - 1];
@@ -349,7 +455,7 @@ export class AWSFileStorage extends FileStorageBase {
             contentType: mime.lookup(item.Key) || 'application/octet-stream',
             lastModified: item.LastModified || new Date(),
             isDirectory: item.Key.endsWith('/'),
-            etag: item.ETag
+            etag: item.ETag,
           });
         }
       }
@@ -374,19 +480,19 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Creates a directory (virtual) in S3.
-   * 
+   *
    * Since S3 doesn't have a native directory concept, this method creates
    * a zero-byte object with a trailing slash to simulate a directory.
    * The object has a special content type to indicate it's a directory.
-   * 
+   *
    * @param directoryPath - The path of the directory to create
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Create a new directory structure
    * const created = await s3Storage.CreateDirectory('documents/reports/annual/');
-   * 
+   *
    * if (created) {
    *   console.log('Directory created successfully');
    * } else {
@@ -405,7 +511,7 @@ export class AWSFileStorage extends FileStorageBase {
       Bucket: this._bucket,
       Key: key,
       Body: '',
-      ContentType: 'application/x-directory'
+      ContentType: 'application/x-directory',
     });
 
     try {
@@ -420,25 +526,25 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Deletes a directory (virtual) and optionally its contents from S3.
-   * 
+   *
    * For non-recursive deletion, this method simply deletes the directory
    * placeholder object. For recursive deletion, it lists all objects with
    * the directory path as prefix and deletes them using the DeleteObjects API,
    * which allows for deleting up to 1000 objects in a single request.
-   * 
+   *
    * Note: This implementation doesn't handle pagination for directories with
    * more than 1000 objects. In a production environment, you might want to
    * enhance this to handle such cases.
-   * 
+   *
    * @param directoryPath - The path of the directory to delete
    * @param recursive - If true, deletes all contents recursively (default: false)
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Delete an empty directory
    * const deleted = await s3Storage.DeleteDirectory('documents/temp/');
-   * 
+   *
    * // Delete a directory and all its contents
    * const recursivelyDeleted = await s3Storage.DeleteDirectory('documents/old_projects/', true);
    * ```
@@ -447,7 +553,7 @@ export class AWSFileStorage extends FileStorageBase {
     if (!directoryPath.endsWith('/')) {
       directoryPath = `${directoryPath}/`;
     }
-    
+
     const key = this._normalizeKey(directoryPath);
 
     if (!recursive) {
@@ -459,11 +565,11 @@ export class AWSFileStorage extends FileStorageBase {
     try {
       const command = new ListObjectsV2Command({
         Bucket: this._bucket,
-        Prefix: key
+        Prefix: key,
       });
 
       const response = await this._client.send(command);
-      
+
       if (!response.Contents || response.Contents.length === 0) {
         // Empty directory, just delete the directory placeholder
         return this.DeleteObject(directoryPath);
@@ -473,17 +579,15 @@ export class AWSFileStorage extends FileStorageBase {
       const deleteObjectsCommand = new DeleteObjectsCommand({
         Bucket: this._bucket,
         Delete: {
-          Objects: response.Contents
-            .filter(item => item.Key)
-            .map(item => ({ Key: item.Key! }))
-        }
+          Objects: response.Contents.filter((item) => item.Key).map((item) => ({ Key: item.Key! })),
+        },
       });
 
       await this._client.send(deleteObjectsCommand);
-      
+
       // If we have more than 1000 objects, we'll need pagination, but that's beyond this implementation
       // For a real-world implementation, you'd want to handle pagination for directories with more than 1000 objects
-      
+
       return true;
     } catch (e) {
       console.error('Error deleting directory recursively from S3 storage', { key, bucket: this._bucket });
@@ -530,7 +634,7 @@ export class AWSFileStorage extends FileStorageBase {
     const key = this._normalizeKey(objectName);
     const command = new HeadObjectCommand({
       Bucket: this._bucket,
-      Key: key
+      Key: key,
     });
 
     try {
@@ -551,7 +655,7 @@ export class AWSFileStorage extends FileStorageBase {
         isDirectory: key.endsWith('/'),
         etag: response.ETag,
         cacheControl: response.CacheControl,
-        customMetadata: response.Metadata
+        customMetadata: response.Metadata,
       };
     } catch (e) {
       console.error('Error getting object metadata from S3 storage', { key, bucket: this._bucket });
@@ -597,7 +701,7 @@ export class AWSFileStorage extends FileStorageBase {
     const key = this._normalizeKey(objectName);
     const command = new GetObjectCommand({
       Bucket: this._bucket,
-      Key: key
+      Key: key,
     });
 
     try {
@@ -618,16 +722,16 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Uploads data to an object in S3.
-   * 
+   *
    * This method directly uploads a Buffer of data to an object with the specified name.
    * It's useful for server-side operations where you already have the data in memory.
-   * 
+   *
    * @param objectName - The name to assign to the uploaded object
    * @param data - The Buffer containing the data to upload
    * @param contentType - Optional MIME type for the object (inferred from name if not provided)
    * @param metadata - Optional key-value pairs of custom metadata to associate with the object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Upload a text file
@@ -638,7 +742,7 @@ export class AWSFileStorage extends FileStorageBase {
    *   'text/plain',
    *   { author: 'John Doe', department: 'Engineering' }
    * );
-   * 
+   *
    * if (uploaded) {
    *   console.log('File uploaded successfully');
    * } else {
@@ -646,23 +750,18 @@ export class AWSFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async PutObject(
-    objectName: string, 
-    data: Buffer, 
-    contentType?: string, 
-    metadata?: Record<string, string>
-  ): Promise<boolean> {
+  public async PutObject(objectName: string, data: Buffer, contentType?: string, metadata?: Record<string, string>): Promise<boolean> {
     const key = this._normalizeKey(objectName);
-    
+
     // Determine content type based on file extension if not provided
     const effectiveContentType = contentType || mime.lookup(objectName) || 'application/octet-stream';
-    
+
     const command = new PutObjectCommand({
       Bucket: this._bucket,
       Key: key,
       Body: data,
       ContentType: effectiveContentType,
-      Metadata: metadata
+      Metadata: metadata,
     });
 
     try {
@@ -677,14 +776,14 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Copies an object within S3.
-   * 
+   *
    * This method creates a copy of an object at a new location without removing the original.
    * It uses the CopyObject API, which allows for copying objects within the same bucket.
-   * 
+   *
    * @param sourceObjectName - The name of the object to copy
    * @param destinationObjectName - The name to assign to the copied object
    * @returns A Promise resolving to a boolean indicating success
-   * 
+   *
    * @example
    * ```typescript
    * // Create a backup copy of an important file
@@ -692,7 +791,7 @@ export class AWSFileStorage extends FileStorageBase {
    *   'documents/contract.pdf',
    *   'backups/contract_2024-05-16.pdf'
    * );
-   * 
+   *
    * if (copied) {
    *   console.log('File copied successfully');
    * } else {
@@ -703,7 +802,7 @@ export class AWSFileStorage extends FileStorageBase {
   public async CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean> {
     const sourceKey = this._normalizeKey(sourceObjectName);
     const destinationKey = this._normalizeKey(destinationObjectName);
-    
+
     const copyCommand = new CopyObjectCommand({
       Bucket: this._bucket,
       CopySource: `/${this._bucket}/${sourceKey}`,
@@ -717,7 +816,7 @@ export class AWSFileStorage extends FileStorageBase {
       console.error('Error copying object in S3 storage', {
         sourceKey,
         destinationKey,
-        bucket: this._bucket
+        bucket: this._bucket,
       });
       console.error(e);
       return false;
@@ -726,18 +825,18 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Checks if an object exists in S3.
-   * 
+   *
    * This method verifies the existence of an object using the HeadObject API,
    * which doesn't download the object content. This is efficient for validation purposes.
-   * 
+   *
    * @param objectName - The name of the object to check
    * @returns A Promise resolving to a boolean indicating if the object exists
-   * 
+   *
    * @example
    * ```typescript
    * // Check if a file exists before attempting to use it
    * const exists = await s3Storage.ObjectExists('documents/report.pdf');
-   * 
+   *
    * if (exists) {
    *   console.log('File exists, proceeding with download');
    *   const content = await s3Storage.GetObject('documents/report.pdf');
@@ -751,7 +850,7 @@ export class AWSFileStorage extends FileStorageBase {
     const key = this._normalizeKey(objectName);
     const command = new HeadObjectCommand({
       Bucket: this._bucket,
-      Key: key
+      Key: key,
     });
 
     try {
@@ -765,24 +864,24 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Checks if a directory (virtual) exists in S3.
-   * 
+   *
    * Since S3 doesn't have a native directory concept, this method checks for either:
    * 1. The existence of a directory placeholder object (zero-byte object with trailing slash)
    * 2. The existence of any objects with the directory path as a prefix
-   * 
+   *
    * @param directoryPath - The path of the directory to check
    * @returns A Promise resolving to a boolean indicating if the directory exists
-   * 
+   *
    * @example
    * ```typescript
    * // Check if a directory exists before trying to save files to it
    * const exists = await s3Storage.DirectoryExists('documents/reports/');
-   * 
+   *
    * if (!exists) {
    *   console.log('Directory does not exist, creating it first');
    *   await s3Storage.CreateDirectory('documents/reports/');
    * }
-   * 
+   *
    * // Now safe to use the directory
    * await s3Storage.PutObject('documents/reports/new-report.pdf', fileData);
    * ```
@@ -804,7 +903,7 @@ export class AWSFileStorage extends FileStorageBase {
     const command = new ListObjectsV2Command({
       Bucket: this._bucket,
       Prefix: key,
-      MaxKeys: 1
+      MaxKeys: 1,
     });
 
     try {
@@ -831,10 +930,7 @@ export class AWSFileStorage extends FileStorageBase {
    * @param options - Search options (not used)
    * @throws UnsupportedOperationError always
    */
-  public async SearchFiles(
-    query: string,
-    options?: FileSearchOptions
-  ): Promise<FileSearchResultSet> {
+  public async SearchFiles(query: string, options?: FileSearchOptions): Promise<FileSearchResultSet> {
     this.throwUnsupportedOperationError('SearchFiles');
   }
 }

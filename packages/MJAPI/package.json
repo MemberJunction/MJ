@@ -7,31 +7,33 @@
   "type": "module",
   "scripts": {
     "start": "node --experimental-specifier-resolution=node --import ./register.js -r dotenv/config ./src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "check-types": "tsc -noEmit",
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
-    "build": "tsc"
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
+    "build": "tsc && tsc-alias -f"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "dotenv": "16.4.5",
-    "nodemon": "^3.1.4",
+    "dotenv": "17.2.4",
+    "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "3.0.0",
-    "@memberjunction/communication-sendgrid": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/server": "3.0.0",
-    "@memberjunction/server-bootstrap": "3.0.0",
-    "@memberjunction/sqlserver-dataprovider": "3.0.0",
-    "@memberjunction/templates": "3.0.0",
-    "axios": "^1.6.7",
-    "class-validator": "^0.14.0",
+    "@memberjunction/ai": "5.3.1",
+    "@memberjunction/communication-sendgrid": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/server": "5.3.1",
+    "@memberjunction/server-bootstrap": "5.3.1",
+    "@memberjunction/sqlserver-dataprovider": "5.3.1",
+    "@memberjunction/templates": "5.3.1",
+    "axios": "^1.13.4",
+    "class-validator": "^0.14.3",
     "mj_generatedactions": "1.0.0",
     "mj_generatedentities": "1.0.0"
   },

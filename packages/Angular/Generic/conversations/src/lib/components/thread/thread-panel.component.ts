@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DataCacheService } from '../../services/data-cache.service';
 import { Subject } from 'rxjs';
@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
  * Shows parent message at top with all replies in chronological order
  */
 @Component({
+  standalone: false,
   selector: 'mj-thread-panel',
   templateUrl: './thread-panel.component.html',
   styleUrls: ['./thread-panel.component.css']
@@ -20,10 +21,10 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
   @Input() currentUser!: UserInfo;
 
   @Output() closed = new EventEmitter<void>();
-  @Output() replyAdded = new EventEmitter<ConversationDetailEntity>();
+  @Output() replyAdded = new EventEmitter<MJConversationDetailEntity>();
 
-  public parentMessage: ConversationDetailEntity | null = null;
-  public replies: ConversationDetailEntity[] = [];
+  public parentMessage: MJConversationDetailEntity | null = null;
+  public replies: MJConversationDetailEntity[] = [];
   public replyText: string = '';
   public isLoading: boolean = false;
   public isSending: boolean = false;
@@ -81,9 +82,9 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
   private async loadReplies(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ConversationDetailEntity>(
+      const result = await rv.RunView<MJConversationDetailEntity>(
         {
-          EntityName: 'Conversation Details',
+          EntityName: 'MJ: Conversation Details',
           ExtraFilter: `ParentID='${this.parentMessageId}'`,
           OrderBy: '__mj_CreatedAt ASC',
           ResultType: 'entity_object'
@@ -132,7 +133,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
 
         // Update parent message thread count
         if (this.parentMessage) {
-          (this.parentMessage as any).ThreadCount = ((this.parentMessage as any).ThreadCount || 0) + 1; // TODO: ThreadCount field doesn't exist on ConversationDetailEntity yet
+          (this.parentMessage as any).ThreadCount = ((this.parentMessage as any).ThreadCount || 0) + 1; // TODO: ThreadCount field doesn't exist on MJConversationDetailEntity yet
         }
 
         this.cdRef.detectChanges();
@@ -159,14 +160,14 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
   /**
    * Gets the display text for a message
    */
-  getMessageText(message: ConversationDetailEntity): string {
+  getMessageText(message: MJConversationDetailEntity): string {
     return message.Message || '';
   }
 
   /**
    * Gets the timestamp display for a message
    */
-  getMessageTime(message: ConversationDetailEntity): string {
+  getMessageTime(message: MJConversationDetailEntity): string {
     if (!message.__mj_CreatedAt) return '';
 
     const date = new Date(message.__mj_CreatedAt);
@@ -187,7 +188,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
   /**
    * Gets the sender name for a message
    */
-  getSenderName(message: ConversationDetailEntity): string {
+  getSenderName(message: MJConversationDetailEntity): string {
     if (message.Role === 'AI') return 'AI Assistant';
     return message.User || 'User';
   }

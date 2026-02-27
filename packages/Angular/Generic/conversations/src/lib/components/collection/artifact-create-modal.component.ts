@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity, CollectionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
 
@@ -8,87 +8,86 @@ import { CollectionPermissionService } from '../../services/collection-permissio
  * Modal for creating new artifacts and adding them to collections
  */
 @Component({
+  standalone: false,
   selector: 'mj-artifact-create-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isOpen"
-      title="Create Artifact"
-      (close)="onCancel()"
-      [width]="600"
-      [minWidth]="400">
-      <div class="artifact-form">
-        <div class="form-group">
-          <label class="form-label">
-            Name <span class="required">*</span>
-          </label>
-          <input
-            type="text"
-            class="k-textbox form-control"
-            [(ngModel)]="formData.name"
-            placeholder="Artifact name"
-            #nameInput>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            Type <span class="required">*</span>
-          </label>
-          <kendo-dropdownlist
-            [data]="artifactTypes"
-            [(ngModel)]="formData.selectedType"
-            textField="Name"
-            valueField="ID"
-            [valuePrimitive]="false"
-            class="form-control"
-            [loading]="isLoadingTypes">
-          </kendo-dropdownlist>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea
-            class="k-textarea form-control"
-            [(ngModel)]="formData.description"
-            placeholder="Optional description"
-            rows="2">
-          </textarea>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            Content <span class="required">*</span>
-          </label>
-          <textarea
-            class="k-textarea form-control content-area"
-            [(ngModel)]="formData.content"
-            placeholder="Paste your content here..."
-            rows="12">
-          </textarea>
-          <div class="content-hint">
-            <i class="fas fa-info-circle"></i>
-            Paste or type the artifact content. The content will be saved as version 1.
+    @if (isOpen) {
+      <kendo-dialog
+        title="Create Artifact"
+        (close)="onCancel()"
+        [width]="600"
+        [minWidth]="400">
+        <div class="artifact-form">
+          <div class="form-group">
+            <label class="form-label">
+              Name <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              class="k-textbox form-control"
+              [(ngModel)]="formData.name"
+              placeholder="Artifact name"
+              #nameInput>
           </div>
+          <div class="form-group">
+            <label class="form-label">
+              Type <span class="required">*</span>
+            </label>
+            <kendo-dropdownlist
+              [data]="artifactTypes"
+              [(ngModel)]="formData.selectedType"
+              textField="Name"
+              valueField="ID"
+              [valuePrimitive]="false"
+              class="form-control"
+              [loading]="isLoadingTypes">
+            </kendo-dropdownlist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea
+              class="k-textarea form-control"
+              [(ngModel)]="formData.description"
+              placeholder="Optional description"
+              rows="2">
+            </textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              Content <span class="required">*</span>
+            </label>
+            <textarea
+              class="k-textarea form-control content-area"
+              [(ngModel)]="formData.content"
+              placeholder="Paste your content here..."
+              rows="12">
+            </textarea>
+            <div class="content-hint">
+              <i class="fas fa-info-circle"></i>
+              Paste or type the artifact content. The content will be saved as version 1.
+            </div>
+          </div>
+          @if (errorMessage) {
+            <div class="form-error">
+              <i class="fas fa-exclamation-circle"></i>
+              {{ errorMessage }}
+            </div>
+          }
         </div>
-
-        <div class="form-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-circle"></i>
-          {{ errorMessage }}
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving">
-          Cancel
-        </button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSave()"
-                [disabled]="!canSave || isSaving">
-          {{ isSaving ? 'Creating...' : 'Create Artifact' }}
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+            Cancel
+          </button>
+          <button kendoButton
+            [primary]="true"
+            (click)="onSave()"
+            [disabled]="!canSave || isSaving">
+            {{ isSaving ? 'Creating...' : 'Create Artifact' }}
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .artifact-form {
       padding: 20px 0;
@@ -160,24 +159,25 @@ export class ArtifactCreateModalComponent implements OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() saved = new EventEmitter<ArtifactEntity>();
+  @Output() saved = new EventEmitter<MJArtifactEntity>();
   @Output() cancelled = new EventEmitter<void>();
 
   public formData = {
     name: '',
     description: '',
     content: '',
-    selectedType: null as ArtifactTypeEntity | null
+    selectedType: null as MJArtifactTypeEntity | null
   };
 
-  public artifactTypes: ArtifactTypeEntity[] = [];
+  public artifactTypes: MJArtifactTypeEntity[] = [];
   public isLoadingTypes: boolean = false;
   public isSaving: boolean = false;
   public errorMessage: string = '';
 
   constructor(
     private toastService: ToastService,
-    private permissionService: CollectionPermissionService
+    private permissionService: CollectionPermissionService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnChanges(changes: SimpleChanges) {
@@ -197,7 +197,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     this.isLoadingTypes = true;
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactTypeEntity>(
+      const result = await rv.RunView<MJArtifactTypeEntity>(
         {
           EntityName: 'MJ: Artifact Types',
           ExtraFilter: 'IsEnabled=1',
@@ -223,6 +223,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       this.toastService.error('Failed to load artifact types');
     } finally {
       this.isLoadingTypes = false;
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -235,7 +236,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     try {
       // Validate permission to add artifacts to collection
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
@@ -254,7 +255,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 1: Create the artifact
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
       artifact.Name = this.formData.name.trim();
       artifact.Description = this.formData.description.trim() || null;
       artifact.TypeID = this.formData.selectedType!.ID;
@@ -269,7 +270,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 2: Create the first version
-      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       version.ArtifactID = artifact.ID;
       version.VersionNumber = 1;
       version.Content = this.formData.content.trim();

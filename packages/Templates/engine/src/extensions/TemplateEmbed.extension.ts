@@ -1,7 +1,7 @@
 import { LogError, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
-import { TemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from '../TemplateEngine';
 
 // TODO: Add type defs based on nunjucks classes used for extensions
@@ -227,7 +227,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
      * 2. Current template's content type
      * 3. Highest priority content available in target template
      */
-    private resolveContentType(explicitType: string | undefined, currentType: string | undefined, targetTemplate: TemplateEntityExtended): string {
+    private resolveContentType(explicitType: string | undefined, currentType: string | undefined, targetTemplate: MJTemplateEntityExtended): string {
         // 1. Use explicit type if provided
         if (explicitType) {
             return explicitType;
@@ -254,7 +254,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
     /**
      * Gets the template content for the specified type with fallback logic.
      */
-    private getTemplateContent(template: TemplateEntityExtended, contentType: string): TemplateContentEntity | null {
+    private getTemplateContent(template: MJTemplateEntityExtended, contentType: string): MJTemplateContentEntity | null {
         // Try to get content of the specified type
         const contentByType = template.GetContentByType(contentType);
         if (contentByType && contentByType.length > 0) {
@@ -282,7 +282,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
     /**
      * Renders the embedded template content with the provided data context.
      */
-    private async renderEmbeddedTemplate(templateEngine: any, templateContent: TemplateContentEntity, data: any): Promise<string> {
+    private async renderEmbeddedTemplate(templateEngine: any, templateContent: MJTemplateContentEntity, data: any): Promise<string> {
         // Use the template engine's simple rendering method which handles Nunjucks environment setup
         const result = await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data);
         
@@ -292,8 +292,4 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
 
         return result.Output;
     }
-}
-
-export function LoadTemplateEmbedExtension() {
-    // This function ensures the extension class isn't tree-shaken
 }

@@ -185,7 +185,7 @@ describe('Constraint Validator Integration', () => {
  */
 function createMockContext(overrides: Partial<ValidationContext> & { entityFields?: Array<{ name: string; type: string }> }): ValidationContext {
   const entityFields = overrides.entityFields || [];
-  const entityName = overrides.siblingProps?.get('entityName') as string || 'TestEntity';
+  const entityName = overrides.siblingProps?.get('entityName') as string || 'MJTestEntity';
 
   return {
     node: {} as any,

@@ -1,3 +1,8 @@
+/**
+ * ERD Composite Component - MJ Design Tokens
+ * MJ theming for the ERD composite wrapper
+ */
+
 :host {
   display: block;
   height: 100%;
@@ -16,6 +21,7 @@
   height: 100%;
   width: 100%;
 }
+
 .main-splitter .k-pane {
   overflow: hidden;
 }
@@ -27,29 +33,33 @@
   overflow: hidden;
 }
 
+/* Floating Details Panel - MD3 Styled */
 .floating-details-panel {
   position: absolute;
   top: 50%;
   right: 20px;
   width: 380px;
   max-height: calc(100% - 40px);
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 28px;
+  box-shadow: var(--mj-shadow-lg);
   z-index: 1000;
   overflow: hidden;
   transform: translateY(-50%);
   animation: slideInFromRight 0.3s ease-out;
 }
+
 @media (max-width: 768px) {
   .floating-details-panel {
     right: 10px;
     left: 10px;
     width: auto;
     max-width: none;
+    border-radius: 20px;
   }
 }
+
 @media (max-height: 600px) {
   .floating-details-panel {
     top: 20px;
@@ -69,7 +79,7 @@
   }
 }
 
-/* Entity Explorer Container */
+/* Entity Explorer Container - MD3 Styled */
 .explorer-container {
   display: flex;
   flex-direction: column;
@@ -82,30 +92,34 @@
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
+/* MD3 Outlined Back Button */
 .back-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 500;
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 20px;
+  color: var(--mj-text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-color-neutral-400);
+  color: var(--mj-text-primary);
+}
+
+.back-btn:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
 }
 
 .back-btn i {

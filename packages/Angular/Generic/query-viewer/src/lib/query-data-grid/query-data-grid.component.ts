@@ -87,6 +87,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-query-data-grid',
     templateUrl: './query-data-grid.component.html',
     styleUrls: ['./query-data-grid.component.css'],
@@ -129,6 +130,27 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         return this._queryInfo;
     }
 
+    private _columnConfigs: QueryGridColumnConfig[] | null = null;
+    /**
+     * Optional pre-built column configurations for ad-hoc queries without saved metadata.
+     * When provided, overrides both QueryInfo-derived columns and auto-inferred columns.
+     * Enables entity linking without requiring a saved Query or QueryInfo object.
+     *
+     * Set this BEFORE setting Data to ensure columns are configured before the grid renders.
+     */
+    @Input()
+    set ColumnConfigs(value: QueryGridColumnConfig[] | null) {
+        this._columnConfigs = value;
+        if (value && value.length > 0) {
+            this.Columns = value;
+            this.buildColumnDefs();
+            this.cdr.markForCheck();
+        }
+    }
+    get ColumnConfigs(): QueryGridColumnConfig[] | null {
+        return this._columnConfigs;
+    }
+
     private _data: Record<string, unknown>[] = [];
     /**
      * The query result data to display in the grid.
@@ -137,8 +159,8 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
 
-        // If we have data but no columns from metadata, build columns from the data itself
-        if (this._data.length > 0 && this.Columns.length === 0) {
+        // If we have data but no columns from metadata or explicit configs, build from data
+        if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
             this.Columns = buildColumnsFromData(this._data);
             this.buildColumnDefs();
         }

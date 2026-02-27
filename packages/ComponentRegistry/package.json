@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/component-registry-server",
-  "version": "3.0.0",
+  "version": "5.3.1",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,8 +13,9 @@
     "MemberJunction": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
-    "start": "node dist/index.js"
+    "build": "tsc && tsc-alias -f && node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "start": "node dist/index.js",
+    "test": "vitest run"
   },
   "files": [
     "dist"
@@ -22,23 +23,23 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/interactive-component-types": "3.0.0",
-    "@memberjunction/sqlserver-dataprovider": "3.0.0",
-    "@types/express": "^5.0.3",
-    "express": "^5.1.0",
-    "cors": "^2.8.5",
-    "mssql": "^11.0.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/interactive-component-types": "5.3.1",
+    "@memberjunction/sqlserver-dataprovider": "5.3.1",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "cors": "^2.8.6",
+    "mssql": "^12.2.0",
     "cosmiconfig": "9.0.0",
-    "dotenv": "^16.4.1",
-    "zod": "^3.23.8"
+    "dotenv": "^17.2.4",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

@@ -7,6 +7,7 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
  * Displays current app and allows switching between apps.
  */
 @Component({
+  standalone: false,
   selector: 'mj-app-switcher',
   templateUrl: './app-switcher.component.html',
   styleUrls: ['./app-switcher.component.css']
@@ -78,7 +79,7 @@ export class AppSwitcherComponent {
     // Use setTimeout to ensure ViewChild is available
     setTimeout(() => {
       if (this.appConfigDialog) {
-        this.appConfigDialog.open();
+        this.appConfigDialog.Open();
       }
     }, 0);
   }

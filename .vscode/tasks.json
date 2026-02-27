@@ -27,7 +27,7 @@
             "regexp": "(.*?)"
           },
           "endsPattern": {
-            "regexp": "Compiled |Failed to compile."
+            "regexp": "bundle generation complete|Compiled |Failed to compile."
           }
         }
       },
@@ -46,9 +46,8 @@
     },
     {
       "label": "build-mcp-server",
-      "type": "npm",
-      "script": "build",
-      "path": "packages/AI/MCPServer",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/ai-agents && npm run build --workspace=@memberjunction/ai-mcp-server",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {

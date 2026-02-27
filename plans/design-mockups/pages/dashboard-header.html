@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Header - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    .demo-description {
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      margin-bottom: var(--mj-space-4);
+      padding: var(--mj-space-3);
+      background: var(--mj-bg-surface-sunken);
+      border-radius: var(--mj-radius-md);
+    }
+
+    /* Custom app accent colors for demos */
+    .accent-ai { --mj-app-accent: #8b5cf6; --mj-app-accent-subtle: rgba(139, 92, 246, 0.1); }
+    .accent-actions { --mj-app-accent: #10b981; --mj-app-accent-subtle: rgba(16, 185, 129, 0.1); }
+    .accent-entities { --mj-app-accent: #0076b6; --mj-app-accent-subtle: rgba(0, 118, 182, 0.1); }
+    .accent-reports { --mj-app-accent: #f59e0b; --mj-app-accent-subtle: rgba(245, 158, 11, 0.1); }
+    .accent-security { --mj-app-accent: #ef4444; --mj-app-accent-subtle: rgba(239, 68, 68, 0.1); }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Dashboard Header</h1>
+      <p>Consistent header pattern for all MJ dashboards with app-specific accent colors.</p>
+    </header>
+
+    <!-- Standard Pattern -->
+    <section class="section">
+      <h2 class="section-title">Standard Dashboard Header</h2>
+      <p class="demo-description">
+        <strong>Pattern:</strong> Flat white/surface background with a colored left border accent.
+        No gradients - simple, clean, and easy to theme. The accent color comes from the application's
+        <code>--mj-app-accent</code> token.
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+          <div>
+            <h1>Analytics Dashboard</h1>
+            <p class="mj-dashboard-subtitle">Monitor system performance and usage</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-download"></i> Export
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-refresh"></i> Refresh
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- AI Dashboard -->
+    <section class="section accent-ai">
+      <h2 class="section-title">AI Dashboard Header</h2>
+      <p class="demo-description">
+        Purple accent color representing AI/ML functionality.
+        <code>--mj-app-accent: #8b5cf6</code>
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div>
+            <h1>AI Dashboard</h1>
+            <p class="mj-dashboard-subtitle">Manage models, prompts, and agents</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-cog"></i> Settings
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-plus"></i> New Agent
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Actions Dashboard -->
+    <section class="section accent-actions">
+      <h2 class="section-title">Actions Dashboard Header</h2>
+      <p class="demo-description">
+        Green accent color for automation and actions.
+        <code>--mj-app-accent: #10b981</code>
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div>
+            <h1>Actions</h1>
+            <p class="mj-dashboard-subtitle">Configure and manage automated workflows</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-history"></i> History
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-plus"></i> Create Action
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Entity Admin Dashboard -->
+    <section class="section accent-entities">
+      <h2 class="section-title">Entity Admin Header</h2>
+      <p class="demo-description">
+        MJ Blue accent color for core data management.
+        <code>--mj-app-accent: #0076b6</code>
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div>
+            <h1>Entity Administration</h1>
+            <p class="mj-dashboard-subtitle">Manage entities, fields, and relationships</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-download"></i> Export Schema
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-plus"></i> New Entity
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Reports Dashboard -->
+    <section class="section accent-reports">
+      <h2 class="section-title">Reports Dashboard Header</h2>
+      <p class="demo-description">
+        Amber accent color for reporting and analytics.
+        <code>--mj-app-accent: #f59e0b</code>
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-file-lines"></i>
+          </div>
+          <div>
+            <h1>Reports</h1>
+            <p class="mj-dashboard-subtitle">View and manage data reports</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-clock-rotate-left"></i> Scheduled
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-plus"></i> New Report
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Credentials/Security Dashboard -->
+    <section class="section accent-security">
+      <h2 class="section-title">Security Dashboard Header</h2>
+      <p class="demo-description">
+        Red accent color for security and sensitive settings.
+        <code>--mj-app-accent: #ef4444</code>
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div>
+            <h1>Security & Credentials</h1>
+            <p class="mj-dashboard-subtitle">Manage API keys and security settings</p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-eye"></i> Audit Log
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-key"></i> New Credential
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Minimal Header -->
+    <section class="section">
+      <h2 class="section-title">Minimal Header (No Subtitle)</h2>
+      <p class="demo-description">
+        Compact version without subtitle for simpler dashboards.
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-home"></i>
+          </div>
+          <div>
+            <h1>Home</h1>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-cog"></i> Settings
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Header with Status -->
+    <section class="section">
+      <h2 class="section-title">Header with Status Badge</h2>
+      <p class="demo-description">
+        Include a status indicator in the header when needed.
+      </p>
+
+      <header class="mj-dashboard-header">
+        <div class="mj-dashboard-title">
+          <div class="mj-dashboard-icon">
+            <i class="fa-solid fa-server"></i>
+          </div>
+          <div>
+            <h1>System Status</h1>
+            <p class="mj-dashboard-subtitle">
+              <span class="mj-badge mj-badge-success mj-mr-2"><span class="mj-badge-dot"></span> All Systems Operational</span>
+              Last checked: 2 minutes ago
+            </p>
+          </div>
+        </div>
+        <div class="mj-dashboard-actions">
+          <button class="mj-btn mj-btn-secondary">
+            <i class="fa-solid fa-bell"></i> Alerts
+          </button>
+          <button class="mj-btn mj-btn-primary">
+            <i class="fa-solid fa-refresh"></i> Check Now
+          </button>
+        </div>
+      </header>
+    </section>
+
+    <!-- Code Example -->
+    <section class="section">
+      <h2 class="section-title">Code Example (mj-* classes)</h2>
+      <div style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); padding: var(--mj-space-4); font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm); overflow-x: auto; white-space: pre; color: var(--mj-text-secondary);">&lt;header class="mj-dashboard-header"&gt;
+  &lt;div class="mj-dashboard-title"&gt;
+    &lt;div class="mj-dashboard-icon"&gt;
+      &lt;i class="fa-solid fa-chart-line"&gt;&lt;/i&gt;
+    &lt;/div&gt;
+    &lt;div&gt;
+      &lt;h1&gt;Dashboard Title&lt;/h1&gt;
+      &lt;p class="mj-dashboard-subtitle"&gt;Optional subtitle text&lt;/p&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-dashboard-actions"&gt;
+    &lt;button class="mj-btn mj-btn-secondary"&gt;Secondary&lt;/button&gt;
+    &lt;button class="mj-btn mj-btn-primary"&gt;Primary&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/header&gt;</div>
+    </section>
+
+    <!-- Existing Dashboard Pattern -->
+    <section class="section">
+      <h2 class="section-title">Dashboard Header (Existing Pattern)</h2>
+      <p class="demo-description">
+        The existing AI dashboards use a slightly different class structure with <code>.dashboard-header</code>,
+        <code>.header-info</code>, and <code>.header-controls</code>. These classes are now available in the design system.
+      </p>
+
+      <header class="dashboard-header">
+        <div class="header-info">
+          <h1 class="dashboard-title">AI Agents</h1>
+          <span class="item-count">24 agents</span>
+        </div>
+        <div class="header-controls">
+          <div class="view-toggle">
+            <button class="view-btn active" title="Grid view">
+              <i class="fa-solid fa-grip"></i>
+            </button>
+            <button class="view-btn" title="List view">
+              <i class="fa-solid fa-list"></i>
+            </button>
+          </div>
+          <button class="filter-toggle-btn">
+            <i class="fa-solid fa-filter"></i> Filters
+          </button>
+          <button class="control-btn">
+            <i class="fa-solid fa-cog"></i> Settings
+          </button>
+          <button class="control-btn primary">
+            <i class="fa-solid fa-plus"></i> New Agent
+          </button>
+        </div>
+      </header>
+
+      <div style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); padding: var(--mj-space-4); font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm); overflow-x: auto; white-space: pre; color: var(--mj-text-secondary); margin-top: var(--mj-space-4);">&lt;header class="dashboard-header"&gt;
+  &lt;div class="header-info"&gt;
+    &lt;h1 class="dashboard-title"&gt;AI Agents&lt;/h1&gt;
+    &lt;span class="item-count"&gt;24 agents&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;div class="header-controls"&gt;
+    &lt;div class="view-toggle"&gt;
+      &lt;button class="view-btn active"&gt;&lt;i class="fa-solid fa-grip"&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;button class="view-btn"&gt;&lt;i class="fa-solid fa-list"&gt;&lt;/i&gt;&lt;/button&gt;
+    &lt;/div&gt;
+    &lt;button class="filter-toggle-btn"&gt;Filters&lt;/button&gt;
+    &lt;button class="control-btn"&gt;Settings&lt;/button&gt;
+    &lt;button class="control-btn primary"&gt;New Agent&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/header&gt;</div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

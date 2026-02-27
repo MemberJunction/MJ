@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Delete Storage Directory',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Dropbox'
  *   }, {
  *     Name: 'DirectoryPath',
@@ -30,7 +30,7 @@ export class DeleteDirectoryAction extends BaseFileStorageAction {
      * Delete a directory
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - DirectoryPath: Required - Path to the directory to delete
      *   - Recursive: Optional - Delete recursively (default: false)
      *
@@ -75,7 +75,4 @@ export class DeleteDirectoryAction extends BaseFileStorageAction {
             );
         }
     }
-}
-export function LoadDeleteDirectoryAction() {
-    // Stub function to prevent tree shaking
 }

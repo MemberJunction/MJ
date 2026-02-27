@@ -1,6 +1,3 @@
-import { LoadAIPromptCategoryEntityExtended } from './AIPromptCategoryExtended';
-import { LoadAIPromptEntityExtended } from './AIPromptExtended';
-
 export * from './prompt.types';
 export * from './agent-types';
 export * from './agent-payload-change-request';
@@ -12,16 +9,10 @@ export * from './conversation-utility';
 export * from './foreach-operation';
 export * from './while-operation';
 
-export * from './AIPromptExtended';
-export * from './AIPromptCategoryExtended';
-export * from './AIAgentExtended';
-export * from './AIModelExtended';
-export * from './AIAgentRunExtended';
-export * from './AIAgentRunStepExtended';
-export * from './AIPromptRunEntityExtended';
-
-export function LoadAICorePlus() {
-    LoadAIPromptEntityExtended();
-    LoadAIPromptCategoryEntityExtended();
-}
-LoadAICorePlus();
+export * from './MJAIPromptEntityExtended';
+export * from './MJAIPromptCategoryEntityExtended';
+export * from './MJAIAgentEntityExtended';
+export * from './MJAIModelEntityExtended';
+export * from './MJAIAgentRunEntityExtended';
+export * from './MJAIAgentRunStepEntityExtended';
+export * from './MJAIPromptRunEntityExtended';

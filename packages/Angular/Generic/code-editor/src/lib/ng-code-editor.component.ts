@@ -35,6 +35,7 @@ export type Setup = 'basic' | 'minimal' | null;
 export const External = Annotation.define<boolean>();
 
 @Component({
+  standalone: false,
   selector: 'mj-code-editor',
   templateUrl: './ng-code-editor.component.html',
   styleUrls: ['./ng-code-editor.component.css'],

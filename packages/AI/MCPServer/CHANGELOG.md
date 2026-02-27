@@ -1,5 +1,416 @@
 # @memberjunction/ai-mcp-server
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/server@5.3.1
+- @memberjunction/ai-agents@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/aiengine@5.3.1
+- @memberjunction/ai-prompts@5.3.1
+- @memberjunction/ai-provider-bundle@5.3.1
+- @memberjunction/api-keys@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/config@5.3.1
+- @memberjunction/credentials@5.3.1
+- @memberjunction/encryption@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+- @memberjunction/server-bootstrap-lite@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [a6aea29]
+- Updated dependencies [ebf057a]
+- Updated dependencies [1692c53]
+  - @memberjunction/server@5.3.0
+  - @memberjunction/ai-agents@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/server-bootstrap-lite@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/aiengine@5.3.0
+  - @memberjunction/ai-prompts@5.3.0
+  - @memberjunction/api-keys@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/credentials@5.3.0
+  - @memberjunction/encryption@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/ai-provider-bundle@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/config@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 0dab325: Fix duplicate tool registration crash during MCP session initialization caused by overlapping agent tool config patterns
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- 2c91a50: Improvements to tool dedup
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/server@5.2.0
+  - @memberjunction/server-bootstrap-lite@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/ai-agents@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/aiengine@5.2.0
+  - @memberjunction/ai-prompts@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/api-keys@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/credentials@5.2.0
+  - @memberjunction/encryption@5.2.0
+  - @memberjunction/ai-provider-bundle@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/config@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [f426d43]
+- Updated dependencies [61079e9]
+  - @memberjunction/server-bootstrap-lite@5.1.0
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ai-agents@5.1.0
+  - @memberjunction/ai@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/aiengine@5.1.0
+  - @memberjunction/ai-prompts@5.1.0
+  - @memberjunction/api-keys@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/actions@5.1.0
+  - @memberjunction/credentials@5.1.0
+  - @memberjunction/encryption@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/server@5.1.0
+  - @memberjunction/sqlserver-dataprovider@5.1.0
+  - @memberjunction/ai-provider-bundle@5.1.0
+  - @memberjunction/config@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/server@5.0.0
+  - @memberjunction/server-bootstrap-lite@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/aiengine@5.0.0
+  - @memberjunction/ai-prompts@5.0.0
+  - @memberjunction/ai-provider-bundle@5.0.0
+  - @memberjunction/api-keys@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/config@5.0.0
+  - @memberjunction/credentials@5.0.0
+  - @memberjunction/encryption@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+- Updated dependencies [3bab2cd]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-provider-bundle@4.4.0
+  - @memberjunction/ai-agents@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/aiengine@4.4.0
+  - @memberjunction/ai-prompts@4.4.0
+  - @memberjunction/api-keys@4.4.0
+  - @memberjunction/actions-base@4.4.0
+  - @memberjunction/actions@4.4.0
+  - @memberjunction/credentials@4.4.0
+  - @memberjunction/encryption@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/server@4.4.0
+  - @memberjunction/sqlserver-dataprovider@4.4.0
+  - @memberjunction/server-bootstrap-lite@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/config@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@4.3.1
+- @memberjunction/ai@4.3.1
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/aiengine@4.3.1
+- @memberjunction/ai-prompts@4.3.1
+- @memberjunction/ai-provider-bundle@4.3.1
+- @memberjunction/api-keys@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/actions@4.3.1
+- @memberjunction/config@4.3.1
+- @memberjunction/credentials@4.3.1
+- @memberjunction/encryption@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/server@4.3.1
+- @memberjunction/sqlserver-dataprovider@4.3.1
+- @memberjunction/server-bootstrap-lite@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [6f4d33f]
+- Updated dependencies [564e1af]
+  - @memberjunction/ai-agents@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/server@4.3.0
+  - @memberjunction/server-bootstrap-lite@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/ai-prompts@4.3.0
+  - @memberjunction/api-keys@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/credentials@4.3.0
+  - @memberjunction/encryption@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/ai-provider-bundle@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/config@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- Updated dependencies [d2938db]
+  - @memberjunction/server@4.2.0
+  - @memberjunction/ai-agents@4.2.0
+  - @memberjunction/ai@4.2.0
+  - @memberjunction/ai-core-plus@4.2.0
+  - @memberjunction/aiengine@4.2.0
+  - @memberjunction/ai-prompts@4.2.0
+  - @memberjunction/ai-provider-bundle@4.2.0
+  - @memberjunction/api-keys@4.2.0
+  - @memberjunction/actions-base@4.2.0
+  - @memberjunction/actions@4.2.0
+  - @memberjunction/config@4.2.0
+  - @memberjunction/credentials@4.2.0
+  - @memberjunction/encryption@4.2.0
+  - @memberjunction/core@4.2.0
+  - @memberjunction/core-entities@4.2.0
+  - @memberjunction/global@4.2.0
+  - @memberjunction/sqlserver-dataprovider@4.2.0
+  - @memberjunction/server-bootstrap-lite@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/server-bootstrap-lite@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/server@4.1.0
+  - @memberjunction/ai-agents@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/ai-prompts@4.1.0
+  - @memberjunction/api-keys@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/credentials@4.1.0
+  - @memberjunction/encryption@4.1.0
+  - @memberjunction/ai-provider-bundle@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/config@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [7aa23e7]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/aiengine@4.0.0
+  - @memberjunction/server@4.0.0
+  - @memberjunction/sqlserver-dataprovider@4.0.0
+  - @memberjunction/ai-agents@4.0.0
+  - @memberjunction/ai@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/ai-prompts@4.0.0
+  - @memberjunction/ai-provider-bundle@4.0.0
+  - @memberjunction/api-keys@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/actions@4.0.0
+  - @memberjunction/config@4.0.0
+  - @memberjunction/credentials@4.0.0
+  - @memberjunction/encryption@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+  - @memberjunction/server-bootstrap-lite@4.0.0
+
+## 3.4.0
+
+### Minor Changes
+
+- ef7acd8: migration
+- 4e62761: Add OAuth 2.1 proxy with scope-based authorization
+  - OAuth 2.1 authorization server with dynamic client registration (RFC 7591)
+  - Scope-based access control with hierarchical matching (parent scope grants all children)
+  - New API scopes: action:read, agent:read, query:read, prompt:read, communication:read
+  - Proxy-signed JWTs with consistent format across all upstream providers
+
+### Patch Changes
+
+- Updated dependencies [d596467]
+- Updated dependencies [ef7acd8]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [e552e5f]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/server@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/config@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/api-keys@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/credentials@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
+## 3.3.0
+
+### Minor Changes
+
+- 6ccd9d0: migration from metadata sync so marking this as minor
+- 3f17579: migration
+
+### Patch Changes
+
+- da33601: no migration
+- 823192a: no migration
+- d6aa42a: no migration
+- Updated dependencies [ad32a98]
+- Updated dependencies [4bbb600]
+- Updated dependencies [ca551dd]
+- Updated dependencies [6ccd9d0]
+- Updated dependencies [da33601]
+- Updated dependencies [3f17579]
+  - @memberjunction/server@3.3.0
+  - @memberjunction/ai-agents@3.3.0
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/credentials@3.3.0
+  - @memberjunction/encryption@3.3.0
+  - @memberjunction/api-keys@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-prompts@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/sqlserver-dataprovider@3.3.0
+  - @memberjunction/ai-provider-bundle@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/config@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [cbd2714]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/server@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/config@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/server@3.1.1
+  - @memberjunction/ai-agents@3.1.1
+  - @memberjunction/ai@3.1.1
+  - @memberjunction/ai-core-plus@3.1.1
+  - @memberjunction/aiengine@3.1.1
+  - @memberjunction/config@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+  - @memberjunction/sqlserver-dataprovider@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

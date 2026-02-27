@@ -1,27 +1,7 @@
 {
+  "extends": "../../../../tsconfig.angular.json",
   "compilerOptions": {
-    "target": "es2022",
-    "module": "es2022",
-    "moduleResolution": "node",
-    "declaration": true,
-    "declarationMap": true,
-    "experimentalDecorators": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "strict": true,
-      "skipLibCheck": true,
-    "lib": [
-      "es2022",
-      "dom"
-    ]
+    "outDir": "./dist"
   },
-  "angularCompilerOptions": {
-    "skipTemplateCodegen": true,
-    "strictMetadataEmit": true,
-    "enableResourceInlining": true,
-    "strictTemplates": true
-  },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

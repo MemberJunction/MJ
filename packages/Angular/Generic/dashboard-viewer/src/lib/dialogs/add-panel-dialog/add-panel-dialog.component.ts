@@ -11,7 +11,7 @@ import {
     OnDestroy
 } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { PanelConfig } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
 
@@ -19,7 +19,7 @@ import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-con
  * Result when a panel is added
  */
 export interface AddPanelResult {
-    PartType: DashboardPartTypeEntity;
+    PartType: MJDashboardPartTypeEntity;
     Config: PanelConfig;
     Title: string;
     Icon?: string;
@@ -38,6 +38,7 @@ type DialogStep = 'select-type' | 'configure';
  * allowing new part types to be added without modifying this component.
  */
 @Component({
+  standalone: false,
     selector: 'mj-add-panel-dialog',
     templateUrl: './add-panel-dialog.component.html',
     styleUrls: ['./add-panel-dialog.component.css']
@@ -48,7 +49,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     // ========================================
 
     /** Available part types to choose from */
-    @Input() partTypes: DashboardPartTypeEntity[] = [];
+    @Input() partTypes: MJDashboardPartTypeEntity[] = [];
 
     /** Whether the dialog is visible */
     @Input()
@@ -87,7 +88,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     // ========================================
 
     public step: DialogStep = 'select-type';
-    public selectedPartType: DashboardPartTypeEntity | null = null;
+    public selectedPartType: MJDashboardPartTypeEntity | null = null;
 
     /** Current config panel result (updated via configChanged event) */
     public currentResult: ConfigPanelResult | null = null;
@@ -146,7 +147,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     /**
      * Select a part type and go to configuration step
      */
-    public onPartTypeSelect(partType: DashboardPartTypeEntity): void {
+    public onPartTypeSelect(partType: MJDashboardPartTypeEntity): void {
         this.selectedPartType = partType;
         this.currentResult = null;
         this.canAddPart = false;

@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/data-context-server",
-  "version": "3.0.0",
+  "type": "module",
+  "version": "5.3.1",
   "description": "This library provides a server-side implementation of the DataContextItem class from @memberjunction/data-context that can handle the server-side only use case of loading data into a context using raw SQL statements.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,20 +10,20 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/data-context": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "mssql": "^11.0.1"
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/data-context": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "mssql": "^12.2.0"
   },
   "repository": {
     "type": "git",

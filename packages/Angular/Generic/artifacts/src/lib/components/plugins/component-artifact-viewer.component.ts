@@ -15,6 +15,7 @@ import { DataRequirementsViewerComponent } from './data-requirements-viewer/data
  * - Provides tabs for: Code, Functional Requirements, Technical Design, Data Requirements
  */
 @Component({
+  standalone: false,
   selector: 'mj-component-artifact-viewer',
   templateUrl: './component-artifact-viewer.component.html',
   styleUrls: ['./component-artifact-viewer.component.css']
@@ -194,8 +195,28 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
+  /**
+   * Called when MJReactComponent finishes loading the full component spec from the registry.
+   * The full spec may contain Functional, Technical, and Data tabs not in the stripped spec.
+   * Emit tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
+   */
+  onReactComponentInitialized(): void {
+    if (this.reactComponent?.resolvedComponentSpec &&
+        this.reactComponent.resolvedComponentSpec !== this.component) {
+      this.tabsChanged.emit();
+    }
+  }
+
   onComponentEvent(event: unknown): void {
     console.log('Component event:', event);
+
+    // Handle error events from React component
+    if (event && typeof event === 'object' && 'type' in event && event.type === 'error') {
+      const errorEvent = event as { type: 'error'; payload: { error: string; source: string } };
+      this.hasError = true;
+      this.errorMessage = 'Component Failed to Load';
+      this.errorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
+    }
   }
 
   /**

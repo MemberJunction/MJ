@@ -1,15 +1,10 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridStateConfig, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-
-export function LoadViewResource() {
-    // Force class to be included in production builds (tree shaking workaround)
-}
-
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -24,6 +19,7 @@ export function LoadViewResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
+  standalone: false,
     selector: 'mj-userview-resource',
     templateUrl: './view-resource.component.html',
     styles: [`
@@ -147,8 +143,8 @@ export class UserViewResource extends BaseResourceComponent {
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewEntity: UserViewEntityExtended | null = null;
-    public gridState: ViewGridStateConfig | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
+    public gridState: ViewGridState | null = null;
 
     // Export state
     public isExporting: boolean = false;
@@ -235,7 +231,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`View with ID ${viewId} not found`);
         }
 
-        this.viewEntity = view as UserViewEntityExtended;
+        this.viewEntity = view as MJUserViewEntityExtended;
 
         // Check permissions
         if (!this.viewEntity.UserCanView) {
@@ -254,7 +250,7 @@ export class UserViewResource extends BaseResourceComponent {
         // Parse grid state if available
         if (this.viewEntity.GridState) {
             try {
-                this.gridState = JSON.parse(this.viewEntity.GridState) as ViewGridStateConfig;
+                this.gridState = JSON.parse(this.viewEntity.GridState) as ViewGridState;
             } catch (e) {
                 console.warn('Failed to parse GridState:', e);
                 this.gridState = null;
@@ -304,7 +300,7 @@ export class UserViewResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
-            const name = await this.metadata.GetEntityRecordName('User Views', compositeKey);
+            const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

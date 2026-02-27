@@ -27,10 +27,9 @@ import {
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
+import { ResourceData, MJResourceTypeEntity } from '@memberjunction/core-entities';
+import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
-import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -43,6 +42,7 @@ import { DashboardResource } from '../../../resource-wrappers/dashboard-resource
  * - Layout persistence
  */
 @Component({
+  standalone: false,
   selector: 'mj-tab-container',
   templateUrl: './tab-container.component.html',
   styleUrls: ['./tab-container.component.css'],
@@ -68,7 +68,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
-  private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
   private layoutRestorationComplete = false; // True only AFTER layout is fully restored/created
 
@@ -847,7 +846,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Get ResourceType entity by name (includes DriverClass field)
    */
-  private async getResourceTypeEntity(resourceType: string): Promise<ResourceTypeEntity | null> {
+  private async getResourceTypeEntity(resourceType: string): Promise<MJResourceTypeEntity | null> {
     const md = new Metadata();
     const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
     if (!ds || !ds.Success || ds.Results.length === 0) {
@@ -860,7 +859,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes');
     if (result && result.Results?.length > 0) {
-      const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as ResourceTypeEntity;
+      const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as MJResourceTypeEntity;
       return rt || null;
     }
 

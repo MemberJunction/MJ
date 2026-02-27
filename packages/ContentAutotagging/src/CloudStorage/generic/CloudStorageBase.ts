@@ -2,9 +2,9 @@ import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine } from "../../Engine";
 import { ContentSourceParams } from "../../Engine";
 import { UserInfo } from "@memberjunction/core";
-import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
+import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 export abstract class CloudStorageBase extends AutotagBase {
     protected contextUser: UserInfo;
@@ -30,18 +30,18 @@ export abstract class CloudStorageBase extends AutotagBase {
      * @param contextUser - The user context for the autotagging process
      * @returns - An array of content source items that have been modified or added after the most recent process run for that content source
     */
-    public abstract SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<ContentItemEntity[]>;
+    public abstract SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<MJContentItemEntity[]>;
     
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Cloud Storage', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
+        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+        const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
         await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
         
         for (const contentSource of contentSources) {
             await this.Authenticate();

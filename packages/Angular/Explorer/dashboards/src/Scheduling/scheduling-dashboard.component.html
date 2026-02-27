@@ -1,50 +1,81 @@
-<div class="scheduling-dashboard">
-  <div class="dashboard-content">
-    @if (activeTab === 'monitoring' && hasVisited('monitoring')) {
-      <app-scheduling-monitoring
-        [initialState]="monitoringState"
-        (stateChange)="onMonitoringStateChange($event)">
-      </app-scheduling-monitoring>
-    }
-
-    @if (activeTab === 'jobs' && hasVisited('jobs')) {
-      <app-scheduling-jobs
-        [initialState]="jobsState"
-        (stateChange)="onJobsStateChange($event)">
-      </app-scheduling-jobs>
-    }
-
-    @if (activeTab === 'history' && hasVisited('history')) {
-      <app-scheduling-history
-        [initialState]="historyState"
-        (stateChange)="onHistoryStateChange($event)">
-      </app-scheduling-history>
-    }
-
-    @if (activeTab === 'types' && hasVisited('types')) {
-      <app-scheduling-types
-        [initialState]="typesState"
-        (stateChange)="onTypesStateChange($event)">
-      </app-scheduling-types>
-    }
-
-    @if (activeTab === 'health' && hasVisited('health')) {
-      <app-scheduling-health
-        [initialState]="healthState"
-        (stateChange)="onHealthStateChange($event)">
-      </app-scheduling-health>
-    }
+<div class="scheduling-dashboard-container">
+  <div class="dashboard-header">
+    <div class="header-title">
+      <i class="fa-solid fa-calendar-check"></i>
+      <span>Job Scheduling</span>
+    </div>
+    <div class="header-actions">
+      @if (AlertCount > 0) {
+        <div class="status-badge">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>{{AlertCount}} Alert{{AlertCount !== 1 ? 's' : ''}}</span>
+        </div>
+      }
+      @if (AlertCount === 0) {
+        <div class="status-badge healthy">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Healthy</span>
+        </div>
+      }
+      <span class="tab-label">{{GetCurrentTabLabel()}}</span>
+    </div>
   </div>
 
-  <div class="scheduling-dashboard-nav">
-    @for (navItem of navigationConfig; track $index) {
-      <div
-        class="nav-item"
-        [class.active]="navItem.selected"
-        (click)="onTabChange(navigationItems[$index])">
-        <i [class]="navItem.icon"></i>
-        <span>{{ navItem.text }}</span>
+  <div class="dashboard-content">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Overview</div>
       </div>
-    }
+      <div class="nav-item" [class.selected]="ActiveTab === 'dashboard'" (click)="OnTabChange('dashboard')">
+        <i class="fa-solid fa-gauge-high"></i>
+        <span>Dashboard</span>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Management</div>
+      </div>
+      <div class="nav-item" [class.selected]="ActiveTab === 'jobs'" (click)="OnTabChange('jobs')">
+        <i class="fa-solid fa-calendar-check"></i>
+        <span>Jobs</span>
+        @if (ActiveJobCount > 0) {
+          <span class="badge">{{ActiveJobCount}}</span>
+        }
+      </div>
+      <div class="nav-item" [class.selected]="ActiveTab === 'activity'" (click)="OnTabChange('activity')">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>Activity</span>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="tab-container">
+        @switch (ActiveTab) {
+          @case ('dashboard') {
+            <div class="tab-content">
+              <app-scheduling-overview
+                [initialState]="DashboardState"
+                (stateChange)="OnDashboardStateChange($event)">
+              </app-scheduling-overview>
+            </div>
+          }
+          @case ('jobs') {
+            <div class="tab-content">
+              <app-scheduling-jobs
+                [initialState]="JobsState"
+                (stateChange)="OnJobsStateChange($event)">
+              </app-scheduling-jobs>
+            </div>
+          }
+          @case ('activity') {
+            <div class="tab-content">
+              <app-scheduling-activity
+                [initialState]="ActivityState"
+                (stateChange)="OnActivityStateChange($event)">
+              </app-scheduling-activity>
+            </div>
+          }
+        }
+      </div>
+    </div>
   </div>
 </div>

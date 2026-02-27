@@ -165,6 +165,22 @@
   margin-left: 4px;
 }
 
+/* Icon-only mode for narrow panels */
+.tab-nav.icon-only .tab-btn {
+  padding: 12px 8px;
+  gap: 4px;
+}
+
+.tab-nav.icon-only .tab-btn i {
+  font-size: 14px;
+}
+
+.tab-nav.icon-only .tab-badge {
+  margin-left: 0;
+  padding: 2px 4px;
+  font-size: 9px;
+}
+
 /* Panel Content */
 .panel-content {
   flex: 1;
@@ -1630,7 +1646,7 @@
 .panel-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 16px 20px;
   border-top: 1px solid #e0e0e0;
   background: #fafafa;
@@ -2050,6 +2066,273 @@
   font-size: 12px;
 }
 
+/* ========================================
+   AGGREGATES TAB STYLES
+   ======================================== */
+
+.aggregates-section {
+  padding-top: 0;
+}
+
+.aggregates-header {
+  margin-bottom: 16px;
+}
+
+.aggregates-description {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Add Aggregate Button */
+.add-aggregate-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  background: transparent;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.add-aggregate-btn:hover:not(:disabled) {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.add-aggregate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.add-aggregate-btn i {
+  font-size: 12px;
+}
+
+/* Aggregates List */
+.aggregates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* Aggregate Item */
+.aggregate-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.aggregate-item:hover {
+  border-color: #bdbdbd;
+  background: #fafafa;
+}
+
+.aggregate-item.disabled {
+  opacity: 0.6;
+  background: #f5f5f5;
+}
+
+/* Aggregate Icon */
+.agg-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-radius: 8px;
+  color: #1976d2;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.aggregate-item.disabled .agg-icon {
+  background: #f0f0f0;
+  color: #999;
+}
+
+/* Aggregate Content */
+.agg-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.agg-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.aggregate-item.disabled .agg-label {
+  color: #888;
+}
+
+.agg-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #888;
+}
+
+.agg-type {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agg-type i {
+  font-size: 10px;
+}
+
+.agg-smart-badge {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-radius: 4px;
+  color: #3b82f6;
+  font-size: 10px;
+}
+
+/* Aggregate Actions */
+.agg-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.agg-action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #999;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agg-action-btn:hover:not(:disabled) {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.agg-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.agg-action-btn.toggle-btn.enabled {
+  color: #2e7d32;
+}
+
+.agg-action-btn.toggle-btn:not(.enabled) {
+  color: #bdbdbd;
+}
+
+.agg-action-btn.edit-btn:hover:not(:disabled) {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.agg-action-btn.remove-btn:hover:not(:disabled) {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Aggregates Summary */
+.aggregates-summary {
+  display: flex;
+  gap: 16px;
+  padding: 12px 14px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.summary-item i {
+  color: #1976d2;
+  font-size: 11px;
+}
+
+/* Aggregates Empty State */
+.aggregates-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+}
+
+.aggregates-empty-state i {
+  font-size: 48px;
+  opacity: 0.4;
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #bbb;
+  margin: 0;
+}
+
+/* Aggregates Tip */
+.aggregates-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.aggregates-tip i {
+  color: #94a3b8;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .config-panel {
@@ -2084,4 +2367,43 @@
   .config-panel {
     max-width: min(600px, 80vw);
   }
+}
+
+/* Validation Styles (BUG-004) */
+.form-input.invalid {
+  border-color: #ef4444;
+}
+
+.validation-error {
+  display: block;
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+.validation-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fef2f2;
+  border-top: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.validation-banner i {
+  flex-shrink: 0;
+}
+
+/* Duplicate Button (F-005) */
+.footer-btn.duplicate-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.footer-btn.duplicate-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
 }

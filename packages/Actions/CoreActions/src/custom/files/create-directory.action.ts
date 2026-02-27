@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Create Storage Directory',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Google Drive'
  *   }, {
  *     Name: 'DirectoryPath',
@@ -27,7 +27,7 @@ export class CreateDirectoryAction extends BaseFileStorageAction {
      * Create a directory
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - DirectoryPath: Required - Path for the new directory
      *
      * @returns Operation result with:
@@ -67,7 +67,4 @@ export class CreateDirectoryAction extends BaseFileStorageAction {
             );
         }
     }
-}
-export function LoadCreateDirectoryAction() {
-    // Stub function to prevent tree shaking
 }

@@ -270,27 +270,27 @@ textarea.form-control {
     font-family: inherit;
 }
 
-/* Form validation states */
+/* Form validation states - using design tokens */
 .form-control.is-invalid {
-    border-color: #dc3545;
-    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+    border-color: var(--mj-border-error);
+    box-shadow: 0 0 0 2px var(--mj-status-error-bg);
 }
 
 .form-control.is-valid {
-    border-color: #28a745;
-    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+    border-color: var(--mj-status-success);
+    box-shadow: 0 0 0 2px var(--mj-status-success-bg);
 }
 
 .invalid-feedback {
-    color: #dc3545;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
+    color: var(--mj-status-error-text);
+    font-size: var(--mj-text-sm);
+    margin-top: var(--mj-space-1);
 }
 
 .valid-feedback {
-    color: #28a745;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
+    color: var(--mj-status-success-text);
+    font-size: var(--mj-text-sm);
+    margin-top: var(--mj-space-1);
 }
 
 /* Checkbox and Radio styling */

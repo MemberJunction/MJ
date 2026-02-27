@@ -3,19 +3,19 @@ import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
-import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
+import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
+import { MJActionEntityServer } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
-import { mkdirSync } from 'fs-extra';
+import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 export class ActionSubClassGeneratorBase {
 
-    protected getAllActionLibrariesAndUsedItems(actions: ActionEntityExtended[]) {
+    protected getAllActionLibrariesAndUsedItems(actions: MJActionEntityExtended[]) {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
@@ -46,7 +46,7 @@ export class ActionSubClassGeneratorBase {
         });
         return allActionLibraries;
     }
-    public async generateActions(actions: ActionEntityExtended[], directory: string): Promise<boolean> {
+    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
         try {
             const actionFilePath = path.join(directory, 'action_subclasses.ts');
 
@@ -77,13 +77,9 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
             }
             let actionCode = actionHeader + sCode;
 
-            // finally add the LoadGeneratedActions() stub function at the very end
-            actionCode += `
-            
-export function LoadGeneratedActions() {
-    // this function is a stub that is used to force the bundler to include the generated action classes in the final bundle and not tree shake them out
-}
-`;    
+            // Note: LoadGeneratedActions() stub function has been removed.
+            // Tree-shaking prevention is now handled by the pre-built class registration manifest system.
+            // See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
 
             mkdirSync(directory, { recursive: true });
             fs.writeFileSync(actionFilePath, actionCode);
@@ -103,7 +99,7 @@ export function LoadGeneratedActions() {
      * @param directory 
      * @returns 
      */
-    public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
+    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
             // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";

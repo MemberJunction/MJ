@@ -5,13 +5,14 @@ import sql from 'mssql';
 import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
-import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
+import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
 import { AuthProviderFactory } from './AuthProviderFactory.js';
 import { initializeAuthProviders } from './initializeProviders.js';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
 export { IAuthProvider } from './IAuthProvider.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
+export * from './APIKeyScopeAuth.js';
 
 // This is a hard-coded forever constant due to internal migrations
 
@@ -226,13 +227,13 @@ export const verifyUserRecord = async (
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
         const newUserCreator: NewUserBase = MJGlobal.Instance.ClassFactory.CreateInstance<NewUserBase>(NewUserBase); // this will create the object that handles creating the new user for us
-        const newUser: UserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
+        const newUser: MJUserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
           const md: Metadata = new Metadata();
 
-          const initData: UserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
+          const initData: MJUserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
 
           initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);

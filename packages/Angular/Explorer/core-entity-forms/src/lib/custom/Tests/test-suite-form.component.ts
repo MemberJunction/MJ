@@ -1,14 +1,14 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild, ViewContainerRef, ElementRef, inject } from '@angular/core';
 import * as d3 from 'd3';
-import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJTestRunEntity, MJTestRunFeedbackEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
-import { TestSuiteFormComponent } from '../../generated/Entities/TestSuite/testsuite.form.component';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJTestSuiteFormComponent } from '../../generated/Entities/MJTestSuite/mjtestsuite.form.component';
 import {
   TestingDialogService,
   TagsHelper,
@@ -22,13 +22,14 @@ const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suites')
 @Component({
+  standalone: false,
   selector: 'mj-test-suite-form',
   templateUrl: './test-suite-form.component.html',
   styleUrls: ['./test-suite-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestSuiteFormComponentExtended extends TestSuiteFormComponent implements OnInit, OnDestroy, AfterViewInit {
-  public override record!: TestSuiteEntity;
+export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent implements OnInit, OnDestroy, AfterViewInit {
+  public override record!: MJTestSuiteEntity;
 
   private destroy$ = new Subject<void>();
 
@@ -46,8 +47,8 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   error: string | null = null;
 
   // Related data
-  suiteTests: TestSuiteTestEntity[] = [];
-  suiteRuns: TestSuiteRunEntity[] = [];
+  suiteTests: MJTestSuiteTestEntity[] = [];
+  suiteRuns: MJTestSuiteRunEntity[] = [];
 
   // Analytics data
   analyticsData: AnalyticsDataPoint[] = [];
@@ -64,16 +65,16 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   private chartRendered = false;
 
   // Compare data
-  compareRunA: TestSuiteRunEntity | null = null;
-  compareRunB: TestSuiteRunEntity | null = null;
+  compareRunA: MJTestSuiteRunEntity | null = null;
+  compareRunB: MJTestSuiteRunEntity | null = null;
   compareResults: TestRunComparison[] = [];
-  compareRunATests: TestRunEntity[] = [];
-  compareRunBTests: TestRunEntity[] = [];
+  compareRunATests: MJTestRunEntity[] = [];
+  compareRunBTests: MJTestRunEntity[] = [];
 
   // Keyboard shortcuts
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
-  private shortcutsSettingEntity: UserSettingEntity | null = null;
+  private shortcutsSettingEntity: MJUserSettingEntity | null = null;
   private metadata = new Metadata();
 
   // Evaluation preferences
@@ -93,18 +94,12 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   matrixTestFilter = '';
   private matrixFilterSubject$ = new Subject<string>();
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService,
-    private viewContainerRef: ViewContainerRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private evalPrefsService = inject(EvaluationPreferencesService);
+  private viewContainerRef = inject(ViewContainerRef);
+  private appManager = inject(ApplicationManager);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -191,7 +186,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestSuiteTestEntity>({
+      const result = await rv.RunView<MJTestSuiteTestEntity>({
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
         OrderBy: 'Sequence',
@@ -216,7 +211,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestSuiteRunEntity>({
+      const result = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
         OrderBy: 'StartedAt DESC',
@@ -288,7 +283,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     return d.toLocaleDateString();
   }
 
-  getPassRate(run: TestSuiteRunEntity): number {
+  getPassRate(run: MJTestSuiteRunEntity): number {
     const total = run.TotalTests || 0;
     const passed = run.PassedTests || 0;
     if (total === 0) return 0;
@@ -301,6 +296,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
   openSuiteRun(runId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Suite Runs', CompositeKey.FromID(runId));
+  }
+
+  navigateToTestingDashboard(): void {
+    const testingApp = this.appManager.GetAppByName('Testing');
+    if (testingApp) {
+      this.navigationService.SwitchToApp(testingApp.ID);
+    }
   }
 
   async runSuite() {
@@ -362,7 +364,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     try {
       // Load all runs for analytics (not just recent 50)
       const rv = new RunView();
-      const result = await rv.RunView<TestSuiteRunEntity>({
+      const result = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
         OrderBy: 'StartedAt DESC',
@@ -394,7 +396,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     }
   }
 
-  private runToDataPoint(run: TestSuiteRunEntity): AnalyticsDataPoint {
+  private runToDataPoint(run: MJTestSuiteRunEntity): AnalyticsDataPoint {
     const total = run.TotalTests || 0;
     const passed = run.PassedTests || 0;
     return {
@@ -522,7 +524,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
       const allTestRunIds: string[] = [];
 
       for (const runData of runsToLoad) {
-        const testRunsResult = await rv.RunView<TestRunEntity>({
+        const testRunsResult = await rv.RunView<MJTestRunEntity>({
           EntityName: 'MJ: Test Runs',
           ExtraFilter: `TestSuiteRunID='${runData.runId}'`,
           OrderBy: 'Sequence',
@@ -598,10 +600,10 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
   /**
    * Load feedbacks for a batch of test run IDs
-   * Returns a map of testRunId -> TestRunFeedbackEntity
+   * Returns a map of testRunId -> MJTestRunFeedbackEntity
    */
-  private async loadFeedbacksForTestRuns(testRunIds: string[]): Promise<Map<string, TestRunFeedbackEntity>> {
-    const feedbackMap = new Map<string, TestRunFeedbackEntity>();
+  private async loadFeedbacksForTestRuns(testRunIds: string[]): Promise<Map<string, MJTestRunFeedbackEntity>> {
+    const feedbackMap = new Map<string, MJTestRunFeedbackEntity>();
 
     if (testRunIds.length === 0) return feedbackMap;
 
@@ -613,7 +615,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         const chunk = testRunIds.slice(i, i + chunkSize);
         const inClause = chunk.map(id => `'${id}'`).join(',');
 
-        const result = await rv.RunView<TestRunFeedbackEntity>({
+        const result = await rv.RunView<MJTestRunFeedbackEntity>({
           EntityName: 'MJ: Test Run Feedbacks',
           ExtraFilter: `TestRunID IN (${inClause})`,
           ResultType: 'entity_object'
@@ -1567,12 +1569,12 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   // Compare Tab Methods
   // ==========================================
 
-  async selectCompareRunA(run: TestSuiteRunEntity) {
+  async selectCompareRunA(run: MJTestSuiteRunEntity) {
     this.compareRunA = run;
     await this.loadCompareData();
   }
 
-  async selectCompareRunB(run: TestSuiteRunEntity) {
+  async selectCompareRunB(run: MJTestSuiteRunEntity) {
     this.compareRunB = run;
     await this.loadCompareData();
   }
@@ -1601,13 +1603,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
       // Load test runs for both suite runs in parallel
       const [resultA, resultB] = await Promise.all([
-        rv.RunView<TestRunEntity>({
+        rv.RunView<MJTestRunEntity>({
           EntityName: 'MJ: Test Runs',
           ExtraFilter: `TestSuiteRunID='${this.compareRunA.ID}'`,
           OrderBy: 'Sequence ASC',
           ResultType: 'entity_object'
         }),
-        rv.RunView<TestRunEntity>({
+        rv.RunView<MJTestRunEntity>({
           EntityName: 'MJ: Test Runs',
           ExtraFilter: `TestSuiteRunID='${this.compareRunB.ID}'`,
           OrderBy: 'Sequence ASC',
@@ -1629,9 +1631,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     }
   }
 
-  private buildComparisonResults(testsA: TestRunEntity[], testsB: TestRunEntity[]): TestRunComparison[] {
+  private buildComparisonResults(testsA: MJTestRunEntity[], testsB: MJTestRunEntity[]): TestRunComparison[] {
     const results: TestRunComparison[] = [];
-    const testMap = new Map<string, { a?: TestRunEntity; b?: TestRunEntity; name: string }>();
+    const testMap = new Map<string, { a?: MJTestRunEntity; b?: MJTestRunEntity; name: string }>();
 
     // Map all tests from run A
     for (const test of testsA) {
@@ -1778,7 +1780,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     URL.revokeObjectURL(link.href);
   }
 
-  getRunTags(run: TestSuiteRunEntity): string[] {
+  getRunTags(run: MJTestSuiteRunEntity): string[] {
     return TagsHelper.parseTags(run.Tags);
   }
 
@@ -1885,7 +1887,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         if (setting) {
           this.shortcutsSettingEntity = setting;
         } else {
-          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+          this.shortcutsSettingEntity = await this.metadata.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
           this.shortcutsSettingEntity.UserID = userId;
           this.shortcutsSettingEntity.Setting = SHORTCUTS_SETTINGS_KEY;
         }
@@ -1940,6 +1942,3 @@ interface TestResultCell {
   humanComments: string | null;
   sequence: number;
 }
-
-export function LoadTestSuiteFormComponentExtended() {}
-LoadTestSuiteFormComponentExtended();

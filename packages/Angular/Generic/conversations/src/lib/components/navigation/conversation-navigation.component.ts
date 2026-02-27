@@ -3,6 +3,7 @@ import { NavigationTab } from '../../models/conversation-state.model';
 import { UserInfo } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-navigation',
   template: `
     <div class="conversation-navigation">

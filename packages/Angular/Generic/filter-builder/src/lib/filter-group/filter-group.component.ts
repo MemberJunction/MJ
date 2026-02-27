@@ -14,6 +14,7 @@ import {
  * Supports nested groups for complex filter expressions.
  */
 @Component({
+  standalone: false,
   selector: 'mj-filter-group',
   templateUrl: './filter-group.component.html',
   styleUrls: ['./filter-group.component.css'],

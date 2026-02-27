@@ -3,15 +3,20 @@ import { BehaviorSubject, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActiveTasksService } from './active-tasks.service';
 import { DataCacheService } from './data-cache.service';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 
 /**
- * Completion event structure broadcast when an agent finishes
+ * Completion event structure broadcast when an agent finishes.
+ * Includes enriched result data from the server's fire-and-forget completion event.
  */
 export interface CompletionEvent {
   conversationDetailId: string;
   agentRunId: string;
+  /** Whether the agent execution succeeded */
+  success?: boolean;
+  /** Error message if the agent execution failed */
+  errorMessage?: string;
 }
 
 /**
@@ -283,9 +288,8 @@ export class ConversationStreamingService implements OnDestroy {
       const callbacks = this.callbackRegistry.get(conversationDetailId) || [];
 
       if (callbacks.length === 0) {
-        // No callbacks registered - message might be in a hidden conversation
-        // This is fine, callbacks will be registered when conversation becomes visible
-        console.warn(`[ConversationStreamingService] ⚠️  No callbacks registered for message ${conversationDetailId}. Registered: [${Array.from(this.callbackRegistry.keys()).join(', ')}]`);
+        // No callbacks registered - expected when progress is handled directly by graphQLAIClient's
+        // fire-and-forget subscription, or when the message is in a hidden conversation.
         return;
       }
 
@@ -326,11 +330,14 @@ export class ConversationStreamingService implements OnDestroy {
       // Extract progress information from RunAIAgentResolver message
       const { agentRun, progress, type } = statusObj.data || {};
 
-      // Handle completion messages - backend sends type: 'complete' when agent finishes
-      // Now includes conversationDetailId directly from backend (no reverse lookup needed)
+      // Handle completion messages - backend sends type: 'complete' when agent finishes.
+      // Now includes conversationDetailId and enriched result data (success, errorMessage, result)
+      // from the server's fire-and-forget execution.
       if (type === 'complete') {
         const agentRunId = statusObj.data?.agentRunId;
         const conversationDetailId = statusObj.data?.conversationDetailId;
+        const success = statusObj.data?.success;
+        const errorMessage = statusObj.data?.errorMessage;
 
         // Remove from active tasks (clears spinner in conversation list)
         if (agentRunId) {
@@ -349,16 +356,18 @@ export class ConversationStreamingService implements OnDestroy {
             timestamp: new Date()
           });
 
-          // Broadcast to all subscribers
+          // Broadcast enriched completion to all subscribers
           this.completionEvents$.next({
             conversationDetailId,
-            agentRunId: agentRunId || ''
+            agentRunId: agentRunId || '',
+            success,
+            errorMessage
           });
 
           // Cleanup old completions to prevent memory leak
           this.cleanupOldCompletions();
 
-          console.log(`[ConversationStreamingService] 📢 Completion broadcast for message ${conversationDetailId}`);
+          console.log(`[ConversationStreamingService] 📢 Completion broadcast for message ${conversationDetailId} (success: ${success})`);
         } else {
           console.warn(`[ConversationStreamingService] ⚠️ Completion received without conversationDetailId for agentRunId: ${agentRunId}`);
         }
@@ -385,7 +394,8 @@ export class ConversationStreamingService implements OnDestroy {
       const callbacks = this.callbackRegistry.get(conversationDetailId) || [];
 
       if (callbacks.length === 0) {
-        console.warn(`[ConversationStreamingService] ⚠️  No callbacks registered for message ${conversationDetailId}. Registered: [${Array.from(this.callbackRegistry.keys()).join(', ')}]`);
+        // No callbacks registered - expected when progress is handled directly by graphQLAIClient's
+        // fire-and-forget subscription, or when the message is in a hidden conversation.
         return;
       }
 

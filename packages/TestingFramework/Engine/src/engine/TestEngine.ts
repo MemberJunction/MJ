@@ -11,11 +11,11 @@ import {
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
 import {
-    TestEntity,
-    TestRunEntity,
-    TestSuiteEntity,
-    TestSuiteRunEntity,
-    TestTypeEntity
+    MJTestEntity,
+    MJTestRunEntity,
+    MJTestSuiteEntity,
+    MJTestSuiteRunEntity,
+    MJTestTypeEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
@@ -33,7 +33,8 @@ import {
     TestRunResult,
     TestSuiteRunResult,
     TestLogMessage,
-    ResolvedTestVariables
+    ResolvedTestVariables,
+    TestRunOutputItem
 } from '../types';
 import {
     gatherExecutionContext,
@@ -140,7 +141,7 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence ?? null, options, contextUser, startTime, tags);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -348,7 +349,7 @@ export class TestEngine extends TestEngineBase {
      * Get or create test driver instance.
      * @private
      */
-    private async getDriver(testType: TestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {
+    private async getDriver(testType: MJTestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {
         // Check cache
         const cached = this._driverCache.get(testType.ID);
         if (cached) {
@@ -374,7 +375,7 @@ export class TestEngine extends TestEngineBase {
      * Get test entity from cache.
      * @private
      */
-    private async loadTest(testId: string): Promise<TestEntity> {
+    private async loadTest(testId: string): Promise<MJTestEntity> {
         // Use cached test instead of loading from DB
         const test = this.GetTestByID(testId);
         if (!test) {
@@ -387,7 +388,7 @@ export class TestEngine extends TestEngineBase {
      * Get suite entity from cache.
      * @private
      */
-    private async loadSuite(suiteId: string): Promise<TestSuiteEntity> {
+    private async loadSuite(suiteId: string): Promise<MJTestSuiteEntity> {
         // Use cached suite instead of loading from DB
         const suite = this.GetTestSuiteByID(suiteId);
         if (!suite) {
@@ -400,7 +401,7 @@ export class TestEngine extends TestEngineBase {
      * Get tests for a suite from cache (sorted by sequence).
      * @private
      */
-    private async loadSuiteTests(suiteId: string): Promise<TestEntity[]> {
+    private async loadSuiteTests(suiteId: string): Promise<MJTestEntity[]> {
         // Use cached test suite tests and tests instead of querying DB
         return this.GetTestsForSuite(suiteId);
     }
@@ -415,9 +416,9 @@ export class TestEngine extends TestEngineBase {
      */
     private filterTestsForExecution(
         suiteId: string,
-        tests: TestEntity[],
+        tests: MJTestEntity[],
         options: SuiteRunOptions
-    ): TestEntity[] {
+    ): MJTestEntity[] {
         // Get suite test mappings to access sequence numbers
         const suiteTests = this.TestSuiteTests.filter(st => st.SuiteID === suiteId);
 
@@ -468,14 +469,14 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async createTestRun(
-        test: TestEntity,
+        test: MJTestEntity,
         contextUser: UserInfo,
         suiteRunId?: string | null,
         sequence?: number | null,
         tags?: string | null
-    ): Promise<TestRunEntity> {
+    ): Promise<MJTestRunEntity> {
         const md = new Metadata();
-        const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
+        const testRun = await md.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', contextUser);
         testRun.NewRecord();
         testRun.TestID = test.ID;
         testRun.RunByUserID = contextUser.ID;
@@ -522,12 +523,12 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async createSuiteRun(
-        suite: TestSuiteEntity,
+        suite: MJTestSuiteEntity,
         contextUser: UserInfo,
         options?: SuiteRunOptions
-    ): Promise<TestSuiteRunEntity> {
+    ): Promise<MJTestSuiteRunEntity> {
         const md = new Metadata();
-        const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>(
+        const suiteRun = await md.GetEntityObject<MJTestSuiteRunEntity>(
             'MJ: Test Suite Runs',
             contextUser
         );
@@ -563,9 +564,10 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async updateTestRun(
-        testRun: TestRunEntity,
+        testRun: MJTestRunEntity,
         result: DriverExecutionResult,
         startTime: number,
+        contextUser: UserInfo,
         logMessages?: TestLogMessage[]
     ): Promise<void> {
         testRun.Status = result.status;
@@ -601,6 +603,11 @@ export class TestEngine extends TestEngineBase {
         if (!saved) {
             this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.Message));
         }
+
+        // Persist structured outputs if the driver emitted any
+        if (result.outputs && result.outputs.length > 0) {
+            await this.persistOutputs(testRun, result.outputs, contextUser);
+        }
     }
 
     /**
@@ -614,11 +621,85 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Persist structured outputs emitted by a test driver as TestRunOutput entity records.
+     * @private
+     */
+    private async persistOutputs(
+        testRun: MJTestRunEntity,
+        outputs: TestRunOutputItem[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            this.log(`Persisting ${outputs.length} test run output(s) for TestRun ${testRun.ID}`);
+
+            const outputTypes = this.TestOutputTypes;
+            if (outputTypes.length === 0) {
+                this.logError('TestOutputTypes cache is empty — no Test Run Output Type rows found. Cannot persist outputs.');
+                return;
+            }
+
+            const md = new Metadata();
+            let persisted = 0;
+            for (const output of outputs) {
+                const outputType = outputTypes.find(t => t.Get('Name') === output.outputTypeName);
+                if (!outputType) {
+                    const availableTypes = outputTypes.map(t => t.Get('Name') as string).join(', ');
+                    this.logError(`Unknown output type: "${output.outputTypeName}". Available types: ${availableTypes}. Skipping output.`);
+                    continue;
+                }
+
+                await this.persistSingleOutput(md, testRun, output, outputType.Get('ID') as string, contextUser);
+                persisted++;
+            }
+
+            this.log(`Persisted ${persisted}/${outputs.length} test run outputs`);
+        } catch (error) {
+            this.logError('Failed to persist test run outputs', error as Error);
+        }
+    }
+
+    /**
+     * Persist a single output record.
+     * @private
+     */
+    private async persistSingleOutput(
+        md: Metadata,
+        testRun: MJTestRunEntity,
+        output: TestRunOutputItem,
+        outputTypeId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Use BaseEntity since TestRunOutputEntity won't exist until CodeGen runs
+        const entity = await md.GetEntityObject('MJ: Test Run Outputs', contextUser);
+        entity.NewRecord();
+        entity.Set('TestRunID', testRun.ID);
+        entity.Set('OutputTypeID', outputTypeId);
+        entity.Set('Sequence', output.sequence);
+
+        if (output.stepNumber != null) entity.Set('StepNumber', output.stepNumber);
+        if (output.name) entity.Set('Name', output.name);
+        if (output.description) entity.Set('Description', output.description);
+        if (output.mimeType) entity.Set('MimeType', output.mimeType);
+        if (output.inlineData) entity.Set('InlineData', output.inlineData);
+        if (output.fileSizeBytes != null) entity.Set('FileSizeBytes', output.fileSizeBytes);
+        if (output.width != null) entity.Set('Width', output.width);
+        if (output.height != null) entity.Set('Height', output.height);
+        if (output.durationSeconds != null) entity.Set('DurationSeconds', output.durationSeconds);
+        if (output.metadata) entity.Set('Metadata', JSON.stringify(output.metadata));
+
+        const saved = await entity.Save();
+        if (!saved) {
+            const reason = entity.LatestResult?.Message || 'unknown error';
+            this.logError(`Failed to save test run output "${output.name || output.outputTypeName}": ${reason}`);
+        }
+    }
+
+    /**
      * Update TestSuiteRun entity with results.
      * @private
      */
     private async updateSuiteRun(
-        suiteRun: TestSuiteRunEntity,
+        suiteRun: MJTestSuiteRunEntity,
         testResults: TestRunResult[],
         startTime: number
     ): Promise<void> {
@@ -644,7 +725,7 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async runRepeatedTest(
-        test: TestEntity,
+        test: MJTestEntity,
         repeatCount: number,
         options: TestRunOptions,
         contextUser: UserInfo,
@@ -689,7 +770,7 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async runSingleTestIteration(
-        test: TestEntity,
+        test: MJTestEntity,
         suiteRunId: string | null | undefined,
         sequence: number | null,
         options: TestRunOptions,
@@ -826,7 +907,7 @@ export class TestEngine extends TestEngineBase {
         }
 
         // Update TestRun entity with results and logs
-        await this.updateTestRun(testRun, driverResult, startTime, logMessages);
+        await this.updateTestRun(testRun, driverResult, startTime, contextUser, logMessages);
 
         // Convert to TestRunResult
         const result: TestRunResult = {

@@ -1,5 +1,5 @@
 import { CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, Metadata, RunView } from '@memberjunction/core';
-import { FileCategoryEntity, FileEntity } from '@memberjunction/core-entities';
+import { MJFileCategoryEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
 import { mj_core_schema } from '../config.js';
 import { MJFileCategoryResolver as FileCategoryResolverBase, MJFileCategory_ } from '../generated/generated.js';
@@ -7,7 +7,7 @@ import sql from 'mssql';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { GetReadWriteProvider } from '../util.js';
 
-export class FileResolver extends FileCategoryResolverBase {
+export class FileCategoryResolver extends FileCategoryResolverBase {
   @Mutation(() => MJFileCategory_)
   async DeleteFileCategory(
     @Arg('ID', () => String) ID: string,
@@ -23,8 +23,8 @@ export class FileResolver extends FileCategoryResolverBase {
     }
 
     const user = this.GetUserFromPayload(userPayload);
-    const fileEntity = await p.GetEntityObject<FileEntity>('Files', user);
-    const fileCategoryEntity = await p.GetEntityObject<FileCategoryEntity>('File Categories', user);
+    const fileEntity = await p.GetEntityObject<MJFileEntity>('MJ: Files', user);
+    const fileCategoryEntity = await p.GetEntityObject<MJFileCategoryEntity>('MJ: File Categories', user);
 
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
     fileCategoryEntity.CheckPermissions(EntityPermissionType.Delete, true);
@@ -49,7 +49,7 @@ export class FileResolver extends FileCategoryResolverBase {
       const rv = new RunView();
       const filesResult = await rv.RunView(
         {
-          EntityName: 'Files',
+          EntityName: 'MJ: Files',
           ExtraFilter: `CategoryID='${fileCategoryEntity.ID}'`,
           ResultType: 'entity_object',
         },
@@ -59,7 +59,7 @@ export class FileResolver extends FileCategoryResolverBase {
         // iterate through each of the files in filesResult.Results
         // and update the CategoryID to fileCategoryEntity.ParentID
         for (const file of filesResult.Results) {
-          const fileEntity = await p.GetEntityObject<FileEntity>('Files', user);
+          const fileEntity = await p.GetEntityObject<MJFileEntity>('MJ: Files', user);
           await fileEntity.Load(file.ID);
           fileEntity.CategoryID = fileCategoryEntity.ParentID;
           await fileEntity.Save();

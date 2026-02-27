@@ -1,0 +1,360 @@
+<div class="applications-panel" [class.panel-open]="ShowEditPanel || ShowCreatePanel">
+  @if (IsLoading) {
+    <mj-loading text="Loading applications..."></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <!-- Header -->
+    <div class="panel-header">
+      <div class="header-left">
+        <h3 class="panel-title">
+          <i class="fa-solid fa-cube"></i>
+          API Applications
+        </h3>
+        <p class="panel-subtitle">Manage applications and their default scope permissions</p>
+      </div>
+      <button class="btn-create" (click)="openCreatePanel()">
+        <i class="fa-solid fa-plus"></i>
+        New Application
+      </button>
+    </div>
+    <!-- Messages -->
+    @if (SuccessMessage) {
+      <div class="message success">
+        <i class="fa-solid fa-check-circle"></i>
+        {{SuccessMessage}}
+      </div>
+    }
+    @if (ErrorMessage) {
+      <div class="message error">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        {{ErrorMessage}}
+      </div>
+    }
+    <!-- Applications Grid -->
+    <div class="applications-grid">
+      @for (appItem of Applications; track appItem) {
+        <div class="app-card"
+          [class.inactive]="!appItem.application.IsActive"
+          [class.expanded]="appItem.expanded">
+          <div class="app-header">
+            <div class="app-header-main" (click)="toggleExpanded(appItem)">
+              <div class="app-icon">
+                <i class="fa-solid fa-cube"></i>
+              </div>
+              <div class="app-info">
+                <div class="app-name">
+                  {{appItem.application.Name}}
+                  <span class="status-badge" [class.active]="appItem.application.IsActive"
+                    [class.inactive]="!appItem.application.IsActive">
+                    {{appItem.application.IsActive ? 'Active' : 'Inactive'}}
+                  </span>
+                </div>
+                @if (appItem.application.Description) {
+                  <div class="app-description">
+                    {{appItem.application.Description}}
+                  </div>
+                }
+              </div>
+              <div class="app-stats">
+                <div class="scope-count">
+                  <i class="fa-solid fa-shield-halved"></i>
+                  {{appItem.scopeCount}} scopes
+                </div>
+                <i class="fa-solid expand-icon"
+                  [class.fa-chevron-down]="!appItem.expanded"
+                [class.fa-chevron-up]="appItem.expanded"></i>
+              </div>
+            </div>
+            <button class="app-edit-btn" (click)="openEditPanel(appItem); $event.stopPropagation()" title="Edit Application">
+              <i class="fa-solid fa-pencil"></i>
+            </button>
+          </div>
+          <!-- Expanded Content -->
+          @if (appItem.expanded) {
+            <div class="app-details">
+              <div class="details-section">
+                <h4>Scope Ceiling Rules</h4>
+                @if (appItem.scopes.length > 0) {
+                  <div class="scope-rules">
+                    @for (scope of appItem.scopes; track scope) {
+                      <div class="scope-rule">
+                        <div class="rule-icon" [ngClass]="getPatternClass(scope.PatternType, scope.IsDeny)">
+                          <i [class]="getPatternIcon(scope.PatternType, scope.IsDeny)"></i>
+                        </div>
+                        <div class="rule-info">
+                          <div class="rule-scope">{{getScopeName(scope.ScopeID)}}</div>
+                          <div class="rule-pattern">
+                            <code>{{scope.ResourcePattern}}</code>
+                            <span class="pattern-type">{{scope.PatternType}}</span>
+                            @if (scope.Priority > 0) {
+                              <span class="priority">
+                                Priority: {{scope.Priority}}
+                              </span>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (appItem.scopes.length === 0) {
+                  <div class="empty-scopes">
+                    <i class="fa-solid fa-shield-xmark"></i>
+                    <span>No scope rules defined - all access denied by default</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+      <!-- Empty State -->
+      @if (Applications.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-cube"></i>
+          <span>No applications configured</span>
+          <p>Create an application to define scope ceilings for API key access</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Slide-out Backdrop -->
+  @if (ShowEditPanel || ShowCreatePanel) {
+    <div class="slideout-backdrop" (click)="closePanel()"></div>
+  }
+
+  <!-- Create Panel (Slide-out) -->
+  <div class="slideout-panel" [class.open]="ShowCreatePanel">
+    <div class="slideout-header">
+      <div class="slideout-title">
+        <i class="fa-solid fa-plus-circle"></i>
+        <span>New Application</span>
+      </div>
+      <button class="slideout-close" (click)="closePanel()" title="Close">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+
+    <div class="slideout-content">
+      <div class="form-section">
+        <div class="form-field">
+          <label>Application Name *</label>
+          <input kendoTextBox [(ngModel)]="EditName"
+            placeholder="e.g., MJAPI, MCP Server, Portal"
+            class="form-input" />
+        </div>
+
+        <div class="form-field">
+          <label>Description</label>
+          <textarea kendoTextArea [(ngModel)]="EditDescription"
+            placeholder="Describe the application's purpose..."
+            [rows]="3"
+          class="form-textarea"></textarea>
+        </div>
+
+        <div class="form-field">
+          <label class="checkbox-label">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+            <div>
+              <span>Active</span>
+              <span class="checkbox-hint">Inactive applications cannot be used with API keys</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="slideout-footer">
+      <button kendoButton [themeColor]="'primary'"
+        [disabled]="!EditName.trim() || IsSaving"
+        (click)="saveApplication()">
+        @if (IsSaving) {
+          <mj-loading [showText]="false" size="small"></mj-loading>
+        }
+        @if (!IsSaving) {
+          <span>
+            <i class="fa-solid fa-save"></i>
+            Create Application
+          </span>
+        }
+      </button>
+      <button kendoButton (click)="closePanel()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Edit Panel (Slide-out) -->
+  <div class="slideout-panel" [class.open]="ShowEditPanel" [style.width.px]="PanelWidth">
+    <!-- Resize Handle -->
+    <div class="slideout-resize-handle"
+      [class.resizing]="IsResizing"
+    (mousedown)="startResize($event)"></div>
+    <div class="slideout-header">
+      <div class="slideout-title">
+        <i class="fa-solid fa-cube"></i>
+        <span>{{EditingApplication?.Name}}</span>
+        <span class="status-pill" [class.active]="EditIsActive">
+          {{EditIsActive ? 'Active' : 'Inactive'}}
+        </span>
+      </div>
+      <button class="slideout-close" (click)="closePanel()" title="Close">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="slideout-tabs">
+      <button class="slideout-tab" [class.active]="EditTab === 'details'"
+        (click)="EditTab = 'details'">
+        <i class="fa-solid fa-info-circle"></i>
+        Details
+      </button>
+      <button class="slideout-tab" [class.active]="EditTab === 'scopes'"
+        (click)="EditTab = 'scopes'">
+        <i class="fa-solid fa-shield-halved"></i>
+        Scopes
+        <span class="tab-badge">{{getSelectedScopeCount()}}</span>
+      </button>
+    </div>
+
+    <div class="slideout-content">
+      <!-- Details Tab -->
+      @if (EditTab === 'details') {
+        <div class="tab-panel">
+          <div class="form-section">
+            <div class="form-field">
+              <label>Application Name *</label>
+              <input kendoTextBox [(ngModel)]="EditName"
+                placeholder="e.g., MJAPI, MCP Server, Portal"
+                class="form-input" />
+            </div>
+            <div class="form-field">
+              <label>Description</label>
+              <textarea kendoTextArea [(ngModel)]="EditDescription"
+                placeholder="Describe the application's purpose..."
+                [rows]="4"
+              class="form-textarea"></textarea>
+            </div>
+            <div class="form-field">
+              <label class="checkbox-label">
+                <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+                <div>
+                  <span>Active</span>
+                  <span class="checkbox-hint">Inactive applications cannot be used with API keys</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Scopes Tab -->
+      @if (EditTab === 'scopes') {
+        <div class="tab-panel scopes-panel">
+          <div class="scopes-intro">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>Define the maximum permissions this application can grant to API keys.</span>
+          </div>
+          <div class="scope-categories-list">
+            @for (category of ScopeCategories; track category) {
+              <div class="scope-category-card">
+                <div class="category-header" (click)="toggleScopeCategory(category)">
+                  <div class="category-left">
+                    <i [class]="category.icon" [style.color]="category.color"></i>
+                    <span class="category-name">{{category.name}}</span>
+                    <span class="category-count-badge">
+                      {{getCategorySelectedCount(category)}}/{{category.scopes.length}}
+                    </span>
+                  </div>
+                  <div class="category-right">
+                    <label class="category-all-toggle" (click)="$event.stopPropagation()">
+                      <input type="checkbox" kendoCheckBox
+                        [checked]="category.allSelected"
+                        (change)="toggleCategoryAll(category)" />
+                      <span>All</span>
+                    </label>
+                    <i class="fa-solid category-chevron"
+                      [class.fa-chevron-down]="!category.expanded"
+                    [class.fa-chevron-up]="category.expanded"></i>
+                  </div>
+                </div>
+                @if (category.expanded) {
+                  <div class="category-scopes-list">
+                    @for (selection of category.scopes; track selection) {
+                      <div class="scope-row"
+                        [class.selected]="selection.selected">
+                        <label class="scope-select">
+                          <input type="checkbox" kendoCheckBox
+                            [(ngModel)]="selection.selected"
+                            (change)="updateCategoryState(category)" />
+                          <div class="scope-label">
+                            <span class="scope-path">{{selection.displayName || '(unnamed scope)'}}</span>
+                            @if (selection.scope.Description) {
+                              <span class="scope-description">
+                                {{selection.scope.Description}}
+                              </span>
+                            }
+                          </div>
+                        </label>
+                        <!-- Read-only pattern display -->
+                        @if (selection.selected) {
+                          <div class="scope-pattern-display">
+                            <span class="pattern-tag" [class.include]="selection.patternType === 'Include'"
+                              [class.exclude]="selection.patternType === 'Exclude'">
+                              <i class="fa-solid" [class.fa-check]="selection.patternType === 'Include'"
+                              [class.fa-minus]="selection.patternType === 'Exclude'"></i>
+                              {{selection.pattern || '*'}}
+                            </span>
+                          </div>
+                        }
+                        <!-- Editable pattern config - shown on hover -->
+                        @if (selection.selected) {
+                          <div class="scope-pattern-config">
+                            <input kendoTextBox [(ngModel)]="selection.pattern"
+                              placeholder="*"
+                              class="pattern-field"
+                              title="Resource Pattern" />
+                            <kendo-dropdownlist [(ngModel)]="selection.patternType"
+                              [data]="['Include', 'Exclude']"
+                              [valuePrimitive]="true"
+                              class="type-field"
+                              title="Pattern Type">
+                            </kendo-dropdownlist>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+            @if (ScopeCategories.length === 0) {
+              <div class="empty-scopes-message">
+                <i class="fa-solid fa-shield-xmark"></i>
+                <span>No scopes available</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="slideout-footer">
+      <button kendoButton [themeColor]="'primary'"
+        [disabled]="!EditName.trim() || IsSaving"
+        (click)="saveAll()">
+        @if (IsSaving) {
+          <mj-loading [showText]="false" size="small"></mj-loading>
+        }
+        @if (!IsSaving) {
+          <span>
+            <i class="fa-solid fa-save"></i>
+            Save Changes
+          </span>
+        }
+      </button>
+      <button kendoButton (click)="closePanel()">Cancel</button>
+    </div>
+  </div>
+</div>

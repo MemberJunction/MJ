@@ -1,6 +1,7 @@
 import { Component, Output, EventEmitter } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-executions-list-view',
   template: `
     <div class="executions-list-placeholder" >

@@ -2,6 +2,7 @@ import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'ty
 import { AppContext } from '../types.js';
 import { LogError, Metadata } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
 export class DatasetResultType {
@@ -35,13 +36,16 @@ export class DatasetItemFilterTypeGQL {
 
 
 @Resolver(DatasetResultType)
-export class DatasetResolverExtended {
+export class DatasetResolverExtended extends ResolverBase {
   @Query(() => DatasetResultType)
   async GetDatasetByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
+    // Check API key scope authorization for dataset read
+    await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+
     try {
       const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
       const result = await md.GetDatasetByName(DatasetName, ItemFilters);
@@ -86,13 +90,16 @@ export class DatasetStatusResultType {
 }
 
 @Resolver(DatasetStatusResultType)
-export class DatasetStatusResolver {
+export class DatasetStatusResolver extends ResolverBase {
   @Query(() => DatasetStatusResultType)
   async GetDatasetStatusByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
+    // Check API key scope authorization for dataset read
+    await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+
     try {
       const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
       const result = await md.GetDatasetStatusByName(DatasetName, ItemFilters);

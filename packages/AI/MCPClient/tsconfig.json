@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "Node16",
+    "moduleResolution": "Node16"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]
+}

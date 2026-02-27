@@ -8,7 +8,6 @@ import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormsModule } from '@angular/forms';
@@ -27,7 +26,6 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
     FormsModule,
     DialogsModule,
     ExcelExportModule,
-    CompareRecordsModule,
     ContainerDirectivesModule,
     ButtonsModule,
     DropDownsModule,

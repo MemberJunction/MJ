@@ -1,18 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsOverviewResource() {
-  // Force inclusion in production builds
-}
-
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -34,22 +26,22 @@ interface CategoryStats {
   successRate: number;
 }
 
-interface ExecutionWithExpanded extends ActionExecutionLogEntity {
+interface ExecutionWithExpanded extends MJActionExecutionLogEntity {
   isExpanded?: boolean;
 }
-
 
 /**
  * Actions Overview Resource - displays action management dashboard
  */
 @RegisterClass(BaseResourceComponent, 'ActionsOverviewResource')
 @Component({
+  standalone: false,
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
   styleUrls: ['./actions-overview.component.css']
 })
 export class ActionsOverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  public isLoading = true;
+  public isLoading: boolean = true;
   public metrics: ActionMetrics = {
     totalActions: 0,
     activeActions: 0,
@@ -64,9 +56,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   };
 
   public categoryStats: CategoryStats[] = [];
-  public recentActions: ActionEntity[] = [];
+  public recentActions: MJActionEntity[] = [];
   public recentExecutions: ExecutionWithExpanded[] = [];
-  public topCategories: ActionCategoryEntity[] = [];
+  public topCategories: MJActionCategoryEntity[] = [];
 
   public searchTerm$ = new BehaviorSubject<string>('');
   public selectedStatus$ = new BehaviorSubject<string>('all');
@@ -74,7 +66,8 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   private destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService) {
+  constructor(private navigationService: NavigationService, 
+              private cdr: ChangeDetectorRef ) {
     super();
   }
 
@@ -103,21 +96,22 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   private async loadData(): Promise<void> {
     try {
       this.isLoading = true;
-      
+      this.cdr.detectChanges();
+
       // Load all data in a single batch using RunViews
       const rv = new RunView();
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
-          EntityName: 'Actions', 
+          EntityName: 'MJ: Actions', 
           OrderBy: '__mj_UpdatedAt DESC' 
         },
         {
-          EntityName: 'Action Categories', 
+          EntityName: 'MJ: Action Categories', 
           OrderBy: 'Name' 
         },
         {
-          EntityName: 'Action Execution Logs', 
+          EntityName: 'MJ: Action Execution Logs', 
           OrderBy: 'StartedAt DESC', 
         }
       ]);
@@ -130,31 +124,29 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         throw new Error('Failed to load data: ' + errors.join(', '));
       }
       
-      const actions = (actionsResult.Results || []) as ActionEntity[];
-      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
-      const executions = (executionsResult.Results || []) as ActionExecutionLogEntity[];
+      const actions = (actionsResult.Results || []) as MJActionEntity[];
+      const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
+      const executions = (executionsResult.Results || []) as MJActionExecutionLogEntity[];
 
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
       this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
-
     } catch (error) {
       console.error('Error loading actions overview data:', error);
       LogError('Failed to load actions overview data', undefined, error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
       this.NotifyLoadComplete();
     }
   }
 
-
-
   private calculateMetrics(
-    actions: ActionEntity[], 
-    categories: ActionCategoryEntity[], 
-    executions: ActionExecutionLogEntity[]
+    actions: MJActionEntity[], 
+    categories: MJActionCategoryEntity[], 
+    executions: MJActionExecutionLogEntity[]
   ): void {
     this.metrics = {
       totalActions: actions.length,
@@ -174,7 +166,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     };
   }
 
-  private calculateSuccessRate(executions: ActionExecutionLogEntity[]): number {
+  private calculateSuccessRate(executions: MJActionExecutionLogEntity[]): number {
     if (!executions || executions.length === 0) return 0;
     // Check for success based on result code - Actions may use different success codes
     const successful = executions.filter(e => {
@@ -185,9 +177,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   private calculateCategoryStats(
-    actions: ActionEntity[], 
-    categories: ActionCategoryEntity[], 
-    executions: ActionExecutionLogEntity[]
+    actions: MJActionEntity[], 
+    categories: MJActionCategoryEntity[], 
+    executions: MJActionExecutionLogEntity[]
   ): void {
     this.categoryStats = categories.map(category => {
       const categoryActions = actions.filter(a => a.CategoryID === category.ID);
@@ -229,7 +221,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     try {
       const rv = new RunView();
       const result = await rv.RunView({
-        EntityName: 'Actions',
+        EntityName: 'MJ: Actions',
         ExtraFilter: extraFilter,
         OrderBy: '__mj_UpdatedAt DESC',
         UserSearchString: searchTerm,
@@ -237,7 +229,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         MaxRows: 1000
       });
       
-      this.recentActions = ((result.Results || []) as ActionEntity[]).slice(0, 10);
+      this.recentActions = ((result.Results || []) as MJActionEntity[]).slice(0, 10);
     } catch (error) {
       LogError('Failed to load filtered actions', undefined, error);
     }
@@ -255,22 +247,22 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     this.selectedType$.next(type);
   }
 
-  public openAction(action: ActionEntity): void {
+  public openAction(action: MJActionEntity): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
   public openCategory(categoryId: string): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
-    this.navigationService.OpenEntityRecord('Action Categories', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Categories', key);
   }
 
-  public openExecution(execution: ActionExecutionLogEntity): void {
+  public openExecution(execution: MJActionExecutionLogEntity): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: execution.ID }]);
-    this.navigationService.OpenEntityRecord('Action Execution Logs', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
   }
 
-  public isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
+  public isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
     const code = execution.ResultCode?.toLowerCase();
     return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
   }
@@ -332,12 +324,11 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
   }
 
-
   /**
    * Gets the icon class for an action
    * Falls back to type-based icon if no IconClass is set
    */
-  public getActionIcon(action: ActionEntity): string {
+  public getActionIcon(action: MJActionEntity): string {
     return action?.IconClass || this.getTypeIcon(action.Type);
   }
 

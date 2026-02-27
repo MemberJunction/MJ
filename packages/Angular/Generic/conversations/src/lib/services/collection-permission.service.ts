@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionPermissionEntity } from '@memberjunction/core-entities';
+import { MJCollectionPermissionEntity } from '@memberjunction/core-entities';
 
 export interface CollectionPermission {
     id: string;
@@ -33,7 +33,7 @@ export class CollectionPermissionService {
      */
     async loadPermissions(collectionId: string, currentUser: UserInfo): Promise<CollectionPermission[]> {
         const rv = new RunView();
-        const result = await rv.RunView<CollectionPermissionEntity>({
+        const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `CollectionID='${collectionId}'`,
             OrderBy: '__mj_CreatedAt ASC',
@@ -55,7 +55,7 @@ export class CollectionPermissionService {
         currentUser: UserInfo
     ): Promise<CollectionPermission | null> {
         const rv = new RunView();
-        const result = await rv.RunView<CollectionPermissionEntity>({
+        const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `CollectionID='${collectionId}' AND UserID='${userId}'`,
             MaxRows: 1,
@@ -85,7 +85,7 @@ export class CollectionPermissionService {
         // Build filter for all collection IDs
         const collectionFilter = collectionIds.map(id => `CollectionID='${id}'`).join(' OR ');
         const rv = new RunView();
-        const result = await rv.RunView<CollectionPermissionEntity>({
+        const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `(${collectionFilter}) AND UserID='${userId}'`,
             ResultType: 'entity_object'
@@ -110,9 +110,9 @@ export class CollectionPermissionService {
         permissions: PermissionSet,
         sharedByUserId: string,
         currentUser: UserInfo
-    ): Promise<CollectionPermissionEntity> {
+    ): Promise<MJCollectionPermissionEntity> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<CollectionPermissionEntity>(
+        const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
         );
@@ -195,7 +195,7 @@ export class CollectionPermissionService {
         currentUser: UserInfo
     ): Promise<boolean> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<CollectionPermissionEntity>(
+        const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
         );
@@ -263,7 +263,7 @@ export class CollectionPermissionService {
      */
     async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
         const md = new Metadata();
-        const permission = await md.GetEntityObject<CollectionPermissionEntity>(
+        const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
         );
@@ -421,7 +421,7 @@ export class CollectionPermissionService {
         );
     }
 
-    private mapToPermission(entity: CollectionPermissionEntity): CollectionPermission {
+    private mapToPermission(entity: MJCollectionPermissionEntity): CollectionPermission {
         return {
             id: entity.ID,
             collectionId: entity.CollectionID,

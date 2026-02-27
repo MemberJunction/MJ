@@ -1,0 +1,100 @@
+<div class="folder-tree">
+  <!-- Navigation bar with back/forward buttons and breadcrumbs -->
+  @if (account) {
+    <div class="navigation-bar">
+      <!-- Back/Forward buttons -->
+      <div class="nav-buttons">
+        <button
+          kendoButton
+          fillMode="flat"
+          size="small"
+          [disabled]="!canGoBack()"
+          (click)="navigateBack()"
+          title="Go back"
+          class="nav-button"
+          >
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <button
+          kendoButton
+          fillMode="flat"
+          size="small"
+          [disabled]="!canGoForward()"
+          (click)="navigateForward()"
+          title="Go forward"
+          class="nav-button"
+          >
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+      <!-- Breadcrumb path -->
+      <div class="breadcrumbs">
+        @for (item of breadcrumbs; track item; let last = $last) {
+          <button
+            kendoButton
+            fillMode="flat"
+            size="small"
+            (click)="onBreadcrumbClick(item)"
+            [class.current]="last"
+            class="breadcrumb-item"
+            >
+            {{ item.label }}
+          </button>
+          @if (!last) {
+            <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+          }
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Folder tree content -->
+  <div class="tree-content">
+    <!-- Loading state -->
+    @if (isLoading) {
+      <mj-loading text="Loading folders..."></mj-loading>
+    }
+
+    <!-- Error state -->
+    @if (errorMessage && !isLoading) {
+      <div class="tree-error">
+        <div class="error-icon">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+        </div>
+        <p class="error-text">{{ errorMessage }}</p>
+      </div>
+    }
+
+    <!-- Folder list -->
+    @if (!isLoading && !errorMessage) {
+      <div class="folder-list">
+        @for (folder of folders; track folder) {
+          <div
+            class="folder-item"
+            (click)="onFolderClick(folder)"
+            >
+            <i class="fa-solid fa-folder folder-icon"></i>
+            <span class="folder-name">{{ folder.name }}</span>
+          </div>
+        }
+        <!-- Empty state -->
+        @if (folders.length === 0) {
+          <div class="tree-placeholder">
+            <div class="placeholder-icon">
+              <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <p class="placeholder-text">No folders in this location</p>
+            @if (account) {
+              <p class="placeholder-hint">
+                Account: {{ account.account.Name }}
+              </p>
+            }
+            <p class="placeholder-hint">
+              Path: {{ currentPath }}
+            </p>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

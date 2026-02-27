@@ -23,6 +23,8 @@ import {
   IMetadataProvider,
   IRunViewProvider,
   RunViewResult,
+  AggregateResult,
+  AggregateValue,
   EntityInfo,
   EntityFieldInfo,
   ApplicationInfo,
@@ -32,6 +34,7 @@ import {
   UserInfo,
   RecordChange,
   ILocalStorageProvider,
+  IFileSystemProvider,
   AuditLogTypeInfo,
   AuthorizationInfo,
   TransactionGroupBase,
@@ -75,24 +78,28 @@ import {
   RunQueryWithCacheCheckParams,
   RunQueriesWithCacheCheckResponse,
   RunQueryWithCacheCheckResult,
+  InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
+import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {
-  AuditLogEntity,
-  DuplicateRunEntity,
-  EntityAIActionEntity,
-  ListEntity,
-  RecordMergeDeletionLogEntity,
-  RecordMergeLogEntity,
-  UserFavoriteEntity,
-  UserViewEntityExtended,
+  MJAuditLogEntity,
+  MJDuplicateRunEntity,
+  MJEntityAIActionEntity,
+  MJListEntity,
+  MJQueryEntity,
+  MJRecordMergeDeletionLogEntity,
+  MJRecordMergeLogEntity,
+  MJUserFavoriteEntity,
+  QueryEngine,
+  MJUserViewEntityExtended,
   ViewInfo,
 } from '@memberjunction/core-entities';
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
@@ -111,6 +118,7 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
+import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
 
 /**
  * Represents a single field change in the DiffObjects comparison result
@@ -251,18 +259,30 @@ export class SQLServerDataProvider
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
-  
+
   // Query cache instance
   private queryCache = new QueryCache();
-  
+
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
+  private _fileSystemProvider: IFileSystemProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
-  private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
-  
+  private static _sqlLoggingSessionsKey: string = 'MJ_SQLServerDataProvider_SqlLoggingSessions';
+  private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (g) {
+      if (!g[SQLServerDataProvider._sqlLoggingSessionsKey]) {
+        g[SQLServerDataProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
+      }
+      return g[SQLServerDataProvider._sqlLoggingSessionsKey];
+    } else {
+      throw new Error('No global object store available for SQL logging session');
+    }
+  }
+
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
   private _sqlQueue$ = new Subject<{
@@ -523,6 +543,17 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Gets a specific SQL logging session by its ID.
+   * Returns the session if found, or undefined if not found.
+   *
+   * @param sessionId - The unique identifier of the session to retrieve
+   * @returns The SqlLoggingSession if found, undefined otherwise
+   */
+  public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
+    return this._sqlLoggingSessions.get(sessionId);
+  }
+
+  /**
    * Disposes all active SQL logging sessions.
    * Useful for cleanup on provider shutdown.
    */
@@ -750,7 +781,15 @@ export class SQLServerDataProvider
    * @returns The found QueryInfo or null if not found
    */
   protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryPath: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
-      // First, get the query metadata
+      // Use QueryEngine as the source of truth — it auto-refreshes on entity changes,
+      // so we always get fresh data without needing to reload full metadata.
+      const freshEntity = this.findQueryInEngine(QueryID, QueryName, CategoryID, CategoryPath);
+      if (freshEntity) {
+        return this.refreshQueryInfoFromEntity(freshEntity);
+      }
+
+      // If QueryEngine didn't have it, fall back to ProviderBase metadata with optional refresh.
+      // This handles edge cases where QueryEngine hasn't loaded yet or hasn't picked up a brand-new record.
       const queries = this.Queries.filter(q => {
         if (QueryID) {
           return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
@@ -759,13 +798,10 @@ export class SQLServerDataProvider
           if (CategoryID) {
             matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
           } else if (CategoryPath) {
-            // New hierarchical path logic - try path resolution first, fall back to simple name match
             const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
             if (resolvedCategoryId) {
-              // Hierarchical path matched - use the resolved CategoryID
               matches = matches && q.CategoryID === resolvedCategoryId;
             } else {
-              // Fall back to simple category name comparison for backward compatibility
               matches = matches && q.Category.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
             }
           }
@@ -776,12 +812,11 @@ export class SQLServerDataProvider
 
       if (queries.length === 0) {
         if (refreshMetadataIfNotFound) {
-          // If we didn't find the query, refresh metadata and try again
           await this.Refresh();
-          return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
-        } 
+          return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false);
+        }
         else {
-          return null; // No query found and not refreshing metadata
+          return null;
         }
       }
       else {
@@ -789,11 +824,73 @@ export class SQLServerDataProvider
       }
   }
 
+  /**
+   * Looks up a query from QueryEngine's auto-refreshed cache by ID, name, and optional category filters.
+   */
+  protected findQueryInEngine(QueryID: string, QueryName: string, CategoryID: string, CategoryPath: string): MJQueryEntity | null {
+      const engineQueries = QueryEngine.Instance?.Queries;
+      if (!engineQueries || engineQueries.length === 0) {
+        return null; // Engine not loaded yet
+      }
+
+      if (QueryID) {
+        const lower = QueryID.trim().toLowerCase();
+        return engineQueries.find(q => q.ID.trim().toLowerCase() === lower) ?? null;
+      }
+
+      if (QueryName) {
+        const lowerName = QueryName.trim().toLowerCase();
+        const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
+        if (matches.length === 0) return null;
+        if (matches.length === 1) return matches[0];
+
+        // Disambiguate by category
+        if (CategoryID) {
+          const byId = matches.find(q => q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase());
+          if (byId) return byId;
+        }
+        if (CategoryPath) {
+          const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+          if (resolvedCategoryId) {
+            const byPath = matches.find(q => q.CategoryID === resolvedCategoryId);
+            if (byPath) return byPath;
+          }
+        }
+        return matches[0];
+      }
+
+      return null;
+  }
+
+  /**
+   * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase in-memory cache.
+   * This avoids stale data without requiring a full metadata reload.
+   */
+  protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
+      const freshInfo = new QueryInfo(entity.GetAll());
+
+      // Patch the ProviderBase cache: replace the stale entry or add the new one
+      const existingIndex = this.Queries.findIndex(q => q.ID === freshInfo.ID);
+      if (existingIndex >= 0) {
+        this.Queries[existingIndex] = freshInfo;
+      } else {
+        this.Queries.push(freshInfo);
+      }
+
+      return freshInfo;
+  }
+
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
   protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+
+    // Route ad-hoc SQL queries to dedicated handler
+    if (params.SQL) {
+      return this.ExecuteAdhocSQL(params, contextUser);
+    }
+
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -843,6 +940,60 @@ export class SQLServerDataProvider
         TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Executes an ad-hoc SQL query directly, with security validation.
+   * SQL must be a SELECT or WITH (CTE) statement — mutations are rejected.
+   */
+  protected async ExecuteAdhocSQL(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    try {
+      // Validate SQL security
+      const validator = SQLExpressionValidator.Instance;
+      const validation = validator.validateFullQuery(params.SQL!);
+      if (!validation.valid) {
+        return {
+          Success: false,
+          QueryID: '',
+          QueryName: 'Ad-Hoc Query',
+          Results: [],
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+          ErrorMessage: validation.error || 'SQL validation failed',
+        };
+      }
+
+      // Execute query and measure performance
+      const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+
+      // Apply pagination if requested
+      const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+
+      return {
+        Success: true,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: paginatedResult,
+        RowCount: paginatedResult.length,
+        TotalRowCount: totalRowCount,
+        ExecutionTime: executionTime,
+        ErrorMessage: '',
+      };
+    } catch (e) {
+      LogError(e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return {
+        Success: false,
+        QueryID: '',
+        QueryName: 'Ad-Hoc Query',
+        Results: [],
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+        ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
       };
     }
   }
@@ -1191,12 +1342,20 @@ export class SQLServerDataProvider
    * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
    */
   protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    // Try QueryEngine first for fresh, auto-refreshed data
+    const freshEntity = this.findQueryInEngine(
+      params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath
+    );
+    if (freshEntity) {
+      return this.refreshQueryInfoFromEntity(freshEntity);
+    }
+
+    // Fall back to ProviderBase cache if engine isn't loaded
     if (params.QueryID) {
       return this.Queries.find((q) => q.ID === params.QueryID);
     }
 
     if (params.QueryName) {
-      // Match by name and optional category path
       const matchingQueries = this.Queries.filter(
         (q) => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase()
       );
@@ -1204,7 +1363,6 @@ export class SQLServerDataProvider
       if (matchingQueries.length === 0) return undefined;
       if (matchingQueries.length === 1) return matchingQueries[0];
 
-      // Multiple matches - use CategoryPath or CategoryID to disambiguate
       if (params.CategoryPath) {
         const byPath = matchingQueries.find(
           (q) => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase()
@@ -1217,7 +1375,6 @@ export class SQLServerDataProvider
         if (byId) return byId;
       }
 
-      // Return first match if no category disambiguation
       return matchingQueries[0];
     }
 
@@ -1321,7 +1478,7 @@ export class SQLServerDataProvider
    * @param viewEntity
    * @param user
    */
-  protected async RenderViewWhereClause(viewEntity: UserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
+  protected async RenderViewWhereClause(viewEntity: MJUserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
     try {
       let sWhere = viewEntity.WhereClause;
       if (sWhere && sWhere.length > 0) {
@@ -1375,6 +1532,11 @@ export class SQLServerDataProvider
   /**************************************************************************/
   protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
     // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
+
+    // Log aggregate input for debugging
+    if (params?.Aggregates?.length) {
+      LogStatus(`[SQLServerDataProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}, aggregates=${JSON.stringify(params.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
+    }
 
     const startTime = new Date();
     try {
@@ -1545,22 +1707,125 @@ export class SQLServerDataProvider
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
-        // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
-        const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
+        // Build aggregate SQL if aggregates are requested
+        let aggregateSQL: string | null = null;
+        let aggregateValidationErrors: AggregateResult[] = [];
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          const aggregateBuild = this.buildAggregateSQL(
+            params.Aggregates,
+            entityInfo,
+            entityInfo.SchemaName,
+            entityInfo.BaseView,
+            whereSQL
+          );
+          aggregateSQL = aggregateBuild.aggregateSQL;
+          aggregateValidationErrors = aggregateBuild.validationErrors;
+        }
 
-        // finally, if we have a countSQL, we need to run that to get the row count
-        // Run the count query if:
-        // 1. We're using pagination (always need total count for pagination)
-        // 2. ResultType is 'count_only'
-        // 3. The number of returned rows equals the max limit (might be more rows available)
-        let rowCount = null;
+        // Execute queries in parallel for better performance
+        // - Data query (if not count_only)
+        // - Count query (if needed)
+        // - Aggregate query (if aggregates requested)
+        const queries: Promise<unknown>[] = [];
+        const queryKeys: string[] = [];
+
+        // Data query
+        if (params.ResultType !== 'count_only') {
+          queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
+          queryKeys.push('data');
+        }
+
+        // Count query (run in parallel if we'll need it)
         const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
+        const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+        if (willNeedCount) {
+          queries.push(this.ExecuteSQL(countSQL, undefined, undefined, contextUser));
+          queryKeys.push('count');
+        }
+
+        // Aggregate query (runs in parallel with data/count queries)
+        const aggregateStartTime = Date.now();
+        if (aggregateSQL) {
+          queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
+          queryKeys.push('aggregate');
+        }
+
+        // Execute all queries in parallel
+        const results = await Promise.all(queries);
+
+        // Map results back to their queries
+        const resultMap: Record<string, unknown> = {};
+        queryKeys.forEach((key, index) => {
+          resultMap[key] = results[index];
+        });
+
+        // Process data results
+        let retData = resultMap['data'] as Record<string, unknown>[] || [];
+
+        // Process rows for datetime conversion and field-level decryption
+        // This is critical for encrypted fields - without this, encrypted data stays encrypted in the UI
+        if (retData.length > 0 && params.ResultType !== 'count_only') {
+          retData = await this.ProcessEntityRows(retData, entityInfo, contextUser);
+        }
+
+        // Process count results - also check if we need count based on result length
+        let rowCount = null;
+        if (willNeedCount && resultMap['count']) {
+          const countResult = resultMap['count'] as { TotalRowCount: number }[];
+          if (countResult && countResult.length > 0) {
+            rowCount = countResult[0].TotalRowCount;
+          }
+        } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+          // Need to run count query because we hit the limit
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
           }
         }
+
+        // Process aggregate results
+        let aggregateResults: AggregateResult[] | undefined = undefined;
+        let aggregateExecutionTime: number | undefined = undefined;
+        if (params.Aggregates && params.Aggregates.length > 0) {
+          aggregateExecutionTime = Date.now() - aggregateStartTime;
+
+          if (resultMap['aggregate']) {
+            // Map raw aggregate results back to original expressions
+            const rawAggregateResult = resultMap['aggregate'] as Record<string, unknown>[];
+            if (rawAggregateResult && rawAggregateResult.length > 0) {
+              const row = rawAggregateResult[0];
+              aggregateResults = [];
+              let validExprIndex = 0;
+
+              for (let i = 0; i < params.Aggregates.length; i++) {
+                const agg = params.Aggregates[i];
+                const alias = agg.alias || agg.expression;
+
+                // Check if this expression had a validation error
+                const validationError = aggregateValidationErrors.find(e => e.expression === agg.expression);
+                if (validationError) {
+                  aggregateResults.push(validationError);
+                } else {
+                  // Get the value from the result using the numbered alias
+                  const rawValue = row[`Agg_${validExprIndex}`];
+                  // Cast to AggregateValue - SQL Server returns numbers, strings, dates, or null
+                  const value: AggregateValue = rawValue === undefined ? null : rawValue as AggregateValue;
+                  aggregateResults.push({
+                    expression: agg.expression,
+                    alias: alias,
+                    value: value,
+                    error: undefined
+                  });
+                  validExprIndex++;
+                }
+              }
+            }
+          } else if (aggregateValidationErrors.length > 0) {
+            // All expressions had validation errors
+            aggregateResults = aggregateValidationErrors;
+          }
+        }
+
         const stopTime = new Date();
 
         if (
@@ -1590,17 +1855,19 @@ export class SQLServerDataProvider
           );
         }
 
-        const result =  {
+        const result: RunViewResult<T> = {
           RowCount:
             params.ResultType === 'count_only'
               ? rowCount
               : retData.length /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */,
           TotalRowCount: rowCount ? rowCount : retData.length,
-          Results: retData,
+          Results: retData as T[],
           UserViewRunID: userViewRunID,
           ExecutionTime: stopTime.getTime() - startTime.getTime(),
           Success: true,
           ErrorMessage: null,
+          AggregateResults: aggregateResults,
+          AggregateExecutionTime: aggregateExecutionTime,
         };
 
         return result;
@@ -2204,7 +2471,155 @@ export class SQLServerDataProvider
     return true;
   }
 
-  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
+  /**
+   * Validates and builds an aggregate SQL query from the provided aggregate expressions.
+   * Uses the SQLExpressionValidator to ensure expressions are safe from SQL injection.
+   *
+   * @param aggregates - Array of aggregate expressions to validate and build
+   * @param entityInfo - Entity metadata for field reference validation
+   * @param schemaName - Schema name for the table
+   * @param baseView - Base view name for the table
+   * @param whereSQL - WHERE clause to apply (without the WHERE keyword)
+   * @returns Object with aggregateSQL string and any validation errors
+   */
+  protected buildAggregateSQL(
+    aggregates: { expression: string; alias?: string }[],
+    entityInfo: EntityInfo,
+    schemaName: string,
+    baseView: string,
+    whereSQL: string
+  ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+    if (!aggregates || aggregates.length === 0) {
+      return { aggregateSQL: null, validationErrors: [] };
+    }
+
+    const validator = SQLExpressionValidator.Instance;
+    const validationErrors: AggregateResult[] = [];
+    const validExpressions: string[] = [];
+    const fieldNames = entityInfo.Fields.map(f => f.Name);
+
+    for (let i = 0; i < aggregates.length; i++) {
+      const agg = aggregates[i];
+      const alias = agg.alias || agg.expression;
+
+      // Validate the expression using SQLExpressionValidator
+      const result = validator.validate(agg.expression, {
+        context: 'aggregate',
+        entityFields: fieldNames
+      });
+
+      if (!result.valid) {
+        // Record the error but continue processing other expressions
+        validationErrors.push({
+          expression: agg.expression,
+          alias: alias,
+          value: null,
+          error: result.error || 'Validation failed'
+        });
+      } else {
+        // Expression is valid, add to the query with an alias
+        // Use a numbered alias for the SQL to make result mapping easier
+        validExpressions.push(`${agg.expression} AS [Agg_${i}]`);
+      }
+    }
+
+    if (validExpressions.length === 0) {
+      return { aggregateSQL: null, validationErrors };
+    }
+
+    // Build the aggregate SQL query
+    let aggregateSQL = `SELECT ${validExpressions.join(', ')} FROM [${schemaName}].${baseView}`;
+    if (whereSQL && whereSQL.length > 0) {
+      aggregateSQL += ` WHERE ${whereSQL}`;
+    }
+
+    return { aggregateSQL, validationErrors };
+  }
+
+  /**
+   * Executes the aggregate query and maps results back to the original expressions.
+   *
+   * @param aggregateSQL - The aggregate SQL query to execute
+   * @param aggregates - Original aggregate expressions (for result mapping)
+   * @param validationErrors - Any validation errors from buildAggregateSQL
+   * @param contextUser - User context for query execution
+   * @returns Array of AggregateResult objects
+   */
+  protected async executeAggregateQuery(
+    aggregateSQL: string | null,
+    aggregates: { expression: string; alias?: string }[],
+    validationErrors: AggregateResult[],
+    contextUser?: UserInfo
+  ): Promise<{ results: AggregateResult[]; executionTime: number }> {
+    const startTime = Date.now();
+
+    if (!aggregateSQL) {
+      // No valid expressions to execute, return only validation errors
+      return { results: validationErrors, executionTime: 0 };
+    }
+
+    try {
+      const queryResult = await this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser);
+      const executionTime = Date.now() - startTime;
+
+      if (!queryResult || queryResult.length === 0) {
+        // Query returned no results, which shouldn't happen for aggregates
+        // Return validation errors plus null values for valid expressions
+        const nullResults = aggregates
+          .filter((_, i) => !validationErrors.some(e => e.expression === aggregates[i].expression))
+          .map(agg => ({
+            expression: agg.expression,
+            alias: agg.alias || agg.expression,
+            value: null,
+            error: undefined
+          }));
+        return { results: [...validationErrors, ...nullResults], executionTime };
+      }
+
+      // Map query results back to original expressions
+      const row = queryResult[0];
+      const results: AggregateResult[] = [];
+      let validExprIndex = 0;
+
+      for (let i = 0; i < aggregates.length; i++) {
+        const agg = aggregates[i];
+        const alias = agg.alias || agg.expression;
+
+        // Check if this expression had a validation error
+        const validationError = validationErrors.find(e => e.expression === agg.expression);
+        if (validationError) {
+          results.push(validationError);
+        } else {
+          // Get the value from the result using the numbered alias
+          const value = row[`Agg_${validExprIndex}`];
+          results.push({
+            expression: agg.expression,
+            alias: alias,
+            value: value ?? null,
+            error: undefined
+          });
+          validExprIndex++;
+        }
+      }
+
+      return { results, executionTime };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Return all expressions with the error
+      const errorResults = aggregates.map(agg => ({
+        expression: agg.expression,
+        alias: agg.alias || agg.expression,
+        value: null,
+        error: errorMessage
+      }));
+
+      return { results: errorResults, executionTime };
+    }
+  }
+
+  protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended): string {
     const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
     // pass this back as a comma separated list, put square brackets around field names to make sure if they are reserved words or have spaces, that they'll still work.
     if (fieldList.length === 0) return '*';
@@ -2217,7 +2632,7 @@ export class SQLServerDataProvider
         .join(',');
   }
 
-  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
+  protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended): EntityFieldInfo[] {
     const fieldList: EntityFieldInfo[] = [];
     try {
       let entityInfo: EntityInfo = null;
@@ -2361,7 +2776,7 @@ export class SQLServerDataProvider
     recordId: any | null,
     auditLogDescription: string | null,
     saveOptions: EntitySaveOptions
-  ): Promise<AuditLogEntity> {
+  ): Promise<MJAuditLogEntity> {
     try {
       const authorization = authorizationName
         ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase())
@@ -2373,7 +2788,7 @@ export class SQLServerDataProvider
         throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
       }
 
-      const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = await this.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = user.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
@@ -2451,7 +2866,7 @@ export class SQLServerDataProvider
 
       // if we're here that means we need to invert the status, which either means creating a record or deleting a record
       const e = this.Entities.find((e) => e.Name === entityName);
-      const ufEntity = <UserFavoriteEntity>await this.GetEntityObject('User Favorites', contextUser || this.CurrentUser);
+      const ufEntity = <MJUserFavoriteEntity>await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
       if (currentFavoriteId !== null) {
         // delete the record since we are setting isFavorite to FALSE
         await ufEntity.Load(currentFavoriteId);
@@ -2637,14 +3052,14 @@ export class SQLServerDataProvider
       throw new Error('User context is required to get record duplicates.');
     }
 
-    const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
+    const listEntity: MJListEntity = await this.GetEntityObject<MJListEntity>('MJ: Lists');
     listEntity.ContextCurrentUser = contextUser;
     const success = await listEntity.Load(params.ListID);
     if (!success) {
       throw new Error(`List with ID ${params.ListID} not found.`);
     }
 
-    const duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+    const duplicateRun: MJDuplicateRunEntity = await this.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
     duplicateRun.NewRecord();
     duplicateRun.EntityID = params.EntityID;
     duplicateRun.StartedByUserID = contextUser.ID;
@@ -2679,7 +3094,7 @@ export class SQLServerDataProvider
       Request: request,
       OverallStatus: null,
     };
-    const mergeRecordLog: RecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
+    const mergeRecordLog: MJRecordMergeLogEntity = await this.StartMergeLogging(request, result, contextUser);
     try {
       /*
                 we will follow this process...
@@ -2763,10 +3178,10 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<RecordMergeLogEntity> {
+  protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser: UserInfo): Promise<MJRecordMergeLogEntity> {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
-      const recordMergeLog = <RecordMergeLogEntity>await this.GetEntityObject('Record Merge Logs', contextUser);
+      const recordMergeLog = <MJRecordMergeLogEntity>await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
       const entity = this.Entities.find((e) => e.Name === request.EntityName);
       if (!entity) throw new Error(`Entity ${result.Request.EntityName} not found in metadata`);
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -2789,7 +3204,7 @@ export class SQLServerDataProvider
     }
   }
 
-  protected async CompleteMergeLogging(recordMergeLog: RecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
+  protected async CompleteMergeLogging(recordMergeLog: MJRecordMergeLogEntity, result: RecordMergeResult, contextUser?: UserInfo) {
     try {
       // create records in the Record Merge Logs entity and Record Merge Deletion Logs entity
       if (!contextUser && !this.CurrentUser) throw new Error(`contextUser is null and no CurrentUser is set`);
@@ -2802,7 +3217,7 @@ export class SQLServerDataProvider
       if (await recordMergeLog.Save()) {
         // top level saved, now let's create the deletion detail records for each of the records that were merged
         for (const d of result.RecordStatus) {
-          const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
+          const recordMergeDeletionLog = <MJRecordMergeDeletionLogEntity>await this.GetEntityObject('MJ: Record Merge Deletion Logs', contextUser);
           recordMergeDeletionLog.NewRecord();
           recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
           recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
@@ -2848,7 +3263,7 @@ export class SQLServerDataProvider
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string }> {
+  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string; overlappingChangeData?: { changesJSON: string; changesDescription: string } }> {
     // Generate the stored procedure parameters - now returns an object with structured SQL
     // This is async because it may need to encrypt field values
     const spParams = await this.generateSPParams(entity, !bNewRecord, user);
@@ -2862,8 +3277,9 @@ export class SQLServerDataProvider
       sSimpleSQL = execSQL;
     }
     
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     let sSQL: string = '';
+    let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       let oldData = null;
@@ -2873,7 +3289,22 @@ export class SQLServerDataProvider
 
       if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
 
-      const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      // Capture the diff for overlapping subtype Record Change propagation.
+      // Must happen before finalizeSave() resets OldValues, since the diff would be lost.
+      // Returned to Save() which handles propagation — this is a backend-only concern.
+      const newData = entity.GetAll(false);
+      if (!bNewRecord && oldData) {
+        const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+        const diffKeys = diffChanges ? Object.keys(diffChanges) : [];
+        if (diffKeys.length > 0) {
+          overlappingChangeData = {
+            changesJSON: JSON.stringify(diffChanges),
+            changesDescription: this.CreateUserDescriptionOfChanges(diffChanges)
+          };
+        }
+      }
+
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
       if (logRecordChangeSQL === null) {
         // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
         // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
@@ -2916,7 +3347,7 @@ export class SQLServerDataProvider
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
     }
-    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
+    return { fullSQL: sSQL, simpleSQL: sSimpleSQL, overlappingChangeData };
   }
 
   /**
@@ -2927,7 +3358,7 @@ export class SQLServerDataProvider
    * @returns Array of AI action entities
    * @internal
    */
-  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
+  protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
     return AIEngine.Instance.EntityAIActions.filter(
       (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
     );
@@ -3159,10 +3590,12 @@ export class SQLServerDataProvider
             } else {
               try {
                 // Execute SQL with optional simple SQL fallback for loggers
+                // IS-A: use entity's ProviderTransaction when available for shared transaction
                 const rawResult = await this.ExecuteSQL(sSQL, null, {
                   isMutation: true,
                   description: `Save ${entity.EntityInfo.Name}`,
-                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+                  connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
                 }, user);
                 // Process rows with user context for decryption
                 result = await this.ProcessEntityRows(rawResult, entity.EntityInfo, user);
@@ -3183,6 +3616,23 @@ export class SQLServerDataProvider
               if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
 
               entityResult.Success = true;
+
+              // IS-A overlapping subtypes: propagate Record Change entries to sibling branches.
+              // Runs after this entity's save succeeds. Skips the active child branch (if this
+              // is a parent save in a chain) so siblings don't get duplicate entries.
+              if (sqlDetails.overlappingChangeData
+                  && entity.EntityInfo.AllowMultipleSubtypes
+                  && entity.EntityInfo.TrackRecordChanges) {
+                await this.PropagateRecordChangesToSiblings(
+                  entity.EntityInfo,
+                  sqlDetails.overlappingChangeData,
+                  entity.PrimaryKey.Values(),
+                  user?.ID ?? '',
+                  options.ISAActiveChildEntityName,
+                  entity.ProviderTransaction as sql.Transaction ?? undefined
+                );
+              }
+
               return result[0];
             } else {
               if (bNewRecord) {
@@ -3652,6 +4102,11 @@ export class SQLServerDataProvider
       return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
     }
     
+    // Handle Date objects - convert to ISO string before they lose their value
+    if (obj instanceof Date) {
+      return obj.toISOString();
+    }
+
     // Handle objects recursively
     if (typeof obj === 'object') {
       const sRet: any = {};
@@ -3829,7 +4284,7 @@ export class SQLServerDataProvider
               // Find the related entity info to process datetime fields correctly
               const relEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
               if (relEntityInfo) {
-                ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo);
+                ret[rel] = await this.ProcessEntityRows(rawRelData, relEntityInfo, user);
               } else {
                 // Fallback if we can't find entity info
                 ret[rel] = rawRelData;
@@ -3870,7 +4325,7 @@ export class SQLServerDataProvider
       return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
     }).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
@@ -4009,10 +4464,12 @@ export class SQLServerDataProvider
         if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
-          d = await this.ExecuteSQL(sSQL, null, { 
-            isMutation: true, 
+          // IS-A: use entity's ProviderTransaction when available for shared transaction
+          d = await this.ExecuteSQL(sSQL, null, {
+            isMutation: true,
             description: `Delete ${entity.EntityInfo.Name}`,
-            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+            simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined,
+            connectionSource: entity.ProviderTransaction as sql.Transaction ?? undefined
           }, user);
         }
 
@@ -4131,7 +4588,18 @@ export class SQLServerDataProvider
           });
         } else {
           // Process successful query result
-          const itemData = batchResults[queryIndex] || [];
+          let itemData = batchResults[queryIndex] || [];
+
+          // Process rows for datetime conversion and field-level decryption
+          // This is critical for datasets that contain encrypted fields
+          if (itemData.length > 0) {
+            const entityInfo = useThisProvider.Entities.find(e =>
+              e.Name.trim().toLowerCase() === item.Entity.trim().toLowerCase()
+            );
+            if (entityInfo) {
+              itemData = await useThisProvider.ProcessEntityRows(itemData, entityInfo, contextUser);
+            }
+          }
 
           const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
           const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
@@ -4773,7 +5241,8 @@ export class SQLServerDataProvider
   ): Promise<any> {
     try {
       // Use internal method with logging options
-      const result = await this._internalExecuteSQL(query, parameters, undefined, {
+      // Pass connectionSource if provided (used by IS-A chain orchestration for shared transactions)
+      const result = await this._internalExecuteSQL(query, parameters, options?.connectionSource, {
         description: options?.description,
         ignoreLogging: options?.ignoreLogging,
         isMutation: options?.isMutation,
@@ -5119,10 +5588,264 @@ export class SQLServerDataProvider
     }
   }
 
+  /**
+   * Begin an independent transaction for IS-A chain orchestration.
+   * Returns a new sql.Transaction object that is NOT linked to the provider's
+   * internal transaction state (used by TransactionGroup). Each IS-A chain
+   * gets its own transaction to avoid interference with other operations.
+   */
+  public async BeginISATransaction(): Promise<unknown> {
+    const transaction = new sql.Transaction(this._pool);
+    await transaction.begin();
+    return transaction;
+  }
+
+  /**
+   * Commit an IS-A chain transaction.
+   * @param txn The sql.Transaction object returned from BeginISATransaction()
+   */
+  public async CommitISATransaction(txn: unknown): Promise<void> {
+    if (txn && txn instanceof sql.Transaction) {
+      await txn.commit();
+    }
+  }
+
+  /**
+   * Rollback an IS-A chain transaction.
+   * @param txn The sql.Transaction object returned from BeginISATransaction()
+   */
+  public async RollbackISATransaction(txn: unknown): Promise<void> {
+    if (txn && txn instanceof sql.Transaction) {
+      await txn.rollback();
+    }
+  }
+
+  /**
+   * Discovers which IS-A child entity, if any, has a record with the given primary key.
+   * Executes a single UNION ALL query across all child entity tables for maximum efficiency.
+   * Each branch of the UNION is a PK lookup on a clustered index — effectively instant.
+   *
+   * @param entityInfo The parent entity whose children to search
+   * @param recordPKValue The primary key value to find in child tables
+   * @param contextUser Optional context user for audit/permission purposes
+   * @returns The child entity name if found, or null if no child record exists
+   */
+  public async FindISAChildEntity(
+    entityInfo: EntityInfo,
+    recordPKValue: string,
+    contextUser?: UserInfo
+  ): Promise<{ ChildEntityName: string } | null> {
+    const childEntities = entityInfo.ChildEntities;
+    if (childEntities.length === 0) return null;
+
+    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
+    if (!unionSQL) return null;
+
+    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
+    if (results && results.length > 0 && results[0].EntityName) {
+      return { ChildEntityName: results[0].EntityName };
+    }
+    return null;
+  }
+
+  /**
+   * Discovers ALL IS-A child entities that have records with the given primary key.
+   * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+   * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+   *
+   * @param entityInfo The parent entity whose children to search
+   * @param recordPKValue The primary key value to find in child tables
+   * @param contextUser Optional context user for audit/permission purposes
+   * @returns Array of child entity names found (empty if none)
+   */
+  public async FindISAChildEntities(
+    entityInfo: EntityInfo,
+    recordPKValue: string,
+    contextUser?: UserInfo
+  ): Promise<{ ChildEntityName: string }[]> {
+    const childEntities = entityInfo.ChildEntities;
+    if (childEntities.length === 0) return [];
+
+    const unionSQL = this.buildChildDiscoverySQL(childEntities, recordPKValue);
+    if (!unionSQL) return [];
+
+    const results = await this.ExecuteSQL(unionSQL, undefined, undefined, contextUser);
+    if (results && results.length > 0) {
+      return results
+        .filter((r: Record<string, string>) => r.EntityName)
+        .map((r: Record<string, string>) => ({ ChildEntityName: r.EntityName }));
+    }
+    return [];
+  }
+
+  /**
+   * Builds a UNION ALL query that checks each child entity's base table for a record
+   * with the given primary key. Returns the first match (disjoint subtypes guarantee
+   * at most one result) unless used with overlapping subtypes.
+   */
+  private buildChildDiscoverySQL(
+    childEntities: EntityInfo[],
+    recordPKValue: string
+  ): string {
+    // Sanitize the PK value to prevent SQL injection
+    const safePKValue = recordPKValue.replace(/'/g, "''");
+
+    const unionParts = childEntities
+      .filter(child => child.PrimaryKeys.length > 0)
+      .map(child => {
+        const schema = child.SchemaName || '__mj';
+        const table = child.BaseTable;
+        const pkName = child.PrimaryKeys[0].Name;
+        return `SELECT '${child.Name.replace(/'/g, "''")}' AS EntityName FROM [${schema}].[${table}] WHERE [${pkName}] = '${safePKValue}'`;
+      });
+
+    if (unionParts.length === 0) return '';
+    return unionParts.join(' UNION ALL ');
+  }
+
+  /**************************************************************************
+   * IS-A Overlapping Subtype — Record Change Propagation
+   *
+   * When saving through one branch of an overlapping hierarchy, propagate
+   * ancestor-level Record Change entries to all active sibling branches.
+   * Executes as a single SQL batch within the active IS-A transaction.
+   **************************************************************************/
+
+  /**
+   * Propagates Record Change entries to sibling branches of an overlapping IS-A parent.
+   * Called from Save() after a successful save of an entity with AllowMultipleSubtypes.
+   * Generates a single SQL batch that creates Record Change entries for all child entities
+   * (and their sub-trees) except the active branch that triggered this parent save.
+   *
+   * @param parentInfo The overlapping parent entity's metadata
+   * @param changeData The diff data (changesJSON and changesDescription) from the save
+   * @param pkValue The shared primary key value
+   * @param userId The ID of the user performing the save
+   * @param activeChildEntityName The child entity that initiated this parent save (skipped).
+   *        Undefined when saving the parent directly — all children get propagated to.
+   * @param transaction The active IS-A transaction, or undefined for standalone saves
+   */
+  private async PropagateRecordChangesToSiblings(
+    parentInfo: EntityInfo,
+    changeData: { changesJSON: string; changesDescription: string },
+    pkValue: string,
+    userId: string,
+    activeChildEntityName: string | undefined,
+    transaction: sql.Transaction | undefined
+  ): Promise<void> {
+    const sqlParts: string[] = [];
+    let varIndex = 0;
+
+    const safePKValue = pkValue.replace(/'/g, "''");
+    const safeUserId = userId.replace(/'/g, "''");
+    const safeChangesJSON = changeData.changesJSON.replace(/'/g, "''");
+    const safeChangesDesc = changeData.changesDescription.replace(/'/g, "''");
+
+    for (const childInfo of parentInfo.ChildEntities) {
+      // Skip the active branch (the child that initiated the parent save).
+      // When activeChildEntityName is undefined (direct save on parent), propagate to ALL children.
+      if (activeChildEntityName && this.isEntityOrAncestorOf(childInfo, activeChildEntityName)) continue;
+
+      // Recursively enumerate this child's entire sub-tree from metadata
+      const subTree = this.getFullSubTree(childInfo);
+
+      for (const entityInTree of subTree) {
+        if (!entityInTree.TrackRecordChanges) continue;
+
+        const varName = `@_rc_prop_${varIndex++}`;
+        sqlParts.push(this.buildSiblingRecordChangeSQL(
+          varName,
+          entityInTree,
+          safeChangesJSON,
+          safeChangesDesc,
+          safePKValue,
+          safeUserId
+        ));
+      }
+    }
+
+    // Execute as single batch
+    if (sqlParts.length > 0) {
+      const batch = sqlParts.join('\n');
+      await this.ExecuteSQL(batch, undefined, {
+        connectionSource: transaction,
+        description: 'IS-A overlapping subtype Record Change propagation',
+        isMutation: true
+      });
+    }
+  }
+
+  /**
+   * Checks whether a given entity matches the target name, or is an ancestor
+   * of the target (i.e., the target is somewhere in its descendant sub-tree).
+   * Used to identify and skip the active branch during sibling propagation.
+   */
+  private isEntityOrAncestorOf(entityInfo: EntityInfo, targetName: string): boolean {
+    if (entityInfo.Name === targetName) return true;
+    for (const child of entityInfo.ChildEntities) {
+      if (this.isEntityOrAncestorOf(child, targetName)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Recursively enumerates an entity's entire sub-tree from metadata.
+   * No DB queries — uses EntityInfo.ChildEntities which is populated from metadata.
+   */
+  private getFullSubTree(entityInfo: EntityInfo): EntityInfo[] {
+    const result: EntityInfo[] = [entityInfo];
+    for (const child of entityInfo.ChildEntities) {
+      result.push(...this.getFullSubTree(child));
+    }
+    return result;
+  }
+
+  /**
+   * Generates a single block of SQL for one sibling entity in the Record Change
+   * propagation batch. Uses SELECT...FOR JSON to get the full record, then
+   * conditionally inserts a Record Change entry if the record exists.
+   */
+  private buildSiblingRecordChangeSQL(
+    varName: string,
+    entityInfo: EntityInfo,
+    safeChangesJSON: string,
+    safeChangesDesc: string,
+    safePKValue: string,
+    safeUserId: string
+  ): string {
+    const schema = entityInfo.SchemaName || '__mj';
+    const view = entityInfo.BaseView;
+    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const safeEntityName = entityInfo.Name.replace(/'/g, "''");
+
+    // Build RecordID in CompositeKey format: "FieldCodeName|Value" (or "F1|V1||F2|V2" for composite PKs)
+    // Must match the format used by the main save flow (concatPKIDString in GetSaveSQLWithDetails)
+    const recordID = entityInfo.PrimaryKeys
+      .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
+      .join(CompositeKey.DefaultFieldDelimiter);
+
+    return `
+DECLARE ${varName} NVARCHAR(MAX) = (
+    SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+);
+IF ${varName} IS NOT NULL
+    EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
+        @EntityName='${safeEntityName}',
+        @RecordID='${recordID}',
+        @UserID='${safeUserId}',
+        @Type='Update',
+        @ChangesJSON='${safeChangesJSON}',
+        @ChangesDescription='${safeChangesDesc}',
+        @FullRecordJSON=${varName},
+        @Status='Complete',
+        @Comments=NULL;`;
+  }
+
   public async BeginTransaction() {
     try {
       this._transactionDepth++;
-      
+
       if (this._transactionDepth === 1) {
         // First transaction - actually begin using mssql Transaction object
         this._transaction = new sql.Transaction(this._pool);
@@ -5291,14 +6014,20 @@ export class SQLServerDataProvider
   }
 
   get LocalStorageProvider(): ILocalStorageProvider {
-    if (!this._localStorageProvider) this._localStorageProvider = new NodeLocalStorageProvider();
+    if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
 
     return this._localStorageProvider;
   }
 
-  public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+  override get FileSystemProvider(): IFileSystemProvider {
+    if (!this._fileSystemProvider) this._fileSystemProvider = new NodeFileSystemProvider();
+
+    return this._fileSystemProvider;
+  }
+
+  protected async InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
     const promises = info.map(async (item) => {
-      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
+      const r = await this.InternalGetEntityRecordName(item.EntityName, item.CompositeKey, contextUser);
       return {
         EntityName: item.EntityName,
         CompositeKey: item.CompositeKey,
@@ -5310,7 +6039,7 @@ export class SQLServerDataProvider
     return Promise.all(promises);
   }
 
-  public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
+  protected async InternalGetEntityRecordName(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
     try {
       const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
       if (sql) {
@@ -5361,56 +6090,5 @@ export class SQLServerDataProvider
   /**************************************************************************/
   protected get Metadata(): IMetadataProvider {
     return this;
-  }
-}
-
-/**
- * In-memory storage provider for Node.js server-side usage.
- * Uses a Map of Maps structure for category isolation:
- * Map<category, Map<key, value>>
- *
- * This implementation is purely in-memory and doesn't persist to disk.
- * Data is retained for the lifetime of the server process.
- */
-class NodeLocalStorageProvider implements ILocalStorageProvider {
-  private static readonly DEFAULT_CATEGORY = 'default';
-  private _storage: Map<string, Map<string, string>> = new Map();
-
-  /**
-   * Gets or creates a category map
-   */
-  private getCategoryMap(category: string): Map<string, string> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    let categoryMap = this._storage.get(cat);
-    if (!categoryMap) {
-      categoryMap = new Map();
-      this._storage.set(cat, categoryMap);
-    }
-    return categoryMap;
-  }
-
-  public async GetItem(key: string, category?: string): Promise<string | null> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap.get(key) ?? null;
-  }
-
-  public async SetItem(key: string, value: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.set(key, value);
-  }
-
-  public async Remove(key: string, category?: string): Promise<void> {
-    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    categoryMap.delete(key);
-  }
-
-  public async ClearCategory(category: string): Promise<void> {
-    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
-    this._storage.delete(cat);
-  }
-
-  public async GetCategoryKeys(category: string): Promise<string[]> {
-    const categoryMap = this._storage.get(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
-    return categoryMap ? Array.from(categoryMap.keys()) : [];
   }
 }

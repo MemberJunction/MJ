@@ -1,32 +1,87 @@
-<div *ngIf="authBase.isAuthenticated() | async" class="app-main">
-  <mj-system-validation-banner></mj-system-validation-banner>
-  <mj-shell *ngIf="!HasError" class="app-body"></mj-shell>
-  <div *ngIf="HasError && !showValidationOnly"><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
-</div>
-<div class="login-wrapper" *ngIf="!(authBase.isAuthenticated() | async)">
-  <div class="main-banner">
-    <div class="logo-icon">
-      <svg width="62" height="44" viewBox="0 0 62 44" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-        <mask id="mask0_236_1614" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="62" height="44">
-          <rect width="61.3333" height="44" fill="#D9D9D9"/>
-        </mask>
-        <g mask="url(#mask0_236_1614)">
-          <rect x="-94.4727" y="-2.66667" width="246.882" height="94.8387" fill="url(#pattern0)"/>
-        </g>
-      </svg>
-    </div>
-    <div class="title">
-      <img src="/assets/MJ_logo.svg" height="45px" class="app-logo" alt="MemberJunction Logo" />
-    </div>
-    <h1 class="text-header">
-      Welcome <br/> Back
-    </h1>
+<!-- OAuth callback route - shown regardless of auth state, component handles waiting for auth -->
+@if (isOAuthCallback) {
+  <router-outlet></router-outlet>
+}
+
+<!-- Normal authenticated view (not OAuth callback) -->
+@if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
+  <div class="app-main">
+    <mj-system-validation-banner></mj-system-validation-banner>
+    @if (!HasError) {
+      <mj-shell class="app-body"></mj-shell>
+    }
+    @if (HasError && !showValidationOnly) {
+      <div><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
+    }
   </div>
-  <div class="login-btn">
-    <h3>Log In</h3>
-    <p>{{subHeaderText}}</p>
-    <button (click)="authBase.login()">
-      Log in
+}
+<!-- Login - shows when NOT authenticated AND not on OAuth callback -->
+@if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {
+  <div class="login-wrapper">
+    <button class="theme-toggle" (click)="ToggleTheme()" [attr.aria-label]="IsDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+      <i class="fa-solid" [class.fa-sun]="IsDarkMode" [class.fa-moon]="!IsDarkMode"></i>
     </button>
+    <div class="main-banner">
+      <!-- Animated SVG background (replaces bgImg.png) -->
+      <svg class="login-bg-svg"
+           viewBox="0 0 1110 1080"
+           preserveAspectRatio="xMidYMid slice"
+           aria-hidden="true"
+           focusable="false">
+        <defs>
+          <linearGradient id="login-bg-gradient" x1="0" y1="0" x2="1" y2="0.3">
+            <stop offset="0%" stop-color="var(--mj-login-grad-start)" />
+            <stop offset="60%" stop-color="var(--mj-login-grad-mid)" />
+            <stop offset="100%" stop-color="var(--mj-login-grad-end)" />
+          </linearGradient>
+        </defs>
+
+        <!-- Background -->
+        <rect width="1110" height="1080" fill="url(#login-bg-gradient)" />
+
+        <!-- Wave 1 (back, widest): brand-500 at 25% opacity -->
+        <path class="login-wave login-wave-1"
+              fill="var(--mj-login-wave-1)" fill-opacity="0.25"
+              d="M 550,-20 C 400,180 780,300 700,540 C 620,780 300,880 450,1100
+                 L 580,1100 C 430,880 750,780 830,540 C 910,300 530,180 680,-20 Z" />
+
+        <!-- Wave 2 (middle): accent-400 at 30% opacity -->
+        <path class="login-wave login-wave-2"
+              fill="var(--mj-login-wave-2)" fill-opacity="0.30"
+              d="M 720,-20 C 900,200 550,380 650,540 C 750,700 1050,820 880,1100
+                 L 990,1100 C 1160,820 860,700 760,540 C 660,380 1010,200 830,-20 Z" />
+
+        <!-- Wave 3 (front): brand-300 at 20% opacity -->
+        <path class="login-wave login-wave-3"
+              fill="var(--mj-login-wave-3)" fill-opacity="0.20"
+              d="M 450,-20 C 520,200 750,280 690,440 C 630,600 350,720 480,1100
+                 L 580,1100 C 450,720 730,600 790,440 C 850,280 620,200 550,-20 Z" />
+      </svg>
+
+      <!-- Login content (stacks above SVG via z-index) -->
+      <div class="logo-icon">
+        <svg width="62" height="44" viewBox="0 0 62 44" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <mask id="mask0_236_1614" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="62" height="44">
+            <rect width="61.3333" height="44" fill="#D9D9D9"/>
+          </mask>
+          <g mask="url(#mask0_236_1614)">
+            <rect x="-94.4727" y="-2.66667" width="246.882" height="94.8387" fill="url(#pattern0)"/>
+          </g>
+        </svg>
+      </div>
+      <div class="title">
+        <img src="/assets/MJ_logo.svg" height="45px" class="app-logo" alt="MemberJunction Logo" />
+      </div>
+      <h1 class="text-header">
+        Welcome <br/> Back
+      </h1>
+    </div>
+    <div class="login-btn">
+      <h3>Log In</h3>
+      <p>{{subHeaderText}}</p>
+      <button (click)="authBase.login()">
+        Log in
+      </button>
+    </div>
   </div>
-</div>
+}

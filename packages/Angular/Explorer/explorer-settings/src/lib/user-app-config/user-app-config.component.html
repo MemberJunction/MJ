@@ -1,183 +1,296 @@
-<div class="k-overlay" *ngIf="showDialog"></div>
-<kendo-window
-  *ngIf="showDialog"
-  [top]="0"
-  [left]="0"
-  [resizable]="false"
-  [draggable]="false"
-  title="Configure Apps"
-  (close)="close()"
-  class="full-screen-dialog"
->
-  <div class="app-config-container">
-    <!-- Loading State -->
-    <div *ngIf="isLoading" class="loading-container">
-      <mj-loading text="Loading your app configuration..." size="medium"></mj-loading>
+<!-- Modal Backdrop -->
+@if (ShowDialog) {
+  <div class="modal-backdrop" (click)="Close()" role="presentation"></div>
+  <div
+    class="modal-dialog full-screen-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="app-config-title"
+  >
+    <!-- Dialog Header -->
+    <div class="modal-header">
+      <h2 class="modal-title" id="app-config-title">
+        <i class="fa-solid fa-grid-2" aria-hidden="true"></i>
+        Configure Apps
+      </h2>
+      <button
+        class="modal-close"
+        (click)="Close()"
+        aria-label="Close dialog"
+      >
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
     </div>
 
-    <!-- Error Message -->
-    <div *ngIf="errorMessage" class="error-message">
-      <span class="fa-solid fa-circle-exclamation"></span>
-      {{ errorMessage }}
-    </div>
+    <div class="app-config-container">
+      <!-- Loading State -->
+      @if (IsLoading) {
+        <div class="loading-container" role="status" aria-live="polite">
+          <mj-loading text="Loading your app configuration..." size="medium"></mj-loading>
+        </div>
+      }
 
-    <!-- Main Content -->
-    <div *ngIf="!isLoading" class="config-content">
-      <p class="config-description">
-        Select which applications appear in your app switcher and arrange them in your preferred order.
-        Double-click to quickly add or remove. Drag and drop to reorder, or use the arrow buttons.
-      </p>
+      <!-- Error Message -->
+      @if (ErrorMessage) {
+        <div class="error-message" role="alert">
+          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+          <span>{{ ErrorMessage }}</span>
+        </div>
+      }
 
-      <div class="panels-container">
-        <!-- Available Apps Panel -->
-        <div class="panel available-apps-panel" [class.collapsed]="availablePanelCollapsed">
-          <div class="panel-header" (click)="availablePanelCollapsed = !availablePanelCollapsed">
-            <span class="fa-solid fa-layer-group"></span>
-            <h3>Available Applications</h3>
-            <span class="badge">{{ availableApps.length }}</span>
-            <span class="collapse-toggle fa-solid" [class.fa-chevron-down]="availablePanelCollapsed" [class.fa-chevron-up]="!availablePanelCollapsed"></span>
-          </div>
+      <!-- Main Content -->
+      @if (!IsLoading) {
+        <div class="config-content">
+          <p class="config-description">
+            Select which applications appear in your app switcher and arrange them in your preferred order.
+            Double-click to quickly add or remove. Drag and drop to reorder, or use the arrow buttons.
+          </p>
 
-          <div class="panel-content">
-            <div *ngIf="availableApps.length === 0" class="empty-state">
-              <span class="fa-solid fa-check-double"></span>
-              <p>All applications added!</p>
+          <!-- Desktop: two-panel layout with drag-and-drop -->
+          <div class="panels-container desktop-only">
+            <!-- Available Apps Panel -->
+            <div class="panel available-apps-panel" [class.collapsed]="AvailablePanelCollapsed">
+              <div class="panel-header" (click)="AvailablePanelCollapsed = !AvailablePanelCollapsed">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <h3>Available Applications</h3>
+                <span class="badge">{{ AvailableApps.length }}</span>
+                <i
+                  class="collapse-toggle fa-solid"
+                  [class.fa-chevron-down]="AvailablePanelCollapsed"
+                  [class.fa-chevron-up]="!AvailablePanelCollapsed"
+                  aria-hidden="true"
+                ></i>
+              </div>
+
+              <div class="panel-content">
+                @if (AvailableApps.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+                    <p>All applications added!</p>
+                  </div>
+                }
+
+                @for (item of AvailableApps; track item.app.ID) {
+                  <div class="available-app-item" (dblclick)="AddApp(item)">
+                    <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                    </div>
+
+                    <div class="app-info">
+                      <span class="app-name">{{ item.app.Name }}</span>
+                      @if (item.app.Description) {
+                        <span class="app-description">{{ item.app.Description }}</span>
+                      }
+                    </div>
+
+                    <button
+                      class="mj-btn mj-btn-primary mj-btn-outline mj-btn-sm"
+                      (click)="AddApp(item)"
+                      title="Add to your apps"
+                    >
+                      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                      Add
+                    </button>
+                  </div>
+                }
+              </div>
             </div>
 
-            <div *ngFor="let item of availableApps" class="available-app-item" (dblclick)="addApp(item)">
-              <div class="app-icon" [style.background-color]="item.app.GetColor()">
-                <span [class]="item.app.Icon || 'fa-solid fa-cube'"></span>
+            <!-- Selected Apps Panel -->
+            <div class="panel selected-apps-panel" [class.collapsed]="SelectedPanelCollapsed">
+              <div class="panel-header" (click)="SelectedPanelCollapsed = !SelectedPanelCollapsed">
+                <i class="fa-solid fa-check-circle" aria-hidden="true"></i>
+                <h3>Your Applications</h3>
+                <span class="badge">{{ ActiveApps.length }}</span>
+                <i
+                  class="collapse-toggle fa-solid"
+                  [class.fa-chevron-down]="SelectedPanelCollapsed"
+                  [class.fa-chevron-up]="!SelectedPanelCollapsed"
+                  aria-hidden="true"
+                ></i>
               </div>
 
-              <div class="app-info">
-                <span class="app-name">{{ item.app.Name }}</span>
-                <span class="app-description" *ngIf="item.app.Description">{{ item.app.Description }}</span>
-              </div>
+              <div class="panel-content">
+                @if (ActiveApps.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+                    <p>No applications selected</p>
+                    <p class="hint">Add apps from the available list</p>
+                  </div>
+                }
 
-              <button
-                kendoButton
-                themeColor="primary"
-                fillMode="outline"
-                (click)="addApp(item)"
-                title="Add to your apps"
-              >
-                <span class="fa-solid fa-plus"></span>
-                Add
-              </button>
+                @if (ActiveApps.length > 0) {
+                  <div
+                    class="sortable-list"
+                    (dragover)="OnDragOver($event)"
+                    (drop)="OnDrop($event)"
+                  >
+                    @for (item of ActiveApps; track item.app.ID; let i = $index) {
+                      <div
+                        class="app-item"
+                        [class.dragging]="DraggedItem === item"
+                        draggable="true"
+                        (dragstart)="OnDragStart($event, item, i)"
+                        (dragend)="OnDragEnd()"
+                        (dragenter)="OnDragEnter($event, i)"
+                        (dblclick)="RemoveApp(item); $event.stopPropagation()"
+                      >
+                        <div class="app-item-content" [style.border-left-color]="item.app.GetColor()">
+                          <div class="drag-handle">
+                            <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+                          </div>
+
+                          <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                            <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                          </div>
+
+                          <div class="app-info">
+                            <span class="app-name">{{ item.app.Name }}</span>
+                            @if (item.app.Description) {
+                              <span class="app-description">{{ item.app.Description }}</span>
+                            }
+                          </div>
+
+                          <div class="app-actions">
+                            <button
+                              class="mj-btn mj-btn-ghost mj-btn-sm"
+                              [disabled]="i === 0"
+                              (click)="MoveUp(item); $event.stopPropagation()"
+                              title="Move up"
+                            >
+                              <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                            </button>
+                            <button
+                              class="mj-btn mj-btn-ghost mj-btn-sm"
+                              [disabled]="i === ActiveApps.length - 1"
+                              (click)="MoveDown(item); $event.stopPropagation()"
+                              title="Move down"
+                            >
+                              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <button
+                              class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                              (click)="RemoveApp(item); $event.stopPropagation()"
+                              title="Remove from your apps"
+                            >
+                              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Mobile: single list with toggles + touch drag reorder -->
+          <div
+            class="mobile-view"
+            (touchmove)="OnTouchDragMove($event)"
+            (touchend)="OnTouchDragEnd()"
+            (touchcancel)="OnTouchDragEnd()"
+          >
+            <div class="mobile-list">
+              @if (ActiveApps.length > 0) {
+                <div class="mobile-section-label">Your Apps</div>
+                @for (item of ActiveApps; track item.app.ID; let i = $index) {
+                  @if (TouchDragActive && TouchDropIndex === i && TouchDragIndex > i) {
+                    <div class="mobile-drop-indicator"></div>
+                  }
+                  <div
+                    class="mobile-app-row"
+                    [class.touch-ghost]="TouchDragActive && TouchDragIndex === i"
+                  >
+                    <div
+                      class="mobile-drag-handle"
+                      (touchstart)="OnTouchDragStart($event, i)"
+                      aria-label="Drag to reorder"
+                    >
+                      <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+                    </div>
+                    <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                    </div>
+                    <span class="mobile-app-name">{{ item.app.Name }}</span>
+                    <button
+                      class="mobile-toggle on"
+                      (click)="ToggleApp(item)"
+                      aria-label="Remove {{ item.app.Name }}"
+                    >
+                      <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  @if (TouchDragActive && TouchDropIndex === i && TouchDragIndex < i) {
+                    <div class="mobile-drop-indicator"></div>
+                  }
+                }
+                @if (TouchDragActive && TouchDropIndex === ActiveApps.length - 1 && TouchDragIndex < TouchDropIndex) {
+                  <div class="mobile-drop-indicator"></div>
+                }
+              }
+
+              @if (AvailableApps.length > 0) {
+                <div class="mobile-section-label">Available</div>
+                @for (item of AvailableApps; track item.app.ID) {
+                  <div class="mobile-app-row inactive">
+                    <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                    </div>
+                    <span class="mobile-app-name">{{ item.app.Name }}</span>
+                    <button
+                      class="mobile-toggle off"
+                      (click)="ToggleApp(item)"
+                      aria-label="Add {{ item.app.Name }}"
+                    >
+                      <i class="fa-solid fa-toggle-off" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                }
+              }
             </div>
           </div>
         </div>
+      }
 
-        <!-- Selected Apps Panel -->
-        <div class="panel selected-apps-panel" [class.collapsed]="selectedPanelCollapsed">
-          <div class="panel-header" (click)="selectedPanelCollapsed = !selectedPanelCollapsed">
-            <span class="fa-solid fa-check-circle"></span>
-            <h3>Your Applications</h3>
-            <span class="badge">{{ activeApps.length }}</span>
-            <span class="collapse-toggle fa-solid" [class.fa-chevron-down]="selectedPanelCollapsed" [class.fa-chevron-up]="!selectedPanelCollapsed"></span>
-          </div>
-
-          <div class="panel-content">
-            <div *ngIf="activeApps.length === 0" class="empty-state">
-              <span class="fa-solid fa-inbox"></span>
-              <p>No applications selected</p>
-              <p class="hint">Add apps from the available list</p>
-            </div>
-
-            <kendo-sortable
-              *ngIf="activeApps.length > 0"
-              [kendoSortableBinding]="activeApps"
-              [animation]="true"
-              itemClass="app-item"
-              activeItemClass="app-item dragging"
-              (dragEnd)="onDragEnd($event)"
+      <!-- Footer Actions -->
+      <div class="dialog-footer">
+        <div class="footer-left">
+          @if (HasChanges()) {
+            <button
+              class="mj-btn mj-btn-secondary"
+              (click)="Reset()"
+              [disabled]="IsLoading || IsSaving"
             >
-              <ng-template let-item="item" let-index="index">
-                <div class="app-item-content" [style.border-left-color]="item.app.GetColor()" (dblclick)="removeApp(item); $event.stopPropagation()">
-                  <div class="drag-handle">
-                    <span class="fa-solid fa-grip-vertical"></span>
-                  </div>
-
-                  <div class="app-icon" [style.background-color]="item.app.GetColor()">
-                    <span [class]="item.app.Icon || 'fa-solid fa-cube'"></span>
-                  </div>
-
-                  <div class="app-info">
-                    <span class="app-name">{{ item.app.Name }}</span>
-                    <span class="app-description" *ngIf="item.app.Description">{{ item.app.Description }}</span>
-                  </div>
-
-                  <div class="app-actions">
-                    <button
-                      kendoButton
-                      fillMode="flat"
-                      [disabled]="index === 0"
-                      (click)="moveUp(item); $event.stopPropagation()"
-                      title="Move up"
-                    >
-                      <span class="fa-solid fa-chevron-up"></span>
-                    </button>
-                    <button
-                      kendoButton
-                      fillMode="flat"
-                      [disabled]="index === activeApps.length - 1"
-                      (click)="moveDown(item); $event.stopPropagation()"
-                      title="Move down"
-                    >
-                      <span class="fa-solid fa-chevron-down"></span>
-                    </button>
-                    <button
-                      kendoButton
-                      fillMode="flat"
-                      themeColor="error"
-                      (click)="removeApp(item); $event.stopPropagation()"
-                      title="Remove from your apps"
-                    >
-                      <span class="fa-solid fa-xmark"></span>
-                    </button>
-                  </div>
-                </div>
-              </ng-template>
-            </kendo-sortable>
-          </div>
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+              Reset Changes
+            </button>
+          }
         </div>
-      </div>
-    </div>
-
-    <!-- Footer Actions -->
-    <div class="dialog-footer">
-      <div class="footer-left">
-        <button
-          kendoButton
-          fillMode="outline"
-          (click)="reset()"
-          [disabled]="isLoading || isSaving"
-          *ngIf="hasChanges()"
-        >
-          <span class="fa-solid fa-rotate-left"></span>
-          Reset Changes
-        </button>
-      </div>
-      <div class="footer-right">
-        <button
-          kendoButton
-          themeColor="primary"
-          (click)="save()"
-          [disabled]="isLoading || isSaving || !hasChanges()"
-        >
-          <mj-loading *ngIf="isSaving" [showText]="false" size="small"></mj-loading>
-          <span *ngIf="!isSaving" class="fa-solid fa-check"></span>
-          {{ isSaving ? 'Saving...' : 'Save Changes' }}
-        </button>
-        <button
-          kendoButton
-          fillMode="outline"
-          (click)="close()"
-          [disabled]="isSaving"
-        >
-          Cancel
-        </button>
+        <div class="footer-right">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="Save()"
+            [disabled]="IsLoading || IsSaving || !HasChanges()"
+          >
+            @if (IsSaving) {
+              <mj-loading [showText]="false" size="small"></mj-loading>
+              <span>Saving...</span>
+            } @else {
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              <span>Save Changes</span>
+            }
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary"
+            (click)="Close()"
+            [disabled]="IsSaving"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   </div>
-</kendo-window>
+}

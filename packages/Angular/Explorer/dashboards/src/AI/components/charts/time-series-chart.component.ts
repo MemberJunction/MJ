@@ -20,6 +20,7 @@ export interface DataPointClickEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-time-series-chart',
   template: `
     <div class="time-series-chart">

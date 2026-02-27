@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { EntityRelationshipDisplayComponentEntity } from "../generated/entity_subclasses";
+import { MJEntityRelationshipDisplayComponentEntity } from "../generated/entity_subclasses";
 
 /**
  * Simple cache for commonly used type tables across the system that are outside of what we have in the Metadata object
@@ -9,7 +9,7 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
-                EntityName: 'Entity Relationship Display Components',
+                EntityName: 'MJ: Entity Relationship Display Components',
                 PropertyName: '_EntityRelationshipDisplayComponents',
                 CacheLocal: true
             }
@@ -20,9 +20,9 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
     public static get Instance(): TypeTablesCache {
         return super.getInstance<TypeTablesCache>();
     }
-    
+
     public get EntityRelationshipDisplayComponents() {
         return this._EntityRelationshipDisplayComponents;
     }
-    private _EntityRelationshipDisplayComponents: EntityRelationshipDisplayComponentEntity[] = [];
+    private _EntityRelationshipDisplayComponents: MJEntityRelationshipDisplayComponentEntity[] = [];
 }

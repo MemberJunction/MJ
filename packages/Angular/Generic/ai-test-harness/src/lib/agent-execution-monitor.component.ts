@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, Eleme
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExecutionNodeComponent } from './agent-execution-node.component';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Progress message with display mode
@@ -51,6 +51,7 @@ export interface ExecutionStats {
  * - Input/output preview
  */
 @Component({
+  standalone: false,
     selector: 'mj-agent-execution-monitor',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
@@ -366,8 +367,8 @@ export interface ExecutionStats {
 })
 export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, AfterViewInit {
     @Input() mode: ExecutionMonitorMode = 'historical';
-    @Input() agentRun: AIAgentRunEntityExtended | null = null; // For historical mode
-    @Input() liveSteps: AIAgentRunStepEntityExtended[] = []; // For live mode streaming
+    @Input() agentRun: MJAIAgentRunEntityExtended | null = null; // For historical mode
+    @Input() liveSteps: MJAIAgentRunStepEntityExtended[] = []; // For live mode streaming
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
     @Input() runId: string | null = null; // ID of the run (agent or prompt)
     @Input() runType: 'agent' | 'prompt' = 'agent'; // Type of run
@@ -378,7 +379,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
     
     // Store the currently rendered steps for UI state management
-    currentStep: AIAgentRunStepEntityExtended | null = null;
+    currentStep: MJAIAgentRunStepEntityExtended | null = null;
     
     // Track component references for dynamic components
     private nodeComponentMap = new Map<string, ComponentRef<ExecutionNodeComponent>>();
@@ -621,7 +622,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Render steps recursively with proper hierarchy
      */
-    private renderSteps(steps: AIAgentRunStepEntityExtended[], depth: number, agentPath: string[]): void {
+    private renderSteps(steps: MJAIAgentRunStepEntityExtended[], depth: number, agentPath: string[]): void {
         console.log('🎨 Rendering steps:', {
             count: steps.length,
             depth,
@@ -655,7 +656,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Create a component for a step
      */
     private createStepComponent(
-        step: AIAgentRunStepEntityExtended, 
+        step: MJAIAgentRunStepEntityExtended, 
         depth: number, 
         agentPath: string[]
     ): ComponentRef<ExecutionNodeComponent> {
@@ -704,7 +705,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Toggle step expansion
      */
-    private toggleStepExpansion(step: AIAgentRunStepEntityExtended): void {
+    private toggleStepExpansion(step: MJAIAgentRunStepEntityExtended): void {
         const currentState = this.expandedStates.get(step.ID) || false;
         this.expandedStates.set(step.ID, !currentState);
         this.userHasInteracted = true;
@@ -722,7 +723,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Toggle step details expansion
      */
-    private toggleStepDetails(step: AIAgentRunStepEntityExtended): void {
+    private toggleStepDetails(step: MJAIAgentRunStepEntityExtended): void {
         const currentState = this.detailsExpandedStates.get(step.ID) || false;
         this.detailsExpandedStates.set(step.ID, !currentState);
         
@@ -922,7 +923,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     private updateCurrentStep(): void {
         // Find the first running step from all rendered components
-        let runningStep: AIAgentRunStepEntityExtended | null = null;
+        let runningStep: MJAIAgentRunStepEntityExtended | null = null;
         
         this.nodeComponentMap.forEach((componentRef, stepId) => {
             const step = componentRef.instance.step;
@@ -1027,7 +1028,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Count steps recursively
      */
-    private countSteps(steps: AIAgentRunStepEntityExtended[]): void {
+    private countSteps(steps: MJAIAgentRunStepEntityExtended[]): void {
         for (const step of steps) {
             this.stats.totalSteps++;
             
@@ -1224,7 +1225,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Append new live steps without re-rendering entire tree
      */
-    private appendNewLiveSteps(newSteps: AIAgentRunStepEntityExtended[]): void {
+    private appendNewLiveSteps(newSteps: MJAIAgentRunStepEntityExtended[]): void {
         if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.executionNodesContainer) {
             return;
         }
@@ -1293,7 +1294,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Calculate step depth based on parent hierarchy
      */
-    private calculateStepDepth(step: AIAgentRunStepEntityExtended): number {
+    private calculateStepDepth(step: MJAIAgentRunStepEntityExtended): number {
         // For now, return 0 for top-level steps
         // In live mode, depth information should come from the streaming data
         return 0;
@@ -1302,7 +1303,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Build agent path for a step
      */
-    private buildAgentPath(step: AIAgentRunStepEntityExtended): string[] {
+    private buildAgentPath(step: MJAIAgentRunStepEntityExtended): string[] {
         // In live mode, agent path should come from streaming data
         // For now, return empty array
         return [];

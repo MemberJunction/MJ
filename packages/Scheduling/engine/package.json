@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/scheduling-engine",
-  "version": "3.0.0",
+  "type": "module",
+  "version": "5.3.1",
   "description": "MemberJunction: Scheduling Engine - core engine for executing scheduled jobs with plugin architecture",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,27 +9,30 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
-    "@memberjunction/ai-core-plus": "3.0.0",
-    "@memberjunction/ai-agents": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/scheduling-base-types": "3.0.0",
-    "@memberjunction/scheduling-engine-base": "3.0.0",
-    "@memberjunction/sqlserver-dataprovider": "3.0.0",
+    "@memberjunction/actions": "5.3.1",
+    "@memberjunction/actions-base": "5.3.1",
+    "@memberjunction/ai-core-plus": "5.3.1",
+    "@memberjunction/ai-agents": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/scheduling-base-types": "5.3.1",
+    "@memberjunction/scheduling-engine-base": "5.3.1",
+    "@memberjunction/sqlserver-dataprovider": "5.3.1",
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
-    "typescript": "^5.4.5"
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
   },
   "repository": {
     "type": "git",

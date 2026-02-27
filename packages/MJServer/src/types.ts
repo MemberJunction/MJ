@@ -1,5 +1,5 @@
-import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { AggregateExpression, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
@@ -11,6 +11,10 @@ export type UserPayload = {
   sessionId: string;
   isSystemUser?: boolean;
   apiKey?: string;
+  /** ID of the MJ API key used for authentication (when using mj_sk_* format keys) */
+  apiKeyId?: string;
+  /** SHA-256 hash of the MJ API key (used for scope authorization) */
+  apiKeyHash?: string;
 };
 
 /**
@@ -64,7 +68,7 @@ export type DirectiveBuilder = {
 };
 
 export type RunViewGenericParams = {
-  viewInfo: UserViewEntityExtended;
+  viewInfo: MJUserViewEntityExtended;
   provider: DatabaseProviderBase;
   extraFilter: string;
   orderBy: string;
@@ -80,7 +84,8 @@ export type RunViewGenericParams = {
   forceAuditLog?: boolean;
   auditLogDescription?: string;
   resultType?: string;
-  userPayload?: UserPayload; 
+  userPayload?: UserPayload;
+  aggregates?: AggregateExpression[];
 };
 
 

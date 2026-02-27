@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Artifact - Query Save UX Proposals</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5;
+    color: #1a1a2e;
+    padding: 32px;
+  }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .subtitle { color: #6c757d; margin-bottom: 32px; font-size: 14px; }
+
+  /* Proposal sections */
+  .proposal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    margin-bottom: 40px;
+    overflow: hidden;
+  }
+  .proposal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .proposal-header .badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-recommended { background: #d1fae5; color: #065f46; }
+  .badge-alt { background: #e0e7ff; color: #3730a3; }
+  .badge-alt2 { background: #fef3c7; color: #92400e; }
+  .proposal-header h2 { font-size: 18px; }
+  .proposal-desc {
+    padding: 16px 24px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 13px;
+    color: #495057;
+    line-height: 1.6;
+  }
+
+  /* Scenario grid */
+  .scenarios {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .scenario {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0f0f0;
+    border-right: 1px solid #f0f0f0;
+  }
+  .scenario:nth-child(even) { border-right: none; }
+  .scenario-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .scenario-label .version-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .pill-latest { background: #dbeafe; color: #1e40af; }
+  .pill-older { background: #f3e8ff; color: #6b21a8; }
+  .pill-match { background: #d1fae5; color: #065f46; }
+  .pill-differ { background: #fee2e2; color: #991b1b; }
+
+  /* Toolbar mockup */
+  .toolbar-mock {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+  }
+  .toolbar-left i { color: #6c757d; }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 5px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+    background: white;
+    color: #495057;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #e9ecef; }
+  .btn-save { color: #16a34a; border-color: #86efac; }
+  .btn-save:hover { background: #f0fdf4; border-color: #16a34a; }
+  .btn-open { color: #2563eb; border-color: #93c5fd; }
+  .btn-open:hover { background: #eff6ff; border-color: #2563eb; }
+  .btn-warning { color: #d97706; border-color: #fcd34d; }
+  .btn-warning:hover { background: #fffbeb; border-color: #d97706; }
+  .btn-primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-muted { color: #9ca3af; border-color: #e5e7eb; }
+
+  /* Badges in toolbar */
+  .live-badge {
+    padding: 2px 8px;
+    background: #cce5ff;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #004085;
+  }
+  .row-count {
+    padding: 2px 8px;
+    background: #e9ecef;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #495057;
+  }
+  .outdated-badge {
+    padding: 2px 8px;
+    background: #fff3cd;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #856404;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .linked-badge {
+    padding: 2px 10px;
+    background: #ede9fe;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #5b21b6;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .linked-badge:hover { background: #ddd6fe; }
+  .synced-badge {
+    padding: 2px 8px;
+    background: #d1fae5;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #065f46;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Dropdown mockup */
+  .dropdown-mock {
+    margin-top: 8px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    overflow: hidden;
+    max-width: 280px;
+  }
+  .dropdown-item {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.1s;
+  }
+  .dropdown-item:last-child { border-bottom: none; }
+  .dropdown-item:hover { background: #f8f9fa; }
+  .dropdown-item i { width: 16px; text-align: center; }
+  .dropdown-item .item-label { font-weight: 500; }
+  .dropdown-item .item-desc { font-size: 11px; color: #6c757d; margin-top: 2px; }
+  .dropdown-item.disabled { opacity: 0.4; pointer-events: none; }
+
+  /* Grid placeholder */
+  .grid-placeholder {
+    margin-top: 12px;
+    height: 80px;
+    background: repeating-linear-gradient(
+      0deg,
+      #f8f9fa,
+      #f8f9fa 20px,
+      white 20px,
+      white 40px
+    );
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  /* Annotation callouts */
+  .callout {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .callout i { margin-top: 2px; flex-shrink: 0; }
+  .callout-info { background: #eff6ff; color: #1e40af; }
+  .callout-warn { background: #fffbeb; color: #92400e; }
+  .callout-success { background: #f0fdf4; color: #166534; }
+
+  /* Pros/Cons */
+  .tradeoffs {
+    padding: 16px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    background: #fafafa;
+    border-top: 1px solid #e9ecef;
+  }
+  .tradeoff-col h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tradeoff-col ul { list-style: none; padding: 0; }
+  .tradeoff-col li {
+    font-size: 12px;
+    padding: 4px 0;
+    color: #4b5563;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .tradeoff-col li i { margin-top: 3px; font-size: 10px; }
+  .pros h4 { color: #065f46; }
+  .pros li i { color: #16a34a; }
+  .cons h4 { color: #991b1b; }
+  .cons li i { color: #dc2626; }
+
+  /* Separator */
+  .section-sep {
+    text-align: center;
+    padding: 24px;
+    color: #adb5bd;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* Full-width scenario */
+  .scenario-full {
+    grid-column: 1 / -1;
+    border-right: none !important;
+  }
+
+  .note { font-size: 11px; color: #6c757d; margin-top: 6px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Data Artifact Viewer — Query Save UX Proposals</h1>
+<p class="subtitle">Three approaches for handling saved queries across artifact versions with divergent SQL</p>
+
+<!-- ============================================================ -->
+<!-- PROPOSAL A: Recommended -->
+<!-- ============================================================ -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="badge badge-recommended">Recommended</span>
+    <h2>Proposal A: Version-Scoped Actions (SQL Comparison)</h2>
+  </div>
+  <div class="proposal-desc">
+    Compare the artifact version's SQL against the saved query's SQL at render time.
+    Only the <strong>latest version</strong> can modify or replace the saved query.
+    Older versions show the link as read-only context.
+  </div>
+
+  <div class="scenarios">
+
+    <!-- A1: Latest + SQL matches -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-match">SQL Matches</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">847 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-open"><i class="fas fa-external-link-alt"></i> Open Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        Current behavior — query is in sync, show Open Query.
+      </div>
+    </div>
+
+    <!-- A2: Latest + SQL differs -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-differ">SQL Differs</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">1,204 rows</span>
+          <span class="outdated-badge"><i class="fas fa-exclamation-triangle"></i> Query outdated</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-warning"><i class="fas fa-save"></i> Update Query <i class="fas fa-caret-down" style="margin-left:2px"></i></button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="dropdown-mock">
+        <div class="dropdown-item">
+          <i class="fas fa-pen-to-square" style="color:#d97706"></i>
+          <div>
+            <div class="item-label">Update "Revenue by Region"</div>
+            <div class="item-desc">Overwrite saved query with this version's SQL</div>
+          </div>
+        </div>
+        <div class="dropdown-item">
+          <i class="fas fa-plus" style="color:#16a34a"></i>
+          <div>
+            <div class="item-label">Save as New Query</div>
+            <div class="item-desc">Create a separate saved query for this version</div>
+          </div>
+        </div>
+        <div class="dropdown-item">
+          <i class="fas fa-external-link-alt" style="color:#6c757d"></i>
+          <div>
+            <div class="item-label">Open Current Query</div>
+            <div class="item-desc">View the existing saved query (older SQL)</div>
+          </div>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <i class="fas fa-info-circle"></i>
+        Only the latest version gets modification options. The dropdown gives clear choices without ambiguity.
+      </div>
+    </div>
+
+    <!-- A3: Older version + SQL differs -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-older">Older (v1)</span>
+        <span class="version-pill pill-differ">SQL Differs</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-muted" title="Query was updated from a newer version"><i class="fas fa-external-link-alt"></i> Open Query <span style="font-size:10px;color:#9ca3af">(differs)</span></button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <i class="fas fa-shield-halved"></i>
+        No update/create options on older versions — prevents accidental regression. Read-only link with "(differs)" hint.
+      </div>
+    </div>
+
+    <!-- A4: No saved query yet -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v2)</span>
+        <span style="font-size:11px;color:#6c757d">No saved query</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Top Customers Q4</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">156 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-save"><i class="fas fa-save"></i> Save Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        Current behavior unchanged — simple "Save Query" when no query exists.
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoffs">
+    <div class="tradeoff-col pros">
+      <h4><i class="fas fa-thumbs-up"></i> Pros</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> Prevents backtracking — older versions can't regress the query</li>
+        <li><i class="fas fa-circle"></i> Clear visual signal ("Query outdated" badge) when SQL diverges</li>
+        <li><i class="fas fa-circle"></i> All three actions (update, new, open) visible in one dropdown</li>
+        <li><i class="fas fa-circle"></i> Minimal state changes — only adds SQL comparison logic</li>
+      </ul>
+    </div>
+    <div class="tradeoff-col cons">
+      <h4><i class="fas fa-thumbs-down"></i> Cons</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> Requires loading query SQL from QueryEngine at render time</li>
+        <li><i class="fas fa-circle"></i> "Query outdated" badge adds visual noise to the toolbar</li>
+        <li><i class="fas fa-circle"></i> Users on older versions may wonder why they can't update</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PROPOSAL B -->
+<!-- ============================================================ -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="badge badge-alt">Alternative</span>
+    <h2>Proposal B: Linked Query Badge (Always-Available Save)</h2>
+  </div>
+  <div class="proposal-desc">
+    Separate the concepts: a persistent <strong>"Linked Query"</strong> badge shows the relationship,
+    while "Save Query" is always available and contextually offers update vs. create.
+    Every version is treated independently — the badge is informational, not an action gate.
+  </div>
+
+  <div class="scenarios">
+
+    <!-- B1: Has linked query + SQL matches -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-match">SQL Matches</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">847 rows</span>
+          <span class="synced-badge"><i class="fas fa-link"></i> Saved <i class="fas fa-arrow-up-right-from-square" style="font-size:9px;cursor:pointer" title="Open query"></i></span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        In-sync: the badge shows "Saved" in green with a tiny open-link icon. No save button needed — it's already saved.
+      </div>
+    </div>
+
+    <!-- B2: Has linked query + SQL differs (any version) -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Any Version</span>
+        <span class="version-pill pill-differ">SQL Differs</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">1,204 rows</span>
+          <span class="linked-badge"><i class="fas fa-link"></i> Revenue by Region <i class="fas fa-arrow-up-right-from-square" style="font-size:9px"></i></span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-save"><i class="fas fa-save"></i> Save Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <div class="dropdown-mock">
+          <div class="dropdown-item">
+            <i class="fas fa-pen-to-square" style="color:#d97706"></i>
+            <div>
+              <div class="item-label">Update "Revenue by Region"</div>
+              <div class="item-desc">Replace saved query SQL with this version</div>
+            </div>
+          </div>
+          <div class="dropdown-item">
+            <i class="fas fa-plus" style="color:#16a34a"></i>
+            <div>
+              <div class="item-label">Save as New Query</div>
+              <div class="item-desc">Keep existing, create a new saved query</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <i class="fas fa-info-circle"></i>
+        The purple "Linked Query" badge is always visible as context. "Save Query" opens a choice dialog — works on ANY version.
+        The user consciously decides. No backtrack protection needed because the action is always intentional.
+      </div>
+    </div>
+
+    <!-- B3: No linked query -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Any Version</span>
+        <span style="font-size:11px;color:#6c757d">No saved query</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Top Customers Q4</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">156 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-save"><i class="fas fa-save"></i> Save Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        No badge, just "Save Query" — identical to current behavior.
+      </div>
+    </div>
+
+    <!-- B4: Older version after update -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-older">Older (v1)</span>
+        <span class="version-pill pill-differ">SQL Differs</span>
+        After user updated query from v3
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+          <span class="linked-badge"><i class="fas fa-link"></i> Revenue by Region <i class="fas fa-arrow-up-right-from-square" style="font-size:9px"></i></span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-save"><i class="fas fa-save"></i> Save Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <i class="fas fa-triangle-exclamation"></i>
+        Same UI as any "differs" state. If user clicks Save → dropdown shows "Update" and "Save as New".
+        User takes responsibility — no guardrails against regression, but the action is always explicit.
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoffs">
+    <div class="tradeoff-col pros">
+      <h4><i class="fas fa-thumbs-up"></i> Pros</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> Consistent UI across all versions — no "why can't I do this?" confusion</li>
+        <li><i class="fas fa-circle"></i> Linked Query badge provides persistent context without being an action</li>
+        <li><i class="fas fa-circle"></i> Users always have full control — trusts user judgment</li>
+        <li><i class="fas fa-circle"></i> Cleaner toolbar — badge replaces "Open Query" button</li>
+      </ul>
+    </div>
+    <div class="tradeoff-col cons">
+      <h4><i class="fas fa-thumbs-down"></i> Cons</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> No guardrail against accidental regression from older versions</li>
+        <li><i class="fas fa-circle"></i> Users might update from v1 without realizing v3 has newer SQL</li>
+        <li><i class="fas fa-circle"></i> More visual elements (badge + button) even when in-sync</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PROPOSAL C -->
+<!-- ============================================================ -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="badge badge-alt2">Creative Alt</span>
+    <h2>Proposal C: Query Lineage Timeline</h2>
+  </div>
+  <div class="proposal-desc">
+    Flip the mental model: instead of per-version save state, show a <strong>query lineage indicator</strong>
+    that tells the user which version the saved query reflects.
+    "Save" always creates a <em>new</em> query. "Update" is offered only if you're ahead of the saved version.
+    Think of it like git — you can only fast-forward, never rewind.
+  </div>
+
+  <div class="scenarios">
+
+    <!-- C1: Latest + SQL matches -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-match">SQL Matches</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">847 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span class="synced-badge"><i class="fas fa-check"></i> Query synced at v3</span>
+          <button class="btn btn-open"><i class="fas fa-external-link-alt"></i> Open</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i></button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        "Query synced at v3" — clearly communicates which version the saved query reflects.
+      </div>
+    </div>
+
+    <!-- C2: Latest + ahead of saved version -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-differ">Ahead of saved (v1)</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">1,204 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span class="outdated-badge"><i class="fas fa-code-branch"></i> Query at v1</span>
+          <button class="btn btn-primary"><i class="fas fa-arrow-up"></i> Fast-forward</button>
+          <button class="btn btn-save"><i class="fas fa-plus"></i> New Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i></button>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <i class="fas fa-info-circle"></i>
+        "Query at v1" shows how far behind the saved query is.
+        "Fast-forward" updates to current SQL. "New Query" creates a fresh one. Git-like mental model.
+      </div>
+    </div>
+
+    <!-- C3: Older version -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-older">Older (v1)</span>
+        <span class="version-pill pill-match">This is the saved version</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span class="synced-badge"><i class="fas fa-check"></i> Query synced at v1</span>
+          <button class="btn btn-open"><i class="fas fa-external-link-alt"></i> Open</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i></button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        When viewing the actual version the query was saved from, it shows as synced. No update needed.
+      </div>
+    </div>
+
+    <!-- C4: Older version behind the saved one -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span class="version-pill pill-older">Older (v1)</span>
+        <span class="version-pill pill-differ">Query was updated to v3</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span style="font-size:11px;color:#9ca3af"><i class="fas fa-code-branch"></i> Query at v3</span>
+          <button class="btn btn-muted"><i class="fas fa-external-link-alt"></i> Open</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i></button>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <i class="fas fa-shield-halved"></i>
+        You're BEHIND the saved version — no fast-forward possible, no update offered.
+        "Query at v3" tells you the query has moved on. Can only open it (read-only reference).
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoffs">
+    <div class="tradeoff-col pros">
+      <h4><i class="fas fa-thumbs-up"></i> Pros</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> Intuitive git-like model — "fast-forward" is natural for developers</li>
+        <li><i class="fas fa-circle"></i> Version indicator ("Query at v1") gives immediate spatial awareness</li>
+        <li><i class="fas fa-circle"></i> Impossible to regress — can only go forward, never backward</li>
+        <li><i class="fas fa-circle"></i> Very clear call-to-action hierarchy: primary "Fast-forward" vs secondary "New"</li>
+      </ul>
+    </div>
+    <div class="tradeoff-col cons">
+      <h4><i class="fas fa-thumbs-down"></i> Cons</h4>
+      <ul>
+        <li><i class="fas fa-circle"></i> Requires storing <code>savedAtVersionNumber</code> alongside <code>savedQueryId</code></li>
+        <li><i class="fas fa-circle"></i> "Fast-forward" metaphor may confuse non-developer users</li>
+        <li><i class="fas fa-circle"></i> More toolbar elements — could feel crowded on narrow panels</li>
+        <li><i class="fas fa-circle"></i> Version number comparison logic adds complexity vs. simple SQL diff</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; padding: 20px; color: #6c757d; font-size: 13px;">
+  <i class="fas fa-lightbulb" style="color:#fbbf24"></i>
+  All three proposals can be mixed — e.g., Proposal A's guardrails + Proposal B's linked badge + Proposal C's version indicator.
+</div>
+
+<hr style="border:none; border-top: 3px solid #6366f1; margin: 40px 0 20px;">
+
+<!-- ============================================================ -->
+<!-- FINAL PROTOTYPE -->
+<!-- ============================================================ -->
+<h1 style="margin-bottom:4px;">Final Prototype: A + C Hybrid</h1>
+<p class="subtitle">Version-aware query sync with Proposal A's dropdown UI and Proposal C's version indicators. Uses <code>savedAtVersionNumber</code> for spatial awareness, SQL comparison for sync detection, and latest-only guardrails to prevent regression.</p>
+
+<!-- Data model change callout -->
+<div class="proposal" style="margin-bottom:24px;">
+  <div class="proposal-header" style="background:#f0fdf4;">
+    <span class="badge badge-recommended">Data Model</span>
+    <h2>Interface Change: DataArtifactSpec</h2>
+  </div>
+  <div class="proposal-desc" style="font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.8; background: #1e1e2e; color: #cdd6f4; padding: 20px 24px;">
+    <pre style="margin:0; white-space:pre; font-family:inherit;">interface DataArtifactSpec {
+  source: 'query' | 'view';
+  title?: string;
+  queryId?: string;
+  // ... existing fields ...
+
+  <span style="color:#a6e3a1;">/** ID of saved query (set after user saves from artifact) */</span>
+  savedQueryId?: string;
+
+  <span style="color:#a6e3a1;">/** Name of saved query (for display) */</span>
+  savedQueryName?: string;
+
+  <span style="color:#f9e2af; font-weight:bold;">/** NEW: Version number this query was saved/updated from */</span>
+  <span style="color:#f9e2af; font-weight:bold;">savedAtVersionNumber?: number;</span>
+}</pre>
+  </div>
+</div>
+
+<!-- Decision logic -->
+<div class="proposal" style="margin-bottom:24px;">
+  <div class="proposal-header" style="background:#eff6ff;">
+    <span class="badge badge-alt">Logic</span>
+    <h2>Rendering Decision Tree</h2>
+  </div>
+  <div class="proposal-desc" style="font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 2; background: #1e1e2e; color: #cdd6f4; padding: 20px 24px;">
+    <pre style="margin:0; white-space:pre; font-family:inherit;"><span style="color:#89b4fa;">const</span> hasSavedQuery   = !!spec.savedQueryId;
+<span style="color:#89b4fa;">const</span> isLatest        = currentVersionNumber === latestVersionNumber;
+<span style="color:#89b4fa;">const</span> savedAt         = spec.savedAtVersionNumber;
+<span style="color:#89b4fa;">const</span> viewingVersion  = currentVersionNumber;
+<span style="color:#89b4fa;">const</span> sqlMatches      = querySql === spec.metadata?.sql;  <span style="color:#a6e3a1;">// compare at render</span>
+
+<span style="color:#cba6f7;">if</span> (!hasSavedQuery)
+  <span style="color:#fab387;">→ Show "Save Query" button</span>                             <span style="color:#6c7086;">// Scenario 1</span>
+
+<span style="color:#cba6f7;">else if</span> (sqlMatches)
+  <span style="color:#fab387;">→ Show "Saved at v{savedAt}" green badge + "Open Query"</span>  <span style="color:#6c7086;">// Scenario 2</span>
+
+<span style="color:#cba6f7;">else if</span> (isLatest)
+  <span style="color:#fab387;">→ Show "Saved at v{savedAt}" amber badge + dropdown</span>     <span style="color:#6c7086;">// Scenario 3</span>
+  <span style="color:#fab387;">  (Update Query / Save as New / Open Saved Query)</span>
+
+<span style="color:#cba6f7;">else if</span> (viewingVersion &lt; savedAt)
+  <span style="color:#fab387;">→ Show "Query updated at v{savedAt}" muted + "Open"</span>     <span style="color:#6c7086;">// Scenario 4</span>
+
+<span style="color:#cba6f7;">else if</span> (viewingVersion &gt; savedAt)
+  <span style="color:#fab387;">→ Show "Saved at v{savedAt}" muted + "Open"</span>             <span style="color:#6c7086;">// Scenario 5</span>
+  <span style="color:#6c7086;">  // Ahead of saved but not latest — no actions, avoid mid-version confusion</span></pre>
+  </div>
+</div>
+
+<!-- All 6 scenarios -->
+<div class="proposal">
+  <div class="proposal-header" style="background:linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color:white;">
+    <span class="badge" style="background:rgba(255,255,255,0.2); color:white;">Final</span>
+    <h2 style="color:white;">All Scenarios</h2>
+  </div>
+
+  <div class="scenarios">
+
+    <!-- S1: No saved query -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span style="background:#f3f4f6; color:#374151; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 1</span>
+        <span style="font-size:11px; color:#6c757d;">No saved query yet</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Top Customers Q4</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">156 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-save"><i class="fas fa-save"></i> Save Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        No change from today. Simple "Save Query" opens the save panel. On save, sets <code>savedQueryId</code>, <code>savedQueryName</code>, and <code>savedAtVersionNumber</code>.
+      </div>
+    </div>
+
+    <!-- S2: SQL matches (any version) -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span style="background:#f3f4f6; color:#374151; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 2</span>
+        <span class="version-pill pill-match">SQL Matches</span>
+        <span style="font-size:11px; color:#6c757d;">Any version</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">847 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span class="synced-badge"><i class="fas fa-check"></i> Saved at v3</span>
+          <button class="btn btn-open"><i class="fas fa-external-link-alt"></i> Open Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-success">
+        <i class="fas fa-check-circle"></i>
+        Query is in sync. Green "Saved at v3" badge gives version context. Whether you're viewing v3 or any version that happens to have identical SQL, the query matches — all good.
+      </div>
+    </div>
+
+    <!-- S3: Latest version, SQL differs (THE KEY SCENARIO) -->
+    <div class="scenario scenario-full" style="background:#fefce8;">
+      <div class="scenario-label">
+        <span style="background:#6366f1; color:white; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 3 — KEY</span>
+        <span class="version-pill pill-latest">Latest (v3)</span>
+        <span class="version-pill pill-differ">SQL Differs from saved (v1)</span>
+      </div>
+      <div class="toolbar-mock" style="border-color:#fbbf24;">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="live-badge">Live</span>
+          <span class="row-count">1,204 rows</span>
+          <span class="outdated-badge"><i class="fas fa-circle-exclamation"></i> Saved at v1</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-warning"><i class="fas fa-save"></i> Update Query <i class="fas fa-caret-down" style="margin-left:2px"></i></button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <!-- Dropdown -->
+      <div style="margin-top:10px; display:flex; gap:24px; align-items:flex-start;">
+        <div class="dropdown-mock" style="flex-shrink:0;">
+          <div class="dropdown-item" style="border-left:3px solid #d97706;">
+            <i class="fas fa-arrow-up-from-bracket" style="color:#d97706"></i>
+            <div>
+              <div class="item-label">Update "Revenue by Region"</div>
+              <div class="item-desc">Replace saved query SQL with this version's SQL</div>
+            </div>
+          </div>
+          <div class="dropdown-item" style="border-left:3px solid #16a34a;">
+            <i class="fas fa-plus" style="color:#16a34a"></i>
+            <div>
+              <div class="item-label">Save as New Query</div>
+              <div class="item-desc">Create a new query, keep the original unchanged</div>
+            </div>
+          </div>
+          <div class="dropdown-item" style="border-left:3px solid #6c757d;">
+            <i class="fas fa-external-link-alt" style="color:#6c757d"></i>
+            <div>
+              <div class="item-label">Open Saved Query</div>
+              <div class="item-desc">View "Revenue by Region" (saved at v1)</div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div class="callout callout-info" style="margin-top:0;">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <strong>This is the main scenario.</strong> The user iterated with the agent and got new SQL. The amber "Saved at v1" badge clearly shows the query is behind. The dropdown gives three clean choices:
+              <ul style="margin:6px 0 0 16px; line-height:1.8;">
+                <li><strong>Update</strong> — overwrites the saved query's SQL, then updates <code>savedAtVersionNumber</code> to this version</li>
+                <li><strong>Save as New</strong> — creates a fresh query, updates this version's <code>savedQueryId</code> + <code>savedAtVersionNumber</code></li>
+                <li><strong>Open</strong> — just navigate to the existing query record (no mutation)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4: Older version, query was updated ahead -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span style="background:#f3f4f6; color:#374151; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 4</span>
+        <span class="version-pill pill-older">Viewing v1</span>
+        <span class="version-pill pill-differ">Query updated at v3</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span style="padding:2px 8px; background:#f3f4f6; border-radius:10px; font-size:11px; color:#9ca3af; display:inline-flex; align-items:center; gap:4px;">
+            <i class="fas fa-clock-rotate-left"></i> Query updated at v3
+          </span>
+          <button class="btn btn-muted"><i class="fas fa-external-link-alt"></i> Open Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <i class="fas fa-shield-halved"></i>
+        <div>
+          <strong>Backtrack protection.</strong> You're viewing v1 but the query has moved on to v3.
+          The muted "Query updated at v3" badge tells the user exactly what happened — no guessing.
+          Only "Open Query" is available (read-only). No update/save options that could regress the query.
+        </div>
+      </div>
+    </div>
+
+    <!-- S5: Middle version, ahead of saved but not latest -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span style="background:#f3f4f6; color:#374151; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 5</span>
+        <span class="version-pill pill-older">Viewing v2</span>
+        <span style="font-size:11px; color:#6c757d;">Saved at v1, latest is v3</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">712 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <span style="padding:2px 8px; background:#f3f4f6; border-radius:10px; font-size:11px; color:#9ca3af; display:inline-flex; align-items:center; gap:4px;">
+            <i class="fas fa-clock-rotate-left"></i> Saved at v1
+          </span>
+          <button class="btn btn-muted"><i class="fas fa-external-link-alt"></i> Open Query</button>
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <i class="fas fa-info-circle"></i>
+        <div>
+          <strong>Mid-version — no actions.</strong> You're on v2, the query was saved at v1, and v3 is latest.
+          Even though v2 is "ahead" of the saved version, only the latest version gets modification rights.
+          This avoids confusing mid-version updates. User sees the version context and can navigate to v3 to take action.
+        </div>
+      </div>
+    </div>
+
+    <!-- S6: First save from non-latest (edge case) -->
+    <div class="scenario">
+      <div class="scenario-label">
+        <span style="background:#f3f4f6; color:#374151; padding:3px 10px; border-radius:10px; font-size:10px; font-weight:700;">SCENARIO 6</span>
+        <span class="version-pill pill-older">Viewing v1</span>
+        <span style="font-size:11px; color:#6c757d;">No saved query, but not latest</span>
+      </div>
+      <div class="toolbar-mock">
+        <div class="toolbar-left">
+          <i class="fas fa-table"></i>
+          <span>Revenue by Region</span>
+          <span class="row-count">523 rows</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <i class="fas fa-info-circle"></i>
+        <div>
+          <strong>No "Save Query" on older versions.</strong> If no query has been saved yet, only the latest version shows the Save button.
+          This prevents saving a stale version as the canonical query. The user should navigate to the latest version to save.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Summary rules -->
+  <div style="padding:20px 24px; background:#fafafa; border-top:1px solid #e9ecef;">
+    <h3 style="font-size:14px; margin-bottom:12px;">Summary of Rules</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+      <thead>
+        <tr style="border-bottom:2px solid #dee2e6; text-align:left;">
+          <th style="padding:8px 12px; color:#6c757d; font-weight:600;">Condition</th>
+          <th style="padding:8px 12px; color:#6c757d; font-weight:600;">Badge</th>
+          <th style="padding:8px 12px; color:#6c757d; font-weight:600;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:8px 12px;">No saved query + latest version</td>
+          <td style="padding:8px 12px;"><em>None</em></td>
+          <td style="padding:8px 12px;"><span style="color:#16a34a; font-weight:500;">Save Query</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:8px 12px;">No saved query + older version</td>
+          <td style="padding:8px 12px;"><em>None</em></td>
+          <td style="padding:8px 12px;"><em>None</em> (save from latest only)</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0; background:#f0fdf4;">
+          <td style="padding:8px 12px;">SQL matches saved query</td>
+          <td style="padding:8px 12px;"><span class="synced-badge" style="font-size:10px;"><i class="fas fa-check"></i> Saved at vN</span></td>
+          <td style="padding:8px 12px;"><span style="color:#2563eb; font-weight:500;">Open Query</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0; background:#fefce8;">
+          <td style="padding:8px 12px; font-weight:600;">SQL differs + latest version</td>
+          <td style="padding:8px 12px;"><span class="outdated-badge" style="font-size:10px;"><i class="fas fa-circle-exclamation"></i> Saved at vN</span></td>
+          <td style="padding:8px 12px;"><span style="color:#d97706; font-weight:500;">Update Query</span> dropdown (Update / New / Open)</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:8px 12px;">SQL differs + older version + query ahead</td>
+          <td style="padding:8px 12px;"><span style="color:#9ca3af; font-size:10px;"><i class="fas fa-clock-rotate-left"></i> Query updated at vN</span></td>
+          <td style="padding:8px 12px;"><span style="color:#9ca3af;">Open Query</span> (muted, read-only)</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;">SQL differs + older version + query behind</td>
+          <td style="padding:8px 12px;"><span style="color:#9ca3af; font-size:10px;"><i class="fas fa-clock-rotate-left"></i> Saved at vN</span></td>
+          <td style="padding:8px 12px;"><span style="color:#9ca3af;">Open Query</span> (muted, read-only)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Implementation notes -->
+  <div style="padding:20px 24px; border-top:1px solid #e9ecef;">
+    <h3 style="font-size:14px; margin-bottom:12px;">Implementation Notes</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:12px; color:#4b5563; line-height:1.6;">
+      <div>
+        <strong style="color:#1a1a2e;">Data flow on Save/Update:</strong>
+        <ol style="margin:6px 0 0 18px;">
+          <li>Save/update the Query record via existing <code>SaveQueryResult</code> flow</li>
+          <li>Set <code>spec.savedQueryId</code> (new ID if "Save as New")</li>
+          <li>Set <code>spec.savedQueryName</code></li>
+          <li>Set <code>spec.savedAtVersionNumber</code> to current version number</li>
+          <li>Persist updated spec to artifact version content</li>
+        </ol>
+      </div>
+      <div>
+        <strong style="color:#1a1a2e;">SQL comparison at render:</strong>
+        <ol style="margin:6px 0 0 18px;">
+          <li>On <code>ngOnInit</code>, if <code>savedQueryId</code> exists, look up query from <code>QueryEngine.Instance.Queries</code></li>
+          <li>Compare <code>query.SQL</code> against <code>spec.metadata.sql</code></li>
+          <li>Store result as <code>QuerySqlMatches: boolean</code></li>
+          <li>Use <code>savedAtVersionNumber</code> + current version + latest version to determine UI state</li>
+          <li>No network call needed — QueryEngine caches queries in memory</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

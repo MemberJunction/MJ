@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
-import { ActionParamEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity } from "@memberjunction/core";
 import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
@@ -15,7 +15,7 @@ export abstract class EntityActionInvocationBase {
      * @param allParams 
      * @param valueType 
      */
-    public FindActionParam(allParams: ActionParamEntity[], valueType: "Scalar" | "Simple Object" | "BaseEntity Sub-Class" | "Other"): ActionParamEntity {
+    public FindActionParam(allParams: MJActionParamEntity[], valueType: "Scalar" | "Simple Object" | "BaseEntity Sub-Class" | "Other"): MJActionParamEntity {
         return allParams.find(p => p.ValueType.trim().toLowerCase() === valueType.trim().toLowerCase());
     }
 
@@ -36,7 +36,7 @@ export abstract class EntityActionInvocationBase {
      * @param entityObject 
      * @returns 
      */
-    public async MapParams(params: ActionParamEntity[], entityActionParams: EntityActionParamEntity[], entityObject: BaseEntity): Promise<ActionParam[]> {
+    public async MapParams(params: MJActionParamEntity[], entityActionParams: MJEntityActionParamEntity[], entityObject: BaseEntity): Promise<ActionParam[]> {
         const returnValues: ActionParam[] = [];
         for (const eap of entityActionParams) {
             const param = params.find(p => p.ID === eap.ActionParamID);
@@ -95,12 +95,14 @@ export abstract class EntityActionInvocationBase {
             if (this._scriptCache.has(EntityActionID)) {
                 scriptFunction = this._scriptCache.get(EntityActionID);
             }
-            else
+            else {
                 scriptFunction = new Function('EntityActionContext', `
                     return (async () => {
                         ${scriptText}
                     })();
                 `);
+                this._scriptCache.set(EntityActionID, scriptFunction);
+            }
     
             const ret = await scriptFunction(entityActionContext);
             return ret || entityActionContext.result;

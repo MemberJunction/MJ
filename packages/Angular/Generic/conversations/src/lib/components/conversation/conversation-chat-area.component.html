@@ -1,81 +1,92 @@
 <div class="chat-area">
-    <!-- Fixed Header -->
-    <div class="chat-header" *ngIf="conversation">
-    <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
-        <button class="sidebar-toggle-btn"
-                *ngIf="showSidebarToggle"
-                (click)="sidebarToggleClicked.emit()"
-                title="Show conversations">
-          <i class="fas fa-table-columns"></i>
-        </button>
+  <!-- Fixed Header -->
+  @if (conversation) {
+    <div class="chat-header">
+      <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
+        @if (showSidebarToggle) {
+          <button class="sidebar-toggle-btn"
+            (click)="sidebarToggleClicked.emit()"
+            title="Show conversations">
+            <i class="fas fa-table-columns"></i>
+          </button>
+        }
         <div class="chat-title">{{ conversation.Name }}</div>
-        <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
-        <i class="fas fa-folder"></i>
-        <span>{{ conversation.Project || 'Project' }}</span>
-        </button>
-        <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run" *ngIf="conversation.TestRunID">
-        <i class="fas fa-flask"></i>
-        <span>Test</span>
-        </button>
+        @if (conversation.ProjectID) {
+          <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
+            <i class="fas fa-folder"></i>
+            <span>{{ conversation.Project || 'Project' }}</span>
+          </button>
+        }
+        @if (conversation.TestRunID) {
+          <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run">
+            <i class="fas fa-flask"></i>
+            <span>Test</span>
+          </button>
+        }
         <mj-active-agent-indicator
-        [conversationId]="conversation.ID"
-        [currentUser]="currentUser"
-        (togglePanel)="onToggleAgentPanel()"
-        (agentSelected)="onAgentSelected($event)">
+          [conversationId]="conversation.ID"
+          [currentUser]="currentUser"
+          (togglePanel)="onToggleAgentPanel()"
+          (agentSelected)="onAgentSelected($event)">
         </mj-active-agent-indicator>
-    </div>
-    <div class="chat-actions chat-actions-buttons">
-        <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts" *ngIf="artifactCountDisplay > 0">
-        <i class="fas fa-cube"></i>
-        <span class="artifact-badge">{{ artifactCountDisplay }}</span>
-        </button>
-        <button class="chat-members" (click)="toggleMembersModal()" title="View members" *ngIf="memberCount > 1">
-        <i class="fas fa-users"></i>
-        <span class="members-badge">{{ memberCount }}</span>
-        </button>
+      </div>
+      <div class="chat-actions chat-actions-buttons">
+        @if (artifactCountDisplay > 0) {
+          <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
+            <i class="fas fa-cube"></i>
+            <span class="artifact-badge">{{ artifactCountDisplay }}</span>
+          </button>
+        }
+        @if (memberCount > 1) {
+          <button class="chat-members" (click)="toggleMembersModal()" title="View members">
+            <i class="fas fa-users"></i>
+            <span class="members-badge">{{ memberCount }}</span>
+          </button>
+        }
         <button class="action-btn" (click)="exportConversation()" title="Export conversation">
-        <i class="fas fa-download"></i>
-        <span class="btn-label">Export</span>
+          <i class="fas fa-download"></i>
+          <span class="btn-label">Export</span>
         </button>
         <button class="action-btn share-btn"
-                [class.shared]="isShared"
-                (click)="shareConversation()"
-                [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-        <i class="fas fa-share-nodes"></i>
-        <span class="btn-label">Share</span>
+          [class.shared]="isShared"
+          (click)="shareConversation()"
+          [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+          <i class="fas fa-share-nodes"></i>
+          <span class="btn-label">Share</span>
         </button>
         <mj-active-agent-indicator
-        [conversationId]="conversation.ID"
-        [currentUser]="currentUser"
-        (togglePanel)="onToggleAgentPanel()"
-        (agentSelected)="onAgentSelected($event)">
+          [conversationId]="conversation.ID"
+          [currentUser]="currentUser"
+          (togglePanel)="onToggleAgentPanel()"
+          (agentSelected)="onAgentSelected($event)">
         </mj-active-agent-indicator>
+      </div>
     </div>
-    </div>
+  }
 
-    <!-- Messages and Artifact Split Layout -->
-    <div class="chat-content-area">
+  <!-- Messages and Artifact Split Layout -->
+  <div class="chat-content-area">
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
-         [class.full-width]="!showArtifactPanel"
-         [class.hidden]="isArtifactPaneMaximized">
-        @if (isNewConversation || !conversationId) {
-          <!-- Empty State - No conversation selected OR new unsaved conversation -->
-          <mj-conversation-empty-state
-            [currentUser]="currentUser"
-            [disabled]="isProcessing"
-            [showSidebarToggle]="showSidebarToggle"
-            (sidebarToggleClicked)="sidebarToggleClicked.emit()"
-            (messageSent)="onEmptyStateMessageSent($event)">
-          </mj-conversation-empty-state>
-        } @else if (isLoadingConversation) {
-          <!-- Loading State - Show centered spinner while conversation loads -->
-          <div class="conversation-loading-state">
-            <mj-loading text="Loading conversation..." size="large"></mj-loading>
-          </div>
-        } @else {
-          <!-- Normal Message View -->
-          <div class="chat-messages-wrapper">
+      [class.full-width]="!showArtifactPanel"
+      [class.hidden]="isArtifactPaneMaximized">
+      @if (isNewConversation || !conversationId) {
+        <!-- Empty State - No conversation selected OR new unsaved conversation -->
+        <mj-conversation-empty-state
+          [currentUser]="currentUser"
+          [disabled]="isProcessing"
+          [showSidebarToggle]="showSidebarToggle"
+          (sidebarToggleClicked)="sidebarToggleClicked.emit()"
+          (messageSent)="onEmptyStateMessageSent($event)">
+        </mj-conversation-empty-state>
+      } @else if (isLoadingConversation) {
+        <!-- Loading State - Show centered spinner while conversation loads -->
+        <div class="conversation-loading-state">
+          <mj-loading text="Loading conversation..." size="large"></mj-loading>
+        </div>
+      } @else {
+        <!-- Normal Message View -->
+        <div class="chat-messages-wrapper">
           <!-- Upload Indicator Overlay (centered in conversation area) -->
           @if (isUploadingAttachments) {
             <div class="upload-indicator-overlay">
@@ -83,7 +94,7 @@
             </div>
           }
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
-              <mj-conversation-message-list
+            <mj-conversation-message-list
               [messages]="messages"
               [conversation]="conversation"
               [currentUser]="currentUser"
@@ -102,90 +113,92 @@
               (openEntityRecord)="onOpenEntityRecord($event)"
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)">
-              </mj-conversation-message-list>
+            </mj-conversation-message-list>
 
-              <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
+            <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
+            @if (showScrollToBottomIcon && messages && messages.length > 0) {
               <span class="scroll-to-bottom-icon" style="left: 50%;"
-                    *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
-                    (click)="scrollToBottomAnimate()">
-                  <i class="fas fa-arrow-down"></i>
+                (click)="scrollToBottomAnimate()">
+                <i class="fas fa-arrow-down"></i>
               </span>
+            }
           </div>
 
           <!-- Fixed Input Area -->
           <div class="chat-input-container">
-              @if (isLoadingPeripheralData) {
-                <!-- Loading State -->
-                <div class="loading-peripheral-placeholder">
-                  <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
-                </div>
-              } @else {
-                <!-- Input Component - Multiple instances cached, only one visible -->
-                <div class="message-input-container-wrapper">
-                  @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
-                    <mj-message-input
-                      #messageInput
-                      [hidden]="inputRef.conversationId !== conversationId"
-                      [conversationId]="inputRef.conversationId"
-                      [conversationName]="inputRef.conversationName"
-                      [currentUser]="currentUser"
-                      [conversationHistory]="inputRef.conversationId === conversationId ? messages : []"
-                      [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
-                      [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
-                      [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
-                      [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
-                      [disabled]="isProcessing"
-                      [enableAttachments]="enableAttachments"
-                      [maxAttachments]="maxAttachments"
-                      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-                      [acceptedFileTypes]="acceptedFileTypes"
-                      [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
-                      [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
-                      (messageSent)="onMessageSent($event)"
-                      (agentResponse)="onAgentResponse($event)"
-                      (agentRunDetected)="onAgentRunDetected($event)"
-                      (agentRunUpdate)="onAgentRunUpdate($event)"
-                      (messageComplete)="onMessageComplete($event)"
-                      (artifactCreated)="onArtifactCreated($event)"
-                      (conversationRenamed)="onConversationRenamed($event)"
-                      (intentCheckStarted)="onIntentCheckStarted()"
-                      (intentCheckCompleted)="onIntentCheckCompleted()"
-                      (uploadStateChanged)="onUploadStateChanged($event)">
-                    </mj-message-input>
-                  }
-                </div>
-              }
+            @if (isLoadingPeripheralData) {
+              <!-- Loading State -->
+              <div class="loading-peripheral-placeholder">
+                <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
+              </div>
+            } @else {
+              <!-- Input Component - Multiple instances cached, only one visible -->
+              <div class="message-input-container-wrapper">
+                @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
+                  <mj-message-input
+                    #messageInput
+                    [hidden]="inputRef.conversationId !== conversationId"
+                    [conversationId]="inputRef.conversationId"
+                    [conversationName]="inputRef.conversationName"
+                    [currentUser]="currentUser"
+                    [conversationHistory]="inputRef.conversationId === conversationId ? messages : []"
+                    [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
+                    [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
+                    [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
+                    [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
+                    [disabled]="isProcessing"
+                    [enableAttachments]="enableAttachments"
+                    [maxAttachments]="maxAttachments"
+                    [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                    [acceptedFileTypes]="acceptedFileTypes"
+                    [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
+                    [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
+                    (messageSent)="onMessageSent($event)"
+                    (agentResponse)="onAgentResponse($event)"
+                    (agentRunDetected)="onAgentRunDetected($event)"
+                    (agentRunUpdate)="onAgentRunUpdate($event)"
+                    (messageComplete)="onMessageComplete($event)"
+                    (artifactCreated)="onArtifactCreated($event)"
+                    (conversationRenamed)="onConversationRenamed($event)"
+                    (intentCheckStarted)="onIntentCheckStarted()"
+                    (intentCheckCompleted)="onIntentCheckCompleted()"
+                    (uploadStateChanged)="onUploadStateChanged($event)">
+                  </mj-message-input>
+                }
+              </div>
+            }
           </div>
-          </div>
-        }
+        </div>
+      }
     </div>
 
     <!-- Artifact Viewer Pane -->
     @if (showArtifactPanel && selectedArtifactId) {
-        @if (!isArtifactPaneMaximized) {
-            <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
-        }
-        <div class="chat-artifact-pane"
-             [style.width.%]="artifactPaneWidth"
-             [class.maximized]="isArtifactPaneMaximized">
+      @if (!isArtifactPaneMaximized) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+      }
+      <div class="chat-artifact-pane"
+        [style.width.%]="artifactPaneWidth"
+        [class.maximized]="isArtifactPaneMaximized">
         <mj-artifact-viewer-panel
-            [artifactId]="selectedArtifactId"
-            [currentUser]="currentUser"
-            [environmentId]="environmentId"
-            [versionNumber]="selectedVersionNumber"
-            [viewContext]="'conversation'"
-            [canShare]="canShareSelectedArtifact"
-            [canEdit]="canEditSelectedArtifact"
-            [isMaximized]="isArtifactPaneMaximized"
-            [refreshTrigger]="artifactViewerRefresh$"
-            (closed)="onCloseArtifactPanel()"
-            (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
-            (navigateToLink)="onArtifactLinkNavigation($event)"
-            (shareRequested)="onArtifactShareRequested($event)"
-            (maximizeToggled)="toggleMaximizeArtifactPane()"
-            (openEntityRecord)="onOpenEntityRecord($event)">
+          [artifactId]="selectedArtifactId"
+          [currentUser]="currentUser"
+          [environmentId]="environmentId"
+          [versionNumber]="selectedVersionNumber"
+          [viewContext]="'conversation'"
+          [canShare]="canShareSelectedArtifact"
+          [canEdit]="canEditSelectedArtifact"
+          [isMaximized]="isArtifactPaneMaximized"
+          [refreshTrigger]="artifactViewerRefresh$"
+          (closed)="onCloseArtifactPanel()"
+          (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
+          (navigateToLink)="onArtifactLinkNavigation($event)"
+          (shareRequested)="onArtifactShareRequested($event)"
+          (maximizeToggled)="toggleMaximizeArtifactPane()"
+          (openEntityRecord)="onOpenEntityRecord($event)"
+          (navigationRequest)="onNavigationRequest($event)">
         </mj-artifact-viewer-panel>
-        </div>
+      </div>
     }
 
     <!-- Artifact Share Modal -->
@@ -196,135 +209,135 @@
       (saved)="onArtifactShared()"
       (cancelled)="onArtifactShareModalClose()">
     </mj-artifact-share-modal>
-    </div>
+  </div>
 </div>
 
 <!-- Thread Panel -->
 @if (threadId) {
-    <mj-thread-panel
+  <mj-thread-panel
     [parentMessageId]="threadId"
     [conversationId]="conversationId || ''"
     [currentUser]="currentUser"
     (closed)="onLocalThreadClosed()"
     (replyAdded)="onThreadReplyAdded($event)">
-    </mj-thread-panel>
+  </mj-thread-panel>
 }
 
 <!-- Export Modal -->
 <mj-export-modal
-    [isVisible]="showExportModal"
-    [conversation]="conversation || undefined"
-    [currentUser]="currentUser"
-    (cancelled)="onExportModalCancelled()"
-    (exported)="onExportModalComplete()">
+  [isVisible]="showExportModal"
+  [conversation]="conversation || undefined"
+  [currentUser]="currentUser"
+  (cancelled)="onExportModalCancelled()"
+  (exported)="onExportModalComplete()">
 </mj-export-modal>
 
 <!-- Members Modal -->
 <mj-members-modal
-    [isVisible]="showMembersModal"
-    [conversation]="conversation || undefined"
-    [currentUser]="currentUser"
-    (cancelled)="showMembersModal = false"
-    (membersChanged)="showMembersModal = false">
+  [isVisible]="showMembersModal"
+  [conversation]="conversation || undefined"
+  [currentUser]="currentUser"
+  (cancelled)="showMembersModal = false"
+  (membersChanged)="showMembersModal = false">
 </mj-members-modal>
 
 <!-- Project Selector Modal -->
 @if (showProjectSelector && conversation) {
-    <div class="modal-overlay" (click)="showProjectSelector = false">
+  <div class="modal-overlay" (click)="showProjectSelector = false">
     <div class="modal-content project-selector-modal" (click)="$event.stopPropagation()">
-        <div class="modal-header">
+      <div class="modal-header">
         <h3>Assign Project</h3>
         <button class="modal-close-btn" (click)="showProjectSelector = false">
-            <i class="fas fa-times"></i>
+          <i class="fas fa-times"></i>
         </button>
-        </div>
-        <div class="modal-body">
+      </div>
+      <div class="modal-body">
         <mj-project-selector
-            [environmentId]="environmentId"
-            [currentUser]="currentUser"
-            [selectedProjectId]="conversation.ProjectID"
-            (projectSelected)="onProjectSelected($event)">
+          [environmentId]="environmentId"
+          [currentUser]="currentUser"
+          [selectedProjectId]="conversation.ProjectID"
+          (projectSelected)="onProjectSelected($event)">
         </mj-project-selector>
-        </div>
+      </div>
     </div>
-    </div>
+  </div>
 }
 
 <!-- Artifacts Modal -->
 @if (showArtifactsModal) {
-    <div class="modal-overlay" (click)="showArtifactsModal = false">
+  <div class="modal-overlay" (click)="showArtifactsModal = false">
     <div class="modal-content artifacts-modal" (click)="$event.stopPropagation()">
-        <div class="modal-header">
+      <div class="modal-header">
         <h3>Conversation Artifacts</h3>
         <div class="modal-header-actions">
-            @if (hasSystemArtifacts) {
-              <button class="toggle-system-btn"
-                      [class.active]="showSystemArtifacts"
-                      (click)="toggleSystemArtifacts()"
-                      title="Toggle system artifacts visibility">
+          @if (hasSystemArtifacts) {
+            <button class="toggle-system-btn"
+              [class.active]="showSystemArtifacts"
+              (click)="toggleSystemArtifacts()"
+              title="Toggle system artifacts visibility">
               <i class="fas fa-cog"></i>
               <span>{{ showSystemArtifacts ? 'Hide' : 'Show' }} System</span>
-              </button>
-            }
-            <button class="modal-close-btn" (click)="showArtifactsModal = false">
-            <i class="fas fa-times"></i>
             </button>
+          }
+          <button class="modal-close-btn" (click)="showArtifactsModal = false">
+            <i class="fas fa-times"></i>
+          </button>
         </div>
-        </div>
-        <div class="modal-body artifacts-grid">
+      </div>
+      <div class="modal-body artifacts-grid">
         @if (artifactsByDetailId.size === 0) {
-            <div class="empty-state">
+          <div class="empty-state">
             <i class="fas fa-cube" style="font-size: 48px; color: #D1D5DB; margin-bottom: 16px;"></i>
             <p style="color: #6B7280; font-size: 14px;">No artifacts in this conversation yet</p>
-            </div>
+          </div>
         }
         @for (artifact of getArtifactsArray(); track artifact.artifactId) {
-            <div class="artifact-modal-card"
-                 [class.expanded]="expandedArtifactId === artifact.artifactId"
-                 [class.system-artifact]="artifact.visibility === 'System Only'">
-              <!-- Main card header - click to open latest version -->
-              <div class="artifact-card-header" (click)="openArtifactFromModal(artifact.artifactId)">
-                <div class="artifact-modal-icon">
-                    <i class="fas fa-file-code"></i>
-                </div>
-                <div class="artifact-modal-info">
-                    <div class="artifact-modal-title">{{artifact.name}}</div>
-                    <div class="artifact-modal-meta">
-                      @if (artifact.versionCount > 1) {
-                        {{artifact.versionCount}} versions
-                      } @else {
-                        1 version
-                      }
-                    </div>
-                </div>
-                @if (artifact.versionCount > 1) {
-                  <button class="expand-btn" (click)="toggleArtifactExpansion(artifact.artifactId, $event)">
-                    <i class="fas" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
-                       [class.fa-chevron-up]="expandedArtifactId === artifact.artifactId"></i>
-                  </button>
-                }
-                <div class="artifact-modal-action">
-                    <i class="fas fa-external-link-alt"></i>
-                </div>
+          <div class="artifact-modal-card"
+            [class.expanded]="expandedArtifactId === artifact.artifactId"
+            [class.system-artifact]="artifact.visibility === 'System Only'">
+            <!-- Main card header - click to open latest version -->
+            <div class="artifact-card-header" (click)="openArtifactFromModal(artifact.artifactId)">
+              <div class="artifact-modal-icon">
+                <i class="fas fa-file-code"></i>
               </div>
-
-              <!-- Expanded version list -->
-              @if (expandedArtifactId === artifact.artifactId && artifact.versionCount > 1) {
-                <div class="artifact-versions-list">
-                  @for (version of artifact.versions; track version.versionId) {
-                    <div class="artifact-version-item" (click)="openArtifactFromModal(artifact.artifactId, version.versionNumber); $event.stopPropagation()">
-                      <span class="version-badge">v{{version.versionNumber}}</span>
-                      <span class="version-open-text">Open this version</span>
-                      <i class="fas fa-arrow-right"></i>
-                    </div>
+              <div class="artifact-modal-info">
+                <div class="artifact-modal-title">{{artifact.name}}</div>
+                <div class="artifact-modal-meta">
+                  @if (artifact.versionCount > 1) {
+                    {{artifact.versionCount}} versions
+                  } @else {
+                    1 version
                   }
                 </div>
+              </div>
+              @if (artifact.versionCount > 1) {
+                <button class="expand-btn" (click)="toggleArtifactExpansion(artifact.artifactId, $event)">
+                  <i class="fas" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
+                  [class.fa-chevron-up]="expandedArtifactId === artifact.artifactId"></i>
+                </button>
               }
+              <div class="artifact-modal-action">
+                <i class="fas fa-external-link-alt"></i>
+              </div>
             </div>
+
+            <!-- Expanded version list -->
+            @if (expandedArtifactId === artifact.artifactId && artifact.versionCount > 1) {
+              <div class="artifact-versions-list">
+                @for (version of artifact.versions; track version.versionId) {
+                  <div class="artifact-version-item" (click)="openArtifactFromModal(artifact.artifactId, version.versionNumber); $event.stopPropagation()">
+                    <span class="version-badge">v{{version.versionNumber}}</span>
+                    <span class="version-open-text">Open this version</span>
+                    <i class="fas fa-arrow-right"></i>
+                  </div>
+                }
+              </div>
+            }
+          </div>
         }
-        </div>
+      </div>
     </div>
-    </div>
+  </div>
 }
 
 <!-- Collection Picker Modal -->

@@ -6,16 +6,30 @@ import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 export class EntitySubClassGeneratorBase {
   /**
-   * 
-   * @param pool 
-   * @param entities 
+   * Escapes sequences in description text that would break generated code.
+   * Handles JSDoc comment terminators, nested comment openers, backticks,
+   * and template literal interpolation sequences.
+   */
+  protected static SanitizeDescription(text: string): string {
+    if (text && text.length > 0){
+      return text.replace(/\*\//g, '*\\/').replace(/\/\*/g, '/\\*').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+    }
+    else {
+      return '';
+    }
+  }
+
+  /**
+   *
+   * @param pool
+   * @param entities
    * @param directory 
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
    * @returns 
@@ -59,7 +73,7 @@ export const loadModule = () => {
    */
   public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
-      console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
@@ -72,7 +86,7 @@ export const loadModule = () => {
           // Sort by Sequence to ensure consistent ordering in comments
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
-            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
+            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
@@ -80,7 +94,7 @@ export const loadModule = () => {
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
+          // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
@@ -92,21 +106,26 @@ export const loadModule = () => {
             typeString += ' | null';
           }
         }
-        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ? 
+        const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ?
             `\n    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
-        const fieldDisabledFlag: string = e.Status === 'Disabled' ? 
+        const fieldDisabledFlag: string = e.Status === 'Disabled' ?
             `\n    * * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
+
+        // IS-A parent field detection: virtual fields with AllowUpdateAPI on child entities
+        const isISAParentField = e.IsVirtual && e.AllowUpdateAPI && entity.IsChildType;
+        const isaSourceComment = isISAParentField
+            ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
+            : '';
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}
     */
     get ${e.CodeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
-        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement)) {
-          // Generate setter for non-readonly fields OR for primary keys that are not auto-increment
-          // This allows manual override of non-auto-increment primary keys (like UUIDs)
+        if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
+          // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);
@@ -218,7 +237,7 @@ export const loadModule = () => {
  * ${entity.Name} - strongly typed entity sub-class
  * * Schema: ${entity.SchemaName}
  * * Base Table: ${entity.BaseTable}
- * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + entity.Description : ''}
+ * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + EntitySubClassGeneratorBase.SanitizeDescription(entity.Description) : ''}
  * * Primary Key${entity.PrimaryKeys.length > 1 ? 's' : ''}: ${entity.PrimaryKeys.map((f) => f.Name).join(', ')}
  * @extends {BaseEntity}
  * @class${disabledFlag}
@@ -236,6 +255,23 @@ ${fields}
     }
   }
 
+  /**
+   * Finds the source parent entity for an IS-A inherited field by walking the parent chain.
+   * Returns the name of the parent entity that originally defines the field (as a non-virtual column).
+   */
+  protected getISAFieldSourceEntity(entity: EntityInfo, field: EntityFieldInfo): string {
+    for (const parent of entity.ParentChain) {
+      const parentField = parent.Fields.find(
+        pf => pf.Name === field.Name && !pf.IsVirtual
+      );
+      if (parentField) {
+        return parent.Name;
+      }
+    }
+    // Fallback: return the immediate parent entity name
+    return entity.ParentEntityInfo?.Name ?? 'parent entity';
+  }
+
   public async LogAndGenerateValidateFunction(pool: sql.ConnectionPool, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
     // first generate the validate function
     const ret = this.GenerateValidateFunction(entity);
@@ -244,8 +280,8 @@ ${fields}
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
       const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'Entities')?.ID;
+      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
@@ -326,17 +362,17 @@ ${fields}
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
         return `    /**
-    * ${f.functionDescription}
+    * ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-${formattedText}`  
+${formattedText}`
       }).join('\n\n')
 
       const ret = `    /**
     * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${f.functionDescription}`).join('\n')}
+${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`).join('\n')}
     * @public
     * @method
     * @override
@@ -357,7 +393,7 @@ ${validationFunctions}`
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
     if (entity.PrimaryKeys.length === 0) {
-      logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
+      logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
@@ -377,8 +413,8 @@ ${validationFunctions}`
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
-          const sortedValues = [...e.EntityFieldValues].sort((a, b) => a.Sequence - b.Sequence);
+          // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
@@ -418,13 +454,13 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
       // Sort by Sequence to ensure consistent ordering in comments
       const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
-        (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
+        (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');
       valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values ` + values;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + entityField.Description : ''}`;
+    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
   }
 }

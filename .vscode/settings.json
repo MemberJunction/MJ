@@ -43,5 +43,5 @@
     }
   },
   "peacock.color": "#162B4C",
-  "terminal.integrated.gpuAcceleration": "off"
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

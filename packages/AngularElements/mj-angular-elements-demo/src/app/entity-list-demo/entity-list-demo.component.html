@@ -1,39 +1,45 @@
-<!-- 
-  Entity List Demo Component Template
-  
-  This template displays:
-  1. A table of MemberJunction entities with their properties (when loaded)
-  2. A loading message when entities are not yet loaded
-  
-  Features:
-  - Rows are clickable and trigger the handleRowClicked() method
-  - Selected row is highlighted with a 'row-selected' CSS class
-  - Conditional display based on whether entities have been loaded
+<!--
+Entity List Demo Component Template
+
+This template displays:
+1. A table of MemberJunction entities with their properties (when loaded)
+2. A loading message when entities are not yet loaded
+
+Features:
+- Rows are clickable and trigger the handleRowClicked() method
+- Selected row is highlighted with a 'row-selected' CSS class
+- Conditional display based on whether entities have been loaded
 -->
 <div class="demo-container">
-    <!-- Entity table - only shown when entities have been loaded -->
-    <table *ngIf="entityList && entityList.length > 0" class="demo-list">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Schema</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Loop through each entity and create a row -->
-            <tr *ngFor="let e of entityList" 
-                (click)="handleRowClicked(e)" 
-                [class]=" 'row' + (e === this.selectedRow ? ' row-selected' : '')">
-                <td>{{e.Name}}</td>
-                <td>{{e.Description}}</td>
-                <td>{{e.SchemaName}}</td>
-            </tr>
-        </tbody>
-    </table>    
-    
-    <!-- Loading message - shown when entities are not yet loaded -->
-    <div *ngIf="!entityList || entityList.length === 0">
-        Loading...
+  <!-- Entity table - only shown when entities have been loaded -->
+  @if (entityList && entityList.length > 0) {
+    <table class="demo-list">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Schema</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Loop through each entity and create a row -->
+        @for (e of entityList; track e) {
+          <tr
+            (click)="handleRowClicked(e)"
+            [class]=" 'row' + (e === this.selectedRow ? ' row-selected' : '')">
+            <td>{{e.Name}}</td>
+            <td>{{e.Description}}</td>
+            <td>{{e.SchemaName}}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <!-- Loading message - shown when entities are not yet loaded -->
+  @if (!entityList || entityList.length === 0) {
+    <div>
+      Loading...
     </div>
+  }
 </div>

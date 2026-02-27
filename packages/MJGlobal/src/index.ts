@@ -10,6 +10,7 @@ export * from './util/PatternUtils';
 export * from './ValidationTypes'
 export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'
+export * from './SQLExpressionValidator'
 export * from './warningManager'
 export * from './EncryptionUtils'
 
@@ -19,6 +20,7 @@ export * from './EncryptionUtils'
 // Export the main classes
 export * from './Global'
 export * from './RegisterClass'
+export * from './DynamicPackageLoader'
 
 // NOTE: RegisterForStartup has moved to @memberjunction/core
 // Import from there instead of here

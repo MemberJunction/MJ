@@ -5,16 +5,18 @@ import {
     LogError,
     LogStatus,
     Metadata,
-    RunView,
     UserInfo
 } from "@memberjunction/core";
+
 import {
-    AuditLogEntity,
-    CredentialCategoryEntity,
-    CredentialEntity,
-    CredentialTypeEntity,
-    EntityEntity
+    MJAuditLogEntity,
+    MJCredentialCategoryEntity,
+    MJCredentialEntity,
+    MJCredentialTypeEntity
 } from "@memberjunction/core-entities";
+
+import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
+import addFormats from 'ajv-formats';
 import {
     CredentialResolutionOptions,
     ResolvedCredential,
@@ -23,9 +25,12 @@ import {
     CredentialAccessDetails
 } from "./types";
 
+
+
+
 // Hardcoded ID for the "Credential Access" AuditLogType
 // This matches the ID in /metadata/audit-log-types/.credential-audit-types.json
-const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
+const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = '9375C9F9-1A58-44D6-9B09-8C6AF0714383';
 
 /**
  * CredentialEngine provides secure credential management with:
@@ -59,12 +64,30 @@ const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC
  */
 export class CredentialEngine extends BaseEngine<CredentialEngine> {
     // Cached entity data
-    private _credentials: CredentialEntity[] = [];
-    private _credentialTypes: CredentialTypeEntity[] = [];
-    private _credentialCategories: CredentialCategoryEntity[] = [];
+    private _credentials: MJCredentialEntity[] = [];
+    private _credentialTypes: MJCredentialTypeEntity[] = [];
+    private _credentialCategories: MJCredentialCategoryEntity[] = [];
 
     // Cached entity ID for audit logging
     private _credentialsEntityId: string | null = null;
+
+    // Ajv JSON Schema validator
+    private _ajv: Ajv;
+    private _schemaValidators: Map<string, ValidateFunction> = new Map();
+
+    constructor() {
+        super();
+
+        // Initialize Ajv with options
+        this._ajv = new Ajv({
+            allErrors: true,      // Collect all errors, not just first
+            strict: false,        // Allow additional properties not in schema
+            coerceTypes: false    // Don't auto-convert types
+        });
+
+        // Add format validation (uri, email, date, etc.)
+        addFormats(this._ajv);
+    }
 
     /**
      * Configures the engine by loading credential metadata from the database.
@@ -126,21 +149,21 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Returns all active credentials loaded from the database.
      */
-    public get Credentials(): CredentialEntity[] {
+    public get Credentials(): MJCredentialEntity[] {
         return this._credentials;
     }
 
     /**
      * Returns all credential types loaded from the database.
      */
-    public get CredentialTypes(): CredentialTypeEntity[] {
+    public get CredentialTypes(): MJCredentialTypeEntity[] {
         return this._credentialTypes;
     }
 
     /**
      * Returns all credential categories loaded from the database.
      */
-    public get CredentialCategories(): CredentialCategoryEntity[] {
+    public get CredentialCategories(): MJCredentialCategoryEntity[] {
         return this._credentialCategories;
     }
 
@@ -151,7 +174,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential type by name.
      */
-    public getCredentialTypeByName(typeName: string): CredentialTypeEntity | undefined {
+    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
         return this._credentialTypes.find(t =>
             t.Name.trim().toLowerCase() === typeName.trim().toLowerCase()
         );
@@ -160,7 +183,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets the default credential for a given type.
      */
-    public getDefaultCredentialForType(credentialTypeName: string): CredentialEntity | undefined {
+    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
@@ -172,14 +195,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential by ID.
      */
-    public getCredentialById(credentialId: string): CredentialEntity | undefined {
+    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
         return this._credentials.find(c => c.ID === credentialId);
     }
 
     /**
      * Gets a credential by type and name.
      */
-    public getCredentialByName(credentialTypeName: string, credentialName: string): CredentialEntity | undefined {
+    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
@@ -217,7 +240,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         options: CredentialResolutionOptions = {}
     ): Promise<ResolvedCredential<T>> {
         const startTime = Date.now();
-        let credential: CredentialEntity | null = null;
+        let credential: MJCredentialEntity | null = null;
         let values: T = {} as T;
         let source: 'database' | 'request' = 'database';
 
@@ -291,7 +314,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         values: Record<string, string>,
         options: StoreCredentialOptions,
         contextUser: UserInfo
-    ): Promise<CredentialEntity> {
+    ): Promise<MJCredentialEntity> {
         this.TryThrowIfNotLoaded();
 
         const credType = this.getCredentialTypeByName(credentialTypeName);
@@ -299,17 +322,20 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             throw new Error(`Credential type not found: ${credentialTypeName}`);
         }
 
-        // Validate against FieldSchema
-        this.validateValues(values, credType.FieldSchema);
+        // Apply default and const values from schema
+        const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+
+        // Validate against FieldSchema using Ajv
+        this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
 
         // Create credential entity via metadata
         const md = new Metadata();
-        const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         credEntity.NewRecord();
         credEntity.CredentialTypeID = credType.ID;
         credEntity.Name = name;
         credEntity.Description = options.description || null;
-        credEntity.Values = JSON.stringify(values); // Encryption happens on save
+        credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
         credEntity.IsDefault = options.isDefault ?? false;
         credEntity.IsActive = true;
         credEntity.CategoryID = options.categoryId || null;
@@ -352,7 +378,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         this.TryThrowIfNotLoaded();
 
         const md = new Metadata();
-        const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credEntity.Load(credentialId);
         if (!loaded) {
             throw new Error(`Credential not found: ${credentialId}`);
@@ -361,10 +387,19 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         // Get credential type for validation
         const credType = this._credentialTypes.find(t => t.ID === credEntity.CredentialTypeID);
         if (credType) {
-            this.validateValues(values, credType.FieldSchema);
+            // Apply default and const values from schema
+            const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+
+            // Validate against FieldSchema using Ajv
+            this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
+
+            // Use values with defaults applied
+            credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
+        } else {
+            // No credential type found, just use provided values
+            credEntity.Values = JSON.stringify(values);
         }
 
-        credEntity.Values = JSON.stringify(values); // Encryption happens on save
         const saved = await credEntity.Save();
         if (!saved) {
             throw new Error('Failed to update credential');
@@ -448,7 +483,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private resolveCredential(
         credentialName: string,
         options: CredentialResolutionOptions
-    ): CredentialEntity | null {
+    ): MJCredentialEntity | null {
         // Try by ID first
         if (options.credentialId) {
             return this.getCredentialById(options.credentialId) || null;
@@ -488,28 +523,123 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
-     * Validates credential values against a JSON Schema.
+     * Gets or compiles a JSON Schema validator for a credential type.
+     * Validators are cached for performance.
      */
-    private validateValues(values: Record<string, string>, fieldSchemaJson: string): void {
+    private getValidator(credentialTypeId: string, schemaJson: string): ValidateFunction {
+        if (!this._schemaValidators.has(credentialTypeId)) {
+            const schema = JSON.parse(schemaJson);
+            const validator = this._ajv.compile(schema);
+            this._schemaValidators.set(credentialTypeId, validator);
+        }
+        return this._schemaValidators.get(credentialTypeId)!;
+    }
+
+    /**
+     * Validates credential values against a JSON Schema using Ajv.
+     * Supports all JSON Schema Draft 7 constraints including:
+     * - required fields
+     * - const (fixed values)
+     * - enum (allowed values)
+     * - format (uri, email, date, etc.)
+     * - pattern (regex)
+     * - minLength/maxLength
+     * - minimum/maximum
+     */
+    private validateValues(values: Record<string, string>, fieldSchemaJson: string, credentialTypeId?: string): void {
         if (!fieldSchemaJson) return;
 
         try {
-            const schema = JSON.parse(fieldSchemaJson);
-            const required = schema.required || [];
+            const validator = credentialTypeId
+                ? this.getValidator(credentialTypeId, fieldSchemaJson)
+                : this._ajv.compile(JSON.parse(fieldSchemaJson));
 
-            for (const field of required) {
-                if (!values[field]) {
-                    throw new Error(`Required field missing: ${field}`);
-                }
+            const valid = validator(values);
+
+            if (!valid) {
+                const errors = this.formatValidationErrors(validator.errors || []);
+                throw new Error(`Credential validation failed:\n${errors.join('\n')}`);
             }
-
-            // Additional validation could be added here using a JSON Schema validator
         } catch (e) {
             if (e instanceof SyntaxError) {
                 LogError(`Invalid FieldSchema JSON: ${e}`);
-            } else {
-                throw e;
+                throw new Error('Invalid credential type schema');
             }
+            throw e;
+        }
+    }
+
+    /**
+     * Formats Ajv validation errors into user-friendly messages.
+     */
+    private formatValidationErrors(errors: ErrorObject[]): string[] {
+        return errors.map(error => {
+            const field = error.instancePath.replace(/^\//, '') || 'credential';
+
+            switch (error.keyword) {
+                case 'required':
+                    return `Missing required field: ${error.params.missingProperty}`;
+
+                case 'const':
+                    return `Field "${field}" must be "${error.params.allowedValue}"`;
+
+                case 'enum':
+                    const allowed = error.params.allowedValues.join(', ');
+                    return `Field "${field}" must be one of: ${allowed}`;
+
+                case 'format':
+                    return `Field "${field}" must be a valid ${error.params.format}`;
+
+                case 'pattern':
+                    return `Field "${field}" does not match required pattern`;
+
+                case 'minLength':
+                    return `Field "${field}" must be at least ${error.params.limit} characters`;
+
+                case 'maxLength':
+                    return `Field "${field}" must be no more than ${error.params.limit} characters`;
+
+                case 'minimum':
+                    return `Field "${field}" must be at least ${error.params.limit}`;
+
+                case 'maximum':
+                    return `Field "${field}" must be no more than ${error.params.limit}`;
+
+                default:
+                    return `Field "${field}": ${error.message}`;
+            }
+        });
+    }
+
+    /**
+     * Applies default and const values from JSON Schema to credential values.
+     * This ensures fields with default or const constraints are auto-populated.
+     */
+    private applySchemaDefaults(values: Record<string, string>, fieldSchemaJson: string): Record<string, string> {
+        if (!fieldSchemaJson) return values;
+
+        try {
+            const schema = JSON.parse(fieldSchemaJson);
+            const properties = schema.properties || {};
+            const result = { ...values };
+
+            for (const [fieldName, fieldSchema] of Object.entries(properties)) {
+                const propSchema = fieldSchema as Record<string, unknown>;
+
+                // Apply const if field is missing (const takes priority)
+                if (!(fieldName in result) && 'const' in propSchema) {
+                    result[fieldName] = String(propSchema.const);
+                }
+                // Apply default if field is missing and no const
+                else if (!(fieldName in result) && 'default' in propSchema) {
+                    result[fieldName] = String(propSchema.default);
+                }
+            }
+
+            return result;
+        } catch (e) {
+            LogError(`Failed to apply schema defaults: ${e}`);
+            return values;
         }
     }
 
@@ -519,7 +649,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastUsedAt = new Date();
             await credEntity.Save();
@@ -535,7 +665,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const credEntity = await md.GetEntityObject<CredentialEntity>('MJ: Credentials', contextUser);
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastValidatedAt = new Date();
             await credEntity.Save();
@@ -568,7 +698,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * Logs credential access to the AuditLog entity.
      */
     private async logAccess(
-        credential: CredentialEntity | null,
+        credential: MJCredentialEntity | null,
         contextUser: UserInfo | undefined,
         details: CredentialAccessDetails
     ): Promise<void> {
@@ -579,7 +709,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             }
 
             const md = new Metadata();
-            const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', contextUser);
+            const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', contextUser);
             auditLog.NewRecord();
 
             auditLog.UserID = contextUser.ID;

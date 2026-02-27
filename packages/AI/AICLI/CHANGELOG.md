@@ -1,5 +1,373 @@
 # @memberjunction/ai-cli
 
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/ai-prompts@5.3.1
+- @memberjunction/ai-anthropic@5.3.1
+- @memberjunction/ai-betty-bot@5.3.1
+- @memberjunction/ai-cerebras@5.3.1
+- @memberjunction/ai-groq@5.3.1
+- @memberjunction/ai-mistral@5.3.1
+- @memberjunction/ai-openai@5.3.1
+- @memberjunction/core-actions@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/core-entities-server@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [ebf057a]
+- Updated dependencies [1692c53]
+  - @memberjunction/ai-agents@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/core-actions@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/ai-prompts@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/core-entities-server@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ai-anthropic@5.3.0
+  - @memberjunction/ai-betty-bot@5.3.0
+  - @memberjunction/ai-cerebras@5.3.0
+  - @memberjunction/ai-groq@5.3.0
+  - @memberjunction/ai-mistral@5.3.0
+  - @memberjunction/ai-openai@5.3.0
+  - @memberjunction/core@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core-entities-server@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/ai-agents@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/ai-prompts@5.2.0
+  - @memberjunction/core-actions@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/ai-anthropic@5.2.0
+  - @memberjunction/ai-betty-bot@5.2.0
+  - @memberjunction/ai-cerebras@5.2.0
+  - @memberjunction/ai-groq@5.2.0
+  - @memberjunction/ai-mistral@5.2.0
+  - @memberjunction/ai-openai@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.1.0
+- @memberjunction/ai@5.1.0
+- @memberjunction/ai-core-plus@5.1.0
+- @memberjunction/ai-prompts@5.1.0
+- @memberjunction/ai-anthropic@5.1.0
+- @memberjunction/ai-betty-bot@5.1.0
+- @memberjunction/ai-cerebras@5.1.0
+- @memberjunction/ai-groq@5.1.0
+- @memberjunction/ai-mistral@5.1.0
+- @memberjunction/ai-openai@5.1.0
+- @memberjunction/core-actions@5.1.0
+- @memberjunction/actions@5.1.0
+- @memberjunction/core@5.1.0
+- @memberjunction/core-entities@5.1.0
+- @memberjunction/core-entities-server@5.1.0
+- @memberjunction/sqlserver-dataprovider@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-agents@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/ai-prompts@5.0.0
+  - @memberjunction/ai-anthropic@5.0.0
+  - @memberjunction/ai-betty-bot@5.0.0
+  - @memberjunction/ai-cerebras@5.0.0
+  - @memberjunction/ai-groq@5.0.0
+  - @memberjunction/ai-mistral@5.0.0
+  - @memberjunction/ai-openai@5.0.0
+  - @memberjunction/core-actions@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/core-entities-server@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-agents@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/ai-prompts@4.4.0
+  - @memberjunction/core-actions@4.4.0
+  - @memberjunction/actions@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/core-entities-server@4.4.0
+  - @memberjunction/sqlserver-dataprovider@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/ai-anthropic@4.4.0
+  - @memberjunction/ai-betty-bot@4.4.0
+  - @memberjunction/ai-cerebras@4.4.0
+  - @memberjunction/ai-groq@4.4.0
+  - @memberjunction/ai-mistral@4.4.0
+  - @memberjunction/ai-openai@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- 690f6e0: no migration
+  - @memberjunction/ai-agents@4.3.1
+  - @memberjunction/ai@4.3.1
+  - @memberjunction/ai-core-plus@4.3.1
+  - @memberjunction/ai-prompts@4.3.1
+  - @memberjunction/ai-anthropic@4.3.1
+  - @memberjunction/ai-betty-bot@4.3.1
+  - @memberjunction/ai-cerebras@4.3.1
+  - @memberjunction/ai-groq@4.3.1
+  - @memberjunction/ai-mistral@4.3.1
+  - @memberjunction/ai-openai@4.3.1
+  - @memberjunction/core-actions@4.3.1
+  - @memberjunction/actions@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/core-entities@4.3.1
+  - @memberjunction/core-entities-server@4.3.1
+  - @memberjunction/sqlserver-dataprovider@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [6f4d33f]
+- Updated dependencies [564e1af]
+  - @memberjunction/ai-agents@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/core-actions@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/ai-prompts@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/core-entities-server@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/ai-anthropic@4.3.0
+  - @memberjunction/ai-betty-bot@4.3.0
+  - @memberjunction/ai-cerebras@4.3.0
+  - @memberjunction/ai-groq@4.3.0
+  - @memberjunction/ai-mistral@4.3.0
+  - @memberjunction/ai-openai@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@4.2.0
+- @memberjunction/ai@4.2.0
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/ai-prompts@4.2.0
+- @memberjunction/ai-anthropic@4.2.0
+- @memberjunction/ai-betty-bot@4.2.0
+- @memberjunction/ai-cerebras@4.2.0
+- @memberjunction/ai-groq@4.2.0
+- @memberjunction/ai-mistral@4.2.0
+- @memberjunction/ai-openai@4.2.0
+- @memberjunction/core-actions@4.2.0
+- @memberjunction/actions@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/core-entities-server@4.2.0
+- @memberjunction/sqlserver-dataprovider@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities-server@4.1.0
+  - @memberjunction/core-actions@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-agents@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/ai-prompts@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/ai-anthropic@4.1.0
+  - @memberjunction/ai-betty-bot@4.1.0
+  - @memberjunction/ai-cerebras@4.1.0
+  - @memberjunction/ai-groq@4.1.0
+  - @memberjunction/ai-mistral@4.1.0
+  - @memberjunction/ai-openai@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/core-entities-server@4.0.0
+  - @memberjunction/sqlserver-dataprovider@4.0.0
+  - @memberjunction/ai-agents@4.0.0
+  - @memberjunction/ai@4.0.0
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/ai-prompts@4.0.0
+  - @memberjunction/ai-anthropic@4.0.0
+  - @memberjunction/ai-betty-bot@4.0.0
+  - @memberjunction/ai-cerebras@4.0.0
+  - @memberjunction/ai-groq@4.0.0
+  - @memberjunction/ai-mistral@4.0.0
+  - @memberjunction/ai-openai@4.0.0
+  - @memberjunction/core-actions@4.0.0
+  - @memberjunction/actions@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+
+## 3.4.0
+
+### Patch Changes
+
+- Updated dependencies [d596467]
+- Updated dependencies [cf1df5b]
+- Updated dependencies [3a71e4e]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-prompts@3.4.0
+  - @memberjunction/core-actions@3.4.0
+  - @memberjunction/sqlserver-dataprovider@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/core-entities-server@3.4.0
+  - @memberjunction/ai-agents@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/ai-core-plus@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/ai-anthropic@3.4.0
+  - @memberjunction/ai-betty-bot@3.4.0
+  - @memberjunction/ai-cerebras@3.4.0
+  - @memberjunction/ai-groq@3.4.0
+  - @memberjunction/ai-mistral@3.4.0
+  - @memberjunction/ai-openai@3.4.0
+
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [4bbb600]
+- Updated dependencies [ca551dd]
+- Updated dependencies [d844955]
+  - @memberjunction/ai-agents@3.3.0
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/core-actions@3.3.0
+  - @memberjunction/ai-core-plus@3.3.0
+  - @memberjunction/ai-prompts@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/core-entities-server@3.3.0
+  - @memberjunction/sqlserver-dataprovider@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/ai-anthropic@3.3.0
+  - @memberjunction/ai-betty-bot@3.3.0
+  - @memberjunction/ai-cerebras@3.3.0
+  - @memberjunction/ai-groq@3.3.0
+  - @memberjunction/ai-mistral@3.3.0
+  - @memberjunction/ai-openai@3.3.0
+  - @memberjunction/core@3.3.0
+
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [011c820]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/ai-agents@3.2.0
+  - @memberjunction/core-actions@3.2.0
+  - @memberjunction/ai-core-plus@3.2.0
+  - @memberjunction/ai-prompts@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/core-entities-server@3.2.0
+  - @memberjunction/sqlserver-dataprovider@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/ai-anthropic@3.2.0
+  - @memberjunction/ai-betty-bot@3.2.0
+  - @memberjunction/ai-cerebras@3.2.0
+  - @memberjunction/ai-groq@3.2.0
+  - @memberjunction/ai-mistral@3.2.0
+  - @memberjunction/ai-openai@3.2.0
+  - @memberjunction/core@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@3.1.1
+- @memberjunction/ai@3.1.1
+- @memberjunction/ai-core-plus@3.1.1
+- @memberjunction/ai-prompts@3.1.1
+- @memberjunction/ai-anthropic@3.1.1
+- @memberjunction/ai-betty-bot@3.1.1
+- @memberjunction/ai-cerebras@3.1.1
+- @memberjunction/ai-groq@3.1.1
+- @memberjunction/ai-mistral@3.1.1
+- @memberjunction/ai-openai@3.1.1
+- @memberjunction/core-actions@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/core-entities-server@3.1.1
+- @memberjunction/sqlserver-dataprovider@3.1.1
+
 ## 3.0.0
 
 ### Patch Changes

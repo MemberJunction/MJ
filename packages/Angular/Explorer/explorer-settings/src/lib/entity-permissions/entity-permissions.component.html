@@ -1,299 +1,434 @@
 <div class="entity-permissions-container">
-  <!-- Action Buttons -->
-  <div class="action-buttons">
-    <div class="mj-view-toggle">
-      <button 
-        class="mj-btn mj-btn-ghost"
-        [class.mj-btn-primary]="viewMode === 'list'"
-        (click)="setViewMode('list')"
-        title="List View"
-      >
-        <i class="fa-solid fa-list"></i>
-      </button>
-      <button 
-        class="mj-btn mj-btn-ghost"
-        [class.mj-btn-primary]="viewMode === 'grid'"
-        (click)="setViewMode('grid')"
-        title="Grid View"
-      >
-        <i class="fa-solid fa-th"></i>
-      </button>
-    </div>
-    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
-      <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-      Refresh
-    </button>
-  </div>
-
-  <!-- Stats Cards -->
-  <div class="mj-grid mj-grid-4">
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-total">
-        <i class="fa-solid fa-database"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalEntities }}</div>
-        <div class="stat-label">Total Entities</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-public">
-        <i class="fa-solid fa-globe"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.publicEntities }}</div>
-        <div class="stat-label">Public Entities</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-restricted">
-        <i class="fa-solid fa-lock"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.restrictedEntities }}</div>
-        <div class="stat-label">Restricted Entities</div>
-      </div>
-    </div>
-    
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-permissions">
-        <i class="fa-solid fa-key"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">{{ stats.totalPermissions }}</div>
-        <div class="stat-label">Total Permissions</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Filters Section -->
-  <div class="filters-section">
-    <div class="filters-row">
-      <!-- Entity Search -->
-      <div class="mj-search">
-        <i class="fa-solid fa-search mj-search-icon"></i>
-        <input 
-          type="text" 
-          class="mj-search-input" 
-          placeholder="Search entities by name or description..."
-          (input)="onSearchChange($event)"
-          [value]="filters$.value.entitySearch"
-        />
-      </div>
-      
-      <!-- Access Level Filter -->
-      <div class="mj-filter-group">
-        <label class="mj-filter-label">Access Level</label>
-        <div class="mj-filter-buttons">
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.accessLevel === 'all'"
-            (click)="onAccessLevelChange('all')"
-          >
-            All
-          </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.accessLevel === 'public'"
-            (click)="onAccessLevelChange('public')"
-          >
-            Public
-          </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.accessLevel === 'restricted'"
-            (click)="onAccessLevelChange('restricted')"
-          >
-            Restricted
-          </button>
-          <button 
-            class="mj-btn mj-btn-ghost"
-            [class.mj-btn-primary]="filters$.value.accessLevel === 'custom'"
-            (click)="onAccessLevelChange('custom')"
-          >
-            Custom
-          </button>
-        </div>
-      </div>
-      
-      <!-- Role Filter -->
-      <div class="mj-filter-group">
-        <label class="mj-filter-label">Filter by Role</label>
-        <select class="mj-select" (change)="onRoleFilterChange($event)">
-          <option value="">All Roles</option>
-          @for (role of roles; track role.ID) {
-            <option [value]="role.ID">{{ role.Name }}</option>
-          }
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <!-- Loading State -->
-  @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-      </div>
-      <div class="loading-text">Loading entity permissions...</div>
-    </div>
-  }
-
-  <!-- Error State -->
-  @if (error && !isLoading) {
-    <div class="error-container">
-      <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
-        <p class="error-message">{{ error }}</p>
-        <button class="mj-btn mj-btn-primary" (click)="loadInitialData()">
-          <i class="fa-solid fa-refresh"></i>
-          Try Again
+  <!-- Sticky Header Section - Contains controls that should always be visible -->
+  <div class="sticky-header">
+    <!-- Action Buttons -->
+    <div class="action-buttons" role="toolbar" aria-label="Entity permissions actions">
+      <div class="mj-view-toggle">
+        <button
+          class="mj-btn mj-btn-ghost"
+          [class.mj-btn-primary]="viewMode === 'list'"
+          (click)="setViewMode('list')"
+          (keydown.enter)="setViewMode('list')"
+          (keydown.space)="setViewMode('list'); $event.preventDefault()"
+          [attr.aria-label]="'List view' + (viewMode === 'list' ? ' (active)' : '')"
+          [attr.aria-pressed]="viewMode === 'list'"
+          role="button"
+          tabindex="0"
+          title="List View"
+        >
+          <i class="fa-solid fa-list" aria-hidden="true"></i>
+        </button>
+        <button
+          class="mj-btn mj-btn-ghost"
+          [class.mj-btn-primary]="viewMode === 'grid'"
+          (click)="setViewMode('grid')"
+          (keydown.enter)="setViewMode('grid')"
+          (keydown.space)="setViewMode('grid'); $event.preventDefault()"
+          [attr.aria-label]="'Grid view' + (viewMode === 'grid' ? ' (active)' : '')"
+          [attr.aria-pressed]="viewMode === 'grid'"
+          role="button"
+          tabindex="0"
+          title="Grid View"
+        >
+          <i class="fa-solid fa-th" aria-hidden="true"></i>
         </button>
       </div>
+      <button
+        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        (click)="refreshData()"
+        [disabled]="isLoading"
+        aria-label="Refresh entity permissions data"
+        title="Refresh"
+      >
+        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
+        <span class="btn-text">Refresh</span>
+      </button>
     </div>
-  }
 
-  <!-- Content Area -->
-  @if (!isLoading && !error) {
-    <div class="content-area">
-      @if (viewMode === 'list') {
-        <!-- List View -->
-        <div class="entities-list">
-          @for (ea of filteredEntityAccess; track ea.entity.ID) {
-            <div class="entity-card" [class.expanded]="isEntityExpanded(ea.entity.ID)">
-              <div class="entity-header" (click)="toggleEntityExpansion(ea.entity.ID)">
-                <div class="entity-info">
-                  <div class="entity-icon-wrapper">
-                    <i class="fa-solid fa-table"></i>
-                  </div>
-                  <div class="entity-details">
-                    <h3 class="entity-name">{{ ea.entity.Name }}</h3>
-                    <p class="entity-description">{{ ea.entity.Description || 'No description available' }}</p>
-                  </div>
-                </div>
-                
-                <div class="entity-meta">
-                  <span class="access-badge" [class]="getAccessLevelClass(ea)">
-                    <i [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' : 
-                               getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' : 
-                               'fa-solid fa-key'"></i>
-                    {{ getAccessLevelLabel(ea) }}
-                  </span>
-                  <button 
-                    type="button"
-                    class="btn-edit" 
-                    (click)="editEntityPermissions(ea); $event.stopPropagation()"
-                    (mousedown)="$event.stopPropagation()"
-                    title="Edit Permissions"
-                  >
-                    <i class="fa-solid fa-edit"></i>
-                  </button>
-                  <button class="expand-btn">
-                    <i class="fa-solid fa-chevron-down"></i>
-                  </button>
-                </div>
-              </div>
-              
-              @if (isEntityExpanded(ea.entity.ID)) {
-                <div class="entity-content">
-                  @if (ea.permissions.length > 0) {
-                    <div class="permissions-grid">
-                      <div class="permissions-header">
-                        <span class="role-header">Role</span>
-                        <span class="permission-header">Create</span>
-                        <span class="permission-header">Read</span>
-                        <span class="permission-header">Update</span>
-                        <span class="permission-header">Delete</span>
-                      </div>
-                      @for (roleId of ea.rolePermissions.keys(); track roleId) {
-                        <div class="permission-row">
-                          <span class="role-name">{{ getRoleName(roleId) }}</span>
-                          <span class="permission-cell">
-                            <i [class]="hasPermission(ea, roleId, 'canCreate') ? 
-                                       'fa-solid fa-check text-success' : 
-                                       'fa-solid fa-times text-muted'"></i>
-                          </span>
-                          <span class="permission-cell">
-                            <i [class]="hasPermission(ea, roleId, 'canRead') ? 
-                                       'fa-solid fa-check text-success' : 
-                                       'fa-solid fa-times text-muted'"></i>
-                          </span>
-                          <span class="permission-cell">
-                            <i [class]="hasPermission(ea, roleId, 'canUpdate') ? 
-                                       'fa-solid fa-check text-success' : 
-                                       'fa-solid fa-times text-muted'"></i>
-                          </span>
-                          <span class="permission-cell">
-                            <i [class]="hasPermission(ea, roleId, 'canDelete') ? 
-                                       'fa-solid fa-check text-success' : 
-                                       'fa-solid fa-times text-muted'"></i>
-                          </span>
-                        </div>
-                      }
-                    </div>
-                  } @else {
-                    <p class="no-permissions">
-                      @if (ea.isPublic) {
-                        This entity is publicly accessible by all users.
-                      } @else {
-                        No specific role permissions configured. Access is restricted to system administrators.
-                      }
-                    </p>
-                  }
-                </div>
-              }
-            </div>
-          }
+    <!-- Stats Cards -->
+    <div class="mj-grid-4" role="region" aria-label="Permission statistics">
+      <div class="mj-card" role="article" aria-label="Total entities statistic">
+        <div class="stat-icon stat-icon-total" aria-hidden="true">
+          <i class="fa-solid fa-database"></i>
         </div>
-      } @else {
-        <!-- Grid View -->
-        <div class="entities-grid">
-          @for (ea of filteredEntityAccess; track ea.entity.ID) {
-            <div class="entity-grid-card" [class]="getAccessLevelClass(ea)">
-              <div class="grid-card-header">
-                <i class="fa-solid fa-table"></i>
-                <button 
-                  type="button"
-                  class="btn-edit" 
-                  (click)="editEntityPermissions(ea)"
-                  title="Edit Permissions"
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total entities count">{{ stats.totalEntities }}</div>
+          <div class="stat-label">Total Entities</div>
+        </div>
+      </div>
+
+      <div class="mj-card" role="article" aria-label="Public entities statistic">
+        <div class="stat-icon stat-icon-public" aria-hidden="true">
+          <i class="fa-solid fa-globe"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Public entities count">{{ stats.publicEntities }}</div>
+          <div class="stat-label">Public Entities</div>
+        </div>
+      </div>
+
+      <div class="mj-card" role="article" aria-label="Restricted entities statistic">
+        <div class="stat-icon stat-icon-restricted" aria-hidden="true">
+          <i class="fa-solid fa-lock"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Restricted entities count">{{ stats.restrictedEntities }}</div>
+          <div class="stat-label">Restricted Entities</div>
+        </div>
+      </div>
+
+      <div class="mj-card" role="article" aria-label="Total permissions statistic">
+        <div class="stat-icon stat-icon-permissions" aria-hidden="true">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" aria-label="Total permissions count">{{ stats.totalPermissions }}</div>
+          <div class="stat-label">Total Permissions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section" role="search" aria-label="Entity filters">
+      <div class="filters-row">
+        <!-- Mobile: Search + Filter Button Container -->
+        <div class="mobile-search-container">
+          <!-- Entity Search -->
+          <div class="mj-search">
+            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+            <input
+              type="text"
+              class="mj-search-input"
+              placeholder="Search entities by name or description..."
+              (input)="onSearchChange($event)"
+              [value]="filters$.value.entitySearch"
+              aria-label="Search entities"
+            />
+          </div>
+
+          <!-- Filter Button (Mobile Only) -->
+          <button
+            class="filter-button"
+            (click)="showMobileFilters = true"
+            aria-label="Open filters"
+          >
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            <span>Filters</span>
+          </button>
+        </div>
+
+        <!-- Access Level Filter -->
+        <div class="mj-filter-group">
+          <label class="mj-filter-label" id="access-level-label">Access Level</label>
+          <div class="mj-filter-buttons" role="group" aria-labelledby="access-level-label">
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.accessLevel === 'all'"
+              (click)="onAccessLevelChange('all')"
+              [attr.aria-pressed]="filters$.value.accessLevel === 'all'"
+              aria-label="Show all access levels"
+            >
+              All
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.accessLevel === 'public'"
+              (click)="onAccessLevelChange('public')"
+              [attr.aria-pressed]="filters$.value.accessLevel === 'public'"
+              aria-label="Show only public entities"
+            >
+              Public
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.accessLevel === 'restricted'"
+              (click)="onAccessLevelChange('restricted')"
+              [attr.aria-pressed]="filters$.value.accessLevel === 'restricted'"
+              aria-label="Show only restricted entities"
+            >
+              Restricted
+            </button>
+            <button
+              class="mj-btn mj-btn-ghost"
+              [class.mj-btn-primary]="filters$.value.accessLevel === 'custom'"
+              (click)="onAccessLevelChange('custom')"
+              [attr.aria-pressed]="filters$.value.accessLevel === 'custom'"
+              aria-label="Show only custom access entities"
+            >
+              Custom
+            </button>
+          </div>
+        </div>
+
+        <!-- Role Filter -->
+        <div class="mj-filter-group">
+          <label class="mj-filter-label" for="role-filter">Filter by Role</label>
+          <select
+            id="role-filter"
+            class="mj-filter-select"
+            (change)="onRoleFilterChange($event)"
+            aria-label="Filter entities by role"
+          >
+            <option value="">All Roles</option>
+            @for (role of roles; track role.ID) {
+              <option [value]="role.ID">{{ role.Name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+  </div><!-- End Sticky Header -->
+
+  <!-- Scrollable Content Section -->
+  <div class="scrollable-content">
+    <!-- Loading State -->
+    @if (isLoading) {
+      <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
+        <mj-loading text="Loading entity permissions..." size="medium"></mj-loading>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (error && !isLoading) {
+      <div class="error-container" role="alert" aria-live="assertive">
+        <div class="error-content">
+          <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
+          <p class="error-message">{{ error }}</p>
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="loadInitialData()"
+            aria-label="Retry loading entity permissions"
+          >
+            <i class="fa-solid fa-refresh" aria-hidden="true"></i>
+            Try Again
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Content Area -->
+    @if (!isLoading && !error) {
+      <div class="content-area">
+        @if (viewMode === 'list') {
+          <!-- List View -->
+          <div class="entities-list" role="list" aria-label="Entity permissions list">
+            @for (ea of filteredEntityAccess; track ea.entity.ID) {
+              <div
+                class="entity-card"
+                [class.expanded]="isEntityExpanded(ea.entity.ID)"
+                role="listitem"
+                [attr.aria-expanded]="isEntityExpanded(ea.entity.ID)"
+              >
+                <div
+                  class="entity-header"
+                  (click)="toggleEntityExpansion(ea.entity.ID)"
+                  (keydown.enter)="toggleEntityExpansion(ea.entity.ID)"
+                  (keydown.space)="toggleEntityExpansion(ea.entity.ID); $event.preventDefault()"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-label]="'Expand permissions for ' + ea.entity.Name"
                 >
-                  <i class="fa-solid fa-edit"></i>
-                </button>
-              </div>
-              <h4 class="grid-card-title">{{ ea.entity.Name }}</h4>
-              <p class="grid-card-description">{{ ea.entity.Description || 'No description' }}</p>
-              <div class="grid-card-footer">
-                <span class="access-label">
-                  <i [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' : 
-                             getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' : 
-                             'fa-solid fa-key'"></i>
-                  {{ getAccessLevelLabel(ea) }}
-                </span>
-                @if (ea.permissions.length > 0) {
-                  <span class="permission-count">
-                    {{ ea.permissions.length }} permission{{ ea.permissions.length === 1 ? '' : 's' }}
-                  </span>
+                  <div class="entity-info">
+                    <div class="entity-icon-wrapper" aria-hidden="true">
+                      <i class="fa-solid fa-table"></i>
+                    </div>
+                    <div class="entity-details">
+                      <h3 class="entity-name">{{ ea.entity.Name }}</h3>
+                      <p class="entity-description">{{ ea.entity.Description || 'No description available' }}</p>
+                    </div>
+                  </div>
+
+                  <div class="entity-meta">
+                    <span
+                      class="access-badge"
+                      [class]="getAccessLevelClass(ea)"
+                      [attr.aria-label]="'Access level: ' + getAccessLevelLabel(ea)"
+                    >
+                      <i
+                        [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' :
+                                   getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' :
+                                   'fa-solid fa-key'"
+                        aria-hidden="true"
+                      ></i>
+                      {{ getAccessLevelLabel(ea) }}
+                    </span>
+                    <div class="entity-actions" (click)="$event.stopPropagation()">
+                      <button
+                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        (click)="editEntityPermissions(ea)"
+                        title="Edit Permissions"
+                        [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
+                      >
+                        <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                    <button
+                      class="expand-btn"
+                      [attr.aria-label]="(isEntityExpanded(ea.entity.ID) ? 'Collapse' : 'Expand') + ' permissions for ' + ea.entity.Name"
+                    >
+                      <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+
+                @if (isEntityExpanded(ea.entity.ID)) {
+                  <div class="entity-content" role="region" [attr.aria-label]="'Permissions for ' + ea.entity.Name">
+                    <!-- Mobile-only actions bar -->
+                    <div class="mobile-actions-bar" (click)="$event.stopPropagation()">
+                      <span class="access-badge" [class]="getAccessLevelClass(ea)">
+                        <i
+                          [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' :
+                                     getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' :
+                                     'fa-solid fa-key'"
+                          aria-hidden="true"
+                        ></i>
+                        {{ getAccessLevelLabel(ea) }}
+                      </span>
+                      <div class="mobile-action-buttons">
+                        <button
+                          class="mj-btn mj-btn-ghost mj-btn-sm"
+                          (click)="editEntityPermissions(ea)"
+                          title="Edit Permissions"
+                          [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
+                        >
+                          <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                          <span class="btn-label">Edit</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    @if (ea.permissions.length > 0) {
+                      <table class="permissions-grid" role="table" aria-label="Role permissions">
+                        <thead class="permissions-header" role="rowgroup">
+                          <tr role="row">
+                            <th class="role-header" scope="col" role="columnheader">Role</th>
+                            <th class="permission-header" scope="col" role="columnheader">Create</th>
+                            <th class="permission-header" scope="col" role="columnheader">Read</th>
+                            <th class="permission-header" scope="col" role="columnheader">Update</th>
+                            <th class="permission-header" scope="col" role="columnheader">Delete</th>
+                          </tr>
+                        </thead>
+                        <tbody role="rowgroup">
+                          @for (roleId of ea.rolePermissions.keys(); track roleId) {
+                            <tr class="permission-row" role="row">
+                              <td class="role-name" role="cell">{{ getRoleName(roleId) }}</td>
+                              <td class="permission-cell" role="cell" [attr.aria-label]="'Create: ' + (hasPermission(ea, roleId, 'canCreate') ? 'allowed' : 'denied')">
+                                <i
+                                  [class]="hasPermission(ea, roleId, 'canCreate') ?
+                                             'fa-solid fa-check text-success' :
+                                             'fa-solid fa-times text-muted'"
+                                  [attr.aria-hidden]="true"
+                                ></i>
+                              </td>
+                              <td class="permission-cell" role="cell" [attr.aria-label]="'Read: ' + (hasPermission(ea, roleId, 'canRead') ? 'allowed' : 'denied')">
+                                <i
+                                  [class]="hasPermission(ea, roleId, 'canRead') ?
+                                             'fa-solid fa-check text-success' :
+                                             'fa-solid fa-times text-muted'"
+                                  [attr.aria-hidden]="true"
+                                ></i>
+                              </td>
+                              <td class="permission-cell" role="cell" [attr.aria-label]="'Update: ' + (hasPermission(ea, roleId, 'canUpdate') ? 'allowed' : 'denied')">
+                                <i
+                                  [class]="hasPermission(ea, roleId, 'canUpdate') ?
+                                             'fa-solid fa-check text-success' :
+                                             'fa-solid fa-times text-muted'"
+                                  [attr.aria-hidden]="true"
+                                ></i>
+                              </td>
+                              <td class="permission-cell" role="cell" [attr.aria-label]="'Delete: ' + (hasPermission(ea, roleId, 'canDelete') ? 'allowed' : 'denied')">
+                                <i
+                                  [class]="hasPermission(ea, roleId, 'canDelete') ?
+                                             'fa-solid fa-check text-success' :
+                                             'fa-solid fa-times text-muted'"
+                                  [attr.aria-hidden]="true"
+                                ></i>
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    } @else {
+                      <p class="no-permissions">
+                        @if (ea.isPublic) {
+                          This entity is publicly accessible by all users.
+                        } @else {
+                          No specific role permissions configured. Access is restricted to system administrators.
+                        }
+                      </p>
+                    }
+                  </div>
                 }
               </div>
-            </div>
-          }
-        </div>
-      }
-      
-      @if (filteredEntityAccess.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-key empty-icon"></i>
-          <p class="empty-text">No entities found</p>
-          <p class="empty-subtext">Try adjusting your filters to see more results</p>
-        </div>
-      }
-    </div>
-  }
+            }
+          </div>
+        } @else {
+          <!-- Grid View -->
+          <div class="entities-grid" role="list" aria-label="Entity permissions grid">
+            @for (ea of filteredEntityAccess; track ea.entity.ID) {
+              <article
+                class="entity-grid-card"
+                [class]="getAccessLevelClass(ea)"
+                [attr.aria-label]="'Entity: ' + ea.entity.Name"
+              >
+                <div class="grid-card-header">
+                  <i class="fa-solid fa-table" aria-hidden="true"></i>
+                  <button
+                    class="mj-btn mj-btn-ghost mj-btn-sm"
+                    (click)="editEntityPermissions(ea)"
+                    [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
+                    title="Edit Permissions"
+                  >
+                    <i class="fa-solid fa-edit" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <h4 class="grid-card-title">{{ ea.entity.Name }}</h4>
+                <p class="grid-card-description">{{ ea.entity.Description || 'No description' }}</p>
+                <div class="grid-card-footer">
+                  <span
+                    class="access-label"
+                    [attr.aria-label]="'Access level: ' + getAccessLevelLabel(ea)"
+                  >
+                    <i
+                      [class]="getAccessLevelClass(ea) === 'access-public' ? 'fa-solid fa-globe' :
+                                 getAccessLevelClass(ea) === 'access-restricted' ? 'fa-solid fa-lock' :
+                                 'fa-solid fa-key'"
+                      aria-hidden="true"
+                    ></i>
+                    {{ getAccessLevelLabel(ea) }}
+                  </span>
+                  @if (ea.permissions.length > 0) {
+                    <span
+                      class="permission-count"
+                      [attr.aria-label]="ea.permissions.length + ' permission' + (ea.permissions.length === 1 ? '' : 's')"
+                    >
+                      {{ ea.permissions.length }} permission{{ ea.permissions.length === 1 ? '' : 's' }}
+                    </span>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+
+        @if (filteredEntityAccess.length === 0) {
+          <div class="empty-state" role="status">
+            <i class="fa-solid fa-shield-alt empty-state-icon" aria-hidden="true"></i>
+            <h3 class="empty-text">No Permissions Found</h3>
+            <p class="empty-subtext">Try adjusting your filters or refresh the data.</p>
+            <button
+              class="mj-btn mj-btn-primary"
+              (click)="refreshData()"
+              aria-label="Refresh permissions data"
+            >
+              <i class="fa-solid fa-refresh" aria-hidden="true"></i>
+              Refresh
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div><!-- End Scrollable Content -->
 
   <!-- Permission Edit Dialog -->
   <mj-permission-dialog
@@ -301,4 +436,145 @@
     [data]="permissionDialogData"
     (result)="onPermissionDialogResult($event)"
   ></mj-permission-dialog>
+
+  <!-- Mobile Filter Modal -->
+  @if (showMobileFilters) {
+    <div
+      class="filter-modal-backdrop"
+      (click)="showMobileFilters = false"
+      role="presentation"
+    >
+      <div
+        class="filter-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-modal-title"
+      >
+        <div class="filter-modal-header">
+          <h3 class="filter-modal-title" id="filter-modal-title">
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
+            Filters
+          </h3>
+          <button
+            class="filter-modal-close"
+            (click)="showMobileFilters = false"
+            aria-label="Close filters"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-options-container">
+            <!-- Access Level Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Access Level</h4>
+              <div class="filter-group-options">
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'all'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="all"
+                    [checked]="filters$.value.accessLevel === 'all'"
+                    (change)="onAccessLevelChange('all')"
+                  />
+                  <span class="filter-option-label">All Levels</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'public'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="public"
+                    [checked]="filters$.value.accessLevel === 'public'"
+                    (change)="onAccessLevelChange('public')"
+                  />
+                  <span class="filter-option-label">Public Entities</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'restricted'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="restricted"
+                    [checked]="filters$.value.accessLevel === 'restricted'"
+                    (change)="onAccessLevelChange('restricted')"
+                  />
+                  <span class="filter-option-label">Restricted Entities</span>
+                </label>
+                <label
+                  class="filter-option"
+                  [class.selected]="filters$.value.accessLevel === 'custom'"
+                >
+                  <input
+                    type="radio"
+                    name="accessLevel"
+                    value="custom"
+                    [checked]="filters$.value.accessLevel === 'custom'"
+                    (change)="onAccessLevelChange('custom')"
+                  />
+                  <span class="filter-option-label">Custom Access Entities</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Role Filter -->
+            <div class="filter-group">
+              <h4 class="filter-group-label">Filter by Role</h4>
+              <div class="filter-group-options">
+                <label class="filter-option" [class.selected]="!filters$.value.roleId">
+                  <input
+                    type="radio"
+                    name="role"
+                    value=""
+                    [checked]="!filters$.value.roleId"
+                    (change)="onRoleFilterChange($event)"
+                  />
+                  <span class="filter-option-label">All Roles</span>
+                </label>
+                @for (role of roles; track role.ID) {
+                  <label
+                    class="filter-option"
+                    [class.selected]="filters$.value.roleId === role.ID"
+                  >
+                    <input
+                      type="radio"
+                      name="role"
+                      [value]="role.ID"
+                      [checked]="filters$.value.roleId === role.ID"
+                      (change)="onRoleFilterChange($event)"
+                    />
+                    <span class="filter-option-label">{{ role.Name }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal-footer">
+          <button
+            class="mj-btn mj-btn-primary"
+            (click)="showMobileFilters = false"
+          >
+            Apply Filters
+          </button>
+          <button
+            class="mj-btn mj-btn-secondary"
+            (click)="showMobileFilters = false"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </div>

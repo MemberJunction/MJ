@@ -1,39 +1,71 @@
-# DBAutoDoc - AI-Powered Database Documentation Generator
+# @memberjunction/db-auto-doc
 
-Automatically generate comprehensive documentation for SQL Server, MySQL, and PostgreSQL databases using AI. DBAutoDoc analyzes your database structure, uses Large Language Models to understand the purpose of tables and columns, and saves descriptions as database metadata (extended properties for SQL Server, comments for MySQL/PostgreSQL).
+AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes database structure using LLMs to generate intelligent descriptions, discovers missing relationships, generates reference SQL queries, and saves documentation as database metadata.
+
+## Overview
+
+```mermaid
+graph TD
+    A["CLI / Programmatic API"] --> B["AnalysisOrchestrator"]
+    B --> C["Database Layer<br/>(Schema Introspection)"]
+    B --> D["Analysis Engine<br/>(LLM Processing)"]
+    B --> E["State Manager<br/>(Progress Tracking)"]
+    B --> F["Guardrails Manager<br/>(Resource Limits)"]
+
+    C --> G["SQL Server"]
+    C --> H["PostgreSQL"]
+    C --> I["MySQL"]
+
+    D --> J["Description Generator"]
+    D --> K["Relationship Discovery"]
+    D --> L["Sample Query Generator"]
+
+    J --> M["Output Generators"]
+    M --> N["SQL Extended Properties"]
+    M --> O["Markdown / HTML / CSV"]
+    M --> P["Mermaid ERD Diagrams"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#b8762f,stroke:#8a5722,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style M fill:#2d6a9f,stroke:#1a4971,color:#fff
+```
 
 ## Features
 
 ### Core Capabilities
-- **🤖 AI-Powered Analysis** - Uses OpenAI, Anthropic, Google, or Groq to generate intelligent descriptions
-- **🔄 Iterative Refinement** - Multi-pass analysis with backpropagation for accuracy
-- **📊 Topological Processing** - Analyzes tables in dependency order for better context
-- **📈 Data-Driven** - Leverages cardinality, statistics, and sample data for insights
-- **🎯 Convergence Detection** - Automatically knows when analysis is complete
-- **💾 State Tracking** - Full audit trail of all iterations and reasoning
-- **🔌 Standalone** - Works with ANY database, no MemberJunction required
+- **AI-Powered Analysis** -- Uses OpenAI, Anthropic, Google, Groq, and other LLM providers to generate intelligent descriptions
+- **Iterative Refinement** -- Multi-pass analysis with backpropagation for accuracy
+- **Topological Processing** -- Analyzes tables in dependency order for better context
+- **Data-Driven** -- Leverages cardinality, statistics, and sample data for insights
+- **Convergence Detection** -- Automatically knows when analysis is complete
+- **State Tracking** -- Full audit trail of all iterations and reasoning
+- **Standalone** -- Works with any database, no MemberJunction required
 
 ### Multi-Database Support
-- **SQL Server** - Full support with extended properties
-- **PostgreSQL** - Complete implementation with COMMENT syntax
-- **MySQL** - Full support with column/table comments
-- **Unified Interface** - Single configuration approach across all databases
+- **SQL Server** -- Full support with extended properties
+- **PostgreSQL** -- Complete implementation with COMMENT syntax
+- **MySQL** -- Full support with column/table comments
+- **Unified Interface** -- Single configuration approach across all databases
 
 ### Advanced Features
-- **🔍 Relationship Discovery** - Automatically detect missing primary and foreign keys using statistical analysis and LLM validation
-- **🎯 Sample Query Generation** - Generate reference SQL queries for AI agents with alignment tracking
-- **🛡️ Granular Guardrails** - Multi-level resource controls (run, phase, iteration limits)
-- **⏸️ Resume Capability** - Pause and resume analysis from checkpoint state files
-- **📦 Programmatic API** - Use as a library in your own applications
-- **🔧 Extensible** - Custom database drivers and analysis plugins
+- **Relationship Discovery** -- Automatically detect missing primary and foreign keys using statistical analysis and LLM validation
+- **Sample Query Generation** -- Generate reference SQL queries for AI agents with alignment tracking
+- **Granular Guardrails** -- Multi-level resource controls (run, phase, iteration limits)
+- **Resume Capability** -- Pause and resume analysis from checkpoint state files
+- **Programmatic API** -- Use as a library in your own applications
+- **Extensible** -- Custom database drivers and analysis plugins
 
 ### Output Formats
-- **SQL Scripts** - Database-specific metadata scripts (extended properties, comments)
-- **Markdown Documentation** - Human-readable docs with ERD diagrams
-- **HTML Documentation** - Interactive, searchable documentation with embedded CSS/JS
-- **CSV Exports** - Spreadsheet-ready table and column data
-- **Mermaid Diagrams** - Standalone ERD files (.mmd and .html)
-- **Analysis Reports** - Detailed metrics and quality assessments
+- **SQL Scripts** -- Database-specific metadata scripts (extended properties, comments)
+- **Markdown Documentation** -- Human-readable docs with ERD diagrams
+- **HTML Documentation** -- Interactive, searchable documentation with embedded CSS/JS
+- **CSV Exports** -- Spreadsheet-ready table and column data
+- **Mermaid Diagrams** -- Standalone ERD files (.mmd and .html)
+- **Analysis Reports** -- Detailed metrics and quality assessments
 
 ## Installation
 
@@ -65,7 +97,7 @@ db-auto-doc init
 
 This interactive wizard will:
 - Configure database connection
-- Set up AI provider (OpenAI, Anthropic, Google, or Groq)
+- Set up AI provider (Gemini default, plus OpenAI, Anthropic, Groq, and more)
 - Configure guardrails and resource limits
 - Optionally add seed context for better analysis
 - Create `config.json`
@@ -633,12 +665,35 @@ This rich context enables AI to make accurate inferences.
 
 ## Supported AI Providers
 
-DBAutoDoc integrates with MemberJunction's AI provider system, supporting:
+DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
+
+| Config Provider | Driver Class | Description |
+|-----------------|--------------|-------------|
+| `gemini` (default) | GeminiLLM | Google Gemini |
+| `openai` | OpenAILLM | OpenAI |
+| `anthropic` | AnthropicLLM | Anthropic Claude |
+| `groq` | GroqLLM | Groq |
+| `mistral` | MistralLLM | Mistral AI |
+| `vertex` | VertexLLM | Google Vertex AI |
+| `azure` | AzureLLM | Azure OpenAI |
+| `cerebras` | CerebrasLLM | Cerebras |
+| `openrouter` | OpenRouterLLM | OpenRouter (multi-model) |
+| `xai` | xAILLM | xAI (Grok) |
+| `bedrock` | BedrockLLM | AWS Bedrock |
+
+### Gemini (Default)
+```json
+{
+  "provider": "gemini",
+  "model": "gemini-3-flash-preview",
+  "apiKey": "..."
+}
+```
 
 ### OpenAI
 ```json
 {
-  "provider": "OpenAILLM",
+  "provider": "openai",
   "model": "gpt-4-turbo-preview",
   "apiKey": "sk-..."
 }
@@ -647,32 +702,20 @@ DBAutoDoc integrates with MemberJunction's AI provider system, supporting:
 ### Anthropic
 ```json
 {
-  "provider": "AnthropicLLM",
+  "provider": "anthropic",
   "model": "claude-3-5-sonnet-20241022",
   "apiKey": "sk-ant-..."
-}
-```
-
-### Google
-```json
-{
-  "provider": "GoogleLLM",
-  "model": "gemini-1.5-pro",
-  "apiKey": "..."
 }
 ```
 
 ### Groq
 ```json
 {
-  "provider": "GroqLLM",
+  "provider": "groq",
   "model": "llama-3.3-70b-versatile",
   "apiKey": "gsk_..."
 }
 ```
-
-### Other Providers
-Any BaseLLM-compatible provider registered with MemberJunction can be used.
 
 ## State File
 
@@ -733,7 +776,7 @@ const result = await api.analyze({
     password: 'password'
   },
   ai: {
-    provider: 'OpenAILLM',
+    provider: 'openai',
     model: 'gpt-4-turbo-preview',
     apiKey: 'sk-...'
   },

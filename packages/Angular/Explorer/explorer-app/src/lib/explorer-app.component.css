@@ -1,3 +1,7 @@
+/* ========================================
+   App Layout
+   ======================================== */
+
 .app-main {
   display: flex;
   flex-direction: column;
@@ -6,7 +10,7 @@
 }
 
 .app-header {
-  height: 80px;
+  height: var(--mj-space-20);
   width: 100%;
 }
 
@@ -14,68 +18,81 @@
   overflow: hidden;
 }
 
+/* ========================================
+   Login / Welcome Page
+   ======================================== */
+
 .login-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   height: 100vh;
 }
 
-.login-wrapper .main-banner {
-  flex: 1;
-}
+/* ---- Theme Toggle ---- */
 
-.login-wrapper .login-btn {
-  flex: 1;
+.theme-toggle {
+  position: absolute;
+  top: var(--mj-space-4);
+  right: var(--mj-space-4);
+  z-index: 10;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-}
-
-.login-wrapper .login-btn h3 {
-  font-size: 36px;
-  font-weight: 600;
-  line-height: 42px;
-  text-align: center;
-  color: #0D1621;
-}
-
-.login-wrapper .login-btn p {
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 22px;
-  text-align: center;
-  color: #5A6A7D;
-}
-
-.login-wrapper .login-btn button {
-  max-width: 450px;
-  width: 100%;
-  background: #2264DC;
-  color: #fff;
-  border-radius: 10px;
-  padding: 0 25px;
-  border: none;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 50px;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-lg);
   cursor: pointer;
-  text-align: center;
+  transition: background-color var(--mj-transition-base),
+              color var(--mj-transition-base),
+              border-color var(--mj-transition-base);
 }
 
-.login-wrapper .login-btn button:hover {
-  background: #1e56bf;
+.theme-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
 }
+
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+/* ---- Left Banner Column ---- */
 
 .login-wrapper .main-banner {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  background: url('/assets/bgImg.png') no-repeat center / cover;
-  height: 100vh;
   justify-content: center;
-  padding: 50px;
+  position: relative;
+  overflow: hidden;
+  height: 100vh;
+  padding: var(--mj-space-12);
   box-sizing: border-box;
+}
+
+/* SVG background — fills the banner, sits behind content */
+.login-bg-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* Content stacks above the SVG */
+.login-wrapper .main-banner .logo-icon,
+.login-wrapper .main-banner .title,
+.login-wrapper .main-banner h1 {
+  position: relative;
+  z-index: 1;
 }
 
 .login-wrapper .main-banner .logo-icon {
@@ -83,13 +100,118 @@
 }
 
 .login-wrapper .main-banner h1 {
-  font-size: 80px;
-  font-weight: 700;
-  line-height: 95px;
+  font-size: var(--mj-text-display);
+  font-weight: var(--mj-font-bold);
+  line-height: var(--mj-leading-tight);
   text-align: left;
   flex: 2;
-  color: #fff;
+  /* Always white — sits on the SVG gradient in both themes */
+  color: var(--mj-color-neutral-0);
 }
+
+/* ---- Wave Animations ---- */
+
+@keyframes login-wave-sway-1 {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(15px, -8px); }
+  50%      { transform: translate(-10px, 4px); }
+  75%      { transform: translate(12px, -6px); }
+}
+
+@keyframes login-wave-sway-2 {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(-12px, 6px); }
+  50%      { transform: translate(18px, -5px); }
+  75%      { transform: translate(-8px, 8px); }
+}
+
+@keyframes login-wave-sway-3 {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(10px, 5px); }
+  50%      { transform: translate(-14px, -7px); }
+  75%      { transform: translate(6px, 10px); }
+}
+
+.login-wave {
+  will-change: transform;
+}
+
+.login-wave-1 {
+  animation: login-wave-sway-1 16s ease-in-out infinite;
+}
+
+.login-wave-2 {
+  animation: login-wave-sway-2 20s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+.login-wave-3 {
+  animation: login-wave-sway-3 14s ease-in-out infinite;
+  animation-delay: -8s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wave {
+    animation: none !important;
+  }
+}
+
+/* ---- Right Login Column ---- */
+
+.login-wrapper .login-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-bg-surface);
+  height: 100vh;
+  box-sizing: border-box;
+  padding: var(--mj-space-6);
+}
+
+.login-wrapper .login-btn h3 {
+  font-size: var(--mj-text-4xl);
+  font-weight: var(--mj-font-semibold);
+  line-height: var(--mj-leading-tight);
+  text-align: center;
+  color: var(--mj-text-primary);
+}
+
+.login-wrapper .login-btn p {
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-medium);
+  line-height: var(--mj-leading-normal);
+  text-align: center;
+  color: var(--mj-text-secondary);
+}
+
+.login-wrapper .login-btn button {
+  max-width: 450px;
+  width: 100%;
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-radius: var(--mj-radius-lg);
+  padding: 0 var(--mj-space-6);
+  border: none;
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-bold);
+  line-height: var(--mj-space-12);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color var(--mj-transition-base);
+}
+
+.login-wrapper .login-btn button:hover {
+  background: var(--mj-brand-primary-hover);
+}
+
+.login-wrapper .login-btn button:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+/* ---- Misc ---- */
 
 .title {
   font-size: x-large;
@@ -97,4 +219,73 @@
 
 .app-logo {
   width: 297px;
+}
+
+/* ========================================
+   Responsive Breakpoints
+   ======================================== */
+
+/* Tablet: stacked layout */
+@media (max-width: 768px) {
+  .login-wrapper {
+    flex-direction: column;
+  }
+
+  .login-wrapper .main-banner {
+    height: 35vh;
+    width: 100%;
+    padding: var(--mj-space-6);
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .login-wrapper .main-banner h1 {
+    font-size: var(--mj-text-5xl);
+    text-align: center;
+    flex: unset;
+  }
+
+  .login-wrapper .main-banner .logo-icon {
+    flex: unset;
+  }
+
+  .login-wrapper .login-btn {
+    height: auto;
+    flex: 1;
+    width: 100%;
+    padding: var(--mj-space-8) var(--mj-space-6);
+  }
+}
+
+/* Mobile: compact layout */
+@media (max-width: 480px) {
+  .login-wrapper .main-banner {
+    height: 30vh;
+    padding: var(--mj-space-4);
+  }
+
+  .login-wrapper .main-banner h1 {
+    font-size: var(--mj-text-4xl);
+  }
+
+  .login-wrapper .login-btn {
+    padding: var(--mj-space-6) var(--mj-space-4);
+  }
+
+  .login-wrapper .login-btn h3 {
+    font-size: var(--mj-text-2xl);
+  }
+
+  .login-wrapper .login-btn button {
+    max-width: 100%;
+  }
+
+  .app-logo {
+    width: 200px;
+  }
+
+  .theme-toggle {
+    top: var(--mj-space-2);
+    right: var(--mj-space-2);
+  }
 }

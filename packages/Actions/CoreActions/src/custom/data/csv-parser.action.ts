@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as Papa from "papaparse";
+import Papa from "papaparse";
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -153,11 +153,4 @@ export class CSVParserAction extends BaseFileHandlerAction {
             };
         }
     }
-}
-
-/**
- * Loader function to ensure the CSVParserAction class is included in the bundle
- */
-export function LoadCSVParserAction() {
-    // Stub function to prevent tree shaking
 }

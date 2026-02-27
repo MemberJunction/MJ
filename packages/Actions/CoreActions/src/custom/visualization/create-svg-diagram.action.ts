@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
-import * as dagre from '@dagrejs/dagre';
+import dagre from '@dagrejs/dagre';
 import * as d3Hierarchy from 'd3-hierarchy';
 import { JSDOM } from 'jsdom';
 import {
@@ -887,11 +887,4 @@ export class CreateSVGDiagramAction extends BaseAction {
             return param?.Value || null;
         }
     }
-}
-
-/**
- * Loader function to ensure the CreateSVGDiagramAction class is included in the bundle.
- */
-export function LoadCreateSVGDiagramAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

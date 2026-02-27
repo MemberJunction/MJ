@@ -25,9 +25,9 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from "@memberjunction/core";
 import { ENCRYPTION_MARKER } from "@memberjunction/global";
 import {
-    EncryptionKeyEntity,
-    EncryptionAlgorithmEntity,
-    EncryptionKeySourceEntity
+    MJEncryptionKeyEntity,
+    MJEncryptionAlgorithmEntity,
+    MJEncryptionKeySourceEntity
 } from "../generated/entity_subclasses";
 
 /**
@@ -36,11 +36,11 @@ import {
  */
 export interface EncryptionKeyConfiguration {
     /** The encryption key entity */
-    key: EncryptionKeyEntity;
+    key: MJEncryptionKeyEntity;
     /** The encryption algorithm entity */
-    algorithm: EncryptionAlgorithmEntity;
+    algorithm: MJEncryptionAlgorithmEntity;
     /** The key source entity */
-    source: EncryptionKeySourceEntity;
+    source: MJEncryptionKeySourceEntity;
     /** The marker to use for encrypted values (from key or default) */
     marker: string;
 }
@@ -70,19 +70,19 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * Cached array of encryption keys loaded from the database.
      * @private
      */
-    private _encryptionKeys: EncryptionKeyEntity[] = [];
+    private _encryptionKeys: MJEncryptionKeyEntity[] = [];
 
     /**
      * Cached array of encryption algorithms loaded from the database.
      * @private
      */
-    private _encryptionAlgorithms: EncryptionAlgorithmEntity[] = [];
+    private _encryptionAlgorithms: MJEncryptionAlgorithmEntity[] = [];
 
     /**
      * Cached array of encryption key sources loaded from the database.
      * @private
      */
-    private _encryptionKeySources: EncryptionKeySourceEntity[] = [];
+    private _encryptionKeySources: MJEncryptionKeySourceEntity[] = [];
 
     /**
      * Gets the singleton instance of the encryption engine base.
@@ -148,7 +148,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of all encryption key entities
      */
-    public get EncryptionKeys(): EncryptionKeyEntity[] {
+    public get EncryptionKeys(): MJEncryptionKeyEntity[] {
         return this._encryptionKeys;
     }
 
@@ -157,7 +157,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of encryption keys where IsActive is true
      */
-    public get ActiveEncryptionKeys(): EncryptionKeyEntity[] {
+    public get ActiveEncryptionKeys(): MJEncryptionKeyEntity[] {
         return this._encryptionKeys.filter(k => k.IsActive);
     }
 
@@ -166,7 +166,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of all encryption algorithm entities
      */
-    public get EncryptionAlgorithms(): EncryptionAlgorithmEntity[] {
+    public get EncryptionAlgorithms(): MJEncryptionAlgorithmEntity[] {
         return this._encryptionAlgorithms;
     }
 
@@ -175,7 +175,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of encryption algorithms where IsActive is true
      */
-    public get ActiveEncryptionAlgorithms(): EncryptionAlgorithmEntity[] {
+    public get ActiveEncryptionAlgorithms(): MJEncryptionAlgorithmEntity[] {
         return this._encryptionAlgorithms.filter(a => a.IsActive);
     }
 
@@ -184,7 +184,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of all encryption key source entities
      */
-    public get EncryptionKeySources(): EncryptionKeySourceEntity[] {
+    public get EncryptionKeySources(): MJEncryptionKeySourceEntity[] {
         return this._encryptionKeySources;
     }
 
@@ -193,7 +193,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      *
      * @returns Array of encryption key sources where IsActive is true
      */
-    public get ActiveEncryptionKeySources(): EncryptionKeySourceEntity[] {
+    public get ActiveEncryptionKeySources(): MJEncryptionKeySourceEntity[] {
         return this._encryptionKeySources.filter(s => s.IsActive);
     }
 
@@ -215,7 +215,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * }
      * ```
      */
-    public GetKeyByID(keyId: string): EncryptionKeyEntity | undefined {
+    public GetKeyByID(keyId: string): MJEncryptionKeyEntity | undefined {
         return this._encryptionKeys.find(k => k.ID === keyId);
     }
 
@@ -225,7 +225,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @param name - The name of the encryption key (case-insensitive)
      * @returns The encryption key entity, or undefined if not found
      */
-    public GetKeyByName(name: string): EncryptionKeyEntity | undefined {
+    public GetKeyByName(name: string): MJEncryptionKeyEntity | undefined {
         const lowerName = name.trim().toLowerCase();
         return this._encryptionKeys.find(k => k.Name.trim().toLowerCase() === lowerName);
     }
@@ -236,7 +236,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @param algorithmId - The UUID of the encryption algorithm
      * @returns The encryption algorithm entity, or undefined if not found
      */
-    public GetAlgorithmByID(algorithmId: string): EncryptionAlgorithmEntity | undefined {
+    public GetAlgorithmByID(algorithmId: string): MJEncryptionAlgorithmEntity | undefined {
         return this._encryptionAlgorithms.find(a => a.ID === algorithmId);
     }
 
@@ -246,7 +246,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @param name - The name of the algorithm (e.g., 'AES-256-GCM')
      * @returns The encryption algorithm entity, or undefined if not found
      */
-    public GetAlgorithmByName(name: string): EncryptionAlgorithmEntity | undefined {
+    public GetAlgorithmByName(name: string): MJEncryptionAlgorithmEntity | undefined {
         const lowerName = name.trim().toLowerCase();
         return this._encryptionAlgorithms.find(a => a.Name.trim().toLowerCase() === lowerName);
     }
@@ -257,7 +257,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @param sourceId - The UUID of the key source
      * @returns The encryption key source entity, or undefined if not found
      */
-    public GetKeySourceByID(sourceId: string): EncryptionKeySourceEntity | undefined {
+    public GetKeySourceByID(sourceId: string): MJEncryptionKeySourceEntity | undefined {
         return this._encryptionKeySources.find(s => s.ID === sourceId);
     }
 
@@ -267,7 +267,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @param driverClass - The driver class name (e.g., 'EnvVarKeySource')
      * @returns The encryption key source entity, or undefined if not found
      */
-    public GetKeySourceByDriverClass(driverClass: string): EncryptionKeySourceEntity | undefined {
+    public GetKeySourceByDriverClass(driverClass: string): MJEncryptionKeySourceEntity | undefined {
         const lowerClass = driverClass.trim().toLowerCase();
         return this._encryptionKeySources.find(s => s.DriverClass.trim().toLowerCase() === lowerClass);
     }
@@ -387,12 +387,4 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
         const key = this.GetKeyByID(keyId);
         return key?.Marker || ENCRYPTION_MARKER;
     }
-}
-
-/**
- * Tree-shaking prevention function.
- * Call this to ensure the EncryptionEngineBase class is included in the build.
- */
-export function LoadEncryptionEngineBase(): void {
-    // This function exists to prevent tree-shaking from removing the class
 }

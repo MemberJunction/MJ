@@ -1,0 +1,29 @@
+{
+  "name": "@memberjunction/version-history",
+  "type": "module",
+  "version": "5.3.1",
+  "description": "Server-side version history engine providing label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore for MemberJunction record changes",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/global": "5.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

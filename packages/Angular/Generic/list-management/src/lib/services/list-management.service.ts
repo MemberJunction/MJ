@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ListEntity, ListDetailEntity, ListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
   ListItemViewModel,
@@ -25,8 +25,8 @@ export class ListManagementService {
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   // Cache storage
-  private listCache = new Map<string, CacheEntry<ListEntity[]>>();
-  private categoryCache: CacheEntry<ListCategoryEntity[]> | null = null;
+  private listCache = new Map<string, CacheEntry<MJListEntity[]>>();
+  private categoryCache: CacheEntry<MJListCategoryEntity[]> | null = null;
   private membershipCache = new Map<string, CacheEntry<Map<string, string[]>>>();
 
   // Loading state subjects
@@ -42,7 +42,7 @@ export class ListManagementService {
     entityId: string,
     userId?: string,
     forceRefresh: boolean = false
-  ): Promise<ListEntity[]> {
+  ): Promise<MJListEntity[]> {
     const cacheKey = `${entityId}_${userId || 'all'}`;
 
     // Check cache first
@@ -63,8 +63,8 @@ export class ListManagementService {
         filter += ` AND UserID = '${userId}'`;
       }
 
-      const result = await rv.RunView<ListEntity>({
-        EntityName: 'Lists',
+      const result = await rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
         ExtraFilter: filter,
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -89,14 +89,14 @@ export class ListManagementService {
   /**
    * Get all list categories
    */
-  async getListCategories(forceRefresh: boolean = false): Promise<ListCategoryEntity[]> {
+  async getListCategories(forceRefresh: boolean = false): Promise<MJListCategoryEntity[]> {
     if (!forceRefresh && this.categoryCache && this.isCacheValid(this.categoryCache)) {
       return this.categoryCache.data;
     }
 
     const rv = new RunView();
-    const result = await rv.RunView<ListCategoryEntity>({
-      EntityName: 'List Categories',
+    const result = await rv.RunView<MJListCategoryEntity>({
+      EntityName: 'MJ: List Categories',
       OrderBy: 'Name',
       ResultType: 'entity_object'
     });
@@ -139,8 +139,8 @@ export class ListManagementService {
 
       // Get all list details for these records
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
-      const result = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const result = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `RecordID IN (${recordIdFilter})`,
         ResultType: 'entity_object'
       });
@@ -174,12 +174,12 @@ export class ListManagementService {
   async getListsForRecord(
     entityId: string,
     recordId: string
-  ): Promise<ListEntity[]> {
+  ): Promise<MJListEntity[]> {
     const rv = new RunView();
 
     // Get list details for this record
-    const detailsResult = await rv.RunView<ListDetailEntity>({
-      EntityName: 'List Details',
+    const detailsResult = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
       ExtraFilter: `RecordID = '${recordId}'`,
       ResultType: 'entity_object'
     });
@@ -188,12 +188,12 @@ export class ListManagementService {
       return [];
     }
 
-    const listIds = [...new Set(detailsResult.Results.map((d: ListDetailEntity) => d.ListID))];
+    const listIds = [...new Set(detailsResult.Results.map((d: MJListDetailEntity) => d.ListID))];
 
     // Get the lists filtered by entity
     const listIdFilter = listIds.map(id => `'${id}'`).join(',');
-    const listsResult = await rv.RunView<ListEntity>({
-      EntityName: 'Lists',
+    const listsResult = await rv.RunView<MJListEntity>({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `ID IN (${listIdFilter}) AND EntityID = '${entityId}'`,
       ResultType: 'entity_object'
     });
@@ -207,7 +207,7 @@ export class ListManagementService {
   async getListItemCount(listId: string): Promise<number> {
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'List Details',
+      EntityName: 'MJ: List Details',
       ExtraFilter: `ListID = '${listId}'`,
       ResultType: 'count_only'
     });
@@ -219,7 +219,7 @@ export class ListManagementService {
    * Build view models for lists with membership information
    */
   async buildListViewModels(
-    lists: ListEntity[],
+    lists: MJListEntity[],
     recordIds: string[],
     membership: Map<string, string[]>
   ): Promise<ListItemViewModel[]> {
@@ -231,8 +231,8 @@ export class ListManagementService {
     const listIdFilter = listIds.map(id => `'${id}'`).join(',');
 
     // Get counts grouped by list - using a regular query since we need aggregation
-    const countsResult = await rv.RunView<ListDetailEntity>({
-      EntityName: 'List Details',
+    const countsResult = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
       ExtraFilter: listIds.length > 0 ? `ListID IN (${listIdFilter})` : '1=0',
       ResultType: 'entity_object'
     });
@@ -298,8 +298,8 @@ export class ListManagementService {
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
-      const existing = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const existing = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
         ResultType: 'entity_object'
       }, md.CurrentUser);
@@ -336,7 +336,7 @@ export class ListManagementService {
 
     for (const { listId, recordId } of recordsToAdd) {
       try {
-        const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         listDetail.ListID = listId;
         listDetail.RecordID = recordId;
         listDetail.TransactionGroup = tg;
@@ -395,8 +395,8 @@ export class ListManagementService {
     const listIdFilter = listIds.map(id => `'${id}'`).join(',');
     const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
-    const existingResult = await rv.RunView<ListDetailEntity>({
-      EntityName: 'List Details',
+    const existingResult = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
       ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
       ResultType: 'entity_object'
     });
@@ -432,11 +432,11 @@ export class ListManagementService {
   /**
    * Create a new list
    */
-  async createList(config: CreateListConfig): Promise<ListEntity | null> {
+  async createList(config: CreateListConfig): Promise<MJListEntity | null> {
     const md = new Metadata();
 
     try {
-      const list = await md.GetEntityObject<ListEntity>('Lists');
+      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       list.NewRecord();
       list.Name = config.name;
       list.Description = config.description || '';

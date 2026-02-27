@@ -1,3 +1,8 @@
+/**
+ * ERD Diagram Component - MJ Design Tokens
+ * MJ theming for the Entity Relationship Diagram visualization
+ */
+
 :host {
   display: block;
   height: 100%;
@@ -5,7 +10,7 @@
 }
 
 .erd-section {
-  background: white;
+  background: var(--mj-bg-page);
   overflow: hidden;
   height: 100%;
   display: flex;
@@ -18,16 +23,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
 .section-header h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  color: var(--mj-text-primary);
 }
 
 .erd-controls {
@@ -36,28 +39,33 @@
 }
 
 .control-btn {
-  padding: 4px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.control-btn:hover {
-  background-color: #f0f0f0;
+.control-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-color-neutral-400);
+  color: var(--mj-text-primary);
 }
 
 .control-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.38;
   cursor: not-allowed;
 }
 
 .erd-container {
   flex: 1;
   position: relative;
-  background-color: #fafafa;
+  background: var(--mj-bg-surface-sunken);
   overflow: hidden;
   width: 100%;
   min-height: 400px;
@@ -73,14 +81,15 @@
   box-sizing: border-box;
 }
 
-/* Loading overlay */
+/* Loading overlay - using mj-loading component styling */
 .loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(250, 250, 250, 0.95);
+  background: var(--mj-bg-page);
+  opacity: 0.95;
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -112,25 +121,24 @@
 }
 
 .spinner-ring:nth-child(1) {
-  border-top-color: #2196f3;
+  border-top-color: var(--mj-brand-primary);
   animation-delay: 0s;
 }
 
 .spinner-ring:nth-child(2) {
-  border-top-color: #9c27b0;
+  border-top-color: var(--mj-color-warning-500);
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
 
 .spinner-ring:nth-child(3) {
-  border-top-color: #ff6b35;
+  border-top-color: var(--mj-status-success);
   animation-delay: 0.6s;
   transform: scale(0.6);
 }
 
 .loading-text {
-  font-size: 14px;
-  color: #666;
+  color: var(--mj-text-secondary);
   font-weight: 500;
   text-align: center;
 }
@@ -156,26 +164,23 @@
 
 /* Node highlighting styles */
 :host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
-  stroke: #ff9800 !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 4px !important;
-  filter: drop-shadow(0 0 8px rgba(255, 152, 0, 0.6));
-  animation: pulse 1s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-rect {
-  stroke: #2196f3 !important;
+  stroke: #4CAF50 !important;
   stroke-width: 4px !important;
-  filter: drop-shadow(0 0 12px rgba(33, 150, 243, 0.8));
-  fill: #f3f8ff !important;
-  animation: selectedPulse 2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 8px rgba(76, 175, 80, 0.5));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header {
-  fill: #2196f3 !important;
+  fill: #388E3C !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header-bottom {
-  fill: #2196f3 !important;
+  fill: #388E3C !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-name {
@@ -183,47 +188,35 @@
   font-weight: bold !important;
 }
 
-@keyframes selectedPulse {
-  0% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 12px rgba(33, 150, 243, 0.8));
-  }
-  100% {
-    stroke-width: 5px;
-    filter: drop-shadow(0 0 16px rgb(33, 150, 243));
-  }
-}
-
-/* Related/connected nodes */
+/* Related/connected nodes - using tertiary accent */
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-rect.relationship-highlighted {
-  stroke: #ff6b35 !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.5));
-  animation: entityPulse 1.5s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 50%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header {
-  fill: #ff6b35 !important;
+  fill: var(--mj-status-success) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header-bottom {
-  fill: #ff6b35 !important;
+  fill: var(--mj-status-success) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-rect.connection-highlighted {
-  stroke: #9b59b6 !important;
+  stroke: var(--mj-color-warning-500) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px rgba(155, 89, 182, 0.5));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-color-warning-500) 50%, transparent));
   opacity: 0.9;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header {
-  fill: #9b59b6 !important;
+  fill: var(--mj-color-warning-500) !important;
   opacity: 0.8;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header-bottom {
-  fill: #9b59b6 !important;
+  fill: var(--mj-color-warning-500) !important;
   opacity: 0.8;
 }
 
@@ -236,20 +229,19 @@
 
 :host ::ng-deep .erd-container svg .link-group .link:hover {
   stroke-width: 3px;
-  stroke: #ff6b35;
+  stroke: var(--mj-status-success);
   opacity: 1;
 }
 
 :host ::ng-deep .erd-container svg .link-group .link.highlighted {
-  stroke: #ff6b35 !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 4px !important;
   opacity: 1 !important;
-  filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.6));
-  animation: linkPulse 1.5s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .link-group .link-label {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   opacity: 0.8;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -258,7 +250,7 @@
 :host ::ng-deep .erd-container svg .link-group .link-label.highlighted {
   opacity: 1;
   font-weight: bold;
-  fill: #ff6b35;
+  fill: var(--mj-status-success);
 }
 
 :host ::ng-deep .erd-container svg .link-group.highlighted {
@@ -271,36 +263,6 @@
 }
 
 :host ::ng-deep .erd-container svg .field-group:hover .field-bg {
-  fill: #e3f2fd !important;
+  fill: var(--mj-color-accent-300) !important;
 }
 
-@keyframes pulse {
-  0% {
-    stroke-width: 4px;
-  }
-  100% {
-    stroke-width: 6px;
-  }
-}
-
-@keyframes linkPulse {
-  0% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.6));
-  }
-  100% {
-    stroke-width: 5px;
-    filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.8));
-  }
-}
-
-@keyframes entityPulse {
-  0% {
-    stroke-width: 3px;
-    filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.5));
-  }
-  100% {
-    stroke-width: 4px;
-    filter: drop-shadow(0 0 8px rgba(255, 107, 53, 0.7));
-  }
-}

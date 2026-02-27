@@ -3,8 +3,8 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntityExtended, AIPromptEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { TemplateParamEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -141,13 +141,14 @@ export interface SavedConversation {
  * @example
  * ```typescript
  * // Using with agent entity
- * const agent = await metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+ * const agent = await metadata.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
  * await agent.Load('agent-id');
  * this.testHarness.aiAgent = agent;
  * this.testHarness.isVisible = true;
  * ```
  */
 @Component({
+  standalone: false,
     selector: 'mj-ai-test-harness',
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
@@ -172,7 +173,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @Input() mode: TestHarnessMode = 'agent';
     
     /** The entity to test - either an AI Agent or AI Prompt */
-    @Input() entity: AIAgentEntityExtended | AIPromptEntityExtended | null = null;
+    @Input() entity: MJAIAgentEntityExtended | MJAIPromptEntityExtended | null = null;
     
     /** The original prompt run ID when re-running a previous prompt execution */
     @Input() originalPromptRunId: string | null = null;
@@ -188,10 +189,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
-    get aiAgent(): AIAgentEntityExtended | null {
+    get aiAgent(): MJAIAgentEntityExtended | null {
         return this.isAgentEntity(this.entity) ? this.entity : null;
     }
-    set aiAgent(value: AIAgentEntityExtended | null) {
+    set aiAgent(value: MJAIAgentEntityExtended | null) {
         this.entity = value;
         if (value) {
             this.mode = 'agent';
@@ -272,7 +273,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public selectedConfigurationId: string = '';
     
     /** Available AI configurations */
-    public availableConfigurations: AIConfigurationEntity[] = [];
+    public availableConfigurations: MJAIConfigurationEntity[] = [];
     
     /** Default model for the prompt (cached for display) */
     private defaultModelName: string = '';
@@ -348,12 +349,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     public executionMonitorMode: 'live' | 'historical' = 'historical';
     
     /** Current agent run being displayed in execution monitor */
-    public currentAgentRun: AIAgentRunEntityExtended | null = null;
+    public currentAgentRun: MJAIAgentRunEntityExtended | null = null;
     
     /**
      * Tracks agent steps during live execution (deprecated - now using agent run's Steps directly)
      */
-    public liveAgentSteps: AIAgentRunStepEntityExtended[] = [];
+    public liveAgentSteps: MJAIAgentRunStepEntityExtended[] = [];
     
     /** Track the last processed run ID to avoid reprocessing same data */
     private lastProcessedRunId: string | null = null;
@@ -541,7 +542,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     if (!this.currentAgentRun) {
                         // First time - create the entity
                         const md = new Metadata();
-                        this.currentAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+                        this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
                     }
                     
                     // Load the serialized data into our entity
@@ -610,7 +611,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Filter models by the prompt's AIModelTypeID if it exists
         let filteredModels: any[] = [];
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntityExtended;
+            const prompt = this.entity as MJAIPromptEntityExtended;
             if (prompt.AIModelTypeID) {
                 filteredModels = AIEngineBase.Instance.Models.filter(
                     model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
@@ -640,7 +641,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Determine the default model for this prompt
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntityExtended;
+            const prompt = this.entity as MJAIPromptEntityExtended;
             this.defaultModelName = await this.getDefaultModelName(prompt);
         }
         
@@ -668,7 +669,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Gets the default model name for a prompt based on its configuration
      */
-    private async getDefaultModelName(prompt: AIPromptEntityExtended): Promise<string> {
+    private async getDefaultModelName(prompt: MJAIPromptEntityExtended): Promise<string> {
         try {
             // Get prompt-specific model associations
             const promptModels = AIEngineBase.Instance.PromptModels.filter(
@@ -779,7 +780,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private async loadAvailableConfigurations() {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIConfigurationEntity>({
+            const result = await rv.RunView<MJAIConfigurationEntity>({
                 EntityName: 'MJ: AI Configurations',
                 ExtraFilter: `Status IN ('Active', 'Preview')`,
                 OrderBy: 'IsDefault DESC, Name',
@@ -877,7 +878,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private loadPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntityExtended;
+            const prompt = this.entity as MJAIPromptEntityExtended;
             
             // Load default values from prompt entity
             if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
@@ -902,7 +903,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadTemplateParameters() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntityExtended;
+            const prompt = this.entity as MJAIPromptEntityExtended;
             
             if (!prompt.TemplateID) {
                 return; // No template to load parameters from
@@ -910,8 +911,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             try {
                 const rv = new RunView();
-                const result = await rv.RunView<TemplateParamEntity>({
-                    EntityName: 'Template Params',
+                const result = await rv.RunView<MJTemplateParamEntity>({
+                    EntityName: 'MJ: Template Params',
                     ExtraFilter: `TemplateID='${prompt.TemplateID}'`,
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
@@ -971,7 +972,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public resetToPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntityExtended;
+            const prompt = this.entity as MJAIPromptEntityExtended;
             
             // Reset model selection to default
             this.selectedModelId = '';
@@ -1197,19 +1198,19 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadAgentRun(runId: string): Promise<void> {
         const md = new Metadata();
-        const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.Load(runId);
         await this.internalLoadAgenRun(agentRunEntity);
     }
 
     private async loadAgentRunFromData(agentRunData: any): Promise<void> {
         const md = new Metadata();
-        const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.LoadFromData(agentRunData);
         await this.internalLoadAgenRun(agentRunEntity);
     }
 
-    private async internalLoadAgenRun(agentRunEntity: AIAgentRunEntityExtended): Promise<void> {
+    private async internalLoadAgenRun(agentRunEntity: MJAIAgentRunEntityExtended): Promise<void> {
         try {
             this.currentAgentRun = agentRunEntity;
             // The Load method automatically loads related steps through InnerLoad override
@@ -1328,7 +1329,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Clear previous execution data when starting a new run
         // Create a proper agent run entity for live tracking
         const md = new Metadata();
-        this.currentAgentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         this.currentAgentRun.ID = `temp-${Date.now()}`;
         this.currentAgentRun.Status = 'Running';
         this.currentAgentRun.StartedAt = new Date();
@@ -1381,7 +1382,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             this.startTypingAnimation(assistantMessage);
 
             const executionResult = await dataProvider.AI.RunAIAgent({
-                agent: this.entity as AIAgentEntityExtended,
+                agent: this.entity as MJAIAgentEntityExtended,
                 conversationMessages: this.conversationMessages, 
                 data: Object.keys(dataContext).length > 0 ? dataContext : undefined, 
                 lastRunId: this.lastAgentRunId || undefined,
@@ -1591,7 +1592,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the prompt using the new AI client
             const executionResult = await dataProvider.AI.RunAIPrompt({
-                promptId: (this.entity as AIPromptEntityExtended).ID,
+                promptId: (this.entity as MJAIPromptEntityExtended).ID,
                 data: dataContext,
                 overrideModelId: this.selectedModelId || undefined,
                 overrideVendorId: this.selectedVendorId || undefined,
@@ -3056,17 +3057,17 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Type guard to check if entity is an AI Agent
      */
-    private isAgentEntity(entity: any): entity is AIAgentEntityExtended {
+    private isAgentEntity(entity: any): entity is MJAIAgentEntityExtended {
         // Check using the EntityInfo property from BaseEntity
-        return entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Agents';
+        return entity && entity.EntityInfo && entity.EntityInfo.Name === 'MJ: AI Agents';
     }
     
     /**
      * Type guard to check if entity is an AI Prompt
      */
-    private isPromptEntity(entity: any): entity is AIPromptEntityExtended {
+    private isPromptEntity(entity: any): entity is MJAIPromptEntityExtended {
         // Check using the EntityInfo property from BaseEntity
-        const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Prompts';
+        const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'MJ: AI Prompts';
         
         return result;
     }
@@ -3157,7 +3158,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private async loadFromPromptRun(promptRunId: string): Promise<void> {
         console.log('🔄 Loading from prompt run:', promptRunId);
         const md = new Metadata();
-        const promptRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+        const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
         
         if (await promptRun.Load(promptRunId)) {
             console.log('✅ Prompt run loaded successfully');

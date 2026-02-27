@@ -40,7 +40,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 reader.releaseLock();
             }
 
-            const audioBuffer = Buffer.concat(chunks);
+            const audioBuffer = Buffer.concat(chunks as Uint8Array[]);
             speechResult.data = audioBuffer;
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
             speechResult.success = true;
@@ -169,8 +169,4 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     public async GetSupportedMethods() {
         return ["CreateSpeech", "GetVoices", "GetModels", "GetPronounciationDictionaries"];
     }
-}
-
-export function LoadElevenLabsAudioGenerator() {
-    // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
 }

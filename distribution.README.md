@@ -20,7 +20,7 @@ This monorepo distribution includes:
 
 ## Prerequisites
 
-- **Node.js** 22.0.0 or higher
+- **Node.js** 24.0.0 or higher
 - **npm** 10.0.0 or higher
 - **SQL Server** 2019 or higher (or Azure SQL Database)
 - A SQL Server database (can be empty or existing)
@@ -98,11 +98,18 @@ TENANT_ID=your-azure-tenant-id
 
 If you need to override specific settings beyond environment variables, edit `mj.config.cjs`. The file includes extensive comments showing all available options and their defaults. You only need to uncomment and modify settings you want to override.
 
-### 3. Install Dependencies
+### 3. **Install Dependencies** ⚠️ IMPORTANT
+
+**This step must be completed before any other commands.**
 
 ```bash
 npm install
 ```
+
+✅ This command now works perfectly without any flags!
+✅ Installs all dependencies with pinned versions for reproducible builds.
+
+**Note**: Do not use `--legacy-peer-deps` - it's no longer needed!
 
 This will install all dependencies for all packages in the monorepo.
 
@@ -178,7 +185,8 @@ npm run start:explorer     # Start Angular UI on port 4200
 ├── install.config.json      # Installation configuration template
 ├── migrations/              # Flyway database migrations
 │   ├── v2/                  # Version 2 migrations
-│   └── v3/                  # Version 3 migrations
+│   ├── v3/                  # Version 3 migrations
+│   └── v4/                  # Version 4 migrations
 ├── SQL Scripts/             # SQL views, stored procedures
 │   └── generated/           # Auto-generated SQL objects
 ├── apps/                    # Application packages
@@ -251,9 +259,9 @@ MemberJunction uses a **minimal configuration** approach where most settings com
   - Alternative to manual `.env` setup
   - Run `npm run setup` after editing
 
-### Benefits of Minimal Configuration (New in v3.0!)
+### Benefits of Minimal Configuration
 
-MemberJunction v3.0 introduces a minimal configuration system that dramatically simplifies deployment:
+MemberJunction uses a minimal configuration system that dramatically simplifies deployment:
 
 - **Less Boilerplate**: Typical deployments need only ~10 environment variables instead of 250+ lines of config
 - **Clearer Intent**: Only see settings you've customized - everything else uses sensible defaults
@@ -292,7 +300,7 @@ Authentication providers are automatically configured when their environment var
 
 ## Need Help?
 
-- **Documentation**: [https://docs.memberjunction.com](https://docs.memberjunction.com)
+- **Documentation**: [https://docs.memberjunction.org](https://docs.memberjunction.org)
 - **GitHub**: [https://github.com/MemberJunction/MJ](https://github.com/MemberJunction/MJ)
 - **Issues**: [https://github.com/MemberJunction/MJ/issues](https://github.com/MemberJunction/MJ/issues)
 

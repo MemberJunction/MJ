@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 
 import { RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
-import { EntityDocumentEntity } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { LogStatus } from "@memberjunction/core";
 
 /**
@@ -68,8 +68,8 @@ export class VectorizeEntityAction extends BaseAction {
         let vectorizer = new EntityVectorSyncer();
         await vectorizer.Config(false, params.ContextUser);
 
-        const entityDocuments: EntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
-        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: EntityDocumentEntity) => {
+        const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
+        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
             try{
                 await vectorizer.VectorizeEntity({
                     entityID: entityDocument.EntityID,
@@ -98,16 +98,4 @@ export class VectorizeEntityAction extends BaseAction {
             ResultCode: results.every(r => r.Success) ? "SUCCESS" : "FAILED"            
         };
     }
-}
-
-/**
- * Loader function to ensure the VectorizeEntityAction class is included in the bundle.
- * This prevents tree-shaking from removing the class during the build process.
- * 
- * @remarks
- * This function should be called during application initialization to ensure
- * the action is properly registered with the MemberJunction class factory.
- */
-export function LoadVectorizeEntityAction(){
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
 }

@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, UserInfo } from "@memberjunction/core";
 import { DataContextItem } from "@memberjunction/data-context";
-import * as sql from "mssql";
+import sql from "mssql";
 
 @RegisterClass(DataContextItem, undefined, undefined, true) 
 export class DataContextItemServer extends DataContextItem {
@@ -24,12 +24,4 @@ export class DataContextItemServer extends DataContextItem {
             return false;
         }
     }
-}
-
-/**
- * Call this function after you import this package to ensure that the DataContextItemServer class is not tree shaken out of the final build
- */
-export function LoadDataContextItemsServer() {
-    // nothing to do here - this is called from packages that import this package in order to prevent tree shaking from removing the DataContextItemServer class
-    // that can happen since there is no static code path to instantiate the class
 }

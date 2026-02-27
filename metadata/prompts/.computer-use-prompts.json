@@ -1,0 +1,96 @@
+[
+  {
+    "fields": {
+      "Name": "Computer Use - Controller",
+      "Description": "System prompt for the Computer Use browser automation controller. Instructs the LLM to analyze screenshots of a web browser and decide what actions to take (click, type, navigate, scroll, etc.) to accomplish a stated goal. Outputs structured JSON with reasoning, actions, and optional tool calls.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/computer-use/controller.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "OutputType": "object",
+      "OutputExample": "{\"reasoning\":\"The page has loaded and I can see the text editor area. I will click on it to focus it.\",\"actions\":[{\"Type\":\"Click\",\"BoundingBox\":{\"XMin\":100,\"YMin\":200,\"XMax\":900,\"YMax\":600}}],\"toolCalls\":[]}"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "8C56B221-225D-4AA0-ADDA-6804AEAE332A"
+          },
+          "sync": {
+            "lastModified": "2026-02-19T20:08:12.707Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
+    },
+    "sync": {
+      "lastModified": "2026-02-19T20:08:12.657Z",
+      "checksum": "b67c1b8308419175f9eeb754e9ff07485aa15fd71952c739daa42f200f2f8b13"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Computer Use - Judge",
+      "Description": "System prompt for the Computer Use judge evaluator. Analyzes screenshots and step history to determine whether the browser automation agent has accomplished its stated goal. Returns a structured JSON verdict with done/confidence/reason/feedback fields.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/computer-use/judge.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "OutputType": "object",
+      "OutputExample": "{\"done\":false,\"confidence\":0.3,\"reason\":\"The agent has navigated to the page but has not yet completed the goal.\",\"feedback\":\"Try clicking on the search input field next.\"}"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "855B1D42-9D3D-4B2B-9AFC-A61DB0993D47"
+          },
+          "sync": {
+            "lastModified": "2026-02-19T20:08:12.716Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DAFE960C-1CDA-4612-965C-A3CD400387E6"
+    },
+    "sync": {
+      "lastModified": "2026-02-19T20:08:12.136Z",
+      "checksum": "c50b5dd3559abaa66d7187fd6f27466a305533b005bcf50852cff4dbf34c50b9"
+    }
+  }
+]

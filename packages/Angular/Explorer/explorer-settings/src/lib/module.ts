@@ -1,23 +1,13 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { SortableModule } from '@progress/kendo-angular-sortable';
+import { WindowModule } from '@progress/kendo-angular-dialog';
 
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
-import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
-import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { JoinGridModule } from '@memberjunction/ng-join-grid';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -25,78 +15,95 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 // Shared module
 import { SharedSettingsModule } from './shared/shared-settings.module';
 
-// Main components
+// Main settings container
 import { SettingsComponent } from './settings/settings.component';
+
+// User-facing components
+import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
+import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
+
+// New user settings components
+import { GeneralSettingsComponent } from './general-settings/general-settings.component';
+import { AccountInfoComponent } from './account-info/account-info.component';
+import { ApplicationSettingsComponent } from './application-settings/application-settings.component';
+import { AppearanceSettingsComponent } from './appearance-settings/appearance-settings.component';
+
+// Admin components (used by Admin app dashboards)
 import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
 import { UserManagementComponent } from './user-management/user-management.component';
 import { RoleManagementComponent } from './role-management/role-management.component';
 import { ApplicationManagementComponent } from './application-management/application-management.component';
 import { EntityPermissionsComponent } from './entity-permissions/entity-permissions.component';
-import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
 
-// Dialog components
+// Admin dialog components
 import { RoleDialogComponent } from './role-management/role-dialog/role-dialog.component';
 import { UserDialogComponent } from './user-management/user-dialog/user-dialog.component';
 import { PermissionDialogComponent } from './entity-permissions/permission-dialog/permission-dialog.component';
 import { ApplicationDialogComponent } from './application-management/application-dialog/application-dialog.component';
-import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
 
 @NgModule({
   declarations: [
-    // Main dashboard components
+    // Main settings container
     SettingsComponent,
+    // User-facing components
+    UserProfileSettingsComponent,
+    UserAppConfigComponent,
+    NotificationPreferencesComponent,
+    // New user settings components
+    GeneralSettingsComponent,
+    AccountInfoComponent,
+    ApplicationSettingsComponent,
+    AppearanceSettingsComponent,
+    // Admin components (used by Admin app dashboards)
     SqlLoggingComponent,
     UserManagementComponent,
     RoleManagementComponent,
     ApplicationManagementComponent,
     EntityPermissionsComponent,
-    UserProfileSettingsComponent,
-    // Dialog components
+    // Admin dialog components
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
-    ApplicationDialogComponent,
-    UserAppConfigComponent
+    ApplicationDialogComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    GridModule,
-    DialogsModule,
-    WindowModule,
-    ExcelExportModule,
-    CompareRecordsModule,
-    ContainerDirectivesModule,
-    ButtonsModule,
-    DropDownsModule,
+    DragDropModule,
     EntityPermissionsModule,
-    MJTabStripModule,
     EntityFormDialogModule,
-    IndicatorsModule,
-    UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule,
-    SharedGenericModule
+    SharedGenericModule,
+    WindowModule
   ],
   exports: [
-    // Main dashboard components
+    // Main settings container
     SettingsComponent,
+    // User-facing components
+    UserProfileSettingsComponent,
+    UserAppConfigComponent,
+    NotificationPreferencesComponent,
+    // New user settings components
+    GeneralSettingsComponent,
+    AccountInfoComponent,
+    ApplicationSettingsComponent,
+    AppearanceSettingsComponent,
+    // Admin components (used by Admin app dashboards)
     SqlLoggingComponent,
     UserManagementComponent,
     RoleManagementComponent,
     ApplicationManagementComponent,
     EntityPermissionsComponent,
-    UserProfileSettingsComponent,
-    // Dialog components
+    // Admin dialog components
     RoleDialogComponent,
     UserDialogComponent,
     PermissionDialogComponent,
-    ApplicationDialogComponent,
-    UserAppConfigComponent
+    ApplicationDialogComponent
   ]
 })
 export class ExplorerSettingsModule { }

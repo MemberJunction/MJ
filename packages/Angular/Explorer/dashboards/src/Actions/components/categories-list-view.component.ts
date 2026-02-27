@@ -1,15 +1,16 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { RunView, LogError } from '@memberjunction/core';
-import { ActionCategoryEntity, ActionEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 
-interface CategoryWithStats extends ActionCategoryEntity {
+interface CategoryWithStats extends MJActionCategoryEntity {
   actionCount?: number;
   activeActionCount?: number;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-categories-list-view',
   template: `
     <div class="categories-list-view" mjFillContainer>
@@ -338,11 +339,11 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Categories', 
+          EntityName: 'MJ: Action Categories', 
           OrderBy: 'Name' 
         },
         {
-          EntityName: 'Actions', 
+          EntityName: 'MJ: Actions', 
           OrderBy: 'Name'
         }
       ]);
@@ -354,8 +355,8 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
         throw new Error('Failed to load categories: ' + categoriesResult.ErrorMessage);
       }
       
-      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
-      const actions = (actionsResult.Results || []) as ActionEntity[];
+      const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
+      const actions = (actionsResult.Results || []) as MJActionEntity[];
       
       console.log(`Loaded ${categories.length} categories and ${actions.length} actions`);
 
@@ -398,14 +399,14 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
     this.searchTerm$.next(searchTerm);
   }
 
-  public openCategory(category: ActionCategoryEntity): void {
+  public openCategory(category: MJActionCategoryEntity): void {
     this.openEntityRecord.emit({
-      entityName: 'Action Categories',
+      entityName: 'MJ: Action Categories',
       recordId: category.ID
     });
   }
 
-  public viewActions(category: ActionCategoryEntity, event: Event): void {
+  public viewActions(category: MJActionCategoryEntity, event: Event): void {
     event.stopPropagation();
     // This could navigate to the actions list with a pre-applied category filter
     // For now, just open the category

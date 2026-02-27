@@ -3,11 +3,11 @@ import { FormControl } from '@angular/forms';
 import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 
 export interface SubAgentSelectorResult {
-  selectedAgents: AIAgentEntityExtended[];
+  selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
 }
 
@@ -19,7 +19,7 @@ export interface SubAgentSelectorConfig {
   parentAgentId: string; // To exclude from selection
 }
 
-export interface AgentDisplayItem extends AIAgentEntityExtended {
+export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   selected: boolean;
   typeName?: string;
 }
@@ -29,6 +29,7 @@ export interface AgentDisplayItem extends AIAgentEntityExtended {
  * Only shows agents with NULL ParentID (root agents) that can become sub-agents.
  */
 @Component({
+  standalone: false,
   selector: 'mj-sub-agent-selector-dialog',
   templateUrl: './sub-agent-selector-dialog.component.html',
   styleUrls: ['./sub-agent-selector-dialog.component.css']
@@ -44,7 +45,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   
   // Data streams
   allAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
-  agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
+  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   filteredAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
   selectedAgents$ = new BehaviorSubject<Set<string>>(new Set());
   isLoading$ = new BehaviorSubject<boolean>(false);
@@ -101,7 +102,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const results = await rv.RunViews([
       // Root agents (index 0)
       {
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
@@ -271,8 +272,8 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const selectedDisplayItems = allAgents
       .filter(agent => selectedIds.has(agent.ID));
     
-    // Convert AgentDisplayItem to AIAgentEntityExtended by casting (they have the same structure)
-    const selectedAgents: AIAgentEntityExtended[] = selectedDisplayItems.map(item => item as AIAgentEntityExtended);
+    // Convert AgentDisplayItem to MJAIAgentEntityExtended by casting (they have the same structure)
+    const selectedAgents: MJAIAgentEntityExtended[] = selectedDisplayItems.map(item => item as MJAIAgentEntityExtended);
     
     this.result.next({
       selectedAgents,

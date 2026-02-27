@@ -1,0 +1,542 @@
+.scopes-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Panel Header */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.header-left {
+    flex: 1;
+    min-width: 200px;
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin: 0 0 4px 0;
+}
+
+.panel-title i {
+    color: var(--mj-status-success);
+}
+
+.panel-subtitle {
+    font-size: 14px;
+    color: var(--mj-text-secondary);
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.scope-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+}
+
+.stat.active {
+    color: var(--mj-status-success);
+}
+
+.stat i {
+    font-size: 14px;
+}
+
+.tree-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.btn-icon i {
+    font-size: 14px;
+    color: var(--mj-text-secondary);
+}
+
+.btn-create {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
+    color: var(--mj-text-inverse);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-create:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+}
+
+/* Messages */
+.message {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.message.success {
+    background: var(--mj-color-success-100);
+    color: var(--mj-color-success-800);
+    border: 1px solid var(--mj-status-success-border);
+}
+
+.message.error {
+    background: var(--mj-color-error-100);
+    color: var(--mj-color-error-700);
+    border: 1px solid var(--mj-status-error-border);
+}
+
+/* Scope Tree */
+.scope-tree {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--mj-bg-surface);
+    border-radius: 12px;
+    box-shadow: var(--mj-shadow-md);
+}
+
+.scope-node {
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.scope-node:last-child {
+    border-bottom: none;
+}
+
+.node-content {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    transition: background 0.2s ease;
+}
+
+.node-content:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.node-content.inactive {
+    opacity: 0.6;
+}
+
+.expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--mj-text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.expand-btn:hover {
+    color: var(--mj-text-secondary);
+}
+
+.expand-placeholder {
+    width: 24px;
+    flex-shrink: 0;
+}
+
+.scope-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.scope-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.scope-icon i {
+    font-size: 14px;
+    color: var(--mj-text-inverse);
+}
+
+.scope-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.scope-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+    flex-wrap: wrap;
+}
+
+.full-path {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.status-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.scope-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+
+.category {
+    font-weight: 500;
+}
+
+.resource-type {
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-sunken);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.description {
+    color: var(--mj-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.node-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 12px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.node-content:hover .node-actions {
+    opacity: 1;
+}
+
+.btn-node-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-node-action:hover {
+    background: var(--mj-status-success);
+    border-color: var(--mj-status-success);
+    color: var(--mj-text-inverse);
+}
+
+.btn-node-action i {
+    font-size: 12px;
+}
+
+.children {
+    margin-left: 0;
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    color: var(--mj-text-secondary);
+    text-align: center;
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state span {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.empty-state p {
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+/* ========================================
+   Dialog Styles - Polished & Professional
+   ======================================== */
+
+/* Window styling */
+:host ::ng-deep kendo-window {
+    border-radius: 16px !important;
+    overflow: hidden;
+    box-shadow: var(--mj-shadow-2xl) !important;
+    background: var(--mj-bg-surface) !important;
+}
+
+:host ::ng-deep kendo-window .k-window-content {
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--mj-bg-surface) !important;
+}
+
+:host ::ng-deep kendo-window-titlebar {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px !important;
+    background: var(--mj-bg-page) !important;
+    border-bottom: 1px solid var(--mj-border-default) !important;
+}
+
+.dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--mj-text-primary);
+}
+
+.dialog-title i {
+    color: var(--mj-status-success);
+    font-size: 18px;
+}
+
+.window-close-btn {
+    margin-left: auto;
+    color: var(--mj-text-muted);
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.window-close-btn:hover {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+}
+
+.window-close-btn i {
+    font-size: 16px;
+}
+
+/* Dialog Content */
+.dialog-content {
+    padding: 24px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Form Fields */
+.form-field {
+    margin-bottom: 20px;
+}
+
+.form-field:last-of-type {
+    margin-bottom: 0;
+}
+
+.form-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin-bottom: 8px;
+    letter-spacing: 0.01em;
+}
+
+.form-input {
+    width: 100%;
+}
+
+.form-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 80px;
+}
+
+:host ::ng-deep .form-input .k-input,
+:host ::ng-deep .form-textarea .k-input-inner,
+:host ::ng-deep .form-field .k-dropdownlist {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    border-color: var(--mj-border-default);
+    background: var(--mj-bg-surface) !important;
+    color: var(--mj-text-primary) !important;
+    transition: all 0.2s ease;
+}
+
+:host ::ng-deep .form-input:focus-within,
+:host ::ng-deep .form-textarea:focus-within,
+:host ::ng-deep .form-field .k-dropdownlist.k-focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 10%, transparent);
+}
+
+.field-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.form-field.half {
+    flex: 1;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    padding: 12px 16px;
+    background: var(--mj-bg-page);
+    border-radius: 10px;
+    border: 1px solid var(--mj-border-default);
+    transition: all 0.2s ease;
+}
+
+.checkbox-label:hover {
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
+}
+
+.checkbox-label input {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.checkbox-label span:first-of-type {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    font-size: 14px;
+}
+
+.checkbox-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+/* Dialog Actions */
+.dialog-actions {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    background: var(--mj-bg-page);
+    border-top: 1px solid var(--mj-border-default);
+    margin: 0 -24px -24px -24px;
+}
+
+:host ::ng-deep .dialog-actions .k-button {
+    min-width: 100px;
+    padding: 10px 20px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+:host ::ng-deep .dialog-actions .k-button-solid-primary {
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
+    border: none;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
+}
+
+:host ::ng-deep .dialog-actions .k-button-solid-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+}

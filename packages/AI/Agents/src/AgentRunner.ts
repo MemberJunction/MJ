@@ -13,9 +13,9 @@
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { ConversationEntity, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -172,7 +172,7 @@ export class AgentRunner {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
-            let agentResponseDetail: ConversationDetailEntity | undefined;
+            let agentResponseDetail: MJConversationDetailEntity | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -180,8 +180,8 @@ export class AgentRunner {
 
                 // Load the conversation detail to get the conversation ID AND keep reference for final status update
                 // This ensures backend can update Status/Message even if frontend disconnects (browser refresh)
-                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
                 if (await agentResponseDetail.Load(agentResponseDetailId)) {
@@ -203,8 +203,8 @@ export class AgentRunner {
 
                 if (!conversationId) {
                     LogStatus('Creating new conversation');
-                    const conversation = await md.GetEntityObject<ConversationEntity>(
-                        'Conversations',
+                    const conversation = await md.GetEntityObject<MJConversationEntity>(
+                        'MJ: Conversations',
                         contextUser
                     );
 
@@ -249,8 +249,8 @@ export class AgentRunner {
 
                 // Step 2: Create conversation detail for user message
                 LogStatus('Creating conversation detail for user message');
-                const userMessageDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                const userMessageDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
 
@@ -274,8 +274,8 @@ export class AgentRunner {
 
                 // Step 3: Create conversation detail for agent response (like UI does)
                 LogStatus('Creating conversation detail for agent response');
-                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
 
@@ -389,6 +389,31 @@ export class AgentRunner {
                 );
             }
 
+            // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments
+            let mediaIds: string[] = [];
+            if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
+                // Filter to only media that should be persisted (persist !== false)
+                const mediaToSave = agentResult.mediaOutputs.filter(m => m.persist !== false);
+                LogStatus(`Processing ${mediaToSave.length} of ${agentResult.mediaOutputs.length} media outputs (filtered by persist flag)`);
+
+                // Save to AIAgentRunMedia for permanent storage
+                mediaIds = await this.SaveAgentRunMedia(
+                    agentResult.agentRun.ID,
+                    mediaToSave,  // Pass filtered array
+                    contextUser
+                );
+
+                // Create ConversationDetailAttachment records for UI display
+                if (agentResponseDetailId && mediaIds.length > 0) {
+                    await this.CreateConversationMediaAttachments(
+                        agentResponseDetailId,
+                        mediaToSave,  // Pass same filtered array to keep indices aligned
+                        mediaIds,
+                        contextUser
+                    );
+                }
+            }
+
             return {
                 agentResult,
                 conversationId,
@@ -422,7 +447,7 @@ export class AgentRunner {
     public async GetMaxVersionForArtifact(artifactId: string, contextUser: UserInfo): Promise<number> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ArtifactVersionEntity>({
+            const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID='${artifactId}'`,
                 OrderBy: 'VersionNumber DESC',
@@ -464,7 +489,7 @@ export class AgentRunner {
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ConversationDetailArtifactEntity>({
+            const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -478,7 +503,7 @@ export class AgentRunner {
 
             const junction = result.Results[0];
             const md = new Metadata();
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
             );
@@ -585,7 +610,7 @@ export class AgentRunner {
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
                     // Create new artifact header
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
+                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
@@ -622,7 +647,7 @@ export class AgentRunner {
             }
 
             // Create artifact version with content
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
             );
@@ -647,7 +672,7 @@ export class AgentRunner {
                 if (extractedName && extractedName.toLowerCase() !== 'null') {
                     extractedName = extractedName.replace(/^["']|["']$/g, '');
 
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
+                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
@@ -662,7 +687,7 @@ export class AgentRunner {
             }
 
             // Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
+            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
                 'MJ: Conversation Detail Artifacts',
                 contextUser
             );
@@ -747,5 +772,274 @@ export class AgentRunner {
             LogError(`Error generating conversation name: ${(error as Error).message}`);
             return null;
         }
+    }
+
+    /**
+     * Saves media outputs to AIAgentRunMedia table for permanent storage.
+     * This creates records for each media output promoted during agent execution.
+     *
+     * Only media with `persist !== false` is saved. Media items with `persist: false`
+     * are typically intercepted binary content that was never used in the final output.
+     *
+     * @param agentRunId - The ID of the agent run
+     * @param mediaOutputs - Array of media outputs to save
+     * @param contextUser - User context for the operation
+     * @returns Array of saved AIAgentRunMedia IDs
+     * @since 3.1.0
+     *
+     * @example
+     * ```typescript
+     * const runner = new AgentRunner();
+     * const mediaIds = await runner.SaveAgentRunMedia(
+     *     agentResult.agentRun.ID,
+     *     agentResult.mediaOutputs,
+     *     currentUser
+     * );
+     * console.log(`Saved ${mediaIds.length} media outputs`);
+     * ```
+     */
+    public async SaveAgentRunMedia(
+        agentRunId: string,
+        mediaOutputs: MediaOutput[] | undefined,
+        contextUser: UserInfo
+    ): Promise<string[]> {
+        if (!mediaOutputs || mediaOutputs.length === 0) {
+            return [];
+        }
+
+        // Filter to only persist media that should be saved
+        // persist=false means intercepted but unused binary content (e.g., images not used in response)
+        const mediaToSave = mediaOutputs.filter(m => m.persist !== false);
+        if (mediaToSave.length === 0) {
+            LogStatus(`All ${mediaOutputs.length} media outputs have persist=false, skipping save`);
+            return [];
+        }
+
+        if (mediaToSave.length < mediaOutputs.length) {
+            LogStatus(`Filtering: ${mediaToSave.length} of ${mediaOutputs.length} media outputs will be persisted`);
+        }
+
+        const savedIds: string[] = [];
+        const md = new Metadata();
+
+        try {
+            // Use AIEngine's cached modalities instead of a fresh DB call
+            const aiEngine = AIEngine.Instance;
+
+            for (let i = 0; i < mediaToSave.length; i++) {
+                const mediaOutput = mediaToSave[i];
+
+                try {
+                    const mediaEntity = await md.GetEntityObject<MJAIAgentRunMediaEntity>(
+                        'MJ: AI Agent Run Medias',
+                        contextUser
+                    );
+
+                    mediaEntity.AgentRunID = agentRunId;
+
+                    // Link to source prompt run media if this was promoted
+                    if (mediaOutput.promptRunMediaId) {
+                        mediaEntity.SourcePromptRunMediaID = mediaOutput.promptRunMediaId;
+                    }
+
+                    // Get modality ID from cached engine data
+                    const modality = aiEngine.GetModalityByName(mediaOutput.modality);
+                    if (modality) {
+                        mediaEntity.ModalityID = modality.ID;
+                    } else {
+                        LogError(`Unknown modality: ${mediaOutput.modality}`);
+                        continue;
+                    }
+
+                    mediaEntity.MimeType = mediaOutput.mimeType;
+
+                    // Only store inline data if NOT from prompt run media
+                    if (!mediaOutput.promptRunMediaId && mediaOutput.data) {
+                        mediaEntity.InlineData = mediaOutput.data;
+                    }
+
+                    // Set dimensions if available
+                    if (mediaOutput.width) {
+                        mediaEntity.Width = mediaOutput.width;
+                    }
+                    if (mediaOutput.height) {
+                        mediaEntity.Height = mediaOutput.height;
+                    }
+                    if (mediaOutput.durationSeconds) {
+                        mediaEntity.DurationSeconds = mediaOutput.durationSeconds;
+                    }
+
+                    // Set label and metadata
+                    if (mediaOutput.label) {
+                        mediaEntity.Label = mediaOutput.label;
+                    }
+                    if (mediaOutput.metadata) {
+                        mediaEntity.Metadata = JSON.stringify(mediaOutput.metadata);
+                    }
+
+                    // Set description if available
+                    if (mediaOutput.description) {
+                        mediaEntity.Description = mediaOutput.description;
+                    }
+
+                    mediaEntity.DisplayOrder = i;
+
+                    const saved = await mediaEntity.Save();
+                    if (saved) {
+                        savedIds.push(mediaEntity.ID);
+                        LogStatus(`Saved AIAgentRunMedia: ${mediaEntity.ID} (${mediaOutput.modality})`);
+                    } else {
+                        LogError(`Failed to save AIAgentRunMedia: ${mediaEntity.LatestResult?.Message}`);
+                    }
+                } catch (mediaError) {
+                    LogError(`Error saving media output ${i}: ${(mediaError as Error).message}`);
+                }
+            }
+
+            LogStatus(`Saved ${savedIds.length} of ${mediaToSave.length} media outputs for agent run ${agentRunId}`);
+            return savedIds;
+
+        } catch (error) {
+            LogError(`Error in SaveAgentRunMedia: ${(error as Error).message}`);
+            return savedIds;
+        }
+    }
+
+    /**
+     * Creates ConversationDetailAttachment records for media outputs.
+     * This enables media to be displayed in the conversation UI.
+     *
+     * @param conversationDetailId - The conversation detail to attach media to
+     * @param mediaOutputs - Array of media outputs
+     * @param agentRunMediaIds - Corresponding AIAgentRunMedia IDs
+     * @param contextUser - User context for the operation
+     * @returns Array of created attachment IDs
+     * @since 3.1.0
+     *
+     * @example
+     * ```typescript
+     * const runner = new AgentRunner();
+     * const attachmentIds = await runner.CreateConversationMediaAttachments(
+     *     conversationDetailId,
+     *     mediaOutputs,
+     *     agentRunMediaIds,
+     *     currentUser
+     * );
+     * ```
+     */
+    public async CreateConversationMediaAttachments(
+        conversationDetailId: string,
+        mediaOutputs: MediaOutput[],
+        agentRunMediaIds: string[],
+        contextUser: UserInfo
+    ): Promise<string[]> {
+        if (!mediaOutputs || mediaOutputs.length === 0) {
+            return [];
+        }
+
+        const attachmentIds: string[] = [];
+        const md = new Metadata();
+
+        try {
+            // Use AIEngine's cached modalities instead of a fresh DB call
+            const aiEngine = AIEngine.Instance;
+
+            for (let i = 0; i < mediaOutputs.length; i++) {
+                const mediaOutput = mediaOutputs[i];
+                const agentRunMediaId = agentRunMediaIds[i];
+
+                if (!agentRunMediaId) {
+                    LogError(`No AIAgentRunMedia ID for media output ${i}`);
+                    continue;
+                }
+
+                try {
+                    const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
+                        'MJ: Conversation Detail Attachments',
+                        contextUser
+                    );
+
+                    attachment.ConversationDetailID = conversationDetailId;
+                    attachment.MimeType = mediaOutput.mimeType;
+                    attachment.DisplayOrder = i;
+
+                    // Get modality ID from cached engine data
+                    const modality = aiEngine.GetModalityByName(mediaOutput.modality);
+                    if (modality) {
+                        attachment.ModalityID = modality.ID;
+                    } else {
+                        LogError(`Unknown modality: ${mediaOutput.modality}`);
+                        continue;
+                    }
+
+                    // Generate a filename if none provided
+                    const extension = this.getMimeTypeExtension(mediaOutput.mimeType);
+                    attachment.FileName = mediaOutput.label || `${mediaOutput.modality.toLowerCase()}_${i + 1}.${extension}`;
+
+                    // Store inline data for small media
+                    // In the future, consider MJStorage for large files
+                    if (mediaOutput.data) {
+                        attachment.InlineData = mediaOutput.data;
+                        // Estimate file size from base64 length (base64 is ~33% larger than binary)
+                        attachment.FileSizeBytes = Math.ceil(mediaOutput.data.length * 0.75);
+                    }
+
+                    // Set dimensions if available
+                    if (mediaOutput.width) {
+                        attachment.Width = mediaOutput.width;
+                    }
+                    if (mediaOutput.height) {
+                        attachment.Height = mediaOutput.height;
+                    }
+                    if (mediaOutput.durationSeconds) {
+                        attachment.DurationSeconds = Math.ceil(mediaOutput.durationSeconds);
+                    }
+
+                    // Set description if available
+                    if (mediaOutput.description) {
+                        attachment.Description = mediaOutput.description;
+                    }
+
+                    const saved = await attachment.Save();
+                    if (saved) {
+                        attachmentIds.push(attachment.ID);
+                        LogStatus(`Created ConversationDetailAttachment: ${attachment.ID} (${mediaOutput.modality})`);
+                    } else {
+                        LogError(`Failed to create attachment: ${attachment.LatestResult?.Message}`);
+                    }
+                } catch (attachError) {
+                    LogError(`Error creating attachment ${i}: ${(attachError as Error).message}`);
+                }
+            }
+
+            LogStatus(`Created ${attachmentIds.length} conversation attachments for detail ${conversationDetailId}`);
+            return attachmentIds;
+
+        } catch (error) {
+            LogError(`Error in CreateConversationMediaAttachments: ${(error as Error).message}`);
+            return attachmentIds;
+        }
+    }
+
+    /**
+     * Gets file extension from MIME type
+     * @private
+     */
+    private getMimeTypeExtension(mimeType: string): string {
+        const mimeToExt: Record<string, string> = {
+            'image/png': 'png',
+            'image/jpeg': 'jpg',
+            'image/jpg': 'jpg',
+            'image/gif': 'gif',
+            'image/webp': 'webp',
+            'audio/mp3': 'mp3',
+            'audio/mpeg': 'mp3',
+            'audio/wav': 'wav',
+            'audio/ogg': 'ogg',
+            'video/mp4': 'mp4',
+            'video/webm': 'webm',
+            'video/ogg': 'ogv'
+        };
+        return mimeToExt[mimeType.toLowerCase()] || 'bin';
     }
 }

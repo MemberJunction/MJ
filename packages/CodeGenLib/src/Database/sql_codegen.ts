@@ -4,13 +4,13 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { EntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
@@ -209,13 +209,19 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
+            let overallSuccess = true;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
-                return false;
+                overallSuccess = false;
+                // Continue to manage entity fields metadata even after SQL execution failure.
+                // This prevents virtual fields from being incorrectly dropped when sqlcmd fails
+                // (e.g., SSL certificate errors) but the mssql connection still works.
             }
-            const step2eEndTime: Date = new Date();
-            succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            else {
+                const step2eEndTime: Date = new Date();
+                succeedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -224,9 +230,11 @@ export class SQLCodeGenBase {
             startSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
                 failSpinner('Failed to manage entity fields');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner('Entity fields metadata updated');
+            else {
+                succeedSpinner('Entity fields metadata updated');
+            }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
             // STEP 4- Apply permissions, executing all .permissions files
@@ -234,26 +242,32 @@ export class SQLCodeGenBase {
             const step4StartTime: Date = new Date();
             if (! await this.applyPermissions(pool, directory, baselineEntities)) {
                 failSpinner('Failed to apply permissions');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
-            
+            else {
+                succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
+            }
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(pool, 'after-sql')) {
                 failSpinner('Failed to run post-generation SQL scripts');
-                return false;
+                overallSuccess = false;
             }
-            succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            else {
+                succeedSpinner(`Post-generation scripts completed (${(new Date().getTime() - step5StartTime.getTime())/1000}s)`);
+            }
 
-            succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            if (overallSuccess) {
+                succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            }
 
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
             await md.Refresh();
 
-            return true;
+            return overallSuccess;
         }
         catch (err) {
             logError(err as string);
@@ -365,7 +379,7 @@ export class SQLCodeGenBase {
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
-                        logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
+                        logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
                         return {Success: false, Files: []};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
@@ -469,19 +483,105 @@ export class SQLCodeGenBase {
         }
     }
 
-    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
+    /**
+     * Writes a generated SQL file to disk only if the content has changed from the existing file.
+     * Returns true if the file was written (content changed or file is new), false if unchanged.
+     * This avoids false timestamp updates and unnecessary I/O.
+     */
+    protected writeFileIfChanged(filePath: string, newContent: string): boolean {
+        if (fs.existsSync(filePath)) {
+            const existing = fs.readFileSync(filePath, 'utf-8');
+            if (existing === newContent) {
+                return false;
+            }
+        }
+        fs.writeFileSync(filePath, newContent);
+        return true;
+    }
+
+    /**
+     * Fetches the current base view definition from SQL Server and compares it against newly generated SQL.
+     * If the view body has changed (e.g., a virtual field was added to a joined table), the entity is
+     * logged and executed. Unlike adding to modifiedEntityList (which would cause all SPs,
+     * permissions, indexes, etc. to be logged too), this only logs the base view SQL itself.
+     *
+     * Comparison extracts the SELECT body from both the DB definition (CREATE VIEW ... AS <body>)
+     * and the generated SQL, normalizing whitespace for a fair comparison.
+     * @returns true if the base view changed, false otherwise
+     */
+    protected async checkBaseViewChangedInDB(pool: sql.ConnectionPool, entity: EntityInfo, generatedViewSQL: string): Promise<boolean> {
+        // Skip if entity is already tracked as new or modified — those are handled by existing logic
+        if (ManageMetadataBase.newEntityList.includes(entity.Name) ||
+            ManageMetadataBase.modifiedEntityList.includes(entity.Name)) {
+            return false;
+        }
+
+        try {
+            const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+            const result = await pool.request().query(
+                `SELECT OBJECT_DEFINITION(OBJECT_ID('[${entity.SchemaName}].[${viewName}]')) AS ViewDefinition`
+            );
+            const dbDefinition = result.recordset?.[0]?.ViewDefinition;
+            if (!dbDefinition) {
+                // View doesn't exist in DB yet — it's new, will be handled by existing new entity logic
+                return false;
+            }
+
+            // Extract the SELECT body from both: everything after "AS\n" up to the trailing GO/permissions
+            const generatedBody = this.extractViewSelectBody(generatedViewSQL);
+            const dbBody = this.extractViewSelectBody(dbDefinition);
+
+            if (generatedBody !== dbBody) {
+                logStatus(`  Base view changed for ${entity.Name} — logging view SQL`);
+                return true;
+            }
+            return false;
+        }
+        catch (e) {
+            // Non-fatal — if we can't compare, the existing logic still runs
+            logIf(configInfo.verboseOutput, `Could not compare base view for ${entity.Name}: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the SELECT body from a CREATE VIEW statement, normalizing whitespace for comparison.
+     * Handles both DB-stored definitions (CREATE VIEW ... AS SELECT ...) and generated SQL
+     * (which includes DROP VIEW, comment headers, GO, and permissions after the view body).
+     */
+    protected extractViewSelectBody(viewSQL: string): string {
+        // Find the AS keyword that precedes the SELECT — match "AS" on its own line or followed by whitespace+SELECT
+        const asMatch = viewSQL.match(/\bAS\s*\r?\n\s*SELECT\b/i);
+        if (!asMatch || asMatch.index === undefined) {
+            return viewSQL.trim(); // fallback: compare the whole thing
+        }
+
+        // Start from the SELECT keyword
+        let body = viewSQL.substring(asMatch.index + asMatch[0].indexOf('SELECT'));
+
+        // Trim trailing GO and anything after it (permissions, etc.)
+        const goMatch = body.match(/\r?\nGO\b/i);
+        if (goMatch && goMatch.index !== undefined) {
+            body = body.substring(0, goMatch.index);
+        }
+
+        // Normalize whitespace for fair comparison: collapse runs of whitespace to single space
+        return body.replace(/\s+/g, ' ').trim();
+    }
+
+    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false) {
         // Check if we should log this SQL
-        let shouldLog = false;
-        
-        if (logSql) {
+        let shouldLog = forceLog;
+
+        if (!shouldLog && logSql) {
             // Check if entity is in new or modified lists
-            const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) || 
+            const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) ||
                                    !!ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name);
-            
+
             // Check if entity is being regenerated due to cascade dependencies
-            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') && 
+            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') &&
                                                    this.entitiesNeedingDeleteSPRegeneration.has(entity.ID);
-            
+
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
@@ -496,16 +596,23 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spupdate') ||
                   description.toLowerCase().includes('spdelete')))
             );
-            
+
+            // Check if entity has RelatedEntityJoinFields configured (requires view regeneration for metadata-only changes)
+            const hasRelatedEntityJoinFields = description.toLowerCase().includes('base view') &&
+                entity.Fields.some(f => f.RelatedEntityJoinFieldsConfig !== null);
+
             // Determine if we should log based on entity state and force regeneration settings
             if (isNewOrModified) {
                 // Always log new or modified entities
+                shouldLog = true;
+            } else if (hasRelatedEntityJoinFields) {
+                // Always regenerate base views for entities with RelatedEntityJoinFields configuration
                 shouldLog = true;
             } else if (isCascadeDependencyRegeneration) {
                 // Always log cascade dependency regenerations
                 shouldLog = true;
             } else if (isForceRegeneration) {
-                // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
+                // For force regeneration, the specific type flags (spCreate, baseViews, etc.)
                 // already filtered this - now we just need to check entity filtering
                 if (this.filterEntitiesQualifiedForRegeneration) {
                     // Only log if entity is in the qualified list
@@ -516,10 +623,9 @@ export class SQLCodeGenBase {
                 }
             }
         }
-        
+
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
-            // Also write to temp batch file for actual execution (matches CodeGen log order)
             TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
 
@@ -548,15 +654,19 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
-            // Indexes for Fkeys for the table
-            if (!options.onlyPermissions){
+            // Tracks whether the base view SQL differs from what's in the database.
+            // When true, we force-log the view, its permissions, and all SPs (which compile the view in)
+            // so the migration log script can fully update target databases.
+            let baseViewChanged = false;
+            // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
+            if (!options.onlyPermissions && !options.entity.VirtualEntity){
                 const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
                 const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
+                    this.writeFileIfChanged(filePath, s);
                     this.logSQLForNewOrModifiedEntity(options.entity, s, 'Index for Foreign Keys for ' + options.entity.BaseTable, options.enableSQLLoggingForNewOrModifiedEntities);
-                    fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
                 sRet += s + '\nGO\n';
@@ -580,8 +690,8 @@ export class SQLCodeGenBase {
                                   this.generateRootIDFunction(options.entity, field);
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
                         if (options.writeFiles) {
+                            this.writeFileIfChanged(filePath, s);
                             this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                            fs.writeFileSync(filePath, s);
                             files.push(filePath);
                         }
                         // Add function SQL to output BEFORE the view
@@ -591,10 +701,16 @@ export class SQLCodeGenBase {
 
                 // Generate the base view (which may reference the TVFs created above)
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
+
+                // Compare generated view SQL against what's currently in the database.
+                // If the SELECT body differs, force-log just this base view via the forceLog flag
+                // so logging stays centralized in logSQLForNewOrModifiedEntity.
+                baseViewChanged = await this.checkBaseViewChangedInDB(options.pool, options.entity, s);
+
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                    fs.writeFileSync(filePath, s)
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
                 sRet += s + '\nGO\n';
@@ -605,9 +721,8 @@ export class SQLCodeGenBase {
                 permissionsSQL += s + '\nGO\n';
             if (options.writeFiles) {
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, true, true));
-                fs.writeFileSync(filePath, s)
-                this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View Permissions SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
+                this.writeFileIfChanged(filePath, s);
+                this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View Permissions SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                 files.push(filePath);
             }
 
@@ -626,10 +741,8 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, s);
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -639,10 +752,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -662,10 +773,8 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-                        fs.writeFileSync(filePath, s);
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -675,10 +784,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -701,13 +808,11 @@ export class SQLCodeGenBase {
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
                         logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
                     }
-                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
+                    const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + await this.generateSPDelete(options.entity, options.pool)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
-
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, s);
+                        this.writeFileIfChanged(filePath, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -717,10 +822,8 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
-
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, s);
+                    this.writeFileIfChanged(filePath, s);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     files.push(filePath);
                 }
 
@@ -738,9 +841,8 @@ export class SQLCodeGenBase {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     if (options.writeFiles) {
+                        this.writeFileIfChanged(filePath, ft.sql);
                         this.logSQLForNewOrModifiedEntity(options.entity, ft.sql, `Full Text Search SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                        fs.writeFileSync(filePath, ft.sql)
                         files.push(filePath);
                     }
                     sRet += ft.sql + '\nGO\n';
@@ -752,9 +854,8 @@ export class SQLCodeGenBase {
 
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, true, true));
                 if (options.writeFiles) {
+                    this.writeFileIfChanged(filePath, sP);
                     this.logSQLForNewOrModifiedEntity(options.entity, sP, `Full Text Search Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-
-                    fs.writeFileSync(filePath, sP)
                     files.push(filePath);
                 }
 
@@ -842,7 +943,7 @@ export class SQLCodeGenBase {
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             if (entity.spDeleteGenerated)
                 // generated SP, will include permissions
-                sOutput += this.generateSPDelete(entity) + '\n\n';
+                sOutput += await this.generateSPDelete(entity, pool) + '\n\n';
             else
                 // custom SP, still generate the permissions
                 sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';
@@ -918,7 +1019,7 @@ export class SQLCodeGenBase {
                 if (!u)
                     throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
 
-                const e = <EntityEntity>await md.GetEntityObject('Entities', u);
+                const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
                 await e.Load(entity.ID);
                 e.FullTextSearchFunction = functionName;
                 if (!await e.Save())
@@ -1166,9 +1267,71 @@ GO
         return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
+    /**
+     * Generates SELECT field expressions for IS-A parent entity columns.
+     * Walks the ParentID chain upward, joining to each parent's base table, and includes
+     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * Returns a string starting with ',\n' if there are parent fields, or '' if none.
+     */
+    protected generateParentEntityFieldSelects(entity: EntityInfo): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const fieldExpressions: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const alias = `__mj_isa_p${i + 1}`;
+
+            for (const field of parent.Fields) {
+                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
+                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
+
+                fieldExpressions.push(`    ${alias}.[${field.Name}]`);
+            }
+        }
+
+        if (fieldExpressions.length === 0) return '';
+        return ',\n' + fieldExpressions.join(',\n');
+    }
+
+    /**
+     * Generates INNER JOIN clauses for IS-A parent entity base tables.
+     * Chains joins from child -> parent -> grandparent using PK-to-PK conditions.
+     * Each parent is joined via its base table (not view) to avoid view dependency ordering issues.
+     */
+    protected generateParentEntityJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        if (!entity.IsChildType) return '';
+
+        const parentChain = entity.ParentChain;
+        if (parentChain.length === 0) return '';
+
+        const joins: string[] = [];
+
+        for (let i = 0; i < parentChain.length; i++) {
+            const parent = parentChain[i];
+            const parentAlias = `__mj_isa_p${i + 1}`;
+            // First parent joins to child table alias; deeper parents chain to previous parent alias
+            const sourceAlias = i === 0 ? classNameFirstChar : `__mj_isa_p${i}`;
+
+            // Build PK-to-PK join condition (supports composite keys)
+            const joinConditions = entity.PrimaryKeys.map(pk =>
+                `[${sourceAlias}].[${pk.Name}] = ${parentAlias}.[${pk.Name}]`
+            ).join(' AND ');
+
+            joins.push(
+                `INNER JOIN\n    [${parent.SchemaName}].[${parent.BaseTable}] AS ${parentAlias}\n  ON\n    ${joinConditions}`
+            );
+        }
+
+        return joins.join('\n');
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
@@ -1180,6 +1343,10 @@ GO
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
         const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
         const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
+
+        // IS-A parent entity JOINs — walk ParentID chain, JOIN to each parent's base table
+        const parentFieldsString: string = this.generateParentEntityFieldSelects(entity);
+        const parentJoinsString: string = this.generateParentEntityJoins(entity, classNameFirstChar);
 
         return `
 ------------------------------------------------------------
@@ -1195,9 +1362,9 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
+    ${classNameFirstChar}.*${parentFieldsString}${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${parentJoinsString ? '\n' + parentJoinsString : ''}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }
@@ -1215,10 +1382,15 @@ ${whereClause}GO${permissions}
 
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
-        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
-            if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView && ef._RelatedEntityTableAlias) {
+            // Generate SQL JOIN for related entities that have configured join fields
+            // _RelatedEntityJoinFieldMappings is populated during field analysis if:
+            // - IncludeRelatedEntityNameFieldInBaseView is true (legacy), OR
+            // - RelatedEntityJoinFieldsConfig specifies fields to join
+            // This generates the JOIN clause; the actual field aliases are added separately in generateBaseViewFields()
+            if (ef.RelatedEntityID && ef._RelatedEntityJoinFieldMappings && ef._RelatedEntityJoinFieldMappings.length > 0 && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
             }
@@ -1230,50 +1402,122 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+        const md = new Metadata();
+        const allGeneratedAliases: string[] = [];
 
-        // next get the fields that are related entities and have the IncludeRelatedEntityNameFieldInBaseView flag set to true
-        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && f.IncludeRelatedEntityNameFieldInBaseView);
+        // Get fields that are related entities with join field configuration.
+        //
+        // BACKWARD COMPATIBILITY LOGIC:
+        // This handles two cases:
+        // 1. Legacy behavior: IncludeRelatedEntityNameFieldInBaseView=true, no RelatedEntityJoinFieldsConfig
+        //    → Automatically defaults to { mode: 'extend' } and joins the related entity's NameField (as before)
+        // 2. New behavior: RelatedEntityJoinFieldsConfig specified
+        //    → Can 'extend' the NameField with additional fields, 'override' it completely, or 'disable' joins
+        //
+        // Result: _RelatedEntityJoinFieldMappings is populated with all fields to be joined from the related entity.
+        //         If both old and new configs are set, they work together (new fields extend or replace the NameField).
+        const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && (f.IncludeRelatedEntityNameFieldInBaseView || f.RelatedEntityJoinFieldsConfig));
         for (const ef of qualifyingFields) {
-            const {nameField, nameFieldIsVirtual} = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
-            if (nameField !== '') {
-                // only add to the output, if we found a name field for the related entity.
+            const config = ef.RelatedEntityJoinFieldsConfig || { mode: 'extend' };
+            if (config.mode === 'disable') {
+                continue;
+            }
+
+            ef._RelatedEntityJoinFieldMappings = [];
+            let anyFieldIsVirtual = false;
+
+            // 1. Handle NameField (if not overridden)
+            // In 'extend' mode: include the NameField (backward compatible with IncludeRelatedEntityNameFieldInBaseView)
+            // In 'override' mode: skip the NameField, only use explicitly configured fields
+            if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
+                const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+                if (nameField !== '') {
+                    // only add to the output, if we found a name field for the related entity.
+                    ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
+
+                    // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
+                    const candidateName = this.stripID(ef.Name);
+
+                    // Skip if candidateName is empty (e.g., field named exactly "ID")
+                    // This happens in table-per-type inheritance where child.ID is FK to parent.ID
+                    // stripID("ID") returns "" which would generate invalid SQL: AS []
+                    if (candidateName.trim().length === 0) {
+                        logStatus(`  Skipping related entity name field for ${ef.Name} in entity - stripID returned empty string (likely inheritance pattern)`);
+                    }
+                    else {
+                        // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
+                        // because if it is, we need to change it to something else
+                        const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined ||
+                            allGeneratedAliases.some(a => a.toLowerCase() === candidateName.trim().toLowerCase());
+                        const safeAlias = bFound ? candidateName + '_Virtual' : candidateName;
+
+                        ef._RelatedEntityNameFieldMap = safeAlias;
+                        ef._RelatedEntityJoinFieldMappings.push({
+                            sourceField: nameField,
+                            alias: safeAlias,
+                            isVirtual: nameFieldIsVirtual
+                        });
+                        allGeneratedAliases.push(safeAlias);
+                        if (nameFieldIsVirtual) anyFieldIsVirtual = true;
+
+                        // check to see if the database already knows about the RelatedEntityNameFieldMap or not
+                        if (ef.RelatedEntityNameFieldMap === null ||
+                            ef.RelatedEntityNameFieldMap === undefined ||
+                            ef.RelatedEntityNameFieldMap.trim().length === 0) {
+                            // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
+                            // first update the actul field in the metadata object so it can be used from this point forward
+                            // and it also reflects what the DB will hold
+                            ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
+                            // then update the database itself
+                            await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
+                        }
+                    }
+                }
+            }
+
+            // 2. Handle configured additional fields
+            if (config.fields && config.fields.length > 0) {
+                const currentEntity = md.Entities.find(e => e.ID === ef.EntityID);
+                for (const fieldConfig of config.fields) {
+                    const fieldName = fieldConfig.field;
+                    const alias = fieldConfig.alias || this.generateDefaultAlias(ef.Name, fieldName);
+
+                    // Validate field exists on related entity
+                    if (!this.validateFieldExists(ef.RelatedEntity, fieldName)) {
+                        logError(`RelatedEntityJoinFields: Field '${fieldName}' not found on entity '${ef.RelatedEntity}' (FK: ${ef.Name})`);
+                        continue;
+                    }
+
+                    // Check for alias collisions
+                    if (currentEntity && this.hasAliasCollision(currentEntity, alias, allGeneratedAliases)) {
+                        logError(`RelatedEntityJoinFields: Alias '${alias}' for field '${fieldName}' would collide with an existing field or alias in entity '${currentEntity.Name}'`);
+                        continue;
+                    }
+
+                    // Get field metadata from related entity to check if virtual
+                    const relatedEntity = md.Entities.find(e => e.Name === ef.RelatedEntity);
+                    const relatedField = relatedEntity?.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+                    const isVirtual = relatedField?.IsVirtual || false;
+
+                    ef._RelatedEntityJoinFieldMappings.push({
+                        sourceField: fieldName,
+                        alias: alias,
+                        isVirtual: isVirtual
+                    });
+                    allGeneratedAliases.push(alias);
+                    if (isVirtual) anyFieldIsVirtual = true;
+                }
+            }
+
+            // 3. Generate SQL for the mappings
+            if (ef._RelatedEntityJoinFieldMappings.length > 0) {
                 ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
-                ef._RelatedEntityNameFieldIsVirtual = nameFieldIsVirtual;
+                ef._RelatedEntityNameFieldIsVirtual = anyFieldIsVirtual;
 
-                // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
-                const candidateName = this.stripID(ef.Name);
-
-                // Skip if candidateName is empty (e.g., field named exactly "ID")
-                // This happens in table-per-type inheritance where child.ID is FK to parent.ID
-                // stripID("ID") returns "" which would generate invalid SQL: AS []
-                if (candidateName.trim().length === 0) {
-                    logStatus(`  Skipping related entity name field for ${ef.Name} in entity - stripID returned empty string (likely inheritance pattern)`);
-                    continue; // Skip this field entirely - no valid alias can be generated
+                for (const mapping of ef._RelatedEntityJoinFieldMappings) {
+                    sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${mapping.sourceField}] AS [${mapping.alias}]`;
+                    fieldCount++;
                 }
-
-                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
-                // because if it is, we need to change it to something else
-                const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
-                if (bFound)
-                    ef._RelatedEntityNameFieldMap = candidateName + '_Virtual';
-                else
-                    ef._RelatedEntityNameFieldMap = candidateName;
-
-                // now we have a safe field name alias for the new virtual field in the _RelatedEntityNameFieldMap property, so use it...
-                sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
-
-                // check to see if the database already knows about the RelatedEntityNameFieldMap or not
-                if (ef.RelatedEntityNameFieldMap === null ||
-                    ef.RelatedEntityNameFieldMap === undefined ||
-                    ef.RelatedEntityNameFieldMap.trim().length === 0) {
-                    // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
-                    // first update the actul field in the metadata object so it can be used from this point forward
-                    // and it also reflects what the DB will hold
-                    ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
-                    // then update the database itself
-                    await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
-                }
-                fieldCount++;
             }
         }
         return sOutput;
@@ -1298,6 +1542,35 @@ ${whereClause}GO${permissions}
             return name.substring(0, name.length - 2);
         else
             return name;
+    }
+
+    protected generateDefaultAlias(fkFieldName: string, relatedFieldName: string): string {
+        const baseName = this.stripID(fkFieldName);
+        if (baseName.toLowerCase() === relatedFieldName.toLowerCase()) {
+            return baseName;
+        }
+        return baseName + relatedFieldName;
+    }
+
+    protected validateFieldExists(entityName: string, fieldName: string): boolean {
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.Name === entityName);
+        if (!entity) return false;
+        return entity.Fields.some(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+    }
+
+    protected hasAliasCollision(entity: EntityInfo, alias: string, generatedAliases: string[]): boolean {
+        // Check against existing fields in the entity (non-virtual fields first)
+        if (entity.Fields.some(f => !f.IsVirtual && f.Name.toLowerCase() === alias.toLowerCase())) return true;
+
+        // Check against other generated aliases in this view
+        if (generatedAliases.some(a => a.toLowerCase() === alias.toLowerCase())) return true;
+
+        // Check against system fields
+        const systemFields = ['__mj_CreatedAt', '__mj_UpdatedAt', EntityInfo.DeletedAtFieldName];
+        if (systemFields.some(sf => sf?.toLowerCase() === alias.toLowerCase())) return true;
+
+        return false;
     }
 
 
@@ -1458,10 +1731,10 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
-    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.BaseTableCodeName}];
 GO
-CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
+CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.BaseTableCodeName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
 AFTER UPDATE
 AS
@@ -1697,9 +1970,9 @@ ${updatedAtTrigger}
     }
 
 
-    protected generateSPDelete(entity: EntityInfo): string {
+    protected async generateSPDelete(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
-        const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
+        const sCascadeDeletes: string = await this.generateCascadeDeletes(entity, pool);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
         let sSelect: string = '';
@@ -1765,7 +2038,7 @@ GO${permissions}
     `
     }
 
-    protected generateCascadeDeletes(entity: EntityInfo): string {
+    protected async generateCascadeDeletes(entity: EntityInfo, pool: sql.ConnectionPool): Promise<string> {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
             const md = new Metadata();
@@ -1774,12 +2047,12 @@ GO${permissions}
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
-                        
-                        if (sql !== '') {
+                        const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
+
+                        if (cascadeSql !== '') {
                             if (sOutput !== '')
                                 sOutput += '\n    ';
-                            sOutput += sql;
+                            sOutput += cascadeSql;
                         }
                     }
                 }
@@ -1788,7 +2061,32 @@ GO${permissions}
         return sOutput === '' ? '' : `${sOutput}\n    `;
     }
 
-    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+    protected async generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, pool: sql.ConnectionPool): Promise<string> {
+        // Check if nullable FK is part of composite unique constraint
+        // If so, we must DELETE instead of UPDATE to avoid unique constraint violations
+        if (fkField.AllowsNull) {
+            const isCompositeUnique = await this.isFieldInCompositeUniqueConstraint(
+                pool,
+                relatedEntity.SchemaName,
+                relatedEntity.BaseTable,
+                fkField.Name
+            );
+
+            if (isCompositeUnique) {
+                if (relatedEntity.AllowDeleteAPI) {
+                    // FK is part of composite unique - use DELETE instead of UPDATE
+                    logStatus(`    ${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint - using DELETE cascade`);
+                    return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+                } else {
+                    // Can't delete and can't safely update - warn
+                    const msg = `${relatedEntity.Name}.${fkField.Name} is part of composite unique constraint but entity doesn't allow delete API`;
+                    logWarning(`WARNING in spDelete${parentEntity.BaseTableCodeName}: ${msg}`);
+                    return `
+    -- WARNING: ${msg} - cascade operation may fail due to unique constraint violation`;
+                }
+            }
+        }
+
         if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
             // Non-nullable FK: generate cursor-based cascade delete
             return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
@@ -1815,7 +2113,7 @@ GO${permissions}
     -- ${sqlComment}
     -- This will cause a referential integrity violation`;
         }
-        
+
         return '';
     }
 
@@ -1823,48 +2121,53 @@ GO${permissions}
         // Build the WHERE clause for matching foreign key(s)
         // TODO: Future enhancement to support composite foreign keys
         const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
-        
-        // Generate unique cursor name using entity code names
-        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
-        
+
+        // Generate unique cursor name using entity code name AND FK field name
+        // This ensures uniqueness when an entity has multiple FKs pointing to the same parent
+        // (e.g., AIPromptRun.ParentID and AIPromptRun.RerunFromPromptRunID both reference AIPromptRun)
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
+
+        // Use a combined prefix that includes both entity name and FK field name to ensure unique variable names
+        const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
+
         // Determine which SP to call
         const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
         const spName = this.getSPName(relatedEntity, spType);
-        
+
         if (operation === 'update') {
             // For update, we need to include all updateable fields
-            // Use the related entity's code name as prefix to ensure uniqueness
-            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            // Use the combined prefix to ensure uniqueness across multiple FKs to same entity
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
             const spCallParams = updateParams.allParams;
-            
+
             return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
     ${updateParams.declarations}
-    DECLARE ${cursorName} CURSOR FOR 
+    DECLARE ${cursorName} CURSOR FOR
         SELECT ${updateParams.selectFields}
         FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
         WHERE ${whereClause}
-    
+
     OPEN ${cursorName}
     FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
-    
+
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Set the FK field to NULL
-        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
-        
+        SET @${variablePrefix}_${fkField.CodeName} = NULL
+
         -- Call the update SP for the related entity
         EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
-        
+
         FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
     END
-    
+
     CLOSE ${cursorName}
     DEALLOCATE ${cursorName}`;
         }
-        
+
         // For delete operation, use a simpler prefix for primary keys only
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
         
         return `
     -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
@@ -1972,6 +2275,56 @@ GO${permissions}
         }
         
         return { declarations, selectFields, fetchInto, allParams };
+    }
+
+    /**
+     * Checks if a field is part of a composite (multi-column) unique constraint.
+     * Returns true if the field participates in a unique index with 2+ columns.
+     * This is used to determine if a nullable FK should use DELETE instead of UPDATE
+     * during cascade operations, since setting to NULL could violate uniqueness.
+     */
+    protected async isFieldInCompositeUniqueConstraint(
+        pool: sql.ConnectionPool,
+        schemaName: string,
+        tableName: string,
+        columnName: string
+    ): Promise<boolean> {
+        const query = `
+            SELECT i.index_id
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON i.object_id = t.object_id
+            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = @schemaName
+              AND t.name = @tableName
+              -- This index contains the specified column
+              AND EXISTS (
+                  SELECT 1
+                  FROM sys.index_columns ic
+                  INNER JOIN sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+                  WHERE ic.object_id = i.object_id
+                    AND ic.index_id = i.index_id
+                    AND c.name = @columnName
+              )
+              -- This index has more than one column (composite)
+              AND (SELECT COUNT(*)
+                   FROM sys.index_columns ic2
+                   WHERE ic2.object_id = i.object_id
+                     AND ic2.index_id = i.index_id) > 1
+        `;
+
+        try {
+            const result = await pool.request()
+                .input('schemaName', sql.NVarChar, schemaName)
+                .input('tableName', sql.NVarChar, tableName)
+                .input('columnName', sql.NVarChar, columnName)
+                .query(query);
+            return result.recordset.length > 0;
+        } catch (error) {
+            logWarning(`Failed to check composite unique constraint for ${schemaName}.${tableName}.${columnName}: ${error}`);
+            return false; // Fallback to existing UPDATE behavior
+        }
     }
 
     /**

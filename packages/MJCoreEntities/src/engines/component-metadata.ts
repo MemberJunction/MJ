@@ -1,10 +1,10 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { ComponentEntityExtended } from "../custom/ComponentEntityExtended";
+import { MJComponentEntityExtended } from "../custom/MJComponentEntityExtended";
 import { 
-    ComponentLibraryEntity, 
-    ComponentLibraryLinkEntity,
-    ComponentRegistryEntity,
-    ComponentDependencyEntity 
+    MJComponentLibraryEntity, 
+    MJComponentLibraryLinkEntity,
+    MJComponentRegistryEntity,
+    MJComponentDependencyEntity 
 } from "../generated/entity_subclasses";
 
 /**
@@ -18,11 +18,11 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
        return super.getInstance<ComponentMetadataEngine>();
     }
 
-    private _components: ComponentEntityExtended[];
-    private _componentLibraries: ComponentLibraryEntity[];
-    private _componentLibraryLinks: ComponentLibraryLinkEntity[];
-    private _componentRegistries: ComponentRegistryEntity[];
-    private _componentDependencies: ComponentDependencyEntity[];
+    private _components: MJComponentEntityExtended[];
+    private _componentLibraries: MJComponentLibraryEntity[];
+    private _componentLibraryLinks: MJComponentLibraryLinkEntity[];
+    private _componentRegistries: MJComponentRegistryEntity[];
+    private _componentDependencies: MJComponentDependencyEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -60,30 +60,30 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
-    public get Components(): ComponentEntityExtended[] {
+    public get Components(): MJComponentEntityExtended[] {
         return this._components;
     }
 
-    public get ComponentLibraries(): ComponentLibraryEntity[] {
+    public get ComponentLibraries(): MJComponentLibraryEntity[] {
         return this._componentLibraries;
     }
 
-    public get ComponentLibraryLinks(): ComponentLibraryLinkEntity[] {
+    public get ComponentLibraryLinks(): MJComponentLibraryLinkEntity[] {
         return this._componentLibraryLinks;
     }
 
-    public get ComponentRegistries(): ComponentRegistryEntity[] {
+    public get ComponentRegistries(): MJComponentRegistryEntity[] {
         return this._componentRegistries;
     }
 
-    public get ComponentDependencies(): ComponentDependencyEntity[] {
+    public get ComponentDependencies(): MJComponentDependencyEntity[] {
         return this._componentDependencies;
     }
 
     /**
      * Finds a component on a case-insensitive match of name and optionally, namespace and registry if provided
      */
-    public FindComponent(name: string, namespace?: string, registry?: string): ComponentEntityExtended | undefined {
+    public FindComponent(name: string, namespace?: string, registry?: string): MJComponentEntityExtended | undefined {
         const match =  this._components.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase() && 
                                              c.Namespace?.trim().toLowerCase() === namespace?.trim().toLowerCase() && 
                                             (!registry || c.SourceRegistry?.trim().toLowerCase() === registry?.trim().toLowerCase()));

@@ -1,9 +1,8 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { WorkspaceStateManager, NavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
+import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 /**
  * System application ID for non-app-specific resources (fallback only)
@@ -131,22 +130,15 @@ export class NavigationService implements OnDestroy {
    * Set up global keyboard event listeners to track shift key state
    */
   private setupGlobalShiftKeyDetection(): void {
-    // Track shift key down
-    const keyDown$ = fromEvent<KeyboardEvent>(document, 'keydown').pipe(
-      map(event => event.shiftKey)
-    );
-
-    // Track shift key up
-    const keyUp$ = fromEvent<KeyboardEvent>(document, 'keyup').pipe(
-      map(event => event.shiftKey)
-    );
-
+    // Track shift key via mousedown events (capture phase) instead of keydown/keyup.
+    // This is more reliable because:
+    // 1. MouseEvent.shiftKey always reflects the actual modifier state at click time
+    // 2. No risk of "stuck" state from missed keyup events (focus loss, tab switch, etc.)
+    // 3. Navigation is always triggered by a click, so the shift state is read
+    //    at exactly the right moment
     this.subscriptions.push(
-      keyDown$.subscribe(shiftKey => {
-        this.shiftKeyPressed = shiftKey;
-      }),
-      keyUp$.subscribe(shiftKey => {
-        this.shiftKeyPressed = shiftKey;
+      fromEvent<MouseEvent>(document, 'mousedown', { capture: true }).subscribe(event => {
+        this.shiftKeyPressed = event.shiftKey;
       })
     );
   }
@@ -237,6 +229,12 @@ export class NavigationService implements OnDestroy {
     const app = this.appManager.GetAppById(appId);
     const appName = app?.Name || '';
 
+    // Dynamic nav items (e.g. orphan entity records) carry their original tab Configuration
+    // and should NOT get navItemName stamped on them — that would cause buildResourceUrl
+    // to produce a nav-item-style URL like /app/home/<label> instead of the correct
+    // resource-type URL like /app/home/record/Entity/ID|...
+    const isDynamic = (navItem as DynamicNavItem).isDynamic === true;
+
     const request: TabRequest = {
       ApplicationId: appId,
       Title: navItem.Label,
@@ -248,7 +246,7 @@ export class NavigationService implements OnDestroy {
         recordId: navItem.RecordID,
         appName: appName,  // Store app name for URL building
         appId: appId,
-        navItemName: navItem.Label,  // Store nav item name for URL building
+        ...(isDynamic ? {} : { navItemName: navItem.Label }),  // Only set for static nav items
         ...(navItem.Configuration || {})
       },
       IsPinned: options?.pinTab || false
@@ -257,15 +255,21 @@ export class NavigationService implements OnDestroy {
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
+    let tabId: string;
     if (forceNew) {
       // Always create a new tab
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      return tabId;
+      tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       // Use existing OpenTab logic (may replace temporary tab)
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
-      return tabId;
+      tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+
+    // Apply query params to the newly opened/activated tab if provided
+    if (options?.queryParams) {
+      this.applyQueryParamsToTab(tabId, options.queryParams);
+    }
+
+    return tabId;
   }
 
   /**
@@ -279,14 +283,6 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-
-    console.log('NavigationService.OpenEntityRecord called:', {
-      entityName,
-      recordPkey: recordPkey.ToURLSegment(),
-      appId,
-      color: appColor,
-      options
-    });
 
     const forceNew = this.shouldForceNewTab(options);
 
@@ -303,20 +299,17 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
-    console.log('NavigationService.OpenEntityRecord request:', request, 'forceNew:', forceNew);
-
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
+    let tabId: string;
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      console.log('NavigationService.OpenEntityRecord created new tab:', tabId);
-      return tabId;
+      tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
-      console.log('NavigationService.OpenEntityRecord opened tab:', tabId);
-      return tabId;
+      tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+
+    return tabId;
   }
 
   /**
@@ -336,7 +329,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: viewName,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         viewId,
         recordId: viewId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
@@ -479,7 +472,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: `${entityName}${filterSuffix}`,
       Configuration: {
-        resourceType: 'User Views',
+        resourceType: 'MJ: User Views',
         Entity: entityName,
         ExtraFilter: extraFilter,
         isDynamic: true,
@@ -547,13 +540,6 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    console.log('NavigationService.OpenNewEntityRecord called:', {
-      entityName,
-      appId,
-      color: appColor,
-      options
-    });
-
     const forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -570,19 +556,13 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
-    console.log('NavigationService.OpenNewEntityRecord request:', request, 'forceNew:', forceNew);
-
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
-      const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      console.log('NavigationService.OpenNewEntityRecord created new tab:', tabId);
-      return tabId;
+      return this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      const tabId = this.workspaceManager.OpenTab(request, appColor);
-      console.log('NavigationService.OpenNewEntityRecord opened tab:', tabId);
-      return tabId;
+      return this.workspaceManager.OpenTab(request, appColor);
     }
   }
 
@@ -598,12 +578,12 @@ export class NavigationService implements OnDestroy {
    * @param options Navigation options
    * @returns The tab ID if successful, null if nav item not found
    */
-  public OpenNavItemByName(
+  public async OpenNavItemByName(
     navItemName: string,
     configuration?: Record<string, unknown>,
     appId?: string,
     options?: NavigationOptions
-  ): string | null {
+  ): Promise<string | null> {
     // Get app (use provided or current active)
     const targetAppId = appId || this.appManager.GetActiveApp()?.ID;
     if (!targetAppId) {
@@ -616,7 +596,7 @@ export class NavigationService implements OnDestroy {
     }
 
     // Find the nav item by name
-    const navItems = app.GetNavItems();
+    const navItems = await app.GetNavItems();
     const navItem = navItems.find(item => item.Label === navItemName);
     if (!navItem) {
       return null;
@@ -654,7 +634,7 @@ export class NavigationService implements OnDestroy {
 
     // If a specific nav item is requested
     if (navItemName) {
-      const navItems = app.GetNavItems();
+      const navItems = await app.GetNavItems();
       const navItem = navItems.find(item => item.Label === navItemName);
       if (navItem) {
         // Check if there's already a tab for this nav item
@@ -717,10 +697,17 @@ export class NavigationService implements OnDestroy {
       return;
     }
 
-    // Get the current tab to merge with existing queryParams
-    const tab = this.workspaceManager.GetTab(activeTabId);
+    this.applyQueryParamsToTab(activeTabId, queryParams);
+  }
+
+  /**
+   * Apply query params to a specific tab by ID.
+   * Merges with any existing query params on the tab. Use null values to remove params.
+   */
+  private applyQueryParamsToTab(tabId: string, queryParams: Record<string, string | null>): void {
+    const tab = this.workspaceManager.GetTab(tabId);
     if (!tab) {
-      console.warn('NavigationService.UpdateActiveTabQueryParams: Tab not found');
+      console.warn('NavigationService.applyQueryParamsToTab: Tab not found:', tabId);
       return;
     }
 
@@ -747,7 +734,7 @@ export class NavigationService implements OnDestroy {
     }
 
     // Update the tab configuration
-    this.workspaceManager.UpdateTabConfiguration(activeTabId, {
+    this.workspaceManager.UpdateTabConfiguration(tabId, {
       queryParams: Object.keys(mergedQueryParams).length > 0 ? mergedQueryParams : undefined
     });
   }

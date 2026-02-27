@@ -1,0 +1,79 @@
+<div class="providers-list">
+  <!-- Header -->
+  <div class="providers-header">
+    <span class="header-title">Storage Accounts</span>
+  </div>
+
+  <!-- Loading State -->
+  @if (isLoading) {
+    <div class="loading-state">
+      <mj-loading text="Loading accounts..."></mj-loading>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (errorMessage && !isLoading) {
+    <div class="error-state">
+      <div class="error-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <p class="error-message">{{ errorMessage }}</p>
+    </div>
+  }
+
+  <!-- Empty State -->
+  @if (!isLoading && !errorMessage && accounts.length === 0) {
+    <div class="empty-state">
+      <div class="empty-icon">
+        <i class="fa-solid fa-folder-plus"></i>
+      </div>
+      <p class="empty-message">No storage accounts configured</p>
+      <p class="empty-hint">Contact your administrator to set up file storage accounts</p>
+    </div>
+  }
+
+  <!-- Account List -->
+  @if (!isLoading && !errorMessage && accounts.length > 0) {
+    <div class="providers-container">
+      @for (item of accounts; track item) {
+        <div
+          class="provider-item"
+          [class.selected]="isSelected(item)"
+          (click)="selectAccount(item)"
+          [title]="item.account.Description || item.account.Name"
+          >
+          <div class="provider-icon">
+            <i [class]="getProviderIcon(item.provider.Name)"></i>
+          </div>
+          <div class="provider-info">
+            <div class="provider-name">{{ item.account.Name }}</div>
+            <div class="provider-meta">
+              <!-- Provider type badge -->
+              <span class="provider-type-badge" [title]="item.provider.Name">
+                {{ item.provider.Name }}
+              </span>
+              <!-- Search support badge -->
+              @if (item.provider.SupportsSearch) {
+                <span class="search-badge" title="Supports search">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+              }
+              <!-- Credential configured badge -->
+              @if (item.account.CredentialID) {
+                <span class="credential-badge" title="Credentials configured">
+                  <i class="fa-solid fa-key"></i>
+                </span>
+              }
+              <!-- No credential warning -->
+              @if (!item.account.CredentialID) {
+                <span class="unconfigured-badge" title="No credentials configured">
+                  <i class="fa-solid fa-exclamation-triangle"></i>
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

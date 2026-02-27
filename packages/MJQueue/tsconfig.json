@@ -1,17 +1,17 @@
 {
+  "extends": "../../tsconfig.server.json",
   "compilerOptions": {
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "target": "es2020",
-    "declaration": true,
-    "moduleResolution": "node",
-    "declarationMap": true,
-    "sourceMap": true,
     "outDir": "dist",
-    "skipLibCheck": true
+    "rootDir": "src"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "vitest.config.ts"
+  ]
 }

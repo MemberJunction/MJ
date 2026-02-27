@@ -1,6 +1,9 @@
 # GENERAL RULE
 Don't say "You're absolutely right" each time I correct you. Mix it up, that's so boring!
 
+## Claude Code Fast Mode
+To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
@@ -27,17 +30,37 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
-### 4. NO STANDALONE COMPONENTS - EVER
-- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
-- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
-- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
-- When creating new components:
-  - Create or add to an NgModule
-  - Declare component in the module's `declarations` array
-  - Import `CommonModule` and other required modules in the module's `imports` array
-  - Export the component in the module's `exports` array if it needs to be used outside the module
-- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
-- This is **non-negotiable** - standalone components are strictly forbidden
+### 4. ANGULAR COMPONENT & MODULE STRATEGY
+MemberJunction supports both standalone and NgModule-declared components. Choose the right approach for each situation:
+
+#### When to Use Standalone Components (Preferred for New Components)
+- **New leaf components** (dialogs, panels, small widgets) that don't need to share a module
+- **Lazy-loaded route components** — standalone enables direct `loadComponent()` without wrapper modules
+- **Simple, self-contained components** with clear dependency lists
+- Benefits: better tree-shaking with ESBuild, less boilerplate, explicit dependency graph
+
+#### When to Use NgModules
+- **Feature modules** grouping many related components (e.g., dashboards, explorer modules)
+- **Shared modules** providing common functionality to multiple consumers
+- **Existing module-declared components** — don't migrate just for the sake of it
+- When a group of components share the same set of imports
+
+#### Rules for Both Approaches
+- **Standalone components**: declare all dependencies in the component's `imports` array
+- **NgModule components**: must use `standalone: false` explicitly (Angular 21 defaults to standalone)
+- **Never mix within a single component** — a component is either standalone or module-declared
+- When adding to an existing package, **follow the pattern already used in that package**
+
+#### Modern Template Syntax (Required for New Code)
+- **Use `@if`/`@for`/`@switch`** block syntax instead of `*ngIf`/`*ngFor`/`*ngSwitch`
+  - `@for` has 90% better runtime performance than `*ngFor`
+  - `*ngIf`/`*ngFor` are heading toward deprecation
+  - Works identically with both standalone and NgModule components
+  - After migrating templates, `CommonModule` import can be removed if no other directives are used
+- **Use `inject()` function** instead of constructor injection for new components
+  - Angular officially recommends `inject()` over constructor DI
+  - Better inheritance (no `super()` chains), better types, works with standard decorators
+  - Existing constructor injection doesn't need to be migrated unless refactoring
 
 ### 5. NO RE-EXPORTS BETWEEN PACKAGES
 - **NEVER re-export types, classes, or interfaces from other packages**
@@ -59,6 +82,73 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
   ```
 - Consumers should import types from their original source package
 - Add comments directing users to the correct import location when helpful
+
+### 6. ALWAYS RUN AND UPDATE UNIT TESTS
+- **When modifying ANY package's source code, you MUST run that package's unit tests** before considering the work complete
+- Run tests with: `cd packages/PackageName && npm run test`
+- **If tests fail due to your changes, UPDATE the tests** to match the new behavior
+- **If tests fail for other reasons, FIX them** — never leave broken tests behind
+- **Report test results to the user**: pass count, failure count, skip count, and any issues found
+- **This is as important as compilation** — broken tests are as bad as broken builds
+- **Never assume tests still pass** after changing function signatures, renaming methods, changing return values, or modifying behavior
+- Common causes of test drift (all of which YOU must fix):
+  - Renamed functions/methods that tests still reference by old name
+  - Changed return values or formats that test assertions still expect
+  - New required parameters that test mocks don't provide
+  - Removed exports that tests still import
+
+### 7. USE BaseSingleton FOR ALL SINGLETONS
+- **NEVER use manual `static _instance` singleton patterns** — always extend `BaseSingleton<T>` from `@memberjunction/global`
+- **Why**: `BaseSingleton` uses a Global Object Store (`GetGlobalObjectStore()`) that guarantees a single instance across the entire process — even when bundlers duplicate code across multiple execution paths. A plain `static _instance` field lives on the class constructor, so if a module gets loaded twice (common with ESBuild/Vite code splitting), you silently get two "singletons" with divergent state.
+- **How to use it**:
+  ```typescript
+  import { BaseSingleton } from '@memberjunction/global';
+
+  export class MySingleton extends BaseSingleton<MySingleton> {
+      // Constructor MUST be protected (BaseSingleton enforces this)
+      protected constructor() {
+          super();
+      }
+
+      // Expose a static accessor that calls the inherited getInstance()
+      public static get Instance(): MySingleton {
+          return MySingleton.getInstance<MySingleton>();
+      }
+
+      // ... your singleton methods and properties
+  }
+
+  // Usage
+  const instance = MySingleton.Instance;
+  ```
+- **Anti-pattern to avoid**:
+  ```typescript
+  // ❌ BAD — weak singleton, breaks under code duplication
+  export class MySingleton {
+      private static _instance: MySingleton;
+      public static get Instance(): MySingleton {
+          if (!MySingleton._instance)
+              MySingleton._instance = new MySingleton();
+          return MySingleton._instance;
+      }
+  }
+  ```
+- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+
+---
+
+## 📚 Development Guides
+
+The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
+
+- **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
+  - Architecture and naming conventions
+  - State management with getter/setters
+  - Engine class patterns (no Angular services for data)
+  - User preferences and local caching
+  - Layout patterns, permission checking, and more
+
+When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
 
@@ -121,6 +211,64 @@ If `my-feature` tracks `origin/next`:
 
 **This is a non-negotiable safety requirement.**
 
+## Unit Testing
+
+MemberJunction uses **Vitest** as the standard unit testing framework across all packages. Jest has been deprecated and all packages are migrated to Vitest.
+
+### Running Tests
+- Run all tests: `npm test` (from repo root, uses Turborepo)
+- Run tests for a specific package: `cd packages/PackageName && npm run test`
+- Watch mode for a package: `cd packages/PackageName && npm run test:watch`
+- Run tests for changed packages: `npx turbo run test --filter=...[HEAD~1]`
+- Run with coverage: `npm run test:coverage`
+
+### Writing Tests
+- Test files live in `src/__tests__/` with `.test.ts` extension
+- One test file per source file (e.g., `ClassFactory.test.ts` tests `ClassFactory.ts`)
+- Use descriptive test names that read as specifications
+- Import from `vitest`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
+- Use `@memberjunction/test-utils` for shared mocking utilities (singleton reset, mock entities, mock RunView)
+- No database connections in unit tests — mock all external dependencies
+- Tests must be deterministic and fast (< 5s per file)
+
+### Adding Tests to a New Package
+Use the scaffold script:
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
+```
+
+This creates the vitest config, test directory, starter test, and updates package.json scripts.
+
+### Test Structure
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('ClassName', () => {
+  beforeEach(() => {
+    // Reset state between tests
+  });
+
+  describe('MethodName', () => {
+    it('should handle the normal case', () => { ... });
+    it('should handle edge case: empty input', () => { ... });
+    it('should throw on invalid input', () => { ... });
+  });
+});
+```
+
+### CI/CD Integration
+- **Every PR** must pass unit tests before merging (GitHub Actions gate)
+- **Every release** runs the full-stack regression suite via Docker Compose
+- Tests are cached by Turborepo — unchanged packages skip test execution
+
+## Docker Environments
+
+See **[docker/CLAUDE.md](docker/CLAUDE.md)** for full details on Docker configurations.
+
+- **`docker/MJAPI/`** — Production MJAPI container, published with each release
+- **`docker/workbench/`** — Claude Code workbench with dedicated SQL Server for autonomous dev/testing
+- Use `/docker-workbench` slash command to start, stop, rebuild, or exec into the workbench
+
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
 - Build specific packages: `cd packagedirectory && npm run build`
@@ -128,6 +276,31 @@ If `my-feature` tracks `origin/next`:
 - Watch mode: `npm run watch`
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
+
+### Build Pipeline
+- MJExplorer uses the Angular `application` builder powered by ESBuild and Vite
+- Dev server (`npm run start:explorer`) uses Vite with HMR for fast iteration
+- ESBuild provides significantly faster builds compared to the legacy Webpack pipeline
+- Vite prebundling excludes `@memberjunction/*` packages (they're symlinked workspace packages)
+- Source maps are configured for full debugging support including symlinked packages
+
+### Class Registration Manifests (Tree-Shaking Prevention)
+MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`MJGlobal.ClassFactory`). Modern bundlers (ESBuild, Vite) cannot detect dynamic instantiation and tree-shake these classes out. The **manifest system** prevents this.
+
+**How it works:**
+- `mj codegen manifest` walks the dependency tree, finds all `@RegisterClass`-decorated classes via TypeScript AST, and emits a manifest with named imports + an exported `CLASS_REGISTRATIONS` array that creates a static code path the bundler cannot eliminate.
+
+**Dual-manifest architecture for distribution:**
+- **Pre-built manifests** ship inside bootstrap packages (`@memberjunction/server-bootstrap`, `@memberjunction/ng-bootstrap`). These are generated at MJ build time and cover all `@memberjunction/*` classes.
+- **Supplemental manifests** are generated by MJAPI/MJExplorer's `prestart`/`prebuild` scripts with `--exclude-packages @memberjunction` to capture only user-defined classes.
+- This solves the npm distribution gap: published packages only have `dist/` (no `src/`), so the manifest generator can't scan them externally.
+
+**Key scripts:**
+- `npm run mj:manifest` -- regenerates all 4 manifests (server-bootstrap, ng-bootstrap, MJAPI, MJExplorer)
+- `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` -- regenerate bootstrap pre-built manifests
+- `npm run mj:manifest:api` / `mj:manifest:explorer` -- regenerate app supplemental manifests
+
+**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
@@ -1201,3 +1374,94 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
+
+## Browser Testing with Playwright CLI
+
+### Overview
+MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
+
+### Managing Dev Servers
+Claude Code should start and stop MJAPI and MJExplorer as background processes itself. This allows restarting them after code changes without relying on the user to manage them externally.
+
+```bash
+# Start MJAPI (port 4001, configured via GRAPHQL_PORT in .env)
+# Run as a background task from: packages/MJAPI/
+npm run start
+
+# Start MJExplorer (port 4201, configured in package.json start script)
+# Run as a background task from: packages/MJExplorer/
+npm run start
+```
+
+**Key points:**
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
+- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- Run both as background tasks so you can monitor output and restart as needed
+- After rebuilding a server-side package, restart MJAPI to pick up changes
+- After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
+- Always check that servers are healthy before launching the browser (wait for "listening on" / compilation success messages)
+
+### Persistent Browser Profile (Auth Caching)
+To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
+
+```bash
+# First-time launch (requires manual login in the headed browser):
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Subsequent launches reuse cached auth automatically:
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
+
+**Key points:**
+- The `.playwright-cli/` directory is gitignored — profile data stays local
+- After authenticating once, MSAL tokens are cached in the profile directory
+- Sessions typically persist for 30+ days (same as the VSCode debug browser)
+- If auth expires, just log in once in the headed browser to refresh the cache
+
+### Common Commands
+```bash
+# Open browser with persistent auth
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Take a snapshot (get element refs for interaction)
+npx playwright-cli snapshot
+
+# Click an element by ref
+npx playwright-cli click <ref>
+
+# Type text
+npx playwright-cli type "some text"
+
+# Press a key
+npx playwright-cli press Enter
+
+# Run arbitrary Playwright code
+npx playwright-cli run-code "async (page) => { return await page.title(); }"
+
+# Check console logs
+npx playwright-cli console info
+
+# Close browser
+npx playwright-cli close
+```
+
+### Workflow for UI Bug Investigation
+1. Start MJAPI and MJExplorer as background processes (if not already running)
+2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+4. Authenticate once if needed (cached for future sessions)
+5. Use `snapshot` to inspect the page, `click`/`type` to interact
+6. Use `console info` / `console error` to check for issues
+7. Make code fixes, rebuild affected packages
+   - Server-side changes: restart MJAPI background process
+   - Angular library changes: Vite auto-reloads the browser
+8. Re-test to verify the fix
+
+## Active Technologies
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
+- N/A (token validation only, no new persistent state) (601-mcp-oauth)
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa` (601-mcp-oauth)
+- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state (601-mcp-oauth)
+
+## Recent Changes
+- 601-mcp-oauth: Added TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk`

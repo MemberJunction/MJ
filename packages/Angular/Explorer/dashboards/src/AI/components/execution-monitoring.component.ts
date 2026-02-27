@@ -14,7 +14,7 @@ import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
@@ -60,20 +60,13 @@ export interface ExecutionMonitoringState {
   activeTabId: string;
   splitterSizes?: number[];
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIMonitorResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Monitor Resource - displays AI execution monitoring and analytics
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIMonitorResource')
 @Component({
+  standalone: false,
   selector: 'app-execution-monitoring',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -2034,7 +2027,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     ];
   }
 
-
   onTimeRangeChange(): void {
     // Simply change time range - loading state is managed by the service
     this.setTimeRange(this.selectedTimeRange);
@@ -2357,12 +2349,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<AIPromptRunEntityExtended>({
+        new RunView().RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC' 
         }),
-        new RunView().RunView<AIAgentRunEntityExtended>({
+        new RunView().RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC' 
@@ -2436,8 +2428,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     try {
       // Find model by name
       const rv = new RunView();
-      const result = await rv.RunView<AIModelEntityExtended>({
-        EntityName: 'AI Models',
+      const result = await rv.RunView<MJAIModelEntityExtended>({
+        EntityName: 'MJ: AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
       });
       

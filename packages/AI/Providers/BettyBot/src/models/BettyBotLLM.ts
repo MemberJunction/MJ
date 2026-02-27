@@ -239,7 +239,3 @@ export class BettyBotLLM extends BaseLLM {
         }
     }
 }
-
-export function LoadBettyBotLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

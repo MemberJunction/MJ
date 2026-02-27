@@ -1,8 +1,8 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { UserEntity, RoleEntity, UserRoleEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
@@ -21,24 +21,34 @@ interface FilterOptions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-management',
   templateUrl: './user-management.component.html',
-  styleUrls: ['./user-management.component.css']
+  styleUrls: ['../shared/styles/_admin-patterns.css', './user-management.component.css']
 })
 @RegisterClass(BaseDashboard, 'UserManagement')
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
   
   // State management
-  public users: UserEntity[] = [];
-  public filteredUsers: UserEntity[] = [];
-  public roles: RoleEntity[] = [];
-  public selectedUser: UserEntity | null = null;
+  public users: MJUserEntity[] = [];
+  public filteredUsers: MJUserEntity[] = [];
+  public roles: MJRoleEntity[] = [];
+  public selectedUser: MJUserEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
-  
+
+  // Selection state for bulk actions
+  public selectedUserIds = new Set<string>();
+
   // Dialog state
   public showUserDialog = false;
   public userDialogData: UserDialogData | null = null;
+
+  // Bulk action dialog state
+  public showBulkActionConfirm = false;
+  public bulkActionType: 'enable' | 'disable' | 'delete' | null = null;
+  public showBulkRoleAssign = false;
+  public bulkRoleId: string = '';
   
   // Stats
   public stats: UserStats = {
@@ -59,8 +69,11 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public viewMode: 'grid' | 'cards' = 'grid';
-  
+  public showMobileFilters = false;
+
+  // Mobile expansion state
+  private expandedUserIds = new Set<string>();
+
   // User-Role mapping
   private userRoleMap = new Map<string, string[]>(); // userId -> roleIds[]
   
@@ -74,7 +87,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -121,24 +134,27 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error loading user data:', error);
       this.error = 'Failed to load user data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
-  private async loadUsers(): Promise<UserEntity[]> {
+
+  private async loadUsers(): Promise<MJUserEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<UserEntity>({
-      EntityName: 'Users',
+    const result = await rv.RunView<MJUserEntity>({
+      EntityName: 'MJ: Users',
       ResultType: 'entity_object'
     });
     
     return result.Success ? result.Results : [];
   }
   
-  private async loadRoles(): Promise<RoleEntity[]> {
+  private async loadRoles(): Promise<MJRoleEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -146,17 +162,17 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     return result.Success ? result.Results : [];
   }
 
-  private async loadUserRoles(): Promise<UserRoleEntity[]> {
+  private async loadUserRoles(): Promise<MJUserRoleEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<UserRoleEntity>({
-      EntityName: 'User Roles',
+    const result = await rv.RunView<MJUserRoleEntity>({
+      EntityName: 'MJ: User Roles',
       ResultType: 'entity_object'
     });
     
     return result.Success ? result.Results : [];
   }
 
-  private buildUserRoleMapping(userRoles: UserRoleEntity[]): void {
+  private buildUserRoleMapping(userRoles: MJUserRoleEntity[]): void {
     this.userRoleMap.clear();
     
     userRoles.forEach(userRole => {
@@ -246,7 +262,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     });
   }
   
-  public selectUser(user: UserEntity): void {
+  public selectUser(user: MJUserEntity): void {
     this.selectedUser = user;
     this.showEditDialog = true;
   }
@@ -259,7 +275,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     this.showUserDialog = true;
   }
   
-  public editUser(user: UserEntity): void {
+  public editUser(user: MJUserEntity): void {
     this.userDialogData = {
       user: user,
       mode: 'edit',
@@ -268,7 +284,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     this.showUserDialog = true;
   }
   
-  public confirmDeleteUser(user: UserEntity): void {
+  public confirmDeleteUser(user: MJUserEntity): void {
     this.selectedUser = user;
     this.showDeleteConfirm = true;
   }
@@ -278,7 +294,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     
     try {
       // Load user entity to delete
-      const user = await this.metadata.GetEntityObject<UserEntity>('Users');
+      const user = await this.metadata.GetEntityObject<MJUserEntity>('MJ: Users');
       const loadResult = await user.Load(this.selectedUser.ID);
       
       if (loadResult) {
@@ -293,25 +309,30 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       } else {
         throw new Error('User not found or permission denied');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting user:', error);
-      this.error = error.message || 'Failed to delete user';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Failed to delete user';
+        this.cdr.markForCheck();
+      });
     }
   }
   
-  public async toggleUserStatus(user: UserEntity): Promise<void> {
+  public async toggleUserStatus(user: MJUserEntity): Promise<void> {
     try {
       user.IsActive = !user.IsActive;
       await user.Save();
-      this.calculateStats();
+      this.ngZone.run(() => {
+        this.calculateStats();
+        this.cdr.markForCheck();
+      });
     } catch (error) {
       console.error('Error updating user status:', error);
-      user.IsActive = !user.IsActive; // Revert on error
+      this.ngZone.run(() => {
+        user.IsActive = !user.IsActive; // Revert on error
+        this.cdr.markForCheck();
+      });
     }
-  }
-  
-  public toggleViewMode(): void {
-    this.viewMode = this.viewMode === 'grid' ? 'cards' : 'grid';
   }
   
   public exportUsers(): void {
@@ -371,15 +392,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     this.loadInitialData();
   }
   
-  public getStatusIcon(user: UserEntity): string {
+  public getStatusIcon(user: MJUserEntity): string {
     return user.IsActive ? 'fa-check-circle' : 'fa-times-circle';
   }
   
-  public getStatusClass(user: UserEntity): string {
+  public getStatusClass(user: MJUserEntity): string {
     return user.IsActive ? 'status-active' : 'status-inactive';
   }
   
-  public getUserTypeIcon(user: UserEntity): string {
+  public getUserTypeIcon(user: MJUserEntity): string {
     switch (user.Type) {
       case 'Owner':
         return 'fa-shield-halved';
@@ -390,7 +411,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
   
-  public getUserInitials(user: UserEntity): string {
+  public getUserInitials(user: MJUserEntity): string {
     const first = user.FirstName?.charAt(0) || '';
     const last = user.LastName?.charAt(0) || '';
     return (first + last).toUpperCase() || user.Name?.charAt(0).toUpperCase() || 'U';
@@ -399,10 +420,261 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public onUserDialogResult(result: UserDialogResult): void {
     this.showUserDialog = false;
     this.userDialogData = null;
-    
+
     if (result.action === 'save') {
       // Refresh the user list to show changes
       this.loadInitialData();
     }
+  }
+
+  // Selection methods for bulk actions
+  public get isAllSelected(): boolean {
+    return this.filteredUsers.length > 0 &&
+           this.filteredUsers.every(user => this.selectedUserIds.has(user.ID));
+  }
+
+  public get isIndeterminate(): boolean {
+    const selectedCount = this.filteredUsers.filter(user => this.selectedUserIds.has(user.ID)).length;
+    return selectedCount > 0 && selectedCount < this.filteredUsers.length;
+  }
+
+  public get hasSelection(): boolean {
+    return this.selectedUserIds.size > 0;
+  }
+
+  public get selectedCount(): number {
+    return this.selectedUserIds.size;
+  }
+
+  public get hasActiveFilters(): boolean {
+    const filters = this.filters$.value;
+    return filters.status !== 'all' || filters.role !== '';
+  }
+
+  public get activeFilterCount(): number {
+    let count = 0;
+    const filters = this.filters$.value;
+    if (filters.status !== 'all') count++;
+    if (filters.role !== '') count++;
+    return count;
+  }
+
+  public clearFilters(): void {
+    this.filters$.next({
+      ...this.filters$.value,
+      status: 'all',
+      role: ''
+    });
+    this.showMobileFilters = false;
+  }
+
+  public toggleSelectAll(): void {
+    if (this.isAllSelected) {
+      // Deselect all filtered users
+      this.filteredUsers.forEach(user => this.selectedUserIds.delete(user.ID));
+    } else {
+      // Select all filtered users
+      this.filteredUsers.forEach(user => this.selectedUserIds.add(user.ID));
+    }
+  }
+
+  public toggleUserSelection(userId: string, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.selectedUserIds.has(userId)) {
+      this.selectedUserIds.delete(userId);
+    } else {
+      this.selectedUserIds.add(userId);
+    }
+  }
+
+  public isUserSelected(userId: string): boolean {
+    return this.selectedUserIds.has(userId);
+  }
+
+  public clearSelection(): void {
+    this.selectedUserIds.clear();
+  }
+
+  // Bulk action methods
+  public confirmBulkAction(action: 'enable' | 'disable' | 'delete'): void {
+    if (!this.hasSelection) return;
+    this.bulkActionType = action;
+    this.showBulkActionConfirm = true;
+  }
+
+  public cancelBulkAction(): void {
+    this.showBulkActionConfirm = false;
+    this.bulkActionType = null;
+  }
+
+  public async executeBulkAction(): Promise<void> {
+    if (!this.bulkActionType || !this.hasSelection) return;
+
+    try {
+      this.isLoading = true;
+      const selectedUsers = this.users.filter(user => this.selectedUserIds.has(user.ID));
+
+      switch (this.bulkActionType) {
+        case 'enable':
+          await this.bulkSetUserStatus(selectedUsers, true);
+          break;
+        case 'disable':
+          await this.bulkSetUserStatus(selectedUsers, false);
+          break;
+        case 'delete':
+          await this.bulkDeleteUsers(selectedUsers);
+          break;
+      }
+
+      this.clearSelection();
+      this.showBulkActionConfirm = false;
+      this.bulkActionType = null;
+      await this.loadInitialData();
+    } catch (error: unknown) {
+      console.error('Bulk action failed:', error);
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Bulk action failed';
+        this.cdr.markForCheck();
+      });
+    } finally {
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
+    }
+  }
+
+  private async bulkSetUserStatus(users: MJUserEntity[], isActive: boolean): Promise<void> {
+    for (const user of users) {
+      user.IsActive = isActive;
+      const result = await user.Save();
+      if (!result) {
+        throw new Error(`Failed to update user ${user.Name}: ${user.LatestResult?.Message}`);
+      }
+    }
+  }
+
+  private async bulkDeleteUsers(users: MJUserEntity[]): Promise<void> {
+    for (const user of users) {
+      const result = await user.Delete();
+      if (!result) {
+        throw new Error(`Failed to delete user ${user.Name}: ${user.LatestResult?.Message}`);
+      }
+    }
+  }
+
+  // Bulk role assignment
+  public openBulkRoleAssign(): void {
+    if (!this.hasSelection) return;
+    this.bulkRoleId = '';
+    this.showBulkRoleAssign = true;
+  }
+
+  public cancelBulkRoleAssign(): void {
+    this.showBulkRoleAssign = false;
+    this.bulkRoleId = '';
+  }
+
+  public async executeBulkRoleAssign(): Promise<void> {
+    if (!this.bulkRoleId || !this.hasSelection) return;
+
+    try {
+      this.isLoading = true;
+      const selectedUserIds = Array.from(this.selectedUserIds);
+
+      for (const userId of selectedUserIds) {
+        // Check if user already has this role
+        const existingRoles = this.userRoleMap.get(userId) || [];
+        if (!existingRoles.includes(this.bulkRoleId)) {
+          const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
+          userRole.NewRecord();
+          userRole.UserID = userId;
+          userRole.RoleID = this.bulkRoleId;
+
+          const result = await userRole.Save();
+          if (!result) {
+            console.warn(`Failed to assign role to user ${userId}:`, userRole.LatestResult?.Message);
+          }
+        }
+      }
+
+      this.clearSelection();
+      this.showBulkRoleAssign = false;
+      this.bulkRoleId = '';
+      await this.loadInitialData();
+    } catch (error: unknown) {
+      console.error('Bulk role assignment failed:', error);
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Bulk role assignment failed';
+        this.cdr.markForCheck();
+      });
+    } finally {
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
+    }
+  }
+
+  public getBulkActionMessage(): string {
+    const count = this.selectedCount;
+    switch (this.bulkActionType) {
+      case 'enable':
+        return `Are you sure you want to enable ${count} user${count > 1 ? 's' : ''}?`;
+      case 'disable':
+        return `Are you sure you want to disable ${count} user${count > 1 ? 's' : ''}?`;
+      case 'delete':
+        return `Are you sure you want to delete ${count} user${count > 1 ? 's' : ''}? This action cannot be undone.`;
+      default:
+        return '';
+    }
+  }
+
+  public getBulkActionTitle(): string {
+    switch (this.bulkActionType) {
+      case 'enable':
+        return 'Enable Users';
+      case 'disable':
+        return 'Disable Users';
+      case 'delete':
+        return 'Delete Users';
+      default:
+        return 'Confirm Action';
+    }
+  }
+
+  public getBulkActionButtonText(): string {
+    const count = this.selectedCount;
+    switch (this.bulkActionType) {
+      case 'enable':
+        return `Enable ${count} User${count > 1 ? 's' : ''}`;
+      case 'disable':
+        return `Disable ${count} User${count > 1 ? 's' : ''}`;
+      case 'delete':
+        return `Delete ${count} User${count > 1 ? 's' : ''}`;
+      default:
+        return 'Confirm';
+    }
+  }
+
+  // Expansion methods
+  public toggleUserExpansion(userId: string): void {
+    if (this.expandedUserIds.has(userId)) {
+      this.expandedUserIds.delete(userId);
+    } else {
+      this.expandedUserIds.add(userId);
+    }
+  }
+
+  public isUserExpanded(userId: string): boolean {
+    return this.expandedUserIds.has(userId);
+  }
+
+  // Get roles for a specific user
+  public getUserRoles(userId: string): MJRoleEntity[] {
+    const roleIds = this.userRoleMap.get(userId) || [];
+    return this.roles.filter(role => roleIds.includes(role.ID));
   }
 }

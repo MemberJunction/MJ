@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modals - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .demo-row-inline {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    /* Demo specific - show modals inline */
+    .modal-demo-container {
+      position: relative;
+      background: var(--mj-bg-page);
+      border-radius: var(--mj-radius-lg);
+      padding: var(--mj-space-4);
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-demo-container .mj-modal-backdrop {
+      position: absolute;
+      border-radius: var(--mj-radius-lg);
+    }
+    .modal-demo-container .mj-modal {
+      position: relative;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Modals & Dialogs</h1>
+      <p>Modal dialogs for confirmations, forms, alerts, and focused interactions.</p>
+    </header>
+
+    <!-- Confirmation Dialog -->
+    <section class="section">
+      <h2 class="section-title">Confirmation Dialog</h2>
+      <p class="mj-text-secondary mj-mb-4">Simple dialog for confirming user actions.</p>
+      <div class="demo-row">
+        <div class="modal-demo-container">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-sm">
+            <div class="mj-modal-header">
+              <h3 class="mj-modal-title">Confirm Delete</h3>
+              <button class="mj-modal-close">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="mj-modal-body">
+              <p>Are you sure you want to delete this item? This action cannot be undone.</p>
+            </div>
+            <div class="mj-modal-footer">
+              <button class="mj-btn mj-btn-danger">Delete</button>
+              <button class="mj-btn mj-btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal-backdrop"&gt;&lt;/div&gt;
+&lt;div class="mj-modal mj-modal-sm"&gt;
+  &lt;div class="mj-modal-header"&gt;
+    &lt;h3 class="mj-modal-title"&gt;Confirm Delete&lt;/h3&gt;
+    &lt;button class="mj-modal-close"&gt;&lt;i class="fa-solid fa-times"&gt;&lt;/i&gt;&lt;/button&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-body"&gt;
+    &lt;p&gt;Are you sure you want to delete this item?&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-footer"&gt;
+    &lt;button class="mj-btn mj-btn-danger"&gt;Delete&lt;/button&gt;
+    &lt;button class="mj-btn mj-btn-secondary"&gt;Cancel&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Form Dialog -->
+    <section class="section">
+      <h2 class="section-title">Form Dialog</h2>
+      <p class="mj-text-secondary mj-mb-4">Modal with a form for data entry.</p>
+      <div class="demo-row">
+        <div class="modal-demo-container" style="min-height: 400px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal">
+            <div class="mj-modal-header">
+              <h3 class="mj-modal-title">Create New User</h3>
+              <button class="mj-modal-close">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="mj-modal-body">
+              <form class="mj-form">
+                <div class="mj-form-group">
+                  <label class="mj-label mj-label-required">Full Name</label>
+                  <input type="text" class="mj-input" placeholder="Enter full name">
+                </div>
+                <div class="mj-form-group">
+                  <label class="mj-label mj-label-required">Email Address</label>
+                  <input type="email" class="mj-input" placeholder="user@example.com">
+                </div>
+                <div class="mj-form-group">
+                  <label class="mj-label">Role</label>
+                  <select class="mj-input mj-select">
+                    <option>Select a role...</option>
+                    <option>Administrator</option>
+                    <option>Editor</option>
+                    <option>Viewer</option>
+                  </select>
+                </div>
+              </form>
+            </div>
+            <div class="mj-modal-footer">
+              <button class="mj-btn mj-btn-primary">Create User</button>
+              <button class="mj-btn mj-btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal"&gt;
+  &lt;div class="mj-modal-header"&gt;...&lt;/div&gt;
+  &lt;div class="mj-modal-body"&gt;
+    &lt;form class="mj-form"&gt;
+      &lt;div class="mj-form-group"&gt;
+        &lt;label class="mj-label mj-label-required"&gt;Full Name&lt;/label&gt;
+        &lt;input type="text" class="mj-input"&gt;
+      &lt;/div&gt;
+    &lt;/form&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-footer"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Alert/Warning Dialogs -->
+    <section class="section">
+      <h2 class="section-title">Alert & Warning Dialogs</h2>
+      <p class="mj-text-secondary mj-mb-4">Dialogs for displaying important messages to users.</p>
+      <div class="demo-row demo-row-inline">
+        <!-- Success Alert -->
+        <div class="modal-demo-container" style="flex: 1; min-width: 300px; min-height: 250px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-sm mj-modal-alert">
+            <div class="mj-modal-body mj-text-center">
+              <div class="mj-modal-alert-icon mj-modal-alert-success">
+                <i class="fa-solid fa-check"></i>
+              </div>
+              <h3 class="mj-modal-title mj-mt-4">Success!</h3>
+              <p class="mj-text-secondary mj-mt-2">Your changes have been saved successfully.</p>
+            </div>
+            <div class="mj-modal-footer mj-justify-center">
+              <button class="mj-btn mj-btn-primary">Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warning Alert -->
+        <div class="modal-demo-container" style="flex: 1; min-width: 300px; min-height: 250px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-sm mj-modal-alert">
+            <div class="mj-modal-body mj-text-center">
+              <div class="mj-modal-alert-icon mj-modal-alert-warning">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+              </div>
+              <h3 class="mj-modal-title mj-mt-4">Warning</h3>
+              <p class="mj-text-secondary mj-mt-2">You have unsaved changes. Do you want to discard them?</p>
+            </div>
+            <div class="mj-modal-footer mj-justify-center">
+              <button class="mj-btn mj-btn-primary">Save Changes</button>
+              <button class="mj-btn mj-btn-secondary">Discard</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Alert -->
+        <div class="modal-demo-container" style="flex: 1; min-width: 300px; min-height: 250px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-sm mj-modal-alert">
+            <div class="mj-modal-body mj-text-center">
+              <div class="mj-modal-alert-icon mj-modal-alert-error">
+                <i class="fa-solid fa-times"></i>
+              </div>
+              <h3 class="mj-modal-title mj-mt-4">Error</h3>
+              <p class="mj-text-secondary mj-mt-2">Something went wrong. Please try again later.</p>
+            </div>
+            <div class="mj-modal-footer mj-justify-center">
+              <button class="mj-btn mj-btn-secondary">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal mj-modal-sm mj-modal-alert"&gt;
+  &lt;div class="mj-modal-body mj-text-center"&gt;
+    &lt;div class="mj-modal-alert-icon mj-modal-alert-success"&gt;
+      &lt;i class="fa-solid fa-check"&gt;&lt;/i&gt;
+    &lt;/div&gt;
+    &lt;h3 class="mj-modal-title"&gt;Success!&lt;/h3&gt;
+    &lt;p&gt;Your changes have been saved.&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-footer mj-justify-center"&gt;
+    &lt;button class="mj-btn mj-btn-primary"&gt;Continue&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Modal with Tabs -->
+    <section class="section">
+      <h2 class="section-title">Modal with Tabs</h2>
+      <p class="mj-text-secondary mj-mb-4">Complex dialog with tabbed content.</p>
+      <div class="demo-row">
+        <div class="modal-demo-container" style="min-height: 400px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-lg">
+            <div class="mj-modal-header">
+              <h3 class="mj-modal-title">User Settings</h3>
+              <button class="mj-modal-close">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="mj-tabs">
+              <button class="mj-tab active">General</button>
+              <button class="mj-tab">Security</button>
+              <button class="mj-tab">Notifications</button>
+            </div>
+            <div class="mj-modal-body">
+              <div class="mj-form-group">
+                <label class="mj-label">Display Name</label>
+                <input type="text" class="mj-input" value="John Doe">
+              </div>
+              <div class="mj-form-group">
+                <label class="mj-label">Time Zone</label>
+                <select class="mj-input mj-select">
+                  <option>Eastern Time (ET)</option>
+                  <option>Pacific Time (PT)</option>
+                  <option>UTC</option>
+                </select>
+              </div>
+              <div class="mj-form-group">
+                <label class="mj-label">Language</label>
+                <select class="mj-input mj-select">
+                  <option>English</option>
+                  <option>Spanish</option>
+                  <option>French</option>
+                </select>
+              </div>
+            </div>
+            <div class="mj-modal-footer">
+              <button class="mj-btn mj-btn-primary">Save Changes</button>
+              <button class="mj-btn mj-btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal mj-modal-lg"&gt;
+  &lt;div class="mj-modal-header"&gt;...&lt;/div&gt;
+  &lt;div class="mj-tabs"&gt;
+    &lt;button class="mj-tab active"&gt;General&lt;/button&gt;
+    &lt;button class="mj-tab"&gt;Security&lt;/button&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-body"&gt;...&lt;/div&gt;
+  &lt;div class="mj-modal-footer"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Full-Screen Modal -->
+    <section class="section">
+      <h2 class="section-title">Full-Screen Modal</h2>
+      <p class="mj-text-secondary mj-mb-4">Modal that takes up the entire viewport.</p>
+      <div class="demo-row">
+        <div class="modal-demo-container" style="min-height: 500px;">
+          <div class="mj-modal-backdrop"></div>
+          <div class="mj-modal mj-modal-fullscreen" style="width: 100%; height: 450px;">
+            <div class="mj-modal-header">
+              <h3 class="mj-modal-title">Document Editor</h3>
+              <button class="mj-modal-close">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="mj-modal-body" style="flex: 1; display: flex; flex-direction: column;">
+              <div class="mj-panel-toolbar mj-mb-4">
+                <div class="mj-flex mj-gap-2">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-bold"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-italic"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-underline"></i></button>
+                  <span class="mj-toolbar-divider"></span>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-list"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-list-ol"></i></button>
+                </div>
+              </div>
+              <textarea class="mj-input mj-textarea" style="flex: 1; resize: none;" placeholder="Start typing your document..."></textarea>
+            </div>
+            <div class="mj-modal-footer">
+              <button class="mj-btn mj-btn-primary">Save Document</button>
+              <button class="mj-btn mj-btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal mj-modal-fullscreen"&gt;
+  &lt;div class="mj-modal-header"&gt;...&lt;/div&gt;
+  &lt;div class="mj-modal-body"&gt;
+    &lt;!-- Full-screen content --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-modal-footer"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Modal Sizes -->
+    <section class="section">
+      <h2 class="section-title">Modal Sizes</h2>
+      <p class="mj-text-secondary mj-mb-4">Different modal sizes for various use cases.</p>
+      <div class="demo-row">
+        <div class="mj-flex mj-gap-4 mj-flex-wrap">
+          <div>
+            <p class="mj-text-sm mj-font-medium mj-mb-2">Small (mj-modal-sm)</p>
+            <div class="mj-modal mj-modal-sm" style="position: relative; width: 350px;">
+              <div class="mj-modal-header">
+                <h3 class="mj-modal-title">Small Modal</h3>
+              </div>
+              <div class="mj-modal-body">
+                <p>Max width: 350px</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="mj-text-sm mj-font-medium mj-mb-2">Default</p>
+            <div class="mj-modal" style="position: relative; width: 500px;">
+              <div class="mj-modal-header">
+                <h3 class="mj-modal-title">Default Modal</h3>
+              </div>
+              <div class="mj-modal-body">
+                <p>Max width: 500px</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-modal mj-modal-sm"&gt;...&lt;/div&gt;  &lt;!-- 350px --&gt;
+&lt;div class="mj-modal"&gt;...&lt;/div&gt;             &lt;!-- 500px --&gt;
+&lt;div class="mj-modal mj-modal-lg"&gt;...&lt;/div&gt;  &lt;!-- 700px --&gt;
+&lt;div class="mj-modal mj-modal-xl"&gt;...&lt;/div&gt;  &lt;!-- 900px --&gt;
+&lt;div class="mj-modal mj-modal-fullscreen"&gt;...&lt;/div&gt;  &lt;!-- 100% --&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

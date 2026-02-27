@@ -1,11 +1,10 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { ActionExecutionLogEntity, ActionEntity, UserEntity } from '@memberjunction/core-entities';
+import { Component, OnInit } from '@angular/core';
+import { MJActionExecutionLogEntity, MJActionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { ActionExecutionLogFormComponent } from '../../generated/Entities/ActionExecutionLog/actionexecutionlog.form.component';
+import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
 
 interface ActionParameter {
     Name: string;
@@ -13,18 +12,19 @@ interface ActionParameter {
     Type: 'Input' | 'Output' | 'Both';
 }
 
-@RegisterClass(BaseFormComponent, 'Action Execution Logs')
+@RegisterClass(BaseFormComponent, 'MJ: Action Execution Logs')
 @Component({
+  standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']
 })
-export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogFormComponent implements OnInit {
-    public record!: ActionExecutionLogEntity;
+export class MJActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
+    public record!: MJActionExecutionLogEntity;
     
     // Related entities
-    public action: ActionEntity | null = null;
-    public user: UserEntity | null = null;
+    public action: MJActionEntity | null = null;
+    public user: MJUserEntity | null = null;
     
     // Parameter counts for visibility
     public hasInputParams = false;
@@ -52,16 +52,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         bothParams: true,
         metadata: false
     };
-    
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -75,6 +65,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             
             // Format JSON fields
             this.formatJSONFields();
+            this.cdr.detectChanges();
         }
     }
 
@@ -84,7 +75,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         this.isLoadingAction = true;
         try {
             const md = new Metadata();
-            this.action = await md.GetEntityObject<ActionEntity>('Actions');
+            this.action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
             if (this.action) {
                 await this.action.Load(this.record.ActionID);
             }
@@ -101,7 +92,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         this.isLoadingUser = true;
         try {
             const md = new Metadata();
-            this.user = await md.GetEntityObject<UserEntity>('Users');
+            this.user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
             if (this.user) {
                 await this.user.Load(this.record.UserID);
             }
@@ -111,7 +102,6 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             this.isLoadingUser = false;
         }
     }
-
 
     private formatJSONFields() {
         const parseOptions: ParseJSONOptions = {
@@ -201,13 +191,13 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
 
     navigateToAction() {
         if (this.record.ActionID) {
-            this.navigateToEntity('Actions', this.record.ActionID);
+            this.navigateToEntity('MJ: Actions', this.record.ActionID);
         }
     }
 
     navigateToUser() {
         if (this.record.UserID) {
-            this.navigateToEntity('Users', this.record.UserID);
+            this.navigateToEntity('MJ: Users', this.record.UserID);
         }
     }
 
@@ -278,10 +268,3 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 }
-
-
-// Loader function for ActionExecutionLogFormComponentExtended
-export function LoadActionExecutionLogFormComponentExtended() {
-    // This function is called to ensure the form is loaded
-}
-

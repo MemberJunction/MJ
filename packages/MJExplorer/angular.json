@@ -1,22 +1,20 @@
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
-  "newProjectRoot": "projects",
   "projects": {
     "MJExplorer": {
       "projectType": "application",
-      "schematics": {},
       "root": "",
       "sourceRoot": "src",
       "prefix": "app",
       "architect": {
         "build": {
-          "builder": "@angular-devkit/build-angular:browser",
+          "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/MJExplorer",
             "index": "src/index.html",
-            "main": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "browser": "src/main.ts",
+            "polyfills": ["@angular/localize/init", "zone.js"],
             "tsConfig": "tsconfig.app.json",
             "assets": [
               "src/favicon.ico",
@@ -29,19 +27,21 @@
                 "output": "/assets"
               }
             ],
-            "styles": [
-              "@memberjunction/ng-explorer-app/dist/styles.scss",
-              "src/styles.css"
-            ],
+            "styles": ["src/styles.scss"],
             "scripts": []
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "scripts": false,
+                "styles": true,
+                "fonts": true
+              },
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "15mb",
-                  "maximumError": "50mb"
+                  "maximumWarning": "60mb",
+                  "maximumError": "80mb"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -51,6 +51,11 @@
               "outputHashing": "all"
             },
             "staging": {
+              "optimization": {
+                "scripts": false,
+                "styles": true,
+                "fonts": true
+              },
               "sourceMap": true,
               "fileReplacements": [
                 {
@@ -60,15 +65,12 @@
               ]
             },
             "development": {
-              "buildOptimizer": false,
               "optimization": false,
-              "vendorChunk": true,
               "extractLicenses": false,
               "sourceMap": {
                 "scripts": true,
                 "styles": true,
-                "vendor": true,
-                "hidden": false
+                "vendor": true
               },
               "namedChunks": true,
               "fileReplacements": [
@@ -79,15 +81,12 @@
               ]
             },
             "local_modules": {
-              "buildOptimizer": false,
               "optimization": false,
-              "vendorChunk": true,
               "extractLicenses": false,
               "sourceMap": {
                 "scripts": true,
                 "styles": true,
-                "vendor": true,
-                "hidden": false
+                "vendor": true
               },
               "namedChunks": true,
               "fileReplacements": [
@@ -113,6 +112,12 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "hmr": true,
+            "prebundle": {
+              "exclude": ["@memberjunction/*"]
+            }
+          },
           "configurations": {
             "production": {
               "buildTarget": "MJExplorer:build:production"
@@ -129,12 +134,6 @@
           },
           "defaultConfiguration": "development"
         },
-        "extract-i18n": {
-          "builder": "@angular-devkit/build-angular:extract-i18n",
-          "options": {
-            "buildTarget": "MJExplorer:build"
-          }
-        },
         "test": {
           "builder": "@angular-devkit/build-angular:karma",
           "options": {
@@ -150,9 +149,7 @@
                 "output": "/assets"
               }
             ],
-            "styles": [
-              "src/styles/main.scss"
-            ],
+            "styles": ["src/styles/main.scss"],
             "scripts": []
           }
         }

@@ -1,8 +1,8 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { CommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
+import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
-import { ListDetailEntityType, ListEntityType, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
-import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 
  
 /**
@@ -32,7 +32,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     
             await CommunicationEngine.Instance.Config(false, this.ContextUser);
     
-            const provider: CommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
+            const provider: MJCommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
             if (!provider) {
                 throw new Error(`Provider ${params.ProviderName} not found`);
             }
@@ -100,7 +100,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         }
     }
 
-    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: EntityCommunicationMessageTypeExtended, message: Message, records: any[]): Promise<MessageRecipient[]> {
+    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[]): Promise<MessageRecipient[]> {
         // we have now validated we are good on the message type requested...
         // next up we will figure out which field to use for the entity, starting at the entity level and then going to the record level, IF the entity has
         // a PreferredCommunicationField we will flag that here as recordLevelPref = true
@@ -113,7 +113,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         }
         const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes);
         // assume that the template(s) if there are multiple, ALL use the same parameters for their contexts, that is validated above
-        const templates: TemplateEntityExtended[] = [];
+        const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
             templates.push(message.BodyTemplate);
         }
@@ -152,7 +152,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         return recipients;
     }
 
-    protected async PopulateSingleRecipientContextData(record: any, relatedData: {paramName: string, data: any[]}[], pkey: any, params: TemplateParamEntity[]): Promise<{[key: string]: any}> {
+    protected async PopulateSingleRecipientContextData(record: any, relatedData: {paramName: string, data: any[]}[], pkey: any, params: MJTemplateParamEntity[]): Promise<{[key: string]: any}> {
         // now, go through each template, and populate the context data for that param, but only do if we've not already processed that parameter since templates across Body/BodyHTML/Subject can share parameters
         const contextData = {};
         for (const p of params) {
@@ -193,7 +193,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      */
     protected async GetRelatedData(message: Message, recipients: any[], recipientPrimaryKeyFieldName: string, recipientPrimaryKeyNeedsQuotes: boolean): Promise<{paramName: string, data: any[]}[]> {
         // First, get a distinct list of params of type Entity
-        const templates: TemplateEntityExtended[] = [];
+        const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
             templates.push(message.BodyTemplate);
         }
@@ -203,7 +203,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         if (message.SubjectTemplate) {
             templates.push(message.SubjectTemplate);
         }
-        const entityParams: TemplateParamEntity[] = [];
+        const entityParams: MJTemplateParamEntity[] = [];
         templates.forEach(t => {
             t.Params.forEach(p => {
                 if (p.Type === "Entity" && !entityParams.includes(p)) {

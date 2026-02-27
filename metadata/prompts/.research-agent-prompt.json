@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Research Agent - Main Prompt",
       "Description": "Main prompt for Research Agent that conducts comprehensive, iterative research by gathering information from multiple sources, comparing and validating data, and synthesizing findings into detailed reports.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/research-agent/research-agent-main.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -13,14 +13,14 @@
       "MaxRetries": 2,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -28,14 +28,14 @@
             "ID": "CF39BC21-D526-4869-8431-D9545EF357B9"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.818Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:49:01.736Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 4.1",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -43,14 +43,14 @@
             "ID": "5C06F71D-5821-43F3-8267-41078754ABFF"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.820Z",
-            "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
+            "lastModified": "2026-02-13T20:49:01.737Z",
+            "checksum": "e949fff9342bfe356b7741f701cb01952256d58f94e231c0a967f2e720fc71e9"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 3
           },
@@ -58,8 +58,8 @@
             "ID": "A80D1E13-3ADA-4B24-BDE7-9F88A35420E8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:32.822Z",
-            "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
+            "lastModified": "2026-02-13T20:49:01.738Z",
+            "checksum": "51e11c64188d53b523f7f3c7d8685ef215875a0117e00a7b40818a425c9cc82a"
           }
         }
       ]
@@ -68,8 +68,8 @@
       "ID": "7F538775-F3D8-4210-8872-02C706BF3188"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:32.731Z",
-      "checksum": "c53309bdcbd48785304bcae9827e7b53d28803703c0f8185a051ac9f9e305eda"
+      "lastModified": "2026-02-13T20:49:01.664Z",
+      "checksum": "884c0519fa7b5dc240699c9e9e87c6b4d19e2cc78cf7b2d5078b18f2423f1c7a"
     }
   }
 ]

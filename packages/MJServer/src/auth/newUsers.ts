@@ -2,10 +2,10 @@ import { ApplicationInfo, EntitySaveOptions, LogError, LogStatus, Metadata, RunV
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config.js";
-import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity, ApplicationEntityType, ApplicationEntityEntityType } from "@memberjunction/core-entities";
+import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
 
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
         try {
             let contextUser: UserInfo | null = null;
 
@@ -25,7 +25,7 @@ export class NewUserBase {
             }
 
             const md: Metadata = new Metadata();
-            const user = await md.GetEntityObject<UserEntity>('Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
+            const user = await md.GetEntityObject<MJUserEntity>('MJ: Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
             user.NewRecord();
             user.Name = email;
             user.IsActive = true;
@@ -53,7 +53,7 @@ export class NewUserBase {
                 // user created, now create however many roles we need to create for this user based on the config settings
                 LogStatus(`User ${user.Email} created, assigning roles`);
                 for (const role of configInfo.userHandling.newUserRoles) {
-                    const userRoleEntity: UserRoleEntity = await md.GetEntityObject<UserRoleEntity>('User Roles', contextUser);
+                    const userRoleEntity: MJUserRoleEntity = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', contextUser);
                     userRoleEntity.NewRecord();
                     userRoleEntity.UserID = user.ID;
                     const userRole = md.Roles.find(r => r.Name === role);
@@ -96,15 +96,17 @@ export class NewUserBase {
                         }
                     }
                 } else {
-                    // Fall back to DefaultForNewUser applications from metadata
+                    // Fall back to DefaultForNewUser applications from metadata, sorted by DefaultSequence
                     LogStatus(`No UserApplications configured, using DefaultForNewUser applications for new user ${user.Name}`);
-                    applicationsToCreate = md.Applications.filter(a => a.DefaultForNewUser);
+                    applicationsToCreate = md.Applications
+                        .filter(a => a.DefaultForNewUser)
+                        .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
                     LogStatus(`Found ${applicationsToCreate.length} applications with DefaultForNewUser=true`);
                 }
 
                 // Create UserApplication records for each application
                 for (const [appIndex, application] of applicationsToCreate.entries()) {
-                    const userApplication: UserApplicationEntity = await md.GetEntityObject<UserApplicationEntity>('User Applications', contextUser);
+                    const userApplication: MJUserApplicationEntity = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
                     userApplication.NewRecord();
                     userApplication.UserID = user.ID;
                     userApplication.ApplicationID = application.ID;
@@ -115,10 +117,10 @@ export class NewUserBase {
                     if(userApplicationSaveResult){
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
-                        //now create a UserApplicationEntity records for each entity in the application
+                        //now create a MJUserApplicationEntity records for each entity in the application
                         const rv: RunView = new RunView();
-                        const rvResult: RunViewResult<ApplicationEntityEntityType> = await rv.RunView({
-                            EntityName: 'Application Entities',
+                        const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
+                            EntityName: 'MJ: Application Entities',
                             ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
                         }, contextUser);
 
@@ -130,7 +132,7 @@ export class NewUserBase {
                         LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
 
                         for(const [index, appEntity] of rvResult.Results.entries()){
-                            const userAppEntity: UserApplicationEntityEntity = await md.GetEntityObject<UserApplicationEntityEntity>('User Application Entities', contextUser);
+                            const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', contextUser);
                             userAppEntity.NewRecord();
                             userAppEntity.UserApplicationID = userApplication.ID;
                             userAppEntity.EntityID = appEntity.EntityID;

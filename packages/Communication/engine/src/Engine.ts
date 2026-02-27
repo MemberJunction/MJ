@@ -1,5 +1,5 @@
 import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, ProviderCredentialsBase } from "@memberjunction/communication-types";
-import { CommunicationRunEntity } from "@memberjunction/core-entities";
+import { MJCommunicationRunEntity } from "@memberjunction/core-entities";
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
@@ -97,7 +97,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
         providerName: string,
         providerMessageTypeName: string,
         message: Message,
-        run?: CommunicationRunEntity,
+        run?: MJCommunicationRunEntity,
         previewOnly?: boolean,
         credentials?: ProviderCredentialsBase
      ): Promise<MessageResult> {

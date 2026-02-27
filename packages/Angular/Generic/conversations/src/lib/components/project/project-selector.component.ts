@@ -1,15 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
-import { ProjectEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { MJProjectEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService as KendoDialogService } from '@progress/kendo-angular-dialog';
 import { DialogService } from '../../services/dialog.service';
 import { ProjectFormModalComponent } from './project-form-modal.component';
 
-export interface ProjectWithStats extends ProjectEntity {
+export interface ProjectWithStats extends MJProjectEntity {
   conversationCount?: number;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-project-selector',
   template: `
     <div class="project-selector">
@@ -123,13 +124,13 @@ export class ProjectSelectorComponent implements OnInit {
   @Input() disabled: boolean = false;
   @Input() showStats: boolean = true;
 
-  @Output() projectSelected = new EventEmitter<ProjectEntity | null>();
-  @Output() projectCreated = new EventEmitter<ProjectEntity>();
-  @Output() projectUpdated = new EventEmitter<ProjectEntity>();
+  @Output() projectSelected = new EventEmitter<MJProjectEntity | null>();
+  @Output() projectCreated = new EventEmitter<MJProjectEntity>();
+  @Output() projectUpdated = new EventEmitter<MJProjectEntity>();
   @Output() projectDeleted = new EventEmitter<string>();
 
   public projectsWithStats: ProjectWithStats[] = [];
-  public selectedProject: ProjectEntity | null = null;
+  public selectedProject: MJProjectEntity | null = null;
 
   constructor(
     private dialogService: DialogService,
@@ -154,15 +155,15 @@ export class ProjectSelectorComponent implements OnInit {
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'Conversations',
+          EntityName: 'MJ: Conversations',
           ExtraFilter: `EnvironmentID='${this.environmentId}'`,
           ResultType: 'entity_object'
         }
       ], this.currentUser);
 
       if (projectsResult.Success && conversationsResult.Success) {
-        const projects = projectsResult.Results as ProjectEntity[] || [];
-        const conversations = conversationsResult.Results as ConversationEntity[] || [];
+        const projects = projectsResult.Results as MJProjectEntity[] || [];
+        const conversations = conversationsResult.Results as MJConversationEntity[] || [];
 
         // Calculate conversation counts per project
         const conversationCounts = this.calculateConversationCounts(conversations);
@@ -183,7 +184,7 @@ export class ProjectSelectorComponent implements OnInit {
     }
   }
 
-  private calculateConversationCounts(conversations: ConversationEntity[]): Map<string, number> {
+  private calculateConversationCounts(conversations: MJConversationEntity[]): Map<string, number> {
     const counts = new Map<string, number>();
 
     for (const conv of conversations) {
@@ -195,7 +196,7 @@ export class ProjectSelectorComponent implements OnInit {
     return counts;
   }
 
-  onProjectChange(project: ProjectEntity | null): void {
+  onProjectChange(project: MJProjectEntity | null): void {
     this.selectedProject = project;
     this.projectSelected.emit(project);
   }
@@ -212,7 +213,7 @@ export class ProjectSelectorComponent implements OnInit {
     modalInstance.environmentId = this.environmentId;
     modalInstance.currentUser = this.currentUser;
 
-    modalInstance.projectSaved.subscribe(async (project: ProjectEntity) => {
+    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
       this.projectCreated.emit(project);
       await this.loadProjects();
       this.selectedProject = project;
@@ -235,7 +236,7 @@ export class ProjectSelectorComponent implements OnInit {
     modalInstance.environmentId = this.environmentId;
     modalInstance.currentUser = this.currentUser;
 
-    modalInstance.projectSaved.subscribe(async (project: ProjectEntity) => {
+    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
       this.projectUpdated.emit(project);
       await this.loadProjects();
       this.selectedProject = project;
@@ -267,7 +268,7 @@ export class ProjectSelectorComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const project = await md.GetEntityObject<ProjectEntity>('MJ: Projects', this.currentUser);
+      const project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
       await project.Load(projectId);
 
       const deleted = await project.Delete();

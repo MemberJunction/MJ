@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { EntityFieldInfo, RunView, UserInfo } from '@memberjunction/core';
-import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
+import { ResourcePermissionEngine, MJResourcePermissionEntity } from '@memberjunction/core-entities';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SelectionEvent } from '@progress/kendo-angular-grid';
@@ -10,6 +10,7 @@ import { GridComponent } from '@progress/kendo-angular-grid';
  * This component displays a list of available resources for a user for a specific Resource Type.
  */
 @Component({
+  standalone: false,
   selector: 'mj-available-resources',
   templateUrl: './available-resources.component.html',
   styleUrls: ['./available-resources.component.css']
@@ -46,7 +47,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         this.SelectionChanged.emit(this.SelectedResources);
     }
 
-    public resourcePermissions: ResourcePermissionEntity[] = [];
+    public resourcePermissions: MJResourcePermissionEntity[] = [];
     public resources: ResourceData[] = [];
     async ngAfterViewInit() {
         await this.Refresh();

@@ -1,5 +1,5 @@
 import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
-import { DataContextEntity, DataContextItemEntity, DataContextItemEntityType, UserViewEntityExtended } from "@memberjunction/core-entities";
+import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 /**
@@ -76,7 +76,7 @@ export class DataContextItem {
      * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
      *              within a given tier like in the MJAPI server or in the UI.
      */
-    ViewEntity?: UserViewEntityExtended;
+    ViewEntity?: MJUserViewEntityExtended;
 
     /**
      * SingleRecord - the object instantiated that contains the data for the single record being used - only populated if the type is 'single_record' - also this is NOT to be sent to/from the API server, it is a placeholder that can be used in a given tier
@@ -146,10 +146,10 @@ export class DataContextItem {
     }
   
     /**
-     * Create a new DataContextItem from a UserViewEntity class instance
+     * Create a new DataContextItem from a MJUserViewEntity class instance
      * @param viewEntity 
      */
-    public static FromViewEntity(viewEntity: UserViewEntityExtended) {
+    public static FromViewEntity(viewEntity: MJUserViewEntityExtended) {
         const instance = DataContext.CreateDataContextItem();
         // update our data from the viewEntity definition
         instance.Type= 'view';
@@ -261,7 +261,7 @@ export class DataContextItem {
         }
     }
 
-    public async LoadMetadataFromEntityRecord(dataContextItem: DataContextItemEntity, provider: IMetadataProvider, contextUser: UserInfo) {
+    public async LoadMetadataFromEntityRecord(dataContextItem: MJDataContextItemEntity, provider: IMetadataProvider, contextUser: UserInfo) {
         this.DataContextItemID = dataContextItem.ID;
         this.Type = <"view" | "query" | "full_entity" | "sql" | "single_record">dataContextItem.Type;
         switch (this.Type) {
@@ -286,7 +286,7 @@ export class DataContextItem {
                 this.ViewID = dataContextItem.ViewID;
                 this.EntityID = dataContextItem.EntityID; // attempt to get this from the database, often will be null though
                 if (this.ViewID) {
-                    const v = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+                    const v = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
                     await v.Load(this.ViewID);
                     this.RecordName = v.Name;
                     this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
@@ -543,7 +543,7 @@ export class DataContext {
     /**
      * The object holding all the metadata for the data context - this only is in place automatically if you called the `LoadMetadata` method
      */
-    DataContextEntity: DataContextEntity;
+    MJDataContextEntity: MJDataContextEntity;
 
     /**
      * The items in the data context
@@ -607,17 +607,17 @@ export class DataContext {
 
             const p = provider ? provider : Metadata.Provider; 
             const rv = <IRunViewProvider><any>p;
-            const dciEntityInfo = p.Entities.find((e) => e.Name === 'Data Context Items');
+            const dciEntityInfo = p.Entities.find((e) => e.Name === 'MJ: Data Context Items');
             if (!dciEntityInfo)
               throw new Error(`Data Context Items entity not found`);
         
-            this.DataContextEntity = await p.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
-            await this.DataContextEntity.Load(DataContextID);
-            this.ID = this.DataContextEntity.ID; // do it this way to make sure it loaded properly
+            this.MJDataContextEntity = await p.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', contextUser);
+            await this.MJDataContextEntity.Load(DataContextID);
+            this.ID = this.MJDataContextEntity.ID; // do it this way to make sure it loaded properly
             if (!this.ID)
                 throw new Error(`Data Context ID: ${DataContextID} not found`);
 
-            const result = await rv.RunView<DataContextItemEntity>({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = '${DataContextID}'`}, contextUser);
+            const result = await rv.RunView<MJDataContextItemEntity>({EntityName: 'MJ: Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = '${DataContextID}'`}, contextUser);
             if (!result || !result.Success) 
               throw new Error(`Error running view to retrieve data context items for data context ID: ${DataContextID}`);
             else { 
@@ -673,7 +673,7 @@ export class DataContext {
             }});
             for (const itemEntry of itemsArray) {
                 const item = itemEntry.item;
-                const dciEntity = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser);
+                const dciEntity = await md.GetEntityObject<MJDataContextItemEntity>('MJ: Data Context Items', contextUser);
                 if (item.DataContextItemID && item.DataContextItemID.length > 0) 
                   await dciEntity.Load(item.DataContextItemID);
                 else
@@ -848,10 +848,10 @@ export class DataContext {
             const md = new Metadata();
 
             // first, clone the data context itself at the top level
-            const currentContext = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            const currentContext = await md.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', contextUser);
             await currentContext.Load(context.ID);
 
-            const newContext = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            const newContext = await md.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', contextUser);
             newContext.NewRecord();
             newContext.CopyFrom(currentContext, false);
 
@@ -859,10 +859,10 @@ export class DataContext {
                 // we've saved our new data context, now we need to save all of the items
                 const tg = await md.CreateTransactionGroup();
                 for (let item of context.Items) {
-                    const currentItem = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser);
+                    const currentItem = await md.GetEntityObject<MJDataContextItemEntity>('MJ: Data Context Items', contextUser);
                     await currentItem.Load(item.DataContextItemID);
 
-                    const newItem = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser); 
+                    const newItem = await md.GetEntityObject<MJDataContextItemEntity>('MJ: Data Context Items', contextUser); 
                     newItem.NewRecord();
 
                     newItem.CopyFrom(currentItem, false);

@@ -1,6 +1,7 @@
 {
   "name": "@memberjunction/scheduled-actions",
-  "version": "3.0.0",
+  "type": "module",
+  "version": "5.3.1",
   "description": "Scheduled Actions allow a system administrator to take any action defined in MemberJunction and schedule it for recurring or one-time future execution.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,24 +10,24 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc && tsc-alias -f",
+    "test": "echo \"No tests configured yet\""
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions": "3.0.0",
-    "@memberjunction/actions-base": "3.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/core-actions": "3.0.0",
-    "@memberjunction/core-entities": "3.0.0",
-    "@memberjunction/core-entities-server": "3.0.0",
-    "@memberjunction/global": "3.0.0",
-    "@memberjunction/sqlserver-dataprovider": "3.0.0",
+    "@memberjunction/actions": "5.3.1",
+    "@memberjunction/actions-base": "5.3.1",
+    "@memberjunction/core": "5.3.1",
+    "@memberjunction/core-actions": "5.3.1",
+    "@memberjunction/core-entities": "5.3.1",
+    "@memberjunction/core-entities-server": "5.3.1",
+    "@memberjunction/global": "5.3.1",
+    "@memberjunction/sqlserver-dataprovider": "5.3.1",
     "cron-parser": "^4.9.0"
   },
   "repository": {

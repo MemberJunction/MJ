@@ -1,29 +1,78 @@
 # MemberJunction SQL Server Data Provider
 
-A robust SQL Server data provider implementation for MemberJunction applications, providing seamless database connectivity, query execution, and entity management.
+A comprehensive SQL Server data provider implementation for the MemberJunction framework, serving as the primary bridge between MemberJunction applications and Microsoft SQL Server databases. This package implements all core data provider interfaces -- entity CRUD, metadata management, view/query/report execution, transaction handling, and SQL logging.
 
-## Overview
+## Architecture Overview
 
-The `@memberjunction/sqlserver-dataprovider` package implements MemberJunction's data provider interface specifically for Microsoft SQL Server databases. It serves as the bridge between your MemberJunction application and SQL Server, handling data access, entity operations, view execution, and more.
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#888' }}}%%
+graph TB
+    subgraph Application["Application Layer"]
+        MJS["MJServer / MJAPI"]
+        MS["MetadataSync"]
+        Custom["Custom Applications"]
+    end
+
+    subgraph Provider["SQLServerDataProvider"]
+        style Provider fill:#2d6a9f,stroke:#1a4971,color:#fff
+        SDP["SQLServerDataProvider"]
+        TXG["SQLServerTransactionGroup"]
+        UC["UserCache"]
+        QPP["QueryParameterProcessor"]
+        SL["SqlLoggingSessionImpl"]
+        NFS["NodeFileSystemProvider"]
+    end
+
+    subgraph Interfaces["MJ Core Interfaces"]
+        style Interfaces fill:#7c5295,stroke:#563a6b,color:#fff
+        IED["IEntityDataProvider"]
+        IMP["IMetadataProvider"]
+        IRV["IRunViewProvider"]
+        IRR["IRunReportProvider"]
+    end
+
+    subgraph Database["SQL Server"]
+        style Database fill:#2d8659,stroke:#1a5c3a,color:#fff
+        Pool["Connection Pool"]
+        SP["Stored Procedures"]
+        Views["Database Views"]
+        Tables["Entity Tables"]
+    end
+
+    MJS --> SDP
+    MS --> SDP
+    Custom --> SDP
+    SDP --> IED
+    SDP --> IMP
+    SDP --> IRV
+    SDP --> IRR
+    SDP --> TXG
+    SDP --> UC
+    SDP --> QPP
+    SDP --> SL
+    SDP --> NFS
+    SDP --> Pool
+    Pool --> SP
+    Pool --> Views
+    Pool --> Tables
+```
 
 ## Key Features
 
-- **Full CRUD Operations**: Complete Create, Read, Update, Delete operations for all entities
-- **Transaction Support**: Manage atomic operations with transaction groups
-- **View Execution**: Run database views with filtering, sorting, and pagination
-- **Report Generation**: Execute reports with parameters
-- **Query Execution**: Run raw SQL queries with parameter support
-- **Connection Pooling**: Efficient database connection management
-- **Entity Relationships**: Handle complex entity relationships automatically
-- **User/Role Management**: Integrated with MemberJunction's security model
-- **Type-Safe Operations**: Fully TypeScript compatible
-- **AI Integration**: Support for AI-powered features through entity actions
-- **Duplicate Detection**: Built-in support for duplicate record detection
-- **Audit Logging**: Comprehensive audit trail capabilities
-- **Row-Level Security**: Enforce data access controls at the database level
-- **SQL Logging**: Real-time SQL statement capture for debugging and migration generation
-- **Session Management**: Multiple concurrent SQL logging sessions with user filtering
-- **Pattern Filtering**: Include/exclude SQL statements using simple wildcards or regex patterns ([details](#pattern-filtering))
+- **Full CRUD Operations** -- Create, Read, Update, Delete for all MemberJunction entities via generated stored procedures
+- **Transaction Support** -- Both transaction groups (multi-entity atomic operations) and instance-level transactions with nested savepoint support
+- **View Execution** -- Run database views with filtering, sorting, pagination, and aggregation
+- **Report and Query Execution** -- Execute reports and parameterized queries with Nunjucks template processing
+- **Connection Pooling** -- Efficient shared connection pool management with configurable sizing
+- **SQL Logging** -- Real-time SQL statement capture to files with session management, pattern filtering, and Flyway migration formatting
+- **User and Role Caching** -- Server-side singleton cache for user information and role assignments
+- **Record Change Tracking** -- Integrated audit trail for entity modifications
+- **Duplicate Detection** -- AI-powered duplicate record detection via vector similarity
+- **Record Merging** -- Merge duplicate records with dependency resolution
+- **Row-Level Security** -- Enforced data access controls at the database level
+- **Metadata Refresh** -- Automatic and on-demand metadata refresh with configurable intervals
+- **Field Encryption** -- Transparent encryption and decryption of sensitive entity fields
+- **DateTime Offset Handling** -- Automatic detection and adjustment for SQL Server timezone behavior
 
 ## Installation
 
@@ -33,898 +82,669 @@ npm install @memberjunction/sqlserver-dataprovider
 
 ## Dependencies
 
-This package relies on the following key dependencies:
-- `@memberjunction/core`: Core MemberJunction functionality
-- `@memberjunction/core-entities`: Entity definitions
-- `@memberjunction/global`: Shared utilities and constants
-- `@memberjunction/actions`: Action execution framework
-- `@memberjunction/ai`: AI integration capabilities
-- `@memberjunction/ai-vector-dupe`: Duplicate detection using AI vectors
-- `@memberjunction/aiengine`: AI engine integration
-- `@memberjunction/queue`: Queue management for async operations
-- `mssql`: SQL Server client for Node.js (v11+)
-- `typeorm`: ORM for database operations (v0.3+)
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | Core MJ framework: base entities, metadata, providers |
+| `@memberjunction/core-entities` | Generated entity subclasses and type definitions |
+| `@memberjunction/global` | Shared utilities, global object store, SQL validation |
+| `@memberjunction/actions` | Server-side entity action execution |
+| `@memberjunction/actions-base` | Action result types |
+| `@memberjunction/ai` | AI integration capabilities |
+| `@memberjunction/ai-provider-bundle` | AI provider bundle |
+| `@memberjunction/ai-vector-dupe` | AI-powered duplicate detection |
+| `@memberjunction/aiengine` | AI engine for entity AI actions |
+| `@memberjunction/encryption` | Field-level encryption engine |
+| `@memberjunction/queue` | Queue management for async operations |
+| `mssql` | SQL Server client for Node.js |
+| `nunjucks` | Template engine for parameterized queries |
+| `sql-formatter` | SQL pretty-printing for log output |
+| `rxjs` | Reactive extensions for transaction queue processing |
+
+## Exported API
+
+The package exports the following public symbols from its entry point:
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `SQLServerDataProvider` | Class | Main data provider implementing all MJ provider interfaces |
+| `SQLServerProviderConfigData` | Class | Configuration data for provider initialization |
+| `SQLServerTransactionGroup` | Class | Transaction group for atomic multi-entity operations |
+| `UserCache` | Class | Singleton server-side user and role cache |
+| `QueryParameterProcessor` | Class | Parameter validation and Nunjucks query template processor |
+| `NodeFileSystemProvider` | Class | Node.js `fs`-based implementation of `IFileSystemProvider` |
+| `SqlLoggingSessionImpl` | Class | Internal SQL logging session implementation |
+| `SqlLoggingSession` | Interface | Public interface for a logging session |
+| `SqlLoggingOptions` | Interface | Configuration options for SQL logging sessions |
+| `ExecuteSQLOptions` | Interface | Options for SQL execution with logging support |
+| `ExecuteSQLBatchOptions` | Interface | Options for batch SQL execution |
+| `setupSQLServerClient` | Function | Helper to initialize provider, set global provider, start user cache |
+
+## Data Flow
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#888' }}}%%
+sequenceDiagram
+    participant App as Application
+    participant SDP as SQLServerDataProvider
+    participant Queue as SQL Queue (RxJS)
+    participant Logger as SqlLoggingSessions
+    participant Pool as Connection Pool
+    participant DB as SQL Server
+
+    App->>SDP: Save(entity, user, options)
+    SDP->>SDP: Generate SP call SQL
+    SDP->>SDP: Encrypt sensitive fields
+
+    alt Transaction Active
+        SDP->>Queue: Enqueue (sequential)
+        Queue->>Pool: Execute via Transaction
+    else No Transaction
+        SDP->>Pool: Execute directly (parallel)
+    end
+
+    SDP-->>Logger: Log SQL (parallel, non-blocking)
+    Pool->>DB: Execute stored procedure
+    DB-->>Pool: Return result set
+    Pool-->>SDP: Raw result
+    SDP->>SDP: Process rows (decrypt, timezone adjust)
+    SDP-->>App: BaseEntityResult
+```
 
 ## Usage
 
-### Basic Setup
+### Initialization with setupSQLServerClient
+
+The `setupSQLServerClient` helper handles full provider initialization: connecting to the pool, configuring the provider, loading the user cache, setting up the global MJ provider, and running the startup manager.
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { ConfigHelper } from '@memberjunction/global';
+import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import sql from 'mssql';
 
-// Configure database connection
-const config = {
-  host: 'your-server.database.windows.net',
+// Create and connect a connection pool
+const pool = new sql.ConnectionPool({
+  server: 'your-server.database.windows.net',
   port: 1433,
   database: 'YourMJDatabase',
   user: 'your-username',
   password: 'your-password',
   options: {
     encrypt: true,
-    trustServerCertificate: false
-  }
-};
-
-// Create data provider instance
-const dataProvider = new SQLServerDataProvider(config);
-
-// Or using environment variables
-const dataProvider = new SQLServerDataProvider({
-  host: ConfigHelper.getConfigValue('MJ_HOST'),
-  port: ConfigHelper.getConfigValue('MJ_PORT', 1433),
-  database: ConfigHelper.getConfigValue('MJ_DATABASE'),
-  user: ConfigHelper.getConfigValue('MJ_USER'),
-  password: ConfigHelper.getConfigValue('MJ_PASSWORD')
+    trustServerCertificate: false,
+  },
+  pool: {
+    max: 50,
+    min: 5,
+    idleTimeoutMillis: 30000,
+  },
 });
+await pool.connect();
 
-// Initialize the data provider (connects to the database)
-await dataProvider.initialize();
+// Initialize the provider (sets global MJ provider, loads user cache, runs startup)
+const config = new SQLServerProviderConfigData(
+  pool,
+  '__mj',           // MJ core schema name
+  60,               // metadata refresh interval in seconds (0 to disable)
+  undefined,        // includeSchemas (undefined = all)
+  undefined,        // excludeSchemas
+  true              // ignoreExistingMetadata (true for first instance)
+);
+
+const provider = await setupSQLServerClient(config);
 ```
 
 ### Working with Entities
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { UserEntity } from '@memberjunction/core-entities';
 
-// Setup data provider
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
-
-// Get entity metadata
 const md = new Metadata();
-const userEntity = md.EntityByName('User');
 
-// Load an entity by ID
-const userKey = new CompositeKey([{ FieldName: 'ID', Value: 1 }]);
-const userResult = await dataProvider.Get(userEntity, userKey);
-
-if (userResult.Success) {
-  const user = userResult.Entity;
-  console.log(`Loaded user: ${user.FirstName} ${user.LastName}`);
-  
-  // Update the entity
-  user.Email = 'new.email@example.com';
-  const saveResult = await dataProvider.Save(user, contextUser);
-  
-  if (saveResult.Success) {
-    console.log(`User updated successfully, ID: ${saveResult.Entity.ID}`);
-  }
-}
+// Load an entity by primary key
+const user = await md.GetEntityObject<UserEntity>('Users', contextUser);
+const key = new CompositeKey([{ FieldName: 'ID', Value: userId }]);
+await user.Load(key);
+console.log(`Loaded: ${user.Name}`);
 
 // Create a new entity
-const newUserEntity = await md.GetEntityObject<UserEntity>('User');
-newUserEntity.FirstName = 'John';
-newUserEntity.LastName = 'Doe';
-newUserEntity.Email = 'john.doe@example.com';
-// set other required fields...
-
-const createResult = await dataProvider.Save(newUserEntity, contextUser);
-if (createResult.Success) {
-  console.log(`New user created with ID: ${createResult.Entity.ID}`);
+const newUser = await md.GetEntityObject<UserEntity>('Users', contextUser);
+newUser.Name = 'John Doe';
+newUser.Email = 'john@example.com';
+const saved = await newUser.Save();
+if (saved) {
+  console.log(`Created user with ID: ${newUser.ID}`);
 }
 
 // Delete an entity
-const deleteKey = new CompositeKey([{ FieldName: 'ID', Value: 5 }]);
-const deleteResult = await dataProvider.Delete(userEntity, deleteKey, contextUser);
-if (deleteResult.Success) {
-  console.log('User deleted successfully');
-}
+await newUser.Delete();
 ```
 
-### Transaction Management
+### Transaction Groups
 
-The SQL Server Data Provider supports comprehensive transaction management through both transaction groups and instance-level transactions.
-
-#### Transaction Groups
+Transaction groups execute multiple entity operations within a single database transaction, with automatic rollback on failure.
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { SQLServerTransactionGroup } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata } from '@memberjunction/core';
 
-// Setup data provider
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
+const transaction = await provider.CreateTransactionGroup();
 
-// Create a transaction group
-const transaction = new SQLServerTransactionGroup('CreateOrderWithItems');
+const order = await md.GetEntityObject('Orders', contextUser);
+order.CustomerID = customerId;
+order.Status = 'New';
+order.TransactionGroup = transaction;
 
-// Get entity objects
-const md = new Metadata();
-const orderEntity = await md.GetEntityObject('Order');
-const orderItemEntity1 = await md.GetEntityObject('Order Item');
-const orderItemEntity2 = await md.GetEntityObject('Order Item');
+const item = await md.GetEntityObject('Order Items', contextUser);
+item.ProductID = productId;
+item.Quantity = 2;
+item.TransactionGroup = transaction;
 
-// Set up the order
-orderEntity.CustomerID = 123;
-orderEntity.OrderDate = new Date();
-orderEntity.Status = 'New';
-
-// Add to transaction - this will get ID after save
-await transaction.AddTransaction(orderEntity);
-
-// Set up order items with references to the order
-orderItemEntity1.OrderID = '@Order.1'; // Reference to the first Order in this transaction
-orderItemEntity1.ProductID = 456;
-orderItemEntity1.Quantity = 2;
-orderItemEntity1.Price = 29.99;
-
-orderItemEntity2.OrderID = '@Order.1'; // Same order reference
-orderItemEntity2.ProductID = 789;
-orderItemEntity2.Quantity = 1;
-orderItemEntity2.Price = 49.99;
-
-// Add items to transaction
-await transaction.AddTransaction(orderItemEntity1);
-await transaction.AddTransaction(orderItemEntity2);
-
-// Execute the transaction group
+// Both saves are queued, then executed atomically on Submit
+await order.Save();
+await item.Save();
 const results = await transaction.Submit();
-
-// Check results
-const success = results.every(r => r.Success);
-if (success) {
-  console.log('Transaction completed successfully');
-  const orderResult = results.find(r => r.Entity.EntityInfo.Name === 'Order');
-  console.log('Order ID:', orderResult?.Entity.ID);
-} else {
-  console.error('Transaction failed');
-  results.filter(r => !r.Success).forEach(r => {
-    console.error(`Failed: ${r.Entity.EntityInfo.Name}`, r.Message);
-  });
-}
 ```
 
-#### Instance-Level Transactions (Multi-User Environments)
+### Instance-Level Transactions
 
-In multi-user server environments like MJServer, each request gets its own SQLServerDataProvider instance with isolated transaction state. This provides automatic transaction isolation without requiring transaction scope IDs:
+For multi-user server environments, each provider instance supports isolated transaction state with nested savepoints.
 
 ```typescript
-// Each request gets its own provider instance
-const dataProvider = new SQLServerDataProvider(connectionPool);
-await dataProvider.Config(config);
-
 try {
-  // Begin a transaction on this instance
-  await dataProvider.BeginTransaction();
-  
-  // Perform operations - all use this instance's transaction
-  await dataProvider.Save(entity1, contextUser);
-  await dataProvider.Save(entity2, contextUser);
-  
-  // Delete operations also participate in the transaction
-  await dataProvider.Delete(entity3, deleteOptions, contextUser);
-  
-  // Commit the transaction
-  await dataProvider.CommitTransaction();
+  await provider.BeginTransaction();
+
+  await provider.Save(entity1, contextUser, {});
+  await provider.Save(entity2, contextUser, {});
+
+  await provider.CommitTransaction();
 } catch (error) {
-  // Rollback on error
-  await dataProvider.RollbackTransaction();
+  await provider.RollbackTransaction();
   throw error;
 }
 ```
 
-**Key Features of Instance-Level Transactions:**
-- Each provider instance maintains its own transaction state
-- No transaction scope IDs needed - simpler API
-- Automatic isolation between concurrent requests (each has its own instance)
-- Supports nested transactions with SQL Server savepoints
-- Used automatically by MJServer for all GraphQL mutations
-
-**Best Practices for Multi-User Environments:**
-1. Create a new SQLServerDataProvider instance per request
-2. Configure with `ignoreExistingMetadata: false` to reuse cached metadata
-3. Let the instance be garbage collected after the request completes
-4. No need for explicit cleanup - transaction state is instance-scoped
-
-### Running Views and Reports
+### Running Views
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { RunViewParams, RunReportParams } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 
-// Setup data provider
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
+const rv = new RunView();
+const result = await rv.RunView({
+  EntityName: 'Users',
+  ExtraFilter: "Status = 'Active'",
+  OrderBy: 'Name',
+  MaxRows: 100,
+  ResultType: 'entity_object',
+}, contextUser);
 
-// Run a view with filtering and pagination
-const viewOptions: RunViewParams = {
-  EntityName: 'vwActiveUsers',
-  ExtraFilter: "Role = 'Administrator'",
-  OrderBy: 'LastName, FirstName',
-  PageSize: 10,
-  PageNumber: 1
-};
-
-const viewResult = await dataProvider.RunView(viewOptions);
-
-if (viewResult.success) {
-  console.log(`Found ${viewResult.Results.length} users`);
-  console.log(`Total matching records: ${viewResult.TotalRowCount}`);
-  
-  viewResult.Results.forEach(user => {
-    console.log(`${user.FirstName} ${user.LastName} (${user.Email})`);
-  });
-}
-
-// Run a report
-const reportParams: RunReportParams = {
-  ReportID: 'report-id-here',
-  // Other parameters as needed
-};
-
-const reportResult = await dataProvider.RunReport(reportParams);
-
-if (reportResult.Success) {
-  console.log('Report data:', reportResult.Results);
-  console.log('Row count:', reportResult.RowCount);
-  console.log('Execution time:', reportResult.ExecutionTime, 'ms');
+if (result.Success) {
+  console.log(`Found ${result.Results.length} active users`);
 }
 ```
 
-### Executing Raw Queries
+### Running Parameterized Queries
+
+The `QueryParameterProcessor` validates parameters and processes Nunjucks templates for parameterized queries.
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { RunQueryParams } from '@memberjunction/core';
+import { RunQuery } from '@memberjunction/core';
 
-// Setup data provider
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
+const rq = new RunQuery();
+const result = await rq.RunQuery({
+  QueryName: 'ActiveUsersByDepartment',
+  CategoryPath: '/Reports/Users/',
+  Parameters: {
+    department: 'Engineering',
+    minHireDate: '2023-01-01',
+  },
+}, contextUser);
 
-// Execute raw SQL with parameters
-const sqlResult = await dataProvider.ExecuteSQL(
-  'SELECT * FROM Users WHERE Department = @dept AND HireDate > @date',
-  {
-    dept: 'Engineering',
-    date: '2022-01-01'
-  }
+if (result.Success) {
+  console.log('Query results:', result.Results);
+}
+
+// Ad-hoc SQL execution (SELECT/WITH only — validated via SQLExpressionValidator, read-only)
+const adhocResult = await rq.RunQuery({
+  SQL: 'SELECT TOP 50 Name, Status FROM __mj.vwUsers WHERE IsActive = 1',
+}, contextUser);
+```
+
+### Executing Raw SQL
+
+```typescript
+// Instance method
+const rows = await provider.ExecuteSQL(
+  'SELECT * FROM Users WHERE Department = @dept',
+  { dept: 'Engineering' }
 );
 
-console.log(`Query returned ${sqlResult.length} rows`);
-sqlResult.forEach(row => {
-  console.log(row);
-});
-
-// Execute a stored procedure
-const spResult = await dataProvider.ExecuteSQL(
-  'EXEC sp_GetUserPermissions @UserID',
-  {
-    UserID: 123
-  }
+// Static method (useful when you have a pool but not a provider)
+const rows2 = await SQLServerDataProvider.ExecuteSQLWithPool(
+  pool,
+  'SELECT TOP 10 * FROM Users ORDER BY Name'
 );
-
-console.log('User permissions:', spResult);
-
-// Using RunQuery for pre-defined queries
-const queryParams: RunQueryParams = {
-  QueryID: 'query-id-here', // or use QueryName + Category identification
-  // Alternative: use QueryName with hierarchical CategoryPath
-  // QueryName: 'CalculateCost',
-  // CategoryPath: '/MJ/AI/Agents/'  // Hierarchical path notation
-  // CategoryID: 'optional-direct-category-id',
-};
-
-const queryResult = await dataProvider.RunQuery(queryParams);
-
-if (queryResult.Success) {
-  console.log('Query results:', queryResult.Results);
-  console.log('Execution time:', queryResult.ExecutionTime, 'ms');
-}
-
-// Query lookup supports hierarchical category paths
-// Example: Query with name "CalculateCost" in category hierarchy "MJ" -> "AI" -> "Agents"
-const hierarchicalQueryParams: RunQueryParams = {
-  QueryName: 'CalculateCost',
-  CategoryPath: '/MJ/AI/Agents/'  // Full hierarchical path with leading/trailing slashes
-};
-
-// The CategoryPath is parsed as a path where:
-// - "/" separates category levels
-// - Each segment is matched case-insensitively against category names
-// - The path walks from root to leaf through the ParentID relationships
-// - Falls back to simple category name matching for backward compatibility
-```
-
-### User Management and Caching
-
-```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-
-// Setup data provider
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
-
-// Set current user context
-dataProvider.setCurrentUser(123); // User ID
-
-// Get current user
-const currentUser = dataProvider.getCurrentUser();
-console.log(`Current user: ${currentUser.FirstName} ${currentUser.LastName}`);
-
-// User caching is handled automatically by the provider
-// but you can clear the cache if needed
-dataProvider.clearUserCache();
-```
-
-## Configuration Options
-
-The SQL Server data provider accepts the following configuration options:
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `host` | SQL Server hostname or IP | required |
-| `port` | SQL Server port | 1433 |
-| `database` | Database name | required |
-| `user` | Username | required |
-| `password` | Password | required |
-| `connectionTimeout` | Connection timeout in ms | 15000 |
-| `requestTimeout` | Request timeout in ms | 15000 |
-| `pool.max` | Maximum pool size | 10 |
-| `pool.min` | Minimum pool size | 0 |
-| `pool.idleTimeoutMillis` | Pool idle timeout | 30000 |
-| `options.encrypt` | Use encryption | true |
-| `options.trustServerCertificate` | Trust server certificate | false |
-| `options.enableArithAbort` | Enable arithmetic abort | true |
-
-## Advanced Usage
-
-### Custom SQL Execution Hooks
-
-```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-
-class CustomSQLProvider extends SQLServerDataProvider {
-  // Override to add custom logging or modifications
-  async ExecuteSQL(sql: string, params?: any, maxRows?: number): Promise<any> {
-    console.log(`Executing SQL: ${sql}`);
-    console.log('Parameters:', params);
-    
-    // Add timing
-    const startTime = Date.now();
-    const result = await super.ExecuteSQL(sql, params, maxRows);
-    const duration = Date.now() - startTime;
-    
-    console.log(`Query executed in ${duration}ms`);
-    console.log(`Rows returned: ${result?.length || 0}`);
-    
-    return result;
-  }
-  
-  // Custom error handling
-  protected async HandleExecuteSQLError(error: any, sql: string): Promise<void> {
-    console.error('SQL Error:', error);
-    console.error('Failed SQL:', sql);
-    // Add custom error handling logic here
-    await super.HandleExecuteSQLError(error, sql);
-  }
-}
-```
-
-### Error Handling
-
-The SQL Server Data Provider includes comprehensive error handling:
-
-```typescript
-try {
-  const result = await dataProvider.Save(entity, user);
-  if (!result.Success) {
-    console.error('Save failed:', result.ErrorMessage);
-    // Handle validation or business logic errors
-  }
-} catch (error) {
-  console.error('Unexpected error:', error);
-  // Handle system-level errors
-}
-```
-
-## Build & Development
-
-### Building the Package
-
-```bash
-# From the package directory
-npm run build
-
-# Or from the repository root
-turbo build --filter="@memberjunction/sqlserver-dataprovider"
-```
-
-### Development Scripts
-
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run start` - Run the package with ts-node-dev for development
-
-### TypeScript Configuration
-
-This package is configured with TypeScript strict mode enabled. The compiled output is placed in the `dist/` directory with declaration files for type support.
-
-## API Reference
-
-### SQLServerDataProvider
-
-The main class that implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces.
-
-#### Key Methods
-
-- `Config(configData: SQLServerProviderConfigData): Promise<boolean>` - Configure the provider with connection details
-- `Get(entity: EntityInfo, CompositeKey: CompositeKey, user?: UserInfo): Promise<BaseEntityResult>` - Load an entity by primary key
-- `Save(entity: BaseEntity, user: UserInfo, options?: EntitySaveOptions): Promise<BaseEntityResult>` - Save (create/update) an entity
-- `Delete(entity: EntityInfo, CompositeKey: CompositeKey, user?: UserInfo, options?: EntityDeleteOptions): Promise<BaseEntityResult>` - Delete an entity
-- `RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult>` - Execute a database view
-- `RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult>` - Execute a report
-- `RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>` - Execute a query
-- `ExecuteSQL(sql: string, params?: any, maxRows?: number): Promise<any[]>` - Execute raw SQL
-- `createSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession>` - Create a new SQL logging session
-- `getActiveSqlLoggingSessions(): SqlLoggingSession[]` - Get all active logging sessions
-- `disposeAllSqlLoggingSessions(): Promise<void>` - Stop and clean up all logging sessions
-- `isSqlLoggingEnabled(): boolean` - Check if SQL logging is available
-
-### SQLServerProviderConfigData
-
-Configuration class for the SQL Server provider.
-
-#### Constructor Parameters
-
-```typescript
-constructor(
-  connectionPool: sql.ConnectionPool,
-  MJCoreSchemaName?: string,
-  checkRefreshIntervalSeconds: number = 0,
-  includeSchemas?: string[],
-  excludeSchemas?: string[],
-  ignoreExistingMetadata: boolean = true
-)
-```
-
-#### Properties
-
-- `ConnectionPool: sql.ConnectionPool` - SQL Server connection pool instance
-- `CheckRefreshIntervalSeconds: number` - Interval for checking metadata refresh (0 to disable)
-- `MJCoreSchemaName: string` - Schema name for MJ core tables (default: '__mj')
-- `IncludeSchemas?: string[]` - List of schemas to include
-- `ExcludeSchemas?: string[]` - List of schemas to exclude
-- `IgnoreExistingMetadata: boolean` - Whether to ignore cached metadata and force a reload (default: true)
-
-**Important Note on `ignoreExistingMetadata`:**
-- Set to `false` in multi-user environments to reuse cached metadata across provider instances
-- This significantly improves performance when creating provider instances per request
-- The first instance loads metadata from the database, subsequent instances reuse it
-
-### SQLServerTransactionGroup
-
-SQL Server implementation of TransactionGroupBase for managing database transactions.
-
-#### Methods
-
-- `HandleSubmit(): Promise<TransactionResult[]>` - Execute all pending transactions in the group
-
-### UserCache
-
-Server-side cache for user and role information.
-
-#### Static Methods
-
-- `Instance: UserCache` - Get singleton instance
-- `Users: UserInfo[]` - Get all cached users
-
-#### Instance Methods
-
-- `Refresh(dataSource: DataSource, autoRefreshIntervalMS?: number): Promise<void>` - Refresh user cache
-- `UserByName(name: string, caseSensitive?: boolean): UserInfo | undefined` - Find user by name
-
-### setupSQLServerClient
-
-Helper function to initialize and configure the SQL Server data provider.
-
-```typescript
-setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider>
 ```
 
 ## SQL Logging
 
-The SQL Server Data Provider includes comprehensive SQL logging capabilities that allow you to capture SQL statements in real-time. This feature supports both programmatic access and runtime control through the MemberJunction UI.
+The provider includes a comprehensive SQL logging subsystem for capturing executed SQL statements to files. Logging sessions run in parallel with query execution and do not impact performance.
 
-### Key Features
+### Logging Architecture
 
-- **Real-time SQL capture** - Monitor SQL statements as they execute
-- **Session-based logging** with unique identifiers and names
-- **User filtering** - Capture SQL from specific users only
-- **Multiple output formats** - Standard SQL logs or migration-ready files
-- **Runtime control** - Start/stop sessions through GraphQL API and UI
-- **Owner-level security** - Only users with Owner privileges can access SQL logging
-- **Automatic cleanup** - Sessions auto-expire and clean up empty files
-- **Concurrent sessions** - Support multiple active logging sessions
-- **Parameter capture** - Logs both SQL statements and their parameters
-- **Pattern filtering** - Include/exclude statements using simple wildcards or regex
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#888' }}}%%
+graph LR
+    subgraph Execution["SQL Execution"]
+        style Execution fill:#2d6a9f,stroke:#1a4971,color:#fff
+        EX["ExecuteSQL"]
+    end
 
-### Programmatic Usage
+    subgraph Sessions["Active Logging Sessions"]
+        style Sessions fill:#b8762f,stroke:#8a5722,color:#fff
+        S1["Session 1: mutations only"]
+        S2["Session 2: migration format"]
+        S3["Session 3: user-filtered"]
+    end
+
+    subgraph Output["Output Files"]
+        style Output fill:#2d8659,stroke:#1a5c3a,color:#fff
+        F1["operations.sql"]
+        F2["migration.sql"]
+        F3["user-audit.sql"]
+    end
+
+    EX -->|parallel, non-blocking| S1
+    EX -->|parallel, non-blocking| S2
+    EX -->|parallel, non-blocking| S3
+    S1 -->|filtered + formatted| F1
+    S2 -->|schema placeholders| F2
+    S3 -->|user-scoped| F3
+```
+
+### Creating a Logging Session
 
 ```typescript
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-
-const dataProvider = new SQLServerDataProvider(/* config */);
-await dataProvider.initialize();
-
-// Create a SQL logging session
-const logger = await dataProvider.createSqlLogger('./logs/sql/operations.sql', {
-  formatAsMigration: false,
-  sessionName: 'User registration operations',
-  filterByUserId: 'user@example.com',  // Only log SQL from this user
-  prettyPrint: true,
-  statementTypes: 'both'  // Log both queries and mutations
+const session = await provider.CreateSqlLogger('./logs/operations.sql', {
+  sessionName: 'Debug session',
+  statementTypes: 'both',         // 'queries', 'mutations', or 'both'
+  prettyPrint: true,              // Format SQL with sql-formatter
+  formatAsMigration: false,       // Replace schema names with Flyway placeholders
+  logRecordChangeMetadata: false, // Log only core SP calls, not change tracking wrapper
+  retainEmptyLogFiles: false,     // Delete file if no statements were logged
+  filterByUserId: 'user@example.com', // Only capture this user's SQL
+  filterPatterns: [/spCreateAIPromptRun/i],  // Exclude matching patterns
+  filterType: 'exclude',          // 'exclude' or 'include'
 });
 
-// Perform your database operations - they will be automatically logged
-await dataProvider.ExecuteSQL('INSERT INTO Users (Name, Email) VALUES (@name, @email)', {
-  name: 'John Doe',
-  email: 'john@example.com'
-});
+try {
+  // All SQL operations are automatically captured
+  await provider.ExecuteSQL('INSERT INTO ...');
+  console.log(`Captured ${session.statementCount} statements`);
+} finally {
+  await session.dispose(); // Stop logging, close file, clean up
+}
+```
 
-// Check session status
-console.log(`Session ${logger.id} has captured ${logger.statementCount} statements`);
+### Migration-Ready Format
 
-// Clean up the logging session
-await logger.dispose();
+When `formatAsMigration: true`, the logger automatically:
+- Replaces schema names with `${flyway:defaultSchema}` placeholders
+- Escapes `${...}` patterns within SQL string literals to prevent Flyway interpretation
+- Splits string literals exceeding SQL Server's 4000-character NVARCHAR limit into concatenated chunks with `CAST(... AS NVARCHAR(MAX))`
+
+```typescript
+const session = await provider.CreateSqlLogger(
+  './migrations/V20250207120000__entity_updates.sql',
+  {
+    formatAsMigration: true,
+    batchSeparator: 'GO',
+    description: 'Entity schema updates',
+  }
+);
 ```
 
 ### Pattern Filtering
 
-SQL logging sessions support pattern-based filtering to include or exclude specific SQL statements. You can use either **regex patterns** for advanced matching or **simple wildcard patterns** for ease of use.
+Filter which SQL statements are logged using simple wildcard patterns or full regular expressions.
 
-#### Pattern Types
+**Simple wildcards** use `*` as a wildcard character:
+- `*AIPrompt*` -- matches anything containing "AIPrompt"
+- `spCreate*` -- matches anything starting with "spCreate"
 
-1. **Simple Wildcard Patterns** (Recommended for most users):
-   - Use `*` as a wildcard character
-   - Case-insensitive by default
-   - Examples:
-     - `*AIPrompt*` - Matches anything containing "AIPrompt"
-     - `spCreate*` - Matches anything starting with "spCreate"
-     - `*Run` - Matches anything ending with "Run"
-     - `UserTable` - Exact match only
-
-2. **Regular Expression Patterns** (For advanced users):
-   - Full regex support with flags
-   - More powerful but requires regex knowledge
-   - Examples:
-     - `/spCreate.*Run/i` - Case-insensitive regex
-     - `/^SELECT.*FROM.*vw/` - Queries from views
-     - `/INSERT INTO (Users|Roles)/i` - Insert into Users or Roles
-
-#### Exclude Mode (Default)
+**Regex patterns** provide full regular expression support:
+- `/spCreate.*Run/i` -- case-insensitive regex
+- `/^SELECT.*FROM.*vw/` -- queries from views
 
 ```typescript
-// Exclude specific patterns from logging
-const logger = await dataProvider.createSqlLogger('./logs/sql/filtered.sql', {
-  sessionName: 'Production Operations',
+// Exclude noisy patterns
+const session = await provider.CreateSqlLogger('./logs/filtered.sql', {
   filterPatterns: [
-    /spCreateAIPromptRun/i,          // Regex: Exclude AI prompt runs
-    /spUpdateAIPromptRun/i,          // Regex: Exclude AI prompt updates
-    /^SELECT.*FROM.*vw.*Metadata/i,  // Regex: Exclude metadata view queries
-    /INSERT INTO EntityFieldValue/i   // Regex: Exclude field value inserts
+    /spCreateAIPromptRun/i,
+    /^SELECT.*FROM.*vw.*Metadata/i,
+    '*EntityFieldValue*',
   ],
-  filterType: 'exclude'  // Default - exclude matching patterns
+  filterType: 'exclude', // Default: skip matching statements
+});
+
+// Include only specific patterns
+const auditSession = await provider.CreateSqlLogger('./logs/audit.sql', {
+  filterPatterns: [/INSERT INTO Users/i, /UPDATE Users/i, /DELETE FROM Users/i],
+  filterType: 'include', // Only log matching statements
 });
 ```
 
-#### Include Mode
+### Session Management
 
 ```typescript
-// Only log specific patterns
-const auditLogger = await dataProvider.createSqlLogger('./logs/sql/audit.sql', {
-  sessionName: 'User Audit Trail',
-  filterPatterns: [
-    /INSERT INTO Users/i,
-    /UPDATE Users/i,
-    /DELETE FROM Users/i,
-    /sp_ChangePassword/i
-  ],
-  filterType: 'include'  // Only log statements matching these patterns
-});
+// List all active sessions
+const active = provider.GetActiveSqlLoggingSessions();
+console.log(`${active.length} sessions active`);
+
+// Get a specific session
+const session = provider.GetSqlLoggingSessionById(sessionId);
+
+// Dispose all sessions (cleanup on shutdown)
+await provider.DisposeAllSqlLoggingSessions();
 ```
 
-#### Using with MetadataSync
+## Transaction Processing
 
-When configuring SQL logging in MetadataSync's `.mj-sync.json`, you can use string patterns that support both formats:
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#888' }}}%%
+graph TD
+    subgraph TransactionGroup["Transaction Group Flow"]
+        style TransactionGroup fill:#7c5295,stroke:#563a6b,color:#fff
+        TG1["AddTransaction(entity)"]
+        TG2["Submit()"]
+        TG3["Begin SQL Transaction"]
+        TG4["Execute items sequentially"]
+        TG5{"All succeeded?"}
+        TG6["Commit"]
+        TG7["Rollback"]
+    end
 
-```json
-{
-  "sqlLogging": {
-    "enabled": true,
-    "filterPatterns": [
-      "*AIPrompt*",              // Simple: Exclude anything with "AIPrompt"
-      "/^EXEC sp_/i",            // Regex: Exclude stored procedures
-      "*EntityFieldValue*",      // Simple: Exclude EntityFieldValue operations
-      "/INSERT INTO (__mj|mj)/i" // Regex: Exclude system table inserts
-    ],
-    "filterType": "exclude"
-  }
-}
+    subgraph InstanceTx["Instance Transaction Flow"]
+        style InstanceTx fill:#2d6a9f,stroke:#1a4971,color:#fff
+        IT1["BeginTransaction()"]
+        IT2["Queue serializes queries"]
+        IT3["Save / Delete / ExecuteSQL"]
+        IT4["CommitTransaction()"]
+        IT5["RollbackTransaction()"]
+    end
+
+    TG1 --> TG2
+    TG2 --> TG3
+    TG3 --> TG4
+    TG4 --> TG5
+    TG5 -->|Yes| TG6
+    TG5 -->|No| TG7
+
+    IT1 --> IT2
+    IT2 --> IT3
+    IT3 --> IT4
+    IT3 -->|Error| IT5
 ```
 
-#### Filter Pattern Options
-- `filterPatterns`: Array of patterns (RegExp objects in code, strings in config)
-- `filterType`: 
-  - `'exclude'` (default): Skip logging if ANY pattern matches
-  - `'include'`: Only log if ANY pattern matches
-- If no patterns are specified, all SQL is logged (backward compatible)
+The provider supports two transaction mechanisms:
 
-> **Note**: Filtering is applied to the actual SQL that will be logged. If `logRecordChangeMetadata` is false and a simplified SQL fallback is provided, the filtering tests against the simplified version.
+**Transaction Groups** (`SQLServerTransactionGroup`) -- bundle multiple entity save/delete operations and execute them within a single SQL Server transaction. If any operation fails, the entire group is rolled back. Transaction groups also support inter-entity variable references, allowing a newly created entity's ID to be passed to dependent entities in the same batch.
 
-### Runtime Control via GraphQL
+**Instance-Level Transactions** -- each `SQLServerDataProvider` instance maintains its own transaction state. When a transaction is active, all SQL queries from that instance are serialized through an RxJS queue (`concatMap`) and executed against the same `sql.Transaction` object. Non-transactional queries bypass the queue for maximum parallelism. Nested transactions use SQL Server savepoints.
+
+## UserCache
+
+The `UserCache` is a singleton that loads all users and their role assignments from the database and keeps them in memory. It is used for user lookups during authentication and authorization.
 
 ```typescript
-// Start a new logging session
-const mutation = `
-  mutation {
-    startSqlLogging(input: {
-      fileName: "debug-session.sql"
-      filterToCurrentUser: true
-      options: {
-        sessionName: "Debug Session"
-        prettyPrint: true
-        statementTypes: "both"
-        formatAsMigration: false
-      }
-    }) {
-      id
-      filePath
-      sessionName
-    }
-  }
-`;
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
-// List active sessions
-const query = `
-  query {
-    activeSqlLoggingSessions {
-      id
-      sessionName
-      startTime
-      statementCount
-      filterByUserId
-    }
-  }
-`;
+// Access the singleton
+const cache = UserCache.Instance;
 
-// Stop a session
-const stopMutation = `
-  mutation {
-    stopSqlLogging(sessionId: "session-id-here")
-  }
-`;
+// Look up users
+const user = cache.UserByName('john@example.com');
+const systemUser = cache.GetSystemUser();
+const allUsers = cache.Users;
+
+// Refresh from database (with optional auto-refresh interval in ms)
+await cache.Refresh(pool, 60000);
 ```
 
-### UI Integration
+## QueryParameterProcessor
 
-SQL logging can be controlled through the MemberJunction Explorer UI:
+Handles parameter validation and Nunjucks template rendering for parameterized queries.
 
-1. **Settings Panel**: Navigate to Settings > SQL Logging (Owner access required)
-2. **Session Management**: Start/stop sessions with custom options
-3. **Real-time Monitoring**: View active sessions and statement counts
-4. **User Filtering**: Option to capture only your SQL statements
-5. **Log Viewing**: Preview log file contents (implementation dependent)
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#888' }}}%%
+graph LR
+    subgraph Input["Query Input"]
+        style Input fill:#2d6a9f,stroke:#1a4971,color:#fff
+        QI["QueryInfo with SQL template"]
+        P["Parameters"]
+    end
 
-### Migration-Ready Format
+    subgraph Processing["QueryParameterProcessor"]
+        style Processing fill:#b8762f,stroke:#8a5722,color:#fff
+        V["Validate parameters"]
+        T["Type conversion"]
+        R["Nunjucks render"]
+    end
 
-```typescript
-// Create logger with migration formatting
-const migrationLogger = await dataProvider.createSqlLogger('./migrations/V20241215120000__User_Operations.sql', {
-  formatAsMigration: true,
-  sessionName: 'User management operations for deployment',
-  batchSeparator: 'GO',
-  logRecordChangeMetadata: true
-});
+    subgraph Output["Result"]
+        style Output fill:#2d8659,stroke:#1a5c3a,color:#fff
+        SQL["Processed SQL"]
+    end
 
-// Your operations are logged in Flyway-compatible format
-// with proper headers and schema placeholders
+    QI --> V
+    P --> V
+    V --> T
+    T --> R
+    R --> SQL
 ```
 
-### Session Management Methods
+- Validates required parameters, applies defaults, and performs type conversion (string, number, date, boolean, array)
+- Renders parameterized SQL using Nunjucks with custom SQL-safe filters registered through `RunQuerySQLFilterManager`
+- Rejects unknown parameters to prevent injection
 
-```typescript
-// Get all active sessions
-const activeSessions = dataProvider.getActiveSqlLoggingSessions();
-console.log(`${activeSessions.length} sessions currently active`);
+## Configuration Reference
 
-// Dispose all sessions
-await dataProvider.disposeAllSqlLoggingSessions();
+### SQLServerProviderConfigData
 
-// Check if logging is enabled
-if (dataProvider.isSqlLoggingEnabled()) {
-  console.log('SQL logging is available');
-}
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `connectionPool` | `sql.ConnectionPool` | required | Connected mssql connection pool |
+| `MJCoreSchemaName` | `string` | `'__mj'` | Database schema for MJ core tables |
+| `checkRefreshIntervalSeconds` | `number` | `0` | Interval for automatic metadata refresh (0 = disabled) |
+| `includeSchemas` | `string[]` | `undefined` | Restrict metadata loading to these schemas |
+| `excludeSchemas` | `string[]` | `undefined` | Exclude these schemas from metadata loading |
+| `ignoreExistingMetadata` | `boolean` | `true` | Force full metadata reload; set `false` for per-request instances to reuse cache |
+
+### Connection Pool Settings
+
+Configure via `mj.config.cjs` at the repository root:
+
+```javascript
+module.exports = {
+  databaseSettings: {
+    connectionPool: {
+      max: 50,                     // Maximum connections
+      min: 5,                      // Minimum connections
+      idleTimeoutMillis: 30000,    // Idle timeout in ms
+      acquireTimeoutMillis: 30000, // Acquire timeout in ms
+    },
+  },
+};
 ```
 
-> **Security Note**: SQL logging requires Owner-level privileges in the MemberJunction system. Only users with `Type = 'Owner'` can create, manage, or access SQL logging sessions.
+**Recommended pool sizes:**
+
+| Environment | max | min | Notes |
+|-------------|-----|-----|-------|
+| Development | 10 | 2 | Low concurrency |
+| Production Standard | 50 | 5 | 2-4x CPU cores of API server |
+| Production High Load | 100 | 10 | Monitor SQL Server RESOURCE_SEMAPHORE and THREADPOOL wait types |
+
+### SqlLoggingOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `formatAsMigration` | `boolean` | `false` | Replace schema names with Flyway `${flyway:defaultSchema}` placeholders |
+| `defaultSchemaName` | `string` | MJ core schema | Schema name to replace with Flyway placeholder |
+| `description` | `string` | `undefined` | Comment written at the start of the log file |
+| `statementTypes` | `'queries' \| 'mutations' \| 'both'` | `'both'` | Which statement types to log |
+| `batchSeparator` | `string` | `undefined` | Separator emitted after each statement (e.g., `'GO'`) |
+| `prettyPrint` | `boolean` | `false` | Format SQL using sql-formatter with T-SQL dialect |
+| `logRecordChangeMetadata` | `boolean` | `false` | Log full change-tracking wrapper SQL vs. core SP calls only |
+| `retainEmptyLogFiles` | `boolean` | `false` | Keep log files that contain zero statements |
+| `filterByUserId` | `string` | `undefined` | Only log SQL executed by this user |
+| `sessionName` | `string` | `undefined` | Friendly name for UI display |
+| `verboseOutput` | `boolean` | `false` | Output debug information to console |
+| `filterPatterns` | `(string \| RegExp)[]` | `undefined` | Patterns for filtering SQL statements |
+| `filterType` | `'include' \| 'exclude'` | `'exclude'` | How `filterPatterns` are applied |
+
+## Build and Development
+
+```bash
+# Build the package
+cd packages/SQLServerDataProvider && npm run build
+
+# Run tests
+cd packages/SQLServerDataProvider && npm test
+
+# Run tests with coverage
+cd packages/SQLServerDataProvider && npm run test:coverage
+
+# Run tests in watch mode
+cd packages/SQLServerDataProvider && npm run test:watch
+```
+
+## Key Implementation Details
+
+### Connection Pool Best Practices
+
+The provider follows SQL Server connection pool best practices:
+
+1. **Single shared pool** -- one `sql.ConnectionPool` is created at server startup and reused for the application's lifetime
+2. **Fresh request per query** -- each `ExecuteSQL` call creates a new `sql.Request` from the pool, enabling safe parallel execution
+3. **No pool close in handlers** -- the pool remains open; the caller is responsible for closing it on shutdown
+4. **Configurable pool sizing** -- pool `max`/`min` are tunable through `mj.config.cjs`
+
+### DateTime Offset Adjustment
+
+The provider automatically detects whether the SQL Server + mssql driver combination produces incorrect DATETIMEOFFSET values. On first query, it runs a diagnostic test and caches the result. If adjustment is needed, all DATETIMEOFFSET fields are corrected during row processing.
+
+### Metadata Refresh
+
+When `checkRefreshIntervalSeconds > 0`, the provider periodically checks whether database metadata has changed (new entities, field modifications, etc.) and reloads if needed. The `RefreshIfNeeded()` method can also be called on demand.
+
+### Multi-Instance Pattern
+
+In server environments like MJAPI, a new `SQLServerDataProvider` instance is created per request. Setting `ignoreExistingMetadata: false` on subsequent instances allows them to reuse the metadata loaded by the first instance, avoiding redundant database queries.
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Likely Cause | Solution |
+|---------|-------------|----------|
+| Connection timeout | Network or firewall issue | Increase `connectionTimeout`; verify SQL Server firewall rules |
+| Authentication failure | Wrong credentials or permissions | Verify credentials; check encryption settings match server |
+| Schema not found | Wrong `MJCoreSchemaName` | Verify schema exists (default is `__mj`); check user schema access |
+| Transaction rollback | Constraint violation in entity save | Check required fields, foreign key references, unique constraints |
+| Pool exhausted | Too many concurrent connections | Increase `pool.max`; check for leaked connections or long-running queries |
+| EREQINPROG error | Request reuse during transaction | This is handled automatically; the provider clears stale transaction references |
 
-1. **Connection Timeout Errors**
-   - Increase `connectionTimeout` and `requestTimeout` in configuration
-   - Verify network connectivity to SQL Server
-   - Check SQL Server firewall rules
+## IS-A Type Relationship Transaction Support
 
-2. **Authentication Failures**
-   - Ensure correct username/password or Windows authentication
-   - Verify user has appropriate database permissions
-   - Check if encryption settings match server requirements
+MemberJunction supports IS-A type relationships where child entities inherit from parent entities (e.g., `MeetingEntity IS-A ProductEntity`). The SQLServerDataProvider manages SQL transactions to ensure atomic save and delete operations across the entire entity hierarchy.
 
-3. **Schema Not Found**
-   - Verify `MJCoreSchemaName` matches your database schema (default: `__mj`)
-   - Ensure user has access to the schema
-   - Check if MemberJunction tables are properly installed
+### How IS-A Transactions Work
 
-4. **Transaction Rollback Issues**
-   - Check for constraint violations in related entities
-   - Verify all required fields are populated
-   - Review transaction logs for specific error details
+When you save or delete an entity that participates in an IS-A hierarchy, SQLServerDataProvider automatically:
 
-5. **Performance Issues**
-   - Adjust connection pool settings (`pool.max`, `pool.min`)
-   - Enable query logging to identify slow queries
-   - Consider adding database indexes for frequently queried fields
+1. **Creates a SQL Transaction**: The initiating (leaf) entity calls `BeginISATransaction()` to create a new `sql.Transaction` on the connection pool
+2. **Propagates the Transaction**: The transaction is stored in `BaseEntity.ProviderTransaction` and shared across all entities in the parent chain
+3. **Executes Operations in Order**:
+   - For **saves**: Parent entities are saved first, then the child entity uses the parent's ID
+   - For **deletes**: The child entity is deleted first, then parents are deleted in reverse order
+4. **Commits or Rolls Back**: `CommitISATransaction()` commits all changes, or `RollbackISATransaction()` reverts everything on failure
 
-### Debug Logging
+### Transaction Lifecycle
 
-Enable detailed logging by setting environment variables:
+```typescript
+// Example: Saving a MeetingEntity (which IS-A ProductEntity)
+const meeting = await md.GetEntityObject<MeetingEntity>('Meetings');
+meeting.Name = 'Project Planning';
+meeting.MeetingDate = new Date();
+// ... set other fields
 
-```bash
-# Enable SQL query logging
-export MJ_LOG_SQL=true
+// When you call Save(), the provider automatically:
+// 1. Begins a SQL transaction
+// 2. Saves the Product parent entity first
+// 3. Uses the Product ID to save the Meeting child entity
+// 4. Commits the transaction
+const result = await meeting.Save();
 
-# Enable detailed error logging
-export MJ_LOG_LEVEL=debug
+// If any step fails, the entire transaction is rolled back
 ```
+
+### Key Methods
+
+- `BeginISATransaction()`: Creates a new `sql.Transaction` on the connection pool and stores it in `BaseEntity.ProviderTransaction`
+- `CommitISATransaction()`: Commits the shared transaction across the entire IS-A chain
+- `RollbackISATransaction()`: Rolls back all changes if any operation in the chain fails
+
+### Benefits
+
+- **Atomicity**: All saves/deletes in the hierarchy succeed or fail together
+- **Consistency**: No orphaned child records or missing parent data
+- **Transparent**: The transaction management is automatic - no manual transaction handling required
+- **Shared State**: All entities in the chain use the same `sql.Transaction` instance via `BaseEntity.ProviderTransaction`
+
+For more details on IS-A relationships and how they work across MemberJunction, see [MJCore IS-A Relationships Documentation](../../MJCore/docs/isa-relationships.md).
+
+## Virtual Entity Support
+
+MemberJunction supports virtual entities that are backed by SQL views instead of physical tables. Virtual entities provide read-only access to data and are commonly used for reporting, aggregations, and denormalized views.
+
+### Read Operations
+
+Virtual entities work seamlessly with the SQLServerDataProvider for all read operations:
+
+- **RunView**: Execute queries against the virtual entity's underlying SQL view
+- **Get**: Load individual records by primary key (if the view supports it)
+- **Filtering, Sorting, Pagination**: All standard query operations work as expected
+
+```typescript
+// Example: Querying a virtual entity backed by a view
+const rv = new RunView();
+const result = await rv.RunView<UserSummaryEntity>({
+    EntityName: 'User Summary',  // Virtual entity backed by vwUserSummary
+    ExtraFilter: "Department = 'Engineering'",
+    OrderBy: 'LastLoginDate DESC',
+    ResultType: 'entity_object'
+});
+
+// result.Results contains fully-typed UserSummaryEntity objects
+const users = result.Results;
+```
+
+### Write Operations
+
+Write operations (Save, Delete) are **automatically blocked** for virtual entities at the BaseEntity level before they reach the data provider:
+
+- **BaseEntity.Save()**: Returns an error if called on a virtual entity
+- **BaseEntity.Delete()**: Returns an error if called on a virtual entity
+- **Why**: Virtual entities represent read-only views and cannot be modified directly
+
+### Use Cases for Virtual Entities
+
+- **Aggregated Data**: Summary views that combine data from multiple tables
+- **Denormalized Views**: Flattened representations of complex relationships
+- **Calculated Fields**: Views that include computed columns or transformations
+- **Security Views**: Row-level filtering applied at the database view level
+- **Reporting**: Pre-joined data optimized for reporting queries
+
+For comprehensive documentation on virtual entities, their configuration, and advanced usage patterns, see [MJCore Virtual Entities Documentation](../../MJCore/docs/virtual-entities.md).
 
 ## License
 
 ISC
-
-## SQL Server Connection Pooling and Best Practices
-
-### Overview
-
-The MemberJunction SQL Server Data Provider is designed to support high-performance parallel database operations through proper connection pool management. The underlying `mssql` driver (node-mssql) is expressly designed to handle many concurrent database calls efficiently.
-
-### How MemberJunction Handles Parallelism
-
-1. **Single Shared Connection Pool**: MemberJunction creates one connection pool at server startup and reuses it throughout the application lifecycle. This pool is passed to the SQLServerDataProvider and used for all database operations.
-
-2. **Request-Per-Query Pattern**: Each database operation creates a new `sql.Request` object from the shared pool, allowing multiple queries to execute in parallel without blocking each other.
-
-3. **Configurable Pool Size**: The connection pool can be configured via `mj.config.cjs` to support your specific concurrency needs:
-
-```javascript
-// In your mj.config.cjs at the root level
-module.exports = {
-  databaseSettings: {
-    connectionPool: {
-      max: 50,              // Maximum connections (default: 50)
-      min: 5,               // Minimum connections (default: 5)
-      idleTimeoutMillis: 30000,    // Idle timeout (default: 30s)
-      acquireTimeoutMillis: 30000  // Acquire timeout (default: 30s)
-    }
-  }
-};
-```
-
-### Best Practices Implementation
-
-MemberJunction follows SQL Server connection best practices:
-
-#### ✅ What We Do Right
-
-1. **Create Pool Once**: The pool is created during server initialization and never recreated
-2. **Never Close Pool in Handlers**: The pool remains open for the server's lifetime
-3. **Fresh Request Per Query**: Each query gets its own `sql.Request` object
-4. **Proper Error Handling**: Connection failures are caught and logged appropriately
-5. **Read-Only Pool Option**: Separate pool for read operations if configured
-
-#### ❌ Anti-Patterns We Avoid
-
-1. We don't create new connections for each request
-2. We don't open/close the pool repeatedly
-3. We don't share Request objects between queries
-4. We don't use hardcoded pool limits
-
-### Recommended Pool Settings
-
-Based on your environment and load:
-
-#### Development Environment
-```javascript
-connectionPool: {
-  max: 10,
-  min: 2,
-  idleTimeoutMillis: 60000,
-  acquireTimeoutMillis: 15000
-}
-```
-
-#### Production - Standard Load
-```javascript
-connectionPool: {
-  max: 50,      // 2-4× CPU cores of your API server
-  min: 5,
-  idleTimeoutMillis: 30000,
-  acquireTimeoutMillis: 30000
-}
-```
-
-#### Production - High Load
-```javascript
-connectionPool: {
-  max: 100,     // Monitor SQL Server wait types to tune
-  min: 10,
-  idleTimeoutMillis: 30000,
-  acquireTimeoutMillis: 30000
-}
-```
-
-### Performance Considerations
-
-1. **Pool Size**: The practical concurrency limit equals your pool size. With default settings (max: 50), you can have up to 50 concurrent SQL operations.
-
-2. **Connection Reuse**: The mssql driver efficiently reuses connections from the pool, minimizing connection overhead.
-
-3. **Queue Management**: When all connections are busy, additional requests queue in FIFO order until a connection becomes available.
-
-4. **Monitoring**: Watch for these SQL Server wait types to identify if pool size is too large:
-   - `RESOURCE_SEMAPHORE`: Memory pressure
-   - `THREADPOOL`: Worker thread exhaustion
-
-### Troubleshooting Connection Pool Issues
-
-If you experience "connection pool exhausted" errors:
-
-1. **Increase Pool Size**: Adjust `max` in your configuration
-2. **Check for Leaks**: Ensure all queries complete properly
-3. **Monitor Long Queries**: Identify and optimize slow queries that hold connections
-4. **Review Concurrent Load**: Ensure pool size matches your peak concurrency needs
-
-### Technical Implementation Details
-
-The connection pool is created in `/packages/MJServer/src/index.ts`:
-
-```typescript
-const pool = new sql.ConnectionPool(createMSSQLConfig());
-await pool.connect();
-```
-
-And used in SQLServerDataProvider for each query:
-
-```typescript
-const request = new sql.Request(this._pool);
-const result = await request.query(sql);
-```
-
-#### **Important** 
-If you are using `SQLServerDataProvider` outside of the context of MJServer/MJAPI it is your responsibility to create connection pool in alignment with whatever practices make sense for your project and pass that along to the SQLServerDataProvider configuration process.
-
-This pattern ensures maximum parallelism while maintaining connection efficiency, allowing MemberJunction applications to scale to handle hundreds of concurrent database operations without blocking the Node.js event loop.

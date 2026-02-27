@@ -13,9 +13,10 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -41,20 +42,83 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
     });
   });
 
+/**
+ * Request context for API key usage logging.
+ */
+export interface RequestContext {
+  /** The API endpoint path (e.g., '/graphql', '/mcp') */
+  endpoint: string;
+  /** HTTP method (e.g., 'POST', 'GET') */
+  method: string;
+  /** GraphQL operation name if available */
+  operationName?: string;
+  /** Client IP address */
+  ipAddress?: string;
+  /** User-Agent header */
+  userAgent?: string;
+}
+
 export const getUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
-  requestApiKey?: string 
+  systemApiKey?: string,
+  userApiKey?: string,
+  requestContext?: RequestContext
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
     const readWriteDataSource = GetReadWriteDataSource(dataSources);
 
-    if (requestApiKey && requestApiKey != String(undefined)) {
-      // use requestApiKey for auth
-      if (requestApiKey === apiKey) {
+    // Check for user API key first (X-API-Key header with mj_sk_* format)
+    // This authenticates as the specific user who owns the API key
+    if (userApiKey && userApiKey !== String(undefined)) {
+      // Use system user as context for validation operations
+      const systemUser = await getSystemUser(readOnlyDataSource);
+      const apiKeyEngine = GetAPIKeyEngine();
+      const validationResult = await apiKeyEngine.ValidateAPIKey(
+        {
+          RawKey: userApiKey,
+          ApplicationName: 'MJAPI', // Check if key is bound to this application
+          Endpoint: requestContext?.endpoint ?? '/api',
+          Method: requestContext?.method ?? 'POST',
+          Operation: requestContext?.operationName ?? null,
+          StatusCode: 200, // Auth succeeded if we get here
+          ResponseTimeMs: undefined, // Not available at auth time
+          IPAddress: requestContext?.ipAddress ?? null,
+          UserAgent: requestContext?.userAgent ?? null,
+        },
+        systemUser
+      );
+
+      if (validationResult.IsValid && validationResult.User) {
+        // Get the user from UserCache to ensure UserRoles is properly populated
+        // The validationResult.User from APIKeyEngine doesn't include UserRoles
+        const cachedUser = UserCache.Instance.Users.find(
+          u => u.ID === validationResult.User.ID
+        );
+
+        // Use cached user if available, otherwise fall back to the validation result
+        const userRecord = cachedUser || validationResult.User;
+
+        return {
+          userRecord,
+          email: userRecord.Email,
+          sessionId,
+          apiKeyId: validationResult.APIKeyId,
+          apiKeyHash: validationResult.APIKeyHash,
+        };
+      }
+
+      // MJ API key validation failed - use generic message to prevent enumeration
+      throw new AuthenticationError('Invalid API key');
+    }
+
+    // Check for system API key (x-mj-api-key header)
+    // This authenticates as the system user for system-level operations
+    if (systemApiKey && systemApiKey != String(undefined)) {
+      if (systemApiKey === apiKey) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
@@ -64,7 +128,7 @@ export const getUserPayload = async (
           apiKey,
         };
       }
-      throw new AuthenticationError('Invalid API key provided');
+      throw new AuthenticationError('Invalid system API key');
     }
 
     const token = bearerToken.replace('Bearer ', '');
@@ -144,8 +208,13 @@ export const contextFunction =
     const requestDomain = url.parse(req.headers.origin || '');
     const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
     const bearerToken = req.headers.authorization ?? '';
-    const apiKey = String(req.headers['x-mj-api-key']);
-    
+
+    // Two types of API keys:
+    // - x-mj-api-key: System API key for system-level operations (authenticates as system user)
+    // - X-API-Key: User API key (mj_sk_*) for user-authenticated operations
+    const systemApiKey = String(req.headers['x-mj-api-key']);
+    const userApiKey = String(req.headers['x-api-key']);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
@@ -153,12 +222,25 @@ export const contextFunction =
       console.log({ operationName, variables: reqAny.body?.variables || undefined });
     }
 
+    // Build request context for API key logging
+    // Note: responseTimeMs is not available at auth time, only endpoint/method/ip/ua
+    const expressReq = req as e.Request;
+    const requestContext: RequestContext = {
+      endpoint: expressReq.path || expressReq.url || '/api',
+      method: expressReq.method || 'POST',
+      operationName: operationName,
+      ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    };
+
     const userPayload = await getUserPayload(
       bearerToken,
       sessionId,
       dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
-      apiKey 
+      systemApiKey,
+      userApiKey,
+      requestContext
     );
 
     if (Metadata.Provider.Entities.length === 0 ) {

@@ -1,0 +1,230 @@
+<div class="scopes-panel">
+  @if (IsLoading) {
+    <mj-loading text="Loading scopes..."></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <!-- Header -->
+    <div class="panel-header">
+      <div class="header-left">
+        <h3 class="panel-title">
+          <i class="fa-solid fa-shield-halved"></i>
+          API Scopes
+        </h3>
+        <p class="panel-subtitle">Manage hierarchical permission scopes for API access</p>
+      </div>
+      <div class="header-actions">
+        <div class="scope-stats">
+          <span class="stat">
+            <i class="fa-solid fa-shield"></i>
+            {{getTotalCount()}} total
+          </span>
+          <span class="stat active">
+            <i class="fa-solid fa-check-circle"></i>
+            {{getActiveCount()}} active
+          </span>
+        </div>
+        <div class="tree-controls">
+          <button class="btn-icon" (click)="expandAll()" title="Expand All">
+            <i class="fa-solid fa-plus-square"></i>
+          </button>
+          <button class="btn-icon" (click)="collapseAll()" title="Collapse All">
+            <i class="fa-solid fa-minus-square"></i>
+          </button>
+        </div>
+        <button class="btn-create" (click)="openCreateDialog()">
+          <i class="fa-solid fa-plus"></i>
+          New Scope
+        </button>
+      </div>
+    </div>
+    <!-- Messages -->
+    @if (SuccessMessage) {
+      <div class="message success">
+        <i class="fa-solid fa-check-circle"></i>
+        {{SuccessMessage}}
+      </div>
+    }
+    @if (ErrorMessage) {
+      <div class="message error">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        {{ErrorMessage}}
+      </div>
+    }
+    <!-- Scope Tree -->
+    <div class="scope-tree">
+      @for (node of ScopeTree; track node) {
+        <ng-container *ngTemplateOutlet="scopeNode; context: { node: node }"></ng-container>
+      }
+      <!-- Empty State -->
+      @if (ScopeTree.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>No scopes configured</span>
+          <p>Create scopes to define API access permissions</p>
+        </div>
+      }
+    </div>
+    <!-- Recursive Node Template -->
+    <ng-template #scopeNode let-node="node">
+      <div class="scope-node" [style.padding-left.px]="node.level * 24">
+        <div class="node-content" [class.inactive]="!node.scope.IsActive">
+          @if (node.children.length > 0) {
+            <button class="expand-btn"
+              (click)="toggleExpanded(node)">
+              <i class="fa-solid"
+                [class.fa-chevron-right]="!node.expanded"
+              [class.fa-chevron-down]="node.expanded"></i>
+            </button>
+          }
+          @if (node.children.length === 0) {
+            <span class="expand-placeholder"></span>
+          }
+          <div class="scope-info" (click)="openEditDialog(node.scope)">
+            <div class="scope-icon" [style.backgroundColor]="getCategoryColor(node.scope.Category)">
+              <i class="fa-solid fa-shield"></i>
+            </div>
+            <div class="scope-details">
+              <div class="scope-name">
+                {{node.scope.Name}}
+                @if (node.scope.FullPath && node.scope.FullPath !== node.scope.Name) {
+                  <span class="full-path">
+                    {{node.scope.FullPath}}
+                  </span>
+                }
+                @if (!node.scope.IsActive) {
+                  <span class="status-badge">Inactive</span>
+                }
+              </div>
+              <div class="scope-meta">
+                <span class="category" [style.color]="getCategoryColor(node.scope.Category)">
+                  {{node.scope.Category}}
+                </span>
+                @if (node.scope.ResourceType) {
+                  <span class="resource-type">
+                    {{node.scope.ResourceType}}
+                  </span>
+                }
+                @if (node.scope.Description) {
+                  <span class="description">
+                    {{node.scope.Description}}
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+          <div class="node-actions">
+            <button class="btn-node-action" (click)="openCreateDialog(node.scope)" title="Add Child Scope">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="btn-node-action" (click)="openEditDialog(node.scope)" title="Edit Scope">
+              <i class="fa-solid fa-pencil"></i>
+            </button>
+          </div>
+        </div>
+        @if (node.expanded && node.children.length > 0) {
+          <div class="children">
+            @for (child of node.children; track child) {
+              <ng-container *ngTemplateOutlet="scopeNode; context: { node: child }"></ng-container>
+            }
+          </div>
+        }
+      </div>
+    </ng-template>
+  }
+
+  <!-- Create/Edit Dialog -->
+  @if (ShowCreateDialog || ShowEditDialog) {
+    <kendo-window
+      [width]="560"
+      [minWidth]="420"
+      [minHeight]="480"
+      [resizable]="true"
+      [draggable]="true"
+      [top]="80"
+      (close)="closeDialogs()">
+      <kendo-window-titlebar>
+        <div class="dialog-title">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>{{EditingScope ? 'Edit Scope' : 'New Scope'}}</span>
+        </div>
+        <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close (Esc)">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </kendo-window-titlebar>
+      <div class="dialog-content">
+        <div class="form-field">
+          <label>Scope Name *</label>
+          <input kendoTextBox [(ngModel)]="EditName"
+            placeholder="e.g., runview, create, execute"
+            class="form-input" />
+          <span class="field-hint">Use lowercase, single word. Will be combined with parent for full path.</span>
+        </div>
+        <div class="form-field">
+          <label>Parent Scope</label>
+          <kendo-dropdownlist [(ngModel)]="EditParentId"
+            [data]="getParentOptions()"
+            [textField]="'FullPath'"
+            [valueField]="'ID'"
+            [valuePrimitive]="true"
+            [defaultItem]="{ FullPath: '(No Parent - Root Level)', ID: null }">
+          </kendo-dropdownlist>
+          @if (SelectedParentScope) {
+            <span class="field-hint">
+              Full path will be: <code>{{SelectedParentScope.FullPath}}:{{EditName || '...'}}</code>
+            </span>
+          }
+        </div>
+        <div class="form-row">
+          <div class="form-field half">
+            <label>Category</label>
+            <kendo-dropdownlist [(ngModel)]="EditCategory"
+              [data]="Categories"
+              [valuePrimitive]="true">
+            </kendo-dropdownlist>
+          </div>
+          <div class="form-field half">
+            <label>Resource Type</label>
+            <kendo-dropdownlist [(ngModel)]="EditResourceType"
+              [data]="ResourceTypes"
+              [valuePrimitive]="true"
+              [defaultItem]="''">
+            </kendo-dropdownlist>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Description</label>
+          <textarea kendoTextArea [(ngModel)]="EditDescription"
+            placeholder="Describe what this scope allows..."
+            [rows]="3"
+          class="form-textarea"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="checkbox-label">
+            <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+            <div>
+              <span>Active</span>
+              <span class="checkbox-hint">Inactive scopes cannot be assigned to keys or applications</span>
+            </div>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button kendoButton [themeColor]="'primary'"
+            [disabled]="!EditName.trim() || IsSaving"
+            (click)="saveScope()">
+            @if (IsSaving) {
+              <mj-loading [showText]="false" size="small"></mj-loading>
+            }
+            @if (!IsSaving) {
+              <span>
+                <i class="fa-solid fa-save"></i>
+                {{EditingScope ? 'Update' : 'Create'}}
+              </span>
+            }
+          </button>
+          <button kendoButton (click)="closeDialogs()">Cancel</button>
+        </div>
+      </div>
+    </kendo-window>
+  }
+</div>

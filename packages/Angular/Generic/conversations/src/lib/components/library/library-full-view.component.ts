@@ -1,12 +1,13 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 
 /**
  * Full-panel Collections view component
  * Replaces the main content area when Collections tab is selected
  */
 @Component({
+  standalone: false,
   selector: 'mj-library-full-view',
   template: `
     <div class="collections-view">
@@ -16,24 +17,26 @@ import { CollectionEntity } from '@memberjunction/core-entities';
             <i class="fas fa-home"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
-          <span class="breadcrumb-path" *ngIf="breadcrumbs.length > 0">
-            <ng-container *ngFor="let crumb of breadcrumbs; let last = last">
-              <i class="fas fa-chevron-right breadcrumb-separator"></i>
-              <a class="breadcrumb-link"
-                 [class.active]="last"
-                 (click)="navigateTo(crumb)">
-                {{ crumb.name }}
-              </a>
-            </ng-container>
-          </span>
+          @if (breadcrumbs.length > 0) {
+            <span class="breadcrumb-path">
+              @for (crumb of breadcrumbs; track crumb; let last = $last) {
+                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                <a class="breadcrumb-link"
+                  [class.active]="last"
+                  (click)="navigateTo(crumb)">
+                  {{ crumb.name }}
+                </a>
+              }
+            </span>
+          }
         </div>
         <div class="collections-search">
           <i class="fas fa-search"></i>
           <input type="text"
-                 [(ngModel)]="searchQuery"
-                 (ngModelChange)="onSearchChange($event)"
-                 placeholder="Search collections and artifacts..."
-                 class="library-search-input">
+            [(ngModel)]="searchQuery"
+            (ngModelChange)="onSearchChange($event)"
+            placeholder="Search collections and artifacts..."
+            class="library-search-input">
         </div>
         <div class="collections-actions">
           <button class="btn-secondary" (click)="refresh()" title="Refresh">
@@ -42,31 +45,41 @@ import { CollectionEntity } from '@memberjunction/core-entities';
         </div>
       </div>
       <div class="collections-content">
-        <div *ngIf="isLoading" class="loading-state">
-          <mj-loading text="Loading collections..." size="large"></mj-loading>
-        </div>
-        <div *ngIf="!isLoading && filteredCollections.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-          <p>{{ searchQuery ? 'No collections found' : 'No collections yet' }}</p>
-        </div>
-        <div *ngIf="!isLoading && filteredCollections.length > 0" class="library-folders">
-          <div *ngFor="let collection of filteredCollections"
-               class="library-folder"
-               (click)="openCollection(collection)">
-            <div class="folder-icon">
-              <i class="fas fa-folder"></i>
-            </div>
-            <div class="folder-info">
-              <div class="folder-name">{{ collection.Name }}</div>
-              <div class="folder-meta" *ngIf="collection.Description">
-                {{ collection.Description }}
-              </div>
-            </div>
+        @if (isLoading) {
+          <div class="loading-state">
+            <mj-loading text="Loading collections..." size="large"></mj-loading>
           </div>
-        </div>
+        }
+        @if (!isLoading && filteredCollections.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <p>{{ searchQuery ? 'No collections found' : 'No collections yet' }}</p>
+          </div>
+        }
+        @if (!isLoading && filteredCollections.length > 0) {
+          <div class="library-folders">
+            @for (collection of filteredCollections; track collection) {
+              <div
+                class="library-folder"
+                (click)="openCollection(collection)">
+                <div class="folder-icon">
+                  <i class="fas fa-folder"></i>
+                </div>
+                <div class="folder-info">
+                  <div class="folder-name">{{ collection.Name }}</div>
+                  @if (collection.Description) {
+                    <div class="folder-meta">
+                      {{ collection.Description }}
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .collections-view {
       display: flex;
@@ -275,8 +288,8 @@ export class LibraryFullViewComponent implements OnInit {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  public collections: CollectionEntity[] = [];
-  public filteredCollections: CollectionEntity[] = [];
+  public collections: MJCollectionEntity[] = [];
+  public filteredCollections: MJCollectionEntity[] = [];
   public searchQuery: string = '';
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
@@ -295,7 +308,7 @@ export class LibraryFullViewComponent implements OnInit {
       const filter = `EnvironmentID='${this.environmentId}'` +
                      (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 
-      const result = await rv.RunView<CollectionEntity>(
+      const result = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: filter,
@@ -333,7 +346,7 @@ export class LibraryFullViewComponent implements OnInit {
     }
   }
 
-  openCollection(collection: CollectionEntity): void {
+  openCollection(collection: MJCollectionEntity): void {
     this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
     this.currentCollectionId = collection.ID;
     this.searchQuery = '';

@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MemberJunction Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="components.css">
+  <style>
+    /* Page-specific layout styles */
+    .design-system-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .design-system-sidebar {
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      padding: var(--mj-space-6);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .design-system-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-3);
+      margin-bottom: var(--mj-space-8);
+      padding-bottom: var(--mj-space-6);
+      border-bottom: 1px solid var(--mj-border-subtle);
+    }
+
+    .design-system-logo svg {
+      width: 140px;
+      height: auto;
+      color: var(--mj-brand-primary);
+    }
+
+    .sidebar-section {
+      margin-bottom: var(--mj-space-6);
+    }
+
+    .sidebar-section-title {
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--mj-tracking-wider);
+      margin-bottom: var(--mj-space-3);
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-1);
+    }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-3);
+      padding: var(--mj-space-2) var(--mj-space-3);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      border-radius: var(--mj-radius-md);
+      text-decoration: none;
+      transition: var(--mj-transition-colors);
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+      text-decoration: none;
+    }
+
+    .sidebar-nav a.active {
+      background: var(--mj-app-accent-subtle);
+      color: var(--mj-app-accent);
+    }
+
+    .sidebar-nav a i {
+      width: 16px;
+      text-align: center;
+    }
+
+    .design-system-main {
+      padding: var(--mj-space-8);
+      max-width: 1200px;
+    }
+
+    .design-system-header {
+      margin-bottom: var(--mj-space-8);
+    }
+
+    .design-system-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+
+    .design-system-header p {
+      font-size: var(--mj-text-lg);
+      color: var(--mj-text-secondary);
+      margin: 0;
+    }
+
+    .theme-controls {
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-4);
+      background: var(--mj-bg-surface-sunken);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-8);
+    }
+
+    .theme-controls button {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2) var(--mj-space-4);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+      transition: var(--mj-transition-colors);
+    }
+
+    .theme-controls button:hover {
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
+    }
+
+    .theme-controls button.active {
+      background: var(--mj-brand-primary);
+      color: var(--mj-brand-on-primary);
+      border-color: var(--mj-brand-primary);
+    }
+
+    .section {
+      margin-bottom: var(--mj-space-12);
+    }
+
+    .section-title {
+      font-size: var(--mj-text-xl);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      padding-bottom: var(--mj-space-3);
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .section-description {
+      color: var(--mj-text-secondary);
+      margin-bottom: var(--mj-space-6);
+    }
+
+    .component-grid {
+      display: grid;
+      gap: var(--mj-space-6);
+    }
+
+    .component-demo {
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+    }
+
+    .component-demo-title {
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-secondary);
+      margin-bottom: var(--mj-space-4);
+      text-transform: uppercase;
+      letter-spacing: var(--mj-tracking-wide);
+    }
+
+    .color-swatches {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: var(--mj-space-4);
+    }
+
+    .color-swatch {
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--mj-radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--mj-border-default);
+    }
+
+    .color-swatch-preview {
+      height: 60px;
+    }
+
+    .color-swatch-info {
+      padding: var(--mj-space-2) var(--mj-space-3);
+      background: var(--mj-bg-surface);
+    }
+
+    .color-swatch-name {
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-primary);
+    }
+
+    .color-swatch-value {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      font-family: var(--mj-font-family-mono);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--mj-space-3);
+      align-items: center;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--mj-space-3);
+      align-items: center;
+    }
+
+    .spacing-demo {
+      display: flex;
+      gap: var(--mj-space-4);
+      flex-wrap: wrap;
+    }
+
+    .spacing-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--mj-space-2);
+    }
+
+    .spacing-box {
+      background: var(--mj-brand-primary);
+      opacity: 0.3;
+    }
+
+    .spacing-label {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      font-family: var(--mj-font-family-mono);
+    }
+
+    .shadow-demo {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: var(--mj-space-6);
+    }
+
+    .shadow-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--mj-space-3);
+    }
+
+    .shadow-box {
+      width: 80px;
+      height: 80px;
+      background: var(--mj-bg-surface);
+      border-radius: var(--mj-radius-lg);
+    }
+
+    .shadow-label {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      font-family: var(--mj-font-family-mono);
+    }
+
+    .radius-demo {
+      display: flex;
+      gap: var(--mj-space-6);
+      flex-wrap: wrap;
+    }
+
+    .radius-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--mj-space-2);
+    }
+
+    .radius-box {
+      width: 60px;
+      height: 60px;
+      background: var(--mj-brand-primary);
+      opacity: 0.8;
+    }
+
+    .radius-label {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      font-family: var(--mj-font-family-mono);
+    }
+
+    @media (max-width: 768px) {
+      .design-system-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .design-system-sidebar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="design-system-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="design-system-sidebar">
+      <div class="design-system-logo">
+        <svg viewBox="0 0 448.28 57.11" xmlns="http://www.w3.org/2000/svg">
+          <path d="M428.73,44.89v-16.92c.7-1.34,1.66-2.37,2.88-3.09,1.22-.72,2.59-1.08,4.12-1.08,2.2,0,3.92.65,5.17,1.94,1.25,1.3,1.87,3.07,1.87,5.33v13.81h2.01v-14.36c0-1.71-.36-3.21-1.08-4.51-.72-1.3-1.72-2.3-3.02-3.02-1.3-.72-2.8-1.08-4.51-1.08-3.14,0-5.63,1.21-7.46,3.61v-3.16h-2.01v22.51h2.01ZM407.08,42.12c-1.39-.87-2.49-2.04-3.29-3.52-.81-1.48-1.21-3.13-1.21-4.96s.4-3.48,1.21-4.96c.81-1.48,1.91-2.65,3.29-3.52,1.39-.87,2.94-1.31,4.64-1.31s3.25.44,4.64,1.31c1.39.87,2.49,2.04,3.29,3.52.81,1.48,1.21,3.13,1.21,4.96s-.41,3.48-1.21,4.96c-.81,1.48-1.91,2.65-3.29,3.52-1.39.87-2.94,1.3-4.64,1.3s-3.26-.43-4.64-1.3M417.42,43.79c1.69-1.04,3.04-2.45,4.03-4.23.99-1.78,1.49-3.76,1.49-5.92s-.5-4.18-1.49-5.95c-.99-1.77-2.33-3.17-4.03-4.21-1.69-1.04-3.59-1.56-5.69-1.56s-3.97.52-5.67,1.56c-1.71,1.04-3.06,2.44-4.05,4.21-.99,1.77-1.49,3.75-1.49,5.95s.5,4.14,1.49,5.92c.99,1.79,2.34,3.19,4.05,4.23,1.71,1.04,3.6,1.56,5.67,1.56s4-.52,5.69-1.56M397.14,16.8c.32-.34.48-.75.48-1.24s-.16-.9-.48-1.24c-.32-.34-.74-.5-1.26-.5-.49,0-.9.17-1.24.5-.34.34-.5.75-.5,1.24s.17.9.5,1.24c.34.34.75.5,1.24.5.52,0,.94-.17,1.26-.5M396.89,22.38h-2.01v22.51h2.01v-22.51ZM390.57,45.21c.61-.09,1.2-.25,1.78-.46v-1.97c-.52.21-1.02.37-1.51.48-.49.11-1.08.16-1.79.16-1.31,0-2.25-.28-2.81-.84s-.85-1.49-.85-2.77v-15.6h6.95v-1.83h-6.95v-6.31l-2.01.64v5.67h-4.94v1.83h4.94v16.29c0,1.52.46,2.71,1.37,3.57.91.85,2.23,1.28,3.94,1.28.64,0,1.26-.05,1.87-.14M373.12,44.43c1.54-.61,2.89-1.45,4.05-2.51l-1.37-1.65c-.98.95-2.1,1.71-3.36,2.29s-2.57.87-3.91.87c-1.71,0-3.25-.43-4.64-1.3-1.39-.87-2.49-2.04-3.29-3.52-.81-1.48-1.21-3.13-1.21-4.96s.4-3.48,1.21-4.96c.81-1.48,1.9-2.65,3.29-3.52,1.39-.87,2.93-1.31,4.64-1.31,1.34,0,2.64.28,3.91.85,1.27.56,2.39,1.33,3.36,2.31l1.37-1.65c-1.16-1.07-2.51-1.91-4.05-2.52-1.54-.61-3.07-.91-4.6-.91-2.07,0-3.96.52-5.67,1.56s-3.06,2.44-4.05,4.21c-.99,1.77-1.49,3.75-1.49,5.95s.49,4.18,1.49,5.95c.99,1.77,2.34,3.17,4.05,4.21s3.6,1.56,5.67,1.56c1.52,0,3.06-.31,4.6-.92M337.65,44.89v-16.92c.7-1.34,1.66-2.37,2.88-3.09,1.22-.72,2.59-1.08,4.12-1.08,2.2,0,3.92.65,5.17,1.94,1.25,1.3,1.88,3.07,1.88,5.33v13.81h2.01v-14.36c0-1.71-.36-3.21-1.07-4.51-.72-1.3-1.73-2.3-3.02-3.02s-2.8-1.08-4.5-1.08c-3.14,0-5.63,1.21-7.46,3.61v-3.16h-2.01v22.51h2.01ZM328.7,41.78v3.11h2.01v-22.51h-2.01v16.92c-.7,1.31-1.66,2.33-2.88,3.06-1.22.73-2.59,1.1-4.12,1.1-2.2,0-3.92-.65-5.17-1.97-1.25-1.31-1.87-3.08-1.87-5.31v-13.81h-2.01v14.36c0,1.71.37,3.21,1.1,4.51.73,1.3,1.74,2.3,3.04,3.02,1.3.72,2.78,1.08,4.46,1.08,3.2,0,5.69-1.19,7.46-3.57M303.64,43.88c1.74-1.01,3.08-2.43,4.02-4.28.95-1.84,1.42-4.05,1.42-6.61V12.87h-2.1v20.13c0,3.2-.85,5.74-2.56,7.62-1.71,1.88-4.01,2.81-6.91,2.81-2.17,0-4.02-.56-5.58-1.69-1.56-1.13-2.77-2.75-3.66-4.85l-1.92.87c1.01,2.5,2.46,4.4,4.37,5.7,1.9,1.3,4.15,1.94,6.75,1.94,2.38,0,4.44-.5,6.18-1.51M279.77,44.89v-15.37c.61-.97,1.41-1.73,2.4-2.26.99-.53,2.07-.8,3.22-.8.64,0,1.27.06,1.88.18.61.12,1.16.3,1.65.55v-6.45c-.55-.37-1.48-.56-2.79-.59-1.31,0-2.5.25-3.57.75-1.07.5-2,1.24-2.79,2.22v-2.42h-7.41v24.2h7.41ZM253.44,28.07c.47-.56,1.04-1,1.72-1.3.67-.3,1.42-.46,2.24-.46s1.52.16,2.2.48c.67.32,1.26.76,1.76,1.33.5.56.88,1.24,1.12,2.04h-10.11c.24-.82.6-1.52,1.07-2.08M263.5,44.47c1.6-.58,3.17-1.51,4.69-2.79l-4.9-4.35c-.58.58-1.28,1.03-2.1,1.35-.82.32-1.74.48-2.75.48-.91,0-1.77-.16-2.56-.48-.79-.32-1.47-.77-2.03-1.35-.56-.58-1.02-1.25-1.35-2.01h17.25v-1.83c0-2.56-.53-4.83-1.58-6.82-1.05-1.98-2.49-3.54-4.32-4.69-1.83-1.14-3.94-1.72-6.31-1.72s-4.48.55-6.4,1.67c-1.92,1.11-3.44,2.62-4.55,4.5-1.11,1.89-1.67,4.01-1.67,6.36s.58,4.47,1.74,6.36c1.16,1.89,2.74,3.39,4.73,4.51,2,1.11,4.23,1.67,6.7,1.67,2.01,0,3.82-.29,5.42-.87M227.12,38.44c-.88-.34-1.65-.79-2.29-1.37v-8.46c.67-.64,1.43-1.12,2.29-1.44s1.8-.48,2.84-.48c1.19,0,2.26.27,3.23.8.96.53,1.72,1.26,2.29,2.2.56.93.84,1.97.84,3.13s-.28,2.2-.84,3.13c-.56.93-1.32,1.66-2.27,2.2-.95.54-2.03.8-3.25.8-1.01,0-1.95-.17-2.84-.5M224.74,44.89v-1.37c.92.55,1.91.97,2.97,1.26,1.07.29,2.16.43,3.29.43,2.35,0,4.48-.55,6.38-1.65,1.91-1.1,3.41-2.58,4.53-4.46,1.11-1.88,1.67-3.97,1.67-6.29s-.55-4.42-1.65-6.29c-1.1-1.88-2.58-3.37-4.44-4.49-1.86-1.11-3.95-1.67-6.27-1.67s-4.51.67-6.41,2.01v-10.66l-7.41,1.14v32.02h7.32ZM183.69,44.89v-16.56c.46-.58,1.01-1.01,1.67-1.3.66-.29,1.4-.43,2.22-.43,1.19,0,2.14.4,2.86,1.19.72.79,1.07,1.86,1.07,3.2v13.91h7.41v-14.91c0-.28,0-.54-.02-.8-.01-.26-.04-.51-.07-.76.49-.61,1.07-1.07,1.74-1.37.67-.31,1.42-.46,2.24-.46,1.19,0,2.14.4,2.86,1.19s1.08,1.86,1.08,3.2v13.91h7.41v-14.91c0-1.92-.41-3.61-1.21-5.08-.81-1.46-1.91-2.61-3.31-3.43-1.4-.82-3.02-1.23-4.85-1.23-1.59,0-3.05.29-4.39.87-1.34.58-2.5,1.4-3.48,2.47-.83-1.07-1.85-1.89-3.07-2.47-1.22-.58-2.59-.87-4.12-.87-2.32,0-4.33.67-6.04,2.01v-1.56h-7.41v24.2h7.41ZM157.36,28.07c.47-.56,1.04-1,1.72-1.3.67-.3,1.42-.46,2.24-.46s1.52.16,2.2.48c.67.32,1.26.76,1.76,1.33.5.56.88,1.24,1.12,2.04h-10.11c.24-.82.6-1.52,1.08-2.08M167.42,44.47c1.6-.58,3.16-1.51,4.69-2.79l-4.9-4.35c-.58.58-1.28,1.03-2.1,1.35-.83.32-1.74.48-2.75.48-.91,0-1.77-.16-2.56-.48-.79-.32-1.47-.77-2.03-1.35-.56-.58-1.02-1.25-1.35-2.01h17.25v-1.83c0-2.56-.53-4.83-1.58-6.82-1.05-1.98-2.49-3.54-4.32-4.69-1.83-1.14-3.93-1.72-6.31-1.72s-4.48.55-6.41,1.67c-1.92,1.11-3.44,2.62-4.55,4.5-1.11,1.89-1.67,4.01-1.67,6.36s.58,4.47,1.74,6.36c1.16,1.89,2.74,3.39,4.74,4.51,2,1.11,4.23,1.67,6.7,1.67,2.01,0,3.82-.29,5.42-.87M118.71,44.89v-21.91l10.52,19.62,10.52-19.53v21.82h7.41V12.87h-9.93l-7.91,15.1-7.91-15.1h-9.93v32.02h7.23Z" fill="currentColor"/>
+          <path d="M88.82,12.69v27.95s9.76,5.58,9.76,5.58c.01-.24.02-34.61.02-34.61,0-3.72-1.57-6.76-4.3-8.35-2.73-1.59-6.15-1.44-9.38.39l-33.88,19.27L17.17,3.66c-3.23-1.84-6.65-1.98-9.38-.39-2.73,1.59-4.3,4.63-4.3,8.35,0,0,0,34.39.02,34.64l9.75-5.58V12.69l27.89,15.87L4.21,49.57c.71,1.84,1.93,3.32,3.57,4.28,1.26.73,2.67,1.1,4.13,1.1,1.71,0,3.51-.5,5.25-1.49L88.82,12.69Z" fill="currentColor"/>
+          <path d="M64.22,30.43l-9.86,5.64,30.56,17.39c1.74.99,3.54,1.49,5.26,1.49,1.46,0,2.87-.37,4.13-1.1,1.65-.96,2.87-2.46,3.59-4.31l-33.67-19.11Z" fill="currentColor"/>
+        </svg>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="sidebar-section-title">Foundations</h3>
+        <nav class="sidebar-nav">
+          <a href="#colors" class="active"><i class="fa-solid fa-palette"></i> Colors</a>
+          <a href="#typography"><i class="fa-solid fa-font"></i> Typography</a>
+          <a href="#spacing"><i class="fa-solid fa-ruler-combined"></i> Spacing</a>
+          <a href="#effects"><i class="fa-solid fa-sparkles"></i> Effects</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="sidebar-section-title">Components</h3>
+        <nav class="sidebar-nav">
+          <a href="pages/buttons.html"><i class="fa-solid fa-square"></i> Buttons</a>
+          <a href="pages/forms.html"><i class="fa-solid fa-rectangle-list"></i> Forms</a>
+          <a href="pages/dropdowns.html"><i class="fa-solid fa-caret-down"></i> Dropdowns</a>
+          <a href="pages/cards.html"><i class="fa-solid fa-id-card"></i> Cards</a>
+          <a href="pages/tables.html"><i class="fa-solid fa-table"></i> Tables</a>
+          <a href="pages/status-badges.html"><i class="fa-solid fa-tag"></i> Badges</a>
+          <a href="pages/navigation.html"><i class="fa-solid fa-compass"></i> Navigation</a>
+          <a href="pages/dashboard-header.html"><i class="fa-solid fa-grip"></i> Dashboard Header</a>
+          <a href="pages/search.html"><i class="fa-solid fa-magnifying-glass"></i> Search</a>
+          <a href="pages/panels.html"><i class="fa-solid fa-window-maximize"></i> Panels</a>
+          <a href="pages/modals.html"><i class="fa-solid fa-window-restore"></i> Modals</a>
+          <a href="pages/splitters.html"><i class="fa-solid fa-columns"></i> Splitters</a>
+          <a href="pages/accordions.html"><i class="fa-solid fa-bars-staggered"></i> Accordions</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="sidebar-section-title">Layouts</h3>
+        <nav class="sidebar-nav">
+          <a href="pages/layouts.html"><i class="fa-solid fa-table-columns"></i> Standardized Layouts</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="sidebar-section-title">Templates</h3>
+        <nav class="sidebar-nav">
+          <a href="pages/full-dashboard.html"><i class="fa-solid fa-chart-line"></i> Full Dashboard</a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="design-system-main">
+      <header class="design-system-header">
+        <h1>MemberJunction Design System</h1>
+        <p>Unified design tokens and components for MJExplorer and all applications.</p>
+      </header>
+
+      <!-- Theme Controls -->
+      <div class="theme-controls">
+        <button data-theme-toggle="light" class="active">
+          <i class="fa-solid fa-sun"></i> Light
+        </button>
+        <button data-theme-toggle="dark">
+          <i class="fa-solid fa-moon"></i> Dark
+        </button>
+        <button data-theme-toggle="system">
+          <i class="fa-solid fa-laptop"></i> System
+        </button>
+      </div>
+
+      <!-- Colors Section -->
+      <section id="colors" class="section">
+        <h2 class="section-title">Colors</h2>
+        <p class="section-description">Semantic color tokens that automatically adapt to light and dark themes.</p>
+
+        <div class="component-grid">
+          <!-- Brand Colors -->
+          <div class="component-demo">
+            <h3 class="component-demo-title">Brand Colors</h3>
+            <div class="color-swatches">
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-brand-primary);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Primary</div>
+                  <div class="color-swatch-value">--mj-brand-primary</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-brand-primary-hover);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Primary Hover</div>
+                  <div class="color-swatch-value">--mj-brand-primary-hover</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-brand-secondary);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Secondary</div>
+                  <div class="color-swatch-value">--mj-brand-secondary</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-app-accent);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">App Accent</div>
+                  <div class="color-swatch-value">--mj-app-accent</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Background Colors -->
+          <div class="component-demo">
+            <h3 class="component-demo-title">Background Colors</h3>
+            <div class="color-swatches">
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-bg-page);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Page</div>
+                  <div class="color-swatch-value">--mj-bg-page</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-bg-surface);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Surface</div>
+                  <div class="color-swatch-value">--mj-bg-surface</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-bg-surface-elevated);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Elevated</div>
+                  <div class="color-swatch-value">--mj-bg-surface-elevated</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-bg-surface-sunken);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Sunken</div>
+                  <div class="color-swatch-value">--mj-bg-surface-sunken</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-bg-surface-hover);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Hover</div>
+                  <div class="color-swatch-value">--mj-bg-surface-hover</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Text Colors -->
+          <div class="component-demo">
+            <h3 class="component-demo-title">Text Colors</h3>
+            <div class="color-swatches">
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-text-primary);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Primary</div>
+                  <div class="color-swatch-value">--mj-text-primary</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-text-secondary);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Secondary</div>
+                  <div class="color-swatch-value">--mj-text-secondary</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-text-muted);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Muted</div>
+                  <div class="color-swatch-value">--mj-text-muted</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-text-link);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Link</div>
+                  <div class="color-swatch-value">--mj-text-link</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Colors -->
+          <div class="component-demo">
+            <h3 class="component-demo-title">Status Colors</h3>
+            <div class="color-swatches">
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-status-success);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Success</div>
+                  <div class="color-swatch-value">--mj-status-success</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-status-warning);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Warning</div>
+                  <div class="color-swatch-value">--mj-status-warning</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-status-error);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Error</div>
+                  <div class="color-swatch-value">--mj-status-error</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-status-info);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Info</div>
+                  <div class="color-swatch-value">--mj-status-info</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Border Colors -->
+          <div class="component-demo">
+            <h3 class="component-demo-title">Border Colors</h3>
+            <div class="color-swatches">
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-border-default);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Default</div>
+                  <div class="color-swatch-value">--mj-border-default</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-border-subtle);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Subtle</div>
+                  <div class="color-swatch-value">--mj-border-subtle</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-border-strong);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Strong</div>
+                  <div class="color-swatch-value">--mj-border-strong</div>
+                </div>
+              </div>
+              <div class="color-swatch">
+                <div class="color-swatch-preview" style="background: var(--mj-border-focus);"></div>
+                <div class="color-swatch-info">
+                  <div class="color-swatch-name">Focus</div>
+                  <div class="color-swatch-value">--mj-border-focus</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Typography Section -->
+      <section id="typography" class="section">
+        <h2 class="section-title">Typography</h2>
+        <p class="section-description">Font sizes, weights, and text styling tokens.</p>
+
+        <div class="component-grid">
+          <div class="component-demo">
+            <h3 class="component-demo-title">Font Sizes</h3>
+            <div class="mj-flex mj-flex-col mj-gap-4">
+              <div><span class="mj-text-xs">Text XS (12px)</span> <code class="mj-text-muted">--mj-text-xs</code></div>
+              <div><span class="mj-text-sm">Text SM (14px)</span> <code class="mj-text-muted">--mj-text-sm</code></div>
+              <div><span class="mj-text-base">Text Base (16px)</span> <code class="mj-text-muted">--mj-text-base</code></div>
+              <div><span class="mj-text-lg">Text LG (18px)</span> <code class="mj-text-muted">--mj-text-lg</code></div>
+              <div><span class="mj-text-xl">Text XL (20px)</span> <code class="mj-text-muted">--mj-text-xl</code></div>
+              <div><span class="mj-text-2xl">Text 2XL (24px)</span> <code class="mj-text-muted">--mj-text-2xl</code></div>
+              <div><span class="mj-text-3xl">Text 3XL (30px)</span> <code class="mj-text-muted">--mj-text-3xl</code></div>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Font Weights</h3>
+            <div class="mj-flex mj-flex-col mj-gap-4">
+              <div><span class="mj-font-normal mj-text-lg">Normal (400)</span> <code class="mj-text-muted">--mj-font-normal</code></div>
+              <div><span class="mj-font-medium mj-text-lg">Medium (500)</span> <code class="mj-text-muted">--mj-font-medium</code></div>
+              <div><span class="mj-font-semibold mj-text-lg">Semibold (600)</span> <code class="mj-text-muted">--mj-font-semibold</code></div>
+              <div><span class="mj-font-bold mj-text-lg">Bold (700)</span> <code class="mj-text-muted">--mj-font-bold</code></div>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Text Colors</h3>
+            <div class="mj-flex mj-flex-col mj-gap-4">
+              <div class="mj-text-primary">Primary text color</div>
+              <div class="mj-text-secondary">Secondary text color</div>
+              <div class="mj-text-muted">Muted text color</div>
+              <div><a href="#">Link text color</a></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Spacing Section -->
+      <section id="spacing" class="section">
+        <h2 class="section-title">Spacing</h2>
+        <p class="section-description">Consistent spacing scale based on a 4px base unit.</p>
+
+        <div class="component-demo">
+          <h3 class="component-demo-title">Spacing Scale</h3>
+          <div class="spacing-demo">
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 4px; height: 20px;"></div>
+              <span class="spacing-label">1 (4px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 8px; height: 20px;"></div>
+              <span class="spacing-label">2 (8px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 12px; height: 20px;"></div>
+              <span class="spacing-label">3 (12px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 16px; height: 20px;"></div>
+              <span class="spacing-label">4 (16px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 20px; height: 20px;"></div>
+              <span class="spacing-label">5 (20px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 24px; height: 20px;"></div>
+              <span class="spacing-label">6 (24px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 32px; height: 20px;"></div>
+              <span class="spacing-label">8 (32px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 40px; height: 20px;"></div>
+              <span class="spacing-label">10 (40px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 48px; height: 20px;"></div>
+              <span class="spacing-label">12 (48px)</span>
+            </div>
+            <div class="spacing-item">
+              <div class="spacing-box" style="width: 64px; height: 20px;"></div>
+              <span class="spacing-label">16 (64px)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Effects Section -->
+      <section id="effects" class="section">
+        <h2 class="section-title">Effects</h2>
+        <p class="section-description">Shadows, border radius, and other visual effects.</p>
+
+        <div class="component-grid">
+          <div class="component-demo">
+            <h3 class="component-demo-title">Shadows</h3>
+            <div class="shadow-demo">
+              <div class="shadow-item">
+                <div class="shadow-box" style="box-shadow: var(--mj-shadow-sm);"></div>
+                <span class="shadow-label">shadow-sm</span>
+              </div>
+              <div class="shadow-item">
+                <div class="shadow-box" style="box-shadow: var(--mj-shadow-md);"></div>
+                <span class="shadow-label">shadow-md</span>
+              </div>
+              <div class="shadow-item">
+                <div class="shadow-box" style="box-shadow: var(--mj-shadow-lg);"></div>
+                <span class="shadow-label">shadow-lg</span>
+              </div>
+              <div class="shadow-item">
+                <div class="shadow-box" style="box-shadow: var(--mj-shadow-xl);"></div>
+                <span class="shadow-label">shadow-xl</span>
+              </div>
+              <div class="shadow-item">
+                <div class="shadow-box" style="box-shadow: var(--mj-shadow-2xl);"></div>
+                <span class="shadow-label">shadow-2xl</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Border Radius</h3>
+            <div class="radius-demo">
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-none);"></div>
+                <span class="radius-label">none</span>
+              </div>
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-sm);"></div>
+                <span class="radius-label">sm (4px)</span>
+              </div>
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-md);"></div>
+                <span class="radius-label">md (8px)</span>
+              </div>
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-lg);"></div>
+                <span class="radius-label">lg (12px)</span>
+              </div>
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-xl);"></div>
+                <span class="radius-label">xl (16px)</span>
+              </div>
+              <div class="radius-item">
+                <div class="radius-box" style="border-radius: var(--mj-radius-full);"></div>
+                <span class="radius-label">full</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Component Preview -->
+      <section class="section">
+        <h2 class="section-title">Component Preview</h2>
+        <p class="section-description">Quick preview of common components using the design tokens.</p>
+
+        <div class="component-grid">
+          <div class="component-demo">
+            <h3 class="component-demo-title">Buttons</h3>
+            <div class="button-row">
+              <button class="mj-btn mj-btn-primary">Primary</button>
+              <button class="mj-btn mj-btn-secondary">Secondary</button>
+              <button class="mj-btn mj-btn-ghost">Ghost</button>
+              <button class="mj-btn mj-btn-danger">Danger</button>
+              <button class="mj-btn mj-btn-primary" disabled>Disabled</button>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Status Badges (mj-* classes)</h3>
+            <div class="badge-row">
+              <span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span>
+              <span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending</span>
+              <span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Failed</span>
+              <span class="mj-badge mj-badge-info"><span class="mj-badge-dot"></span> In Progress</span>
+              <span class="mj-badge mj-badge-neutral">Draft</span>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Dashboard Status Badges (existing pattern)</h3>
+            <div class="badge-row">
+              <span class="status-badge status-active">Active</span>
+              <span class="status-badge status-pending">Pending</span>
+              <span class="status-badge status-inactive">Inactive</span>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Dashboard Control Buttons (existing pattern)</h3>
+            <div class="button-row">
+              <button class="control-btn">
+                <i class="fa-solid fa-cog"></i> Settings
+              </button>
+              <button class="control-btn primary">
+                <i class="fa-solid fa-plus"></i> New
+              </button>
+              <button class="action-btn">
+                <i class="fa-solid fa-eye"></i> View
+              </button>
+              <button class="action-btn-primary">
+                <i class="fa-solid fa-pen"></i> Edit
+              </button>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">View Toggle (existing pattern)</h3>
+            <div class="button-row">
+              <div class="view-toggle">
+                <button class="view-btn active" title="Grid view">
+                  <i class="fa-solid fa-grip"></i>
+                </button>
+                <button class="view-btn" title="List view">
+                  <i class="fa-solid fa-list"></i>
+                </button>
+              </div>
+              <button class="filter-toggle-btn">
+                <i class="fa-solid fa-filter"></i> Filters
+              </button>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Form Input</h3>
+            <div class="mj-form-group">
+              <label class="mj-label">Email Address</label>
+              <input type="email" class="mj-input" placeholder="you@example.com">
+              <span class="mj-help-text">We'll never share your email with anyone.</span>
+            </div>
+          </div>
+
+          <div class="component-demo">
+            <h3 class="component-demo-title">Alert</h3>
+            <div class="mj-alert mj-alert-info">
+              <i class="fa-solid fa-circle-info mj-alert-icon"></i>
+              <div class="mj-alert-content">
+                <div class="mj-alert-title">Information</div>
+                <div class="mj-alert-message">This is an informational alert using the design system tokens.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="theme-toggle.js"></script>
+</body>
+</html>

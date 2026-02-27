@@ -1,8 +1,9 @@
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { ActionEntity } from '@memberjunction/core-entities';
+import { MJActionEntity } from '@memberjunction/core-entities';
 import { ActionMatchResult, ActionEmbeddingMetadata } from '../types/ActionMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Utility service for action embedding operations.
@@ -39,8 +40,8 @@ export class ActionEmbeddingService {
      * @returns Vector entries ready for loading into vector service
      */
     public static async GenerateActionEmbeddings(
-        actions: ActionEntity[],
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>
+        actions: MJActionEntity[],
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>
     ): Promise<VectorEntry<ActionEmbeddingMetadata>[]> {
         const entries: VectorEntry<ActionEmbeddingMetadata>[] = [];
 
@@ -53,7 +54,7 @@ export class ActionEmbeddingService {
                 const embeddingResult = await embedFunction(embeddingText);
 
                 if (!embeddingResult || !embeddingResult.result || embeddingResult.result.vector.length === 0) {
-                    console.error(`Failed to generate embedding for action ${action.Name}`);
+                    LogError(`Failed to generate embedding for action ${action.Name}`);
                     continue;
                 }
 
@@ -70,7 +71,7 @@ export class ActionEmbeddingService {
                     }
                 });
             } catch (error) {
-                console.error(`Error generating embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
+                LogError(`Error generating embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
                 // Continue with other actions
             }
         }
@@ -93,7 +94,7 @@ export class ActionEmbeddingService {
     public static async FindSimilarActions(
         vectorService: SimpleVectorService<ActionEmbeddingMetadata>,
         taskDescription: string,
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>,
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>,
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<ActionMatchResult[]> {
@@ -137,7 +138,7 @@ export class ActionEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding similar actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding similar actions: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -182,7 +183,7 @@ export class ActionEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding related actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding related actions: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -218,7 +219,7 @@ export class ActionEmbeddingService {
      * Combines name and description with proper weighting.
      * @private
      */
-    private static createEmbeddingText(action: ActionEntity): string {
+    private static createEmbeddingText(action: MJActionEntity): string {
         // Weight the action name more heavily by repeating it
         // This ensures that name matches have higher similarity
         const parts = [

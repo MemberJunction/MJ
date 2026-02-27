@@ -10,6 +10,12 @@ import { resolve } from 'node:path';
 import 'mj_generatedentities';
 import 'mj_generatedactions';
 
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap/mj-class-registrations';
+
+// Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
+import './generated/class-registrations-manifest.js';
+
 // Optional: Import communication providers if needed
 // import '@memberjunction/communication-sendgrid';
 // import '@memberjunction/communication-teams';

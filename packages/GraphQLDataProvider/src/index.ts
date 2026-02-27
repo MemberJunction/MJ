@@ -6,6 +6,8 @@ export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
 export { GraphQLActionClient } from './graphQLActionClient';
+export { GraphQLEncryptionClient } from './graphQLEncryptionClient';
+export type { CreateAPIKeyParams, CreateAPIKeyResult, RevokeAPIKeyResult } from './graphQLEncryptionClient';
 export { GraphQLAIClient } from './graphQLAIClient';
 export type {
     RunAIPromptParams,
@@ -31,5 +33,14 @@ export type {
     ComponentDependencyTree,
     ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
+
+export { GraphQLVersionHistoryClient } from './graphQLVersionHistoryClient';
+export type {
+    CreateVersionLabelParams,
+    CreateVersionLabelProgress,
+    CreateVersionLabelResult
+} from './graphQLVersionHistoryClient';
+
+export * from './graphQLFileStorageClient';
 
 export * from './storage-providers';

@@ -8,18 +8,19 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, ActionEntity,
-         AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
-         AIModelActionEntity, AIPromptModelEntity, AIPromptTypeEntity,
-         AIResultCacheEntity, AIVendorTypeDefinitionEntity, ArtifactTypeEntity,
-         EntityAIActionEntity, VectorDatabaseEntity, AIAgentPromptEntity,
-         AIAgentTypeEntity, AIVendorEntity, AIModelVendorEntity, AIModelTypeEntity,
-         AIModelCostEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity,
-         AIConfigurationEntity, AIConfigurationParamEntity, AIAgentStepEntity,
-         AIAgentStepPathEntity, AIAgentRelationshipEntity, AIAgentPermissionEntity,
-         AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
-         AICredentialBindingEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
+import { MJAIActionEntity, MJActionEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+         MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
+         MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
+         MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
+         MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
+         MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
+         MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
+         MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
+         MJAIModelModalityEntity } from "@memberjunction/core-entities";
+import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
 import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
@@ -28,7 +29,7 @@ import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchR
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
-import { AIAgentEntityExtended, AIModelEntityExtended, AIPromptEntityExtended, AIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
 import { EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 
 
@@ -77,7 +78,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     private _exampleVectorService: SimpleVectorService<ExampleEmbeddingMetadata> | null = null;
 
     // Actions loaded from database
-    private _actions: ActionEntity[] = [];
+    private _actions: MJActionEntity[] = [];
 
     // Embedding caches to track which items have embeddings generated
     private _agentEmbeddingsCache: Map<string, boolean> = new Map();
@@ -110,24 +111,24 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     // Delegate all AIEngineBase public getters
-    public get Agents(): AIAgentEntityExtended[] { return this.Base.Agents; }
-    public get AgentRelationships(): AIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
-    public get AgentTypes(): AIAgentTypeEntity[] { return this.Base.AgentTypes; }
-    public get AgentActions(): AIAgentActionEntity[] { return this.Base.AgentActions; }
-    public get AgentPrompts(): AIAgentPromptEntity[] { return this.Base.AgentPrompts; }
-    public get AgentConfigurations(): AIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
-    public get AgentNoteTypes(): AIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
-    public get AgentPermissions(): AIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
-    public get AgentNotes(): AIAgentNoteEntity[] { return this.Base.AgentNotes; }
-    public get AgentExamples(): AIAgentExampleEntity[] { return this.Base.AgentExamples; }
-    public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
-    public get Vendors(): AIVendorEntity[] { return this.Base.Vendors; }
-    public get ModelVendors(): AIModelVendorEntity[] { return this.Base.ModelVendors; }
-    public get CredentialBindings(): AICredentialBindingEntity[] { return this.Base.CredentialBindings; }
+    public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
+    public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
+    public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
+    public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
+    public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
+    public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
+    public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
+    public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
+    public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
+    public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
+    public get Vendors(): MJAIVendorEntity[] { return this.Base.Vendors; }
+    public get ModelVendors(): MJAIModelVendorEntity[] { return this.Base.ModelVendors; }
+    public get CredentialBindings(): MJAICredentialBindingEntity[] { return this.Base.CredentialBindings; }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string
-    ): AICredentialBindingEntity[] {
+    ): MJAICredentialBindingEntity[] {
         return this.Base.GetCredentialBindingsForTarget(bindingType, targetId);
     }
     public HasCredentialBindings(
@@ -136,65 +137,93 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     ): boolean {
         return this.Base.HasCredentialBindings(bindingType, targetId);
     }
-    public get ModelTypes(): AIModelTypeEntity[] { return this.Base.ModelTypes; }
-    public get Prompts(): AIPromptEntityExtended[] { return this.Base.Prompts; }
-    public get PromptModels(): AIPromptModelEntity[] { return this.Base.PromptModels; }
-    public get PromptTypes(): AIPromptTypeEntity[] { return this.Base.PromptTypes; }
-    public get PromptCategories(): AIPromptCategoryEntityExtended[] { return this.Base.PromptCategories; }
-    public get Models(): AIModelEntityExtended[] { return this.Base.Models; }
-    public get ArtifactTypes(): ArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
-    public get LanguageModels(): AIModelEntityExtended[] { return this.Base.LanguageModels; }
-    public get VectorDatabases(): VectorDatabaseEntity[] { return this.Base.VectorDatabases; }
-    public get ModelCosts(): AIModelCostEntity[] { return this.Base.ModelCosts; }
-    public get ModelPriceTypes(): AIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
-    public get ModelPriceUnitTypes(): AIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
-    public get Configurations(): AIConfigurationEntity[] { return this.Base.Configurations; }
-    public get ConfigurationParams(): AIConfigurationParamEntity[] { return this.Base.ConfigurationParams; }
-    public get AgentDataSources(): AIAgentDataSourceEntity[] { return this.Base.AgentDataSources; }
-    public get AgentSteps(): AIAgentStepEntity[] { return this.Base.AgentSteps; }
-    public get AgentStepPaths(): AIAgentStepPathEntity[] { return this.Base.AgentStepPaths; }
-    public get ModelActions(): AIModelActionEntity[] { return this.Base.ModelActions; }
+    public get ModelTypes(): MJAIModelTypeEntity[] { return this.Base.ModelTypes; }
+    public get Prompts(): MJAIPromptEntityExtended[] { return this.Base.Prompts; }
+    public get PromptModels(): MJAIPromptModelEntity[] { return this.Base.PromptModels; }
+    public get PromptTypes(): MJAIPromptTypeEntity[] { return this.Base.PromptTypes; }
+    public get PromptCategories(): MJAIPromptCategoryEntityExtended[] { return this.Base.PromptCategories; }
+    public get Models(): MJAIModelEntityExtended[] { return this.Base.Models; }
+    public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
+    public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
+    public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
+    public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
+    public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
+    public get Configurations(): MJAIConfigurationEntity[] { return this.Base.Configurations; }
+    public get ConfigurationParams(): MJAIConfigurationParamEntity[] { return this.Base.ConfigurationParams; }
+    public get AgentDataSources(): MJAIAgentDataSourceEntity[] { return this.Base.AgentDataSources; }
+    public get AgentSteps(): MJAIAgentStepEntity[] { return this.Base.AgentSteps; }
+    public get AgentStepPaths(): MJAIAgentStepPathEntity[] { return this.Base.AgentStepPaths; }
+    public get ModelActions(): MJAIModelActionEntity[] { return this.Base.ModelActions; }
     /** @deprecated Use the new Action system instead */
-    public get Actions(): AIActionEntity[] { return this.Base.Actions; }
+    public get Actions(): MJAIActionEntity[] { return this.Base.Actions; }
     /** @deprecated Use the new Action system instead */
-    public get EntityAIActions(): EntityAIActionEntity[] { return this.Base.EntityAIActions; }
+    public get EntityAIActions(): MJEntityAIActionEntity[] { return this.Base.EntityAIActions; }
+
+    // Modality getters - delegated from AIEngineBase
+    public get Modalities(): MJAIModalityEntity[] { return this.Base.Modalities; }
+    public get AgentModalities(): MJAIAgentModalityEntity[] { return this.Base.AgentModalities; }
+    public get ModelModalities(): MJAIModelModalityEntity[] { return this.Base.ModelModalities; }
+
+    // Modality helper methods - delegated from AIEngineBase
+    public GetModalityByName(name: string): MJAIModalityEntity | undefined {
+        return this.Base.GetModalityByName(name);
+    }
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction);
+    }
+    public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
+        return this.Base.GetModelModalities(modelId, direction);
+    }
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    }
+    public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.ModelSupportsModality(modelId, modalityName, direction);
+    }
+    public AgentSupportsAttachments(agentId: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId);
+    }
+    public GetAgentSupportedInputModalities(agentId: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId);
+    }
 
     // Delegate AIEngineBase public methods
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         return this.Base.GetHighestPowerModel(vendorName, modelType, contextUser);
     }
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
         return this.Base.GetHighestPowerLLM(vendorName, contextUser);
     }
-    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): AIModelCostEntity | null {
+    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
         return this.Base.GetActiveModelCost(modelID, vendorID, processingType);
     }
     public GetSubAgents(
         agentID: string,
-        status?: AIAgentEntityExtended['Status'],
-        relationshipStatus?: AIAgentRelationshipEntity['Status']
-    ): AIAgentEntityExtended[] {
+        status?: MJAIAgentEntityExtended['Status'],
+        relationshipStatus?: MJAIAgentRelationshipEntity['Status']
+    ): MJAIAgentEntityExtended[] {
         return this.Base.GetSubAgents(agentID, status, relationshipStatus);
     }
-    public GetAgentByName(agentName: string): AIAgentEntityExtended {
+    public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByName(agentName);
     }
-    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): AIAgentConfigurationEntity[] {
+    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         return this.Base.GetAgentConfigurationPresets(agentId, activeOnly);
     }
-    public GetDefaultAgentConfigurationPreset(agentId: string): AIAgentConfigurationEntity | undefined {
+    public GetDefaultAgentConfigurationPreset(agentId: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetDefaultAgentConfigurationPreset(agentId);
     }
-    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): AIAgentConfigurationEntity | undefined {
+    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetAgentConfigurationPresetByName(agentId, presetName);
     }
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this.Base.AgenteNoteTypeIDByName(agentNoteTypeName);
     }
-    public GetConfigurationParams(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParams(configurationId: string): MJAIConfigurationParamEntity[] {
         return this.Base.GetConfigurationParams(configurationId);
     }
-    public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
+    public GetConfigurationParam(configurationId: string, paramName: string): MJAIConfigurationParamEntity | null {
         return this.Base.GetConfigurationParam(configurationId, paramName);
     }
     /**
@@ -203,10 +232,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Delegates to AIEngineBase.GetConfigurationChain.
      *
      * @param configurationId - The ID of the configuration to get the chain for
-     * @returns Array of AIConfigurationEntity objects representing the inheritance chain
+     * @returns Array of MJAIConfigurationEntity objects representing the inheritance chain
      * @throws Error if a circular reference is detected in the configuration hierarchy
      */
-    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+    public GetConfigurationChain(configurationId: string): MJAIConfigurationEntity[] {
         return this.Base.GetConfigurationChain(configurationId);
     }
     /**
@@ -215,24 +244,24 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Delegates to AIEngineBase.GetConfigurationParamsWithInheritance.
      *
      * @param configurationId - The ID of the configuration to get parameters for
-     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied
+     * @returns Array of MJAIConfigurationParamEntity objects, with child overrides applied
      */
-    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+    public GetConfigurationParamsWithInheritance(configurationId: string): MJAIConfigurationParamEntity[] {
         return this.Base.GetConfigurationParamsWithInheritance(configurationId);
     }
-    public GetAgentSteps(agentId: string, status?: string): AIAgentStepEntity[] {
+    public GetAgentSteps(agentId: string, status?: string): MJAIAgentStepEntity[] {
         return this.Base.GetAgentSteps(agentId, status);
     }
-    public GetAgentStepByID(stepId: string): AIAgentStepEntity | null {
+    public GetAgentStepByID(stepId: string): MJAIAgentStepEntity | null {
         return this.Base.GetAgentStepByID(stepId);
     }
-    public GetPathsFromStep(stepId: string): AIAgentStepPathEntity[] {
+    public GetPathsFromStep(stepId: string): MJAIAgentStepPathEntity[] {
         return this.Base.GetPathsFromStep(stepId);
     }
-    public async CheckResultCache(prompt: string): Promise<AIResultCacheEntity | null> {
+    public async CheckResultCache(prompt: string): Promise<MJAIResultCacheEntity | null> {
         return this.Base.CheckResultCache(prompt);
     }
-    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: MJAIModelEntityExtended, prompt: MJAIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         return this.Base.CacheResult(model, prompt, promptText, resultText);
     }
     public async CanUserViewAgent(agentId: string, user: UserInfo): Promise<boolean> {
@@ -250,7 +279,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async GetUserAgentPermissions(agentId: string, user: UserInfo): Promise<EffectiveAgentPermissions> {
         return this.Base.GetUserAgentPermissions(agentId, user);
     }
-    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<AIAgentEntityExtended[]> {
+    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<MJAIAgentEntityExtended[]> {
         return this.Base.GetAccessibleAgents(user, permission);
     }
     public ClearAgentPermissionsCache(): void {
@@ -283,10 +312,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Get all available actions loaded from the database.
      * Loaded during Config() - will be empty before AIEngine.Config() completes.
-     * NOTE: This returns ActionEntity (MJ Action system), not the deprecated AIActionEntity.
+     * NOTE: This returns MJActionEntity (MJ Action system), not the deprecated MJAIActionEntity.
      * For deprecated AI Actions, see the inherited Actions property.
      */
-    public get SystemActions(): ActionEntity[] {
+    public get SystemActions(): MJActionEntity[] {
         return this._actions;
     }
 
@@ -340,7 +369,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             await AIEngineBase.Instance.Config(forceRefresh ?? false, contextUser, provider);
 
             // Now load server-specific capabilities
-            await this.loadServerCapabilities(contextUser);
+            await this.RefreshServerSpecificMetadata(contextUser);
 
             this._loaded = true;
         } catch (error) {
@@ -350,18 +379,30 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
-     * Load server-specific capabilities: actions and embeddings
+     * Refreshes the server metadata including active actions. 
+     * Refreshes the embeddings in the engine's vector service for  
+     *  - Agents (dynamic recalc of embeddings)
+     *  - Actions (dynamic recalc of embeddings)
+     *  - Notes (parsed from DB)
+     *  - Examples (parsed from DB)
+     * 
+     * If you only need to refresh specific elements noted above, call the individual methods:
+     *  - RefreshActions (refreshes just the server side action metadata - e.g. 'Active' Actions)
+     *  - RefreshActionEmbeddings (dynamic recalc of embedings from stored data)
+     *  - RefreshAgentEmbeddings (dynamic recalc of embeddings from stored data)
+     *  - RefreshNoteEmbeddings
+     *  - RefreshExampleEmbeddings
      */
-    private async loadServerCapabilities(contextUser?: UserInfo): Promise<void> {
+    public async RefreshServerSpecificMetadata(contextUser?: UserInfo): Promise<void> {
         // Load actions from the Action system
-        await this.loadActions(contextUser);
+        await this.RefreshActions(contextUser);
 
         // Load all embeddings in parallel since they are independent
         await Promise.all([
-            this.loadAgentEmbeddings(),
-            this.loadActionEmbeddings(),
-            this.loadNoteEmbeddings(contextUser),
-            this.loadExampleEmbeddings(contextUser)
+            this.RefreshAgentEmbeddings(),
+            this.RefreshActionEmbeddings(),
+            this.RefreshNoteEmbeddings(contextUser),
+            this.RefreshExampleEmbeddings(contextUser)
         ]);
 
         this._embeddingsGenerated = true;
@@ -397,24 +438,23 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._actionVectorService = null;
 
             // Reload actions and regenerate embeddings
-            await this.loadActions(contextUser);
-            await this.loadAgentEmbeddings();
-            await this.loadActionEmbeddings();
+            await this.RefreshActions(contextUser);
+            await this.RefreshAgentEmbeddings();
+            await this.RefreshActionEmbeddings();
             this._embeddingsGenerated = true;
 
         } catch (error) {
-            console.error('AIEngine: Failed to regenerate embeddings:', error);
+            LogError('AIEngine: Failed to regenerate embeddings', undefined, error instanceof Error ? error : undefined);
             throw error;
         }
     }
 
     /**
-     * Load embeddings for all agents.
-     * Uses agents already loaded by AIEngineBase - no database round trip needed.
-     * Only generates embeddings for agents that don't already have them cached.
-     * @private
+     * Refreshes Agent embeddings - agents are pre-loaded at this point, but we need
+     * to generate, dynamically, embeddings from the text stored in the agent. This is not a
+     * cheap operation, use it sparingly.
      */
-    private async loadAgentEmbeddings(): Promise<void> {
+    public async RefreshAgentEmbeddings(): Promise<void> {
         try {
             // Use agents already loaded by base class
             const agents = this.Agents;  // Delegates to AIEngineBase
@@ -453,17 +493,16 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._agentVectorService.LoadVectors(entries);
 
         } catch (error) {
-            console.error(`Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
 
     /**
-     * Load Actions from database.
-     * Called during Config to populate the Actions list.
-     * @private
+     * Loads Active actions from the base engine (contained within this class). Does **not** refresh from the database, simply
+     * pulls the latest `Active` actions from the base class into its server side only array.
      */
-    private async loadActions(contextUser?: UserInfo): Promise<void> {
+    public async RefreshActions(contextUser?: UserInfo): Promise<void> {
         try {
             await ActionEngineBase.Instance.Config(false, contextUser);
             const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
@@ -471,23 +510,24 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             if (actions && actions.length > 0) {
                 this._actions = actions;
             } else {
-                console.error(`Failed to load actions`);
+                LogError('AIEngine: No active actions found during load');
                 this._actions = [];
             }
 
         } catch (error) {
-            console.error(`Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
             this._actions = [];
         }
     }
 
     /**
-     * Load embeddings for all actions.
-     * Uses actions loaded in loadActions() - no additional database round trip needed.
-     * Only generates embeddings for actions that don't already have them cached.
-     * @private
+     * Dynamically calculation of embeddings for all `Active` actions. Assumes that the internal Actions array is up to date, call
+     * @see RefreshActions first if you do not think they are already.
+     * 
+     * This operation dynamically calculates embeddings from the text in the Action metadata and is an expensive operation, use it
+     * sparingly.
      */
-    private async loadActionEmbeddings(): Promise<void> {
+    public async RefreshActionEmbeddings(): Promise<void> {
         try {
             const actions = this._actions;
 
@@ -522,136 +562,117 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             this._actionVectorService.LoadVectors(entries);
 
         } catch (error) {
-            console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
 
     /**
-     * Load note embeddings from database and build vector service.
-     * Only loads active notes with embeddings already generated.
-     * @private
+     * Refresh the vector service with the latest persisted vectors that are stored in the Agent Notes
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save 
+     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
+     * vectors that are used by the vector service.
      */
-    private async loadNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
+    public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
-
-            if (notes.length === 0) {
-                return;
-            }
 
             const entries = notes.map(note => ({
                 key: note.ID,
                 vector: JSON.parse(note.EmbeddingVector!),
-                metadata: {
-                    id: note.ID,
-                    agentId: note.AgentID,
-                    userId: note.UserID,
-                    companyId: note.CompanyID,
-                    type: note.Type,
-                    noteText: note.Note!,
-                    noteEntity: note
-                }
+                metadata: this.packageNoteMetadata(note)
             }));
 
             this._noteVectorService = new SimpleVectorService();
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
-            console.error(`Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
-     * Load example embeddings from database and build vector service.
-     * Only loads active examples with embeddings already generated.
-     * @private
+     * Takes in a note and packages up the metadata for the vector service
+     * @param note 
      */
-    private async loadExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
+    protected packageNoteMetadata(note: MJAIAgentNoteEntity): NoteEmbeddingMetadata {
+        return {
+            id: note.ID,
+            agentId: note.AgentID,
+            userId: note.UserID,
+            companyId: note.CompanyID,
+            type: note.Type,
+            noteText: note.Note!,
+            noteEntity: note
+        }
+    }
+
+    /**
+     * Updates the vector service to the latest vector containd within the specified agent note that is passed in
+     * @param note 
+     */
+    public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
+        if (this._noteVectorService) {
+            this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
+        }
+        else {
+            throw new Error('note vector service not initialized, error state')
+        }
+    }
+
+    /**
+     * Takes in an example and packages up the metadata for the vector service
+     * @param example
+     */
+    protected packageExampleMetadata(example: MJAIAgentExampleEntity): ExampleEmbeddingMetadata {
+        return {
+            id: example.ID,
+            agentId: example.AgentID,
+            userId: example.UserID,
+            companyId: example.CompanyID,
+            type: example.Type,
+            exampleInput: example.ExampleInput,
+            exampleOutput: example.ExampleOutput,
+            successScore: example.SuccessScore,
+            exampleEntity: example
+        }
+    }
+
+    /**
+     * Updates the vector service to the latest vector contained within the specified agent example that is passed in
+     * @param example
+     */
+    public AddOrUpdateSingleExampleEmbedding(example: MJAIAgentExampleEntity) {
+        if (this._exampleVectorService) {
+            this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
+        }
+        else {
+            throw new Error('example vector service not initialized, error state')
+        }
+    }
+
+    /**
+     * Refresh the vector service with the latest persisted vectors that are stored in the Agent Examples
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save 
+     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
+     * vectors that are used by the vector service.
+     */
+    public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
             const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
-
-            if (examples.length === 0) {
-                return;
-            }
 
             const entries = examples.map(example => ({
                 key: example.ID,
                 vector: JSON.parse(example.EmbeddingVector!),
-                metadata: {
-                    id: example.ID,
-                    agentId: example.AgentID,
-                    userId: example.UserID,
-                    companyId: example.CompanyID,
-                    type: example.Type,
-                    exampleInput: example.ExampleInput,
-                    exampleOutput: example.ExampleOutput,
-                    successScore: example.SuccessScore,
-                    exampleEntity: example
-                }
+                metadata: this.packageExampleMetadata(example)
             }));
 
             this._exampleVectorService = new SimpleVectorService();
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
-            console.error(`Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-
-    /**
-     * Generate embedding for a single agent and add it to the vector service.
-     * Used for incremental updates when new agents are created.
-     * @param agent - The agent to generate embeddings for
-     * @private
-     */
-    private async generateSingleAgentEmbedding(agent: AIAgentEntityExtended): Promise<void> {
-        try {
-            // Skip restricted agents - they should not be discoverable
-            if (agent.IsRestricted) {
-                return;
-            }
-
-            const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
-                [agent],
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            if (entries.length > 0) {
-                this._agentEmbeddingsCache.set(agent.ID, true);
-                if (!this._agentVectorService) {
-                    this._agentVectorService = new SimpleVectorService();
-                }
-                this._agentVectorService.LoadVectors(entries);
-            }
-        } catch (error) {
-            console.error(`Failed to generate embedding for agent ${agent.Name}:`, error);
-        }
-    }
-
-    /**
-     * Generate embedding for a single action and add it to the vector service.
-     * Used for incremental updates when new actions are created.
-     * @param action - The action to generate embeddings for
-     * @private
-     */
-    private async generateSingleActionEmbedding(action: ActionEntity): Promise<void> {
-        try {
-            const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
-                [action],
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            if (entries.length > 0) {
-                this._actionEmbeddingsCache.set(action.ID, true);
-                if (!this._actionVectorService) {
-                    this._actionVectorService = new SimpleVectorService();
-                }
-                this._actionVectorService.LoadVectors(entries);
-            }
-        } catch (error) {
-            console.error(`Failed to generate embedding for action ${action.Name}:`, error);
-        }
-    }
-
+ 
     // ========================================================================
     // LLM Utility Methods
     // ========================================================================
@@ -687,11 +708,11 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      */
     public async PrepareLLMInstance(
         contextUser: UserInfo,
-        model?: AIModelEntityExtended,
+        model?: MJAIModelEntityExtended,
         apiKey?: string
     ): Promise<{
         modelInstance: BaseLLM,
-        modelToUse: AIModelEntityExtended
+        modelToUse: MJAIModelEntityExtended
     }> {
         await AIEngine.Instance.Config(false, contextUser);
         const modelToUse = model ? model : await this.GetHighestPowerLLM(undefined, contextUser);
@@ -712,7 +733,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * @returns The text response from the LLM
      * @throws Error if user prompt is not provided or if there are issues with model creation
      */
-    public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: AIModelEntityExtended, apiKey?: string): Promise<string> {
+    public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: MJAIModelEntityExtended, apiKey?: string): Promise<string> {
         try {
             if (!userPrompt || userPrompt.length === 0) {
                 throw new Error('User prompt not provided.');
@@ -762,7 +783,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         iterations: number = 3,
         temperatureIncrement: number = 0.1,
         baseTemperature: number = 0.7,
-        model?: AIModelEntityExtended,
+        model?: MJAIModelEntityExtended,
         apiKey?: string,
         callbacks?: ParallelChatCompletionsCallbacks
     ): Promise<ChatResult[]> {
@@ -804,7 +825,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns an array of the local embedding models, sorted with the highest power models first
      */
-    public get LocalEmbeddingModels(): AIModelEntityExtended[] {
+    public get LocalEmbeddingModels(): MJAIModelEntityExtended[] {
         const embeddingModels = this.Models.filter(m => {
             // Guard against AIModelType being non-string (defensive coding for data issues)
             const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
@@ -818,7 +839,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns the highest power local embedding model
      */
-    public get HighestPowerLocalEmbeddingModel(): AIModelEntityExtended | null {
+    public get HighestPowerLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         const models = this.LocalEmbeddingModels;
         return models && models.length > 0 ? models[0] : null;
     }
@@ -826,7 +847,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Returns the lowest power local embedding model
      */
-    public get LowestPowerLocalEmbeddingModel(): AIModelEntityExtended | null {
+    public get LowestPowerLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         const models = this.LocalEmbeddingModels;
         return models && models.length > 0 ? models[models.length - 1] : null;
     }
@@ -834,10 +855,10 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Helper method that generates an embedding for the given text using the highest power local embedding model.
      */
-    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null> {
+    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null> {
         const model = this.HighestPowerLocalEmbeddingModel;
         if (!model) {
-            console.warn('No local embedding model found. Cannot generate embedding.');
+            LogError('AIEngine: No local embedding model found. Cannot generate embedding.');
             return null;
         }
         const result = await this.EmbedText(model, text);
@@ -848,7 +869,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Helper method to instantiate a class instance for the given model and calculate an embedding
      * vector from the provided text.
      */
-    public async EmbedText(model: AIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
+    public async EmbedText(model: MJAIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
         const params: EmbedTextParams = {
             text: text,
             model: model.APIName
@@ -861,7 +882,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         );
 
         if (!embedding) {
-            console.warn(`Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+            LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
             return null;
         }
 
@@ -917,6 +938,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     /**
      * Find notes similar to query text using semantic search.
+     * Falls back to returning notes from cache if vector service is unavailable.
      */
     public async FindSimilarAgentNotes(
         queryText: string,
@@ -924,10 +946,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         userId?: string,
         companyId?: string,
         topK: number = 5,
-        minSimilarity: number = 0.5
+        minSimilarity: number = 0.5,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): Promise<NoteMatchResult[]> {
         if (!this._noteVectorService) {
-            return [];
+            // Vector service not available - fall back to returning notes from cache filtered by scope
+            LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -936,23 +961,18 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
-            throw new Error('Failed to generate embedding for query text');
+            LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
+            return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
-        const needsFiltering = agentId || userId || companyId;
-        const filter = needsFiltering ? (metadata: NoteEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-            return true;
-        } : undefined;
+        const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
         const results = this._noteVectorService.FindNearest(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
             undefined,
-            filter
+            composedFilter
         );
 
         return results.map(r => ({
@@ -962,7 +982,67 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
+     * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
+     * into a single filter callback for use with FindNearest.
+     */
+    private composeNoteFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
+    ): ((metadata: NoteEmbeddingMetadata) => boolean) | undefined {
+        const needsBaseFilter = agentId || userId || companyId;
+        const baseFilter = needsBaseFilter
+            ? (metadata: NoteEmbeddingMetadata): boolean => {
+                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
+                if (userId && metadata.userId && metadata.userId !== userId) return false;
+                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+                return true;
+            }
+            : undefined;
+
+        if (baseFilter && additionalFilter) {
+            return (metadata: NoteEmbeddingMetadata): boolean =>
+                baseFilter(metadata) && additionalFilter(metadata);
+        }
+        return baseFilter || additionalFilter || undefined;
+    }
+
+    /**
+     * Fallback method to get notes from cache when vector service is unavailable.
+     * Returns notes filtered by scope, sorted by creation date.
+     */
+    private fallbackGetNotesFromCache(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 5,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
+    ): NoteMatchResult[] {
+        const notes = this.AgentNotes.filter(n => {
+            if (n.Status !== 'Active') return false;
+            if (agentId && n.AgentID !== agentId && n.AgentID !== null) return false;
+            if (userId && n.UserID !== userId && n.UserID !== null) return false;
+            if (companyId && n.CompanyID !== companyId && n.CompanyID !== null) return false;
+            if (additionalFilter && !additionalFilter(this.packageNoteMetadata(n))) return false;
+            return true;
+        });
+
+        // Sort by creation date (most recent first) and take topK
+        const sorted = notes
+            .sort((a, b) => (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0))
+            .slice(0, topK);
+
+        // Return with similarity of 0 to indicate no semantic ranking was applied
+        return sorted.map(note => ({
+            note,
+            similarity: 0
+        }));
+    }
+
+    /**
      * Find examples similar to query text using semantic search.
+     * Falls back to returning examples from cache if vector service is unavailable.
      */
     public async FindSimilarAgentExamples(
         queryText: string,
@@ -970,10 +1050,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         userId?: string,
         companyId?: string,
         topK: number = 3,
-        minSimilarity: number = 0.5
+        minSimilarity: number = 0.5,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): Promise<ExampleMatchResult[]> {
         if (!this._exampleVectorService) {
-            return [];
+            // Vector service not available - fall back to returning examples from cache filtered by scope
+            LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -982,28 +1065,87 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const queryEmbedding = await this.EmbedTextLocal(queryText);
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
-            throw new Error('Failed to generate embedding for query text');
+            LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
+            return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
 
-        const needsFiltering = agentId || userId || companyId;
-        const filter = needsFiltering ? (metadata: ExampleEmbeddingMetadata) => {
-            if (agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-            return true;
-        } : undefined;
+        const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
         const results = this._exampleVectorService.FindNearest(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
             undefined,
-            filter
+            composedFilter
         );
 
         return results.map(r => ({
             example: r.metadata.exampleEntity,
             similarity: r.score
+        }));
+    }
+
+    /**
+     * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
+     * into a single filter callback for use with FindNearest on examples.
+     */
+    private composeExampleFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
+    ): ((metadata: ExampleEmbeddingMetadata) => boolean) | undefined {
+        const needsBaseFilter = agentId || userId || companyId;
+        const baseFilter = needsBaseFilter
+            ? (metadata: ExampleEmbeddingMetadata): boolean => {
+                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
+                if (userId && metadata.userId && metadata.userId !== userId) return false;
+                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+                return true;
+            }
+            : undefined;
+
+        if (baseFilter && additionalFilter) {
+            return (metadata: ExampleEmbeddingMetadata): boolean =>
+                baseFilter(metadata) && additionalFilter(metadata);
+        }
+        return baseFilter || additionalFilter || undefined;
+    }
+
+    /**
+     * Fallback method to get examples from cache when vector service is unavailable.
+     * Returns examples filtered by scope, sorted by success score then creation date.
+     */
+    private fallbackGetExamplesFromCache(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 3,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
+    ): ExampleMatchResult[] {
+        const examples = this.AgentExamples.filter(e => {
+            if (e.Status !== 'Active') return false;
+            if (agentId && e.AgentID !== agentId) return false;
+            if (userId && e.UserID !== userId && e.UserID !== null) return false;
+            if (companyId && e.CompanyID !== companyId && e.CompanyID !== null) return false;
+            if (additionalFilter && !additionalFilter(this.packageExampleMetadata(e))) return false;
+            return true;
+        });
+
+        // Sort by success score (highest first), then by creation date (most recent first)
+        const sorted = examples
+            .sort((a, b) => {
+                const scoreA = a.SuccessScore ?? 0;
+                const scoreB = b.SuccessScore ?? 0;
+                if (scoreB !== scoreA) return scoreB - scoreA;
+                return (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0);
+            })
+            .slice(0, topK);
+
+        // Return with similarity of 0 to indicate no semantic ranking was applied
+        return sorted.map(example => ({
+            example,
+            similarity: 0
         }));
     }
 
@@ -1091,7 +1233,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             return results;
         }
         catch (err) {
-            console.error(err);
+            LogError('AIEngine: ExecuteEntityAIAction failed', undefined, err instanceof Error ? err : undefined);
             return {
                 success: false,
                 startTime: startTime,
@@ -1168,7 +1310,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * @deprecated This method is related to deprecated AI Actions. Use AIPromptRunner instead.
      */
-    protected GetStringOutputFromActionResults(action: AIActionEntity, result: BaseResult): string {
+    protected GetStringOutputFromActionResults(action: MJAIActionEntity, result: BaseResult): string {
         switch (action.Name.trim().toLowerCase()) {
             case 'classify':
                 const classifyResult = <ClassifyResult>result;
@@ -1184,7 +1326,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         }
     }
 
-    protected async getDriver(model: AIModelEntityExtended, apiKey: string): Promise<BaseModel> {
+    protected async getDriver(model: MJAIModelEntityExtended, apiKey: string): Promise<BaseModel> {
         const driverClassName = model.DriverClass;
         const driverModuleName = model.DriverImportPath;
         try {
@@ -1201,7 +1343,3 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 }
 
-export function LoadAIEngine() {
-    // This function exists to prevent tree shaking from removing the AIEngine class
-    LoadBaseAIEngine();
-}

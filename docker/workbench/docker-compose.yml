@@ -1,0 +1,107 @@
+services:
+  sql-claude:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: sql-claude
+    user: root
+    environment:
+      SA_PASSWORD: "${SA_PASSWORD:-Claude2Sql99}"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_MEMORY_LIMIT_MB: "3072"
+    ports:
+      - "1444:1433"
+    volumes:
+      - sql-claude-data:/var/opt/mssql
+    deploy:
+      resources:
+        limits:
+          memory: 4g            # Baseline migration needs headroom (~96K line SQL)
+        reservations:
+          memory: 1g
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  postgres-claude:
+    profiles: ["postgres"]             # opt-in: docker compose --profile postgres up
+    image: postgres:16-bookworm
+    container_name: postgres-claude
+    environment:
+      POSTGRES_USER: "${PG_USER:-mj_admin}"
+      POSTGRES_PASSWORD: "${PG_PASSWORD:-Claude2Pg99}"
+      POSTGRES_DB: "${PG_DATABASE:-MJ_Workbench_PG}"
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "${PG_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres-claude-data:/var/lib/postgresql/data
+      - ./pg-init:/docker-entrypoint-initdb.d
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-mj_admin} -d ${PG_DATABASE:-MJ_Workbench_PG}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c effective_cache_size=512MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=128MB
+        -c max_connections=100
+
+  claude-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-dev
+    shm_size: '2gb'     # Chromium needs this (default 64MB causes tab crashes)
+    env_file:
+      - .env.database
+    environment:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      IS_SANDBOX: "1"
+      # Auth0 test credentials (from host .env, used by entrypoint for auto-setup)
+      TEST_AUTH0_DOMAIN: "${TEST_AUTH0_DOMAIN}"
+      TEST_AUTH0_CLIENT_ID: "${TEST_AUTH0_CLIENT_ID}"
+      TEST_AUTH0_CLIENT_SECRET: "${TEST_AUTH0_CLIENT_SECRET}"
+      TEST_UID: "${TEST_UID}"
+      TEST_PWD: "${TEST_PWD}"
+    ports:
+      - "${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
+      - "${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)
+    depends_on:
+      sql-claude:
+        condition: service_healthy
+      # postgres-claude dependency is automatic when --profile postgres is active;
+      # entrypoint.sh gracefully handles PG being absent (pg_isready check)
+    volumes:
+      - ./workspace:/workspace
+      - ./.env.database:/workspace/.env.database:ro
+      - claude-settings:/root/.claude
+      - gh-config:/root/.config/gh
+    deploy:
+      resources:
+        limits:
+          memory: 8g          # Build + browser + MJAPI + Explorer need headroom
+        reservations:
+          memory: 2g
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+
+volumes:
+  sql-claude-data:
+  postgres-claude-data:
+  claude-settings:
+  gh-config:
