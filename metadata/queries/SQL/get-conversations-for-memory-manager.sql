@@ -43,19 +43,22 @@ SELECT
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID AND cdr.Rating >= 8
-    ) THEN 1 ELSE 0 END as HasPositiveRating,
+    ) THEN 1 ELSE 0
+END as HasPositiveRating,
 
     CASE WHEN EXISTS (
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID AND cdr.Rating <= 3
-    ) THEN 1 ELSE 0 END as HasNegativeRating,
+    ) THEN 1 ELSE 0
+END as HasNegativeRating,
 
     CASE WHEN NOT EXISTS (
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID
-    ) THEN 1 ELSE 0 END as IsUnrated
+    ) THEN 1 ELSE 0
+END as IsUnrated
 
 FROM [__mj].[vwConversations] c
 
