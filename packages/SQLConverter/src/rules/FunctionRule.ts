@@ -297,6 +297,23 @@ END;
 $$ LANGUAGE plpgsql;
 `;
   }
+  if (funcName === 'parsedomainfromemail') {
+    return `CREATE OR REPLACE FUNCTION __mj."parseDomainFromEmail"(
+    IN "p_Email" VARCHAR(320)
+)
+RETURNS VARCHAR(255) AS $$
+DECLARE
+    p_Domain VARCHAR(255);
+BEGIN
+    IF TRIM("p_Email") = '' THEN
+        RETURN NULL;
+    END IF;
+    p_Domain := RIGHT("p_Email", LENGTH("p_Email") - POSITION('@' IN "p_Email"));
+    RETURN p_Domain;
+END;
+$$ LANGUAGE plpgsql;
+`;
+  }
   if (funcName === 'parsedomain') {
     return `CREATE OR REPLACE FUNCTION __mj."parseDomain"(
     IN "p_url" TEXT
