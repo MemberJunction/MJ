@@ -711,6 +711,7 @@ This package depends on:
 
 ## Documentation
 
+- [Multi-Database Workflow](MULTI_DATABASE_WORKFLOW.md) - How migrations and CodeGen work together to support SQL Server, PostgreSQL, and future database backends
 - [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) - Comprehensive guide to the manifest system for preventing tree-shaking of `@RegisterClass` classes
 - [EXAMPLE_MANIFEST_MJAPI.md](EXAMPLE_MANIFEST_MJAPI.md) - Example server-side manifest (54 packages, 715 classes)
 - [EXAMPLE_MANIFEST_MJEXPLORER.md](EXAMPLE_MANIFEST_MJEXPLORER.md) - Example client-side manifest (17 packages, 721 classes)
@@ -1100,7 +1101,7 @@ See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for developme
 When contributing to CodeGenLib:
 
 1. All generator base classes use the class factory pattern -- always subclass and register rather than modifying base classes directly
-2. Generated SQL must be compatible with SQL Server and produce valid Flyway migration output
+2. Generated SQL must be valid for the target database platform and produce valid Flyway migration output
 3. Generated TypeScript must compile without errors and follow MJ naming conventions (PascalCase public members)
 4. AI-powered features must enforce stability guarantees (existing categories and icons are never changed)
 

@@ -170,7 +170,7 @@ export class CreateTableRule implements IConversionRule {
     for (const line of lines) {
       const trimmed = line.trim();
 
-      if (/^CREATE\s+TABLE\b/i.test(trimmed)) {
+      if (/^CREATE\s+(?:TEMP\s+)?TABLE\b/i.test(trimmed)) {
         insideCreateTable = true;
         parenDepth = 0;
       }
@@ -378,7 +378,7 @@ export class CreateTableRule implements IConversionRule {
   /** Track column names and their PG types for INSERT boolean casting */
   private trackColumnTypes(sql: string, context: ConversionContext): void {
     // Extract table name from CREATE TABLE schema."TableName"
-    const tableMatch = sql.match(/CREATE\s+TABLE\s+(?:\w+\.)?"?(\w+)"?\s*\(/i);
+    const tableMatch = sql.match(/CREATE\s+(?:TEMP\s+)?TABLE\s+(?:\w+\.)?"?(\w+)"?\s*\(/i);
     if (!tableMatch) return;
 
     const tableName = tableMatch[1].toLowerCase();
