@@ -19,8 +19,8 @@ export class MJTagFormComponent extends BaseFormComponent {
             { sectionKey: 'tagBasics', sectionName: 'Tag Basics', isExpanded: true },
             { sectionKey: 'tagHierarchy', sectionName: 'Tag Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'taggedItems', sectionName: 'Tagged Items', isExpanded: false },
-            { sectionKey: 'tags', sectionName: 'Tags', isExpanded: false }
+            { sectionKey: 'mJTaggedItems', sectionName: 'Tagged Items', isExpanded: false },
+            { sectionKey: 'mJTags', sectionName: 'Tags', isExpanded: false }
         ]);
     }
 }

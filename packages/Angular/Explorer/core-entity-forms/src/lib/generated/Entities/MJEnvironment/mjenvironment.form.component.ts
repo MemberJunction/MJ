@@ -20,13 +20,13 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
             { sectionKey: 'environmentDefinition', sectionName: 'Environment Definition', isExpanded: true },
             { sectionKey: 'environmentSettings', sectionName: 'Environment Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJArtifacts', sectionName: 'MJ: Artifacts', isExpanded: false },
-            { sectionKey: 'mJCollections', sectionName: 'MJ: Collections', isExpanded: false },
-            { sectionKey: 'mJProjects', sectionName: 'MJ: Projects', isExpanded: false },
-            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
-            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
+            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
+            { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
+            { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }

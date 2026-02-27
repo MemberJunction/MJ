@@ -19,7 +19,7 @@ export class MJRowLevelSecurityFilterFormComponent extends BaseFormComponent {
             { sectionKey: 'identifier', sectionName: 'Identifier', isExpanded: true },
             { sectionKey: 'filterDefinition', sectionName: 'Filter Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityPermissions', sectionName: 'Entity Permissions', isExpanded: false }
+            { sectionKey: 'mJEntityPermissions', sectionName: 'Entity Permissions', isExpanded: false }
         ]);
     }
 }

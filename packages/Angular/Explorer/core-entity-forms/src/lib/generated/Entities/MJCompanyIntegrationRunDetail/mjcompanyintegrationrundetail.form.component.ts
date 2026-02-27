@@ -20,7 +20,7 @@ export class MJCompanyIntegrationRunDetailFormComponent extends BaseFormComponen
             { sectionKey: 'operationExecution', sectionName: 'Operation Execution', isExpanded: true },
             { sectionKey: 'runAudit', sectionName: 'Run Audit', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'errorLogs', sectionName: 'Error Logs', isExpanded: false }
+            { sectionKey: 'mJErrorLogs', sectionName: 'Error Logs', isExpanded: false }
         ]);
     }
 }

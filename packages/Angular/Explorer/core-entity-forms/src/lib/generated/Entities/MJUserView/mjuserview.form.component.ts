@@ -22,9 +22,9 @@ export class MJUserViewFormComponent extends BaseFormComponent {
             { sectionKey: 'filteringSmartSearch', sectionName: 'Filtering & Smart Search', isExpanded: false },
             { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'dataContextItems', sectionName: 'Data Context Items', isExpanded: false },
-            { sectionKey: 'entityRelationships', sectionName: 'Entity Relationships', isExpanded: false },
-            { sectionKey: 'userViewRuns', sectionName: 'User View Runs', isExpanded: false }
+            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
+            { sectionKey: 'mJEntityRelationships', sectionName: 'Entity Relationships', isExpanded: false },
+            { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false }
         ]);
     }
 }

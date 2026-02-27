@@ -297,33 +297,33 @@
 
     <!-- Reports Section -->
     <mj-collapsible-panel
-        SectionKey="reports"
+        SectionKey="mJReports"
         SectionName="Reports"
         Icon="fa-solid fa-chart-line"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('reports')"
+        [BadgeCount]="GetSectionRowCount('mJReports')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Reports','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: Reports')"
-                [AllowLoad]="IsSectionExpanded('reports')"
+                [AllowLoad]="IsSectionExpanded('mJReports')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJReports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Conversation Detail Artifacts Section -->
+    <!-- Conversation Detail Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailArtifacts"
-        SectionName="MJ: Conversation Detail Artifacts"
+        SectionName="Conversation Detail Artifacts"
         Icon="fa fa-comment"
         Variant="related-entity"
         [Form]="this"
@@ -345,10 +345,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Conversation Detail Attachments Section -->
+    <!-- Conversation Detail Attachments Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailAttachments"
-        SectionName="MJ: Conversation Detail Attachments"
+        SectionName="Conversation Detail Attachments"
         Icon="fa fa-paperclip"
         Variant="related-entity"
         [Form]="this"
@@ -370,10 +370,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Conversation Detail Ratings Section -->
+    <!-- Conversation Detail Ratings Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailRatings"
-        SectionName="MJ: Conversation Detail Ratings"
+        SectionName="Conversation Detail Ratings"
         Icon="fa fa-comment"
         Variant="related-entity"
         [Form]="this"
@@ -397,33 +397,33 @@
 
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel
-        SectionKey="aIAgentNotes"
+        SectionKey="mJAIAgentNotes"
         SectionName="AI Agent Notes"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIAgentNotes')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNotes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','SourceConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
-                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Runs Section -->
+    <!-- AI Agent Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
-        SectionName="MJ: AI Agent Runs"
+        SectionName="AI Agent Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -447,33 +447,33 @@
 
     <!-- Conversation Details Section -->
     <mj-collapsible-panel
-        SectionKey="conversationDetails"
+        SectionKey="mJConversationDetails"
         SectionName="Conversation Details"
         Icon="fa fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('conversationDetails')"
+        [BadgeCount]="GetSectionRowCount('mJConversationDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Details','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Details')"
-                [AllowLoad]="IsSectionExpanded('conversationDetails')"
+                [AllowLoad]="IsSectionExpanded('mJConversationDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Examples Section -->
+    <!-- AI Agent Examples Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentExamples"
-        SectionName="MJ: AI Agent Examples"
+        SectionName="AI Agent Examples"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -495,10 +495,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Tasks Section -->
+    <!-- Tasks Section -->
     <mj-collapsible-panel
         SectionKey="mJTasks"
-        SectionName="MJ: Tasks"
+        SectionName="Tasks"
         Icon="fa fa-tasks"
         Variant="related-entity"
         [Form]="this"

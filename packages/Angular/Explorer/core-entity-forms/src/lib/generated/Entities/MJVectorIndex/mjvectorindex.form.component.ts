@@ -19,7 +19,7 @@ export class MJVectorIndexFormComponent extends BaseFormComponent {
             { sectionKey: 'indexProfile', sectionName: 'Index Profile', isExpanded: true },
             { sectionKey: 'associatedResources', sectionName: 'Associated Resources', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false }
+            { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false }
         ]);
     }
 }

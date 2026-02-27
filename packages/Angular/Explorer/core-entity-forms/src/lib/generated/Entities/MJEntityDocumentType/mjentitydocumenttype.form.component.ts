@@ -19,7 +19,7 @@ export class MJEntityDocumentTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'recordIdentifier', sectionName: 'Record Identifier', isExpanded: true },
             { sectionKey: 'documentTypeInformation', sectionName: 'Document Type Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityDocuments', sectionName: 'Entity Documents', isExpanded: false }
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
 }

@@ -19,9 +19,9 @@ export class MJArtifactFormComponent extends BaseFormComponent {
             { sectionKey: 'ownershipContext', sectionName: 'Ownership & Context', isExpanded: true },
             { sectionKey: 'artifactCore', sectionName: 'Artifact Core', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJArtifactVersions', sectionName: 'MJ: Artifact Versions', isExpanded: false },
-            { sectionKey: 'mJCollectionArtifacts', sectionName: 'MJ: Collection Artifacts', isExpanded: false },
-            { sectionKey: 'mJArtifactPermissions', sectionName: 'MJ: Artifact Permissions', isExpanded: false }
+            { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false },
+            { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
+            { sectionKey: 'mJArtifactPermissions', sectionName: 'Artifact Permissions', isExpanded: false }
         ]);
     }
 }
