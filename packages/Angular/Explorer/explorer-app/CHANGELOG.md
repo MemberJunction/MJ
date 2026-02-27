@@ -1,5 +1,19 @@
 # @memberjunction/ng-explorer-app
 
+## 5.4.0
+
+### Patch Changes
+
+- 081d657: regression fixes
+- 6bcfa1c: unified design tokens
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/ng-bootstrap@5.4.0
+  - @memberjunction/ng-explorer-core@5.4.0
+  - @memberjunction/ng-workspace-initializer@5.4.0
+  - @memberjunction/ng-auth-services@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

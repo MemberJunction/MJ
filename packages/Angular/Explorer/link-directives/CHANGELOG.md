@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

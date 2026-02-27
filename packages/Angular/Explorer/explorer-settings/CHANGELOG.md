@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.4.0
+
+### Patch Changes
+
+- 081d657: regression fixes
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-entity-form-dialog@5.4.0
+  - @memberjunction/ng-entity-permissions@5.4.0
+  - @memberjunction/ng-simple-record-list@5.4.0
+  - @memberjunction/ng-base-forms@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-join-grid@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-user-avatar@5.4.0
+  - @memberjunction/ng-tabstrip@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

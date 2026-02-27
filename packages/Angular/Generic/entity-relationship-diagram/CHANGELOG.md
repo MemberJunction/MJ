@@ -1,5 +1,12 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

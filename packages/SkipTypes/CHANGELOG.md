@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.0
+- @memberjunction/data-context@5.4.0
+- @memberjunction/interactive-component-types@5.4.0
+- @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

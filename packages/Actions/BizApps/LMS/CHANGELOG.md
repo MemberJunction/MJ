@@ -1,5 +1,21 @@
 # @memberjunction/actions-bizapps-lms
 
+## 5.4.0
+
+### Minor Changes
+
+- 9604926: LearnWorlds action metadata: fix 5 DriverClass mismatches, update params for 12 existing actions, add 7 new actions (Attach/Detach
+
+### Patch Changes
+
+- cde53a9: No Migration file or metadata changes to this branch
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes
