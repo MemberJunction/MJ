@@ -515,6 +515,12 @@ export class ProcedureToFunctionRule implements IConversionRule {
     );
     if (viewMatch) {
       const viewName = viewMatch[1];
+      // If the view wasn't created in this file, skip this function.
+      // This handles CodeGen-generated views that aren't in the baseline —
+      // SQL Server allows deferred name resolution but PG requires types to exist.
+      if (!context.CreatedViews.has(viewName)) {
+        return `-- SKIPPED: References view "${viewName}" not created in this file (CodeGen will recreate)\n`;
+      }
       return `RETURNS SETOF __mj."${viewName}" AS`;
     }
 

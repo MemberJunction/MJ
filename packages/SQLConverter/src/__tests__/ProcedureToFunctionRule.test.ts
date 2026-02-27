@@ -4,6 +4,8 @@ import { createConversionContext } from '../rules/types.js';
 
 const rule = new ProcedureToFunctionRule();
 const context = createConversionContext('tsql', 'postgres');
+// Populate CreatedViews with views referenced by tests
+context.CreatedViews.add('vwUsers');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);
@@ -432,6 +434,24 @@ END`;
 
       const result = convert(input);
       expect(result).not.toContain('COLLATE');
+    });
+
+    it('should skip function when referenced view was not created in the file', () => {
+      const ctx = createConversionContext('tsql', 'postgres');
+      // Do NOT add vwMissingView to ctx.CreatedViews
+      const input = `CREATE PROCEDURE [__mj].[spCreateMissing]
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[MissingTable] ([Name]) VALUES (@Name)
+    SELECT * FROM [__mj].[vwMissingView] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+
+      const result = rule.PostProcess!(input, input, ctx);
+      expect(result).toContain('SKIPPED');
+      expect(result).toContain('vwMissingView');
+      expect(result).not.toContain('CREATE OR REPLACE FUNCTION');
     });
 
     it('should convert suser_sname() to current_user', () => {
