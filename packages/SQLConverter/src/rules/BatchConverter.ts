@@ -147,6 +147,13 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   // (cursor + dynamic SQL + temp procedures that can't be auto-converted)
   injectTempProcReplacements(processedSQL, groups);
 
+  // Topologically sort views so dependencies come before dependents.
+  // Required because DROP VIEW ... CASCADE can cascade-drop a view that was
+  // already created earlier in the file. Sorting ensures we process leaves first.
+  if (groups.Views.length > 1) {
+    groups.Views = topologicallySortViews(groups.Views, schema);
+  }
+
   // Assemble output in proper order
   log('Assembling output...');
   const outputParts: string[] = [];
@@ -503,6 +510,67 @@ function extractJsonKeyPatterns(sql: string): string[] {
     }
   }
   return keys;
+}
+
+/**
+ * Topologically sort view blocks so dependencies come before dependents.
+ * Uses Kahn's algorithm. Needed because DROP VIEW ... CASCADE can cascade-drop
+ * a view that was already created earlier in the file.
+ */
+function topologicallySortViews(views: string[], schema: string): string[] {
+  const parsed = views.map((block, idx) => {
+    const nameMatch = block.match(/CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:\w+\.)?"?(\w+)"?/i);
+    const viewName = nameMatch ? nameMatch[1].toLowerCase() : `__unnamed_${idx}`;
+    const deps = new Set<string>();
+    const refRegex = new RegExp(`(?:FROM|JOIN)\\s+(?:${schema}\\.)?(?:"(vw\\w+)"|(vw\\w+))`, 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = refRegex.exec(block)) !== null) {
+      const dep = (m[1] || m[2]).toLowerCase();
+      if (dep !== viewName) deps.add(dep);
+    }
+    return { block, viewName, deps };
+  });
+
+  const nameToIndex = new Map<string, number>();
+  parsed.forEach((v, i) => nameToIndex.set(v.viewName, i));
+
+  const inDegree = new Array(parsed.length).fill(0);
+  const adjList: number[][] = parsed.map(() => []);
+
+  for (let i = 0; i < parsed.length; i++) {
+    for (const dep of parsed[i].deps) {
+      const depIdx = nameToIndex.get(dep);
+      if (depIdx !== undefined) {
+        adjList[depIdx].push(i);
+        inDegree[i]++;
+      }
+    }
+  }
+
+  const queue: number[] = [];
+  for (let i = 0; i < inDegree.length; i++) {
+    if (inDegree[i] === 0) queue.push(i);
+  }
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    sorted.push(parsed[node].block);
+    for (const neighbor of adjList[node]) {
+      inDegree[neighbor]--;
+      if (inDegree[neighbor] === 0) queue.push(neighbor);
+    }
+  }
+
+  // Cycle fallback: append remaining in original order
+  if (sorted.length < parsed.length) {
+    const sortedSet = new Set(sorted);
+    for (const v of parsed) {
+      if (!sortedSet.has(v.block)) sorted.push(v.block);
+    }
+  }
+
+  return sorted;
 }
 
 /** Print a formatted conversion report */

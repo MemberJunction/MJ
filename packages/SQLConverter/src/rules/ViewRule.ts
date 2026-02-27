@@ -128,7 +128,6 @@ export class ViewRule implements IConversionRule {
 
     // CREATE [OR ALTER] VIEW → CREATE OR REPLACE VIEW
     // This is the PostgreSQL equivalent of T-SQL's CREATE OR ALTER VIEW.
-    // Unlike DROP + CREATE, it avoids CASCADE side-effects on dependent views.
     result = result.replace(/\bCREATE\s+OR\s+ALTER\s+VIEW\b/gi, 'CREATE OR REPLACE VIEW');
     // Also handle bare CREATE VIEW (e.g. in baseline) — make idempotent
     result = result.replace(/\bCREATE\s+VIEW\b(?!\s+OR)/gi, 'CREATE OR REPLACE VIEW');
@@ -143,6 +142,16 @@ export class ViewRule implements IConversionRule {
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
+
+    // Prepend DROP VIEW IF EXISTS ... CASCADE so that CREATE OR REPLACE VIEW
+    // succeeds even when the column list has changed (PG limitation: CREATE OR
+    // REPLACE VIEW cannot add/remove/reorder columns). The CASCADE is necessary
+    // because dependent views/functions may reference this view.
+    const viewNameMatch2 = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
+    if (viewNameMatch2) {
+      const viewName = viewNameMatch2[1];
+      result = `DROP VIEW IF EXISTS ${viewName} CASCADE;\n${result}`;
+    }
 
     return result + '\n';
   }
