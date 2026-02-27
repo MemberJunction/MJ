@@ -89,15 +89,13 @@ SELECT name FROM sys.objects WHERE type = 'U'`;
   });
 
   describe('CREATE OR ALTER VIEW conversion', () => {
-    it('should emit DROP VIEW IF EXISTS before CREATE VIEW', () => {
+    it('should convert CREATE OR ALTER VIEW to CREATE OR REPLACE VIEW', () => {
       const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
 SELECT [ID] FROM [__mj].[Foo]`;
       const result = convert(sql);
-      expect(result).toContain('DROP VIEW IF EXISTS');
-      expect(result).toContain('CASCADE');
-      expect(result).toContain('CREATE VIEW');
+      expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
       expect(result).not.toMatch(/CREATE\s+OR\s+ALTER\s+VIEW/i);
-      expect(result).not.toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
+      expect(result).not.toContain('DROP VIEW IF EXISTS');
     });
   });
 

@@ -141,9 +141,8 @@ describe('CatalogViewRule', () => {
     it('should delegate non-catalog views to ViewRule', () => {
       const sql = `CREATE VIEW [__mj].[vwUsers] AS SELECT [ID], [Name] FROM [__mj].[User]`;
       const result = convert(sql);
-      // ViewRule emits DROP VIEW IF EXISTS + CREATE VIEW
-      expect(result).toContain('DROP VIEW IF EXISTS');
-      expect(result).toContain('CREATE VIEW');
+      // ViewRule emits CREATE OR REPLACE VIEW (no DROP CASCADE)
+      expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
       expect(result).toContain('"vwUsers"');
       // Should NOT contain any pg_catalog references (it's not a catalog view)
       expect(result).not.toContain('pg_catalog');
