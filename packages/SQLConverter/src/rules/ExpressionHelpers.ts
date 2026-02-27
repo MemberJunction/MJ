@@ -302,13 +302,54 @@ export function convertStuff(sql: string): string {
   );
 }
 
+/** PG type strings that represent textual/string data */
+const PG_STRING_TYPES = new Set(['TEXT', 'VARCHAR', 'CHAR', 'UUID', 'XML']);
+
+/**
+ * Check if a PG type string (e.g., "VARCHAR(500)", "TEXT", "INTEGER") is a string type.
+ */
+function isStringType(pgType: string): boolean {
+  const baseType = pgType.replace(/\(.*\)/, '').trim().toUpperCase();
+  return PG_STRING_TYPES.has(baseType);
+}
+
+/**
+ * Look up a quoted identifier like "ColName" or alias."ColName" in TableColumns
+ * and return true if it resolves to a string type.
+ */
+function isStringColumn(
+  ident: string,
+  tableColumns: Map<string, Map<string, string>> | undefined
+): boolean {
+  if (!tableColumns || tableColumns.size === 0) return false;
+
+  // Extract column name from patterns like: "Col", alias."Col", schema."Table"."Col"
+  const colMatch = ident.match(/"(\w+)"(?:\s*$)/);
+  if (!colMatch) return false;
+  const colName = colMatch[1].toLowerCase();
+
+  // Search all tables for this column name
+  for (const [, cols] of tableColumns) {
+    const colType = cols.get(colName);
+    if (colType && isStringType(colType)) return true;
+  }
+  return false;
+}
+
 /**
  * Convert T-SQL string concatenation with + to PostgreSQL || operator.
  * Must not affect numeric + operations.
  * Uses SQL segmentation to avoid corrupting string literal content
  * (e.g. TypeScript code stored in database text columns).
+ *
+ * When tableColumns is provided (from ConversionContext.TableColumns),
+ * uses column type information to disambiguate "ColA" + "ColB" —
+ * converting to || only when at least one side is a known string type.
  */
-export function convertStringConcat(sql: string): string {
+export function convertStringConcat(
+  sql: string,
+  tableColumns?: Map<string, Map<string, string>>
+): string {
   const segments = segmentSQL(sql);
 
   for (let i = 0; i < segments.length; i++) {
@@ -336,9 +377,23 @@ export function convertStringConcat(sql: string): string {
       newCode = newCode.replace(/("(?:\w+)")\s*\+(\s*)$/, '$1 ||$2');
     }
 
-    // Within code segments (no adjacent strings): ) + colname.
+    // Within code segments (no adjacent strings)
     if (!prevIsString && !nextIsString) {
+      // ) + colname.qualified
       newCode = newCode.replace(/\)\s*\+\s*(\w+\.)/g, ') || $1');
+
+      // Type-aware: "ColA" + "ColB" → "ColA" || "ColB" when either is a string column
+      if (tableColumns && tableColumns.size > 0) {
+        newCode = newCode.replace(
+          /("[\w]+"(?:\."[\w]+")?)\s*\+\s*("[\w]+"(?:\."[\w]+")?)/g,
+          (match, left: string, right: string) => {
+            if (isStringColumn(left, tableColumns) || isStringColumn(right, tableColumns)) {
+              return `${left} || ${right}`;
+            }
+            return match;
+          }
+        );
+      }
     }
 
     segments[i].text = newCode;

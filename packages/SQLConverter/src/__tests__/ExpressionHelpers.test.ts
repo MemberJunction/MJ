@@ -332,11 +332,40 @@ describe('convertStringConcat', () => {
       .toBe(') || schema.col');
   });
 
-  it('preserves + between quoted identifiers (could be numeric)', () => {
-    // Without string-literal context, + stays as arithmetic — avoids
+  it('preserves + between quoted identifiers without type context (could be numeric)', () => {
+    // Without type context, + stays as arithmetic — avoids
     // false positives on numeric expressions like "SubTotal" + "TaxAmount"
     expect(convertStringConcat('"FirstName" + "LastName"'))
       .toBe('"FirstName" + "LastName"');
+  });
+
+  it('converts + to || between quoted identifiers when type context says string', () => {
+    const tableColumns = new Map<string, Map<string, string>>();
+    tableColumns.set('users', new Map([
+      ['firstname', 'VARCHAR(100)'],
+      ['lastname', 'VARCHAR(100)'],
+    ]));
+    expect(convertStringConcat('"FirstName" + "LastName"', tableColumns))
+      .toBe('"FirstName" || "LastName"');
+  });
+
+  it('preserves + between quoted identifiers when type context says numeric', () => {
+    const tableColumns = new Map<string, Map<string, string>>();
+    tableColumns.set('orders', new Map([
+      ['subtotal', 'NUMERIC(18,2)'],
+      ['taxamount', 'NUMERIC(18,2)'],
+    ]));
+    expect(convertStringConcat('"SubTotal" + "TaxAmount"', tableColumns))
+      .toBe('"SubTotal" + "TaxAmount"');
+  });
+
+  it('converts + to || when one side is string type and other is unknown', () => {
+    const tableColumns = new Map<string, Map<string, string>>();
+    tableColumns.set('integration', new Map([
+      ['navigationbaseurl', 'VARCHAR(500)'],
+    ]));
+    expect(convertStringConcat('"NavigationBaseURL" + "URLFormat"', tableColumns))
+      .toBe('"NavigationBaseURL" || "URLFormat"');
   });
 });
 

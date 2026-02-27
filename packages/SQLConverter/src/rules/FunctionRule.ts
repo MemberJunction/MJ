@@ -47,7 +47,7 @@ export class FunctionRule implements IConversionRule {
     // Common functions
     result = convertCommonFunctions(result);
     result = convertTopToLimit(result);
-    result = convertStringConcat(result);
+    result = convertStringConcat(result, context.TableColumns);
     result = convertDateFunctions(result);
     result = result.replace(/\bLEN\s*\(/gi, 'LENGTH(');
     result = convertCharIndex(result);
@@ -56,7 +56,7 @@ export class FunctionRule implements IConversionRule {
     if (/RETURNS\s+TABLE\s+AS\s+RETURN/i.test(result)) {
       result = this.convertInlineTVF(result);
     } else {
-      result = this.convertScalarFunction(result);
+      result = this.convertScalarFunction(result, context);
     }
 
     return result + '\n';
@@ -106,7 +106,7 @@ export class FunctionRule implements IConversionRule {
     return cols.length > 0 ? cols.join(', ') : null;
   }
 
-  private convertScalarFunction(sql: string): string {
+  private convertScalarFunction(sql: string, context?: ConversionContext): string {
     const m = sql.match(
       /(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+__mj\."?\w+"?\s*\([^)]*\)\s*RETURNS\s+[\w\s()]+?)\s*\bAS\b\s*(?:BEGIN\b)?\s*([\s\S]*?)(?:\s*END\s*;?\s*$)/i
     );
@@ -143,7 +143,7 @@ export class FunctionRule implements IConversionRule {
       body = body.replace(/\bEND\s*(?=\s*(?:ELSE|$))/gi, 'END IF');
 
       // String concat
-      body = convertStringConcat(body);
+      body = convertStringConcat(body, context?.TableColumns);
       body = body.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
 
       const declareBlock = declares.length > 0 ? 'DECLARE\n' + declares.join('\n') + '\n' : '';

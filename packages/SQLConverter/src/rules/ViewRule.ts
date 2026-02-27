@@ -80,7 +80,7 @@ export class ViewRule implements IConversionRule {
     result = removeNPrefix(result);
     result = convertCommonFunctions(result);
     result = convertCastTypes(result);
-    result = convertStringConcat(result);
+    result = convertStringConcat(result, context.TableColumns);
     result = convertTopToLimit(result);
     result = removeCollate(result);
     result = convertDateFunctions(result);

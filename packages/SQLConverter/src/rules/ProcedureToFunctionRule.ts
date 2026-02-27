@@ -45,7 +45,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     const body = sql.slice(bodyStart).trim();
 
     const pgParams = this.convertProcParams(paramsBlock);
-    const pgBody = this.convertProcBody(body, procName);
+    const pgBody = this.convertProcBody(body, procName, context);
     const returnsClause = this.determineReturnType(body, procName, context);
 
     // If the return type references a view that doesn't exist, skip this procedure
@@ -150,7 +150,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
   // Body conversion
   // ---------------------------------------------------------------------------
 
-  private convertProcBody(body: string, _procName: string): string {
+  private convertProcBody(body: string, _procName: string, context?: ConversionContext): string {
     let sql = body;
 
     // Remove SET NOCOUNT ON
@@ -251,7 +251,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     sql = sql.replace(/N'/g, "'");
 
     // String concat + → ||
-    sql = convertStringConcat(sql);
+    sql = convertStringConcat(sql, context?.TableColumns);
 
     // Common function replacements
     sql = convertCommonFunctions(sql);

@@ -13,13 +13,13 @@ export class InsertRule implements IConversionRule {
   Priority = 50;
   BypassSqlglot = true;
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);
     result = removeNPrefix(result);
     result = removeCollate(result);
     // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted)
     result = convertCommonFunctions(result);
-    result = convertStringConcat(result);
+    result = convertStringConcat(result, context.TableColumns);
     result = convertCharIndex(result);
     result = convertStuff(result);
     result = convertConvertFunction(result);
