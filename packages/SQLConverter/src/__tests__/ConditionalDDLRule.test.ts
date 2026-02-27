@@ -80,6 +80,24 @@ CREATE UNIQUE INDEX [UX_Foo_Name] ON __mj."Foo" ("Name")`;
       expect(result).toContain('"UX_Foo_Name"');
     });
 
+    it('should preserve WHERE clause on filtered index', () => {
+      const sql = `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_SchemaInfo_Prefix' AND object_id = OBJECT_ID('__mj.SchemaInfo'))
+BEGIN
+    CREATE UNIQUE INDEX UQ_SchemaInfo_Prefix
+    ON [__mj].SchemaInfo (
+        EntityNamePrefix,
+        EntityNameSuffix
+    )
+    WHERE EntityNamePrefix IS NOT NULL;
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE UNIQUE INDEX IF NOT EXISTS');
+      expect(result).toContain('"UQ_SchemaInfo_Prefix"');
+      expect(result).toContain('WHERE EntityNamePrefix IS NOT NULL');
+      expect(result).not.toContain('WHERE E;');
+      expect(result).not.toContain('sys.indexes');
+    });
+
     it('should strip NONCLUSTERED keyword from conditional index', () => {
       const sql = `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bar_Col')
 CREATE NONCLUSTERED INDEX [IX_Bar_Col] ON __mj."Bar" ("Col")`;

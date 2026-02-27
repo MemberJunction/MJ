@@ -74,7 +74,7 @@ export class ConditionalDDLRule implements IConversionRule {
     let rest = sql.slice(closePos + 1);
     rest = rest.replace(/^\s*\n\s*BEGIN\s*\n/i, '\n').replace(/\s*\bEND\b\s*;?\s*$/i, '');
     const createMatch = rest.match(
-      /^\s*(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(\S+)\s+ON\s+(\S+)\s*\(([^)]+)\)(\s+WHERE\s+[^;]+?)?\s*;?/i
+      /^\s*(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(\S+)\s+ON\s+(\S+)\s*\(([^)]+)\)(\s+WHERE\s+[^;]+)?\s*;?/i
     );
     if (!createMatch) return null;
 

@@ -590,6 +590,13 @@ CREATE TABLE [__mj].[Action] (ID UNIQUEIDENTIFIER NOT NULL)`;
       expect(classifyBatch('EXEC __mj.spUpdateEntityFieldRelatedEntityNameFieldMap @EntityFieldID=\'abc\'')).toBe('SKIP_SQLSERVER');
     });
 
+    it('should classify DROP VIEW/PROCEDURE/FUNCTION as SKIP_SQLSERVER', () => {
+      expect(classifyBatch('DROP VIEW IF EXISTS [__mj].vwEntities')).toBe('SKIP_SQLSERVER');
+      expect(classifyBatch('DROP PROCEDURE IF EXISTS [__mj].[spSomeProc]')).toBe('SKIP_SQLSERVER');
+      expect(classifyBatch('DROP PROC IF EXISTS __mj.spSomeProc')).toBe('SKIP_SQLSERVER');
+      expect(classifyBatch('DROP FUNCTION IF EXISTS [__mj].[fnSomeFunc]')).toBe('SKIP_SQLSERVER');
+    });
+
     it('should classify TRUNCATE as UNKNOWN', () => {
       expect(classifyBatch('TRUNCATE TABLE [__mj].[TempData]')).toBe('UNKNOWN');
     });
