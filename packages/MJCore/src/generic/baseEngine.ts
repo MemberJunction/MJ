@@ -306,8 +306,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         if (!this._loaded || forceRefresh) {
-            const diagTime = Date.now();
-            console.log(`[DIAG][${diagTime}] BaseEngine.Load() STARTING for ${this.constructor.name} (forceRefresh=${forceRefresh}, configCount=${configs.length})`);
             // Start telemetry tracking for engine load
             const entityNames = configs
                 .filter(c => c.Type !== 'dataset' && c.EntityName)
@@ -337,25 +335,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                const loadConfigsStart = Date.now();
                 await this.LoadConfigs(configs, contextUser);
-                console.log(`[DIAG][${diagTime}] BaseEngine.Load() ${this.constructor.name} LoadConfigs completed in ${Date.now() - loadConfigsStart}ms`);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
                 this._loaded = true;
-                console.log(`[DIAG][${diagTime}] BaseEngine.Load() ${this.constructor.name} COMPLETED SUCCESSFULLY in ${Date.now() - diagTime}ms`);
 
                 // Notify registry that engine is loaded
                 BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
             } catch (e) {
-                console.error(`[DIAG][${diagTime}] BaseEngine.Load() ${this.constructor.name} CAUGHT ERROR after ${Date.now() - diagTime}ms:`, e);
                 LogError(e);
             } finally {
                 this._loadingSubject.next(false);
                 TelemetryManager.Instance.EndEvent(eventId);
             }
-        } else {
-            console.log(`[DIAG] BaseEngine.Load() ${this.constructor.name} SKIPPED - already loaded (_loaded=${this._loaded})`);
         }
     }
 
@@ -987,9 +979,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
-        } else {
-            const source = config.EntityName || config.DatasetName || config.PropertyName;
-            console.error(`[DIAG] BaseEngine.HandleSingleViewResult() ${this.constructor.name} FAILED for "${source}": ${result.ErrorMessage || 'No error message'}`);
         }
     }
 

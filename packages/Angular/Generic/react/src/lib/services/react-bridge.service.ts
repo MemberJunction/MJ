@@ -65,10 +65,8 @@ export class ReactBridgeService implements OnDestroy {
    * Wait for React to be ready, with special handling for first component
    */
   async waitForReactReady(): Promise<void> {
-    const diagTime = Date.now();
     // If already ready, return immediately
     if (this.reactReadySubject.value) {
-      console.log(`[DIAG][${diagTime}] waitForReactReady() already ready, returning immediately`);
       return;
     }
 
@@ -76,16 +74,14 @@ export class ReactBridgeService implements OnDestroy {
     const isFirstComponent = !this.firstComponentAttempted;
     this.firstComponentAttempted = true;
 
-    console.log(`[DIAG][${diagTime}] waitForReactReady() isFirstComponent=${isFirstComponent}, starting polling...`);
-
     if (isFirstComponent) {
       // First component - check periodically until React is ready
       if (this.debug) {
         console.log('First React component loading - checking for React initialization');
       }
-
+      
       const startTime = Date.now();
-
+      
       while (Date.now() - startTime < this.maxWaitTime) {
         try {
           const testDiv = document.createElement('div');
