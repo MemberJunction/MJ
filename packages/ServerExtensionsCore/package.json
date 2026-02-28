@@ -19,7 +19,6 @@
   "dependencies": {
     "@memberjunction/global": "5.4.1",
     "@memberjunction/core": "5.4.1",
-    "@types/express": "^5.0.3",
     "express": "^5.2.1"
   },
   "devDependencies": {

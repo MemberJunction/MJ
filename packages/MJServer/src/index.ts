@@ -43,7 +43,7 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
-import { ServerExtensionLoader } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -685,7 +685,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   // Load server extensions from config (messaging adapters, etc.)
   const extensionLoader = new ServerExtensionLoader();
-  const extensionConfigs = configInfo.serverExtensions ?? [];
+  // Zod defaults guarantee all fields are present, but the passthrough schema
+  // output type marks them as optional. Cast is safe since validation already ran.
+  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
   if (extensionConfigs.length > 0) {
     await extensionLoader.LoadExtensions(app, extensionConfigs);
   }
