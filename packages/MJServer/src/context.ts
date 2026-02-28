@@ -283,7 +283,7 @@ export const contextFunction =
       const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
       const sqlProvider = new SQLServerDataProvider();
       await sqlProvider.Config(config);
-      p = sqlProvider;
+      p = sqlProvider as unknown as DatabaseProviderBase;
     }
 
     let rp: DatabaseProviderBase | null = null;
@@ -294,7 +294,7 @@ export const contextFunction =
           const roProvider = new SQLServerDataProvider();
           const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
           await roProvider.Config(rConfig);
-          rp = roProvider;
+          rp = roProvider as unknown as DatabaseProviderBase;
         }
       }
       catch (_err) {

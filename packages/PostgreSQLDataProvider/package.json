@@ -14,8 +14,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@memberjunction/core": "5.3.1",
-    "@memberjunction/global": "5.3.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/global": "5.4.1",
     "@memberjunction/sql-dialect": "5.4.1",
     "pg": "^8.13.3"
   },
