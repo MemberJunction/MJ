@@ -143,16 +143,26 @@ export class ViewRule implements IConversionRule {
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
 
-    // Only prepend DROP VIEW CASCADE when the file has DDL changes (ALTER TABLE,
-    // CREATE TABLE) that could change view column lists. Without DDL changes,
-    // CREATE OR REPLACE VIEW suffices and avoids cascade-dropping dependent
-    // functions (e.g. spCreate/spUpdate that RETURN SETOF view_name).
-    if (context.HasDDLChanges) {
-      const viewNameMatch2 = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
-      if (viewNameMatch2) {
-        const viewName = viewNameMatch2[1];
-        result = `DROP VIEW IF EXISTS ${viewName} CASCADE;\n${result}`;
-      }
+    // Wrap in a DO block that tries CREATE OR REPLACE first, falling back to
+    // DROP VIEW ... CASCADE only when the column list changed (PG error 42P16).
+    // This avoids unnecessary CASCADE drops which would kill dependent functions
+    // (spCreate/spUpdate with RETURNS SETOF view_name) created in prior migrations.
+    const viewNameMatch = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
+    if (viewNameMatch) {
+      const viewName = viewNameMatch[1];
+      const viewSQL = result.replace(/;\s*$/, '');
+      result = [
+        'DO $do$',
+        'DECLARE',
+        `  vsql CONSTANT TEXT := $vsql$${viewSQL}$vsql$;`,
+        'BEGIN',
+        '  EXECUTE vsql;',
+        'EXCEPTION WHEN invalid_table_definition THEN',
+        `  DROP VIEW IF EXISTS ${viewName} CASCADE;`,
+        '  EXECUTE vsql;',
+        'END;',
+        '$do$;',
+      ].join('\n');
     }
 
     return result + '\n';

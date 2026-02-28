@@ -89,24 +89,31 @@ SELECT name FROM sys.objects WHERE type = 'U'`;
   });
 
   describe('CREATE OR ALTER VIEW conversion', () => {
-    it('should emit CREATE OR REPLACE VIEW without DROP CASCADE when no DDL changes', () => {
+    it('should wrap view in DO block with exception-based CASCADE fallback', () => {
       const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
 SELECT [ID] FROM [__mj].[Foo]`;
       const result = convert(sql);
-      expect(result).not.toContain('DROP VIEW IF EXISTS');
-      expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
+      expect(result).toContain('DO $do$');
+      expect(result).toContain('EXECUTE vsql');
+      expect(result).toContain('EXCEPTION WHEN invalid_table_definition');
+      expect(result).toContain('DROP VIEW IF EXISTS');
+      expect(result).toContain('CASCADE');
+      expect(result).toContain('CREATE OR REPLACE VIEW');
+      expect(result).toContain('$do$;');
       expect(result).not.toMatch(/CREATE\s+OR\s+ALTER\s+VIEW/i);
     });
 
-    it('should emit DROP VIEW CASCADE + CREATE OR REPLACE VIEW when DDL changes present', () => {
+    it('should use same DO block pattern regardless of HasDDLChanges', () => {
       const ddlContext = createConversionContext('tsql', 'postgres');
       ddlContext.HasDDLChanges = true;
       const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
 SELECT [ID] FROM [__mj].[Foo]`;
       const result = rule.PostProcess!(sql, sql, ddlContext);
+      // Same DO block pattern whether or not DDL changes are present
+      expect(result).toContain('DO $do$');
+      expect(result).toContain('EXCEPTION WHEN invalid_table_definition');
       expect(result).toContain('DROP VIEW IF EXISTS');
       expect(result).toContain('CASCADE');
-      expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
     });
   });
 
@@ -163,11 +170,11 @@ SELECT * FROM flyway_schema_history`;
   });
 
   describe('output formatting', () => {
-    it('should ensure output ends with semicolon and newline', () => {
+    it('should ensure DO block output ends with $do$; and newline', () => {
       const sql = `CREATE VIEW [__mj].[vwSimple] AS
 SELECT [ID] FROM [__mj].[Foo]`;
       const result = convert(sql);
-      expect(result).toMatch(/;\n$/);
+      expect(result).toMatch(/\$do\$;\n$/);
     });
   });
 });
