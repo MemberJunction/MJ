@@ -1,0 +1,44 @@
+{
+  "name": "@memberjunction/messaging-adapters",
+  "version": "5.4.1",
+  "description": "MemberJunction: Messaging platform adapters (Slack, Teams) for routing inbound messages to MJ AI agents via the Server Extension framework",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/server-extensions-core": "5.4.1",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/ai": "5.4.1",
+    "@memberjunction/ai-agents": "5.4.1",
+    "@memberjunction/ai-core-plus": "5.4.1",
+    "@memberjunction/sqlserver-dataprovider": "5.4.1",
+    "@slack/web-api": "^7.9.1",
+    "@slack/socket-mode": "^2.0.3",
+    "@types/express": "^5.0.3",
+    "botbuilder": "^4.23.1",
+    "botframework-connector": "^4.23.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -43,6 +43,7 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { ServerExtensionLoader } from '@memberjunction/server-extensions-core';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -62,6 +63,8 @@ export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
+export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
@@ -680,6 +683,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // No per-route authMiddleware needed — unified auth middleware already ran
   setupRESTEndpoints(app, restApiConfig);
 
+  // Load server extensions from config (messaging adapters, etc.)
+  const extensionLoader = new ServerExtensionLoader();
+  const extensionConfigs = configInfo.serverExtensions ?? [];
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs);
+  }
+
+  // Extension health endpoint (always available, returns empty array if no extensions)
+  app.get('/health/extensions', async (_req, res) => {
+    const results = await extensionLoader.HealthCheckAll();
+    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
+    res.status(allHealthy ? 200 : 503).json({ extensions: results });
+  });
+
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
@@ -730,6 +747,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // Stop server extensions
+    if (extensionLoader.ExtensionCount > 0) {
+      try {
+        await extensionLoader.ShutdownAll();
+        console.log('✅ Server extensions shut down');
+      } catch (error) {
+        console.error('❌ Error shutting down server extensions:', error);
+      }
+    }
 
     // Stop scheduled jobs service
     if (scheduledJobsService?.IsRunning) {

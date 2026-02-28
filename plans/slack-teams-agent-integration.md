@@ -1742,14 +1742,14 @@ This would eliminate the current 3-server architecture (MJAPI + MCP + A2A) and c
 
 ---
 
-## Open Design Questions
+## Design Decisions (Resolved)
 
-1. **Agent-per-channel vs. global agent** — Should we support mapping different agents to different Slack channels, or is a single agent per extension config sufficient for v1?
+1. **Multi-agent per channel** — No limit on agents per channel/conversation. Users can @mention different agents in different messages within the same thread. Each message routes to exactly one agent (the first one mentioned). If a user tags multiple agents in a single message, the adapter routes to the first mentioned agent and includes a note in the response that only one agent can be addressed per message.
 
-2. **User identity mapping** — v1 uses a single service account. Should we provide a hook for resolving the Slack/Teams user to an MJ user for proper permission scoping?
+2. **User identity mapping** — Trust Slack/Teams identity. The adapter maps the platform user's email to an MJ User record and uses that as the `contextUser` for the agent run. This gives proper per-user permission scoping without a separate auth flow. Falls back to the configured service account email if no MJ user matches.
 
-3. **Message length limits** — Slack blocks have a 3000-char limit per text element, and messages have a total limit. Should the formatter auto-split long responses into multiple messages?
+3. **Platform-specific formatting with auto-splitting** — Each platform adapter is responsible for taking the generic MJ `ExecuteAgentResult` and formatting it optimally for that platform. For Slack, this means respecting the 3000-char Block Kit text limit by splitting into multiple blocks/messages. For Teams, this means generating Adaptive Cards. Future platforms (Google Chat, Discord, etc.) implement their own formatting logic.
 
-4. **Socket Mode vs. HTTP** — Slack supports Socket Mode (WebSocket, no public URL needed) which is great for development. Should we support both connection modes?
+4. **Slack Socket Mode support** — Support both HTTP webhook mode and Socket Mode (WebSocket). Socket Mode is ideal for local development (no public URL/ngrok needed). The mode is selected via config: `Settings.ConnectionMode: 'http' | 'socket'` with `'http'` as default.
 
-5. **Extension auth middleware** — Should extensions be able to opt into MJServer's existing auth middleware for their routes, or always handle auth themselves?
+5. **Optional auth middleware** — Extensions CAN opt into MJServer's existing auth middleware for their routes but are NOT required to. The `Initialize(app, config)` method receives the Express app, so extensions can attach any middleware they want. MJServer also exposes the `authMiddleware` function as an export so extensions can import and use it if desired. Slack/Teams adapters handle their own platform-specific auth (signature verification / Bot Framework JWT).

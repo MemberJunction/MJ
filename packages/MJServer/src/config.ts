@@ -177,6 +177,13 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
+const serverExtensionSchema = z.object({
+  Enabled: z.boolean().default(true),
+  DriverClass: z.string(),
+  RootPath: z.string(),
+  Settings: z.record(z.unknown()).default({})
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -190,6 +197,7 @@ const configInfoSchema = z.object({
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
+  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -235,6 +243,7 @@ export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
+export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**
