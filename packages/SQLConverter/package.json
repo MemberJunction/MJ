@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/sql-converter",
-  "version": "5.3.1",
+  "version": "5.4.1",
   "description": "Verified SQL conversion pipeline with statement-by-statement transpilation, database verification, LLM fallback, and audit reporting.",
   "type": "module",
   "main": "dist/index.js",
@@ -13,7 +13,7 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/sql-dialect": "5.3.1",
+    "@memberjunction/sql-dialect": "5.4.1",
     "@memberjunction/sqlglot-ts": "5.0.0"
   },
   "devDependencies": {
