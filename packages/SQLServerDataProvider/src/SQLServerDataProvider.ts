@@ -75,7 +75,7 @@ import {
   RunQueryWithCacheCheckResult,
   InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
-import { QueryParameterProcessor } from './queryParameterProcessor';
+import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import {

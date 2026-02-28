@@ -1,4 +1,4 @@
-import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager } from '@memberjunction/core';
+import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
 import nunjucks from 'nunjucks';
 
 /**
@@ -16,7 +16,7 @@ export interface ParameterValidationResult {
     /**
      * The validated and type-converted parameters
      */
-    validatedParameters: Record<string, any>;
+    validatedParameters: Record<string, unknown>;
 }
 
 /**
@@ -38,21 +38,30 @@ export interface QueryProcessingResult {
     /**
      * The final parameters that were applied, including defaults
      */
-    appliedParameters: Record<string, any>;
+    appliedParameters: Record<string, unknown>;
 }
 
 /**
  * Handles parameter validation and query template processing for parameterized queries.
  * Provides type conversion, validation, and secure template processing using Nunjucks.
+ *
+ * Platform-aware: reads the current platform from RunQuerySQLFilterManager to handle
+ * boolean conversion correctly (SQL Server BIT 1/0 vs PostgreSQL true/false).
+ *
+ * Shared between SQL Server and PostgreSQL data providers.
  */
 export class QueryParameterProcessor {
-    private static _nunjucksEnv: nunjucks.Environment;
+    private static _nunjucksEnv: nunjucks.Environment | null = null;
+    private static _envPlatform: DatabasePlatform | null = null;
 
     /**
-     * Gets or creates the Nunjucks environment with custom SQL-safe filters
+     * Gets or creates the Nunjucks environment with custom SQL-safe filters.
+     * Recreates the environment if the platform has changed since last creation,
+     * because filters (sqlBoolean, sqlIdentifier) are baked in at creation time.
      */
     private static get nunjucksEnv(): nunjucks.Environment {
-        if (!this._nunjucksEnv) {
+        const currentPlatform = RunQuerySQLFilterManager.Instance.Platform;
+        if (!this._nunjucksEnv || this._envPlatform !== currentPlatform) {
             this._nunjucksEnv = new nunjucks.Environment(null, {
                 autoescape: false,
                 throwOnUndefined: true,
@@ -63,30 +72,35 @@ export class QueryParameterProcessor {
             // Add custom SQL-safe filters from the RunQuerySQLFilterManager
             const filterManager = RunQuerySQLFilterManager.Instance;
             const filters = filterManager.getAllFilters();
-            
+
             for (const filter of filters) {
                 if (filter.implementation) {
                     this._nunjucksEnv.addFilter(filter.name, filter.implementation);
                 }
             }
+            this._envPlatform = currentPlatform;
         }
         return this._nunjucksEnv;
     }
 
     /**
-     * Validates parameters against their definitions
+     * Validates parameters against their definitions.
+     * Boolean handling is platform-aware:
+     * - SQL Server: converts to 1/0 (BIT fields)
+     * - PostgreSQL: keeps as true/false (native boolean)
      */
     public static validateParameters(
-        parameters: Record<string, any> | undefined,
+        parameters: Record<string, unknown> | undefined,
         parameterDefinitions: QueryParameterInfo[]
     ): ParameterValidationResult {
         const errors: string[] = [];
-        const validatedParams: Record<string, any> = {};
+        const validatedParams: Record<string, unknown> = {};
+        const platform = RunQuerySQLFilterManager.Instance.Platform;
 
         // Process each defined parameter
         for (const paramDef of parameterDefinitions) {
             const value = parameters?.[paramDef.Name];
-            
+
             // Check required parameters
             if (paramDef.IsRequired && (value === undefined || value === null || value === '')) {
                 errors.push(`Required parameter '${paramDef.Name}' is missing`);
@@ -114,8 +128,9 @@ export class QueryParameterProcessor {
                         default:
                             finalValue = paramDef.DefaultValue;
                     }
-                } catch (e) {
-                    errors.push(`Failed to parse default value for parameter '${paramDef.Name}': ${e.message}`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    errors.push(`Failed to parse default value for parameter '${paramDef.Name}': ${msg}`);
                     continue;
                 }
             }
@@ -127,7 +142,7 @@ export class QueryParameterProcessor {
                         case 'string':
                             validatedParams[paramDef.Name] = String(finalValue);
                             break;
-                        case 'number':
+                        case 'number': {
                             const num = Number(finalValue);
                             if (isNaN(num)) {
                                 errors.push(`Parameter '${paramDef.Name}' must be a number`);
@@ -135,25 +150,31 @@ export class QueryParameterProcessor {
                             }
                             validatedParams[paramDef.Name] = num;
                             break;
-                        case 'date':
-                            const date = finalValue instanceof Date ? finalValue : new Date(finalValue);
+                        }
+                        case 'date': {
+                            const date = finalValue instanceof Date ? finalValue : new Date(finalValue as string | number);
                             if (isNaN(date.getTime())) {
                                 errors.push(`Parameter '${paramDef.Name}' must be a valid date`);
                                 continue;
                             }
-                            // Store as ISO string for SQL compatibility - Date.toString() produces
-                            // format like "Mon Jan 26 2026..." which SQL Server cannot parse
+                            // Store as ISO string for SQL compatibility
                             validatedParams[paramDef.Name] = date.toISOString();
                             break;
-                        case 'boolean':
-                            // Convert to 0/1 for SQL Server bit fields
-                            // This ensures proper SQL syntax: WHERE BitColumn = 1 (not WHERE BitColumn = true)
-                            if (typeof finalValue === 'boolean') {
-                                validatedParams[paramDef.Name] = finalValue ? 1 : 0;
+                        }
+                        case 'boolean': {
+                            const boolValue = typeof finalValue === 'boolean'
+                                ? finalValue
+                                : String(finalValue).toLowerCase() === 'true';
+
+                            if (platform === 'postgresql') {
+                                // PostgreSQL natively supports boolean true/false
+                                validatedParams[paramDef.Name] = boolValue;
                             } else {
-                                validatedParams[paramDef.Name] = String(finalValue).toLowerCase() === 'true' ? 1 : 0;
+                                // SQL Server uses BIT (1/0)
+                                validatedParams[paramDef.Name] = boolValue ? 1 : 0;
                             }
                             break;
+                        }
                         case 'array':
                             if (Array.isArray(finalValue)) {
                                 validatedParams[paramDef.Name] = finalValue;
@@ -176,14 +197,13 @@ export class QueryParameterProcessor {
                     // Apply validation filters if any
                     if (paramDef.ValidationFilters) {
                         const filters = paramDef.ParsedFilters;
-                        for (const filter of filters) {
-                            // This is where custom validation logic would go
-                            // For now, we'll just log that we would apply filters
-                            // In a real implementation, you'd apply the filter rules
+                        for (const _filter of filters) {
+                            // Validation filter application placeholder
                         }
                     }
-                } catch (e) {
-                    errors.push(`Error processing parameter '${paramDef.Name}': ${e.message}`);
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    errors.push(`Error processing parameter '${paramDef.Name}': ${msg}`);
                 }
             }
         }
@@ -206,11 +226,14 @@ export class QueryParameterProcessor {
     }
 
     /**
-     * Processes a query template with the provided parameters
+     * Processes a query template with the provided parameters.
+     * @param query The query info containing template SQL and parameter definitions
+     * @param parameters User-provided parameter values
+     * @param sqlOverride Optional SQL to use instead of query.SQL (e.g., platform-resolved SQL)
      */
     public static processQueryTemplate(
         query: QueryInfo,
-        parameters: Record<string, any> | undefined,
+        parameters: Record<string, unknown> | undefined,
         sqlOverride?: string
     ): QueryProcessingResult {
         try {
@@ -248,19 +271,21 @@ export class QueryParameterProcessor {
                     processedSQL,
                     appliedParameters: validation.validatedParameters
                 };
-            } catch (e) {
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
                 return {
                     success: false,
                     processedSQL: '',
-                    error: `Template processing failed: ${e.message}`,
+                    error: `Template processing failed: ${msg}`,
                     appliedParameters: validation.validatedParameters
                 };
             }
-        } catch (e) {
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
             return {
                 success: false,
                 processedSQL: '',
-                error: `Unexpected error during query processing: ${e.message}`,
+                error: `Unexpected error during query processing: ${msg}`,
                 appliedParameters: {}
             };
         }

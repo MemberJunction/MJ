@@ -16,6 +16,7 @@
   "dependencies": {
     "@memberjunction/core": "5.4.1",
     "@memberjunction/global": "5.4.1",
+    "@memberjunction/query-processor": "5.4.1",
     "@memberjunction/sql-dialect": "5.4.1",
     "pg": "^8.13.3"
   },

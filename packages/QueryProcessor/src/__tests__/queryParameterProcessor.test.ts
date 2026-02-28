@@ -1,113 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { QueryParameterProcessor } from '../queryParameterProcessor.js';
+import type { ParameterValidationResult } from '../queryParameterProcessor.js';
+import { RunQuerySQLFilterManager } from '@memberjunction/core';
 
-// ---------------------------------------------------------------------------
-// Mock external modules that the source files import so we can test pure logic
-// without database connections or heavy framework dependencies.
-// ---------------------------------------------------------------------------
-
-// Mock @memberjunction/core to avoid pulling in the full MJ framework
-vi.mock('@memberjunction/core', () => {
-  class RunQuerySQLFilterManager {
-    private static _inst: RunQuerySQLFilterManager;
-    static get Instance() {
-      if (!this._inst) this._inst = new RunQuerySQLFilterManager();
-      return this._inst;
-    }
-    getAllFilters() {
-      return [];
-    }
-  }
-
-  class QueryParameterInfo {
-    QueryID: string | null = null;
-    Name: string | null = null;
-    Type: 'string' | 'number' | 'date' | 'boolean' | 'array' = 'string';
-    IsRequired = false;
-    DefaultValue: string | null = null;
-    Description: string | null = null;
-    SampleValue: string | null = null;
-    ValidationFilters: string | null = null;
-    DetectionMethod: 'AI' | 'Manual' = 'Manual';
-    AutoDetectConfidenceScore: number | null = null;
-    get ParsedFilters(): unknown[] {
-      try {
-        return this.ValidationFilters ? JSON.parse(this.ValidationFilters) : [];
-      } catch {
-        return [];
-      }
-    }
-  }
-
-  class QueryInfo {
-    ID = '';
-    SQL = '';
-    UsesTemplate = false;
-    Parameters: QueryParameterInfo[] = [];
-  }
-
-  const EntityFieldTSType = {
-    String: 'String',
-    Number: 'Number',
-    Boolean: 'Boolean',
-    Date: 'Date',
-  } as const;
-
-  return {
-    RunQuerySQLFilterManager,
-    QueryParameterInfo,
-    QueryInfo,
-    EntityFieldTSType,
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
-    Metadata: { Provider: { Queries: [] } },
-  };
-});
-
-// Mock @memberjunction/global
-vi.mock('@memberjunction/global', () => {
-  return {
-    ensureRegExps: (patterns: (string | RegExp)[]) =>
-      patterns.map((p) => (p instanceof RegExp ? p : new RegExp(p.replace(/\*/g, '.*'), 'i'))),
-    MJGlobal: {
-      Instance: {
-        GetGlobalObjectStore: () => ({}),
-      },
-    },
-    SQLExpressionValidator: class {},
-  };
-});
-
-// Mock sql-formatter
-vi.mock('sql-formatter', () => ({
-  format: (sql: string) => sql, // passthrough for tests
-}));
-
-// Mock nunjucks — keep a lightweight render implementation
-// Note: Code imports as `import nunjucks from 'nunjucks'` (default import)
-// so we must wrap in a default object
-vi.mock('nunjucks', () => ({
-  default: {
-    Environment: class Environment {
-      constructor() {}
-      addFilter() {}
-      renderString(template: string, context: Record<string, unknown>) {
-        // Very naive Nunjucks substitute: replace {{ key }} with context[key]
-        return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => {
-          const val = context[key];
-          return val !== undefined ? String(val) : '';
-        });
-      }
-    }
-  }
-}));
-
-// ---------------------------------------------------------------------------
-// Import the classes under test AFTER mocks are set up
-// ---------------------------------------------------------------------------
-import { QueryParameterProcessor } from '@memberjunction/query-processor';
-import type { ParameterValidationResult } from '@memberjunction/query-processor';
-
-// We need the mock QueryParameterInfo type for building test fixtures
+// Helper to build mock QueryParameterInfo objects
 function makeParamDef(overrides: Record<string, unknown> = {}) {
   return {
     QueryID: 'q1',
@@ -135,6 +31,11 @@ function makeParamDef(overrides: Record<string, unknown> = {}) {
 // Tests for QueryParameterProcessor.validateParameters
 // =====================================================================
 describe('QueryParameterProcessor.validateParameters', () => {
+  beforeEach(() => {
+    // Reset to default SQL Server platform before each test
+    RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
+  });
+
   describe('required parameter handling', () => {
     it('should fail when a required parameter is missing', () => {
       const defs = [makeParamDef({ Name: 'userId', Type: 'string', IsRequired: true })];
@@ -183,7 +84,7 @@ describe('QueryParameterProcessor.validateParameters', () => {
     });
   });
 
-  describe('boolean type conversion', () => {
+  describe('boolean type conversion - SQL Server (default)', () => {
     it('should convert true boolean to 1 (SQL Server bit)', () => {
       const defs = [makeParamDef({ Name: 'isActive', Type: 'boolean' })];
       const result = QueryParameterProcessor.validateParameters({ isActive: true }, defs as never[]);
@@ -210,6 +111,40 @@ describe('QueryParameterProcessor.validateParameters', () => {
       const result = QueryParameterProcessor.validateParameters({ isActive: 'false' }, defs as never[]);
       expect(result.success).toBe(true);
       expect(result.validatedParameters.isActive).toBe(0);
+    });
+  });
+
+  describe('boolean type conversion - PostgreSQL', () => {
+    beforeEach(() => {
+      RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+    });
+
+    it('should keep true as boolean true for PostgreSQL', () => {
+      const defs = [makeParamDef({ Name: 'isActive', Type: 'boolean' })];
+      const result = QueryParameterProcessor.validateParameters({ isActive: true }, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.isActive).toBe(true);
+    });
+
+    it('should keep false as boolean false for PostgreSQL', () => {
+      const defs = [makeParamDef({ Name: 'isActive', Type: 'boolean' })];
+      const result = QueryParameterProcessor.validateParameters({ isActive: false }, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.isActive).toBe(false);
+    });
+
+    it('should convert string "true" to boolean true for PostgreSQL', () => {
+      const defs = [makeParamDef({ Name: 'isActive', Type: 'boolean' })];
+      const result = QueryParameterProcessor.validateParameters({ isActive: 'true' }, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.isActive).toBe(true);
+    });
+
+    it('should convert string "false" to boolean false for PostgreSQL', () => {
+      const defs = [makeParamDef({ Name: 'isActive', Type: 'boolean' })];
+      const result = QueryParameterProcessor.validateParameters({ isActive: 'false' }, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.isActive).toBe(false);
     });
   });
 
@@ -283,11 +218,19 @@ describe('QueryParameterProcessor.validateParameters', () => {
       expect(result.validatedParameters.status).toBe('active');
     });
 
-    it('should apply boolean default value', () => {
+    it('should apply boolean default value (SQL Server)', () => {
       const defs = [makeParamDef({ Name: 'flag', Type: 'boolean', DefaultValue: 'true' })];
       const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
       expect(result.success).toBe(true);
       expect(result.validatedParameters.flag).toBe(1);
+    });
+
+    it('should apply boolean default value (PostgreSQL)', () => {
+      RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+      const defs = [makeParamDef({ Name: 'flag', Type: 'boolean', DefaultValue: 'true' })];
+      const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.flag).toBe(true);
     });
 
     it('should prefer provided value over default', () => {
@@ -298,43 +241,38 @@ describe('QueryParameterProcessor.validateParameters', () => {
     });
   });
 
-  describe('unknown parameter detection', () => {
+  describe('unknown parameters', () => {
     it('should report unknown parameters', () => {
-      const defs = [makeParamDef({ Name: 'known', Type: 'string' })];
+      const defs = [makeParamDef({ Name: 'a', Type: 'string' }), makeParamDef({ Name: 'b', Type: 'number' })];
       const result = QueryParameterProcessor.validateParameters(
-        { known: 'ok', unknown1: 'bad' },
+        { a: 'hello', b: 5, c: 'extra' },
         defs as never[]
       );
       expect(result.success).toBe(false);
-      expect(result.errors).toContain("Unknown parameter: 'unknown1'");
+      expect(result.errors).toContain("Unknown parameter: 'c'");
     });
 
-    it('should succeed when all parameters are known', () => {
-      const defs = [
-        makeParamDef({ Name: 'a', Type: 'string' }),
-        makeParamDef({ Name: 'b', Type: 'number' }),
-      ];
+    it('should accept valid parameters only', () => {
+      const defs = [makeParamDef({ Name: 'a', Type: 'string' }), makeParamDef({ Name: 'b', Type: 'number' })];
       const result = QueryParameterProcessor.validateParameters({ a: 'hello', b: 5 }, defs as never[]);
       expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
   });
 
-  describe('empty/undefined parameters', () => {
-    it('should succeed with no parameters and no required defs', () => {
-      const defs = [makeParamDef({ Name: 'optional', Type: 'string' })];
+  describe('edge cases', () => {
+    it('should handle undefined parameters with optional defs', () => {
+      const defs = [makeParamDef({ Name: 'opt', Type: 'string', IsRequired: false })];
       const result = QueryParameterProcessor.validateParameters(undefined, defs as never[]);
       expect(result.success).toBe(true);
     });
 
-    it('should handle empty parameter definitions', () => {
+    it('should handle unknown params with no defs', () => {
       const result = QueryParameterProcessor.validateParameters({ a: 1 }, []);
-      // Unknown parameter 'a' should be flagged
       expect(result.success).toBe(false);
       expect(result.errors).toContain("Unknown parameter: 'a'");
     });
 
-    it('should succeed with empty params and empty defs', () => {
+    it('should succeed for empty params and empty defs', () => {
       const result = QueryParameterProcessor.validateParameters(undefined, []);
       expect(result.success).toBe(true);
     });
@@ -345,9 +283,12 @@ describe('QueryParameterProcessor.validateParameters', () => {
 // Tests for QueryParameterProcessor.processQueryTemplate
 // =====================================================================
 describe('QueryParameterProcessor.processQueryTemplate', () => {
-  it('should return SQL as-is when query does not use templates', () => {
+  beforeEach(() => {
+    RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
+  });
+
+  it('should return SQL as-is when UsesTemplate is false', () => {
     const query = {
-      ID: 'q1',
       SQL: 'SELECT * FROM Users',
       UsesTemplate: false,
       Parameters: [],
@@ -357,123 +298,36 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
     expect(result.processedSQL).toBe('SELECT * FROM Users');
   });
 
-  it('should process a simple template query', () => {
+  it('should process template with valid parameters', () => {
     const query = {
-      ID: 'q2',
       SQL: "SELECT * FROM Users WHERE Status = '{{ status }}'",
       UsesTemplate: true,
       Parameters: [makeParamDef({ Name: 'status', Type: 'string', IsRequired: true })],
     };
     const result = QueryParameterProcessor.processQueryTemplate(query as never, { status: 'Active' });
     expect(result.success).toBe(true);
-    expect(result.processedSQL).toContain('Active');
-    expect(result.appliedParameters.status).toBe('Active');
+    expect(result.processedSQL).toBe("SELECT * FROM Users WHERE Status = 'Active'");
   });
 
-  it('should fail when required parameters are missing for template query', () => {
+  it('should fail when required parameter is missing', () => {
     const query = {
-      ID: 'q3',
-      SQL: "SELECT * FROM Users WHERE ID = '{{ userId }}'",
+      SQL: "SELECT * FROM Users WHERE ID = '{{ id }}'",
       UsesTemplate: true,
-      Parameters: [makeParamDef({ Name: 'userId', Type: 'string', IsRequired: true })],
+      Parameters: [makeParamDef({ Name: 'id', Type: 'string', IsRequired: true })],
     };
     const result = QueryParameterProcessor.processQueryTemplate(query as never, {});
     expect(result.success).toBe(false);
     expect(result.error).toContain('Parameter validation failed');
   });
-});
 
-// =====================================================================
-// Tests for SqlLoggingSessionImpl (pure logic methods)
-// =====================================================================
-import { SqlLoggingSessionImpl } from '../SqlLogger';
-
-describe('SqlLoggingSessionImpl', () => {
-  describe('constructor and properties', () => {
-    it('should initialize with correct properties', () => {
-      const session = new SqlLoggingSessionImpl('test-id', '/tmp/test.sql', {
-        description: 'Test session',
-      });
-      expect(session.id).toBe('test-id');
-      expect(session.filePath).toBe('/tmp/test.sql');
-      expect(session.statementCount).toBe(0);
-      expect(session.options.description).toBe('Test session');
-      expect(session.startTime).toBeInstanceOf(Date);
-    });
-  });
-
-  describe('_escapeFlywaySyntaxInStrings', () => {
-    // Access private method for testing via prototype
-    const escapeFlyway = (sql: string) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._escapeFlywaySyntaxInStrings(sql);
+  it('should use sqlOverride when provided', () => {
+    const query = {
+      SQL: 'SELECT 1 -- original',
+      UsesTemplate: false,
+      Parameters: [],
     };
-
-    it('should escape ${...} patterns in SQL strings', () => {
-      const input = "INSERT INTO T VALUES (N'${someVar}')";
-      const result = escapeFlyway(input);
-      expect(result).not.toContain('${someVar}');
-      expect(result).toContain("$'+'{someVar}");
-    });
-
-    it('should handle multiple ${...} occurrences', () => {
-      const input = "N'${a} and ${b}'";
-      const result = escapeFlyway(input);
-      expect(result).toContain("$'+'{a}");
-      expect(result).toContain("$'+'{b}");
-    });
-
-    it('should return unchanged SQL when no ${...} patterns exist', () => {
-      const input = "SELECT * FROM Users WHERE Name = 'John'";
-      const result = escapeFlyway(input);
-      expect(result).toBe(input);
-    });
-  });
-
-  describe('_postProcessBeginEnd', () => {
-    const postProcess = (sql: string) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._postProcessBeginEnd(sql);
-    };
-
-    it('should put BEGIN on its own line', () => {
-      const input = 'IF 1=1 BEGIN SELECT 1 END';
-      const result = postProcess(input);
-      expect(result).toContain('1=1\nBEGIN');
-    });
-
-    it('should put END on its own line', () => {
-      const input = 'SELECT 1 END';
-      const result = postProcess(input);
-      expect(result).toContain('1\nEND');
-    });
-
-    it('should put EXEC on its own line', () => {
-      const input = 'DECLARE @x INT EXEC spFoo';
-      const result = postProcess(input);
-      expect(result).toContain('INT\nEXEC');
-    });
-
-    it('should handle empty or null input', () => {
-      expect(postProcess('')).toBe('');
-    });
-  });
-
-});
-
-// =====================================================================
-// Tests for FieldChange type and DiffObjects-style comparisons
-// These verify the data structures exported from the provider module
-// =====================================================================
-describe('FieldChange type structure', () => {
-  it('should have the expected shape', () => {
-    const change = {
-      field: 'Name',
-      oldValue: 'Alice',
-      newValue: 'Bob',
-    };
-    expect(change).toHaveProperty('field');
-    expect(change).toHaveProperty('oldValue');
-    expect(change).toHaveProperty('newValue');
+    const result = QueryParameterProcessor.processQueryTemplate(query as never, undefined, 'SELECT 2 -- override');
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).toBe('SELECT 2 -- override');
   });
 });

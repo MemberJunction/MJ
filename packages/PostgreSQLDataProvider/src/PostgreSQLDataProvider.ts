@@ -33,9 +33,11 @@ import {
     ILocalStorageProvider,
     IMetadataProvider,
     InMemoryLocalStorageProvider,
+    RunQuerySQLFilterManager,
 } from '@memberjunction/core';
 
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
+import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
@@ -196,6 +198,11 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
             await this._connectionManager.Initialize(configData.ConnectionConfig);
+
+            // Set the platform so RunQuerySQLFilterManager produces PG-appropriate
+            // filters (e.g. boolean true/false instead of SQL Server 1/0)
+            RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+
             return await super.Config(configData);
         } catch (err) {
             LogError(`PostgreSQLDataProvider.Config failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -366,7 +373,17 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
                 return { ...emptyResult, ErrorMessage: 'No SQL defined for query' };
             }
 
-            const rows = await this.ExecuteSQL<Record<string, unknown>>(querySQL, undefined, { description: `RunQuery: ${queryInfo.Name}` }, contextUser);
+            // Process Nunjucks templates if the query uses them
+            let finalSQL = querySQL;
+            if (queryInfo.UsesTemplate) {
+                const processingResult = QueryParameterProcessor.processQueryTemplate(queryInfo, params.Parameters, querySQL);
+                if (!processingResult.success) {
+                    return { ...emptyResult, ErrorMessage: processingResult.error ?? 'Template processing failed' };
+                }
+                finalSQL = processingResult.processedSQL;
+            }
+
+            const rows = await this.ExecuteSQL<Record<string, unknown>>(finalSQL, undefined, { description: `RunQuery: ${queryInfo.Name}` }, contextUser);
             return {
                 QueryID: queryInfo.ID,
                 QueryName: queryInfo.Name,

@@ -5,6 +5,7 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -265,6 +266,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await setupSQLServerClient(config);
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  }
+
+  // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
+  // read it without a circular dependency on MJServer
+  if (configInfo.queryDialects) {
+    MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
   }
 
   // Initialize server telemetry based on config
