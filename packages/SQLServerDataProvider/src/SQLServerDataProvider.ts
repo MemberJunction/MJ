@@ -1464,7 +1464,7 @@ export class SQLServerDataProvider
               if (innerViewEntity) {
                 // we have the inner view, so now call this function recursively to get the where clause for the inner view
                 const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
-                const innerSQL = `SELECT [${innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name}] FROM [${innerViewEntity.ViewEntityInfo.SchemaName}].[${innerViewEntity.ViewEntityInfo.BaseView}] WHERE (${innerWhere})`;
+                const innerSQL = `SELECT ${this.QuoteIdentifier(innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerViewEntity.ViewEntityInfo.SchemaName, innerViewEntity.ViewEntityInfo.BaseView)} WHERE (${innerWhere})`;
                 sWhere = sWhere.replace(match, innerSQL);
               } else throw new Error(`View ID ${variableValue} not found in metadata`);
             } else {
