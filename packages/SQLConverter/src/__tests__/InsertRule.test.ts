@@ -163,6 +163,58 @@ VALUES
     });
   });
 
+  describe('UPDATE alias FROM pattern conversion', () => {
+    it('should convert T-SQL UPDATE alias FROM table alias JOIN to PG syntax', () => {
+      const sql = `UPDATE er
+SET
+\ter.DisplayName = NULL
+FROM
+\t[__mj].[EntityRelationship] er
+INNER JOIN [__mj].[Entity] e1 ON er.EntityID = e1.ID
+INNER JOIN [__mj].[Entity] e2 ON er.RelatedEntityID = e2.ID
+WHERE
+\te1.SchemaName = '__mj'
+\tAND e2.SchemaName = '__mj'
+\tAND er.DisplayName = e2.Name`;
+      const result = convert(sql);
+      // Should move table to UPDATE clause with AS alias
+      expect(result).toContain('UPDATE __mj."EntityRelationship" AS er');
+      // Should strip alias prefix from SET columns
+      expect(result).toContain('"DisplayName" = NULL');
+      expect(result).not.toMatch(/\ber\."DisplayName"\s*=\s*NULL/);
+      // Should have comma-separated FROM (not JOINs)
+      expect(result).toContain('__mj."Entity" e1');
+      expect(result).toContain('__mj."Entity" e2');
+      // JOIN conditions should be in WHERE
+      expect(result).toContain('er."EntityID" = e1."ID"');
+      expect(result).toContain('er."RelatedEntityID" = e2."ID"');
+      // Original WHERE conditions preserved
+      expect(result).toContain("e1.\"SchemaName\" = '__mj'");
+      expect(result).not.toMatch(/\bINNER\s+JOIN\b/i);
+    });
+
+    it('should not modify UPDATE with direct table reference (no alias pattern)', () => {
+      const sql = `UPDATE [__mj].[Users] SET [Name] = 'Bob' WHERE [ID] = '123'`;
+      const result = convert(sql);
+      expect(result).toContain('__mj."Users"');
+      expect(result).toContain('"Name"');
+      expect(result).not.toContain(' AS ');
+    });
+
+    it('should handle UPDATE alias FROM without JOINs', () => {
+      const sql = `UPDATE e
+SET e.Name = 'test'
+FROM [__mj].[Entity] e
+WHERE e.ID = '123'`;
+      const result = convert(sql);
+      expect(result).toContain('UPDATE __mj."Entity" AS e');
+      expect(result).toContain('"Name" = ');
+      // FROM should be removed (target is in UPDATE), WHERE preserved
+      expect(result).toContain('WHERE');
+      expect(result).not.toMatch(/\bFROM\b/i);
+    });
+  });
+
   describe('__mj_ prefixed column quoting', () => {
     it('should quote __mj_UpdatedAt in UPDATE SET clause', () => {
       const sql = `UPDATE __mj."Entity" SET "Icon" = 'test', __mj_UpdatedAt = NOW() WHERE "ID" = '123'`;
