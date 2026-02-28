@@ -990,11 +990,11 @@ export class SQLServerDataProvider
    * Processes query parameters and applies template substitution if needed
    */
   protected processQueryParameters(query: QueryInfo, parameters?: Record<string, any>): { finalSQL: string; appliedParameters: Record<string, any> } {
-    let finalSQL = query.SQL;
+    let finalSQL = query.GetPlatformSQL(this.PlatformKey);
     let appliedParameters: Record<string, any> = {};
-    
+
     if (query.UsesTemplate) {
-      const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters);
+      const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters, finalSQL);
       
       if (!processingResult.success) {
         throw new Error(processingResult.error);

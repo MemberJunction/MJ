@@ -14,6 +14,85 @@ import {
 } from "./queryInfoInterfaces";
 
 /**
+ * Represents a SQL dialect (e.g., T-SQL, PostgreSQL) in the MemberJunction system.
+ * Maps to the SQLDialect database table.
+ */
+export class SQLDialectInfo extends BaseInfo {
+    /** Unique identifier for this SQL dialect */
+    public ID: string = null
+    /** Display name (e.g., 'T-SQL', 'PostgreSQL') */
+    public Name: string = null
+    /** Lowercase platform key matching DatabasePlatform type (e.g., 'sqlserver', 'postgresql') */
+    public PlatformKey: string = null
+    /** Database engine name (e.g., 'SQL Server', 'PostgreSQL') */
+    public DatabaseName: string = null
+    /** SQL language variant name (e.g., 'T-SQL', 'PL/pgSQL') */
+    public LanguageName: string = null
+    /** Primary vendor or organization */
+    public VendorName: string = null
+    /** URL to documentation or vendor website */
+    public WebURL: string = null
+    /** CSS class or icon reference for UI display */
+    public Icon: string = null
+    /** Detailed description */
+    public Description: string = null
+    /** Record creation timestamp */
+    __mj_CreatedAt: Date = null
+    /** Record last update timestamp */
+    __mj_UpdatedAt: Date = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+/**
+ * Stores dialect-specific SQL for a query. Each record pairs a Query with a SQLDialect
+ * and provides the SQL text written in that dialect.
+ * Maps to the QuerySQL database table.
+ */
+export class QuerySQLInfo extends BaseInfo {
+    /** Unique identifier */
+    public ID: string = null
+    /** Foreign key to the parent query */
+    public QueryID: string = null
+    /** Foreign key to the SQL dialect */
+    public SQLDialectID: string = null
+    /** The SQL query text in the specified dialect */
+    public SQL: string = null
+    /** Record creation timestamp */
+    __mj_CreatedAt: Date = null
+    /** Record last update timestamp */
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from view
+    /** Query name from the related query */
+    public Query: string = null
+    /** SQL dialect name */
+    public SQLDialect: string = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+
+    /** Gets the parent query info */
+    get QueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+    }
+
+    /** Gets the SQL dialect info */
+    get SQLDialectInfo(): SQLDialectInfo {
+        return Metadata.Provider.SQLDialects.find(d => d.ID === this.SQLDialectID);
+    }
+}
+
+/**
  * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
  * Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability
  * instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
@@ -110,9 +189,15 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     EmbeddingModelID: string | null = null
     /**
+     * Foreign key to the SQL dialect this query's SQL column is written in.
+     * Defaults to T-SQL for backward compatibility.
+     */
+    public SQLDialectID: string = null
+    /**
      * JSON column containing platform-specific SQL variants for multi-database support.
      * Stores alternative SQL for platforms other than the default (typically SQL Server).
      * Parsed at runtime via GetPlatformSQL() and GetPlatformCacheValidationSQL().
+     * @deprecated Use the QuerySQL child table via GetPlatformSQL() instead.
      */
     PlatformVariants: string | null = null
 
@@ -349,13 +434,41 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
 
     /**
      * Resolves the SQL for a given database platform.
-     * Checks PlatformVariants first; falls back to the base SQL property.
+     * Resolution order:
+     *   1. QuerySQL child table entry matching this query + platform's dialect
+     *   2. PlatformVariants JSON (legacy approach)
+     *   3. Base SQL property (the query's primary SQL)
      * @param platform - The target database platform
      * @returns The appropriate SQL string for the platform
      */
     public GetPlatformSQL(platform: DatabasePlatform): string {
+        // 1. Check QuerySQL child table entries (normalized approach)
+        const querySqlEntry = this.resolveQuerySQLForPlatform(platform);
+        if (querySqlEntry) return querySqlEntry;
+
+        // 2. Check PlatformVariants JSON (legacy approach)
         const variant = ResolvePlatformVariant(this.ParsedVariants, 'SQL', platform);
-        return variant ?? this.SQL;
+        if (variant) return variant;
+
+        // 3. Fall back to base SQL
+        return this.SQL;
+    }
+
+    /**
+     * Looks up a QuerySQL entry for this query matching the given platform.
+     * Uses the SQLDialect table to map platform keys to dialect IDs.
+     */
+    private resolveQuerySQLForPlatform(platform: DatabasePlatform): string | null {
+        const provider = Metadata.Provider;
+        if (!provider || !provider.SQLDialects || !provider.QuerySQLs) return null;
+
+        const dialect = provider.SQLDialects.find(d => d.PlatformKey === platform);
+        if (!dialect) return null;
+
+        const entry = provider.QuerySQLs.find(
+            qs => qs.QueryID === this.ID && qs.SQLDialectID === dialect.ID
+        );
+        return entry?.SQL ?? null;
     }
 
     /**

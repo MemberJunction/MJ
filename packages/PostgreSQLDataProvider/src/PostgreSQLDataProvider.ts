@@ -361,7 +361,7 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
                 return { ...emptyResult, ErrorMessage: `Query not found: ${queryId || queryName}` };
             }
 
-            const querySQL = queryInfo.SQL;
+            const querySQL = queryInfo.GetPlatformSQL(this.PlatformKey);
             if (!querySQL) {
                 return { ...emptyResult, ErrorMessage: 'No SQL defined for query' };
             }

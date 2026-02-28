@@ -9,7 +9,7 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -89,6 +89,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllQueryEntities', class: QueryEntityInfo },
     { key: 'AllQueryParameters', class: QueryParameterInfo },
+    { key: 'AllSQLDialects', class: SQLDialectInfo },
+    { key: 'AllQuerySQLs', class: QuerySQLInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
     { key: 'AllLibraries', class: LibraryInfo },
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
@@ -1854,6 +1856,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
+    }
+    /**
+     * Gets all SQL dialect definitions.
+     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
+     */
+    public get SQLDialects(): SQLDialectInfo[] {
+        return this._localMetadata.AllSQLDialects;
+    }
+    /**
+     * Gets all query SQL dialect variants.
+     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
+     */
+    public get QuerySQLs(): QuerySQLInfo[] {
+        return this._localMetadata.AllQuerySQLs;
     }
     /**
      * Gets all library definitions in the system.

@@ -169,27 +169,24 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     }
   }
 
-  outputParts.push('\n-- ===================== DDL: Tables, PKs, Indexes =====================\n');
-  outputParts.push(...groups.Tables);
-  outputParts.push('\n-- ===================== Helper Functions (fn*) =====================\n');
-  outputParts.push(...groups.HelperFunctions);
-  outputParts.push('\n-- ===================== Views =====================\n');
-  outputParts.push(...groups.Views);
-  outputParts.push('\n-- ===================== Stored Procedures (sp*) =====================\n');
-  outputParts.push(...groups.StoredProcedures);
-  outputParts.push('\n-- ===================== Triggers =====================\n');
-  outputParts.push(...groups.Triggers);
-  outputParts.push('\n-- ===================== Data (INSERT/UPDATE/DELETE) =====================\n');
-  outputParts.push(...groups.Data);
-  outputParts.push('\n-- ===================== FK & CHECK Constraints =====================\n');
-  outputParts.push(...groups.FKConstraints);
-  outputParts.push('\n-- ===================== Grants =====================\n');
-  outputParts.push(...groups.Grants);
-  outputParts.push('\n-- ===================== Comments =====================\n');
-  outputParts.push(...groups.Comments);
-  if (groups.Other.length > 0) {
-    outputParts.push('\n-- ===================== Other =====================\n');
-    outputParts.push(...groups.Other);
+  // Only emit section headers for groups that have content
+  const sections: { header: string; items: string[] }[] = [
+    { header: 'DDL: Tables, PKs, Indexes', items: groups.Tables },
+    { header: 'Helper Functions (fn*)', items: groups.HelperFunctions },
+    { header: 'Views', items: groups.Views },
+    { header: 'Stored Procedures (sp*)', items: groups.StoredProcedures },
+    { header: 'Triggers', items: groups.Triggers },
+    { header: 'Data (INSERT/UPDATE/DELETE)', items: groups.Data },
+    { header: 'FK & CHECK Constraints', items: groups.FKConstraints },
+    { header: 'Grants', items: groups.Grants },
+    { header: 'Comments', items: groups.Comments },
+    { header: 'Other', items: groups.Other },
+  ];
+  for (const section of sections) {
+    if (section.items.length > 0) {
+      outputParts.push(`\n-- ===================== ${section.header} =====================\n`);
+      outputParts.push(...section.items);
+    }
   }
 
   // Post-process

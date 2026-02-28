@@ -210,14 +210,17 @@ export class QueryParameterProcessor {
      */
     public static processQueryTemplate(
         query: QueryInfo,
-        parameters: Record<string, any> | undefined
+        parameters: Record<string, any> | undefined,
+        sqlOverride?: string
     ): QueryProcessingResult {
         try {
+            const sql = sqlOverride ?? query.SQL;
+
             // If query doesn't use templates, return the SQL as-is
             if (!query.UsesTemplate) {
                 return {
                     success: true,
-                    processedSQL: query.SQL,
+                    processedSQL: sql,
                     appliedParameters: {}
                 };
             }
@@ -236,7 +239,7 @@ export class QueryParameterProcessor {
             // Process the template
             try {
                 const processedSQL = this.nunjucksEnv.renderString(
-                    query.SQL,
+                    sql,
                     validation.validatedParameters
                 );
 

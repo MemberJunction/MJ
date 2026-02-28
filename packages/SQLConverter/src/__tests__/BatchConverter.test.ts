@@ -19,17 +19,17 @@ function makeConfig(sql: string, overrides?: Partial<BatchConverterConfig>): Bat
 
 describe('convertFile (BatchConverter)', () => {
   // ============================================================
-  // 1. Empty input → empty output with section headers
+  // 1. Empty input → empty output with no section headers
   // ============================================================
-  it('should handle empty input and produce section headers', () => {
+  it('should handle empty input and suppress empty section headers', () => {
     const result = convertFile(makeConfig(''));
     expect(result.Stats.TotalBatches).toBe(0);
     expect(result.Stats.Converted).toBe(0);
     expect(result.Stats.Errors).toBe(0);
-    // Output should have the section header markers even with no content
-    expect(result.OutputSQL).toContain('DDL: Tables');
-    expect(result.OutputSQL).toContain('Views');
-    expect(result.OutputSQL).toContain('Data');
+    // Empty groups should NOT produce section headers
+    expect(result.OutputSQL).not.toContain('DDL: Tables');
+    expect(result.OutputSQL).not.toContain('Views');
+    expect(result.OutputSQL).not.toContain('Data');
   });
 
   // ============================================================
