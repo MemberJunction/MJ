@@ -81,6 +81,20 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         return pgDialect.QuoteSchema(schemaName, objectName);
     }
 
+    private static readonly _pgUUIDPattern: RegExp =
+        /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
+
+    private static readonly _pgDefaultPattern: RegExp =
+        /^\s*(now|current_timestamp|clock_timestamp|statement_timestamp|transaction_timestamp)\s*\(\s*\)\s*$/i;
+
+    protected override get UUIDFunctionPattern(): RegExp {
+        return PostgreSQLDataProvider._pgUUIDPattern;
+    }
+
+    protected override get DBDefaultFunctionPattern(): RegExp {
+        return PostgreSQLDataProvider._pgDefaultPattern;
+    }
+
     protected override BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string {
         const safePKValue = recordPKValue.replace(/'/g, "''");
         const unionParts = childEntities
@@ -1291,14 +1305,14 @@ SELECT * FROM delete_result`;
             return value;
         }
 
-        if (DatabaseProviderBase.IsUUIDGenerationFunction(value)) {
+        if (this.IsUUIDGenerationFunction(value)) {
             // Replace UUID generation function strings with an actual generated UUID.
             // This handles the case where a field's default value is a DB function like
             // gen_random_uuid() or NEWID() — we generate the UUID in TypeScript instead.
             return this.GenerateNewID();
         }
 
-        if (DatabaseProviderBase.IsNonUUIDDatabaseFunction(value)) {
+        if (this.IsNonUUIDDatabaseFunction(value)) {
             // For non-UUID database functions (GETUTCDATE, NOW, etc.), send null
             // so the stored function/procedure lets the database use its column default
             return null;

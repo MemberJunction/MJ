@@ -9,10 +9,10 @@ Code review of `postgres-5-0-implementation` branch identified significant code 
 - [x] **Task 3**: Delete old PG Python conversion scripts from scripts/ folder (kept active utility scripts like scaffold-tests.mjs, fix-missing-dependencies.mjs)
 
 ## Phase 2: Medium Effort (Commit 2)
-- [ ] **Task 4**: Make UUID/default function patterns abstract getter properties
-- [ ] **Task 5**: Fix FormatValueInternal for PG types in util.ts
-- [ ] **Task 6**: Fix SQLFullType/SQLMaxLength PG gaps in util.ts
-- [ ] **Task 7**: Move ProcessEntityRows to DatabaseProviderBase
+- [x] **Task 4**: Make UUID/default function patterns abstract getter properties
+- [x] **Task 5**: Fix FormatValueInternal for PG types in util.ts
+- [x] **Task 6**: Fix SQLFullType/SQLMaxLength PG gaps in util.ts
+- [x] **Task 7**: ProcessEntityRows — analyzed, stays in providers. Datetime handling is SQL Server-specific; encryption logic moves to generic-database-provider in Phase 3 (Task 9). Base class already has correct `PostProcessRows` hook.
 
 ## Phase 3: Larger Refactoring (Commit 3)
 - [ ] **Task 8**: Refactor InternalRunView into base class with abstract methods

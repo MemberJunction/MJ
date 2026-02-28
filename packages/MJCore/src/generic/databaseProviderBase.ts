@@ -170,43 +170,71 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**************************************************************************/
 
     /**
-     * Regex pattern matching known database UUID/ID generation functions.
-     * Covers SQL Server (NEWID, NEWSEQUENTIALID) and PostgreSQL (gen_random_uuid, uuid_generate_v4).
-     * Case-insensitive, matches the full string with optional whitespace.
+     * Regex pattern matching known database UUID/ID generation functions for this provider's platform.
+     * SQL Server should match NEWID, NEWSEQUENTIALID.
+     * PostgreSQL should match gen_random_uuid, uuid_generate_v4.
+     * Case-insensitive, should match the full string with optional whitespace and parens.
      */
-    private static readonly _uuidFunctionPattern: RegExp =
+    protected abstract get UUIDFunctionPattern(): RegExp;
+
+    /**
+     * Regex pattern matching known database default-value functions (non-UUID) for this provider's platform.
+     * SQL Server should match GETDATE, GETUTCDATE, SYSDATETIME, etc.
+     * PostgreSQL should match NOW, CURRENT_TIMESTAMP, clock_timestamp, etc.
+     * Case-insensitive, should match the full string with optional whitespace and parens.
+     */
+    protected abstract get DBDefaultFunctionPattern(): RegExp;
+
+    /**
+     * Combined regex covering UUID functions from ALL platforms.
+     * Used by the static convenience method for code that doesn't have a provider instance.
+     */
+    private static readonly _allPlatformUUIDPattern: RegExp =
         /^\s*(newid|newsequentialid|gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
 
     /**
-     * Regex pattern matching known database default-value functions that are NOT UUID generators.
-     * Covers date/time functions (GETDATE, GETUTCDATE, SYSDATETIME, NOW, CURRENT_TIMESTAMP, etc.)
-     * and other server-side defaults. When detected, the value should be sent as null so the
-     * database applies its own default.
-     * Case-insensitive, matches the full string with optional whitespace.
+     * Combined regex covering default-value functions from ALL platforms.
+     * Used by the static convenience method for code that doesn't have a provider instance.
      */
-    private static readonly _dbDefaultFunctionPattern: RegExp =
+    private static readonly _allPlatformDefaultPattern: RegExp =
         /^\s*(getdate|getutcdate|sysdatetime|sysdatetimeoffset|sysutcdatetime|current_timestamp|now|clock_timestamp|statement_timestamp|transaction_timestamp)\s*\(\s*\)\s*$/i;
 
     /**
      * Checks whether a string value looks like a database UUID generation function
-     * (e.g., NEWID(), NEWSEQUENTIALID(), gen_random_uuid(), uuid_generate_v4()).
+     * for this provider's platform.
      *
      * @param value The string value to check
      * @returns true if the value matches a known UUID generation function pattern
      */
-    public static IsUUIDGenerationFunction(value: string): boolean {
-        return DatabaseProviderBase._uuidFunctionPattern.test(value);
+    public IsUUIDGenerationFunction(value: string): boolean {
+        return this.UUIDFunctionPattern.test(value);
     }
 
     /**
      * Checks whether a string value looks like a known database default-value function
-     * that is NOT a UUID generator (e.g., GETDATE(), GETUTCDATE(), NOW()).
+     * that is NOT a UUID generator for this provider's platform.
      *
      * @param value The string value to check
      * @returns true if the value matches a known non-UUID database function pattern
      */
-    public static IsNonUUIDDatabaseFunction(value: string): boolean {
-        return DatabaseProviderBase._dbDefaultFunctionPattern.test(value);
+    public IsNonUUIDDatabaseFunction(value: string): boolean {
+        return this.DBDefaultFunctionPattern.test(value);
+    }
+
+    /**
+     * Static convenience: checks all platforms' UUID generation functions.
+     * Prefer the instance method when you have a provider reference.
+     */
+    public static IsUUIDGenerationFunctionAllPlatforms(value: string): boolean {
+        return DatabaseProviderBase._allPlatformUUIDPattern.test(value);
+    }
+
+    /**
+     * Static convenience: checks all platforms' default-value functions.
+     * Prefer the instance method when you have a provider reference.
+     */
+    public static IsNonUUIDDatabaseFunctionAllPlatforms(value: string): boolean {
+        return DatabaseProviderBase._allPlatformDefaultPattern.test(value);
     }
 
     /**

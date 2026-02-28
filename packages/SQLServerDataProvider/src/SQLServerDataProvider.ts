@@ -243,6 +243,20 @@ export class SQLServerDataProvider
     return `[${schemaName}].[${objectName}]`;
   }
 
+  private static readonly _sqlServerUUIDPattern: RegExp =
+      /^\s*(newid|newsequentialid)\s*\(\s*\)\s*$/i;
+
+  private static readonly _sqlServerDefaultPattern: RegExp =
+      /^\s*(getdate|getutcdate|sysdatetime|sysdatetimeoffset|sysutcdatetime|current_timestamp)\s*\(\s*\)\s*$/i;
+
+  protected override get UUIDFunctionPattern(): RegExp {
+    return SQLServerDataProvider._sqlServerUUIDPattern;
+  }
+
+  protected override get DBDefaultFunctionPattern(): RegExp {
+    return SQLServerDataProvider._sqlServerDefaultPattern;
+  }
+
   private _pool: sql.ConnectionPool;
   
   // Instance transaction properties
