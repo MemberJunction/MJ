@@ -147,6 +147,13 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
+const serverExtensionSchema = z.object({
+  Enabled: z.boolean().default(true),
+  DriverClass: z.string(),
+  RootPath: z.string(),
+  Settings: z.record(z.unknown()).default({})
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -158,6 +165,7 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
+  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -201,6 +209,7 @@ export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
+export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

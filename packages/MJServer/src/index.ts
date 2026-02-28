@@ -36,6 +36,7 @@ import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-de
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
+import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -43,6 +44,8 @@ export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
+export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
@@ -362,6 +365,22 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Set up REST endpoints with the configured options and auth middleware
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
 
+  // Load server extensions from config (messaging adapters, etc.)
+  const extensionLoader = new ServerExtensionLoader();
+  // Zod defaults guarantee all fields are present, but the passthrough schema
+  // output type marks them as optional. Cast is safe since validation already ran.
+  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs);
+  }
+
+  // Extension health endpoint (always available, returns empty array if no extensions)
+  app.get('/health/extensions', async (_req, res) => {
+    const results = await extensionLoader.HealthCheckAll();
+    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
+    res.status(allHealthy ? 200 : 503).json({ extensions: results });
+  });
+
   // GraphQL middleware (after REST so /api/v1/* routes are handled first)
   // Note: Type assertion needed due to @apollo/server bundling older @types/express types
   // that are incompatible with Express 5.x types (missing 'param' property)
@@ -405,6 +424,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // Stop server extensions
+    if (extensionLoader.ExtensionCount > 0) {
+      try {
+        await extensionLoader.ShutdownAll();
+        console.log('✅ Server extensions shut down');
+      } catch (error) {
+        console.error('❌ Error shutting down server extensions:', error);
+      }
+    }
 
     // Stop scheduled jobs service
     if (scheduledJobsService?.IsRunning) {

@@ -68,6 +68,7 @@ flowchart TD
 - **CloudEvents**: Optional CloudEvent emission for entity lifecycle events
 - **Telemetry**: Configurable server-side telemetry with multiple verbosity levels
 - **Extensible Architecture**: Custom resolvers, entity subclasses, and new user handling via `@RegisterClass`
+- **Server Extensions**: Plugin architecture for auto-discovering and loading extension modules (webhooks, messaging adapters, custom integrations) via `@RegisterClass` + `mj.config.cjs`
 
 ## Configuration
 
@@ -800,13 +801,75 @@ databaseSettings: {
 
 Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
 
+## Server Extensions
+
+MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+### How It Works
+
+1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
+2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
+3. Configuration in `mj.config.cjs` defines which extensions to load
+4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
+
+### Configuration
+
+```javascript
+// mj.config.cjs
+module.exports = {
+    serverExtensions: [
+        {
+            Enabled: true,
+            DriverClass: 'SlackMessagingExtension',
+            RootPath: '/webhook/slack',
+            Settings: {
+                AgentID: 'your-agent-guid',
+                BotToken: process.env.SLACK_BOT_TOKEN,
+                SigningSecret: process.env.SLACK_SIGNING_SECRET,
+            }
+        },
+        {
+            Enabled: true,
+            DriverClass: 'TeamsMessagingExtension',
+            RootPath: '/webhook/teams',
+            Settings: {
+                AgentID: 'your-agent-guid',
+                MicrosoftAppId: process.env.MICROSOFT_APP_ID,
+                MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+            }
+        }
+    ]
+};
+```
+
+### Health Monitoring
+
+MJServer exposes an aggregate health check endpoint for all loaded extensions:
+
+```
+GET /health/extensions
+```
+
+Returns `200` when all extensions are healthy, `503` when any extension reports unhealthy.
+
+### Available Extensions
+
+| Package | Extensions | Description |
+|---------|-----------|-------------|
+| [`@memberjunction/messaging-adapters`](../MessagingAdapters/) | `SlackMessagingExtension`, `TeamsMessagingExtension` | Slack & Teams integration for MJ AI agents |
+
+### Creating Custom Extensions
+
+See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) for documentation on building custom extensions.
+
 ## Graceful Shutdown
 
 The server registers handlers for `SIGTERM` and `SIGINT` to:
 
-1. Stop the scheduled jobs service
-2. Close the HTTP server
-3. Force-exit after a 10-second timeout if graceful shutdown stalls
+1. Shut down all server extensions (in reverse order of loading)
+2. Stop the scheduled jobs service
+3. Close the HTTP server
+4. Force-exit after a 10-second timeout if graceful shutdown stalls
 
 Unhandled promise rejections are caught and logged without crashing the server.
 
