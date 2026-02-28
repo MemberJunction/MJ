@@ -353,72 +353,37 @@ export class GraphQLComponentRegistryClient {
             }
 
             // Execute the query
-            const gqlDiagTime = Date.now();
-            console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() calling ExecuteGQL for ${params.registryName}/${params.name}`, {
-                variables,
-                dataProviderType: this._dataProvider?.constructor?.name
-            });
-            const gqlExecStart = Date.now();
             const result = await this._dataProvider.ExecuteGQL(query, variables);
-            console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() ExecuteGQL returned in ${Date.now() - gqlExecStart}ms`, {
-                resultExists: !!result,
-                hasGetRegistryComponent: result ? !!result.GetRegistryComponent : false,
-                resultKeys: result ? Object.keys(result) : [],
-                rawResult: result ? JSON.stringify(result).substring(0, 500) : 'null'
-            });
 
             // Handle new response structure with hash
             if (result && result.GetRegistryComponent) {
                 const response = result.GetRegistryComponent as ComponentSpecWithHash;
-                console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() response details:`, {
-                    notModified: response.notModified,
-                    hasSpecification: !!response.specification,
-                    specType: response.specification ? typeof response.specification : 'N/A',
-                    specLength: response.specification ? (typeof response.specification === 'string' ? response.specification.length : JSON.stringify(response.specification).length) : 0,
-                    hash: response.hash,
-                    message: response.message
-                });
-
+                
                 // If not modified and no specification, return null (client should use cache)
                 if (response.notModified && !response.specification) {
-                    console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() returning null - notModified with no spec`);
                     return null;
                 }
-
+                
                 // Parse the JSON string specification if available
                 if (response.specification) {
                     // If it's already an object, return it
                     if (typeof response.specification === 'object') {
-                        console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() returning spec as object`);
                         return response.specification as ComponentSpec;
                     }
                     // Otherwise parse the JSON string
                     try {
-                        const parsed = JSON.parse(response.specification) as ComponentSpec;
-                        console.log(`[DIAG][${gqlDiagTime}] GetRegistryComponent() returning parsed spec`, {
-                            name: parsed.name,
-                            hasCode: !!parsed.code,
-                            codeLength: parsed.code?.length
-                        });
-                        return parsed;
+                        return JSON.parse(response.specification) as ComponentSpec;
                     } catch (e) {
-                        console.error(`[DIAG][${gqlDiagTime}] GetRegistryComponent() JSON PARSE FAILED:`, e);
                         LogError(`Failed to parse component specification: ${e}`);
                         return null;
                     }
                 }
-
-                console.warn(`[DIAG][${gqlDiagTime}] GetRegistryComponent() response has GetRegistryComponent but no specification - returning null`);
+                
                 return null;
             }
 
-            console.warn(`[DIAG][${gqlDiagTime}] GetRegistryComponent() result missing GetRegistryComponent field - returning null`, {
-                resultExists: !!result,
-                resultKeys: result ? Object.keys(result) : []
-            });
             return null;
         } catch (e) {
-            console.error(`[DIAG] GetRegistryComponent() CAUGHT ERROR:`, e);
             LogError(e);
             throw new Error(`Failed to get registry component: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
