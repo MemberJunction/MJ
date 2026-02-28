@@ -1310,7 +1310,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Creates an audit log record in the MJ: Audit Logs entity.
-     * Uses BaseEntity with .Set() calls (no typed entity subclass imports needed).
+     * Uses BaseEntity with .Set() calls (no typed entity subclass imports needed - can't use those from MJCore anyway).
      * Callers typically fire-and-forget.
      *
      * @param user The user performing the action
@@ -1719,7 +1719,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Creates the initial merge log record at the start of a merge operation.
-     * Uses BaseEntity with .Set() calls (no typed entity subclass imports).
+     * Uses BaseEntity with .Set() calls (no typed entity subclass imports available in MJCore).
      */
     protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser?: UserInfo): Promise<BaseEntity> {
         try {
@@ -1796,6 +1796,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *
      * @param params Report parameters including ReportID
      * @param contextUser Optional context user for permission/audit purposes
+     * @deprecated Reports are no longer supported and will eventually be removed. Interactive Components and Artifacts are replacements
      */
     public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
         const reportID = params.ReportID;
