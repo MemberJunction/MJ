@@ -19,9 +19,9 @@ export class MJConversationArtifactFormComponent extends BaseFormComponent {
             { sectionKey: 'artifactDetails', sectionName: 'Artifact Details', isExpanded: true },
             { sectionKey: 'conversationContext', sectionName: 'Conversation Context', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJConversationArtifactPermissions', sectionName: 'MJ: Conversation Artifact Permissions', isExpanded: false },
-            { sectionKey: 'mJConversationArtifactVersions', sectionName: 'MJ: Conversation Artifact Versions', isExpanded: false },
-            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+            { sectionKey: 'mJConversationArtifactPermissions', sectionName: 'Conversation Artifact Permissions', isExpanded: false },
+            { sectionKey: 'mJConversationArtifactVersions', sectionName: 'Conversation Artifact Versions', isExpanded: false },
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
         ]);
     }
 }

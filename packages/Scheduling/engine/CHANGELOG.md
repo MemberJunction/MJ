@@ -1,5 +1,37 @@
 # @memberjunction/scheduling-engine
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/scheduling-engine-base@5.4.1
+- @memberjunction/scheduling-base-types@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+- Updated dependencies [bc993b8]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-agents@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/scheduling-engine-base@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+  - @memberjunction/scheduling-base-types@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

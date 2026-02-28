@@ -1,5 +1,126 @@
 # Change Log - @memberjunction/server
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager-actions@5.4.1
+- @memberjunction/ai-agent-manager@5.4.1
+- @memberjunction/ai-agents@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-mcp-client@5.4.1
+- @memberjunction/computer-use-engine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/ai-vectors-pinecone@5.4.1
+- @memberjunction/api-keys@5.4.1
+- @memberjunction/actions-apollo@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions-bizapps-accounting@5.4.1
+- @memberjunction/actions-bizapps-crm@5.4.1
+- @memberjunction/actions-bizapps-formbuilders@5.4.1
+- @memberjunction/actions-bizapps-lms@5.4.1
+- @memberjunction/actions-bizapps-social@5.4.1
+- @memberjunction/core-actions@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/communication-types@5.4.1
+- @memberjunction/entity-communications-base@5.4.1
+- @memberjunction/entity-communications-server@5.4.1
+- @memberjunction/notifications@5.4.1
+- @memberjunction/communication-ms-graph@5.4.1
+- @memberjunction/communication-sendgrid@5.4.1
+- @memberjunction/component-registry-client-sdk@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/doc-utils@5.4.1
+- @memberjunction/encryption@5.4.1
+- @memberjunction/external-change-detection@5.4.1
+- @memberjunction/graphql-dataprovider@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/data-context@5.4.1
+- @memberjunction/data-context-server@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/queue@5.4.1
+- @memberjunction/storage@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/scheduling-actions@5.4.1
+- @memberjunction/scheduling-engine-base@5.4.1
+- @memberjunction/scheduling-base-types@5.4.1
+- @memberjunction/scheduling-engine@5.4.1
+- @memberjunction/skip-types@5.4.1
+- @memberjunction/templates@5.4.1
+- @memberjunction/testing-engine@5.4.1
+- @memberjunction/testing-engine-base@5.4.1
+- @memberjunction/version-history@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- c9a760c: no migration
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [bc993b8]
+- Updated dependencies [cde53a9]
+- Updated dependencies [9604926]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-agents@5.4.0
+  - @memberjunction/actions-bizapps-lms@5.4.0
+  - @memberjunction/ai-agent-manager-actions@5.4.0
+  - @memberjunction/ai-agent-manager@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-mcp-client@5.4.0
+  - @memberjunction/computer-use-engine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/api-keys@5.4.0
+  - @memberjunction/actions-apollo@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions-bizapps-accounting@5.4.0
+  - @memberjunction/actions-bizapps-crm@5.4.0
+  - @memberjunction/actions-bizapps-formbuilders@5.4.0
+  - @memberjunction/actions-bizapps-social@5.4.0
+  - @memberjunction/core-actions@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/communication-types@5.4.0
+  - @memberjunction/entity-communications-base@5.4.0
+  - @memberjunction/entity-communications-server@5.4.0
+  - @memberjunction/notifications@5.4.0
+  - @memberjunction/communication-ms-graph@5.4.0
+  - @memberjunction/communication-sendgrid@5.4.0
+  - @memberjunction/doc-utils@5.4.0
+  - @memberjunction/encryption@5.4.0
+  - @memberjunction/external-change-detection@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/data-context@5.4.0
+  - @memberjunction/queue@5.4.0
+  - @memberjunction/storage@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/scheduling-actions@5.4.0
+  - @memberjunction/scheduling-engine-base@5.4.0
+  - @memberjunction/scheduling-engine@5.4.0
+  - @memberjunction/templates@5.4.0
+  - @memberjunction/testing-engine@5.4.0
+  - @memberjunction/testing-engine-base@5.4.0
+  - @memberjunction/version-history@5.4.0
+  - @memberjunction/skip-types@5.4.0
+  - @memberjunction/ai-vectors-pinecone@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/data-context-server@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/component-registry-client-sdk@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+  - @memberjunction/scheduling-base-types@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

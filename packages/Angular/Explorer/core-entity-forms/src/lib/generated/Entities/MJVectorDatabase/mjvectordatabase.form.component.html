@@ -82,23 +82,23 @@
 
     <!-- Entity Documents Section -->
     <mj-collapsible-panel
-        SectionKey="entityDocuments"
+        SectionKey="mJEntityDocuments"
         SectionName="Entity Documents"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityDocuments')"
+        [BadgeCount]="GetSectionRowCount('mJEntityDocuments')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','ID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
-                [AllowLoad]="IsSectionExpanded('entityDocuments')"
+                [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -107,23 +107,23 @@
 
     <!-- Vector Indexes Section -->
     <mj-collapsible-panel
-        SectionKey="vectorIndexes"
+        SectionKey="mJVectorIndexes"
         SectionName="Vector Indexes"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('vectorIndexes')"
+        [BadgeCount]="GetSectionRowCount('mJVectorIndexes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Vector Indexes','VectorDatabaseID')"
                 [NewRecordValues]="NewRecordValues('MJ: Vector Indexes')"
-                [AllowLoad]="IsSectionExpanded('vectorIndexes')"
+                [AllowLoad]="IsSectionExpanded('mJVectorIndexes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('vectorIndexes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJVectorIndexes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

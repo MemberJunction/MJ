@@ -21,10 +21,10 @@ export class MJResourceTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'entityAssociations', sectionName: 'Entity Associations', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'workspaceItems', sectionName: 'Workspace Items', isExpanded: false },
-            { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false },
-            { sectionKey: 'resourceLinks', sectionName: 'Resource Links', isExpanded: false },
-            { sectionKey: 'resourcePermissions', sectionName: 'Resource Permissions', isExpanded: false }
+            { sectionKey: 'mJWorkspaceItems', sectionName: 'Workspace Items', isExpanded: false },
+            { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
+            { sectionKey: 'mJResourceLinks', sectionName: 'Resource Links', isExpanded: false },
+            { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false }
         ]);
     }
 }

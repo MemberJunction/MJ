@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/cli
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.4.1
+- @memberjunction/codegen-lib@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/db-auto-doc@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/metadata-sync@5.4.1
+- @memberjunction/query-gen@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+- @memberjunction/testing-cli@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/codegen-lib@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/metadata-sync@5.4.0
+  - @memberjunction/ai-cli@5.4.0
+  - @memberjunction/query-gen@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/testing-cli@5.4.0
+  - @memberjunction/db-auto-doc@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

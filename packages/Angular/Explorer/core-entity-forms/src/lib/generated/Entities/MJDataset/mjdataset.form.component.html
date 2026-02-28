@@ -66,23 +66,23 @@
 
     <!-- Dataset Items Section -->
     <mj-collapsible-panel
-        SectionKey="datasetItems"
+        SectionKey="mJDatasetItems"
         SectionName="Dataset Items"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('datasetItems')"
+        [BadgeCount]="GetSectionRowCount('mJDatasetItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dataset Items','DatasetName')"
                 [NewRecordValues]="NewRecordValues('MJ: Dataset Items')"
-                [AllowLoad]="IsSectionExpanded('datasetItems')"
+                [AllowLoad]="IsSectionExpanded('mJDatasetItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('datasetItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDatasetItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

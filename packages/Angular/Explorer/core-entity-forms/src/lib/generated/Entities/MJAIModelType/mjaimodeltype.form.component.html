@@ -94,23 +94,23 @@
 
     <!-- AI Models Section -->
     <mj-collapsible-panel
-        SectionKey="aIModels"
+        SectionKey="mJAIModels"
         SectionName="AI Models"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIModels')"
+        [BadgeCount]="GetSectionRowCount('mJAIModels')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Models','AIModelTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Models')"
-                [AllowLoad]="IsSectionExpanded('aIModels')"
+                [AllowLoad]="IsSectionExpanded('mJAIModels')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIModels', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIModels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -119,23 +119,23 @@
 
     <!-- AI Prompts Section -->
     <mj-collapsible-panel
-        SectionKey="aIPrompts"
+        SectionKey="mJAIPrompts"
         SectionName="AI Prompts"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIPrompts')"
+        [BadgeCount]="GetSectionRowCount('mJAIPrompts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','AIModelTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
-                [AllowLoad]="IsSectionExpanded('aIPrompts')"
+                [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

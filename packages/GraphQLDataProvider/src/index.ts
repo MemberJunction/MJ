@@ -15,7 +15,8 @@ export type {
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
-    EmbedTextResult
+    EmbedTextResult,
+    RunAIAgentFromConversationDetailParams
 } from './graphQLAIClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {
@@ -25,6 +26,8 @@ export type {
     RunTestSuiteResult,
     TestExecutionProgress
 } from './graphQLTestingClient';
+export { FireAndForgetHelper } from './fireAndForgetHelper';
+export type { FireAndForgetConfig } from './fireAndForgetHelper';
 export { GraphQLComponentRegistryClient } from './GraphQLComponentRegistryClient';
 export type {
     GetRegistryComponentParams,

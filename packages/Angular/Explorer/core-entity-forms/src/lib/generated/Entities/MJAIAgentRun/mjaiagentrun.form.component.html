@@ -474,10 +474,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: AI Agent Examples Section -->
+    <!-- AI Agent Examples Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentExamples"
-        SectionName="MJ: AI Agent Examples"
+        SectionName="AI Agent Examples"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -501,33 +501,33 @@
 
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel
-        SectionKey="aIAgentNotes"
+        SectionKey="mJAIAgentNotes"
         SectionName="AI Agent Notes"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIAgentNotes')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNotes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','SourceAIAgentRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
-                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Run Medias Section -->
+    <!-- AI Agent Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunMedias"
-        SectionName="MJ: AI Agent Run Medias"
+        SectionName="AI Agent Run Medias"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -549,10 +549,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Run Steps Section -->
+    <!-- AI Agent Run Steps Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunSteps"
-        SectionName="MJ: AI Agent Run Steps"
+        SectionName="AI Agent Run Steps"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -574,10 +574,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Runs Section -->
+    <!-- AI Agent Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
-        SectionName="MJ: AI Agent Runs"
+        SectionName="AI Agent Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -599,10 +599,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Prompt Runs Section -->
+    <!-- AI Prompt Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRuns"
-        SectionName="MJ: AI Prompt Runs"
+        SectionName="AI Prompt Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

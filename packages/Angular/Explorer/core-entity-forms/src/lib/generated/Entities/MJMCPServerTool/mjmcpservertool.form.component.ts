@@ -20,8 +20,8 @@ export class MJMCPServerToolFormComponent extends BaseFormComponent {
             { sectionKey: 'schemasAnnotations', sectionName: 'Schemas & Annotations', isExpanded: true },
             { sectionKey: 'automation', sectionName: 'Automation', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MJ: MCP Server Connection Tools', isExpanded: false },
-            { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MJ: MCP Tool Execution Logs', isExpanded: false }
+            { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MCP Server Connection Tools', isExpanded: false },
+            { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MCP Tool Execution Logs', isExpanded: false }
         ]);
     }
 }

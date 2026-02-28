@@ -327,13 +327,33 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * Initialize the React component
    */
   private async initializeComponent() {
+    const initDiagTime = Date.now();
+    console.log(`[DIAG][${initDiagTime}] initializeComponent() ENTER`, {
+      componentName: this.component?.name,
+      componentRegistry: this.component?.registry,
+      providerExists: !!Metadata?.Provider,
+      providerType: Metadata?.Provider ? Metadata.Provider.constructor?.name : 'N/A',
+      hasCurrentUser: !!Metadata?.Provider?.CurrentUser
+    });
     try {
       // Ensure React is loaded
+      const reactCtxStart = Date.now();
       await this.reactBridge.getReactContext();
-      
+      console.log(`[DIAG][${initDiagTime}] initializeComponent() getReactContext() took ${Date.now() - reactCtxStart}ms`);
+
       // Wait for React to be fully ready (handles first-load delay)
+      const reactReadyStart = Date.now();
       await this.reactBridge.waitForReactReady();
-      
+      console.log(`[DIAG][${initDiagTime}] initializeComponent() waitForReactReady() took ${Date.now() - reactReadyStart}ms`);
+
+      // Check provider state AGAIN right before loading - this is the critical timing check
+      console.log(`[DIAG][${initDiagTime}] initializeComponent() PRE-LOAD provider state:`, {
+        providerExists: !!Metadata?.Provider,
+        providerType: Metadata?.Provider ? Metadata.Provider.constructor?.name : 'N/A',
+        hasCurrentUser: !!Metadata?.Provider?.CurrentUser,
+        hasExecuteGQL: Metadata?.Provider ? 'ExecuteGQL' in Metadata.Provider : false
+      });
+
       // NEW: Use ComponentManager if enabled (default: true)
       if (this.useComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
@@ -505,11 +525,24 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * NEW: Load component using unified ComponentManager - MUCH SIMPLER!
    */
   private async loadComponentWithManager() {
+    const loadDiagTime = Date.now();
+    console.log(`[DIAG][${loadDiagTime}] loadComponentWithManager() ENTER`, {
+      componentName: this.component?.name,
+      componentRegistry: this.component?.registry,
+      componentNamespace: this.component?.namespace
+    });
     try {
       const manager = this.adapter.getComponentManager();
-      
+
       console.log(`🚀 [ComponentManager] Loading component hierarchy: ${this.component.name}`);
-      
+      console.log(`[DIAG][${loadDiagTime}] loadComponentWithManager() PRE-loadHierarchy provider state:`, {
+        providerExists: !!Metadata?.Provider,
+        providerType: Metadata?.Provider ? Metadata.Provider.constructor?.name : 'N/A',
+        hasCurrentUser: !!Metadata?.Provider?.CurrentUser,
+        currentUserEmail: Metadata?.Provider?.CurrentUser?.Email || 'N/A'
+      });
+
+      const hierarchyStart = Date.now();
       // Load the entire hierarchy with one simple call
       const result = await manager.loadHierarchy(this.component, {
         contextUser: Metadata.Provider.CurrentUser,
@@ -518,6 +551,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         returnType: 'both'
       });
       
+      console.log(`[DIAG][${loadDiagTime}] loadComponentWithManager() loadHierarchy() returned in ${Date.now() - hierarchyStart}ms`, {
+        success: result.success,
+        errorCount: result.errors?.length,
+        loadedCount: result.loadedComponents?.length,
+        errors: result.errors?.map(e => `${e.componentName}: ${e.message}`)
+      });
+
       if (!result.success) {
         const errorMessages = result.errors.map(e => `${e.componentName}: ${e.message}`).join(', ');
         console.error(`❌ [ComponentManager] Failed to load hierarchy:`, errorMessages);

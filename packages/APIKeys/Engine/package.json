@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/api-keys",
-  "version": "5.3.1",
+  "version": "5.4.1",
   "description": "MemberJunction: Server-side API Key authorization engine with hierarchical scopes, pattern-based access control, and application-level restrictions. Requires Node.js crypto module.",
   "type": "module",
   "main": "dist/index.js",
@@ -23,10 +23,10 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/api-keys-base": "5.3.1",
-    "@memberjunction/global": "5.3.1",
-    "@memberjunction/core": "5.3.1",
-    "@memberjunction/core-entities": "5.3.1"
+    "@memberjunction/api-keys-base": "5.4.1",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1"
   },
   "repository": {
     "type": "git",

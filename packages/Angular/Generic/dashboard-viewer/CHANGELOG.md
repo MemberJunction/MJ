@@ -1,5 +1,32 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-artifacts@5.4.1
+- @memberjunction/ng-entity-viewer@5.4.1
+- @memberjunction/ng-query-viewer@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/ng-trees@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-artifacts@5.4.0
+  - @memberjunction/ng-entity-viewer@5.4.0
+  - @memberjunction/ng-query-viewer@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-trees@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

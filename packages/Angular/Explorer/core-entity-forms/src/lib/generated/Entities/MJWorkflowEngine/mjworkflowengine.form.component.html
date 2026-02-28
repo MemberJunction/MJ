@@ -82,23 +82,23 @@
 
     <!-- Workflows Section -->
     <mj-collapsible-panel
-        SectionKey="workflows"
+        SectionKey="mJWorkflows"
         SectionName="Workflows"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('workflows')"
+        [BadgeCount]="GetSectionRowCount('mJWorkflows')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflows','WorkflowEngineName')"
                 [NewRecordValues]="NewRecordValues('MJ: Workflows')"
-                [AllowLoad]="IsSectionExpanded('workflows')"
+                [AllowLoad]="IsSectionExpanded('mJWorkflows')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('workflows', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJWorkflows', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

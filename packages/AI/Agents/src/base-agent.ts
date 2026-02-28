@@ -836,6 +836,9 @@ export class BaseAgent {
                 Object.keys(preloadedResult.context).length +
                 Object.keys(preloadedResult.payload).length;
 
+            // Only create a step if there was any preloading activity (loaded or failed)
+            const hadActivity = totalSources > 0 || preloadedResult.failedSources.length > 0;
+
             if (totalSources > 0) {
                 const destinations: string[] = [];
                 if (Object.keys(preloadedResult.data).length > 0) {
@@ -869,12 +872,51 @@ export class BaseAgent {
                     ...preloadedResult.payload,
                     ...params.payload
                 };
-            } else {
+            } else if (!hadActivity) {
                 this.logStatus(`📭 No data sources configured for agent '${params.agent.Name}'`, true, params);
+                return; // No step needed when there are no data sources at all
+            }
+
+            // Create a step entity to track data preloading in the agent run
+            const stepEntity = await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Data Source Preloading',
+                contextUser: params.contextUser
+            });
+
+            // Surface any data source failures in the agent run step and agent run record
+            if (preloadedResult.failedSources.length > 0) {
+                const failureDetails = preloadedResult.failedSources
+                    .map(f => `${f.name}${f.entityName ? ` (Entity: ${f.entityName})` : ''}: ${f.errorMessage}`)
+                    .join('; ');
+
+                const warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+
+                // Finalize step as completed but with error details captured
+                await this.finalizeStepEntity(stepEntity, true, warningMessage, {
+                    loadedSources: preloadedResult.loadedSources,
+                    failedSources: preloadedResult.failedSources
+                });
+
+                // Append warning to the agent run's ErrorMessage for top-level visibility
+                if (this._agentRun) {
+                    const existing = this._agentRun.ErrorMessage || '';
+                    this._agentRun.ErrorMessage = existing
+                        ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
+                        : `[Data Preloading Warning] ${warningMessage}`;
+                    await this._agentRun.Save();
+                }
+            } else {
+                // All sources loaded successfully
+                await this.finalizeStepEntity(stepEntity, true, undefined, {
+                    loadedSources: preloadedResult.loadedSources
+                });
             }
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
             // Log error but don't fail the agent run
-            this.logError(`Failed to preload data for agent '${params.agent.Name}': ${error.message}`, {
+            this.logError(`Failed to preload data for agent '${params.agent.Name}': ${errorMessage}`, {
                 agent: params.agent,
                 category: 'DataPreloading',
                 severity: 'warning'

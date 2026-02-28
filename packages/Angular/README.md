@@ -2,6 +2,14 @@
 
 MemberJunction's Angular UI framework -- the Bootstrap package, Explorer application components, and a comprehensive library of reusable generic components.
 
+## Theming & Design System
+
+MemberJunction's theming system provides a complete CSS custom property design system with light/dark modes and pluggable custom theme support.
+
+| Resource | Description |
+|----------|-------------|
+| [Theming & Design Tokens](./Generic/shared/THEMING.md) | Architecture, full token catalog, ThemeService API, custom theme creation, and best practices |
+
 ## Packages
 
 | Package | npm | Description |

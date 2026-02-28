@@ -190,23 +190,23 @@
 
     <!-- Entities Section -->
     <mj-collapsible-panel
-        SectionKey="entities"
+        SectionKey="mJApplicationEntities"
         SectionName="Entities"
         Icon="fa fa-cubes"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entities')"
+        [BadgeCount]="GetSectionRowCount('mJApplicationEntities')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Entities','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Application Entities')"
-                [AllowLoad]="IsSectionExpanded('entities')"
+                [AllowLoad]="IsSectionExpanded('mJApplicationEntities')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entities', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJApplicationEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -215,23 +215,23 @@
 
     <!-- Application Settings Section -->
     <mj-collapsible-panel
-        SectionKey="applicationSettings"
+        SectionKey="mJApplicationSettings"
         SectionName="Application Settings"
         Icon="fa fa-sliders-h"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('applicationSettings')"
+        [BadgeCount]="GetSectionRowCount('mJApplicationSettings')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Settings','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Application Settings')"
-                [AllowLoad]="IsSectionExpanded('applicationSettings')"
+                [AllowLoad]="IsSectionExpanded('mJApplicationSettings')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('applicationSettings', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJApplicationSettings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -240,23 +240,23 @@
 
     <!-- User Applications Section -->
     <mj-collapsible-panel
-        SectionKey="userApplications"
+        SectionKey="mJUserApplications"
         SectionName="User Applications"
         Icon="fa fa-th"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('userApplications')"
+        [BadgeCount]="GetSectionRowCount('mJUserApplications')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Applications','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Applications')"
-                [AllowLoad]="IsSectionExpanded('userApplications')"
+                [AllowLoad]="IsSectionExpanded('mJUserApplications')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('userApplications', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserApplications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -265,33 +265,33 @@
 
     <!-- Dashboards Section -->
     <mj-collapsible-panel
-        SectionKey="dashboards"
+        SectionKey="mJDashboards"
         SectionName="Dashboards"
         Icon="fa-solid fa-table-columns"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('dashboards')"
+        [BadgeCount]="GetSectionRowCount('mJDashboards')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboards','ApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboards')"
-                [AllowLoad]="IsSectionExpanded('dashboards')"
+                [AllowLoad]="IsSectionExpanded('mJDashboards')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Dashboard User Preferences Section -->
+    <!-- Dashboard User Preferences Section -->
     <mj-collapsible-panel
         SectionKey="mJDashboardUserPreferences"
-        SectionName="MJ: Dashboard User Preferences"
+        SectionName="Dashboard User Preferences"
         Icon="fa fa-tachometer-alt"
         Variant="related-entity"
         [Form]="this"

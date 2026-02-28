@@ -139,3 +139,32 @@
 .app-switcher-dropdown .app-switcher-item.loading i {
   color: var(--item-color, #757575);
 }
+
+/* Mobile: full-width dropdown with scroll */
+@media (max-width: 600px) {
+  .app-switcher-dropdown {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    min-width: unset;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    border-radius: 0;
+    border-top: none;
+    padding: 0.25rem 0;
+  }
+
+  .app-switcher-dropdown .app-switcher-item {
+    padding: 14px 20px;
+    gap: 14px;
+    min-height: 48px;
+    font-size: 0.9375rem;
+  }
+
+  .app-switcher-dropdown .app-switcher-item i {
+    font-size: 20px;
+    width: 24px;
+  }
+}

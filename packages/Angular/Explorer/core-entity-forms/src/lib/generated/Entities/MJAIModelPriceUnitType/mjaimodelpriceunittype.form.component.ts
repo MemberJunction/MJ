@@ -18,7 +18,7 @@ export class MJAIModelPriceUnitTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'unitDefinition', sectionName: 'Unit Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIModelCosts', sectionName: 'MJ: AI Model Costs', isExpanded: false }
+            { sectionKey: 'mJAIModelCosts', sectionName: 'AI Model Costs', isExpanded: false }
         ]);
     }
 }
