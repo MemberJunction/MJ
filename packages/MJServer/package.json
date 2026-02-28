@@ -68,6 +68,7 @@
     "@memberjunction/notifications": "5.4.1",
     "@memberjunction/queue": "5.4.1",
     "@memberjunction/scheduling-actions": "5.4.1",
+    "@memberjunction/server-extensions-core": "5.4.1",
     "@memberjunction/scheduling-base-types": "5.4.1",
     "@memberjunction/scheduling-engine": "5.4.1",
     "@memberjunction/scheduling-engine-base": "5.4.1",
