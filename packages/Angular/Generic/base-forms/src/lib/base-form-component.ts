@@ -198,11 +198,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public StartEditMode(): void {
     this.EditMode = true;
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setEditMode(entityName, true);
+    }
   }
 
   public EndEditMode(): void {
     this.EditMode = false;
     this.clearValidationState();
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setEditMode(entityName, false);
+    }
   }
 
   public handleHistoryDialog(): void {
