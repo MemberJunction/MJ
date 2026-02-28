@@ -143,14 +143,16 @@ export class ViewRule implements IConversionRule {
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
 
-    // Prepend DROP VIEW IF EXISTS ... CASCADE so that CREATE OR REPLACE VIEW
-    // succeeds even when the column list has changed (PG limitation: CREATE OR
-    // REPLACE VIEW cannot add/remove/reorder columns). The CASCADE is necessary
-    // because dependent views/functions may reference this view.
-    const viewNameMatch2 = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
-    if (viewNameMatch2) {
-      const viewName = viewNameMatch2[1];
-      result = `DROP VIEW IF EXISTS ${viewName} CASCADE;\n${result}`;
+    // Only prepend DROP VIEW CASCADE when the file has DDL changes (ALTER TABLE,
+    // CREATE TABLE) that could change view column lists. Without DDL changes,
+    // CREATE OR REPLACE VIEW suffices and avoids cascade-dropping dependent
+    // functions (e.g. spCreate/spUpdate that RETURN SETOF view_name).
+    if (context.HasDDLChanges) {
+      const viewNameMatch2 = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
+      if (viewNameMatch2) {
+        const viewName = viewNameMatch2[1];
+        result = `DROP VIEW IF EXISTS ${viewName} CASCADE;\n${result}`;
+      }
     }
 
     return result + '\n';

@@ -89,14 +89,24 @@ SELECT name FROM sys.objects WHERE type = 'U'`;
   });
 
   describe('CREATE OR ALTER VIEW conversion', () => {
-    it('should emit DROP VIEW CASCADE + CREATE OR REPLACE VIEW', () => {
+    it('should emit CREATE OR REPLACE VIEW without DROP CASCADE when no DDL changes', () => {
       const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
 SELECT [ID] FROM [__mj].[Foo]`;
       const result = convert(sql);
+      expect(result).not.toContain('DROP VIEW IF EXISTS');
+      expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
+      expect(result).not.toMatch(/CREATE\s+OR\s+ALTER\s+VIEW/i);
+    });
+
+    it('should emit DROP VIEW CASCADE + CREATE OR REPLACE VIEW when DDL changes present', () => {
+      const ddlContext = createConversionContext('tsql', 'postgres');
+      ddlContext.HasDDLChanges = true;
+      const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
+SELECT [ID] FROM [__mj].[Foo]`;
+      const result = rule.PostProcess!(sql, sql, ddlContext);
       expect(result).toContain('DROP VIEW IF EXISTS');
       expect(result).toContain('CASCADE');
       expect(result).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW/i);
-      expect(result).not.toMatch(/CREATE\s+OR\s+ALTER\s+VIEW/i);
     });
   });
 

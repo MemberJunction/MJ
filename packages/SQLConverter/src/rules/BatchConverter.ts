@@ -84,6 +84,10 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     : config.Source;
   log(`  File size: ${rawSQL.length.toLocaleString()} bytes, ${rawSQL.split('\n').length.toLocaleString()} lines`);
 
+  // Detect DDL changes (ALTER TABLE, CREATE TABLE) — used by ViewRule to decide
+  // whether DROP CASCADE is needed (column lists may change) or just CREATE OR REPLACE
+  context.HasDDLChanges = /\b(ALTER\s+TABLE|CREATE\s+TABLE)\b/i.test(rawSQL);
+
   // Preprocess: replace Flyway placeholders
   log('Pre-processing (Flyway placeholders)...');
   const processedSQL = preprocess(rawSQL, schema);

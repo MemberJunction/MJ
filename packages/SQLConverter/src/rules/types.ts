@@ -66,6 +66,13 @@ export interface ConversionContext {
    * Used by GrantRule to skip grants on views that don't exist.
    */
   CreatedViews: Set<string>;
+  /**
+   * Whether the source file contains DDL changes (ALTER TABLE, CREATE TABLE)
+   * that could change view column lists. When true, ViewRule emits
+   * DROP VIEW CASCADE before CREATE OR REPLACE VIEW. When false, it only
+   * emits CREATE OR REPLACE VIEW to avoid cascade-dropping dependent functions.
+   */
+  HasDDLChanges: boolean;
 }
 
 /**
@@ -155,6 +162,7 @@ export function createConversionContext(
     HandWrittenFunctions: new Map(),
     CreatedFunctions: new Set(),
     CreatedViews: new Set(),
+    HasDDLChanges: false,
   };
 }
 
