@@ -20,7 +20,7 @@ export class MJAIAgentTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'promptConfiguration', sectionName: 'Prompt Configuration', isExpanded: true },
             { sectionKey: 'behaviorUISettings', sectionName: 'Behavior & UI Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

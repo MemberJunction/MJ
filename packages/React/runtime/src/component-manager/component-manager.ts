@@ -289,11 +289,27 @@ export class ComponentManager {
       location: rootSpec.location,
       registry: rootSpec.registry
     });
-    
+
+    const hierarchyDiagTime = Date.now();
+    console.log(`[DIAG][${hierarchyDiagTime}] loadHierarchy() ENTER for ${rootSpec.name}`, {
+      location: rootSpec.location,
+      registry: rootSpec.registry,
+      namespace: rootSpec.namespace,
+      version: rootSpec.version,
+      providerExists: !!Metadata?.Provider,
+      providerType: Metadata?.Provider ? Metadata.Provider.constructor?.name : 'N/A',
+      graphQLClientExists: !!this.graphQLClient
+    });
+
     try {
       // Initialize component engine if needed (skip in browser context where it doesn't exist)
       if (this.componentEngine && typeof this.componentEngine.Config === 'function') {
+        const engineConfigStart = Date.now();
+        console.log(`[DIAG][${hierarchyDiagTime}] loadHierarchy() calling componentEngine.Config()...`);
         await this.componentEngine.Config(false, options.contextUser);
+        console.log(`[DIAG][${hierarchyDiagTime}] loadHierarchy() componentEngine.Config() completed in ${Date.now() - engineConfigStart}ms`);
+      } else {
+        console.log(`[DIAG][${hierarchyDiagTime}] loadHierarchy() SKIPPING componentEngine.Config() - engine: ${!!this.componentEngine}, hasConfig: ${this.componentEngine ? typeof this.componentEngine.Config === 'function' : 'N/A'}`);
       }
       
       // Load the root component and all its dependencies
@@ -533,25 +549,51 @@ export class ComponentManager {
     }
     
     // Handle EXTERNAL registry components (registry has a name)
+    const fetchDiagTime = Date.now();
+    console.log(`[DIAG][${fetchDiagTime}] fetchComponentSpec() EXTERNAL path for ${spec.registry}/${spec.name}`, {
+      graphQLClientExists: !!this.graphQLClient,
+      registryName: spec.registry,
+      namespace: spec.namespace,
+      name: spec.name,
+      version: spec.version
+    });
+
     // Initialize GraphQL client if needed
     if (!this.graphQLClient) {
+      console.log(`[DIAG][${fetchDiagTime}] fetchComponentSpec() graphQLClient is null, calling initializeGraphQLClient()...`);
       await this.initializeGraphQLClient();
+      console.log(`[DIAG][${fetchDiagTime}] fetchComponentSpec() after initializeGraphQLClient(): graphQLClient is ${this.graphQLClient ? 'SET' : 'STILL NULL'}`);
     }
-    
+
     if (!this.graphQLClient) {
+      console.error(`[DIAG][${fetchDiagTime}] fetchComponentSpec() FATAL: GraphQL client not available after init attempt. Provider state:`, {
+        metadataExists: !!Metadata,
+        providerExists: !!Metadata?.Provider,
+        providerType: Metadata?.Provider ? Metadata.Provider.constructor?.name : 'N/A'
+      });
       throw new Error('GraphQL client not available for registry fetching');
     }
-    
+
     // Fetch from external registry
     this.log(`Fetching from external registry: ${spec.registry}/${spec.name}`);
-    
+    console.log(`[DIAG][${fetchDiagTime}] fetchComponentSpec() calling GetRegistryComponent()...`);
+    const gqlStart = Date.now();
+
     const fullSpec = await this.graphQLClient.GetRegistryComponent({
       registryName: spec.registry,
       namespace: spec.namespace || 'Global',
       name: spec.name,
       version: spec.version || 'latest'
     });
-    
+
+    console.log(`[DIAG][${fetchDiagTime}] fetchComponentSpec() GetRegistryComponent() returned in ${Date.now() - gqlStart}ms:`, {
+      resultIsNull: fullSpec === null,
+      resultIsUndefined: fullSpec === undefined,
+      resultType: fullSpec ? typeof fullSpec : 'N/A',
+      hasName: fullSpec ? !!fullSpec.name : false,
+      hasCode: fullSpec ? !!fullSpec.code : false
+    });
+
     if (!fullSpec) {
       throw new Error(`Component not found in registry: ${spec.registry}/${spec.name}`);
     }
@@ -699,16 +741,33 @@ export class ComponentManager {
    * Initialize GraphQL client for registry operations
    */
   private async initializeGraphQLClient(): Promise<void> {
+    const diagTime = Date.now();
+    console.log(`[DIAG][${diagTime}] initializeGraphQLClient() ENTER`);
     try {
       const provider = Metadata?.Provider;
+      console.log(`[DIAG][${diagTime}] initializeGraphQLClient() provider check:`, {
+        metadataExists: !!Metadata,
+        providerExists: !!provider,
+        providerType: provider ? provider.constructor?.name : 'N/A',
+        hasExecuteGQL: provider ? 'ExecuteGQL' in provider : false,
+        typeofExecuteGQL: provider && 'ExecuteGQL' in provider ? typeof provider.ExecuteGQL : 'N/A'
+      });
       if (provider && (provider as any).ExecuteGQL) {
+        console.log(`[DIAG][${diagTime}] initializeGraphQLClient() provider check PASSED, importing GraphQLComponentRegistryClient...`);
+        const importStart = Date.now();
         const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
+        console.log(`[DIAG][${diagTime}] initializeGraphQLClient() import took ${Date.now() - importStart}ms`);
         this.graphQLClient = new GraphQLComponentRegistryClient(provider as any);
+        console.log(`[DIAG][${diagTime}] initializeGraphQLClient() SUCCESS - graphQLClient created`);
         this.log('GraphQL client initialized');
+      } else {
+        console.warn(`[DIAG][${diagTime}] initializeGraphQLClient() provider check FAILED - graphQLClient will remain null`);
       }
     } catch (error) {
+      console.error(`[DIAG][${diagTime}] initializeGraphQLClient() CAUGHT ERROR:`, error);
       LogError(`Failed to initialize GraphQL client: ${error instanceof Error ? error.message : String(error)}`);
     }
+    console.log(`[DIAG][${diagTime}] initializeGraphQLClient() EXIT - graphQLClient is ${this.graphQLClient ? 'SET' : 'NULL'} (took ${Date.now() - diagTime}ms)`);
   }
   
   /**

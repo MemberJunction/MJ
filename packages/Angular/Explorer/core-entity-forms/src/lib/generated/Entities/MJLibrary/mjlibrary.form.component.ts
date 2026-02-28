@@ -19,8 +19,8 @@ export class MJLibraryFormComponent extends BaseFormComponent {
             { sectionKey: 'libraryIdentification', sectionName: 'Library Identification', isExpanded: true },
             { sectionKey: 'contentAvailability', sectionName: 'Content & Availability', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'actions', sectionName: 'Actions', isExpanded: false },
-            { sectionKey: 'items', sectionName: 'Items', isExpanded: false }
+            { sectionKey: 'mJActionLibraries', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJLibraryItems', sectionName: 'Items', isExpanded: false }
         ]);
     }
 }

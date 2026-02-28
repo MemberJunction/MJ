@@ -1249,6 +1249,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       this.markMessageComplete(convoDetail);
     }
 
+    // Race condition guard: Before writing Error, reload from DB to check if the server
+    // already completed this record. The server and client write to the same conversation
+    // detail record — if the server completed successfully but a client-side timeout or
+    // WebSocket disconnect triggered this error path, we must not overwrite the server's
+    // successful completion with an error status.
+    if (status === 'Error' && convoDetail.ID) {
+      await convoDetail.Load(convoDetail.ID);
+      if (convoDetail.Status === 'Complete') {
+        // Server already completed — emit updated message, don't overwrite with error
+        this.messageSent.emit(convoDetail);
+        return;
+      }
+    }
+
     // Guard clause: Don't re-save if already complete/errored (prevents duplicate saves)
     // Task has already been removed by markMessageComplete() above
     if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {

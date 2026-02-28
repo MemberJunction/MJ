@@ -458,9 +458,16 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
         const sectionsWithoutTop = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top && s.Name);
         const allSections = [...sectionsWithoutTop, ...relatedEntitySections];
 
-        // Assign unique keys to each section
+        // Assign unique keys to each section.
+        // Related entity sections already have UniqueKey pre-set (derived from entity name);
+        // field sections derive theirs from the display name here.
         const usedKeys = new Set<string>();
         allSections.forEach((s) => {
+            if (s.UniqueKey) {
+                // Already set (e.g. related entity tabs) — just register it
+                usedKeys.add(s.UniqueKey);
+                return;
+            }
             let sectionKey = this.camelCase(s.Name);
             // Ensure unique keys by tracking used keys and adding suffix for duplicates
             let suffix = 1;
@@ -468,10 +475,10 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
                 sectionKey = this.camelCase(s.Name) + suffix++;
             }
             usedKeys.add(sectionKey);
-            s.UniqueKey = sectionKey; // Store the unique key with the section
+            s.UniqueKey = sectionKey;
         });
 
-        // Now update all TabCode with the correct unique keys
+        // Now update all TabCode with the correct unique keys (for field sections that got deduped)
         allSections.forEach(s => {
             if (s.TabCode && s.UniqueKey) {
                 // Replace placeholder camelCase keys with actual unique keys in the HTML
@@ -810,9 +817,12 @@ ${indentedFormHTML}
             return relatedEntity.DisplayName;
         }
         else {
-            let tabName = relatedEntity.RelatedEntity;
-            
-            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID 
+            // Use the entity's DisplayName (human-friendly) when available, falling back to the technical Name
+            const md = new Metadata();
+            const re = md.EntityByID(relatedEntity.RelatedEntityID);
+            let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
+
+            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID
             const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
             if (relationships.length > 1) {
                 // we have more than one related entity for this entity, so we need to append the field name to the tab name
@@ -820,16 +830,14 @@ ${indentedFormHTML}
                 if (fkeyField) {
                     // if the fkeyField has wrapping [] then remove them
                     fkeyField = fkeyField.trim().replace('[', '').replace(']', '');
-    
+
                     // let's get the actual entityInfo for the related entity so we can get the field and see if it has a display name
-                    const md = new Metadata();
-                    const re = md.EntityByID(relatedEntity.RelatedEntityID);
-                    const f = re.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
+                    const f = re?.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
                     if (f)
                         tabName += ` (${f.DisplayNameOrName})`
                 }
             }
-            return tabName;    
+            return tabName;
         }
       }
       
@@ -881,8 +889,12 @@ ${indentedFormHTML}
                 }
             }
 
-            // Calculate section key before generation (may be replaced later if duplicate)
-            const sectionKey = this.camelCase(tabName);
+            // Build section key from the stable entity name (not the display name which can change).
+            // When multiple relationships point to the same entity, append the join field for uniqueness.
+            const sameEntityRelationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
+            const sectionKey = sameEntityRelationships.length > 1
+                ? this.camelCase(relatedEntity.RelatedEntity + ' ' + relatedEntity.RelatedEntityJoinField)
+                : this.camelCase(relatedEntity.RelatedEntity);
 
             let generateResults: GenerationResult;
             try {
@@ -929,6 +941,7 @@ ${componentCodeWithIndent}
                 TabCode: tabCode,
                 GeneratedOutput: generateResults,
                 EntityClassName: entity.ClassName,
+                UniqueKey: sectionKey, // Pre-set from entity name so dedup logic doesn't re-derive from display name
             })
             index++;
         }

@@ -19,7 +19,7 @@ export class MJQueueTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'queueDefinition', sectionName: 'Queue Definition', isExpanded: true },
             { sectionKey: 'processingDriverSettings', sectionName: 'Processing Driver Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'queues', sectionName: 'Queues', isExpanded: false }
+            { sectionKey: 'mJQueues', sectionName: 'Queues', isExpanded: false }
         ]);
     }
 }

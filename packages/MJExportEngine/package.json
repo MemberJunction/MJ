@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/export-engine",
   "type": "module",
-  "version": "5.3.1",
+  "version": "5.4.1",
   "description": "MemberJunction: Export Engine for Excel, CSV, and JSON export with sampling and formatting options",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

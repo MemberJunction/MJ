@@ -1,5 +1,31 @@
 # @memberjunction/ng-base-forms
 
+## 5.4.1
+
+### Patch Changes
+
+- c28af42: base forms dep fix
+  - @memberjunction/ng-list-management@5.4.1
+  - @memberjunction/ng-base-types@5.4.1
+  - @memberjunction/ng-entity-viewer@5.4.1
+  - @memberjunction/ng-record-changes@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-entity-viewer@5.4.0
+  - @memberjunction/ng-list-management@5.4.0
+  - @memberjunction/ng-record-changes@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

@@ -9635,5 +9635,427 @@
       "lastModified": "2026-02-13T21:08:31.338Z",
       "checksum": "cc3482b007f476dbbdf590abdb2159b2e0c3576cf9e54c5f8619b61dc3eaa5cf"
     }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax-M2.5",
+      "PowerRank": 20,
+      "Description": "MiniMax's frontier MoE model released February 12, 2026. 230B total parameters (10B active) with 204K token context window and 128K output capacity. Achieves 80.2% on SWE-bench Verified, comparable to Claude Opus on coding benchmarks. Features built-in chain-of-thought reasoning (<think> tags), function calling, and agentic tool use. Extensively trained with RL across hundreds of thousands of real-world environments. Open-weights under MIT license.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "EB300DB7-354A-4F4A-9154-818AEB6B46E0"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.001Z",
+            "checksum": "59d7ff617908fec6cabae3bc50c34922cef5229894fee808c9abfb5795b8e526"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "MiniMaxLLM",
+            "APIName": "MiniMax-M2.5",
+            "MaxInputTokens": 204800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D064C8B1-A247-4728-9E00-140820612ACD"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.017Z",
+            "checksum": "c95d249148d86711a4a1c99e36890a7419dc9cf375c2ff5c939675751dbfc5a5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m2.5",
+            "MaxInputTokens": 196608,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "03538687-3297-4F7F-99EF-DFCC79858D37"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.031Z",
+            "checksum": "65d2893919c0ab3c3b063ee90b7528769d72847d50f7485462aaff793a69734e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/minimax-m2p5",
+            "MaxInputTokens": 196608,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "04F3C004-BDA4-40E2-8A0D-5148C7BE1ACE"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.042Z",
+            "checksum": "8706fc2ab5dda572618dd810328e73eb156d8c3aea5a6d55d700c6d3e2009810"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "StartedAt": "2026-02-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.3,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.5 pricing on MiniMax as of February 2026. 230B MoE model (10B active) with 204K context and 128K output. Cached input available at $0.03/1M tokens."
+          },
+          "primaryKey": {
+            "ID": "0441C917-DD13-4978-893A-BA0AA82EB1FB"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.103Z",
+            "checksum": "76a4a790bd369b765fae6d4d443221e4ca924637b188403d4f69a0ee6d2aab6e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-02-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.295,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.5 pricing on OpenRouter as of February 2026. Routed inference - provider may vary."
+          },
+          "primaryKey": {
+            "ID": "4D535607-2673-459C-8CAF-170BBFAC7D08"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.117Z",
+            "checksum": "9185a8217108331e796f7e49aa63c0685959b52433470f61e8d7038f3b18d12e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-02-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.3,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.5 pricing on Fireworks.ai as of February 2026. Serverless deployment with cached input at $0.03/1M tokens."
+          },
+          "primaryKey": {
+            "ID": "F740C7C6-8B3E-48AC-9897-0565909AB3ED"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.130Z",
+            "checksum": "54c62d3f9c3c22237cc8b7c15f18188575c517f226562000ee0175b93ccdb6fc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4E731CAA-9765-41DD-A6CB-F68945561753"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T20:01:00.828Z",
+      "checksum": "a85db807839801d3310b217737c1bee72eebc1f30607358b7dd480522a2be36b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax-M2.5-highspeed",
+      "PowerRank": 20,
+      "Description": "MiniMax's high-speed variant of M2.5, identical in capability but optimized for ~100 tokens/sec output (vs ~60 tps for standard M2.5). Same 230B MoE architecture (10B active) with 204K context and 128K output. Ideal for latency-sensitive agentic workflows where rapid iteration matters. 2x the price of standard M2.5 but still very cost-effective for frontier-class performance.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7583AB09-ECC1-492D-B2AC-6D41295DE57F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.059Z",
+            "checksum": "59d7ff617908fec6cabae3bc50c34922cef5229894fee808c9abfb5795b8e526"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "MiniMaxLLM",
+            "APIName": "MiniMax-M2.5-highspeed",
+            "MaxInputTokens": 204800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F0D3DA50-89B7-47AA-8B7B-58820FB3BBBD"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.071Z",
+            "checksum": "bd360fdcc3d7f767f5c1d84aa50d2ab155ac9dd4bb7018fd2d723b9a4361d2a2"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "StartedAt": "2026-02-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.5-highspeed pricing on MiniMax as of February 2026. 2x standard M2.5 pricing for ~100 tps output speed (vs ~60 tps standard). Same model capability, optimized for low-latency inference."
+          },
+          "primaryKey": {
+            "ID": "66D273F8-BDB7-44C5-9986-BE4E36A68E53"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.142Z",
+            "checksum": "8780c96d128a346efb9abb518343dd6b97f3a40142b610abc62587bf3b4a12ca"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6D185CAB-A4C0-4B5F-AC34-6C922CE6F1A8"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T20:01:00.840Z",
+      "checksum": "365dba81748a59f51d6dcb1ebc09c4033ce1603f0f4891791a0cbc93f2677049"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.1 Pro",
+      "PowerRank": 26,
+      "Description": "Google's most advanced reasoning model, released February 19, 2026. Built on Gemini 3 Pro architecture with improved software engineering behavior and expanded thinking levels (including new MEDIUM setting). Features 1M token context window and 64K output capacity. Ranked #1 of 115 models on Artificial Analysis Intelligence Index. Achieves 80.6% SWE-bench Verified, 94.3% GPQA Diamond, 77.1% ARC-AGI-2, and 51.4% Humanity's Last Exam (with tools). Supports Deep Think mode, function calling, code execution, and grounding. Knowledge cutoff January 2025.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3 Pro"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "59535ED3-7553-4800-BACA-3D5AADC1725B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.285Z",
+            "checksum": "ef6d226602de06d06d965a5292f2f0ba86cb37545982834713369adf4bcee8d7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-3.1-pro-preview",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D4DB6984-85E3-4A61-8E71-62932DA9149B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.295Z",
+            "checksum": "e12a24930d012271d712f537c818e4ee8cb8464066690907f629db611e54305a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B8EAEF05-6504-421D-8B2C-79DB5EF65699"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.330Z",
+            "checksum": "54a5d1ccebf82cab593aa1d658a423785879bc3b2aaadb005e3121b07960ea71"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-3.1-pro-preview",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5A6F5907-C3F9-4F59-94F8-F2DD6DEBB2C7"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.343Z",
+            "checksum": "176d2c5b7bca4e73f29f6bd19b1d3016a44fde22b0d20a04562ca2cddd967e45"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-02-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 12,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.1 Pro Preview pricing on Google AI Studio as of February 2026. Prompts <=200K: $2.00/$12.00 per 1M tokens. Prompts >200K: $4.00/$18.00 per 1M tokens. Cached input: $0.20/1M (<=200K), $0.40/1M (>200K). Base tier pricing shown."
+          },
+          "primaryKey": {
+            "ID": "BE29F384-C9D6-4386-9FF6-AA0DBCA84640"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.368Z",
+            "checksum": "0ceb57a5f26018783cc59dafb9518eaf9d6c45d0ddb73d2734398b5b0a287c62"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-02-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 12,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.1 Pro Preview pricing on Vertex AI as of February 2026. Standard tier: $2.00/$12.00 per 1M tokens (<=200K), $4.00/$18.00 (>200K). Priority tier: $3.60/$21.60 (<=200K). Flex/Batch: $1.00/$6.00 (<=200K). Cached input: $0.20/1M. Base standard tier pricing shown."
+          },
+          "primaryKey": {
+            "ID": "ED052BC7-82BC-44D9-8937-5B6D1B7AE85B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T20:01:06.378Z",
+            "checksum": "0e76f73b2aa2bddac011513788c48d7510ae0a0ddc5bc84d2053ed235f4522e2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "93B65E90-49F3-40F6-8C75-F18C7A80AC3B"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T20:01:06.160Z",
+      "checksum": "b1e90e85cc58bf29bdb72a46335b22ea91ac46c457d68e9910c317f1ca130001"
+    }
   }
 ]

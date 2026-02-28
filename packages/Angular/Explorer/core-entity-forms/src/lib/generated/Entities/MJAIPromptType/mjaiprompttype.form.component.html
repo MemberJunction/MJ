@@ -66,23 +66,23 @@
 
     <!-- AI Prompts Section -->
     <mj-collapsible-panel
-        SectionKey="aIPrompts"
+        SectionKey="mJAIPrompts"
         SectionName="AI Prompts"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIPrompts')"
+        [BadgeCount]="GetSectionRowCount('mJAIPrompts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
-                [AllowLoad]="IsSectionExpanded('aIPrompts')"
+                [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

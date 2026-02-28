@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-heygen",
   "type": "module",
-  "version": "5.3.1",
+  "version": "5.4.1",
   "description": "MemberJunction Wrapper for HeyGen Video Generation",
   "main": "dist/index.js",
   "scripts": {
@@ -16,8 +16,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "5.3.1",
-    "@memberjunction/global": "5.3.1",
+    "@memberjunction/ai": "5.4.1",
+    "@memberjunction/global": "5.4.1",
     "axios": "^1.13.4",
     "@elevenlabs/elevenlabs-js": "^2.34.0"
   },

@@ -20,9 +20,9 @@ export class MJTaskFormComponent extends BaseFormComponent {
             { sectionKey: 'taskDetails', sectionName: 'Task Details', isExpanded: true },
             { sectionKey: 'timelineMilestones', sectionName: 'Timeline & Milestones', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTaskDependencies', sectionName: 'MJ: Task Dependencies', isExpanded: false },
-            { sectionKey: 'mJTaskDependencies1', sectionName: 'MJ: Task Dependencies', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false }
+            { sectionKey: 'mJTaskDependenciesDependsOnTaskID', sectionName: 'Task Dependencies (Depends On Task ID)', isExpanded: false },
+            { sectionKey: 'mJTaskDependenciesTaskID', sectionName: 'Task Dependencies (Task ID)', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }

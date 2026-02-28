@@ -20,9 +20,9 @@ export class MJEntityDocumentFormComponent extends BaseFormComponent {
             { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
             { sectionKey: 'matchingConfiguration', sectionName: 'Matching Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityDocumentRuns', sectionName: 'Entity Document Runs', isExpanded: false },
-            { sectionKey: 'entityDocumentSettings', sectionName: 'Entity Document Settings', isExpanded: false },
-            { sectionKey: 'entityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false }
+            { sectionKey: 'mJEntityDocumentRuns', sectionName: 'Entity Document Runs', isExpanded: false },
+            { sectionKey: 'mJEntityDocumentSettings', sectionName: 'Entity Document Settings', isExpanded: false },
+            { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false }
         ]);
     }
 }

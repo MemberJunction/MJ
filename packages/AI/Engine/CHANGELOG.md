@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/ai-vectors-memory@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/storage@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/storage@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/ai-vectors-memory@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

@@ -1,1 +1,1 @@
-SELECT * FROM __mj.flyway_schema_history ORDER BY installed_on DESC
+SELECT * FROM [__mj].flyway_schema_history ORDER BY installed_on DESC

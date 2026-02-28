@@ -18,7 +18,7 @@ export class MJAIPromptTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'promptTypeInformation', sectionName: 'Prompt Type Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false }
+            { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false }
         ]);
     }
 }

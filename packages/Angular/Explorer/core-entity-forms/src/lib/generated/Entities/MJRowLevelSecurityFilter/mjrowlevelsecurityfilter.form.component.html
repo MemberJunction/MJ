@@ -84,23 +84,23 @@
 
     <!-- Entity Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="entityPermissions"
+        SectionKey="mJEntityPermissions"
         SectionName="Entity Permissions"
         Icon="fa fa-shield-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityPermissions')"
+        [BadgeCount]="GetSectionRowCount('mJEntityPermissions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','ReadRLSFilterID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
-                [AllowLoad]="IsSectionExpanded('entityPermissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityPermissions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityPermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
