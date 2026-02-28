@@ -229,7 +229,7 @@ export abstract class BaseMessagingAdapter {
         if (email) {
             const userCache = new UserCache();
             const mjUser = userCache.Users.find(
-                u => u.Email?.toLowerCase() === email!.toLowerCase()
+                (u: UserInfo) => u.Email?.toLowerCase() === email!.toLowerCase()
             );
             if (mjUser) {
                 return mjUser;
@@ -302,19 +302,21 @@ export abstract class BaseMessagingAdapter {
                 agent,
                 conversationMessages,
                 contextUser,
-                onStreaming: async (content: string) => {
-                    streamBuffer += content;
+                onStreaming: (chunk) => {
+                    streamBuffer += chunk.content;
                     const now = Date.now();
                     if (now - lastUpdateTime >= updateInterval) {
                         lastUpdateTime = now;
-                        try {
-                            progressMessageId = await this.sendOrUpdateStreamingMessage(
-                                message, streamBuffer, progressMessageId
-                            );
-                        } catch (streamError) {
+                        // Fire-and-forget: the callback type is synchronous,
+                        // so we handle the async update via .then/.catch
+                        this.sendOrUpdateStreamingMessage(
+                            message, streamBuffer, progressMessageId
+                        ).then(msgId => {
+                            progressMessageId = msgId;
+                        }).catch(() => {
                             // Silently skip streaming update failures (rate limiting, etc.)
                             // The final message will still be sent
-                        }
+                        });
                     }
                 }
             };
@@ -365,12 +367,12 @@ export abstract class BaseMessagingAdapter {
             return "I'm sorry, I encountered an error processing your request. Please try again.";
         }
 
-        // Look for output in run steps (last step with output)
+        // Look for output in run steps (last step with output data)
         const steps = result.agentRun?.Steps ?? [];
         for (let i = steps.length - 1; i >= 0; i--) {
             const step = steps[i];
-            if (step.Output) {
-                return step.Output;
+            if (step.OutputData) {
+                return step.OutputData;
             }
         }
 
@@ -474,7 +476,7 @@ export abstract class BaseMessagingAdapter {
     private async loadFallbackContextUser(): Promise<void> {
         const userCache = new UserCache();
         const user = userCache.Users.find(
-            u => u.Email?.toLowerCase() === this.Settings.ContextUserEmail.toLowerCase()
+            (u: UserInfo) => u.Email?.toLowerCase() === this.Settings.ContextUserEmail.toLowerCase()
         );
 
         if (!user) {

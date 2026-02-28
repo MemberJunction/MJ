@@ -81,7 +81,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
-            const settings = config.Settings as MessagingAdapterSettings;
+            const settings = config.Settings as unknown as MessagingAdapterSettings;
             this.SigningSecret = settings.SigningSecret ?? '';
 
             // Create and initialize the Slack adapter
