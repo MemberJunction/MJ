@@ -66,7 +66,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         );
 
         // Extract sender email from activity (available in Teams)
-        const senderEmail = (activity.from as Record<string, unknown>)?.['email'] as string | undefined;
+        const senderEmail = (activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined;
 
         return {
             MessageID: activity.id ?? '',

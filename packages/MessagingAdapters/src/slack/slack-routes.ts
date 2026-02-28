@@ -98,12 +98,12 @@ function computeSignature(body: unknown, timestamp: string, signingSecret: strin
  * @returns `true` if the signatures match.
  */
 function safeCompare(expected: string, actual: string): boolean {
-    const expectedBuffer = Buffer.from(expected);
-    const actualBuffer = Buffer.from(actual);
+    const expectedBytes = new Uint8Array(Buffer.from(expected));
+    const actualBytes = new Uint8Array(Buffer.from(actual));
 
-    if (expectedBuffer.length !== actualBuffer.length) {
+    if (expectedBytes.length !== actualBytes.length) {
         return false;
     }
 
-    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+    return crypto.timingSafeEqual(expectedBytes, actualBytes);
 }

@@ -10,7 +10,7 @@
  * - Stripping bot @mentions from message text
  */
 
-import { WebClient } from '@slack/web-api';
+import { WebClient, type KnownBlock } from '@slack/web-api';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
 import { markdownToBlocks } from './slack-formatter.js';
@@ -103,8 +103,8 @@ export class SlackAdapter extends BaseMessagingAdapter {
         return (result.messages ?? []).map(msg => ({
             MessageID: msg.ts!,
             Text: msg.text ?? '',
-            SenderID: msg.user ?? msg.bot_id ?? '',
-            SenderName: msg.username ?? '',
+            SenderID: msg.user ?? (msg as Record<string, unknown>).bot_id as string ?? '',
+            SenderName: (msg as Record<string, unknown>).username as string ?? '',
             ChannelID: channelId,
             ThreadID: threadId,
             IsDirectMessage: false,
@@ -151,7 +151,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
             channel: originalMessage.ChannelID,
             thread_ts: threadTs,
             text: response.PlainText,
-            blocks: response.RichPayload.blocks as Record<string, unknown>[]
+            blocks: response.RichPayload.blocks as KnownBlock[]
         });
     }
 
@@ -167,7 +167,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
             channel: originalMessage.ChannelID,
             ts: messageId,
             text: response.PlainText,
-            blocks: response.RichPayload.blocks as Record<string, unknown>[]
+            blocks: response.RichPayload.blocks as KnownBlock[]
         });
     }
 
