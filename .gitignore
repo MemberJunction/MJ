@@ -156,3 +156,4 @@ coverage/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt
+docker/workbench/.env.database
