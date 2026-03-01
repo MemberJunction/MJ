@@ -149,10 +149,10 @@ describe('SQLMaxLength', () => {
         it('text with -1 returns 0 (unlimited)', () => {
             expect(SQLMaxLength('text', -1)).toBe(0);
         });
-        it('non-string types return 0', () => {
+        it('non-string types return 0 (except uuid which has fixed length 36)', () => {
             expect(SQLMaxLength('integer', 0)).toBe(0);
             expect(SQLMaxLength('boolean', 0)).toBe(0);
-            expect(SQLMaxLength('uuid', 0)).toBe(0);
+            expect(SQLMaxLength('uuid', 0)).toBe(36);
             expect(SQLMaxLength('jsonb', 0)).toBe(0);
         });
     });
