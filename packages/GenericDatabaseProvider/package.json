@@ -17,6 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "@types/uuid": "^11.0.0",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"
   },
@@ -28,7 +29,9 @@
     "@memberjunction/core-entities": "5.4.1",
     "@memberjunction/encryption": "5.4.1",
     "@memberjunction/global": "5.4.1",
-    "@memberjunction/queue": "5.4.1"
+    "@memberjunction/queue": "5.4.1",
+    "sql-formatter": "^15.7.0",
+    "uuid": "^13.0.0"
   },
   "repository": {
     "type": "git",

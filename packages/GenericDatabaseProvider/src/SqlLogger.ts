@@ -1,10 +1,11 @@
 /**
- * @fileoverview SQL Logging Implementation for SQL Server Data Provider
- * 
+ * @fileoverview SQL Logging Implementation for Generic Database Provider
+ *
  * This module provides SQL statement logging functionality with file I/O,
- * filtering, formatting, and session management capabilities.
- * 
- * @module @memberjunction/sqlserver-dataprovider/SqlLogger
+ * filtering, formatting, and session management capabilities. It is
+ * database-agnostic and shared between all platform-specific providers.
+ *
+ * @module @memberjunction/generic-database-provider/SqlLogger
  */
 
 import * as fs from 'fs';
@@ -16,7 +17,7 @@ import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 /**
  * Internal implementation of SqlLoggingSession that handles SQL statement logging to files.
  * This class manages file I/O, SQL formatting, and filtering based on session options.
- * 
+ *
  * @internal
  */
 export class SqlLoggingSessionImpl implements SqlLoggingSession {
@@ -35,7 +36,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     this.filePath = filePath;
     this.startTime = new Date();
     this.options = options;
-    
+
     // Compile patterns once during construction
     if (options.filterPatterns && options.filterPatterns.length > 0) {
       this._compiledPatterns = ensureRegExps(options.filterPatterns);
@@ -69,16 +70,16 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
   /**
    * Logs a SQL statement to the file, applying filtering and formatting based on session options
-   * 
+   *
    * @param query - The SQL query to log
    * @param parameters - Optional parameters for the query
    * @param description - Optional description for this operation
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async logSqlStatement(query: string, parameters?: any, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
     const verbose = this.options.verboseOutput === true;
-    
+
     if (verbose) {
       console.log(`=== SESSION ${this.id} LOG ATTEMPT ===`);
       console.log(`Session disposed: ${this._disposed}, File handle exists: ${!!this._fileHandle}`);
@@ -86,7 +87,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.log(`isMutation: ${isMutation}, description: ${description || 'none'}`);
       console.log(`Options:`, this.options);
     }
-    
+
     if (this._disposed || !this._fileHandle) {
       if (verbose) {
         console.log(`Session ${this.id}: Skipping - disposed or no file handle`);
@@ -99,7 +100,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     if (verbose) {
       console.log(`Session ${this.id}: Statement filter check - statementTypes: ${statementTypes}, isMutation: ${isMutation}`);
     }
-    
+
     if (statementTypes === 'mutations' && !isMutation) {
       if (verbose) {
         console.log(`Session ${this.id}: Skipping - mutations only but this is not a mutation`);
@@ -112,7 +113,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       }
       return; // Skip logging mutation statements
     }
-    
+
     if (verbose) {
       console.log(`Session ${this.id}: Statement passed type filters, proceeding to process`);
     }
@@ -126,7 +127,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     // Process the SQL statement
     let processedQuery = query;
-    
+
     // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
     if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
@@ -135,24 +136,24 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }
     }
-    
+
     // Apply pattern filtering on the processed query
     if (this._compiledPatterns && this._compiledPatterns.length > 0) {
       const filterType = this.options.filterType || 'exclude'; // Default to exclude
       const anyPatternMatches = this._compiledPatterns.some(pattern => pattern.test(processedQuery));
-      
+
       if (verbose) {
         console.log(`Session ${this.id}: Pattern filter check - filterType: ${filterType}, patterns: ${this._compiledPatterns.length}, anyMatch: ${anyPatternMatches}`);
         console.log(`Session ${this.id}: Testing against processedQuery: ${processedQuery.substring(0, 100)}...`);
       }
-      
+
       if (filterType === 'exclude' && anyPatternMatches) {
         if (verbose) {
           console.log(`Session ${this.id}: Skipping - exclude pattern matched`);
         }
         return; // Skip logging if any exclude pattern matches
       }
-      
+
       if (filterType === 'include' && !anyPatternMatches) {
         if (verbose) {
           console.log(`Session ${this.id}: Skipping - no include pattern matched`);
@@ -164,12 +165,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Replace schema names with Flyway placeholders if migration format
     if (this.options.formatAsMigration) {
       // Step 1: Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
-      // This regex matches string literals and replaces ${...} with $' + '{...} within them
       processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
 
       // Step 2: Replace schema names with Flyway placeholders
       const schemaName = this.options.defaultSchemaName;
-      if (schemaName?.length > 0) {
+      if (schemaName && schemaName.length > 0) {
         // Create a regex that matches the schema name with optional brackets
         const schemaRegex = new RegExp(`\\[?${schemaName}\\]?\\.`, 'g');
         processedQuery = processedQuery.replace(schemaRegex, '[${flyway:defaultSchema}].');
@@ -194,10 +194,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     if (parameters) {
       if (Array.isArray(parameters)) {
         if (parameters.length > 0) {
-          logEntry += `-- Parameters: ${parameters.map((p, i) => `@p${i}='${p}'`).join(', ')}\n`;
+          logEntry += `-- Parameters: ${parameters.map((p: unknown, i: number) => `@p${i}='${p}'`).join(', ')}\n`;
         }
       } else if (typeof parameters === 'object') {
-        const paramStr = Object.entries(parameters)
+        const paramStr = Object.entries(parameters as Record<string, unknown>)
           .map(([key, value]) => `@${key}='${value}'`)
           .join(', ');
         if (paramStr) {
@@ -217,7 +217,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.log(`Session ${this.id}: About to write log entry (${logEntry.length} chars)`);
       console.log(`Session ${this.id}: Log entry preview: ${logEntry.substring(0, 200)}...`);
     }
-    
+
     try {
       await this._fileHandle.writeFile(logEntry);
       this._statementCount++;
@@ -276,7 +276,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       header += `-- Format: Migration-ready with Flyway schema placeholders\n`;
     }
 
-    header += `-- Generated by MemberJunction SQLServerDataProvider\n`;
+    header += `-- Generated by MemberJunction\n`;
     header += `\n`;
 
     return header;
@@ -296,14 +296,14 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
-   * Format SQL using sql-formatter library with SQL Server dialect
+   * Format SQL using sql-formatter library
    */
   private _prettyPrintSql(sql: string): string {
     if (!sql) return sql;
 
     try {
       let formatted = formatSql(sql, {
-        language: 'tsql', // SQL Server Transact-SQL dialect
+        language: 'tsql', // SQL Server Transact-SQL dialect (also works reasonably for PostgreSQL)
         tabWidth: 2,
         keywordCase: 'upper',
         functionCase: 'upper',
@@ -329,19 +329,15 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     if (!sql) return sql;
 
     // Fix BEGIN keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by BEGIN (word boundary)
     sql = sql.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
 
     // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
-    // Match: BEGIN followed by space(s) followed by non-whitespace
     sql = sql.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
 
     // Fix END keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by END (word boundary)
     sql = sql.replace(/(\S)\s+(END\b)/g, '$1\n$2');
 
     // Fix EXEC keyword - ensure it's on its own line
-    // Match: any non-whitespace followed by space(s) followed by EXEC (word boundary)
     sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
 
     return sql;
@@ -350,16 +346,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
    * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
-   *
-   * @param sql - The SQL statement to process
-   * @returns The SQL with escaped template syntax within strings
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    // Regex /\$\{/g matches all occurrences of "${" literally:
-    // - \$ escapes the dollar sign (which is a special regex character)
-    // - \{ escapes the opening brace (also a special regex character)
-    // - /g flag ensures all occurrences are replaced, not just the first one
-    // The replacement "$'+'{ " breaks up the ${ pattern so Flyway won't interpret it as a placeholder
     return sql.replaceAll(/\$\{/g, "$$'+'{");
   }
 

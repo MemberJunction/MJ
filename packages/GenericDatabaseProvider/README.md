@@ -30,7 +30,15 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `OnAfterSaveExecute()` | Fires after-save entity/AI actions (no await) |
 | `OnBeforeDeleteExecute()` | Runs before-delete entity actions and AI actions |
 | `OnAfterDeleteExecute()` | Fires after-delete entity/AI actions (no await) |
-| `PostProcessRows()` | Decrypts encrypted fields using `EncryptionEngine` |
+| `PostProcessRows()` | Platform-specific datetime adjustment (via `AdjustDatetimeFields` hook) + field-level decryption using `EncryptionEngine` |
+| `AdjustDatetimeFields()` | Virtual hook for platform-specific datetime corrections (no-op default; SQL Server overrides for DATETIMEOFFSET) |
+| `ExecuteSQLBatch()` | Executes multiple SQL queries; default runs in parallel via `Promise.all(ExecuteSQL(...))`, SQL Server overrides for true multi-result-set batching |
+| `GetDatasetStatusByName()` | Retrieves dataset item status (max date + row count) using `ExecuteSQLBatch` |
+| `CreateSqlLogger()` | Creates a SQL logging session that captures all SQL operations to a file |
+| `GetActiveSqlLoggingSessions()` | Lists all active SQL logging sessions |
+| `GetSqlLoggingSessionById()` | Retrieves a specific logging session by ID |
+| `DisposeAllSqlLoggingSessions()` | Disposes all active logging sessions (used on shutdown) |
+| `LogSQLStatement()` | Static method to log SQL from external sources (e.g., transaction groups) |
 | `RenderViewWhereClause()` | Resolves `{%UserView "id"%}` templates in saved view WHERE clauses |
 | `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, pagination, aggregates, audit logging |
 | `InternalRunViews()` | Parallel wrapper for multiple InternalRunView calls |
@@ -75,6 +83,40 @@ export class MyDatabaseProvider extends GenericDatabaseProvider {
 }
 ```
 
+## SQL Logging
+
+The SQL logging subsystem lives in GenericDatabaseProvider so it is available to all platform-specific providers (SQL Server, PostgreSQL, etc.). Sessions capture executed SQL statements to files with filtering, formatting, and Flyway migration support.
+
+```typescript
+import { Metadata } from '@memberjunction/core';
+import type { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+
+const provider = Metadata.Provider as GenericDatabaseProvider;
+
+// Create a logging session
+const session = await provider.CreateSqlLogger('./logs/operations.sql', {
+    statementTypes: 'mutations',
+    prettyPrint: true,
+    filterPatterns: [/spCreateAIPromptRun/i],
+    filterType: 'exclude',
+});
+
+try {
+    // All SQL operations are automatically captured
+    await provider.ExecuteSQL('INSERT INTO ...');
+} finally {
+    await session.dispose();
+}
+```
+
+Key types exported from this package:
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `SqlLoggingOptions` | Interface | Configuration options for SQL logging sessions |
+| `SqlLoggingSession` | Interface | Public interface for an active logging session |
+| `SqlLoggingSessionImpl` | Class | Internal session implementation (file I/O, formatting, filtering) |
+
 ## Dependencies
 
 - `@memberjunction/core` — Base class and entity types
@@ -82,4 +124,7 @@ export class MyDatabaseProvider extends GenericDatabaseProvider {
 - `@memberjunction/actions` / `@memberjunction/actions-base` — Entity action engine
 - `@memberjunction/aiengine` — AI action execution
 - `@memberjunction/encryption` — Field-level encryption/decryption
+- `@memberjunction/global` — Global object store, `ensureRegExps` for pattern filtering
 - `@memberjunction/queue` — Task queue for after-save AI actions
+- `sql-formatter` — SQL pretty-printing for log output
+- `uuid` — Session ID generation

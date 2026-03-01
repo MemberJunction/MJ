@@ -25,6 +25,8 @@ import {
     EntitySaveOptions,
     EntityDeleteOptions,
     EntityPermissionType,
+    ExecuteSQLOptions,
+    Metadata,
     RunViewParams,
     RunViewResult,
     RunViewWithCacheCheckParams,
@@ -43,12 +45,19 @@ import {
     DatasetItemFilterType,
     DatasetResultType,
     DatasetItemResultType,
+    DatasetStatusResultType,
+    DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
     UserInfo,
     LogError,
     LogStatus,
     StripStopWords,
 } from '@memberjunction/core';
+
+import { MJGlobal } from '@memberjunction/global';
+import { v4 as uuidv4 } from 'uuid';
+import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
 import {
     MJEntityAIActionEntity,
@@ -65,6 +74,19 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 
 /**
+ * Configuration options for batch SQL execution.
+ * Shared between GenericDatabaseProvider and platform-specific providers.
+ */
+export interface ExecuteSQLBatchOptions {
+    /** Optional description for this batch operation */
+    description?: string;
+    /** If true, this batch will not be logged to any logging session */
+    ignoreLogging?: boolean;
+    /** Whether this batch contains data mutation operations */
+    isMutation?: boolean;
+}
+
+/**
  * GenericDatabaseProvider is an intermediate abstract class that implements shared
  * entity action, AI action, encryption, and view WHERE clause rendering logic.
  *
@@ -72,6 +94,235 @@ import { EncryptionEngine } from '@memberjunction/encryption';
  * to inherit these shared behaviors.
  */
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+
+    /**************************************************************************/
+    // SQL Logging — Session Management & Statement Logging
+    /**************************************************************************/
+
+    private static _sqlLoggingSessionsKey: string = 'MJ_GenericDatabaseProvider_SqlLoggingSessions';
+    private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+        const g = MJGlobal.Instance.GetGlobalObjectStore();
+        if (g) {
+            if (!g[GenericDatabaseProvider._sqlLoggingSessionsKey]) {
+                g[GenericDatabaseProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
+            }
+            return g[GenericDatabaseProvider._sqlLoggingSessionsKey];
+        } else {
+            throw new Error('No global object store available for SQL logging session');
+        }
+    }
+
+    /**
+     * Creates a new SQL logging session that will capture all SQL operations to a file.
+     * Returns a disposable session object that must be disposed to stop logging.
+     *
+     * @param filePath - Full path to the file where SQL statements will be logged
+     * @param options - Optional configuration for the logging session
+     * @returns Promise<SqlLoggingSession> - Disposable session object
+     *
+     * @example
+     * ```typescript
+     * // Basic usage
+     * const session = await provider.CreateSqlLogger('./logs/metadata-sync.sql');
+     * try {
+     *   // Perform operations that will be logged
+     *   await provider.ExecuteSQL('INSERT INTO ...');
+     * } finally {
+     *   await session.dispose(); // Stop logging
+     * }
+     *
+     * // With migration formatting
+     * const session = await provider.CreateSqlLogger('./migrations/changes.sql', {
+     *   formatAsMigration: true,
+     *   description: 'MetadataSync push operation'
+     * });
+     * ```
+     */
+    public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
+        const sessionId = uuidv4();
+        const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+        const session = new SqlLoggingSessionImpl(sessionId, filePath,
+            {
+                defaultSchemaName: mjCoreSchema,
+                ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
+                // the caller's defaultSchemaName will be used
+            });
+
+        // Initialize the session (create file, write header)
+        await session.initialize();
+
+        // Store in active sessions map
+        this._sqlLoggingSessions.set(sessionId, session);
+
+        // Return a proxy that handles cleanup on dispose
+        return {
+            id: session.id,
+            filePath: session.filePath,
+            startTime: session.startTime,
+            get statementCount() {
+                return session.statementCount;
+            },
+            options: session.options,
+            dispose: async () => {
+                await session.dispose();
+                this._sqlLoggingSessions.delete(sessionId);
+            },
+        };
+    }
+
+    /**
+     * Gets information about all active SQL logging sessions.
+     * Useful for monitoring and debugging.
+     *
+     * @returns Array of session information objects
+     */
+    public GetActiveSqlLoggingSessions(): Array<{
+        id: string;
+        filePath: string;
+        startTime: Date;
+        statementCount: number;
+        options: SqlLoggingOptions;
+    }> {
+        return Array.from(this._sqlLoggingSessions.values()).map((session) => ({
+            id: session.id,
+            filePath: session.filePath,
+            startTime: session.startTime,
+            statementCount: session.statementCount,
+            options: session.options,
+        }));
+    }
+
+    /**
+     * Gets a specific SQL logging session by its ID.
+     * Returns the session if found, or undefined if not found.
+     *
+     * @param sessionId - The unique identifier of the session to retrieve
+     * @returns The SqlLoggingSession if found, undefined otherwise
+     */
+    public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
+        return this._sqlLoggingSessions.get(sessionId);
+    }
+
+    /**
+     * Disposes all active SQL logging sessions.
+     * Useful for cleanup on provider shutdown.
+     */
+    public async DisposeAllSqlLoggingSessions(): Promise<void> {
+        const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.dispose());
+        await Promise.all(disposePromises);
+        this._sqlLoggingSessions.clear();
+    }
+
+    /**
+     * Internal method to log SQL statement to all active logging sessions.
+     * This is called automatically by ExecuteSQL methods.
+     * Protected so platform-specific providers can reference it (e.g., to bind as a callback).
+     *
+     * @param query - The SQL query being executed
+     * @param parameters - Parameters for the query
+     * @param description - Optional description for this operation
+     * @param ignoreLogging - If true, this statement will not be logged
+     * @param isMutation - Whether this is a data mutation operation
+     * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
+     * @param contextUser - Optional user context for session filtering
+     */
+    protected async _logSqlStatement(
+        query: string,
+        parameters?: unknown,
+        description?: string,
+        ignoreLogging: boolean = false,
+        isMutation: boolean = false,
+        simpleSQLFallback?: string,
+        contextUser?: UserInfo,
+    ): Promise<void> {
+        if (ignoreLogging || this._sqlLoggingSessions.size === 0) {
+            return;
+        }
+
+        // Check if any session has verbose output enabled for debug logging
+        const allSessions = Array.from(this._sqlLoggingSessions.values());
+        const hasVerboseSession = allSessions.some(s => s.options.verboseOutput === true);
+
+        if (hasVerboseSession) {
+            console.log('=== SQL LOGGING DEBUG ===');
+            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
+            console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
+
+            console.log(`All sessions:`, allSessions.map(s => ({
+                id: s.id,
+                filterByUserId: s.options.filterByUserId,
+                sessionName: s.options.sessionName
+            })));
+        }
+
+        const filteredSessions = allSessions.filter((session) => {
+            // If session has user filter, only log if contextUser matches AND contextUser is provided
+            if (session.options.filterByUserId) {
+                if (!contextUser?.Email) {
+                    if (hasVerboseSession) {
+                        console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
+                    }
+                    return false; // Don't log if filtering requested but no user context provided
+                }
+                const matches = session.options.filterByUserId === contextUser.ID;
+                if (hasVerboseSession) {
+                    console.log(`Session ${session.id} filter check:`, {
+                        filterByUserId: session.options.filterByUserId,
+                        contextUserEmail: contextUser.Email,
+                        matches: matches
+                    });
+                }
+                return matches;
+            }
+            // No filter means log for all users (regardless of contextUser)
+            if (hasVerboseSession) {
+                console.log(`Session ${session.id} has no filter - including`);
+            }
+            return true;
+        });
+
+        if (hasVerboseSession) {
+            console.log(`Sessions after filtering: ${filteredSessions.length}`);
+        }
+
+        const logPromises = filteredSessions.map((session) =>
+            session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
+        );
+
+        await Promise.all(logPromises);
+
+        if (hasVerboseSession) {
+            console.log('=== SQL LOGGING DEBUG END ===');
+        }
+    }
+
+    /**
+     * Static method to log SQL statements from external sources like transaction groups.
+     * Gets the current provider instance from Metadata.Provider and delegates to the
+     * instance _logSqlStatement method.
+     *
+     * @param query - The SQL query being executed
+     * @param parameters - Parameters for the query
+     * @param description - Optional description for this operation
+     * @param isMutation - Whether this is a data mutation operation
+     * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
+     * @param contextUser - Optional user context for session filtering
+     */
+    public static async LogSQLStatement(
+        query: string,
+        parameters?: unknown,
+        description?: string,
+        isMutation: boolean = false,
+        simpleSQLFallback?: string,
+        contextUser?: UserInfo,
+    ): Promise<void> {
+        // Get the current provider instance
+        const provider = Metadata.Provider as GenericDatabaseProvider;
+        if (provider && provider._sqlLoggingSessions.size > 0) {
+            await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
+        }
+    }
 
     /**************************************************************************/
     // Entity Actions & AI Actions (Concrete Implementations)
@@ -230,13 +481,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**************************************************************************/
-    // PostProcessRows — Encryption Decryption
+    // PostProcessRows — Datetime Adjustment + Encryption Decryption
     /**************************************************************************/
 
     /**
-     * Post-processes rows to handle field-level decryption for encrypted fields.
-     * Platform-specific datetime processing should be handled by provider subclasses
-     * which call super.PostProcessRows() and then apply their own datetime logic.
+     * Post-processes rows: first applies platform-specific datetime adjustments
+     * via the virtual `AdjustDatetimeFields` hook, then handles field-level
+     * decryption for encrypted fields.
+     *
+     * Subclasses should NOT override this method. Instead, override
+     * `AdjustDatetimeFields` for platform-specific datetime corrections.
      */
     protected override async PostProcessRows(
         rows: Record<string, unknown>[],
@@ -245,13 +499,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
+        // Step 1: Platform-specific datetime adjustment (virtual hook)
+        const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
+        let processedRows: Record<string, unknown>[] = rows;
+        if (datetimeFields.length > 0) {
+            processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
+        }
+
+        // Step 2: Encryption decryption
         const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
-        if (encryptedFields.length === 0) return rows;
+        if (encryptedFields.length === 0) return processedRows;
 
         const encryptionEngine = EncryptionEngine.Instance;
         await encryptionEngine.Config(false, user);
 
-        return Promise.all(rows.map(async (row) => {
+        return Promise.all(processedRows.map(async (row) => {
             const processedRow = { ...row };
 
             for (const field of encryptedFields) {
@@ -275,6 +537,65 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    /**
+     * Virtual hook for platform-specific datetime field adjustments.
+     * Default implementation is a no-op (returns rows unchanged).
+     *
+     * SQL Server overrides this to correct datetime2/datetimeoffset/datetime
+     * timezone interpretation issues in the mssql driver.
+     * PostgreSQL does NOT need to override — PG timestamp types are timezone-aware natively.
+     *
+     * @param rows The data rows to process
+     * @param datetimeFields Entity fields with TSType === Date
+     * @param entityInfo The entity metadata
+     * @returns The rows with datetime fields adjusted (or unchanged for default)
+     */
+    protected async AdjustDatetimeFields(
+        rows: Record<string, unknown>[],
+        datetimeFields: EntityFieldInfo[],
+        entityInfo: EntityInfo,
+    ): Promise<Record<string, unknown>[]> {
+        return rows; // No-op by default — PG timestamps don't need adjustment
+    }
+
+    /**************************************************************************/
+    // ExecuteSQLBatch — Default Batch Execution (Parallel Individual Queries)
+    /**************************************************************************/
+
+    /**
+     * Executes multiple SQL queries and returns an array of result arrays, one per query.
+     *
+     * The default implementation runs queries in parallel using `Promise.all(ExecuteSQL(...))`.
+     * Platform-specific providers can override for true multi-result-set batching:
+     * - SQL Server: concatenates queries and uses a single mssql request with multiple recordsets
+     * - PostgreSQL: could use pg pipeline or simple parallel execution
+     *
+     * @param queries Array of SQL query strings to execute
+     * @param parameters Optional array of parameter arrays, one per query
+     * @param options Optional batch execution options
+     * @param contextUser Optional user context for logging/filtering
+     * @returns Array of result arrays, one for each query
+     */
+    public async ExecuteSQLBatch(
+        queries: string[],
+        parameters?: unknown[][],
+        options?: ExecuteSQLBatchOptions,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> {
+        const execOptions: ExecuteSQLOptions | undefined = options ? {
+            description: options.description,
+            ignoreLogging: options.ignoreLogging,
+            isMutation: options.isMutation,
+        } : undefined;
+
+        const promises = queries.map((query, index) => {
+            const queryParams = parameters?.[index];
+            return this.ExecuteSQL<Record<string, unknown>>(query, queryParams, execOptions, contextUser);
+        });
+
+        return Promise.all(promises);
     }
 
     /**************************************************************************/
@@ -1456,8 +1777,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Retrieves a dataset by name, executing all item queries and aggregating results.
-     * Uses dialect-neutral quoting for all SQL construction.
+     * Retrieves a dataset by name, executing all item queries via ExecuteSQLBatch
+     * and aggregating results. Uses dialect-neutral quoting for all SQL construction.
+     *
+     * ExecuteSQLBatch gives SQL Server true multi-result-set batching automatically,
+     * while PG (and the default) use parallel individual queries.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -1481,114 +1805,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
 
-        if (items && items.length > 0) {
-            const results: DatasetItemResultType[] = [];
-
-            for (const item of items) {
-                const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
-                const entityBaseView = String(item['EntityBaseView']);
-                const code = String(item['Code']);
-                const entityName = String(item['Entity']);
-                const entityID = String(item['EntityID']);
-                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-                const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
-
-                // Build filter SQL
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === code);
-                    if (filter) filterSQL = (whereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
-                }
-
-                // Validate columns if specified
-                const columns = provider.getColumnsForDatasetItem(item, datasetName);
-                if (!columns) {
-                    results.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        Code: code,
-                        Results: [],
-                        LatestUpdateDate: undefined,
-                        Status: 'Invalid columns specified for dataset item',
-                        Success: false,
-                    });
-                    continue;
-                }
-
-                const itemSQL = `SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${whereClause ? 'WHERE ' + whereClause : ''}${filterSQL}`;
-
-                try {
-                    let itemData = await provider.ExecuteSQL<Record<string, unknown>>(itemSQL, undefined, undefined, contextUser);
-
-                    // Post-process rows for encryption/datetime
-                    if (itemData.length > 0) {
-                        const entityInfo = provider.Entities.find(e =>
-                            e.Name.trim().toLowerCase() === entityName.trim().toLowerCase(),
-                        );
-                        if (entityInfo && contextUser) {
-                            itemData = await provider.PostProcessRows(itemData, entityInfo, contextUser);
-                        }
-                    }
-
-                    const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
-                    const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
-                    const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-                    let latestUpdateDate = new Date(1900, 1, 1);
-                    if (itemData && itemData.length > 0) {
-                        for (const data of itemData) {
-                            if (data[dateFieldToCheck] && new Date(String(data[dateFieldToCheck])) > latestUpdateDate) {
-                                latestUpdateDate = new Date(String(data[dateFieldToCheck]));
-                            }
-                        }
-                    }
-
-                    if (datasetMaxUpdatedAt > latestUpdateDate) latestUpdateDate = datasetMaxUpdatedAt;
-
-                    results.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        Code: code,
-                        Results: itemData,
-                        LatestUpdateDate: latestUpdateDate,
-                        Success: itemData !== null && itemData !== undefined,
-                    });
-                } catch (err) {
-                    LogError(`GetDatasetByName: Error fetching item ${code}: ${err instanceof Error ? err.message : String(err)}`);
-                    results.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        Code: code,
-                        Results: [],
-                        LatestUpdateDate: undefined,
-                        Status: err instanceof Error ? err.message : String(err),
-                        Success: false,
-                    });
-                }
-            }
-
-            // Aggregate results
-            const bSuccess = results.every(result => result.Success);
-            const latestUpdateDate = results.reduce(
-                (acc, result) => {
-                    if (result?.LatestUpdateDate) {
-                        const theDate = new Date(result.LatestUpdateDate);
-                        if (theDate.getTime() > acc.getTime()) return theDate;
-                    }
-                    return acc;
-                },
-                new Date(0),
-            );
-
-            return {
-                DatasetID: String(items[0]['DatasetID']),
-                DatasetName: datasetName,
-                Success: bSuccess,
-                Status: '',
-                LatestUpdateDate: latestUpdateDate,
-                Results: results,
-            };
-        } else {
+        if (!items || items.length === 0) {
             return {
                 DatasetID: '',
                 DatasetName: datasetName,
@@ -1598,7 +1815,250 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: [],
             };
         }
+
+        // Phase 1: Build all item SQL queries
+        const queries: string[] = [];
+        const validItems: Record<string, unknown>[] = [];
+        const errorResults: DatasetItemResultType[] = [];
+
+        for (const item of items) {
+            const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
+            const entityBaseView = String(item['EntityBaseView']);
+            const code = String(item['Code']);
+            const entityName = String(item['Entity']);
+            const entityID = String(item['EntityID']);
+            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+
+            let filterSQL = '';
+            if (itemFilters && itemFilters.length > 0) {
+                const filter = itemFilters.find(f => f.ItemCode === code);
+                if (filter) filterSQL = (whereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
+            }
+
+            const columns = provider.getColumnsForDatasetItem(item, datasetName);
+            if (!columns) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: 'Invalid columns specified for dataset item',
+                    Success: false,
+                });
+                continue;
+            }
+
+            queries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${whereClause ? 'WHERE ' + whereClause : ''}${filterSQL}`);
+            validItems.push(item);
+        }
+
+        // Phase 2: Execute all queries via ExecuteSQLBatch (true batch on SQL Server, parallel on PG)
+        let batchResults: Record<string, unknown>[][] = [];
+        try {
+            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+        } catch (err) {
+            LogError(`GetDatasetByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
+            // Fall through with empty results
+        }
+
+        // Phase 3: Process results per item
+        const results: DatasetItemResultType[] = [...errorResults];
+
+        for (let i = 0; i < validItems.length; i++) {
+            const item = validItems[i];
+            const entityName = String(item['Entity']);
+            const entityID = String(item['EntityID']);
+            const code = String(item['Code']);
+            const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+
+            let itemData = batchResults[i] || [];
+
+            // Post-process rows for encryption/datetime
+            if (itemData.length > 0) {
+                const entityInfo = provider.Entities.find(e =>
+                    e.Name.trim().toLowerCase() === entityName.trim().toLowerCase(),
+                );
+                if (entityInfo && contextUser) {
+                    itemData = await provider.PostProcessRows(itemData, entityInfo, contextUser);
+                }
+            }
+
+            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
+            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
+            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+            let latestUpdateDate = new Date(1900, 1, 1);
+            if (itemData && itemData.length > 0) {
+                for (const data of itemData) {
+                    if (data[dateFieldToCheck] && new Date(String(data[dateFieldToCheck])) > latestUpdateDate) {
+                        latestUpdateDate = new Date(String(data[dateFieldToCheck]));
+                    }
+                }
+            }
+
+            if (datasetMaxUpdatedAt > latestUpdateDate) latestUpdateDate = datasetMaxUpdatedAt;
+
+            results.push({
+                EntityID: entityID,
+                EntityName: entityName,
+                Code: code,
+                Results: itemData,
+                LatestUpdateDate: latestUpdateDate,
+                Success: itemData !== null && itemData !== undefined,
+            });
+        }
+
+        // Aggregate results
+        const bSuccess = results.every(result => result.Success);
+        const latestUpdateDate = results.reduce(
+            (acc, result) => {
+                if (result?.LatestUpdateDate) {
+                    const theDate = new Date(result.LatestUpdateDate);
+                    if (theDate.getTime() > acc.getTime()) return theDate;
+                }
+                return acc;
+            },
+            new Date(0),
+        );
+
+        return {
+            DatasetID: String(items[0]['DatasetID']),
+            DatasetName: datasetName,
+            Success: bSuccess,
+            Status: '',
+            LatestUpdateDate: latestUpdateDate,
+            Results: results,
+        };
     }
+
+    /**************************************************************************/
+    // GetDatasetStatusByName — Shared Implementation
+    /**************************************************************************/
+
+    /**
+     * Retrieves status information for a dataset by name: per-entity row count and
+     * latest update date. Uses ExecuteSQLBatch for per-item status queries.
+     */
+    public async GetDatasetStatusByName(
+        datasetName: string,
+        itemFilters?: DatasetItemFilterType[],
+        contextUser?: UserInfo,
+        providerToUse?: IMetadataProvider,
+    ): Promise<DatasetStatusResultType> {
+        const provider = (providerToUse ?? this) as GenericDatabaseProvider;
+        const schema = provider.MJCoreSchemaName;
+
+        // Fetch dataset items metadata
+        const sSQL = `SELECT di.*, ` +
+            `e.${provider.QuoteIdentifier('BaseView')} AS ${provider.QuoteIdentifier('EntityBaseView')}, ` +
+            `e.${provider.QuoteIdentifier('SchemaName')} AS ${provider.QuoteIdentifier('EntitySchemaName')}, ` +
+            `d.${provider.QuoteIdentifier('__mj_UpdatedAt')} AS ${provider.QuoteIdentifier('DatasetUpdatedAt')}, ` +
+            `di.${provider.QuoteIdentifier('__mj_UpdatedAt')} AS ${provider.QuoteIdentifier('DatasetItemUpdatedAt')} ` +
+            `FROM ${provider.QuoteSchemaAndView(schema, 'vwDatasets')} d ` +
+            `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwDatasetItems')} di ON d.${provider.QuoteIdentifier('ID')} = di.${provider.QuoteIdentifier('DatasetID')} ` +
+            `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
+            `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
+
+        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
+
+        if (!items || items.length === 0) {
+            return {
+                DatasetID: '',
+                DatasetName: datasetName,
+                Success: false,
+                Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
+                LatestUpdateDate: new Date(0),
+                EntityUpdateDates: [],
+            };
+        }
+
+        // Build per-item status queries
+        const queries: string[] = [];
+        const itemMeta: Array<{ entityID: string; entityName: string; datasetMaxUpdatedAt: string }> = [];
+
+        for (const item of items) {
+            const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
+            const entityBaseView = String(item['EntityBaseView']);
+            const entityID = String(item['EntityID']);
+            const entityName = String(item['Entity']);
+            const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+
+            let filterSQL = '';
+            if (itemFilters && itemFilters.length > 0) {
+                const filter = itemFilters.find(f => f.ItemCode === String(item['Code']));
+                if (filter) filterSQL = ' WHERE ' + filter.Filter;
+            }
+
+            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
+            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
+            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
+
+            const statusSQL = `SELECT ` +
+                `CASE ` +
+                `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
+                `ELSE '${datasetMaxUpdatedAt}' ` +
+                `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
+                `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
+                `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
+
+            queries.push(statusSQL);
+            itemMeta.push({ entityID, entityName, datasetMaxUpdatedAt });
+        }
+
+        // Execute all status queries via ExecuteSQLBatch
+        let batchResults: Record<string, unknown>[][] = [];
+        try {
+            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+        } catch (err) {
+            LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        // Process results
+        const updateDates: DatasetStatusEntityUpdateDateType[] = [];
+        let overallLatestDate = new Date(1900, 1, 1);
+
+        for (let i = 0; i < itemMeta.length; i++) {
+            const meta = itemMeta[i];
+            const statusRows = batchResults[i];
+            if (statusRows && statusRows.length > 0) {
+                const updateDate = new Date(String(statusRows[0]['UpdateDate']));
+                updateDates.push({
+                    EntityID: meta.entityID,
+                    EntityName: meta.entityName,
+                    RowCount: Number(statusRows[0]['TheRowCount']),
+                    UpdateDate: updateDate,
+                });
+                if (updateDate > overallLatestDate) {
+                    overallLatestDate = updateDate;
+                }
+            }
+        }
+
+        if (updateDates.length === 0) {
+            return {
+                DatasetID: String(items[0]['DatasetID']),
+                DatasetName: datasetName,
+                Success: false,
+                Status: 'No update dates found for DatasetName: ' + datasetName,
+                LatestUpdateDate: new Date(0),
+                EntityUpdateDates: [],
+            };
+        }
+
+        return {
+            DatasetID: String(items[0]['DatasetID']),
+            DatasetName: datasetName,
+            Success: true,
+            Status: '',
+            LatestUpdateDate: overallLatestDate,
+            EntityUpdateDates: updateDates,
+        };
+    }
+
+    /**************************************************************************/
+    // getColumnsForDatasetItem — Column Validation
+    /**************************************************************************/
 
     /**
      * Validates columns for a dataset item and returns the column list string.

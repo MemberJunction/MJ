@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { SqlLoggingSessionImpl } from '../SqlLogger';
+
+// Mock sql-formatter (used by SqlLoggingSessionImpl)
+vi.mock('sql-formatter', () => ({
+    format: (sql: string) => sql, // passthrough for tests
+}));
 import {
     DatabaseProviderBase,
     SaveSQLResult,
@@ -16,6 +22,7 @@ import {
     QueryInfo,
     QueryCategoryInfo,
 } from '@memberjunction/core';
+import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 
 /**
  * Concrete test subclass that provides minimal implementations of all abstract methods.
@@ -58,6 +65,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
 
     public async testPostProcessRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, user: UserInfo): Promise<Record<string, unknown>[]> {
         return this.PostProcessRows(rows, entityInfo, user);
+    }
+
+    public async testAdjustDatetimeFields(rows: Record<string, unknown>[], datetimeFields: EntityFieldInfo[], entityInfo: EntityInfo): Promise<Record<string, unknown>[]> {
+        return this.AdjustDatetimeFields(rows, datetimeFields, entityInfo);
     }
 
     public async testRenderViewWhereClause(viewEntity: { WhereClause: string | null }, user: UserInfo, stack?: string[]): Promise<string> {
@@ -428,6 +439,189 @@ describe('GenericDatabaseProvider', () => {
             const result = await provider.Load(entity, compositeKey, null, mockUser) as Record<string, unknown>;
             expect(result.Code).toBe('ABC'); // trimmed
             expect(result.Name).toBe('Test   '); // varchar not trimmed
+        });
+    });
+
+    describe('AdjustDatetimeFields (default no-op)', () => {
+        it('returns rows unchanged by default', async () => {
+            const now = new Date();
+            const rows = [{ ID: '1', CreatedAt: now, Name: 'Test' }];
+            const datetimeFields = [
+                { Name: 'CreatedAt', TSType: EntityFieldTSType.Date, Type: 'timestamp' },
+            ] as EntityFieldInfo[];
+            const entityInfo = { Fields: datetimeFields } as unknown as EntityInfo;
+
+            const result = await provider.testAdjustDatetimeFields(rows, datetimeFields, entityInfo);
+            expect(result).toBe(rows); // Same reference — no-op returns unchanged
+            expect(result[0].CreatedAt).toBe(now); // Exact same Date object
+        });
+
+        it('returns empty array unchanged', async () => {
+            const result = await provider.testAdjustDatetimeFields([], [], {} as EntityInfo);
+            expect(result).toEqual([]);
+        });
+    });
+
+    describe('ExecuteSQLBatch', () => {
+        it('executes multiple queries in parallel via ExecuteSQL', async () => {
+            provider.executeSQLResults = [
+                [{ ID: '1', Name: 'Alice' }],
+                [{ ID: '2', Name: 'Bob' }],
+                [{ ID: '3', Name: 'Charlie' }],
+            ];
+
+            const results = await provider.ExecuteSQLBatch(
+                ['SELECT * FROM Users', 'SELECT * FROM Orders', 'SELECT * FROM Items'],
+                undefined,
+                undefined,
+                mockUser,
+            );
+
+            expect(results).toHaveLength(3);
+            expect(results[0]).toEqual([{ ID: '1', Name: 'Alice' }]);
+            expect(results[1]).toEqual([{ ID: '2', Name: 'Bob' }]);
+            expect(results[2]).toEqual([{ ID: '3', Name: 'Charlie' }]);
+            expect(provider.executeSQLCalls).toHaveLength(3);
+            expect(provider.executeSQLCalls[0].sql).toBe('SELECT * FROM Users');
+            expect(provider.executeSQLCalls[1].sql).toBe('SELECT * FROM Orders');
+            expect(provider.executeSQLCalls[2].sql).toBe('SELECT * FROM Items');
+        });
+
+        it('returns empty array for empty queries', async () => {
+            const results = await provider.ExecuteSQLBatch([], undefined, undefined, mockUser);
+            expect(results).toEqual([]);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+
+        it('passes parameters per query', async () => {
+            provider.executeSQLResults = [
+                [{ Count: 5 }],
+                [{ Count: 10 }],
+            ];
+
+            const results = await provider.ExecuteSQLBatch(
+                ['SELECT COUNT(*) AS Count FROM Users WHERE Status = $1', 'SELECT COUNT(*) AS Count FROM Orders WHERE Total > $1'],
+                [['active'], [100]],
+                undefined,
+                mockUser,
+            );
+
+            expect(results).toHaveLength(2);
+            expect(provider.executeSQLCalls[0].params).toEqual(['active']);
+            expect(provider.executeSQLCalls[1].params).toEqual([100]);
+        });
+
+        it('passes options to individual ExecuteSQL calls', async () => {
+            // Spy on ExecuteSQL to verify options are forwarded
+            const execSpy = vi.spyOn(provider, 'ExecuteSQL');
+            provider.executeSQLResults = [
+                [{ ID: '1' }],
+            ];
+
+            await provider.ExecuteSQLBatch(
+                ['SELECT 1'],
+                undefined,
+                { description: 'test batch', ignoreLogging: true, isMutation: false },
+                mockUser,
+            );
+
+            expect(execSpy).toHaveBeenCalledWith(
+                'SELECT 1',
+                undefined,
+                { description: 'test batch', ignoreLogging: true, isMutation: false },
+                mockUser,
+            );
+        });
+
+        it('handles single query batch', async () => {
+            provider.executeSQLResults = [
+                [{ ID: '1', Name: 'Only' }],
+            ];
+
+            const results = await provider.ExecuteSQLBatch(
+                ['SELECT * FROM Users WHERE ID = 1'],
+                undefined,
+                undefined,
+                mockUser,
+            );
+
+            expect(results).toHaveLength(1);
+            expect(results[0]).toEqual([{ ID: '1', Name: 'Only' }]);
+        });
+    });
+});
+
+// =====================================================================
+// Tests for SqlLoggingSessionImpl (pure logic methods)
+// =====================================================================
+describe('SqlLoggingSessionImpl', () => {
+    describe('constructor and properties', () => {
+        it('should initialize with correct properties', () => {
+            const session = new SqlLoggingSessionImpl('test-id', '/tmp/test.sql', {
+                description: 'Test session',
+            });
+            expect(session.id).toBe('test-id');
+            expect(session.filePath).toBe('/tmp/test.sql');
+            expect(session.statementCount).toBe(0);
+            expect(session.options.description).toBe('Test session');
+            expect(session.startTime).toBeInstanceOf(Date);
+        });
+    });
+
+    describe('_escapeFlywaySyntaxInStrings', () => {
+        // Access private method for testing via prototype
+        const escapeFlyway = (sql: string) => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
+            return (session as Record<string, CallableFunction>)._escapeFlywaySyntaxInStrings(sql);
+        };
+
+        it('should escape ${...} patterns in SQL strings', () => {
+            const input = "INSERT INTO T VALUES (N'${someVar}')";
+            const result = escapeFlyway(input);
+            expect(result).not.toContain('${someVar}');
+            expect(result).toContain("$'+'{someVar}");
+        });
+
+        it('should handle multiple ${...} occurrences', () => {
+            const input = "N'${a} and ${b}'";
+            const result = escapeFlyway(input);
+            expect(result).toContain("$'+'{a}");
+            expect(result).toContain("$'+'{b}");
+        });
+
+        it('should return unchanged SQL when no ${...} patterns exist', () => {
+            const input = "SELECT * FROM Users WHERE Name = 'John'";
+            const result = escapeFlyway(input);
+            expect(result).toBe(input);
+        });
+    });
+
+    describe('_postProcessBeginEnd', () => {
+        const postProcess = (sql: string) => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
+            return (session as Record<string, CallableFunction>)._postProcessBeginEnd(sql);
+        };
+
+        it('should put BEGIN on its own line', () => {
+            const input = 'IF 1=1 BEGIN SELECT 1 END';
+            const result = postProcess(input);
+            expect(result).toContain('1=1\nBEGIN');
+        });
+
+        it('should put END on its own line', () => {
+            const input = 'SELECT 1 END';
+            const result = postProcess(input);
+            expect(result).toContain('1\nEND');
+        });
+
+        it('should put EXEC on its own line', () => {
+            const input = 'DECLARE @x INT EXEC spFoo';
+            const result = postProcess(input);
+            expect(result).toContain('INT\nEXEC');
+        });
+
+        it('should handle empty or null input', () => {
+            expect(postProcess('')).toBe('');
         });
     });
 });

@@ -1,6 +1,6 @@
 # MemberJunction SQL Server Data Provider
 
-A comprehensive SQL Server data provider implementation for the MemberJunction framework, serving as the primary bridge between MemberJunction applications and Microsoft SQL Server databases. This package implements all core data provider interfaces -- entity CRUD, metadata management, view/query/report execution, transaction handling, and SQL logging.
+A comprehensive SQL Server data provider implementation for the MemberJunction framework, serving as the primary bridge between MemberJunction applications and Microsoft SQL Server databases. This package implements all core data provider interfaces -- entity CRUD, metadata management, view/query/report execution, and transaction handling. SQL logging is inherited from `@memberjunction/generic-database-provider`.
 
 ## Architecture Overview
 
@@ -19,8 +19,14 @@ graph TB
         TXG["SQLServerTransactionGroup"]
         UC["UserCache"]
         QPP["QueryParameterProcessor"]
-        SL["SqlLoggingSessionImpl"]
         NFS["NodeFileSystemProvider"]
+    end
+
+    subgraph GenericDP["GenericDatabaseProvider (inherited)"]
+        style GenericDP fill:#b8762f,stroke:#8a5722,color:#fff
+        SL["SQL Logging Sessions"]
+        EH["Entity/AI Action Hooks"]
+        ENC["Field Encryption"]
     end
 
     subgraph Interfaces["MJ Core Interfaces"]
@@ -49,8 +55,10 @@ graph TB
     SDP --> TXG
     SDP --> UC
     SDP --> QPP
-    SDP --> SL
     SDP --> NFS
+    SDP --> SL
+    SDP --> EH
+    SDP --> ENC
     SDP --> Pool
     Pool --> SP
     Pool --> Views
@@ -64,7 +72,7 @@ graph TB
 - **View Execution** -- Run database views with filtering, sorting, pagination, and aggregation
 - **Report and Query Execution** -- Execute reports and parameterized queries with Nunjucks template processing
 - **Connection Pooling** -- Efficient shared connection pool management with configurable sizing
-- **SQL Logging** -- Real-time SQL statement capture to files with session management, pattern filtering, and Flyway migration formatting
+- **SQL Logging** -- Real-time SQL statement capture to files with session management, pattern filtering, and Flyway migration formatting (inherited from `GenericDatabaseProvider`)
 - **User and Role Caching** -- Server-side singleton cache for user information and role assignments
 - **Record Change Tracking** -- Integrated audit trail for entity modifications
 - **Duplicate Detection** -- AI-powered duplicate record detection via vector similarity
@@ -86,6 +94,7 @@ npm install @memberjunction/sqlserver-dataprovider
 |---------|---------|
 | `@memberjunction/core` | Core MJ framework: base entities, metadata, providers |
 | `@memberjunction/core-entities` | Generated entity subclasses and type definitions |
+| `@memberjunction/generic-database-provider` | Shared base class: entity hooks, encryption, SQL logging, view execution |
 | `@memberjunction/global` | Shared utilities, global object store, SQL validation |
 | `@memberjunction/actions` | Server-side entity action execution |
 | `@memberjunction/actions-base` | Action result types |
@@ -96,8 +105,6 @@ npm install @memberjunction/sqlserver-dataprovider
 | `@memberjunction/encryption` | Field-level encryption engine |
 | `@memberjunction/queue` | Queue management for async operations |
 | `mssql` | SQL Server client for Node.js |
-| `nunjucks` | Template engine for parameterized queries |
-| `sql-formatter` | SQL pretty-printing for log output |
 | `rxjs` | Reactive extensions for transaction queue processing |
 
 ## Exported API

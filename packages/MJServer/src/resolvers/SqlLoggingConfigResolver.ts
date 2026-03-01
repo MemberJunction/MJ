@@ -9,6 +9,7 @@ import * as fs from 'fs/promises';
 import { loadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
+import { SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -744,7 +745,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * @returns GraphQL-compatible SqlLoggingOptions
    * @private
    */
-  private convertOptionsToGraphQL(options: import('@memberjunction/sqlserver-dataprovider').SqlLoggingOptions): SqlLoggingOptions {
+  private convertOptionsToGraphQL(options: ProviderSqlLoggingOptions): SqlLoggingOptions {
     return {
       formatAsMigration: options.formatAsMigration,
       description: options.description,

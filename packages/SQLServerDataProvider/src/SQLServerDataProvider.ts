@@ -24,7 +24,6 @@ import {
   IRunViewProvider,
   EntityInfo,
   EntityFieldInfo,
-  ApplicationInfo,
   RunViewParams,
   EntityFieldTSType,
   ProviderType,
@@ -32,17 +31,11 @@ import {
   RecordChange,
   ILocalStorageProvider,
   IFileSystemProvider,
-  AuditLogTypeInfo,
-  AuthorizationInfo,
   TransactionGroupBase,
   TransactionItem,
   EntityPermissionType,
   EntitySaveOptions,
   LogError,
-  DatasetItemFilterType,
-  DatasetResultType,
-  DatasetStatusEntityUpdateDateType,
-  DatasetStatusResultType,
   EntityRecordNameInput,
   EntityRecordNameResult,
   IRunReportProvider,
@@ -54,7 +47,6 @@ import {
   CompositeKey,
   BaseEntityResult,
   Metadata,
-  DatasetItemResultType,
   FieldChange,
   SaveSQLResult,
   DeleteSQLResult,
@@ -78,18 +70,14 @@ import {
 } from '@memberjunction/core-entities';
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions } from '@memberjunction/generic-database-provider';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
-import { 
-  ExecuteSQLOptions, 
-  ExecuteSQLBatchOptions, 
-  SQLServerProviderConfigData, 
-  SqlLoggingOptions, 
-  SqlLoggingSession,
+import {
+  ExecuteSQLOptions,
+  SQLServerProviderConfigData,
   SQLExecutionContext,
   InternalSQLOptions
 } from './types.js';
@@ -97,7 +85,7 @@ import {
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
-import { MJGlobal, SQLExpressionValidator } from '@memberjunction/global';
+import { SQLExpressionValidator } from '@memberjunction/global';
 /**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
@@ -265,18 +253,6 @@ export class SQLServerDataProvider
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
-  private static _sqlLoggingSessionsKey: string = 'MJ_SQLServerDataProvider_SqlLoggingSessions';
-  private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
-    const g = MJGlobal.Instance.GetGlobalObjectStore();
-    if (g) {
-      if (!g[SQLServerDataProvider._sqlLoggingSessionsKey]) {
-        g[SQLServerDataProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
-      }
-      return g[SQLServerDataProvider._sqlLoggingSessionsKey];
-    } else {
-      throw new Error('No global object store available for SQL logging session');
-    }
-  }
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -453,243 +429,35 @@ export class SQLServerDataProvider
   // START ---- SQL Logging Methods
   /**************************************************************************/
 
-  /**
-   * Creates a new SQL logging session that will capture all SQL operations to a file.
-   * Returns a disposable session object that must be disposed to stop logging.
-   *
-   * @param filePath - Full path to the file where SQL statements will be logged
-   * @param options - Optional configuration for the logging session
-   * @returns Promise<SqlLoggingSession> - Disposable session object
-   *
-   * @example
-   * ```typescript
-   * // Basic usage
-   * const session = await provider.CreateSqlLogger('./logs/metadata-sync.sql');
-   * try {
-   *   // Perform operations that will be logged
-   *   await provider.ExecuteSQL('INSERT INTO ...');
-   * } finally {
-   *   await session.dispose(); // Stop logging
-   * }
-   *
-   * // With migration formatting
-   * const session = await provider.CreateSqlLogger('./migrations/changes.sql', {
-   *   formatAsMigration: true,
-   *   description: 'MetadataSync push operation'
-   * });
-   * ```
-   */
-  public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
-    const sessionId = uuidv4();
-    const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
-    const session = new SqlLoggingSessionImpl(sessionId, filePath, 
-      {
-        defaultSchemaName: mjCoreSchema,
-        ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
-        // the caller's defaultSchemaName will be used
-      });
-
-    // Initialize the session (create file, write header)
-    await session.initialize();
-
-    // Store in active sessions map
-    this._sqlLoggingSessions.set(sessionId, session);
-
-    // Return a proxy that handles cleanup on dispose
-    return {
-      id: session.id,
-      filePath: session.filePath,
-      startTime: session.startTime,
-      get statementCount() {
-        return session.statementCount;
-      },
-      options: session.options,
-      dispose: async () => {
-        await session.dispose();
-        this._sqlLoggingSessions.delete(sessionId);
-      },
-    };
-  }
+  // SQL Logging (CreateSqlLogger, GetActiveSqlLoggingSessions, GetSqlLoggingSessionById,
+  // DisposeAllSqlLoggingSessions, _logSqlStatement, LogSQLStatement) — all inherited from GenericDatabaseProvider
 
   public async GetCurrentUser(): Promise<UserInfo> {
     return this.CurrentUser;
   }
 
   /**
-   * Gets information about all active SQL logging sessions.
-   * Useful for monitoring and debugging.
-   *
-   * @returns Array of session information objects
-   */
-  public GetActiveSqlLoggingSessions(): Array<{
-    id: string;
-    filePath: string;
-    startTime: Date;
-    statementCount: number;
-    options: SqlLoggingOptions;
-  }> {
-    return Array.from(this._sqlLoggingSessions.values()).map((session) => ({
-      id: session.id,
-      filePath: session.filePath,
-      startTime: session.startTime,
-      statementCount: session.statementCount,
-      options: session.options,
-    }));
-  }
-
-  /**
-   * Gets a specific SQL logging session by its ID.
-   * Returns the session if found, or undefined if not found.
-   *
-   * @param sessionId - The unique identifier of the session to retrieve
-   * @returns The SqlLoggingSession if found, undefined otherwise
-   */
-  public GetSqlLoggingSessionById(sessionId: string): SqlLoggingSession | undefined {
-    return this._sqlLoggingSessions.get(sessionId);
-  }
-
-  /**
-   * Disposes all active SQL logging sessions.
-   * Useful for cleanup on provider shutdown.
-   */
-  public async DisposeAllSqlLoggingSessions(): Promise<void> {
-    const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.dispose());
-    await Promise.all(disposePromises);
-    this._sqlLoggingSessions.clear();
-  }
-  
-  /**
    * Dispose of this provider instance and clean up resources.
    * This should be called when the provider is no longer needed.
    */
   public async Dispose(): Promise<void> {
-    // Dispose all SQL logging sessions
+    // Dispose all SQL logging sessions (inherited from GenericDatabaseProvider)
     await this.DisposeAllSqlLoggingSessions();
-    
+
     // Unsubscribe from the SQL queue
     if (this._queueSubscription) {
       this._queueSubscription.unsubscribe();
       this._queueSubscription = null;
     }
-    
+
     // Complete the queue subject
     if (this._sqlQueue$) {
       this._sqlQueue$.complete();
     }
-    
+
     // Note: We don't close the pool here as it might be shared
     // The caller is responsible for closing the pool when appropriate
   }
-
-  /**
-   * Internal method to log SQL statement to all active logging sessions.
-   * This is called automatically by ExecuteSQL methods.
-   *
-   * @param query - The SQL query being executed
-   * @param parameters - Parameters for the query
-   * @param description - Optional description for this operation
-   * @param ignoreLogging - If true, this statement will not be logged
-   * @param isMutation - Whether this is a data mutation operation
-   * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
-   */
-  private async _logSqlStatement(
-    query: string,
-    parameters?: any,
-    description?: string,
-    ignoreLogging: boolean = false,
-    isMutation: boolean = false,
-    simpleSQLFallback?: string,
-    contextUser?: UserInfo,
-  ): Promise<void> {
-    if (ignoreLogging || this._sqlLoggingSessions.size === 0) {
-      return;
-    }
-
-    // Check if any session has verbose output enabled for debug logging
-    const allSessions = Array.from(this._sqlLoggingSessions.values());
-    const hasVerboseSession = allSessions.some(s => s.options.verboseOutput === true);
-    
-    if (hasVerboseSession) {
-      console.log('=== SQL LOGGING DEBUG ===');
-      console.log(`Query to log: ${query.substring(0, 100)}...`);
-      console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
-      console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
-      
-      console.log(`All sessions:`, allSessions.map(s => ({
-        id: s.id,
-        filterByUserId: s.options.filterByUserId,
-        sessionName: s.options.sessionName
-      })));
-    }
-    
-    const filteredSessions = allSessions.filter((session) => {
-        // If session has user filter, only log if contextUser matches AND contextUser is provided
-        if (session.options.filterByUserId) {
-          if (!contextUser?.Email) {
-            if (hasVerboseSession) {
-              console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
-            }
-            return false; // Don't log if filtering requested but no user context provided
-          }
-          const matches = session.options.filterByUserId === contextUser.ID;
-          if (hasVerboseSession) {
-            console.log(`Session ${session.id} filter check:`, {
-              filterByUserId: session.options.filterByUserId,
-              contextUserEmail: contextUser.Email,
-              matches: matches
-            });
-          }
-          return matches;
-        }
-        // No filter means log for all users (regardless of contextUser)
-        if (hasVerboseSession) {
-          console.log(`Session ${session.id} has no filter - including`);
-        }
-        return true;
-      });
-    
-    if (hasVerboseSession) {
-      console.log(`Sessions after filtering: ${filteredSessions.length}`);
-    }
-    
-    const logPromises = filteredSessions.map((session) => 
-        session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
-      );
-
-    await Promise.all(logPromises);
-    
-    if (hasVerboseSession) {
-      console.log('=== SQL LOGGING DEBUG END ===');
-    }
-  }
-
-  /**
-   * Static method to log SQL statements from external sources like transaction groups
-   * 
-   * @param query - The SQL query being executed
-   * @param parameters - Parameters for the query
-   * @param description - Optional description for this operation
-   * @param isMutation - Whether this is a data mutation operation
-   * @param simpleSQLFallback - Optional simple SQL to use for loggers with logRecordChangeMetadata=false
-   */
-  public static async LogSQLStatement(
-    query: string,
-    parameters?: any,
-    description?: string,
-    isMutation: boolean = false,
-    simpleSQLFallback?: string,
-    contextUser?: UserInfo,
-  ): Promise<void> {
-    // Get the current provider instance
-    const provider = Metadata.Provider as SQLServerDataProvider;
-    if (provider && provider._sqlLoggingSessions.size > 0) {
-      await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
-    }
-  }
-
-  /**************************************************************************/
-  // END ---- SQL Logging Methods
-  /**************************************************************************/
 
   // RunReport is inherited from DatabaseProviderBase
 
@@ -1914,9 +1682,7 @@ export class SQLServerDataProvider
     };
   }
 
-  protected override async PostProcessRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, user: UserInfo): Promise<Record<string, unknown>[]> {
-    return this.ProcessEntityRows(rows, entityInfo, user);
-  }
+  // PostProcessRows is inherited from GenericDatabaseProvider (datetime via AdjustDatetimeFields + encryption)
 
   protected override async OnSaveCompleted(
     entity: BaseEntity,
@@ -2002,573 +1768,79 @@ export class SQLServerDataProvider
   // START ---- IMetadataProvider
   /**************************************************************************/
 
-  public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
-    const sSQL = `SELECT
-                        di.*,
-                        e.BaseView EntityBaseView,
-                        e.SchemaName EntitySchemaName,
-                        di.__mj_UpdatedAt AS DatasetItemUpdatedAt,
-                        d.__mj_UpdatedAt AS DatasetUpdatedAt
-                    FROM
-                        [${this.MJCoreSchemaName}].vwDatasets d
-                    INNER JOIN
-                        [${this.MJCoreSchemaName}].vwDatasetItems di
-                    ON
-                        d.ID = di.DatasetID
-                    INNER JOIN
-                        [${this.MJCoreSchemaName}].vwEntities e
-                    ON
-                        di.EntityID = e.ID
-                    WHERE
-                        d.Name = @p0`;
+  // GetDatasetByName, GetDatasetItemSQL, GetDatasetItem, GetColumnsForDatasetItem
+  // are all inherited from GenericDatabaseProvider. SQL Server gets true batch execution
+  // through its ExecuteSQLBatch override.
 
-    let items: any[] = [];
-    const useThisProvider: SQLServerDataProvider = providerToUse ? (providerToUse as SQLServerDataProvider) : this;
-    items = await useThisProvider.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
-    // now we have the dataset and the items, we need to get the update date from the items underlying entities
+  // GetDatasetStatusByName is inherited from GenericDatabaseProvider
 
-    if (items && items.length > 0) {
-      // Optimization: Use batch SQL execution for multiple items
-      // Build SQL queries for all items
-      const queries: string[] = [];
-      const itemsWithSQL: any[] = [];
-
-      for (const item of items) {
-        const itemSQL = useThisProvider.GetDatasetItemSQL(item, itemFilters, datasetName);
-        if (itemSQL) {
-          queries.push(itemSQL);
-          itemsWithSQL.push(item);
-        } else {
-          // Handle invalid SQL case - add to results with error
-          itemsWithSQL.push({ ...item, hasError: true });
-        }
-      }
-
-      // Execute all queries in a single batch
-      const batchResults = await useThisProvider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
-
-      // Process results for each item
-      const results: DatasetItemResultType[] = [];
-      let queryIndex = 0;
-
-      for (const item of itemsWithSQL) {
-        if (item.hasError) {
-          // Handle error case for invalid columns
-          results.push({
-            EntityID: item.EntityID,
-            EntityName: item.Entity,
-            Code: item.Code,
-            Results: null,
-            LatestUpdateDate: null,
-            Status: 'Invalid columns specified for dataset item',
-            Success: false,
-          });
-        } else {
-          // Process successful query result
-          let itemData = batchResults[queryIndex] || [];
-
-          // Process rows for datetime conversion and field-level decryption
-          // This is critical for datasets that contain encrypted fields
-          if (itemData.length > 0) {
-            const entityInfo = useThisProvider.Entities.find(e =>
-              e.Name.trim().toLowerCase() === item.Entity.trim().toLowerCase()
-            );
-            if (entityInfo) {
-              itemData = await useThisProvider.ProcessEntityRows(itemData, entityInfo, contextUser);
-            }
-          }
-
-          const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
-          const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
-          const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-          // get the latest update date
-          let latestUpdateDate = new Date(1900, 1, 1);
-          if (itemData && itemData.length > 0) {
-            itemData.forEach((data) => {
-              if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
-                latestUpdateDate = new Date(data[item.DateFieldToCheck]);
-              }
-            });
-          }
-
-          // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
-          if (datasetMaxUpdatedAt > latestUpdateDate) {
-            latestUpdateDate = datasetMaxUpdatedAt;
-          }
-
-          results.push({
-            EntityID: item.EntityID,
-            EntityName: item.Entity,
-            Code: item.Code,
-            Results: itemData,
-            LatestUpdateDate: latestUpdateDate,
-            Success: itemData !== null && itemData !== undefined,
-          });
-
-          queryIndex++;
-        }
-      }
-
-      // determine overall success
-      const bSuccess = results.every((result) => result.Success);
-
-      // get the latest update date from all the results
-      const latestUpdateDate = results.reduce(
-        (acc, result) => {
-          if (result?.LatestUpdateDate) {
-            const theDate = new Date(result.LatestUpdateDate);
-            if (result.LatestUpdateDate && theDate.getTime() > acc.getTime()) {
-              return theDate;
-            }
-          }
-          return acc;
-        },
-        new Date(0), // Unix epoch - lowest possible date to start with
-      );
-
-      return {
-        DatasetID: items[0].DatasetID,
-        DatasetName: datasetName,
-        Success: bSuccess,
-        Status: '',
-        LatestUpdateDate: latestUpdateDate,
-        Results: results,
-      };
-    } else {
-      return {
-        DatasetID: '',
-        DatasetName: datasetName,
-        Success: false,
-        Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
-        LatestUpdateDate: null,
-        Results: null,
-      };
-    }
-  }
-
-  /**
-   * Constructs the SQL query for a dataset item.
-   * @param item - The dataset item metadata
-   * @param itemFilters - Optional filters to apply
-   * @param datasetName - Name of the dataset (for error logging)
-   * @returns The SQL query string, or null if columns are invalid
-   */
-  protected GetDatasetItemSQL(item: any, itemFilters: any, datasetName: string): string | null {
-    let filterSQL = '';
-    if (itemFilters && itemFilters.length > 0) {
-      const filter = itemFilters.find((f) => f.ItemCode === item.Code);
-      if (filter) filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
-    }
-
-    const columns = this.GetColumnsForDatasetItem(item, datasetName);
-    if (!columns) {
-      return null; // Invalid columns
-    }
-
-    return `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
-  }
-
-  protected async GetDatasetItem(item: any, itemFilters, datasetName, contextUser: UserInfo): Promise<DatasetItemResultType> {
-    const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
-    const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
-    const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-    const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
-    if (!itemSQL) {
-      // failure condition within columns, return a failed result
-      return {
-        EntityID: item.EntityID,
-        EntityName: item.Entity,
-        Code: item.Code,
-        Results: null,
-        LatestUpdateDate: null,
-        Status: 'Invalid columns specified for dataset item',
-        Success: false,
-      };
-    }
-
-    const itemData = await this.ExecuteSQL(itemSQL, undefined, undefined, contextUser);
-
-    // get the latest update date
-    let latestUpdateDate = new Date(1900, 1, 1);
-    if (itemData && itemData.length > 0) {
-      itemData.forEach((data) => {
-        if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
-          latestUpdateDate = new Date(data[item.DateFieldToCheck]);
-        }
-      });
-    }
-
-    // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
-    if (datasetMaxUpdatedAt > latestUpdateDate) {
-      latestUpdateDate = datasetMaxUpdatedAt;
-    }
-
-    return {
-      EntityID: item.EntityID,
-      EntityName: item.Entity,
-      Code: item.Code,
-      Results: itemData,
-      LatestUpdateDate: latestUpdateDate,
-      Success: itemData !== null && itemData !== undefined,
-    };
-  }
-
-  /**
-   * Gets column info for a dataset item, which might be * for all columns or if a Columns field was provided in the DatasetItem table,
-   * attempts to use those columns assuming they are valid.
-   * @param item
-   * @param datasetName
-   * @returns
-   */
-  protected GetColumnsForDatasetItem(item: any, datasetName: string): string {
-    const specifiedColumns = item.Columns ? item.Columns.split(',').map((col) => col.trim()) : [];
-    if (specifiedColumns.length > 0) {
-      // validate that the columns specified are valid within the entity metadata
-      const entity = this.Entities.find((e) => e.ID === item.EntityID);
-      if (!entity && this.Entities.length > 0) {
-        // we have loaded entities (e.g. Entites.length > 0) but the entity wasn't found, log an error and return a failed result
-        // the reason we continue below if we have NOT loaded Entities is that when the system first bootstraps, DATASET gets loaded
-        // FIRST before Entities are loaded to load the entity metadata so this would ALWAYS fail :)
-
-        // entity not found, return a failed result, shouldn't ever get here  due to the foreign key constraint on the table
-        LogError(`Entity not found for dataset item ${item.Code} in dataset ${datasetName}`);
-        return null;
-      } else {
-        if (entity) {
-          // have a valid entity, now make sure that all of the columns specified are valid
-          // only do the column validity check if we have an entity, we can get here if the entity wasn't found IF we haven't loaded entities yet per above comment
-          const invalidColumns: string[] = [];
-
-          specifiedColumns.forEach((col) => {
-            if (!entity.Fields.find((f) => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
-              invalidColumns.push(col);
-            }
-          });
-          if (invalidColumns.length > 0) {
-            LogError(`Invalid columns specified for dataset item ${item.Code} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
-            return null;
-          }
-        }
-
-        // check to see if the specified columns include the DateFieldToCheck
-        // in the below we only check entity metadata if we have it, if we don't have it, we just add the special fields back in
-        if (item.DateFieldToCheck && item.DateFieldToCheck.trim().length > 0 && specifiedColumns.indexOf(item.DateFieldToCheck) === -1) {
-          // we only check the entity if we have it, otherwise we just add it back in
-          if (!entity || entity.Fields.find((f) => f.Name.trim().toLowerCase() === item.DateFieldToCheck.trim().toLowerCase()))
-            specifiedColumns.push(item.DateFieldToCheck);
-        }
-      }
-    }
-    return specifiedColumns.length > 0 ? specifiedColumns.map((colName) => `[${colName.trim()}]`).join(',') : '*';
-  }
-
-  public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType> {
-    const sSQL = `
-            SELECT
-                di.*,
-                e.BaseView EntityBaseView,
-                e.SchemaName EntitySchemaName,
-                d.__mj_UpdatedAt AS DatasetUpdatedAt,
-                di.__mj_UpdatedAt AS DatasetItemUpdatedAt
-            FROM
-                [${this.MJCoreSchemaName}].vwDatasets d
-            INNER JOIN
-                [${this.MJCoreSchemaName}].vwDatasetItems di
-            ON
-                d.ID = di.DatasetID
-            INNER JOIN
-                [${this.MJCoreSchemaName}].vwEntities e
-            ON
-                di.EntityID = e.ID
-            WHERE
-                d.Name = @p0`;
-
-    let items: any[] = [];
-    const useThisProvider: SQLServerDataProvider = providerToUse ? (providerToUse as SQLServerDataProvider) : this;
-    items = await useThisProvider.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
-
-    // now we have the dataset and the items, we need to get the update date from the items underlying entities
-    if (items && items.length > 0) {
-      // loop through each of the items and get the update date from the underlying entity by building a combined UNION ALL SQL statement
-      let combinedSQL = '';
-      const updateDates: DatasetStatusEntityUpdateDateType[] = [];
-
-      items.forEach((item, index) => {
-        let filterSQL = '';
-        if (itemFilters && itemFilters.length > 0) {
-          const filter = itemFilters.find((f) => f.ItemCode === item.Code);
-          if (filter) filterSQL = ' WHERE ' + filter.Filter;
-        }
-        const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
-        const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
-        const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
-
-        const itemSQL = `SELECT
-                                        CASE
-                                            WHEN MAX(${item.DateFieldToCheck}) > '${datasetMaxUpdatedAt}' THEN MAX(${item.DateFieldToCheck})
-                                            ELSE '${datasetMaxUpdatedAt}'
-                                        END AS UpdateDate,
-                                        COUNT(*) AS TheRowCount,
-                                        '${item.EntityID}' AS EntityID,
-                                        '${item.Entity}' AS EntityName
-                                 FROM
-                                    [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
-        combinedSQL += itemSQL;
-        if (index < items.length - 1) {
-          combinedSQL += ' UNION ALL ';
-        }
-      });
-      const itemUpdateDates = await useThisProvider.ExecuteSQL(combinedSQL, null, undefined, contextUser);
-
-      if (itemUpdateDates && itemUpdateDates.length > 0) {
-        let latestUpdateDate = new Date(1900, 1, 1);
-
-        itemUpdateDates.forEach((itemUpdate) => {
-          const updateDate = new Date(itemUpdate.UpdateDate);
-          updateDates.push({
-            EntityID: itemUpdate.EntityID,
-            EntityName: itemUpdate.EntityName,
-            RowCount: itemUpdate.TheRowCount,
-            UpdateDate: updateDate,
-          });
-
-          if (updateDate > latestUpdateDate) {
-            latestUpdateDate = updateDate;
-          }
-        });
-
-        return {
-          DatasetID: items[0].DatasetID,
-          DatasetName: datasetName,
-          Success: true,
-          Status: '',
-          LatestUpdateDate: latestUpdateDate,
-          EntityUpdateDates: updateDates,
-        };
-      } else {
-        return {
-          DatasetID: items[0].DatasetID,
-          DatasetName: datasetName,
-          Success: false,
-          Status: 'No update dates found for DatasetName: ' + datasetName,
-          LatestUpdateDate: null,
-          EntityUpdateDates: null,
-        };
-      }
-    } else {
-      return {
-        DatasetID: '',
-        DatasetName: datasetName,
-        Success: false,
-        Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
-        EntityUpdateDates: null,
-        LatestUpdateDate: null,
-      };
-    }
-  }
-
-  protected async GetApplicationMetadata(contextUser: UserInfo): Promise<ApplicationInfo[]> {
-    const apps = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplications`, null, undefined, contextUser);
-    const appEntities = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwApplicationEntities ORDER BY ApplicationName`, undefined, undefined, contextUser);
-    const ret: ApplicationInfo[] = [];
-    for (let i = 0; i < apps.length; i++) {
-      ret.push(
-        new ApplicationInfo(this, {
-          ...apps[i],
-          ApplicationEntities: appEntities.filter((ae) => ae.ApplicationName.trim().toLowerCase() === apps[i].Name.trim().toLowerCase()),
-        }),
-      );
-    }
-    return ret;
-  }
-
-  protected async GetAuditLogTypeMetadata(contextUser: UserInfo): Promise<AuditLogTypeInfo[]> {
-    const alts = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuditLogTypes`, null, undefined, contextUser);
-    const ret: AuditLogTypeInfo[] = [];
-    for (let i = 0; i < alts.length; i++) {
-      const alt = new AuditLogTypeInfo(alts[i]);
-      ret.push(alt);
-    }
-    return ret;
-  }
-
-  protected async GetUserMetadata(contextUser: UserInfo): Promise<UserInfo[]> {
-    const users = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUsers`, null, undefined, contextUser);
-    const userRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwUserRoles ORDER BY UserID`, undefined, undefined, contextUser);
-    const ret: UserInfo[] = [];
-    for (let i = 0; i < users.length; i++) {
-      ret.push(
-        new UserInfo(this, {
-          ...users[i],
-          UserRoles: userRoles.filter((ur) => ur.UserID === users[i].ID),
-        }),
-      );
-    }
-    return ret;
-  }
-
-  protected async GetAuthorizationMetadata(contextUser: UserInfo): Promise<AuthorizationInfo[]> {
-    const auths = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizations`, null, undefined, contextUser);
-    const authRoles = await this.ExecuteSQL(`SELECT * FROM [${this.MJCoreSchemaName}].vwAuthorizationRoles ORDER BY AuthorizationName`, undefined, undefined, contextUser);
-    const ret: AuthorizationInfo[] = [];
-    for (let i = 0; i < auths.length; i++) {
-      ret.push(
-        new AuthorizationInfo(this, {
-          ...auths[i],
-          AuthorizationRoles: authRoles.filter((ar) => ar.AuthorizationName.trim().toLowerCase() === auths[i].Name.trim().toLowerCase()),
-        }),
-      );
-    }
-    return ret;
-  }
+  // Dead metadata methods removed: GetApplicationMetadata, GetAuditLogTypeMetadata,
+  // GetUserMetadata, GetAuthorizationMetadata. Metadata is loaded via
+  // GetAllMetadata() → GetDatasetByName("MJ_Metadata"), never through these methods.
    
   /**
-   * Processes entity rows returned from SQL Server to handle:
-   * 1. Timezone conversions for datetime fields
-   * 2. Field-level decryption for encrypted fields
+   * Public backward-compatible wrapper that delegates to PostProcessRows (inherited from GenericDP).
+   * Used by SQLServerTransactionGroup which needs a public entry point for row processing.
    *
-   * This method specifically handles the conversion of datetime2 fields (which SQL Server returns without timezone info)
-   * to proper UTC dates, preventing JavaScript from incorrectly interpreting them as local time.
-   *
-   * For encrypted fields, this method decrypts values at the data provider level.
-   * API-level filtering (AllowDecryptInAPI/SendEncryptedValue) is handled by the GraphQL layer.
-   *
-   * @param rows The raw result rows from SQL Server
-   * @param entityInfo The entity metadata to determine field types
-   * @param contextUser Optional user context for decryption operations
-   * @returns The processed rows with corrected datetime values and decrypted fields
-   *
-   * @security Encrypted fields are decrypted here for internal use.
-   *           The API layer handles response filtering based on AllowDecryptInAPI settings.
+   * PostProcessRows (GenericDP) handles: AdjustDatetimeFields → encryption decryption.
    */
-  public async ProcessEntityRows(rows: any[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<any[]> {
-    if (!rows || rows.length === 0) {
-      return rows;
-    }
+  public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
+    if (!rows || rows.length === 0) return rows;
+    return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
+  }
 
-    // Find all datetime fields in the entity
-    const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
+  /**
+   * SQL Server-specific datetime field adjustments.
+   *
+   * SQL Server's `datetime2` and `datetime` types store values without timezone info.
+   * The mssql driver creates Date objects using local timezone interpretation, which is
+   * incorrect when the server stores UTC. This method adjusts dates back to UTC.
+   *
+   * For `datetimeoffset`, the driver sometimes mishandles timezone info (detected via
+   * `NeedsDatetimeOffsetAdjustment()`), requiring similar correction.
+   */
+  protected override async AdjustDatetimeFields(
+    rows: Record<string, unknown>[],
+    datetimeFields: EntityFieldInfo[],
+    entityInfo: EntityInfo,
+  ): Promise<Record<string, unknown>[]> {
+    const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
-    // Find all encrypted fields in the entity
-    const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
-
-    // If there are no fields requiring processing, return the rows as-is
-    if (datetimeFields.length === 0 && encryptedFields.length === 0) {
-      return rows;
-    }
-
-    // Check if we need datetimeoffset adjustment (lazy loaded on first use)
-    const needsAdjustment = datetimeFields.length > 0 ? await this.NeedsDatetimeOffsetAdjustment() : false;
-
-    // Get encryption engine instance (lazy - only if we have encrypted fields)
-    let encryptionEngine: EncryptionEngine | null = null;
-    if (encryptedFields.length > 0) {
-      encryptionEngine = EncryptionEngine.Instance;
-      await encryptionEngine.Config(false, contextUser);
-    }
-
-    // Process each row - need to use Promise.all for async decryption
-    const processedRows = await Promise.all(rows.map(async (row) => {
+    return rows.map((row) => {
       const processedRow = { ...row };
 
-      // ========================================================================
-      // DATETIME FIELD PROCESSING
-      // ========================================================================
       for (const field of datetimeFields) {
         const fieldValue = processedRow[field.Name];
+        if (fieldValue === null || fieldValue === undefined) continue;
 
-        // Skip null/undefined values
-        if (fieldValue === null || fieldValue === undefined) {
-          continue;
-        }
-
-        // Handle different datetime field types
         if (field.Type.toLowerCase() === 'datetime2') {
           if (typeof fieldValue === 'string') {
-            // If it's still a string (rare case), convert to UTC
             if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
-              const utcValue = fieldValue.replace(' ', 'T') + 'Z';
-              processedRow[field.Name] = new Date(utcValue);
+              processedRow[field.Name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
             } else {
               processedRow[field.Name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
-            // DB driver has already converted to a Date object using local timezone
-            // We need to adjust it back to UTC
-            // SQL Server stores datetime2 as UTC, but DB Driver interprets it as local
-            const localDate = fieldValue;
-            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
-            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
-            processedRow[field.Name] = utcDate;
+            const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
+            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         } else if (field.Type.toLowerCase() === 'datetimeoffset') {
-          // Handle datetimeoffset based on empirical test results
           if (typeof fieldValue === 'string') {
-            // String format should include timezone offset, parse it correctly
             processedRow[field.Name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
-            // The database driver has incorrectly converted to a Date object using local timezone
-            // For datetimeoffset, SQL Server provides the value with timezone info, but the driver
-            // creates the Date as if it were in local time, ignoring the offset
-            // We need to adjust it back to the correct UTC time
-            const localDate = fieldValue;
-            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
-            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
-            processedRow[field.Name] = utcDate;
+            const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
+            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-          // If it's already a Date object and no adjustment needed, leave as-is
         } else if (field.Type.toLowerCase() === 'datetime') {
-          // Legacy datetime type - similar handling to datetime2
           if (fieldValue instanceof Date) {
-            const localDate = fieldValue;
-            const timezoneOffsetMs = localDate.getTimezoneOffset() * 60 * 1000;
-            const utcDate = new Date(localDate.getTime() + timezoneOffsetMs);
-            processedRow[field.Name] = utcDate;
-          }
-        }
-        // For other types (date, time), leave as-is
-      }
-
-      // ========================================================================
-      // ENCRYPTED FIELD PROCESSING (DECRYPTION)
-      // Decrypt at the data provider level for internal use.
-      // API-level filtering based on AllowDecryptInAPI is handled by GraphQL resolvers.
-      // ========================================================================
-      if (encryptionEngine && encryptedFields.length > 0) {
-        for (const field of encryptedFields) {
-          const fieldValue = processedRow[field.Name];
-
-          // Skip null/undefined/empty values
-          if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
-            continue;
-          }
-
-          // Only decrypt if the value is actually encrypted
-          const keyMarker = field.EncryptionKeyID ? encryptionEngine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
-          if (typeof fieldValue === 'string' && encryptionEngine.IsEncrypted(fieldValue, keyMarker)) {
-            try {
-              const decryptedValue = await encryptionEngine.Decrypt(fieldValue, contextUser);
-              processedRow[field.Name] = decryptedValue;
-            } catch (decryptError) {
-              // Log error but don't fail the entire operation
-              // Return the encrypted value so the caller knows something is wrong
-              const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
-              LogError(
-                `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +
-                'The encrypted value will be returned unchanged.'
-              );
-              // Keep the encrypted value in the row - let the caller decide what to do
-            }
+            const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
+            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         }
       }
 
       return processedRow;
-    }));
-
-    return processedRows;
+    });
   }
 
 
@@ -2755,7 +2027,7 @@ export class SQLServerDataProvider
         transaction: null,
         logSqlStatement: async (q, p, d, i, m, s, u) => {
           // Use static logging method
-          await SQLServerDataProvider.LogSQLStatement(q, p, d || 'ExecuteSQLWithPool', m || false, s, u);
+          await GenericDatabaseProvider.LogSQLStatement(q, p, d || 'ExecuteSQLWithPool', m || false, s, u);
         }
       };
       
@@ -2858,7 +2130,7 @@ export class SQLServerDataProvider
         pool: pool,
         transaction: transaction,
         logSqlStatement: async (q, p, d, i, m, s, u) => {
-          await SQLServerDataProvider.LogSQLStatement(q, p, d || 'Batch execution', m || false, s, u);
+          await GenericDatabaseProvider.LogSQLStatement(q, p, d || 'Batch execution', m || false, s, u);
         }
       };
       

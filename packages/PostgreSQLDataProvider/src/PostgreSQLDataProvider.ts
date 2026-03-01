@@ -14,9 +14,6 @@ import {
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
-    DatasetStatusResultType,
-    DatasetStatusEntityUpdateDateType,
-    DatasetItemFilterType,
     TransactionGroupBase,
     ILocalStorageProvider,
     IMetadataProvider,
@@ -490,99 +487,7 @@ SELECT * FROM delete_result`;
 
     // GetDatasetByName is inherited from GenericDatabaseProvider
 
-    async GetDatasetStatusByName(
-        datasetName: string,
-        itemFilters?: DatasetItemFilterType[],
-        contextUser?: UserInfo
-    ): Promise<DatasetStatusResultType> {
-        const sSQL = `SELECT
-                        di.*,
-                        e."BaseView" AS "EntityBaseView",
-                        e."SchemaName" AS "EntitySchemaName",
-                        d."__mj_UpdatedAt" AS "DatasetUpdatedAt",
-                        di."__mj_UpdatedAt" AS "DatasetItemUpdatedAt"
-                    FROM
-                        ${this._schemaName}."vwDatasets" d
-                    INNER JOIN
-                        ${this._schemaName}."vwDatasetItems" di
-                    ON
-                        d."ID" = di."DatasetID"
-                    INNER JOIN
-                        ${this._schemaName}."vwEntities" e
-                    ON
-                        di."EntityID" = e."ID"
-                    WHERE
-                        d."Name" = $1`;
-
-        const items = await this.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
-
-        if (items && items.length > 0) {
-            const updateDates: DatasetStatusEntityUpdateDateType[] = [];
-            let overallLatestDate = new Date(1900, 1, 1);
-
-            for (const item of items) {
-                const entitySchemaName = String(item.EntitySchemaName ?? this._schemaName);
-                const entityBaseView = String(item.EntityBaseView);
-                const entityID = String(item.EntityID);
-                const entityName = String(item.Entity);
-                const dateFieldToCheck = String(item.DateFieldToCheck ?? '__mj_UpdatedAt');
-
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === String(item.Code));
-                    if (filter) filterSQL = ' WHERE ' + filter.Filter;
-                }
-
-                const itemUpdatedAt = new Date(String(item.DatasetItemUpdatedAt));
-                const datasetUpdatedAt = new Date(String(item.DatasetUpdatedAt));
-                const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-                try {
-                    const statusSQL = `SELECT
-                        CASE
-                            WHEN MAX("${dateFieldToCheck}") > '${datasetMaxUpdatedAt.toISOString()}' THEN MAX("${dateFieldToCheck}")
-                            ELSE '${datasetMaxUpdatedAt.toISOString()}'
-                        END AS "UpdateDate",
-                        COUNT(*) AS "TheRowCount"
-                    FROM ${pgDialect.QuoteSchema(entitySchemaName, entityBaseView)}${filterSQL}`;
-
-                    const statusRows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
-                    if (statusRows && statusRows.length > 0) {
-                        const updateDate = new Date(String(statusRows[0].UpdateDate));
-                        updateDates.push({
-                            EntityID: entityID,
-                            EntityName: entityName,
-                            RowCount: Number(statusRows[0].TheRowCount),
-                            UpdateDate: updateDate,
-                        });
-                        if (updateDate > overallLatestDate) {
-                            overallLatestDate = updateDate;
-                        }
-                    }
-                } catch (err) {
-                    LogError(`GetDatasetStatusByName: Error for ${entityName}: ${err instanceof Error ? err.message : String(err)}`);
-                }
-            }
-
-            return {
-                DatasetID: String(items[0].DatasetID),
-                DatasetName: datasetName,
-                Success: true,
-                Status: '',
-                LatestUpdateDate: overallLatestDate,
-                EntityUpdateDates: updateDates,
-            };
-        } else {
-            return {
-                DatasetID: '',
-                DatasetName: datasetName,
-                Success: false,
-                Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
-                LatestUpdateDate: new Date(0),
-                EntityUpdateDates: [],
-            };
-        }
-    }
+    // GetDatasetStatusByName is inherited from GenericDatabaseProvider
 
     // ─── Cache Check Methods ─────────────────────────────────────────
 
