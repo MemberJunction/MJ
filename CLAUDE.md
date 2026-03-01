@@ -261,6 +261,10 @@ describe('ClassName', () => {
 - **Every release** runs the full-stack regression suite via Docker Compose
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
+## Switching Database Platforms (SQL Server ↔ PostgreSQL)
+
+When developing against both SQL Server and PostgreSQL on the same URL/port (e.g., `localhost:4000`), **you must clear your browser cache** after switching backends. The `GraphQLDataProvider` client caches entity metadata and query results in the browser. Since SQL Server returns UUIDs uppercase and PostgreSQL returns them lowercase, stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache (or use an incognito window) whenever you switch the backend database platform behind the same endpoint.
+
 ## Docker Environments
 
 See **[docker/CLAUDE.md](docker/CLAUDE.md)** for full details on Docker configurations.

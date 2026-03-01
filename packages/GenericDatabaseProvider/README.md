@@ -117,6 +117,10 @@ Key types exported from this package:
 | `SqlLoggingSession` | Interface | Public interface for an active logging session |
 | `SqlLoggingSessionImpl` | Class | Internal session implementation (file I/O, formatting, filtering) |
 
+## Switching Database Platforms (Developer Note)
+
+When developing against both SQL Server and PostgreSQL on the same URL/port, **clear your browser cache** after switching backends. The client-side `GraphQLDataProvider` caches entity metadata and query results in the browser. UUID casing differs between platforms (SQL Server: uppercase, PostgreSQL: lowercase), so stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache or use an incognito window whenever you switch the backend database.
+
 ## Dependencies
 
 - `@memberjunction/core` — Base class and entity types
