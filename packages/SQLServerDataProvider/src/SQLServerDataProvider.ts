@@ -425,13 +425,6 @@ export class SQLServerDataProvider
     return this.ConfigData.MJCoreSchemaName;
   }
 
-  /**************************************************************************/
-  // START ---- SQL Logging Methods
-  /**************************************************************************/
-
-  // SQL Logging (CreateSqlLogger, GetActiveSqlLoggingSessions, GetSqlLoggingSessionById,
-  // DisposeAllSqlLoggingSessions, _logSqlStatement, LogSQLStatement) — all inherited from GenericDatabaseProvider
-
   public async GetCurrentUser(): Promise<UserInfo> {
     return this.CurrentUser;
   }
@@ -441,7 +434,6 @@ export class SQLServerDataProvider
    * This should be called when the provider is no longer needed.
    */
   public async Dispose(): Promise<void> {
-    // Dispose all SQL logging sessions (inherited from GenericDatabaseProvider)
     await this.DisposeAllSqlLoggingSessions();
 
     // Unsubscribe from the SQL queue
@@ -458,10 +450,6 @@ export class SQLServerDataProvider
     // Note: We don't close the pool here as it might be shared
     // The caller is responsible for closing the pool when appropriate
   }
-
-  // RunReport is inherited from DatabaseProviderBase
-
-  // resolveCategoryPath is inherited from GenericDatabaseProvider
 
   /**
    * Finds a query by ID or by Name+Category combination.
@@ -517,10 +505,6 @@ export class SQLServerDataProvider
         return queries[0];
       }
   }
-
-  // findQueryInEngine is inherited from GenericDatabaseProvider
-
-  // refreshQueryInfoFromEntity is inherited from GenericDatabaseProvider
 
   /**************************************************************************/
   // START ---- IRunQueryProvider
@@ -838,10 +822,6 @@ export class SQLServerDataProvider
     return Promise.all(promises);
   }
 
-  // RunQueriesWithCacheCheck is inherited from GenericDatabaseProvider (uses overridden getBatchedQueryCacheStatus)
-
-  // resolveQueryInfo is inherited from GenericDatabaseProvider
-
   /**
    * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
    */
@@ -893,14 +873,12 @@ export class SQLServerDataProvider
     return results;
   }
 
-  // runFullQueryAndReturnForQuery is inherited from GenericDatabaseProvider
-
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/
 
   /**************************************************************************/
-  // START ---- IRunViewProvider (InternalRunView inherited from GenericDatabaseProvider)
+  // START ---- IRunViewProvider
   /**************************************************************************/
 
   protected override BuildTopClause(maxRows: number): string {
@@ -914,8 +892,6 @@ export class SQLServerDataProvider
   protected override BuildParameterPlaceholder(index: number): string {
     return `@p${index}`;
   }
-
-  // RunViewsWithCacheCheck is inherited from GenericDatabaseProvider (uses overridden getBatchedServerCacheStatus)
 
   /**
    * Executes a batched cache status check for multiple views in a single SQL call.
@@ -969,21 +945,6 @@ export class SQLServerDataProvider
     return results;
   }
 
-  // buildWhereClauseForCacheCheck is inherited from GenericDatabaseProvider
-
-  // isCacheCurrent is inherited from GenericDatabaseProvider
-
-  // runFullQueryAndReturn is inherited from GenericDatabaseProvider
-
-  // extractMaxUpdatedAt is inherited from ProviderBase
-
-  // getDeletedRecordIDsSince is inherited from GenericDatabaseProvider
-
-  // getUpdatedRowsSince is inherited from GenericDatabaseProvider
-
-  // runDifferentialQueryAndReturn is inherited from GenericDatabaseProvider
-
-
   protected override async executeSQLForUserViewRunLogging(
     viewId: number,
     entityBaseView: string,
@@ -1004,10 +965,6 @@ export class SQLServerDataProvider
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
   }
-
-  // CreateAuditLogRecord is inherited from DatabaseProviderBase
-  // InternalRunView, InternalRunViews, getRunTimeViewFieldString, getRunTimeViewFieldArray,
-  // createViewUserSearchSQL are inherited from GenericDatabaseProvider
 
     /**************************************************************************/
   // END ---- IRunViewProvider
@@ -1100,9 +1057,6 @@ export class SQLServerDataProvider
       return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`;
     }
   }
-
-  // GetRecordDuplicates, MergeRecords, StartMergeLogging, CompleteMergeLogging
-  // are inherited from DatabaseProviderBase
 
   /**
    * Generates the SQL Statement that will Save a record to the database.
@@ -1234,8 +1188,6 @@ export class SQLServerDataProvider
     }
   }
 
-
-  // GetCreateUpdateSPName is inherited from DatabaseProviderBase
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',
@@ -1575,9 +1527,6 @@ export class SQLServerDataProvider
     return null;
   }
 
-  // LogRecordChange is inherited from DatabaseProviderBase (calls BuildRecordChangeSQL)
-  // Load is inherited from GenericDatabaseProvider (uses PostProcessRows → ProcessEntityRows chain)
-
   /**
    * Generates the SQL statement for deleting an entity record
    * 
@@ -1682,8 +1631,6 @@ export class SQLServerDataProvider
     };
   }
 
-  // PostProcessRows is inherited from GenericDatabaseProvider (datetime via AdjustDatetimeFields + encryption)
-
   protected override async OnSaveCompleted(
     entity: BaseEntity,
     saveSQLResult: SaveSQLResult,
@@ -1768,16 +1715,6 @@ export class SQLServerDataProvider
   // START ---- IMetadataProvider
   /**************************************************************************/
 
-  // GetDatasetByName, GetDatasetItemSQL, GetDatasetItem, GetColumnsForDatasetItem
-  // are all inherited from GenericDatabaseProvider. SQL Server gets true batch execution
-  // through its ExecuteSQLBatch override.
-
-  // GetDatasetStatusByName is inherited from GenericDatabaseProvider
-
-  // Dead metadata methods removed: GetApplicationMetadata, GetAuditLogTypeMetadata,
-  // GetUserMetadata, GetAuthorizationMetadata. Metadata is loaded via
-  // GetAllMetadata() → GetDatasetByName("MJ_Metadata"), never through these methods.
-   
   /**
    * Public backward-compatible wrapper that delegates to PostProcessRows (inherited from GenericDP).
    * Used by SQLServerTransactionGroup which needs a public entry point for row processing.
@@ -2417,8 +2354,6 @@ export class SQLServerDataProvider
    *        Undefined when saving the parent directly — all children get propagated to.
    * @param transaction The active IS-A transaction, or undefined for standalone saves
    */
-  // PropagateRecordChangesToSiblings orchestration is inherited from DatabaseProviderBase
-
   /**
    * Generates a single block of T-SQL for one sibling entity in the Record Change
    * propagation batch. Uses SELECT...FOR JSON to get the full record, then

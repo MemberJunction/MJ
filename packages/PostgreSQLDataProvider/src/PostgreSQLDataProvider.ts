@@ -292,8 +292,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return new PostgreSQLTransactionGroup();
     }
 
-    // ─── RunView Implementation (inherited from GenericDatabaseProvider) ──────
-
     protected override BuildPaginationSQL(maxRows: number, startRow: number): string {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
@@ -390,8 +388,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     // ─── IEntityDataProvider ─────────────────────────────────────────
 
-    // Load is inherited from GenericDatabaseProvider
-
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
      * when transaction variables require regenerating the SQL instruction.
@@ -478,36 +474,6 @@ SELECT * FROM delete_result`;
         return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
     }
 
-    // GetRecordDuplicates, MergeRecords, StartMergeLogging, CompleteMergeLogging
-    // are inherited from DatabaseProviderBase
-
-    // RunReport is inherited from DatabaseProviderBase
-
-    // ─── Dataset Methods ─────────────────────────────────────────────
-
-    // GetDatasetByName is inherited from GenericDatabaseProvider
-
-    // GetDatasetStatusByName is inherited from GenericDatabaseProvider
-
-    // ─── Cache Check Methods ─────────────────────────────────────────
-
-    // RunViewsWithCacheCheck is inherited from GenericDatabaseProvider
-
-    // getBatchedServerCacheStatus is inherited from GenericDatabaseProvider
-
-    // isCacheCurrent is inherited from GenericDatabaseProvider
-
-    // runFullQueryAndReturn is inherited from GenericDatabaseProvider
-
-    // runDifferentialQueryAndReturn is inherited from GenericDatabaseProvider
-
-    // getDeletedRecordIDsSince is inherited from GenericDatabaseProvider
-
-    // getUpdatedRowsSince is inherited from GenericDatabaseProvider
-
-    // buildWhereClauseForCacheCheck is inherited from GenericDatabaseProvider
-
-
     // ─── SQL Building Helpers ────────────────────────────────────────
 
     /**
@@ -560,12 +526,6 @@ SELECT * FROM delete_result`;
         }
         return token;
     }
-
-    // buildPKWhereClause was removed (only used by Load, now inherited)
-
-    // formatFieldValue was removed (only used by buildPKWhereClause, now inherited)
-
-    // viewName was removed (all callers now inherited from GenericDatabaseProvider)
 
     // ─── CRUD Function Helpers ───────────────────────────────────────
 

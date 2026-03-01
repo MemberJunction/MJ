@@ -378,8 +378,6 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
   });
 });
 
-// SqlLoggingSessionImpl tests moved to GenericDatabaseProvider package
-
 // =====================================================================
 // Tests for FieldChange type and DiffObjects-style comparisons
 // These verify the data structures exported from the provider module
