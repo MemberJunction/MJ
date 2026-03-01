@@ -93,7 +93,7 @@ export class NotificationPreferencesComponent implements OnInit {
 
       // Build view models from cached data
       this.viewModels = types.map((type) => {
-        const existingPref = prefs.find((p) => UUIDsEqual(p.NotificationTypeID, type.ID))
+        const existingPref = prefs.find((p) => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         // Get channel values: user preference > type default
         const inAppEnabled = existingPref?.InAppEnabled ?? type.DefaultInApp ?? true;

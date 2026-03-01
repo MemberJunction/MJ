@@ -287,7 +287,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
             );
 
             // Check if server requires authentication
-            const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID))
+            const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID));
             const serverRequiresAuth = server?.Status === 'Active'; // All servers currently need connections
 
             // Auto-select connection logic
@@ -836,7 +836,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
      * Get display name for selected server
      */
     get SelectedServerName(): string {
-        const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID))
+        const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID));
         return server?.Name || '';
     }
 
@@ -844,7 +844,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
      * Get display name for selected connection
      */
     get SelectedConnectionName(): string {
-        const connection = this.Connections.find(c => UUIDsEqual(c.ID, this.ConnectionID))
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, this.ConnectionID));
         return connection?.Name || '';
     }
 

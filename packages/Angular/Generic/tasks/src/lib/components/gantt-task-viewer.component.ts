@@ -222,7 +222,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
       // Attach click event
       gantt.attachEvent('onTaskClick', (id: string) => {
-        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, id))
+        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, id));
         if (originalTask) {
           this.selectedTask = originalTask;
           this.taskClicked.emit(originalTask);
@@ -516,7 +516,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       if (rootTask) {
         gantt.selectTask(rootTask.id);
         // Trigger task click event to open detail panel
-        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, rootTask.id))
+        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, rootTask.id));
         if (originalTask) {
           this.selectedTask = originalTask;
           this.taskClicked.emit(originalTask);

@@ -658,25 +658,25 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     private enrichConnectionData(): void {
         for (const conn of this.connections) {
-            const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID))
+            const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
             conn.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichToolData(): void {
         for (const tool of this.tools) {
-            const server = this.servers.find(s => UUIDsEqual(s.ID, tool.MCPServerID))
+            const server = this.servers.find(s => UUIDsEqual(s.ID, tool.MCPServerID));
             tool.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichLogData(): void {
         for (const log of this.executionLogs) {
-            const conn = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID))
+            const conn = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
             log.ConnectionName = conn?.Name ?? log.ConnectionName ?? 'Unknown';
             // Add server name via connection
             if (conn) {
-                const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID))
+                const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
                 log.ServerName = server?.Name ?? 'Unknown';
             } else {
                 log.ServerName = log.ServerName ?? 'Unknown';
@@ -926,8 +926,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public async deleteServer(server: MCPServerData): Promise<void> {
         // Check for related connections first
-        const relatedConnections = this.connections.filter((c: MCPConnectionData) => UUIDsEqual(c.MCPServerID, server.ID))
-        const relatedTools = this.tools.filter((t: MCPToolData) => UUIDsEqual(t.MCPServerID, server.ID))
+        const relatedConnections = this.connections.filter((c: MCPConnectionData) => UUIDsEqual(c.MCPServerID, server.ID));
+        const relatedTools = this.tools.filter((t: MCPToolData) => UUIDsEqual(t.MCPServerID, server.ID));
 
         if (relatedConnections.length > 0 || relatedTools.length > 0) {
             const parts: string[] = [];
@@ -1180,7 +1180,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public async deleteConnection(connection: MCPConnectionData): Promise<void> {
         // Check for related execution logs
-        const relatedLogs = this.executionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID))
+        const relatedLogs = this.executionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID));
 
         if (relatedLogs.length > 0) {
             if (!confirm(
@@ -1222,7 +1222,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Toggle tool card expansion for details view
      */
     public toggleToolExpand(tool: MCPToolData): void {
-        if (this.ExpandedToolId === tool.ID) {
+        if (UUIDsEqual(this.ExpandedToolId, tool.ID)) {
             this.ExpandedToolId = null;
         } else {
             this.ExpandedToolId = tool.ID;
@@ -1234,7 +1234,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Check if a tool card is expanded
      */
     public isToolExpanded(tool: MCPToolData): boolean {
-        return this.ExpandedToolId === tool.ID;
+        return UUIDsEqual(this.ExpandedToolId, tool.ID);
     }
 
     /**
@@ -1769,7 +1769,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
 
         // Enrich with server name
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID))
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
         if (connection) {
             log.ServerName = connection.ServerName;
         }
@@ -1796,8 +1796,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.SelectedLog = null;
 
         // Open test tool dialog with pre-selected tool and connection
-        const tool = this.tools.find(t => UUIDsEqual(t.ID, event.toolId))
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, event.connectionId))
+        const tool = this.tools.find(t => UUIDsEqual(t.ID, event.toolId));
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, event.connectionId));
 
         if (tool) {
             this.TestToolServerID = tool.MCPServerID;
@@ -1861,16 +1861,16 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Gets tools for a specific server
      */
     public getToolsForServer(serverId: string): MCPToolData[] {
-        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverId))
+        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
     }
 
     /**
      * Gets tools for a specific connection (via its server)
      */
     public getToolsForConnection(connectionId: string): MCPToolData[] {
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, connectionId))
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, connectionId));
         if (!connection) return [];
-        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, connection.MCPServerID))
+        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, connection.MCPServerID));
     }
 
     /**

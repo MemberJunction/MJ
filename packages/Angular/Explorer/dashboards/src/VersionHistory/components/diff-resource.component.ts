@@ -372,13 +372,13 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     private resolveEntityName(entityId: string): string {
         if (!entityId) return 'Unknown';
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : 'Unknown';
     }
 
     private resolveEntityIcon(entityId: string): string {
         if (!entityId) return 'fa-solid fa-table';
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity?.Icon || 'fa-solid fa-table';
     }
 
@@ -687,13 +687,13 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     /** From dropdown excludes the currently selected To label. */
     public get FilteredFromLabels(): MJVersionLabelEntityType[] {
         if (!this.ToLabelId) return this.AvailableLabels;
-        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.ToLabelId))
+        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.ToLabelId));
     }
 
     /** To dropdown excludes the currently selected From label. */
     public get FilteredToLabels(): MJVersionLabelEntityType[] {
         if (!this.FromLabelId) return this.AvailableLabels;
-        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.FromLabelId))
+        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.FromLabelId));
     }
 
     /** Swap From and To label selections. */

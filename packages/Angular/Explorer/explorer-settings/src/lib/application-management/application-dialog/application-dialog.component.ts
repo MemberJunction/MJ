@@ -178,7 +178,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
         const usedEntityIds = new Set<string>();
 
         for (const appEntity of result.Results) {
-          const entity = this.allEntities.find(e => UUIDsEqual(e.ID, appEntity.EntityID))
+          const entity = this.allEntities.find(e => UUIDsEqual(e.ID, appEntity.EntityID));
           if (entity) {
             this.applicationEntities.push({
               entity,
@@ -215,12 +215,12 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     this.updateSequences();
 
     // Remove from available entities
-    this.availableEntities = this.availableEntities.filter(e => !UUIDsEqual(e.ID, entity.ID))
+    this.availableEntities = this.availableEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
   }
 
   public removeEntity(config: ApplicationEntityConfig): void {
     // Remove from application entities
-    this.applicationEntities = this.applicationEntities.filter(ae => !UUIDsEqual(ae.entity.ID, config.entity.ID))
+    this.applicationEntities = this.applicationEntities.filter(ae => !UUIDsEqual(ae.entity.ID, config.entity.ID));
     
     // Update all sequences to be consecutive
     this.updateSequences();

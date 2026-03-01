@@ -290,7 +290,7 @@ export class OAuthCallbackHandler {
             }
 
             // Verify user owns this state
-            if (authState.userId !== contextUser.ID) {
+            if (!UUIDsEqual(authState.userId, contextUser.ID)) {
                 res.status(403).json({
                     success: false,
                     errorCode: 'forbidden',
@@ -492,7 +492,7 @@ export class OAuthCallbackHandler {
             }
 
             // Verify the authenticated user owns this authorization state
-            if (authState.userId !== contextUser.ID) {
+            if (!UUIDsEqual(authState.userId, contextUser.ID)) {
                 LogError(`[OAuth Exchange] User ${contextUser.ID} attempted to exchange code for state owned by ${authState.userId}`);
                 res.status(403).json({
                     success: false,

@@ -252,8 +252,8 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         next: async (result) => {
           if (result && result.selectedPrompts.length > 0) {
             // Filter out already linked prompts
-            const newPrompts = result.selectedPrompts.filter(prompt => 
-              !linkedPromptIds.includes(prompt.ID)
+            const newPrompts = result.selectedPrompts.filter(prompt =>
+              !linkedPromptIds.some(id => UUIDsEqual(id, prompt.ID))
             );
             
             if (newPrompts.length > 0) {
@@ -392,8 +392,8 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         next: async (selectedActions) => {
           if (selectedActions && selectedActions.length > 0) {
             // Filter out already linked actions
-            const newActions = selectedActions.filter(action => 
-              !linkedActionIds.includes(action.ID)
+            const newActions = selectedActions.filter(action =>
+              !linkedActionIds.some(id => UUIDsEqual(id, action.ID))
             );
             
             if (newActions.length > 0) {
@@ -444,19 +444,19 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public removePrompt(prompt: MJAIPromptEntityExtended) {
     // Remove from UI
-    const promptIndex = this.linkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID))
+    const promptIndex = this.linkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (promptIndex >= 0) {
       this.linkedPrompts.splice(promptIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID))
+    const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID));
     if (linkIndex >= 0) {
       this.agentPromptLinks.splice(linkIndex, 1);
     }
     
     // Remove from newly created prompts if it was created in this dialog
-    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID))
+    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (newPromptIndex >= 0) {
       this.newlyCreatedPrompts.splice(newPromptIndex, 1);
     }
@@ -472,13 +472,13 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public removeAction(action: MJActionEntity) {
     // Remove from UI
-    const actionIndex = this.linkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID))
+    const actionIndex = this.linkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
     if (actionIndex >= 0) {
       this.linkedActions.splice(actionIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID))
+    const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID));
     if (linkIndex >= 0) {
       this.agentActionLinks.splice(linkIndex, 1);
     }

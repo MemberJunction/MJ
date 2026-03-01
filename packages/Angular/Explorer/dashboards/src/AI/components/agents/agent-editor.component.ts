@@ -131,7 +131,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private findRootAgent(agent: MJAIAgentEntityExtended): MJAIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
-      const parent = this.allAgents.find(a => UUIDsEqual(a.ID, current.ParentID))
+      const parent = this.allAgents.find(a => UUIDsEqual(a.ID, current.ParentID));
       if (!parent) break;
       current = parent;
     }

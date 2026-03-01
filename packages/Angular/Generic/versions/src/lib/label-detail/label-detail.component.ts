@@ -701,7 +701,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
             this.RelatedLabels = this.AllLabels.filter(l =>
                 !UUIDsEqual(l.ID, this.Label.ID) &&
                 UUIDsEqual(l.EntityID, this.Label.EntityID) &&
-                l.RecordID === this.Label.RecordID &&
+                UUIDsEqual(l.RecordID, this.Label.RecordID) &&
                 l.RecordID != null
             );
 

@@ -564,7 +564,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 if (existing) {
                     existing.fields.push(field);
                 } else {
-                    const relatedEntity = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID))
+                    const relatedEntity = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
                     outgoingMap.set(field.RelatedEntityID, {
                         entityId: field.RelatedEntityID,
                         entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
@@ -905,7 +905,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public get SiblingEntities(): EntityInfo[] {
         if (!this.IsChildType || !this.entity?.ParentEntityInfo) return [];
         return this.entity.ParentEntityInfo.ChildEntities
-            .filter(e => !UUIDsEqual(e.ID, this.entity!.ID))
+            .filter(e => !UUIDsEqual(e.ID, this.entity!.ID));
     }
 
     public get statusClass(): string {
@@ -962,7 +962,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     public getRelatedEntityName(field: EntityFieldInfo): string | null {
         if (!field.RelatedEntityID) return null;
-        const related = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID))
+        const related = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
         return related?.Name || null;
     }
 
@@ -1007,7 +1007,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      */
     public getRoleName(perm: EntityPermissionInfo): string {
         if (!perm.RoleID) return 'Unknown';
-        const role = this._metadata.Roles.find(r => UUIDsEqual(r.ID, perm.RoleID))
+        const role = this._metadata.Roles.find(r => UUIDsEqual(r.ID, perm.RoleID));
         return role?.Name || 'Unknown';
     }
 

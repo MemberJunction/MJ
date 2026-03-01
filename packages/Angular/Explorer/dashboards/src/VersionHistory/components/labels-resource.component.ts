@@ -160,7 +160,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public ResolveEntityName(entityId: string | undefined): string {
         if (!entityId) return '';
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : '';
     }
 
@@ -477,6 +477,6 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public GetChildLabels(parentId: string | undefined): MJVersionLabelEntityType[] {
         if (!parentId) return [];
-        return this.Labels.filter(l => UUIDsEqual(l.ParentID, parentId))
+        return this.Labels.filter(l => UUIDsEqual(l.ParentID, parentId));
     }
 }

@@ -615,13 +615,13 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   private displayChildCollections(parentId: string, editableCollections: MJCollectionEntity[]): void {
-    const childCollections = editableCollections.filter(c => UUIDsEqual(c.ParentID, parentId))
+    const childCollections = editableCollections.filter(c => UUIDsEqual(c.ParentID, parentId));
     this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
   private createNode(collection: MJCollectionEntity, allEditableCollections: MJCollectionEntity[]): CollectionNode {
-    const hasChildren = allEditableCollections.some(c => UUIDsEqual(c.ParentID, collection.ID))
-    const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
+    const hasChildren = allEditableCollections.some(c => UUIDsEqual(c.ParentID, collection.ID));
+    const alreadyContainsArtifact = this.excludeCollectionIds.some(id => UUIDsEqual(id, collection.ID));
     return {
       collection,
       selected: this.selectedCollections.some(sc => UUIDsEqual(sc.ID, collection.ID)),
@@ -647,7 +647,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       return;
     }
 
-    const index = this.selectedCollections.findIndex(c => UUIDsEqual(c.ID, node.collection.ID))
+    const index = this.selectedCollections.findIndex(c => UUIDsEqual(c.ID, node.collection.ID));
     if (index >= 0) {
       this.selectedCollections.splice(index, 1);
       node.selected = false;
@@ -691,7 +691,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   navigateToCollection(collection: MJCollectionEntity): void {
     // Find the index of this collection in the navigation path
-    const index = this.navigationPath.findIndex(n => UUIDsEqual(n.collection.ID, collection.ID))
+    const index = this.navigationPath.findIndex(n => UUIDsEqual(n.collection.ID, collection.ID));
 
     if (index >= 0) {
       // Trim navigation path to this level

@@ -177,7 +177,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     }
 
     private enrichTypeWithStats(type: MJCredentialTypeEntity): TypeWithStats {
-        const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID))
+        const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
@@ -238,7 +238,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             const success = await type.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential type "${type.Name}" deleted successfully`, 'success', 3000);
-                this.types = this.types.filter(t => !UUIDsEqual(t.ID, type.ID))
+                this.types = this.types.filter(t => !UUIDsEqual(t.ID, type.ID));
                 if (UUIDsEqual(this.selectedType?.ID, type.ID)) {
                     this.closeDetail();
                 }
@@ -266,7 +266,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     // === Panel Event Handlers ===
 
     public onTypeSaved(type: MJCredentialTypeEntity): void {
-        const existingIndex = this.types.findIndex(t => UUIDsEqual(t.ID, type.ID))
+        const existingIndex = this.types.findIndex(t => UUIDsEqual(t.ID, type.ID));
         const enrichedType = this.enrichTypeWithStats(type);
 
         if (existingIndex >= 0) {
@@ -285,7 +285,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     }
 
     public onTypeDeleted(typeId: string): void {
-        this.types = this.types.filter(t => !UUIDsEqual(t.ID, typeId))
+        this.types = this.types.filter(t => !UUIDsEqual(t.ID, typeId));
         if (UUIDsEqual(this.selectedType?.ID, typeId)) {
             this.closeDetail();
         }

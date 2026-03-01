@@ -297,7 +297,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return;
         }
 
-        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID))
+        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID));
         if (!this.selectedContextCompressionPrompt) {
             console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
         }
@@ -613,7 +613,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.allSubAgents = [];
 
             // Load child sub-agents (ParentID-based)
-            const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID))
+            const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID));
             for (const agent of childAgents) {
                 this.allSubAgents.push({
                     agent,
@@ -657,13 +657,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             });
 
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID))
-                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID))
+                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
             });
 
             this.agentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID))
-                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
+                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
+                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
             });
 
             // Execute all queries in a single batch for better performance
@@ -1348,8 +1348,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 next: async (result) => {
                     if (result && result.selectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
-                        const newPrompts = result.selectedPrompts.filter(prompt => 
-                            !allLinkedIds.includes(prompt.ID)
+                        const newPrompts = result.selectedPrompts.filter(prompt =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, prompt.ID))
                         );
                         
                         if (newPrompts.length === 0) {
@@ -1451,8 +1451,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
-                    const newActions = selectedActions.filter(action => 
-                        !allLinkedIds.includes(action.ID)
+                    const newActions = selectedActions.filter(action =>
+                        !allLinkedIds.some(id => UUIDsEqual(id, action.ID))
                     );
                     
                     if (newActions.length === 0) {
@@ -2024,7 +2024,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     const pendingAddIndex = this.PendingRecords.findIndex(
                         p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('PromptID') === prompt.ID
+                             UUIDsEqual(p.entityObject.Get('PromptID'), prompt.ID)
                     );
 
                     if (pendingAddIndex >= 0) {
@@ -2053,7 +2053,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const promptIndex = this.agentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID))
+                    const promptIndex = this.agentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
                     if (promptIndex >= 0) {
                         this.agentPrompts.splice(promptIndex, 1);
                     }
@@ -2117,8 +2117,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 next: async (result) => {
                     if (result && result.selectedAgents && result.selectedAgents.length > 0) {
                         // Filter out already linked or pending agents
-                        const newAgents = result.selectedAgents.filter(agent => 
-                            !allLinkedIds.includes(agent.ID)
+                        const newAgents = result.selectedAgents.filter(agent =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, agent.ID))
                         );
                         
                         if (newAgents.length === 0) {
@@ -2208,7 +2208,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     const pendingAddIndex = this.PendingRecords.findIndex(
                         p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('ID') === subAgent.ID &&
+                             UUIDsEqual(p.entityObject.Get('ID'), subAgent.ID) &&
                              p.entityObject.Get('ParentID') === this.record.ID
                     );
 
@@ -2229,7 +2229,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const subAgentIndex = this.subAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID))
+                    const subAgentIndex = this.subAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID));
                     if (subAgentIndex >= 0) {
                         this.subAgents.splice(subAgentIndex, 1);
                     }
@@ -2430,7 +2430,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const pendingAddIndex = this.PendingRecords.findIndex(
                     p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && 
                          p.action === 'save' && 
-                         p.entityObject.Get('ActionID') === action.ID
+                         UUIDsEqual(p.entityObject.Get('ActionID'), action.ID)
                 );
 
                 if (pendingAddIndex >= 0) {
@@ -2459,7 +2459,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 }
 
                 // Remove from UI immediately
-                const actionIndex = this.agentActions.findIndex(a => UUIDsEqual(a.ID, action.ID))
+                const actionIndex = this.agentActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
                 if (actionIndex >= 0) {
                     this.agentActions.splice(actionIndex, 1);
                 }
@@ -2498,8 +2498,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Find the corresponding MJAIAgentPromptEntity for this prompt
             // Get all agent prompts for validation
 
-            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID))
-            const agentPrompt = allAgentPrompts.find(ap => UUIDsEqual(ap.PromptID, prompt.ID))
+            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+            const agentPrompt = allAgentPrompts.find(ap => UUIDsEqual(ap.PromptID, prompt.ID));
             if (!agentPrompt) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Unable to find prompt configuration for advanced settings',
@@ -2581,7 +2581,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         
         try {
             // Get all sub-agents under the same parent for validation
-            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => UUIDsEqual(sa.ParentID, subAgentEntity.ParentID))
+            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => UUIDsEqual(sa.ParentID, subAgentEntity.ParentID));
 
             this.agentManagementService.openSubAgentAdvancedSettingsDialog({
                 subAgent: subAgentEntity,
@@ -2608,7 +2608,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                                 );
 
                                 // Update the local sub-agent data to reflect changes
-                                const localSubAgent = this.subAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID))
+                                const localSubAgent = this.subAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
                                 if (localSubAgent) {
                                     localSubAgent.ExecutionOrder = formData.executionOrder;
                                     localSubAgent.ExecutionMode = formData.executionMode;

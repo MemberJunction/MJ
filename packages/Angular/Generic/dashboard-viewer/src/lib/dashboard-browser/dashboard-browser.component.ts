@@ -878,7 +878,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.includes(d.ID));
+                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1073,7 +1073,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.includes(d.ID));
+                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1098,7 +1098,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Handle drop from breadcrumb component
      */
     public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
-        const dashboards = this.Dashboards.filter(d => event.DashboardIds.includes(d.ID));
+        const dashboards = this.Dashboards.filter(d => event.DashboardIds.some(id => UUIDsEqual(id, d.ID)));
         if (dashboards.length > 0) {
             this.DashboardMove.emit({
                 Dashboards: dashboards,

@@ -112,7 +112,7 @@ export class DashboardShareDialogComponent implements OnChanges {
             // Build user shares list
             this.UserShares = [];
             for (const permission of existingShares) {
-                const user = this.allUsers.find(u => UUIDsEqual(u.ID, permission.UserID))
+                const user = this.allUsers.find(u => UUIDsEqual(u.ID, permission.UserID));
                 if (user) {
                     this.UserShares.push({
                         Permission: permission,

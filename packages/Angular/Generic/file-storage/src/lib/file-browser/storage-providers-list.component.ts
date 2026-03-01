@@ -95,7 +95,7 @@ export class StorageProvidersListComponent implements OnInit {
    * Checks if an account is currently selected.
    */
   public isSelected(accountWithProvider: StorageAccountWithProvider): boolean {
-    return UUIDsEqual(this.selectedAccount?.account.ID, accountWithProvider.account.ID)
+    return UUIDsEqual(this.selectedAccount?.account.ID, accountWithProvider.account.ID);
   }
 
   /**

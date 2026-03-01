@@ -338,7 +338,7 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
       .subscribe(agents => {
         // Preserve expanded state for existing processes
         this.activeProcesses = agents.map(agent => {
-          const existing = this.activeProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID))
+          const existing = this.activeProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID));
           return {
             ...agent,
             expanded: existing ? existing.expanded : false

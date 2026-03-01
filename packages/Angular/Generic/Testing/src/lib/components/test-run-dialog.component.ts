@@ -306,7 +306,7 @@ interface ProgressUpdate {
                   @for (test of filteredTests; track test.ID) {
                     <div
                       class="item"
-                      [class.selected]="selectedTestId === test.ID"
+                      [class.selected]="IsTestSelected(test)"
                       (click)="selectTest(test.ID)"
                     >
                       <div class="item-icon">
@@ -316,7 +316,7 @@ interface ProgressUpdate {
                         <div class="item-name">{{ test.Name }}</div>
                         <div class="item-meta">{{ test.Type }} • {{ test.Description || 'No description' }}</div>
                       </div>
-                      @if (selectedTestId === test.ID) {
+                      @if (IsTestSelected(test)) {
                         <div class="item-check">
                           <i class="fa-solid fa-check-circle"></i>
                         </div>
@@ -354,7 +354,7 @@ interface ProgressUpdate {
                   @for (suite of filteredSuites; track suite.ID) {
                     <div
                       class="item"
-                      [class.selected]="selectedSuiteId === suite.ID"
+                      [class.selected]="IsSuiteSelected(suite)"
                       (click)="selectSuite(suite.ID)"
                     >
                       <div class="item-icon suite">
@@ -364,7 +364,7 @@ interface ProgressUpdate {
                         <div class="item-name">{{ suite.Name }}</div>
                         <div class="item-meta">{{ suite.Description || 'No description' }}</div>
                       </div>
-                      @if (selectedSuiteId === suite.ID) {
+                      @if (IsSuiteSelected(suite)) {
                         <div class="item-check">
                           <i class="fa-solid fa-check-circle"></i>
                         </div>
@@ -1951,6 +1951,14 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   clearSearch(): void {
     this.searchText = '';
     this.filterItems();
+  }
+
+  IsTestSelected(test: MJTestEntity): boolean {
+    return UUIDsEqual(this.selectedTestId, test.ID);
+  }
+
+  IsSuiteSelected(suite: MJTestSuiteEntity): boolean {
+    return UUIDsEqual(this.selectedSuiteId, suite.ID);
   }
 
   selectTest(testId: string): void {

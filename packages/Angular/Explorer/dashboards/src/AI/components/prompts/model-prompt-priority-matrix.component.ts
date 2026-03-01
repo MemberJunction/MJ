@@ -170,8 +170,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     
     // Create associations for existing database records
     dbAssociations.forEach(dbAssoc => {
-      const prompt = this.prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID))
-      const model = this.models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID))
+      const prompt = this.prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID));
+      const model = this.models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID));
       
       if (prompt && model) {
         this.associations.push({
@@ -197,7 +197,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
       
       this.models.forEach((model, modelIndex) => {
         const association = this.associations.find(a => 
-          a.promptId === prompt.ID && a.modelId === model.ID
+          UUIDsEqual(a.promptId, prompt.ID) && UUIDsEqual(a.modelId, model.ID)
         );
         
         this.matrix[promptIndex][modelIndex] = {
@@ -331,8 +331,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   public createAssociation(promptId: string, modelId: string, priority: number = 1): void {
-    const prompt = this.prompts.find(p => UUIDsEqual(p.ID, promptId))
-    const model = this.models.find(m => UUIDsEqual(m.ID, modelId))
+    const prompt = this.prompts.find(p => UUIDsEqual(p.ID, promptId));
+    const model = this.models.find(m => UUIDsEqual(m.ID, modelId));
     
     if (!prompt || !model) return;
     

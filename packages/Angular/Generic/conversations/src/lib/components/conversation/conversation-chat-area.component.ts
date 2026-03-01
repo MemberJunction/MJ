@@ -293,7 +293,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId))
+        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
@@ -308,7 +308,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
         if (!this.conversationId) return;
-        const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId))
+        const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
           // Agents just completed — reload messages to pick up final response and any
@@ -799,7 +799,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID))
+    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
 
     if (existingIndex >= 0) {
       // Update existing message in place (replace with updated version)

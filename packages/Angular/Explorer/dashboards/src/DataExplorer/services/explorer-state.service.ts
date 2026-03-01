@@ -769,12 +769,12 @@ export class ExplorerStateService {
       const engine = UserInfoEngine.Instance;
 
       // Filter to only entity favorites (where EntityID is the Entities entity)
-      const entityFavorites = engine.UserFavorites.filter(f => UUIDsEqual(f.EntityID, entitiesEntity.ID))
+      const entityFavorites = engine.UserFavorites.filter(f => UUIDsEqual(f.EntityID, entitiesEntity.ID));
 
       const favoriteEntities: FavoriteEntity[] = [];
       for (const fav of entityFavorites) {
         // Look up entity name from RecordID (which is the Entity.ID)
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.RecordID))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.RecordID));
         if (entity) {
           favoriteEntities.push({
             userFavoriteId: fav.ID,
@@ -809,7 +809,7 @@ export class ExplorerStateService {
 
       for (const log of userRecordLogs) {
         // Look up entity name from EntityID
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, log.EntityID))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, log.EntityID));
         if (entity) {
           // Filter by application context if applicable
           if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, log.EntityID))) {
@@ -965,7 +965,7 @@ export class ExplorerStateService {
       const engine = UserInfoEngine.Instance;
 
       // Filter to non-entity favorites (exclude favorites where EntityID is the Entities entity)
-      const nonEntityFavorites = engine.UserFavorites.filter(f => !UUIDsEqual(f.EntityID, entitiesEntityId))
+      const nonEntityFavorites = engine.UserFavorites.filter(f => !UUIDsEqual(f.EntityID, entitiesEntityId));
 
       const favoriteRecords: FavoriteRecord[] = [];
       const recordNameInputs: EntityRecordNameInput[] = [];
@@ -973,7 +973,7 @@ export class ExplorerStateService {
 
       for (const fav of nonEntityFavorites) {
         // Look up entity info from the EntityID
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.EntityID))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.EntityID));
         if (entity) {
           // Filter by application context if applicable
           if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, fav.EntityID))) {

@@ -289,7 +289,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         // User is owner if:
         // 1. OwnerID is null/undefined (backwards compatibility with old collections)
         // 2. OwnerID matches current user ID
-        const isOwner = !this.collection?.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)
+        const isOwner = !this.collection?.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID);
 
         // Allow modification if user is owner OR has Share permission
         this.canModifyPermissions = isOwner || (this.currentUserPermissions?.canShare || false);
@@ -341,7 +341,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
 
         try {
             // User is owner if OwnerID is null (old collections) or matches current user
-            const isOwner = !this.collection.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)
+            const isOwner = !this.collection.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID);
             const userPerms = this.currentUserPermissions || {
                 canRead: true,
                 canShare: false,

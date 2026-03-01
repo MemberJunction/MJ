@@ -138,7 +138,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             // Parse initial URL state
             const urlState = this.parseUrlState();
             if (urlState?.queryId) {
-                const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId))
+                const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
                 if (query) {
                     this.selectedQuery = query;
                     this.expandCategoryForQuery(query);
@@ -162,7 +162,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Create nodes for all categories
         for (const category of this.categories) {
-            const queriesInCategory = this.queries.filter(q => UUIDsEqual(q.CategoryID, category.ID))
+            const queriesInCategory = this.queries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
             categoryMap.set(category.ID, {
                 category,
                 children: [],
@@ -296,7 +296,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public isQueryVisible(query: QueryInfo): boolean {
         if (!this.searchText) return true;
-        return this.filteredQueries.some(q => UUIDsEqual(q.ID, query.ID))
+        return this.filteredQueries.some(q => UUIDsEqual(q.ID, query.ID));
     }
 
     public hasVisibleContent(node: CategoryNode): boolean {
@@ -431,7 +431,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Apply the state without triggering URL updates
         this.skipUrlUpdate = true;
         if (urlState?.queryId) {
-            const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId))
+            const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
             if (query) {
                 if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
                     this.selectedQuery = query;

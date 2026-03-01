@@ -262,7 +262,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     // Apply action filter
     const actionId = this.selectedAction$.value;
     if (actionId !== 'all') {
-      filtered = filtered.filter(e => UUIDsEqual(e.ActionID, actionId))
+      filtered = filtered.filter(e => UUIDsEqual(e.ActionID, actionId));
     }
 
     // Apply search filter

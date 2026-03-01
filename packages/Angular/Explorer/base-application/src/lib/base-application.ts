@@ -219,7 +219,7 @@ export class BaseApplication {
     const sorted = [...preferences].sort((a, b) => a.DisplayOrder - b.DisplayOrder);
 
     // First, look for user-specific preference
-    const userPreference = sorted.find(p => UUIDsEqual(p.UserID, currentUserId))
+    const userPreference = sorted.find(p => UUIDsEqual(p.UserID, currentUserId));
     if (userPreference) {
       return userPreference;
     }

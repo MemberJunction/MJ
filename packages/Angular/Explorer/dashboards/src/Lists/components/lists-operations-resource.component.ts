@@ -367,12 +367,12 @@ interface EntityOption {
               @for (list of filteredAddToListOptions; track list) {
                 <div
                   class="list-option"
-                  [class.selected]="selectedTargetListId === list.ID"
+                  [class.selected]="IsTargetListSelected(list)"
                   (click)="selectTargetList(list.ID)">
                   <div class="list-option-radio">
                     <input
                       type="radio"
-                      [checked]="selectedTargetListId === list.ID"
+                      [checked]="IsTargetListSelected(list)"
                       name="targetList" />
                   </div>
                   <div class="list-option-info">
@@ -1429,13 +1429,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // Apply entity filter from dropdown
     if (this.selectedEntityId) {
-      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId))
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId));
     }
 
     // If we have selected lists, restrict to same entity
     if (this.selectedLists.length > 0) {
       this.entityIdFromSelectedLists = this.selectedLists[0].list.EntityID;
-      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.entityIdFromSelectedLists))
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.entityIdFromSelectedLists));
     }
 
     if (this.listSearchTerm) {
@@ -1525,7 +1525,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     try {
       const md = new Metadata();
       const entityId = this.selectedLists[0].list.EntityID;
-      const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId))
+      const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
 
       if (!entityInfo) {
         // Fallback to showing just IDs
@@ -1846,6 +1846,10 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   /**
    * Select a target list for adding records
    */
+  IsTargetListSelected(list: MJListEntity): boolean {
+    return UUIDsEqual(this.selectedTargetListId, list.ID);
+  }
+
   selectTargetList(listId: string): void {
     this.selectedTargetListId = listId;
   }
@@ -1885,7 +1889,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const success = await tg.Submit();
 
       if (success) {
-        const targetList = this.availableLists.find(l => UUIDsEqual(l.ID, this.selectedTargetListId))
+        const targetList = this.availableLists.find(l => UUIDsEqual(l.ID, this.selectedTargetListId));
         this.notificationService.CreateSimpleNotification(
           `Added ${this.recordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
           'success',
@@ -2015,7 +2019,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         // Restore selected lists
         if (state.listIds && state.listIds.length > 0) {
           for (const listId of state.listIds) {
-            const list = this.availableLists.find(l => UUIDsEqual(l.ID, listId))
+            const list = this.availableLists.find(l => UUIDsEqual(l.ID, listId));
             if (list) {
               const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
               this.selectedLists.push({

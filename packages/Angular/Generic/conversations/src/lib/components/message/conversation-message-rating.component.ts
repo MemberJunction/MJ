@@ -162,7 +162,7 @@ export class ConversationMessageRatingComponent implements OnInit {
         this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
         this.totalRatings = ratings.length;
 
-        const currentUserRating = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId))
+        const currentUserRating = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId));
         this.currentUserRating = currentUserRating?.Rating ?? null;
     }
 

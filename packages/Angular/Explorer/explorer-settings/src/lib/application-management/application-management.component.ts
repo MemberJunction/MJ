@@ -228,7 +228,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   public getEntityInfo(entityId: string): any {
-    return this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
+    return this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
   }
   
   public createNewApplication(): void {

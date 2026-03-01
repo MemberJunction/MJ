@@ -114,14 +114,14 @@ export class AgentPropertiesPanelComponent {
   /** Path: origin step name */
   get originStepName(): string {
     if (!this.PathEntity) return '';
-    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.OriginStepID))
+    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.OriginStepID));
     return step?.Name ?? 'Unknown Step';
   }
 
   /** Path: destination step name */
   get destinationStepName(): string {
     if (!this.PathEntity) return '';
-    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.DestinationStepID))
+    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.DestinationStepID));
     return step?.Name ?? 'Unknown Step';
   }
 

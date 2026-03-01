@@ -92,7 +92,7 @@ export class ConversationDataService {
    * @param updates The fields to update
    */
   updateConversationInPlace(id: string, updates: Partial<MJConversationEntity>): void {
-    const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id))
+    const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id));
     if (conversation) {
       Object.assign(conversation, updates);
       // Emit update to trigger reactive subscribers
@@ -106,7 +106,7 @@ export class ConversationDataService {
    * @returns True if the conversation was the active one (caller may need to handle)
    */
   removeConversation(id: string): void {
-    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id))
+    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id));
     this._conversations$.next(this.conversations);
   }
 
@@ -248,7 +248,7 @@ export class ConversationDataService {
 
     for (const id of ids) {
       try {
-        const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id))
+        const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id));
         const name = conversation?.Name || 'Unknown';
 
         const deleted = await this.deleteConversation(id, currentUser);
@@ -258,7 +258,7 @@ export class ConversationDataService {
           failed.push({ id, name, error: 'Delete returned false' });
         }
       } catch (error) {
-        const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id))
+        const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id));
         failed.push({
           id,
           name: conversation?.Name || 'Unknown',
@@ -309,7 +309,7 @@ export class ConversationDataService {
    * @param currentUser The current user context
    */
   async togglePin(id: string, currentUser: UserInfo): Promise<void> {
-    const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id))
+    const conversation = this.conversations.find(c => UUIDsEqual(c.ID, id));
     if (conversation) {
       await this.saveConversation(id, { IsPinned: !conversation.IsPinned }, currentUser);
     }

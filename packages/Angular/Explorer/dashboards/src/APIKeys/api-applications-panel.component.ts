@@ -592,7 +592,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
      * Get scope name by ID
      */
     public getScopeName(scopeId: string): string {
-        const scope = this.AllScopes.find(s => UUIDsEqual(s.ID, scopeId))
+        const scope = this.AllScopes.find(s => UUIDsEqual(s.ID, scopeId));
         return scope?.FullPath || scope?.Name || 'Unknown';
     }
 }

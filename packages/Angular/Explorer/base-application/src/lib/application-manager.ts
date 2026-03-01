@@ -321,7 +321,7 @@ export class ApplicationManager {
    */
   async SetActiveApp(appId: string): Promise<void> {
     const currentApp = this.activeApp$.value;
-    const newApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appId))
+    const newApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
 
     if (!newApp) {
       return;
@@ -345,7 +345,7 @@ export class ApplicationManager {
    * Get application by ID
    */
   GetAppById(appId: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId))
+    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
   }
 
   /**
@@ -465,7 +465,7 @@ export class ApplicationManager {
     switch (accessStatus) {
       case 'installed_active': {
         // User has access - find the BaseApplication instance
-        const baseApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appInfo.ID))
+        const baseApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appInfo.ID));
         return {
           status: 'accessible',
           message: 'User has access to this app',

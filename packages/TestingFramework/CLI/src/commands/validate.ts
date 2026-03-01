@@ -7,6 +7,7 @@ import { TestEngine } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
 import { MJTestEntity } from '@memberjunction/core-entities';
 import { ValidateFlags } from '../types';
+import { UUIDsEqual } from '@memberjunction/global';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
@@ -70,7 +71,7 @@ export class ValidateCommand {
                     console.error(OutputFormatter.formatError(`Test type not found: ${flags.type}`));
                     process.exit(1);
                 }
-                testsToValidate = engine.Tests.filter(t => t.TypeID === type.ID);
+                testsToValidate = engine.Tests.filter(t => UUIDsEqual(t.TypeID, type.ID));
             } else {
                 console.error(OutputFormatter.formatError('Must specify test ID, --all, or --type'));
                 process.exit(1);

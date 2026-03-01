@@ -355,7 +355,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         try {
             for (const id of this.selectedItems) {
-                const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id))
+                const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id));
                 if (item) {
                     await item.detail.Delete();
                 }
@@ -457,7 +457,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
     public get categoryName(): string {
         if (!this.record?.CategoryID) return 'Uncategorized';
-        const category = this.categories.find(c => UUIDsEqual(c.ID, this.record.CategoryID))
+        const category = this.categories.find(c => UUIDsEqual(c.ID, this.record.CategoryID));
         return category?.Name || 'Unknown';
     }
 
@@ -711,7 +711,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public toggleViewSelection(view: MJUserViewEntityExtended): void {
-        const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID))
+        const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
         } else {
@@ -721,7 +721,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID))
+        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {

@@ -395,7 +395,7 @@ export class SchedulingInstrumentationService {
     const allRuns = runsResult.Results as MJScheduledJobRunEntity[];
 
     return types.map(type => {
-      const jobsOfType = allJobs.filter(j => UUIDsEqual(j.JobTypeID, type.ID))
+      const jobsOfType = allJobs.filter(j => UUIDsEqual(j.JobTypeID, type.ID));
       const activeJobs = jobsOfType.filter(j => j.Status === 'Active');
       const jobIds = new Set(jobsOfType.map(j => j.ID));
       const runsOfType = allRuns.filter(r => jobIds.has(r.ScheduledJobID));

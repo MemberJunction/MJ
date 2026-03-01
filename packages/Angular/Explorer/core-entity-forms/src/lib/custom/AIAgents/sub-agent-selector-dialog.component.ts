@@ -157,7 +157,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
     // Type filter
     if (typeId !== 'all') {
-      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, typeId))
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, typeId));
     }
 
     // Search filter
@@ -198,7 +198,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const agents = this.allAgents$.value;
     
     // Find the agent and toggle its selection
-    const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID))
+    const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
       agentToUpdate.selected = !agentToUpdate.selected;
       
@@ -222,7 +222,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered agents to reflect selection state
       const filtered = this.filteredAgents$.value;
-      const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID))
+      const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
         filteredAgent.selected = agentToUpdate.selected;
         this.filteredAgents$.next(filtered);

@@ -192,7 +192,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         entityNode.IsSelected = true;
         this.SelectedEntity = entityNode;
 
-        const entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityNode.ID))
+        const entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityNode.ID));
         this.SelectedEntityInfo = entityInfo ?? null;
 
         if (entityInfo) {

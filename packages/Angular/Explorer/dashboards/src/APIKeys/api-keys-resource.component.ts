@@ -547,7 +547,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * View activity for a key
      */
     public onActivityClick(activity: ActivityItem): void {
-        const key = this.APIKeys.find(k => UUIDsEqual(k.ID, activity.keyId))
+        const key = this.APIKeys.find(k => UUIDsEqual(k.ID, activity.keyId));
         if (key) {
             this.openEditPanel(key);
         }

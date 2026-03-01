@@ -149,7 +149,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
         const actionsWithDetails = actions.map(action => ({
           ...action,
           expanded: false,
-          selected: this.preSelectedActions.includes(action.ID)
+          selected: this.preSelectedActions.some(id => UUIDsEqual(id, action.ID))
         } as ActionWithDetails));
         
         this.actions$.next(actionsWithDetails);

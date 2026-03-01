@@ -132,7 +132,7 @@ export class UserProfileComponent implements OnInit, OnDestroy {
           continue; // Skip locked types
         }
 
-        let pref = preferences.find(p => UUIDsEqual(p.NotificationTypeID, type.ID))
+        let pref = preferences.find(p => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         if (!pref) {
           // Create new preference record

@@ -481,7 +481,7 @@ export class SingleListDetailComponent implements OnInit {
   }
 
   toggleViewSelection(view: MJUserViewEntityExtended): void {
-    const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID))
+    const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
     if (index >= 0) {
       this.userViewsToAdd.splice(index, 1);
     } else {
@@ -490,7 +490,7 @@ export class SingleListDetailComponent implements OnInit {
   }
 
   isViewSelected(view: MJUserViewEntityExtended): boolean {
-    return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID))
+    return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
   }
 
   async confirmAddFromView(): Promise<void> {

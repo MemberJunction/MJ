@@ -88,7 +88,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       // Create extended configurations with associated data
       this.configurations = configs.map(config => {
         const extended = config as ConfigurationWithParams;
-        extended.params = params.filter(p => UUIDsEqual(p.ConfigurationID, config.ID))
+        extended.params = params.filter(p => UUIDsEqual(p.ConfigurationID, config.ID));
         extended.isExpanded = false;
 
         // Find linked prompts

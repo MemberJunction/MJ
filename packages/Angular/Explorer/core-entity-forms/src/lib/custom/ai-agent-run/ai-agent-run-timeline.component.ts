@@ -227,7 +227,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
 
     // For prompt steps, try to find the associated prompt run to get model/vendor info
     if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
-      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID))
+      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID));
       if (promptRun) {
         subtitle = `Model: ${promptRun.Model || 'Unknown'} | Vendor: ${promptRun.Vendor || 'Unknown'}`;
       }
@@ -259,7 +259,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private getStepIconInfo(step: MJAIAgentRunStepEntity): { icon: string; logoUrl?: string } {
     // For sub-agents, try to get agent-specific icon/logo
     if (step.StepType === 'Sub-Agent' && step.TargetID) {
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, step.TargetID))
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, step.TargetID));
       if (agent) {
         // Prefer LogoURL - if present, use it with robot as fallback icon (icon won't be shown when logoUrl exists)
         if (agent.LogoURL) {

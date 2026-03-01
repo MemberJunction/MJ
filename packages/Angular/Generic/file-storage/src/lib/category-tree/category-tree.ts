@@ -72,7 +72,7 @@ export class CategoryTreeComponent implements OnInit {
       return;
     }
 
-    this.categoriesData = this.categoriesData.filter((c) => !UUIDsEqual(c.ID, ID))
+    this.categoriesData = this.categoriesData.filter((c) => !UUIDsEqual(c.ID, ID));
     this.clearSelection();
     this.isLoading = false;
   }

@@ -1,6 +1,7 @@
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
 import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
+import { UUIDsEqual } from "@memberjunction/global";
 import { PageRecordsParams } from "../generic/VectorCore.types";
 import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
@@ -22,7 +23,7 @@ export class VectorBase {
 
     protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
-        const entity = md.Entities.find(e => e.ID === entityID);
+        const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if (!entity){
             throw new Error(`Entity with ID ${entityID} not found.`);
         }
@@ -42,7 +43,7 @@ export class VectorBase {
     }
 
     protected async PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]> {
-        const entity: EntityInfo | undefined = this.Metadata.Entities.find((e) => e.ID === params.EntityID);
+        const entity: EntityInfo | undefined = this.Metadata.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID as string));
         if (!entity) {
           throw new Error(`Entity with ID ${params.EntityID} not found.`);
         }
@@ -88,7 +89,7 @@ export class VectorBase {
     protected GetVectorDatabase(id?: string): MJVectorDatabaseEntity {
         if(AIEngine.Instance.VectorDatabases.length > 0){
             if(id){
-                let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => vd.ID === id);
+                let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => UUIDsEqual(vd.ID, id));
                 if(vectorDB){
                     return vectorDB;
                 }

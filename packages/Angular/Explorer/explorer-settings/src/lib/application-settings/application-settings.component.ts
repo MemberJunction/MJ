@@ -107,7 +107,7 @@ export class ApplicationSettingsComponent implements OnInit {
     const items: AppConfigItem[] = [];
 
     for (const app of systemApps) {
-      const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID))
+      const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID));
 
       items.push({
         App: app,

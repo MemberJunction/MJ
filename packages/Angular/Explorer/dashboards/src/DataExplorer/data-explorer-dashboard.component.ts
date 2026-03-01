@@ -2771,7 +2771,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onRecentRecordClick(record: RecentRecordAccess): void {
-    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId))
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2785,7 +2785,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onFavoriteRecordClick(record: FavoriteRecord): void {
-    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId))
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2797,7 +2797,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Get the icon for an entity by ID (for recent records)
    */
   public getEntityIconById(entityId: string): string {
-    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
     if (entity) {
       return this.getEntityIcon(entity);
     }

@@ -385,7 +385,7 @@ export class UserAppConfigComponent {
 
   private buildAppConfigItems(systemApps: BaseApplication[], userApps: UserAppRow[]): AppConfigItem[] {
     return systemApps.map(app => {
-      const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID))
+      const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID));
       return {
         app,
         userAppId: userApp?.ID ?? null,

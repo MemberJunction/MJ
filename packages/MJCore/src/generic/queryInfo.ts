@@ -292,7 +292,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Fields(): QueryFieldInfo[] {
         if (this._fields === null) {
-            this._fields = Metadata.Provider.QueryFields.filter(f => f.QueryID === this.ID);
+            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
         }
         return this._fields;
     }
@@ -302,7 +302,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions.filter(p => p.QueryID === this.ID);
+        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -313,7 +313,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Parameters(): QueryParameterInfo[] {
         if (this._parameters === null) {
-            this._parameters = Metadata.Provider.QueryParameters.filter(p => p.QueryID === this.ID);
+            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
         }
         return this._parameters;
     }
@@ -325,7 +325,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Entities(): QueryEntityInfo[] {
         if (this._entities === null) {
-            this._entities = Metadata.Provider.QueryEntities.filter(e => e.QueryID === this.ID);
+            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
         }
         return this._entities;
     }
@@ -467,7 +467,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
         if (!dialect) return null;
 
         const entry = provider.QuerySQLs.find(
-            qs => qs.QueryID === this.ID && qs.SQLDialectID === dialect.ID
+            qs => UUIDsEqual(qs.QueryID, this.ID) && UUIDsEqual(qs.SQLDialectID, dialect.ID)
         );
         return entry?.SQL ?? null;
     }
@@ -555,7 +555,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryInfo[]} Array of queries in this category
      */
     get Queries(): QueryInfo[] {
-        return Metadata.Provider.Queries.filter(q => q.CategoryID === this.ID);
+        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));
     }
 }
 

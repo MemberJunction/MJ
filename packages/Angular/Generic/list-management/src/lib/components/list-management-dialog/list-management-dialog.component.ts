@@ -250,7 +250,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
       // Pre-select lists if configured
       if (this.config.preSelectedListIds) {
         for (const listId of this.config.preSelectedListIds) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId))
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             vm.isSelectedForAdd = true;
             this.addedToLists.add(listId);
@@ -527,7 +527,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
         console.log(`[ListManagementDialog] Add result:`, addResult);
 
         for (const listId of this.addedToLists) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId))
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.added.push({
               listId,
@@ -546,7 +546,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
         );
 
         for (const listId of this.removedFromLists) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId))
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.removed.push({
               listId,

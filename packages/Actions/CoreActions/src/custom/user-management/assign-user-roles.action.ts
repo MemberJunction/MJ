@@ -85,7 +85,7 @@ export class AssignUserRolesAction extends BaseAction {
             const errors: string[] = [];
 
             for (const role of foundRoles) {
-                if (existingRoleIDs.includes(role.ID)) {
+                if (existingRoleIDs.some(id => UUIDsEqual(id, role.ID))) {
                     skippedRoles.push(role.Name);
                     continue;
                 }

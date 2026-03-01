@@ -1391,7 +1391,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       // Build available accounts (excluding current account)
       this.availableAccounts = engine.AccountsWithProviders
-        .filter(a => !UUIDsEqual(a.account.ID, this.account?.account.ID))
+        .filter(a => !UUIDsEqual(a.account.ID, this.account?.account.ID));
 
       if (this.availableAccounts.length === 0) {
         this.errorMessage = 'No other storage accounts available';

@@ -206,7 +206,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   getCategoryDisplayName(categoryId: string): string {
-    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId))
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || 'Unknown Category';
   }
 

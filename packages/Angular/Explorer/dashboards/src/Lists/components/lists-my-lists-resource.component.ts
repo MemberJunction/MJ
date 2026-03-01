@@ -1462,7 +1462,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       const indent = '\u00A0\u00A0'.repeat(level);
       result.push({ ID: cat.ID, displayName: `${indent}${cat.Name}` });
 
-      const children = categories.filter(c => UUIDsEqual(c.ParentID, cat.ID))
+      const children = categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
       for (const child of children) {
         processCategory(child, level + 1);
       }

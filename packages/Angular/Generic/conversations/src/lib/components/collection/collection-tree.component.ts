@@ -39,9 +39,9 @@ interface DragData {
           <div class="tree-node-wrapper">
             <div
               class="tree-node"
-              [class.selected]="node.collection.ID === selectedCollectionId"
+              [class.selected]="IsCollectionSelected(node)"
               [class.drag-over]="dragOverNodeId === node.collection.ID"
-              [class.dragging]="draggedNode?.collection?.ID === node.collection.ID"
+              [class.dragging]="IsCollectionDragging(node)"
               [style.padding-left.px]="node.level * 20"
               [draggable]="true"
               (click)="onSelectCollection(node.collection)"
@@ -87,9 +87,9 @@ interface DragData {
       <div class="tree-node-wrapper">
         <div
           class="tree-node"
-          [class.selected]="node.collection.ID === selectedCollectionId"
+          [class.selected]="IsCollectionSelected(node)"
           [class.drag-over]="dragOverNodeId === node.collection.ID"
-          [class.dragging]="draggedNode?.collection?.ID === node.collection.ID"
+          [class.dragging]="IsCollectionDragging(node)"
           [style.padding-left.px]="node.level * 20"
           [draggable]="true"
           (click)="onSelectCollection(node.collection)"
@@ -213,7 +213,7 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   private buildNode(collection: MJCollectionEntity, level: number): TreeNode {
-    const children = this.collections.filter(c => UUIDsEqual(c.ParentID, collection.ID))
+    const children = this.collections.filter(c => UUIDsEqual(c.ParentID, collection.ID));
     return {
       collection,
       children: children.map(c => this.buildNode(c, level + 1)),
@@ -227,6 +227,14 @@ export class CollectionTreeComponent implements OnInit {
     node.expanded = !node.expanded;
   }
 
+  IsCollectionSelected(node: TreeNode): boolean {
+    return UUIDsEqual(node.collection.ID, this.selectedCollectionId);
+  }
+
+  IsCollectionDragging(node: TreeNode): boolean {
+    return UUIDsEqual(this.draggedNode?.collection?.ID, node.collection.ID);
+  }
+
   onSelectCollection(collection: MJCollectionEntity): void {
     this.selectedCollectionId = collection.ID;
     this.collectionSelected.emit(collection);
@@ -235,7 +243,7 @@ export class CollectionTreeComponent implements OnInit {
   async onCreateCollection(parentId: string | null): Promise<void> {
     // Validate permission if creating child collection
     if (parentId) {
-      const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId))
+      const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
       if (parentCollection) {
         // Check if user has Edit permission on parent
         if (parentCollection.OwnerID && !UUIDsEqual(parentCollection.OwnerID, this.currentUser.ID)) {
@@ -265,7 +273,7 @@ export class CollectionTreeComponent implements OnInit {
 
       if (parentId) {
         // Child collection - inherit parent's owner and set parent
-        const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId))
+        const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
         collection.ParentID = parentId;
         collection.OwnerID = parentCollection?.OwnerID || this.currentUser.ID;
       } else {

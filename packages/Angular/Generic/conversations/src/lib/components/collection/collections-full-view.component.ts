@@ -1964,7 +1964,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
   }
 
   // Sharing methods

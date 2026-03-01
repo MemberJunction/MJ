@@ -418,7 +418,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       
       if (step.StepType === 'Sub-Agent' && step.TargetLogID) {
         // Create a scope for sub-agent
-        const subRun = subRuns.find(sr => UUIDsEqual(sr.ID, step.TargetLogID))
+        const subRun = subRuns.find(sr => UUIDsEqual(sr.ID, step.TargetLogID));
         const scopeElement = await this.createScopeElement(step, subRun);
         mainGroup.appendChild(scopeElement);
         
@@ -523,7 +523,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     // Model info for prompts
     if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
-      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID))
+      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID));
       if (promptRun) {
         const model = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         model.setAttribute('x', '12');

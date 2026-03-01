@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -444,8 +444,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         const allSubAgents: MJAIAgentEntityExtended[] = [];
 
         for (const agent of [...childAgents, ...relatedAgents]) {
-            if (!uniqueAgentIDs.has(agent.ID)) {
-                uniqueAgentIDs.add(agent.ID);
+            if (!uniqueAgentIDs.has(NormalizeUUID(agent.ID))) {
+                uniqueAgentIDs.add(NormalizeUUID(agent.ID));
                 allSubAgents.push(agent);
             }
         }

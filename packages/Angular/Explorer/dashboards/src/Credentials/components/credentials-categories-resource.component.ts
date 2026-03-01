@@ -247,7 +247,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             const success = await node.category.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Category "${node.category.Name}" deleted successfully`, 'success', 3000);
-                this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, node.category.ID))
+                this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, node.category.ID));
                 if (UUIDsEqual(this.selectedNode?.category.ID, node.category.ID)) {
                     this.selectedNode = null;
                 }
@@ -265,7 +265,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     // === Panel Event Handlers ===
 
     public onCategorySaved(category: MJCredentialCategoryEntity): void {
-        const existingIndex = this.categories.findIndex(c => UUIDsEqual(c.ID, category.ID))
+        const existingIndex = this.categories.findIndex(c => UUIDsEqual(c.ID, category.ID));
 
         if (existingIndex >= 0) {
             this.categories[existingIndex] = category;
@@ -278,7 +278,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     }
 
     public onCategoryDeleted(categoryId: string): void {
-        this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, categoryId))
+        this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, categoryId));
         if (UUIDsEqual(this.selectedNode?.category.ID, categoryId)) {
             this.selectedNode = null;
         }

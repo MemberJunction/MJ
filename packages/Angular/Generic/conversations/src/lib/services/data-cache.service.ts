@@ -77,7 +77,7 @@ export class DataCacheService {
    * @param id The conversation ID to remove
    */
   removeConversation(id: string): void {
-    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id))
+    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id));
   }
 
   /**

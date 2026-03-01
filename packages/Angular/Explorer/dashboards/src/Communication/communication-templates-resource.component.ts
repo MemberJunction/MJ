@@ -360,7 +360,7 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     }
 
     private buildTemplateCard(template: MJTemplateEntity, allContents: MJTemplateContentEntity[]): TemplateCardData {
-        const templateContents = allContents.filter(c => UUIDsEqual(c.TemplateID, template.ID))
+        const templateContents = allContents.filter(c => UUIDsEqual(c.TemplateID, template.ID));
         const contentTypes = [...new Set(templateContents.map(c => c.TypeID ? 'Content' : 'Text'))];
         const category = template.Category || 'Uncategorized';
         const lastUpdated = template.Get('__mj_UpdatedAt') as Date | null;

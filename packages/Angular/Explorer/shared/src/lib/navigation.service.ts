@@ -626,7 +626,7 @@ export class NavigationService implements OnDestroy {
   async SwitchToApp(appId: string, navItemName?: string): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
-    const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId))
+    const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
     if (!app) {
       return;
     }

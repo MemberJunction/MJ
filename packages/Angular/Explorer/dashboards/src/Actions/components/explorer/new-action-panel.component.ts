@@ -202,7 +202,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
     let currentParentId = category.ParentID;
 
     while (currentParentId) {
-      const parent = this.Categories.find(c => UUIDsEqual(c.ID, currentParentId))
+      const parent = this.Categories.find(c => UUIDsEqual(c.ID, currentParentId));
       if (parent) {
         path.unshift(parent.Name);
         currentParentId = parent.ParentID || null;

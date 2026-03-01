@@ -158,7 +158,7 @@ interface CategoryViewModel {
         <div class="category-node" [style.padding-left.px]="vm.depth * 20">
           <div
             class="node-content"
-            [class.selected]="selectedCategory?.ID === vm.category.ID"
+            [class.selected]="IsCategorySelected(vm.category)"
             (click)="selectCategory(vm.category)"
             (keydown.enter)="selectCategory(vm.category)"
             (keydown.space)="selectCategory(vm.category); $event.preventDefault()"
@@ -167,7 +167,7 @@ interface CategoryViewModel {
             tabindex="0"
             role="treeitem"
             [attr.aria-expanded]="hasChildren(vm.category) ? vm.isExpanded : null"
-            [attr.aria-selected]="selectedCategory?.ID === vm.category.ID"
+            [attr.aria-selected]="IsCategorySelected(vm.category)"
             [attr.aria-label]="vm.category.Name + ' - ' + vm.listCount + ' lists'">
             @if (hasChildren(vm.category)) {
               <button
@@ -1017,7 +1017,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const buildVm = (category: MJListCategoryEntity, depth: number): CategoryViewModel => {
       const lists = this.listsByCategoryId.get(category.ID) || [];
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID))
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
 
       return {
         category,
@@ -1030,7 +1030,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const processCategory = (category: MJListCategoryEntity, depth: number) => {
       this.categoryViewModels.push(buildVm(category, depth));
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID))
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
       for (const child of children) {
         processCategory(child, depth + 1);
       }
@@ -1051,7 +1051,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         return;
       }
       this.availableParents.push({ ID: cat.ID, displayName: prefix + cat.Name });
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, cat.ID))
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
       for (const child of children) {
         addCategory(child, prefix + '\u00A0\u00A0');
       }
@@ -1077,11 +1077,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   }
 
   getChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
-    return this.categoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID))
+    return this.categoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID));
   }
 
   hasChildren(category: MJListCategoryEntity): boolean {
-    return this.categories.some(c => UUIDsEqual(c.ParentID, category.ID))
+    return this.categories.some(c => UUIDsEqual(c.ParentID, category.ID));
   }
 
   toggleExpand(event: Event, vm: CategoryViewModel) {
@@ -1101,6 +1101,10 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     if (vm.isExpanded) {
       vm.isExpanded = false;
     }
+  }
+
+  IsCategorySelected(category: MJListCategoryEntity): boolean {
+    return UUIDsEqual(this.selectedCategory?.ID, category.ID);
   }
 
   selectCategory(category: MJListCategoryEntity) {
@@ -1148,7 +1152,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.categoryToDelete = this.selectedCategory;
     const categoryName = this.categoryToDelete.Name;
     const listsInCategory = this.listsByCategoryId.get(this.categoryToDelete.ID) || [];
-    const childCategories = this.categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID))
+    const childCategories = this.categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID));
 
     let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {

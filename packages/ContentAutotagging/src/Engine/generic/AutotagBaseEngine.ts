@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core'
-import { RegisterClass, MJGlobal } from '@memberjunction/global'
+import { RegisterClass, MJGlobal, UUIDsEqual } from '@memberjunction/global'
 import { MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity, MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity, MJContentTypeAttributeEntity, MJContentSourceParamEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
@@ -84,7 +84,7 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
-        const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID)
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, params.modelID))
         const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
         const tokenLimit = model.InputTokenLimit
         const text = this.chunkExtractedText(params.text, model.InputTokenLimit)

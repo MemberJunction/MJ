@@ -99,7 +99,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
-        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.applicationId))
+        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.applicationId));
         this.applicationName = app?.Name || 'Unknown Application';
       }
     } catch (error) {
@@ -188,7 +188,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   public addDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.availableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID))
+      const index = this.availableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
         this.availableDashboards.splice(index, 1);
         this.configuredDashboards.push(dashboard);
@@ -207,7 +207,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   public removeDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.configuredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID))
+      const index = this.configuredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
         this.configuredDashboards.splice(index, 1);
         this.availableDashboards.push(dashboard);

@@ -595,7 +595,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onConversationDeleted(deletedId: string): void {
     if (this.selectedConversationId === deletedId) {
-      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId))
+      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
       if (remaining.length > 0) {
         void this.selectConversation(remaining[0].ID);
         this.updateUrl();

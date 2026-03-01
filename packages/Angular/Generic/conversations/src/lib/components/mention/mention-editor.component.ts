@@ -550,7 +550,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
       // Check if this is the selected preset
       const currentPresetId = chip.getAttribute('data-preset-id');
-      const isSelected = UUIDsEqual(preset.ID, currentPresetId)
+      const isSelected = UUIDsEqual(preset.ID, currentPresetId);
 
       // Add checkmark for selected option
       const checkmark = document.createElement('i');
@@ -607,7 +607,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         chip.setAttribute('data-preset-name', preset.Name || '');
 
         // Update preset indicator visibility and text
-        const isDefault = UUIDsEqual(preset.ID, defaultPreset.ID)
+        const isDefault = UUIDsEqual(preset.ID, defaultPreset.ID);
         if (isDefault) {
           presetIndicator.style.display = 'none';
         } else {

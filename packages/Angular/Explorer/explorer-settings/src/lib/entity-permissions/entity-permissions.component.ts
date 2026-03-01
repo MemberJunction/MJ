@@ -347,7 +347,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   public getRoleName(roleId: string): string {
-    const role = this.roles.find(r => UUIDsEqual(r.ID, roleId))
+    const role = this.roles.find(r => UUIDsEqual(r.ID, roleId));
     return role?.Name || 'Unknown Role';
   }
   

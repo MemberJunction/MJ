@@ -239,7 +239,7 @@ export class UserViewResource extends BaseResourceComponent {
         }
 
         // Load the entity info
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID))
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID));
 
         if (!entity) {
             throw new Error(`Entity for view not found`);

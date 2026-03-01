@@ -265,7 +265,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     }
                     return false; // Don't log if filtering requested but no user context provided
                 }
-                const matches = session.options.filterByUserId === contextUser.ID;
+                const matches = UUIDsEqual(session.options.filterByUserId, contextUser.ID);
                 if (hasVerboseSession) {
                     console.log(`Session ${session.id} filter check:`, {
                         filterByUserId: session.options.filterByUserId,

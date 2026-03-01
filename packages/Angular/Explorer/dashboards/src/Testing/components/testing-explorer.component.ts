@@ -2199,7 +2199,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private buildSingleSuiteCard(suite: MJTestSuiteEntity): SuiteCardData {
-    const suiteTestLinks = this.allSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suite.ID))
+    const suiteTestLinks = this.allSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suite.ID));
     const testIds = new Set(suiteTestLinks.map(st => st.TestID));
     const runsForSuite = this.testRunStats.filter(r => testIds.has(r.TestID));
 
@@ -2233,7 +2233,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
       .sort((a, b) => a.Sequence - b.Sequence)
       .slice(0, 5)
       .map(st => {
-        const test = this.allTests.find(t => UUIDsEqual(t.ID, st.TestID))
+        const test = this.allTests.find(t => UUIDsEqual(t.ID, st.TestID));
         const lastRun = this.findLastRunForTest(st.TestID);
         return {
           TestID: st.TestID,
@@ -2249,7 +2249,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private buildSingleTestCard(test: MJTestEntity): TestCardData {
-    const runsForTest = this.testRunStats.filter(r => UUIDsEqual(r.TestID, test.ID))
+    const runsForTest = this.testRunStats.filter(r => UUIDsEqual(r.TestID, test.ID));
     const lastRun = runsForTest.length > 0 ? runsForTest[0] : null; // already sorted DESC
     const passedRuns = runsForTest.filter(r => r.Status === 'Passed');
     const passRate = runsForTest.length > 0 ? (passedRuns.length / runsForTest.length) * 100 : 0;
@@ -2370,7 +2370,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     const sel = this.SelectedSidebar;
     switch (sel.Type) {
       case 'suite':
-        return suites.filter(s => UUIDsEqual(s.ID, sel.ID))
+        return suites.filter(s => UUIDsEqual(s.ID, sel.ID));
       case 'standalone':
         return []; // standalone = tests only
       case 'testType':
@@ -2395,7 +2395,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
       }
       case 'testType':
         return tests.filter(t => {
-          const testEntity = this.allTests.find(te => UUIDsEqual(te.ID, t.ID))
+          const testEntity = this.allTests.find(te => UUIDsEqual(te.ID, t.ID));
           return UUIDsEqual(testEntity?.TypeID, sel.ID);
         });
       default:
@@ -2494,9 +2494,9 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private findSuiteNameForTest(testId: string): string {
-    const suiteTest = this.allSuiteTests.find(st => UUIDsEqual(st.TestID, testId))
+    const suiteTest = this.allSuiteTests.find(st => UUIDsEqual(st.TestID, testId));
     if (!suiteTest) return '';
-    const suite = this.AllSuites.find(s => UUIDsEqual(s.ID, suiteTest.SuiteID))
+    const suite = this.AllSuites.find(s => UUIDsEqual(s.ID, suiteTest.SuiteID));
     return suite?.Name || suiteTest.Suite || '';
   }
 

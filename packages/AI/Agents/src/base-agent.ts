@@ -4267,7 +4267,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             } else if (change.mode === 'remove') {
                 // Remove actions by ID
-                actions = actions.filter(a => !change.actionIds.includes(a.ID));
+                actions = actions.filter(a => !change.actionIds.some(id => UUIDsEqual(id, a.ID)));
             }
         }
 

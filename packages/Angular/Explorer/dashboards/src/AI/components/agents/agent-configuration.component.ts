@@ -360,7 +360,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
     // Apply agent type filter
     if (this.currentFilters.agentType !== 'all') {
-      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.currentFilters.agentType))
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.currentFilters.agentType));
     }
 
     // Apply parent agent filter
@@ -368,7 +368,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       if (this.currentFilters.parentAgent === 'none') {
         filtered = filtered.filter(agent => !agent.ParentID);
       } else {
-        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.currentFilters.parentAgent))
+        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.currentFilters.parentAgent));
       }
     }
 
@@ -503,7 +503,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    */
   public getParentAgentName(agent: MJAIAgentEntityExtended): string | null {
     if (!agent.ParentID) return null;
-    const parent = this.agents.find(a => UUIDsEqual(a.ID, agent.ParentID))
+    const parent = this.agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
     return parent?.Name || 'Unknown Parent';
   }
 

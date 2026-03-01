@@ -1646,7 +1646,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     // Load the agent entity to get its name
-    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID))
+    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID));
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1921,7 +1921,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId))
+    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });

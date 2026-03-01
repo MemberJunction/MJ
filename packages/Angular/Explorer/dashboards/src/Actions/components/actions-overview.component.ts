@@ -182,7 +182,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     executions: MJActionExecutionLogEntity[]
   ): void {
     this.categoryStats = categories.map(category => {
-      const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID))
+      const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
       const categoryExecutions = executions.filter(e => 
         categoryActions.some(a => UUIDsEqual(a.ID, e.ActionID))
       );

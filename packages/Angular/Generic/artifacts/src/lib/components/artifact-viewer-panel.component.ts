@@ -870,7 +870,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
               this.originConversation = conversation;
 
               // Check if user has access (is owner or participant)
-              const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID)
+              const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID);
 
               // Check if user is a participant
               const participantResult = await rv.RunView({

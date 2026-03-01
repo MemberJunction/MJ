@@ -209,7 +209,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
     public onServerChange(): void {
         const serverId = this.connectionForm.get('MCPServerID')?.value;
-        const server = this.servers.find(s => UUIDsEqual(s.ID, serverId))
+        const server = this.servers.find(s => UUIDsEqual(s.ID, serverId));
         if (server && !this.connectionForm.get('Name')?.value) {
             // Auto-fill name based on server
             this.connectionForm.patchValue({

@@ -644,7 +644,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
-            const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
+            const dashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, data.ResourceRecordID));
             if (!dashboard) {
                 throw new Error(`Dashboard with ID ${data.ResourceRecordID} not found.`);
             }
@@ -808,7 +808,7 @@ export class DashboardResource extends BaseResourceComponent {
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
         const md = new Metadata();
-        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID))
+        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
             stateObject = stateResult[0];
@@ -912,7 +912,7 @@ export class DashboardResource extends BaseResourceComponent {
             case 'OpenDashboard': {
                 const dashRequest = request as { type: 'OpenDashboard'; dashboardId: string };
                 // Load dashboard name from engine cache
-                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, dashRequest.dashboardId))
+                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, dashRequest.dashboardId));
                 const name = targetDashboard?.Name || 'Dashboard';
                 this.navigationService.OpenDashboard(dashRequest.dashboardId, name);
                 break;

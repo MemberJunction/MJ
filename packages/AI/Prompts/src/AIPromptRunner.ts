@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
-import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual } from '@memberjunction/global';
+import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -1763,11 +1763,11 @@ export class AIPromptRunner {
     if (configurationId) {
       // Get the configuration inheritance chain
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
-      const chainIds = new Set(chain.map(c => c.ID));
+      const chainIds = new Set(chain.map(c => NormalizeUUID(c.ID)));
 
       // Include models matching any config in the chain, plus null-config (universal fallback)
       return allPromptModels.filter(
-        pm => (pm.ConfigurationID && chainIds.has(pm.ConfigurationID)) ||
+        pm => (pm.ConfigurationID && chainIds.has(NormalizeUUID(pm.ConfigurationID))) ||
               pm.ConfigurationID === null
       );
     } else {
@@ -2904,7 +2904,7 @@ export class AIPromptRunner {
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
 
     // Update ModelID if we ended up using a different model
-    if (currentModel.ID !== promptRun.OriginalModelID) {
+    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
       promptRun.ModelID = currentModel.ID;
     }
     if (currentVendorId && currentVendorId !== promptRun.VendorID) {
@@ -3520,7 +3520,7 @@ export class AIPromptRunner {
 
     // Count how many times we've retried this specific model/vendor for rate limits
     const rateLimitRetryCount = failoverAttempts.filter(a =>
-      a.modelId === currentModel.ID &&
+      UUIDsEqual(a.modelId, currentModel.ID) &&
       a.vendorId === currentVendorId &&
       a.errorType === 'RateLimit'
     ).length;
@@ -4780,8 +4780,8 @@ export class AIPromptRunner {
         } else if (modelStrategy === 'PreferDifferentModel') {
           // Sort to put different models first
           candidates.sort((a, b) => {
-            const aDiffModel = a.model.ID !== currentModel.ID ? 1 : 0;
-            const bDiffModel = b.model.ID !== currentModel.ID ? 1 : 0;
+            const aDiffModel = !UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
+            const bDiffModel = !UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
             return bDiffModel - aDiffModel;
           });
         }

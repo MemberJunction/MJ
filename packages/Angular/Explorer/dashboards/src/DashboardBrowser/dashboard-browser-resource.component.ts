@@ -195,7 +195,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             for (const dashboard of event.Dashboards) {
                 const deleted = await dashboard.Delete();
                 if (deleted) {
-                    const index = this.dashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID))
+                    const index = this.dashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
                     if (index >= 0) {
                         this.dashboards.splice(index, 1);
                     }
@@ -411,7 +411,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             // Delete in reverse order (children first)
             for (const cat of categoriesToDelete.reverse()) {
                 // First, move any dashboards in this category to uncategorized
-                const dashboardsInCategory = this.dashboards.filter(d => UUIDsEqual(d.CategoryID, cat.ID))
+                const dashboardsInCategory = this.dashboards.filter(d => UUIDsEqual(d.CategoryID, cat.ID));
                 for (const dashboard of dashboardsInCategory) {
                     dashboard.CategoryID = null!;
                     await dashboard.Save();
@@ -420,7 +420,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // Then delete the category
                 const deleted = await cat.Delete();
                 if (deleted) {
-                    const index = this.categories.findIndex(c => UUIDsEqual(c.ID, cat.ID))
+                    const index = this.categories.findIndex(c => UUIDsEqual(c.ID, cat.ID));
                     if (index >= 0) {
                         this.categories.splice(index, 1);
                     }
@@ -739,7 +739,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
             case 'OpenDashboard': {
                 // Navigate to another dashboard
-                const targetDashboard = this.dashboards.find(d => UUIDsEqual(d.ID, request.dashboardId))
+                const targetDashboard = this.dashboards.find(d => UUIDsEqual(d.ID, request.dashboardId));
                 if (targetDashboard) {
                     if (openInNewTab) {
                         this.navigationService.OpenDashboard(
@@ -756,7 +756,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             case 'OpenQuery': {
                 // Navigate to query viewer
                 const md = new Metadata();
-                const queryInfo = md.Queries.find(q => UUIDsEqual(q.ID, request.queryId))
+                const queryInfo = md.Queries.find(q => UUIDsEqual(q.ID, request.queryId));
                 if (queryInfo) {
                     this.navigationService.OpenQuery(
                         request.queryId,
@@ -1004,7 +1004,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 if (dashboardId !== currentDashboardId) {
                     if (dashboardId) {
                         // Find and open the dashboard
-                        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId))
+                        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
                         if (dashboard) {
                             this.selectedDashboard = dashboard;
                             this.mode = 'view';
@@ -1057,7 +1057,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     private getChildCategoriesRecursive(parentId: string): MJDashboardCategoryEntity[] {
         const children: MJDashboardCategoryEntity[] = [];
-        const directChildren = this.categories.filter(c => UUIDsEqual(c.ParentID, parentId))
+        const directChildren = this.categories.filter(c => UUIDsEqual(c.ParentID, parentId));
 
         for (const child of directChildren) {
             children.push(child);

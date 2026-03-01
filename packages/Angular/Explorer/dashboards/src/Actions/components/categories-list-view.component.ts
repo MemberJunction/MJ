@@ -363,7 +363,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
 
       // Calculate stats for each category
       this.categories = categories.map(category => {
-        const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID))
+        const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
         return {
           ...category,
           actionCount: categoryActions.length,

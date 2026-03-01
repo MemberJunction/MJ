@@ -136,7 +136,7 @@ export class SharedService {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
   }
   public ResourceTypeByID(id: string): MJResourceTypeEntity | undefined {
-    return SharedService._resourceTypes.find(rt => UUIDsEqual(rt.ID, id))
+    return SharedService._resourceTypes.find(rt => UUIDsEqual(rt.ID, id));
   }
   public ResourceTypeByName(name: string): MJResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());

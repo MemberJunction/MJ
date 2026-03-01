@@ -95,7 +95,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
     // Apply type filter if selected
     if (this.selectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.selectedTypeFilter))
+      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.selectedTypeFilter));
     }
 
     // Apply text filter if it is not empty

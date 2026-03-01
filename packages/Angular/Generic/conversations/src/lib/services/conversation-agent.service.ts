@@ -560,7 +560,7 @@ export class ConversationAgentService {
         const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
         // check by preset ID or AIConfigurationID - since sometimes we have the actual
         // configuration ID. Since both UUID no collisions should ever be possible.
-        const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId))
+        const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId));
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
@@ -639,7 +639,7 @@ export class ConversationAgentService {
       }
 
       // Get agent details
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId))
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
