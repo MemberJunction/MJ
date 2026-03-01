@@ -1116,7 +1116,7 @@ export class SQLCodeGenBase {
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `rootFn_${field.Name}`;
+            const alias = `root_${field.Name}`;
             sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(entity, field, alias)}`;
         }
         return sOutput;
@@ -1131,7 +1131,7 @@ export class SQLCodeGenBase {
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `rootFn_${field.Name}`;
+            const alias = `root_${field.Name}`;
             if (sOutput.length > 0) sOutput += '\n';
             sOutput += this._dbProvider.generateRootFieldJoin(entity, field, alias);
         }

@@ -8,7 +8,7 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { logIf, sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo } from '../../../Config/config';
+import { configInfo, dbDatabase } from '../../../Config/config';
 import { sqlConfig } from '../../../Config/db-connection';
 import { logError, logMessage, logWarning } from '../../../Misc/status_logging';
 import * as fs from 'fs';
@@ -208,9 +208,7 @@ BEGIN
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
-GO
-${permissions}
-GO
+GO${permissions}
     `;
     }
 
@@ -258,10 +256,10 @@ BEGIN
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
         SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
     ELSE
-        -- Return the updated record
+        -- Return the updated record so the caller can see the updated values and any calculated fields
         ${selectUpdatedRecord}
 END
 GO
@@ -302,7 +300,7 @@ ${deleteCode}`;
         [${entity.SchemaName}].[${entity.BaseTable}]
     SET
         ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
-${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update if already soft-deleted`;
+${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`;
         }
 
         let sNullSelect = '';
@@ -329,13 +327,11 @@ ${deleteCode}
 
     -- Check if the delete was successful
     IF @@ROWCOUNT = 0
-        SELECT ${sNullSelect} -- Return NULL for all PKs to indicate no record was deleted
+        SELECT ${sNullSelect} -- Return NULL for all primary key fields to indicate no record was deleted
     ELSE
-        SELECT ${sSelect} -- Return the PK values to indicate successful deletion
+        SELECT ${sSelect} -- Return the primary key values to indicate we successfully deleted the record
 END
-GO
-${permissions}
-GO
+GO${permissions}
     `;
     }
 
@@ -425,7 +421,7 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         let sql = '';
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0
             ? entity.FullTextCatalog
-            : 'MJ_FullTextCatalog';
+            : dbDatabase + '_FullTextCatalog';
 
         if (entity.FullTextCatalogGenerated) {
             sql += `                -- CREATE THE FULL TEXT CATALOG
@@ -564,9 +560,7 @@ GO
 
     /** @inheritdoc */
     generateRootFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
-        const rootFieldName = field.Name.endsWith('ID')
-            ? field.Name.substring(0, field.Name.length - 2) + 'RootID'
-            : field.Name + 'RootID';
+        const rootFieldName = `Root${field.Name}`;
         return `${alias}.RootID AS [${rootFieldName}]`;
     }
 
@@ -615,18 +609,20 @@ GO
                 }
             }
         }
-        return sOutput;
+        return (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     /** @inheritdoc */
     generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
-            if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+            if (ep.CanRead) {
+                if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
+                    sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                }
             }
         }
-        return sOutput;
+        return (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
@@ -650,8 +646,8 @@ GO
         const qs = this.Dialect.QuoteSchema.bind(this.Dialect);
         const whereClause = `${qi(fkField.CodeName)} = @${parentEntity.FirstPrimaryKey.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Delete');
-        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity);
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
         const cursorName = `cascade_delete_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
 
         return `
@@ -688,7 +684,7 @@ GO
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Update');
         const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
-        const cursorName = `cascade_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
+        const cursorName = `cascade_update_${relatedEntity.CodeName}_${fkField.CodeName}_cursor`;
 
         return `
     -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}

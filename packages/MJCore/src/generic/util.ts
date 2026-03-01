@@ -189,6 +189,9 @@ export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
         case 'nchar':
         case 'ntext':
             return sqlLength > 0 ? sqlLength / 2 : 0; // length in the schema is the # of bytes and on unicode fields we divide by 2 to get the # of characters a user is allowed to put in.
+        case 'uniqueidentifier': // SQL Server UUID type
+        case 'uuid': // PostgreSQL UUID type
+            return 36; // UUID string representation: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         default:
             return 0;
     }
