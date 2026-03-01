@@ -208,6 +208,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByName(agentName);
     }
+    public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
+        return this.Base.GetAgentByID(agentId);
+    }
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         return this.Base.GetAgentConfigurationPresets(agentId, activeOnly);
     }
