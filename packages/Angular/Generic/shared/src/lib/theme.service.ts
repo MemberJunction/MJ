@@ -59,8 +59,8 @@ const DARK_THEME: ThemeDefinition = {
  * a dynamically loaded stylesheet.
  *
  * CSS resolution for custom themes (e.g. "Izzy Dark" extending dark):
- * 1. `:root` light defaults (from _tokens.scss)
- * 2. `[data-theme="dark"]` dark overrides (from _tokens.scss)
+ * 1. `:root` light defaults (from _tokens.scss in this package)
+ * 2. `[data-theme="dark"]` dark overrides (from _tokens.scss in this package)
  * 3. `[data-theme-overlay="izzy-dark"]` custom overrides (loaded dynamically)
  *
  * Follows the DeveloperModeService pattern:

@@ -34,6 +34,10 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'test',
   'dbdoc',
 
+  // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
+  'sql-convert',
+  'sql-audit',
+
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',
   'dbdoc analyze',

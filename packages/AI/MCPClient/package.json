@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-mcp-client",
   "type": "module",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "description": "MemberJunction: Model Context Protocol (MCP) - Client Implementation for consuming external MCP servers",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,10 +16,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.4.0",
-    "@memberjunction/core-entities": "5.4.0",
-    "@memberjunction/credentials": "5.4.0",
-    "@memberjunction/global": "5.4.0",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/credentials": "5.4.1",
+    "@memberjunction/global": "5.4.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "zod": "~3.24.4"
   },

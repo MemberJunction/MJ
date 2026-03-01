@@ -5,7 +5,7 @@
 --
 -- Parameters:
 --   @since (optional): ISO date string - only include conversations with new activity after this date
---   @agentIds: Comma-separated list of agent IDs that have memory enabled
+--   @agentIds: Array of agent IDs that have memory enabled (rendered via sqlIn filter)
 
 SELECT
     c.ID as ConversationID,
@@ -16,7 +16,7 @@ SELECT
         SELECT TOP 1 ar.ID
         FROM [__mj].[vwAIAgentRuns] ar
         WHERE ar.ConversationID = c.ID
-        AND ar.AgentID IN ({{ agentIds }})
+        AND ar.AgentID IN {{ agentIds | sqlIn }}
         ORDER BY ar.StartedAt DESC
     ) as AgentRunID,
 
@@ -43,19 +43,22 @@ SELECT
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID AND cdr.Rating >= 8
-    ) THEN 1 ELSE 0 END as HasPositiveRating,
+    ) THEN 1 ELSE 0
+END as HasPositiveRating,
 
     CASE WHEN EXISTS (
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID AND cdr.Rating <= 3
-    ) THEN 1 ELSE 0 END as HasNegativeRating,
+    ) THEN 1 ELSE 0
+END as HasNegativeRating,
 
     CASE WHEN NOT EXISTS (
         SELECT 1 FROM [__mj].[vwConversationDetails] cd
         INNER JOIN [__mj].[vwConversationDetailRatings] cdr ON cdr.ConversationDetailID = cd.ID
         WHERE cd.ConversationID = c.ID
-    ) THEN 1 ELSE 0 END as IsUnrated
+    ) THEN 1 ELSE 0
+END as IsUnrated
 
 FROM [__mj].[vwConversations] c
 
@@ -72,7 +75,7 @@ WHERE EXISTS (
 AND EXISTS (
     SELECT 1 FROM [__mj].[vwAIAgentRuns] ar
     WHERE ar.ConversationID = c.ID
-    AND ar.AgentID IN ({{ agentIds }})
+    AND ar.AgentID IN {{ agentIds | sqlIn }}
 )
 
 ORDER BY c.__mj_UpdatedAt DESC

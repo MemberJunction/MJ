@@ -19,7 +19,7 @@ export class MJEntityCommunicationMessageTypeFormComponent extends BaseFormCompo
             { sectionKey: 'mappingKeys', sectionName: 'Mapping Keys', isExpanded: true },
             { sectionKey: 'messageAttributes', sectionName: 'Message Attributes', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityCommunicationFields', sectionName: 'Entity Communication Fields', isExpanded: false }
+            { sectionKey: 'mJEntityCommunicationFields', sectionName: 'Entity Communication Fields', isExpanded: false }
         ]);
     }
 }

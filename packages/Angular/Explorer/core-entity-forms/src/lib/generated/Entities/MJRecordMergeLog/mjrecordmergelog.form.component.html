@@ -153,23 +153,23 @@
 
     <!-- Duplicate Run Detail Matches Section -->
     <mj-collapsible-panel
-        SectionKey="duplicateRunDetailMatches"
+        SectionKey="mJDuplicateRunDetailMatches"
         SectionName="Duplicate Run Detail Matches"
         Icon="fa fa-clone"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('duplicateRunDetailMatches')"
+        [BadgeCount]="GetSectionRowCount('mJDuplicateRunDetailMatches')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Run Detail Matches','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches')"
-                [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
+                [AllowLoad]="IsSectionExpanded('mJDuplicateRunDetailMatches')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetailMatches', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -178,23 +178,23 @@
 
     <!-- Record Merge Deletion Logs Section -->
     <mj-collapsible-panel
-        SectionKey="recordMergeDeletionLogs"
+        SectionKey="mJRecordMergeDeletionLogs"
         SectionName="Record Merge Deletion Logs"
         Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('recordMergeDeletionLogs')"
+        [BadgeCount]="GetSectionRowCount('mJRecordMergeDeletionLogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Deletion Logs','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Merge Deletion Logs')"
-                [AllowLoad]="IsSectionExpanded('recordMergeDeletionLogs')"
+                [AllowLoad]="IsSectionExpanded('mJRecordMergeDeletionLogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('recordMergeDeletionLogs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordMergeDeletionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

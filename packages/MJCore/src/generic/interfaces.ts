@@ -5,7 +5,7 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -453,6 +453,10 @@ export interface IMetadataProvider {
     get QueryEntities(): QueryEntityInfo[]
 
     get QueryParameters(): QueryParameterInfo[]
+
+    get SQLDialects(): SQLDialectInfo[]
+
+    get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
 
@@ -1164,6 +1168,8 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllQueryEntities: QueryEntityInfo[] = [];
     AllQueryParameters: QueryParameterInfo[] = [];
+    AllSQLDialects: SQLDialectInfo[] = [];
+    AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];

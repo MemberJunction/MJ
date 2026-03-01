@@ -774,10 +774,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: AI Prompt Run Medias Section -->
+    <!-- AI Prompt Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunMedias"
-        SectionName="MJ: AI Prompt Run Medias"
+        SectionName="AI Prompt Run Medias"
         Icon="fa fa-image"
         Variant="related-entity"
         [Form]="this"
@@ -799,10 +799,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Prompt Runs Section -->
+    <!-- AI Prompt Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRuns"
-        SectionName="MJ: AI Prompt Runs"
+        SectionName="AI Prompt Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -826,23 +826,23 @@
 
     <!-- AI Result Cache Section -->
     <mj-collapsible-panel
-        SectionKey="aIResultCache"
+        SectionKey="mJAIResultCache"
         SectionName="AI Result Cache"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIResultCache')"
+        [BadgeCount]="GetSectionRowCount('mJAIResultCache')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Result Cache','PromptRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Result Cache')"
-                [AllowLoad]="IsSectionExpanded('aIResultCache')"
+                [AllowLoad]="IsSectionExpanded('mJAIResultCache')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIResultCache', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIResultCache', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

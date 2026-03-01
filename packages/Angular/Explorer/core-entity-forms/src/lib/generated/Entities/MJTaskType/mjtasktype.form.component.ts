@@ -18,7 +18,7 @@ export class MJTaskTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'taskTypeDetails', sectionName: 'Task Type Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false }
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }

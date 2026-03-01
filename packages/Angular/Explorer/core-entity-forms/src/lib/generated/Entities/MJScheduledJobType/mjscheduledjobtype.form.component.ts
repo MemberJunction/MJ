@@ -19,7 +19,7 @@ export class MJScheduledJobTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'jobTypeDetails', sectionName: 'Job Type Details', isExpanded: true },
             { sectionKey: 'executionIntegration', sectionName: 'Execution Integration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJScheduledJobs', sectionName: 'MJ: Scheduled Jobs', isExpanded: false }
+            { sectionKey: 'mJScheduledJobs', sectionName: 'Scheduled Jobs', isExpanded: false }
         ]);
     }
 }

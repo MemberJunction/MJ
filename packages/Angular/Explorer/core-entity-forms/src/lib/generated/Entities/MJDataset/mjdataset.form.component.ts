@@ -18,7 +18,7 @@ export class MJDatasetFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'datasetCore', sectionName: 'Dataset Core', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'datasetItems', sectionName: 'Dataset Items', isExpanded: false }
+            { sectionKey: 'mJDatasetItems', sectionName: 'Dataset Items', isExpanded: false }
         ]);
     }
 }

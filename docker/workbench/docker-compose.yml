@@ -86,7 +86,7 @@ services:
       # postgres-claude dependency is automatic when --profile postgres is active;
       # entrypoint.sh gracefully handles PG being absent (pg_isready check)
     volumes:
-      - ./workspace:/workspace
+      - workspace:/workspace
       - ./.env.database:/workspace/.env.database:ro
       - claude-settings:/root/.claude
       - gh-config:/root/.config/gh
@@ -101,6 +101,7 @@ services:
     working_dir: /workspace
 
 volumes:
+  workspace:
   sql-claude-data:
   postgres-claude-data:
   claude-settings:

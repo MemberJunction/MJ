@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/entity-communications-client",
   "type": "module",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "description": "MemberJunction: Client for interacting with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,12 +20,12 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "5.4.0",
-    "@memberjunction/core": "5.4.0",
-    "@memberjunction/core-entities": "5.4.0",
-    "@memberjunction/entity-communications-base": "5.4.0",
-    "@memberjunction/global": "5.4.0",
-    "@memberjunction/graphql-dataprovider": "5.4.0"
+    "@memberjunction/communication-types": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/entity-communications-base": "5.4.1",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/graphql-dataprovider": "5.4.1"
   },
   "repository": {
     "type": "git",

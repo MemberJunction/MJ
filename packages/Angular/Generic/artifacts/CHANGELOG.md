@@ -1,5 +1,23 @@
 # @memberjunction/ng-artifacts
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.4.1
+- @memberjunction/ng-code-editor@5.4.1
+- @memberjunction/ng-export-service@5.4.1
+- @memberjunction/ng-markdown@5.4.1
+- @memberjunction/ng-notifications@5.4.1
+- @memberjunction/ng-query-viewer@5.4.1
+- @memberjunction/ng-react@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/ng-trees@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

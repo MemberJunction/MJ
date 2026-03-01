@@ -4,8 +4,9 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
@@ -38,6 +39,18 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } f
 import { getSystemUser } from './auth/index.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
+
+/**
+ * Returns the configured database platform type based on the DB_TYPE environment variable.
+ * Defaults to 'sqlserver' for backward compatibility.
+ */
+export function getDbType(): DatabasePlatform {
+    const dbType = process.env.DB_TYPE?.toLowerCase();
+    if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
+        return 'postgresql';
+    }
+    return 'sqlserver';
+}
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
@@ -134,32 +147,132 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
-  const pool = new sql.ConnectionPool(createMSSQLConfig());
   const setupComplete$ = new ReplaySubject(1);
-  await pool.connect();
+  const dbType = getDbType();
+  const dataSources: DataSourceInfo[] = [];
 
-  const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
-  
-  // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
-  let readOnlyPool: sql.ConnectionPool | null = null;
-  if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
-    const readOnlyConfig = {
-      ...createMSSQLConfig(),
-      user: configInfo.dbReadOnlyUsername,
-      password: configInfo.dbReadOnlyPassword,
+  if (dbType === 'postgresql') {
+    // ─── PostgreSQL Path ───────────────────────────────────────────
+    console.log('Database type: PostgreSQL');
+    const pg = await import('pg');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
+    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const pgPool = new pg.default.Pool({
+      host: pgHost,
+      port: pgPort,
+      user: pgUser,
+      password: pgPass,
+      database: pgDatabase,
+      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
+      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
+      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
+      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
+    });
+
+    // Verify connection
+    const testClient = await pgPool.connect();
+    await testClient.query('SELECT 1');
+    testClient.release();
+    console.log(`PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
+    // This allows existing code (types, util, context) to work without changes
+    const mssqlCompatPool = createMSSQLCompatPool(pgPool);
+    dataSources.push(new DataSourceInfo({
+      dataSource: mssqlCompatPool,
+      type: 'Read-Write',
+      host: pgHost,
+      port: pgPort,
+      database: pgDatabase,
+      userName: pgUser,
+    }));
+
+    // Set up the PostgreSQL provider
+    const pgConnectionConfig = {
+      Host: pgHost,
+      Port: pgPort,
+      Database: pgDatabase,
+      User: pgUser,
+      Password: pgPass,
+      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
+      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
     };
-    readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
-    await readOnlyPool.connect();
+    const pgConfigData = new PostgreSQLProviderConfigData(
+      pgConnectionConfig,
+      mj_core_schema,
+      cacheRefreshInterval / 1000, // convert ms to seconds
+    );
+    const provider = new PostgreSQLDataProvider();
+    await provider.Config(pgConfigData);
+    SetProvider(provider);
 
-    // since we created a read-only pool, add it to the list of data sources
-    dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
-    console.log('Read-only Connection Pool has been initialized.');
+    // Refresh user cache using PostgreSQL
+    await refreshUserCacheFromPG(pgPool, mj_core_schema);
+
+    // Run startup actions
+    const sysUser = UserCache.Instance.GetSystemUser();
+    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider);
+
+    // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
+    // Generated resolvers call this static method with bracket-quoted SQL.
+    // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
+    const origExecuteSQLWithPool = SQLServerDataProvider.ExecuteSQLWithPool;
+    SQLServerDataProvider.ExecuteSQLWithPool = async function(
+      pool: sql.ConnectionPool, query: string, parameters?: unknown[], contextUser?: import('@memberjunction/core').UserInfo
+    ): Promise<unknown[]> {
+      const poolAny = pool as unknown as Record<string, unknown>;
+      if (poolAny._pgPool) {
+        const thePgPool = poolAny._pgPool as import('pg').Pool;
+        // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
+        const pgQuery = translateBracketsToPG(query);
+        const result = await thePgPool.query(pgQuery);
+        return result.rows;
+      }
+      return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
+    };
+
+    const md = new Metadata();
+    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  } else {
+    // ─── SQL Server Path (existing behavior) ───────────────────────
+    console.log('Database type: SQL Server');
+    const pool = new sql.ConnectionPool(createMSSQLConfig());
+    await pool.connect();
+
+    dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
+
+    // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
+    if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
+      const readOnlyConfig = {
+        ...createMSSQLConfig(),
+        user: configInfo.dbReadOnlyUsername,
+        password: configInfo.dbReadOnlyPassword,
+      };
+      const readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+      await readOnlyPool.connect();
+
+      dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
+      console.log('Read-only Connection Pool has been initialized.');
+    }
+
+    const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
+    await setupSQLServerClient(config);
+    const md = new Metadata();
+    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   }
 
-  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
-  const md = new Metadata();
-  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
+  // read it without a circular dependency on MJServer
+  if (configInfo.queryDialects) {
+    MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
+  }
 
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;
@@ -375,7 +488,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,
-                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
+                                 dataSource: extendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
                                  dataSources // all data source
                                }),
     }) as unknown as express.RequestHandler
@@ -440,3 +553,61 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/**
+ * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.
+ * This allows existing code that references DataSourceInfo.dataSource (typed as sql.ConnectionPool)
+ * to work with PostgreSQL pools. Only the .query() and .connected properties are used.
+ */
+function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
+  const wrapper = {
+    connected: true,
+    query: async (sqlQuery: string): Promise<{ recordset: Record<string, unknown>[] }> => {
+      const result = await pgPool.query(sqlQuery);
+      return { recordset: result.rows };
+    },
+    request: (): { query: (sql: string) => Promise<{ recordset: Record<string, unknown>[] }> } => ({
+      query: async (sqlQuery: string) => {
+        const result = await pgPool.query(sqlQuery);
+        return { recordset: result.rows };
+      },
+    }),
+    // pg.Pool reference for consumers that need it
+    _pgPool: pgPool,
+  };
+  return wrapper as unknown as sql.ConnectionPool;
+}
+
+/**
+ * Refreshes the UserCache using PostgreSQL queries instead of MSSQL.
+ * This mirrors the logic in UserCache.Refresh() but uses pg.Pool.
+ */
+async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
+  const { UserInfo } = await import('@memberjunction/core');
+  const uResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUsers"`);
+  const rResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUserRoles"`);
+  const users = uResult.rows;
+  const roles = rResult.rows;
+
+  if (users) {
+    const userInfos = users.map((user: Record<string, unknown>) => {
+      const userWithRoles = {
+        ...user,
+        UserRoles: roles.filter((role: Record<string, unknown>) => role.UserID === user.ID),
+      };
+      return new UserInfo(Metadata.Provider, userWithRoles);
+    });
+    // Access the UserCache internals to set users
+    const cache = UserCache.Instance;
+    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
+  }
+}
+
+/**
+ * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
+ * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
+ */
+function translateBracketsToPG(sql: string): string {
+  // Replace [identifier] with "identifier"
+  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
+}

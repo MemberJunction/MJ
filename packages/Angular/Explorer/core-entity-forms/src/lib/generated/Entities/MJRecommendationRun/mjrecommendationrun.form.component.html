@@ -120,23 +120,23 @@
 
     <!-- Recommendations Section -->
     <mj-collapsible-panel
-        SectionKey="recommendations"
+        SectionKey="mJRecommendations"
         SectionName="Recommendations"
         Icon="fa-solid fa-circle-nodes"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('recommendations')"
+        [BadgeCount]="GetSectionRowCount('mJRecommendations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Recommendations','RecommendationRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Recommendations')"
-                [AllowLoad]="IsSectionExpanded('recommendations')"
+                [AllowLoad]="IsSectionExpanded('mJRecommendations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('recommendations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecommendations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

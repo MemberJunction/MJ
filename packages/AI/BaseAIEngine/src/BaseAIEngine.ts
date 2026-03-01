@@ -460,6 +460,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
 
+    public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
+        return this._agents.find(a => a.ID.trim().toLowerCase() === agentId.trim().toLowerCase());
+    }
+
     public get AgentActions(): MJAIAgentActionEntity[] {
         return this._agentActions;
     }

@@ -1,5 +1,15 @@
 # @memberjunction/ng-credentials
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
 ## 5.4.0
 
 ### Patch Changes

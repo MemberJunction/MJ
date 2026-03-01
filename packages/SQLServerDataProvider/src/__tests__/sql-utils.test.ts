@@ -77,11 +77,6 @@ vi.mock('@memberjunction/global', () => {
   };
 });
 
-// Mock sql-formatter
-vi.mock('sql-formatter', () => ({
-  format: (sql: string) => sql, // passthrough for tests
-}));
-
 // Mock nunjucks — keep a lightweight render implementation
 // Note: Code imports as `import nunjucks from 'nunjucks'` (default import)
 // so we must wrap in a default object
@@ -104,8 +99,8 @@ vi.mock('nunjucks', () => ({
 // ---------------------------------------------------------------------------
 // Import the classes under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
-import { QueryParameterProcessor } from '../queryParameterProcessor';
-import type { ParameterValidationResult } from '../queryParameterProcessor';
+import { QueryParameterProcessor } from '@memberjunction/query-processor';
+import type { ParameterValidationResult } from '@memberjunction/query-processor';
 
 // We need the mock QueryParameterInfo type for building test fixtures
 function makeParamDef(overrides: Record<string, unknown> = {}) {
@@ -381,84 +376,6 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Parameter validation failed');
   });
-});
-
-// =====================================================================
-// Tests for SqlLoggingSessionImpl (pure logic methods)
-// =====================================================================
-import { SqlLoggingSessionImpl } from '../SqlLogger';
-
-describe('SqlLoggingSessionImpl', () => {
-  describe('constructor and properties', () => {
-    it('should initialize with correct properties', () => {
-      const session = new SqlLoggingSessionImpl('test-id', '/tmp/test.sql', {
-        description: 'Test session',
-      });
-      expect(session.id).toBe('test-id');
-      expect(session.filePath).toBe('/tmp/test.sql');
-      expect(session.statementCount).toBe(0);
-      expect(session.options.description).toBe('Test session');
-      expect(session.startTime).toBeInstanceOf(Date);
-    });
-  });
-
-  describe('_escapeFlywaySyntaxInStrings', () => {
-    // Access private method for testing via prototype
-    const escapeFlyway = (sql: string) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._escapeFlywaySyntaxInStrings(sql);
-    };
-
-    it('should escape ${...} patterns in SQL strings', () => {
-      const input = "INSERT INTO T VALUES (N'${someVar}')";
-      const result = escapeFlyway(input);
-      expect(result).not.toContain('${someVar}');
-      expect(result).toContain("$'+'{someVar}");
-    });
-
-    it('should handle multiple ${...} occurrences', () => {
-      const input = "N'${a} and ${b}'";
-      const result = escapeFlyway(input);
-      expect(result).toContain("$'+'{a}");
-      expect(result).toContain("$'+'{b}");
-    });
-
-    it('should return unchanged SQL when no ${...} patterns exist', () => {
-      const input = "SELECT * FROM Users WHERE Name = 'John'";
-      const result = escapeFlyway(input);
-      expect(result).toBe(input);
-    });
-  });
-
-  describe('_postProcessBeginEnd', () => {
-    const postProcess = (sql: string) => {
-      const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
-      return (session as Record<string, CallableFunction>)._postProcessBeginEnd(sql);
-    };
-
-    it('should put BEGIN on its own line', () => {
-      const input = 'IF 1=1 BEGIN SELECT 1 END';
-      const result = postProcess(input);
-      expect(result).toContain('1=1\nBEGIN');
-    });
-
-    it('should put END on its own line', () => {
-      const input = 'SELECT 1 END';
-      const result = postProcess(input);
-      expect(result).toContain('1\nEND');
-    });
-
-    it('should put EXEC on its own line', () => {
-      const input = 'DECLARE @x INT EXEC spFoo';
-      const result = postProcess(input);
-      expect(result).toContain('INT\nEXEC');
-    });
-
-    it('should handle empty or null input', () => {
-      expect(postProcess('')).toBe('');
-    });
-  });
-
 });
 
 // =====================================================================

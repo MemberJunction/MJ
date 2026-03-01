@@ -19,9 +19,9 @@ export class MJDataContextFormComponent extends BaseFormComponent {
             { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
             { sectionKey: 'contextDetails', sectionName: 'Context Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'dataContextItems', sectionName: 'Data Context Items', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
-            { sectionKey: 'conversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }

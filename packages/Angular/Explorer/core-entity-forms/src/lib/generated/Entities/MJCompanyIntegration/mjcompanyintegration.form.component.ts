@@ -21,10 +21,10 @@ export class MJCompanyIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'externalSystemMapping', sectionName: 'External System Mapping', isExpanded: false },
             { sectionKey: 'runHistoryMonitoring', sectionName: 'Run History & Monitoring', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'companyIntegrationRecordMaps', sectionName: 'Company Integration Record Maps', isExpanded: false },
-            { sectionKey: 'companyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
-            { sectionKey: 'employeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
-            { sectionKey: 'lists', sectionName: 'Lists', isExpanded: false }
+            { sectionKey: 'mJCompanyIntegrationRecordMaps', sectionName: 'Company Integration Record Maps', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
+            { sectionKey: 'mJEmployeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
+            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false }
         ]);
     }
 }
