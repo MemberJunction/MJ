@@ -21,6 +21,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -702,7 +703,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     return lastAIMessage?.AgentID || null;
@@ -1634,7 +1635,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     if (!lastAIMessage || !lastAIMessage.AgentID) {
@@ -1645,7 +1646,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     // Load the agent entity to get its name
-    const previousAgent = AIEngineBase.Instance.Agents.find(a => a.ID === lastAIMessage.AgentID);
+    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID))
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1920,7 +1921,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId))
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });

@@ -6,7 +6,7 @@ import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVa
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 
 interface SuiteTestItem {
   testId: string;
@@ -1897,7 +1897,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     if (this.selectedTestId) {
       this.isPreselected = true;
       this.runMode = 'test';
-      const test = this.allTests.find(t => t.ID === this.selectedTestId);
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
       this.preselectedName = test ? test.Name : 'Test';
       // Load variables for the selected test
       if (test) {
@@ -1906,7 +1906,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     } else if (this.selectedSuiteId) {
       this.isPreselected = true;
       this.runMode = 'suite';
-      const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
+      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
       this.preselectedName = suite ? suite.Name : 'Test Suite';
       // Load suite tests for selective execution
       this.loadSuiteTests(this.selectedSuiteId);
@@ -1956,7 +1956,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   selectTest(testId: string): void {
     this.selectedTestId = testId;
     // Load variables for the selected test
-    const test = this.allTests.find(t => t.ID === testId);
+    const test = this.allTests.find(t => UUIDsEqual(t.ID, testId));
     if (test) {
       this.loadVariablesForTest(test);
     }
@@ -1973,12 +1973,12 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
    * Load tests for a selected suite to enable selective execution
    */
   private loadSuiteTests(suiteId: string): void {
-    const suiteTestLinks = this.engine.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+    const suiteTestLinks = this.engine.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId));
 
     // Build list of tests with their sequence numbers
     this.suiteTests = suiteTestLinks
       .map(st => {
-        const test = this.allTests.find(t => t.ID === st.TestID);
+        const test = this.allTests.find(t => UUIDsEqual(t.ID, st.TestID));
         if (!test) return null;
         return {
           testId: st.TestID,
@@ -2009,7 +2009,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.showVariablesSection = false;
 
     // Get the TestType to access VariablesSchema
-    const testType = this.engine.TestTypes.find(tt => tt.ID === test.TypeID);
+    const testType = this.engine.TestTypes.find(tt => UUIDsEqual(tt.ID, test.TypeID));
     if (!testType) {
       return;
     }
@@ -2165,13 +2165,13 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.resetProgressSteps();
 
     if (this.runMode === 'test') {
-      const test = this.allTests.find(t => t.ID === this.selectedTestId);
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
       this.executionTitle = test ? test.Name : 'Running Test...';
       this.executionStatus = 'Running';
       this.addLogEntry(`Starting test: ${test?.Name}`, 'info');
       await this.executeTest();
     } else {
-      const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
+      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
       this.executionTitle = suite ? suite.Name : 'Running Suite...';
       this.executionStatus = 'Running';
       this.addLogEntry(`Starting suite: ${suite?.Name}`, 'info');

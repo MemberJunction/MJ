@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -192,7 +192,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         entityNode.IsSelected = true;
         this.SelectedEntity = entityNode;
 
-        const entityInfo = this.metadata.Entities.find(e => e.ID === entityNode.ID);
+        const entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityNode.ID))
         this.SelectedEntityInfo = entityInfo ?? null;
 
         if (entityInfo) {

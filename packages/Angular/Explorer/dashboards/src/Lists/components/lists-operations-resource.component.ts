@@ -1,5 +1,5 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
@@ -1429,13 +1429,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // Apply entity filter from dropdown
     if (this.selectedEntityId) {
-      filtered = filtered.filter(l => l.EntityID === this.selectedEntityId);
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId))
     }
 
     // If we have selected lists, restrict to same entity
     if (this.selectedLists.length > 0) {
       this.entityIdFromSelectedLists = this.selectedLists[0].list.EntityID;
-      filtered = filtered.filter(l => l.EntityID === this.entityIdFromSelectedLists);
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.entityIdFromSelectedLists))
     }
 
     if (this.listSearchTerm) {
@@ -1525,7 +1525,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     try {
       const md = new Metadata();
       const entityId = this.selectedLists[0].list.EntityID;
-      const entityInfo = md.Entities.find(e => e.ID === entityId);
+      const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId))
 
       if (!entityInfo) {
         // Fallback to showing just IDs
@@ -1655,7 +1655,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const md = new Metadata();
       const entityId = this.selectedLists[0]?.list.EntityID;
       if (entityId) {
-        this.currentEntityInfo = md.Entities.find(e => e.ID === entityId) || null;
+        this.currentEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId)) || null;
       }
     }
 
@@ -1829,7 +1829,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     // Filter to same entity, exclude already selected lists
     const selectedIds = new Set(this.selectedLists.map(s => s.list.ID));
     let filtered = this.availableLists.filter(l =>
-      l.EntityID === entityId && !selectedIds.has(l.ID)
+      UUIDsEqual(l.EntityID, entityId) && !selectedIds.has(l.ID)
     );
 
     // Apply search filter
@@ -1885,7 +1885,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const success = await tg.Submit();
 
       if (success) {
-        const targetList = this.availableLists.find(l => l.ID === this.selectedTargetListId);
+        const targetList = this.availableLists.find(l => UUIDsEqual(l.ID, this.selectedTargetListId))
         this.notificationService.CreateSimpleNotification(
           `Added ${this.recordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
           'success',
@@ -2015,7 +2015,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         // Restore selected lists
         if (state.listIds && state.listIds.length > 0) {
           for (const listId of state.listIds) {
-            const list = this.availableLists.find(l => l.ID === listId);
+            const list = this.availableLists.find(l => UUIDsEqual(l.ID, listId))
             if (list) {
               const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
               this.selectedLists.push({

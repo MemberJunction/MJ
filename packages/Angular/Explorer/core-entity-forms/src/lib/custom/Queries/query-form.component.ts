@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
@@ -315,7 +315,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!this.record.CategoryID) return '';
         
         const findPath = (categoryId: string): string[] => {
-            const category = this.categories.find(c => c.ID === categoryId);
+            const category = this.categories.find(c => UUIDsEqual(c.ID, categoryId))
             if (!category) return [];
             
             if (category.ParentID) {
@@ -702,7 +702,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         try {
             const deleted = await field.Delete();
             if (deleted) {
-                this.queryFields = this.queryFields.filter(f => f.ID !== field.ID);
+                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID))
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field deleted successfully',
@@ -753,7 +753,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         try {
             const deleted = await entity.Delete();
             if (deleted) {
-                this.queryEntities = this.queryEntities.filter(e => e.ID !== entity.ID);
+                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID))
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Entity deleted successfully',

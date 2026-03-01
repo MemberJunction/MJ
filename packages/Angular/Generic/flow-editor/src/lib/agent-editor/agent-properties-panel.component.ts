@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowConnection } from '../interfaces/flow-types';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -113,14 +114,14 @@ export class AgentPropertiesPanelComponent {
   /** Path: origin step name */
   get originStepName(): string {
     if (!this.PathEntity) return '';
-    const step = this.AllSteps.find(s => s.ID === this.PathEntity!.OriginStepID);
+    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.OriginStepID))
     return step?.Name ?? 'Unknown Step';
   }
 
   /** Path: destination step name */
   get destinationStepName(): string {
     if (!this.PathEntity) return '';
-    const step = this.AllSteps.find(s => s.ID === this.PathEntity!.DestinationStepID);
+    const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.DestinationStepID))
     return step?.Name ?? 'Unknown Step';
   }
 
@@ -137,19 +138,19 @@ export class AgentPropertiesPanelComponent {
   /** Resolved action name for display */
   get selectedActionName(): string {
     if (!this.Step?.ActionID) return 'None selected';
-    return this.Actions.find(a => a.ID === this.Step!.ActionID)?.Name ?? 'Unknown';
+    return this.Actions.find(a => UUIDsEqual(a.ID, this.Step!.ActionID))?.Name ?? 'Unknown';
   }
 
   /** Resolved prompt name for display */
   get selectedPromptName(): string {
     if (!this.Step?.PromptID) return 'None selected';
-    return this.Prompts.find(p => p.ID === this.Step!.PromptID)?.Name ?? 'Unknown';
+    return this.Prompts.find(p => UUIDsEqual(p.ID, this.Step!.PromptID))?.Name ?? 'Unknown';
   }
 
   /** Resolved agent name for display */
   get selectedAgentName(): string {
     if (!this.Step?.SubAgentID) return 'None selected';
-    return this.Agents.find(a => a.ID === this.Step!.SubAgentID)?.Name ?? 'Unknown';
+    return this.Agents.find(a => UUIDsEqual(a.ID, this.Step!.SubAgentID))?.Name ?? 'Unknown';
   }
 
   // ── Section Collapse ──────────────────────────────────────

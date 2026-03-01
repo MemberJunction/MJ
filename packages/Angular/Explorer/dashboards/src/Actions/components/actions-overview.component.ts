@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
@@ -182,9 +182,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     executions: MJActionExecutionLogEntity[]
   ): void {
     this.categoryStats = categories.map(category => {
-      const categoryActions = actions.filter(a => a.CategoryID === category.ID);
+      const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID))
       const categoryExecutions = executions.filter(e => 
-        categoryActions.some(a => a.ID === e.ActionID)
+        categoryActions.some(a => UUIDsEqual(a.ID, e.ActionID))
       );
       
       return {

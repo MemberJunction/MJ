@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
@@ -138,7 +138,7 @@ export class FindBestAgentAction extends BaseAction {
             const agentActionsMap = new Map<string, string[]>();
             for (const agent of filteredAgents) {
                 const agentActions = AIEngine.Instance.AgentActions
-                    .filter(aa => aa.AgentID === agent.agentId && aa.Status === 'Active')
+                    .filter(aa => UUIDsEqual(aa.AgentID, agent.agentId) && aa.Status === 'Active')
                     .map(aa => aa.Action);  // Get action name
                 agentActionsMap.set(agent.agentId, agentActions);
             }
@@ -150,7 +150,7 @@ export class FindBestAgentAction extends BaseAction {
 
                 // Find child agents (ParentID = this agent)
                 const childAgents = AIEngine.Instance.Agents.filter(a =>
-                    a.ParentID === agent.agentId && a.Status === 'Active'
+                    UUIDsEqual(a.ParentID, agent.agentId) && a.Status === 'Active'
                 );
                 subAgents.push(...childAgents.map(a => ({
                     name: a.Name,
@@ -159,10 +159,10 @@ export class FindBestAgentAction extends BaseAction {
 
                 // Find related agents (via AgentRelationships)
                 const relationships = AIEngine.Instance.AgentRelationships.filter(r =>
-                    r.AgentID === agent.agentId && r.Status === 'Active'
+                    UUIDsEqual(r.AgentID, agent.agentId) && r.Status === 'Active'
                 );
                 for (const rel of relationships) {
-                    const relatedAgent = AIEngine.Instance.Agents.find(a => a.ID === rel.SubAgentID);
+                    const relatedAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, rel.SubAgentID));
                     if (relatedAgent && relatedAgent.Status === 'Active') {
                         subAgents.push({
                             name: relatedAgent.Name,

@@ -4,6 +4,7 @@ import {
     UserInfo,
     LogError,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJVersionLabelEntity, MJVersionLabelItemEntityType } from '@memberjunction/core-entities';
 import {
     DiffResult,
@@ -42,7 +43,7 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<DiffResult> {
         // Short-circuit: identical labels produce an empty diff
-        if (fromLabelId === toLabelId) {
+        if (UUIDsEqual(fromLabelId, toLabelId)) {
             const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
             const labelName = label ? label.Name : fromLabelId;
             return {
@@ -289,7 +290,7 @@ export class DiffEngine {
      * Resolve an entity name from metadata by ID, with fallback.
      */
     private resolveEntityName(md: Metadata, entityId: string): string {
-        const entityInfo = md.Entities.find(e => e.ID === entityId);
+        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entityInfo?.Name ?? `Unknown(${entityId})`;
     }
 
@@ -346,7 +347,7 @@ export class DiffEngine {
         }
 
         // Same RecordChange ID → Unchanged
-        if (fromChangeId === toChangeId) {
+        if (UUIDsEqual(fromChangeId, toChangeId)) {
             return this.buildUnchangedDiff(entityName, recordId);
         }
 

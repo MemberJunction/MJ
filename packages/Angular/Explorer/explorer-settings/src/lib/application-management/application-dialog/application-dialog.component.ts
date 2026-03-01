@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, MJEntityEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface ApplicationDialogData {
   application?: MJApplicationEntity;
@@ -177,7 +178,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
         const usedEntityIds = new Set<string>();
 
         for (const appEntity of result.Results) {
-          const entity = this.allEntities.find(e => e.ID === appEntity.EntityID);
+          const entity = this.allEntities.find(e => UUIDsEqual(e.ID, appEntity.EntityID))
           if (entity) {
             this.applicationEntities.push({
               entity,
@@ -214,18 +215,18 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     this.updateSequences();
 
     // Remove from available entities
-    this.availableEntities = this.availableEntities.filter(e => e.ID !== entity.ID);
+    this.availableEntities = this.availableEntities.filter(e => !UUIDsEqual(e.ID, entity.ID))
   }
 
   public removeEntity(config: ApplicationEntityConfig): void {
     // Remove from application entities
-    this.applicationEntities = this.applicationEntities.filter(ae => ae.entity.ID !== config.entity.ID);
+    this.applicationEntities = this.applicationEntities.filter(ae => !UUIDsEqual(ae.entity.ID, config.entity.ID))
     
     // Update all sequences to be consecutive
     this.updateSequences();
     
     // Add back to available entities if not already there
-    if (!this.availableEntities.find(e => e.ID === config.entity.ID)) {
+    if (!this.availableEntities.find(e => UUIDsEqual(e.ID, config.entity.ID))) {
       this.availableEntities.push(config.entity);
       this.availableEntities.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }

@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, MJVersionLabelEntityType, MJVersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
@@ -160,7 +160,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public ResolveEntityName(entityId: string | undefined): string {
         if (!entityId) return '';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId))
         return entity ? entity.Name : '';
     }
 
@@ -477,6 +477,6 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public GetChildLabels(parentId: string | undefined): MJVersionLabelEntityType[] {
         if (!parentId) return [];
-        return this.Labels.filter(l => l.ParentID === parentId);
+        return this.Labels.filter(l => UUIDsEqual(l.ParentID, parentId))
     }
 }

@@ -5,6 +5,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 
 import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -71,7 +72,7 @@ export class CategoryTreeComponent implements OnInit {
       return;
     }
 
-    this.categoriesData = this.categoriesData.filter((c) => c.ID !== ID);
+    this.categoriesData = this.categoriesData.filter((c) => !UUIDsEqual(c.ID, ID))
     this.clearSelection();
     this.isLoading = false;
   }

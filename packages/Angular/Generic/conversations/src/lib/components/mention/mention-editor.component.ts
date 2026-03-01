@@ -17,6 +17,7 @@ import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
 import { ChatMessageContentBlock } from '@memberjunction/ai';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a pending attachment that hasn't been uploaded yet
@@ -549,7 +550,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
       // Check if this is the selected preset
       const currentPresetId = chip.getAttribute('data-preset-id');
-      const isSelected = preset.ID === currentPresetId;
+      const isSelected = UUIDsEqual(preset.ID, currentPresetId)
 
       // Add checkmark for selected option
       const checkmark = document.createElement('i');
@@ -606,7 +607,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         chip.setAttribute('data-preset-name', preset.Name || '');
 
         // Update preset indicator visibility and text
-        const isDefault = preset.ID === defaultPreset.ID;
+        const isDefault = UUIDsEqual(preset.ID, defaultPreset.ID)
         if (isDefault) {
           presetIndicator.style.display = 'none';
         } else {

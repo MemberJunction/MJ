@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, 
 import { Metadata } from '@memberjunction/core';
 import { MJAPIApplicationEntity, MJAPIApplicationScopeEntity, MJAPIScopeEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 const PANEL_WIDTH_SETTING_KEY = 'APIKeys.ApplicationsPanelWidth';
 const DEFAULT_PANEL_WIDTH = 570;
@@ -591,7 +592,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
      * Get scope name by ID
      */
     public getScopeName(scopeId: string): string {
-        const scope = this.AllScopes.find(s => s.ID === scopeId);
+        const scope = this.AllScopes.find(s => UUIDsEqual(s.ID, scopeId))
         return scope?.FullPath || scope?.Name || 'Unknown';
     }
 }

@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, RunViewParams, UserInfo } from "@memberjunction/core";
 import { MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
 
 @RegisterClass(BaseEntity, 'MJ: Entity Communication Message Types')
@@ -64,7 +64,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
         this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
         this._Metadata.EntityCommunicationMessageTypes = <MJEntityCommunicationMessageTypeEntityExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
         this.EntityCommunicationMessageTypes.forEach(m => {
-            m.CommunicationFields = this.EntityCommunicationFields.filter(f => f.EntityCommunicationMessageTypeID === m.ID);
+            m.CommunicationFields = this.EntityCommunicationFields.filter(f => UUIDsEqual(f.EntityCommunicationMessageTypeID, m.ID));
         });
     }
 
@@ -75,7 +75,7 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      */
     public GetEntityCommunicationMessageTypes(entityID: string): MJEntityCommunicationMessageTypeEntityExtended[] {
         this.TryThrowIfNotLoaded();
-        return this.EntityCommunicationMessageTypes.filter(m => m.EntityID === entityID);
+        return this.EntityCommunicationMessageTypes.filter(m => UUIDsEqual(m.EntityID, entityID));
     }
 
     /**

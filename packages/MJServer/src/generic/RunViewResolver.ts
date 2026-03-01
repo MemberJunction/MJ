@@ -2,6 +2,7 @@ import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resol
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
@@ -653,7 +654,7 @@ export class RunViewResolver extends ResolverBase {
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
+      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -684,7 +685,7 @@ export class RunViewResolver extends ResolverBase {
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
+      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -838,7 +839,7 @@ export class RunViewResolver extends ResolverBase {
       }
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
+      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,

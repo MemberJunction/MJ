@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
-import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
+import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -228,10 +228,10 @@ export class AIPromptRunner {
       const modelDeveloperType = AIEngine.Instance.VendorTypeDefinitions.find(
         vt => vt.Name === 'Model Developer'
       );
-      return modelVendor.TypeID !== modelDeveloperType?.ID;
+      return !UUIDsEqual(modelVendor.TypeID, modelDeveloperType?.ID);
     }
 
-    return modelVendor.TypeID === inferenceProviderType.ID;
+    return UUIDsEqual(modelVendor.TypeID, inferenceProviderType.ID);
   }
 
   /**
@@ -275,7 +275,7 @@ export class AIPromptRunner {
     // Priority 2: PromptModel bindings (most specific) - with failover
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => pm.PromptID === promptId && pm.ModelID === modelId
+        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
@@ -287,7 +287,7 @@ export class AIPromptRunner {
     // Priority 3: ModelVendor bindings - with failover
     if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
-        mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
+        mv => UUIDsEqual(mv.ModelID, modelId) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
       );
       if (modelVendor) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
@@ -306,7 +306,7 @@ export class AIPromptRunner {
     // Priority 5: Type-based default credential
     // If the vendor declares a CredentialTypeID, try to find a default credential of that type
     if (vendorId) {
-      const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
+      const vendor = AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, vendorId));
       if (vendor?.CredentialTypeID) {
         const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
         if (defaultCredential) {
@@ -461,7 +461,7 @@ export class AIPromptRunner {
   private findDefaultCredentialByType(credentialTypeId: string): MJCredentialEntity | null {
     const credentials = CredentialEngine.Instance.Credentials;
     return credentials.find(c =>
-      c.CredentialTypeID === credentialTypeId &&
+      UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
       c.IsDefault === true &&
       c.IsActive === true &&
       (!c.ExpiresAt || new Date(c.ExpiresAt) > new Date())
@@ -505,7 +505,7 @@ export class AIPromptRunner {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => pm.PromptID === promptId && pm.ModelID === modelId
+        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
@@ -515,7 +515,7 @@ export class AIPromptRunner {
     // Priority 3: ModelVendor bindings
     if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
-        mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
+        mv => UUIDsEqual(mv.ModelID, modelId) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
       );
       if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
         return true;
@@ -531,7 +531,7 @@ export class AIPromptRunner {
 
     // Priority 5: Type-based default credential
     if (vendorId) {
-      const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
+      const vendor = AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, vendorId));
       if (vendor?.CredentialTypeID) {
         const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
         if (defaultCredential) {
@@ -801,8 +801,8 @@ export class AIPromptRunner {
       // we received model selection info, need to lookup vendor driver class and api name from there
       const vendorID = modelSelectionInfo.vendorSelected?.ID;
       const modelID = modelSelectionInfo.modelSelected.ID;
-      const modelVendor = AIEngine.Instance.ModelVendors.find(mv => mv.VendorID === vendorID &&
-                                                                    mv.ModelID === modelID);
+      const modelVendor = AIEngine.Instance.ModelVendors.find(mv => UUIDsEqual(mv.VendorID, vendorID) &&
+                                                                    UUIDsEqual(mv.ModelID, modelID));
       if (modelVendor) {
         vendorDriverClass = modelVendor.DriverClass;
         vendorApiName = modelVendor.APIName;
@@ -958,9 +958,9 @@ export class AIPromptRunner {
       // Get prompt-specific model associations using the model selection prompt
       const promptModels = AIEngine.Instance.PromptModels.filter(
         (pm) =>
-          pm.PromptID === modelSelectionPrompt.ID &&
+          UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId),
+          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)),
       );
 
       // Create execution plan using the modelSelectionPrompt for model configurations
@@ -1185,7 +1185,7 @@ export class AIPromptRunner {
   private async loadTemplate(templateId: string, _contextUser?: UserInfo): Promise<MJTemplateEntityExtended | null> {
     try {
       // Use the template engine to find the template
-      const template = this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => t.ID === templateId);
+      const template = this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, templateId));
       return template || null;
     } catch (error) {
       this.logError(error, {
@@ -1466,7 +1466,7 @@ export class AIPromptRunner {
 
       // Get configuration info if provided
       if (configurationId) {
-        configuration = AIEngine.Instance.Configurations.find(c => c.ID === configurationId);
+        configuration = AIEngine.Instance.Configurations.find(c => UUIDsEqual(c.ID, configurationId));
         configurationName = configuration?.Name;
       }
 
@@ -1569,7 +1569,7 @@ export class AIPromptRunner {
       // Get selected vendor entity
       let selectedVendor: MJAIVendorEntity | undefined;
       if (selected.vendorId) {
-        selectedVendor = AIEngine.Instance.Vendors.find(v => v.ID === selected.vendorId);
+        selectedVendor = AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, selected.vendorId));
       }
 
       return {
@@ -1659,7 +1659,7 @@ export class AIPromptRunner {
     prompt: MJAIPromptEntityExtended,
     preferredVendorId?: string
   ): ModelVendorCandidate[] {
-    const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
+    const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, explicitModelId));
     if (!model || !model.IsActive) {
       return [];
     }
@@ -1687,7 +1687,7 @@ export class AIPromptRunner {
   ): ModelVendorCandidate[] {
     // Get all active AIPromptModel records for this prompt
     const allPromptModels = AIEngine.Instance.PromptModels.filter(
-      pm => pm.PromptID === prompt.ID && (pm.Status === 'Active' || pm.Status === 'Preview')
+      pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview')
     );
 
     // Filter by configuration matching rules
@@ -1726,7 +1726,7 @@ export class AIPromptRunner {
     verbose?: boolean
   ): ModelVendorCandidate[] {
     const preferredVendorName = preferredVendorId ?
-      AIEngine.Instance.Vendors.find(v => v.ID === preferredVendorId)?.Name : undefined;
+      AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, preferredVendorId))?.Name : undefined;
 
     // Get prompt models for configuration
     const promptModels = this.getPromptModelsForConfiguration(prompt, configurationId);
@@ -1818,7 +1818,7 @@ export class AIPromptRunner {
     const candidates: ModelVendorCandidate[] = [];
 
     for (const pm of promptModels) {
-      const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+      const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
       if (!model || !model.IsActive) continue;
 
       if (pm.VendorID) {
@@ -1845,8 +1845,8 @@ export class AIPromptRunner {
     promptModel: MJAIPromptModelEntity
   ): ModelVendorCandidate | null {
     const modelVendor = AIEngine.Instance.ModelVendors.find(
-      mv => mv.ModelID === promptModel.ModelID &&
-            mv.VendorID === promptModel.VendorID &&
+      mv => UUIDsEqual(mv.ModelID, promptModel.ModelID) &&
+            UUIDsEqual(mv.VendorID, promptModel.VendorID) &&
             mv.Status === 'Active' &&
             this.isInferenceProvider(mv)
     );
@@ -1875,7 +1875,7 @@ export class AIPromptRunner {
   ): ModelVendorCandidate[] {
     const vendors = AIEngine.Instance.ModelVendors
       .filter(mv =>
-        mv.ModelID === model.ID &&
+        UUIDsEqual(mv.ModelID, model.ID) &&
         mv.Status === 'Active' &&
         this.isInferenceProvider(mv)
       )
@@ -1929,9 +1929,9 @@ export class AIPromptRunner {
       // Walk the chain looking for prompt models
       for (const config of chain) {
         const promptModels = AIEngine.Instance.PromptModels.filter(
-          pm => pm.PromptID === prompt.ID &&
+          pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
                 (pm.Status === 'Active' || pm.Status === 'Preview') &&
-                pm.ConfigurationID === config.ID
+                UUIDsEqual(pm.ConfigurationID, config.ID)
         );
 
         if (promptModels.length > 0) {
@@ -1945,7 +1945,7 @@ export class AIPromptRunner {
 
     // Return null-config (universal) models
     return AIEngine.Instance.PromptModels.filter(
-      pm => pm.PromptID === prompt.ID &&
+      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
             (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
@@ -1960,7 +1960,7 @@ export class AIPromptRunner {
     preferredVendorId?: string
   ): void {
     for (const pm of promptModels) {
-      const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+      const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
       if (model && model.IsActive) {
         const modelCandidates = this.createCandidatesForModel(
           model,
@@ -1991,9 +1991,9 @@ export class AIPromptRunner {
     for (let i = 1; i < chain.length; i++) {
       const parentConfig = chain[i];
       const parentModels = AIEngine.Instance.PromptModels.filter(
-        pm => pm.PromptID === prompt.ID &&
+        pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
               (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              pm.ConfigurationID === parentConfig.ID
+              UUIDsEqual(pm.ConfigurationID, parentConfig.ID)
       );
 
       if (parentModels.length > 0 && verbose) {
@@ -2001,7 +2001,7 @@ export class AIPromptRunner {
       }
 
       for (const pm of parentModels) {
-        const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
         if (model && model.IsActive) {
           // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
           const basePriority = 3000 - (i * 500);
@@ -2019,7 +2019,7 @@ export class AIPromptRunner {
 
     // Finally add NULL config models (universal fallback) with lowest priority
     const nullConfigModels = AIEngine.Instance.PromptModels.filter(
-      pm => pm.PromptID === prompt.ID &&
+      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
             (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
@@ -2029,7 +2029,7 @@ export class AIPromptRunner {
     }
 
     for (const pm of nullConfigModels) {
-      const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+      const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
       if (model && model.IsActive) {
         const modelCandidates = this.createCandidatesForModel(
           model,
@@ -2071,10 +2071,10 @@ export class AIPromptRunner {
   ): MJAIModelEntityExtended[] {
     return AIEngine.Instance.Models.filter(
       m => m.IsActive &&
-           (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)) &&
            (!preferredVendorName ||
             AIEngine.Instance.ModelVendors.some(mv =>
-              mv.ModelID === m.ID &&
+              UUIDsEqual(mv.ModelID, m.ID) &&
               mv.Status === 'Active' &&
               mv.Vendor === preferredVendorName &&
               this.isInferenceProvider(mv)
@@ -2138,12 +2138,12 @@ export class AIPromptRunner {
 
     // Get all vendors for this model - filter for inference providers only
     const modelVendors = AIEngine.Instance.ModelVendors
-      .filter(mv => mv.ModelID === model.ID && mv.Status === 'Active' && this.isInferenceProvider(mv))
+      .filter(mv => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active' && this.isInferenceProvider(mv))
       .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
     if (preferredVendorId) {
-      const preferredVendor = modelVendors.find(mv => mv.VendorID === preferredVendorId);
+      const preferredVendor = modelVendors.find(mv => UUIDsEqual(mv.VendorID, preferredVendorId));
       if (preferredVendor) {
         modelCandidates.push({
           model,
@@ -2237,8 +2237,8 @@ export class AIPromptRunner {
       // Find matching model vendor for driver and API info
       const modelVendor = considered.vendor
         ? AIEngine.Instance.ModelVendors.find(mv =>
-            mv.ModelID === considered.model.ID &&
-            mv.VendorID === considered.vendor!.ID
+            UUIDsEqual(mv.ModelID, considered.model.ID) &&
+            UUIDsEqual(mv.VendorID, considered.vendor!.ID)
           )
         : undefined;
 
@@ -2315,7 +2315,7 @@ export class AIPromptRunner {
       // Get vendor entity from AIEngine cache if vendorId is available
       let vendorEntity: MJAIVendorEntity | undefined;
       if (candidate.vendorId) {
-        vendorEntity = AIEngine.Instance.Vendors.find(v => v.ID === candidate.vendorId);
+        vendorEntity = AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, candidate.vendorId));
       }
 
       // Track this model as considered with availability status
@@ -2331,8 +2331,8 @@ export class AIPromptRunner {
     // Select the first available candidate (highest priority with API key)
     const selected = consideredModels.find(m => m.available);
     const selectedCandidate = selected ? candidates.find(c =>
-      c.model.ID === selected.model.ID &&
-      c.vendorId === selected.vendor?.ID
+      UUIDsEqual(c.model.ID, selected.model.ID) &&
+      UUIDsEqual(c.vendorId, selected.vendor?.ID)
     ) : null;
 
     if (selectedCandidate) {
@@ -2446,7 +2446,7 @@ export class AIPromptRunner {
       } else {
         // Fallback: grab the highest priority AI Model Vendor record for this model (inference providers only)
         const modelVendors = AIEngine.Instance.ModelVendors
-          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active' && this.isInferenceProvider(mv))
+          .filter((mv) => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active' && this.isInferenceProvider(mv))
           .sort((a, b) => b.Priority - a.Priority);
         
         if (modelVendors.length > 0) {
@@ -2822,7 +2822,7 @@ export class AIPromptRunner {
     let allModels: MJAIModelEntityExtended[];
     if (prompt.AIModelTypeID) {
       // Find the model type from the prompt
-      const modelType = aiEngine.ModelTypes.find(mt => mt.ID === prompt.AIModelTypeID);
+      const modelType = aiEngine.ModelTypes.find(mt => UUIDsEqual(mt.ID, prompt.AIModelTypeID));
       if (!modelType) {
         throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
       }
@@ -3014,7 +3014,7 @@ export class AIPromptRunner {
         if (vendorId) {
           // Find the AIModelVendor record for this specific vendor - must be an inference provider
           const modelVendor = AIEngine.Instance.ModelVendors.find(
-            (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active' && this.isInferenceProvider(mv)
+            (mv) => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active' && this.isInferenceProvider(mv)
           );
 
           if (modelVendor) {
@@ -3473,7 +3473,7 @@ export class AIPromptRunner {
 
     const removedCount = beforeCount - filteredCandidates.length;
     if (removedCount > 0) {
-      const vendorName = AIEngine.Instance.Vendors.find(v => v.ID === failedVendorId)?.Name || failedVendorId;
+      const vendorName = AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, failedVendorId))?.Name || failedVendorId;
       const remainingCount = filteredCandidates.length;
 
       // Log appropriate message based on error type
@@ -3534,7 +3534,7 @@ export class AIPromptRunner {
     if (shouldRetry) {
       const modelName = currentModel.Name;
       const vendorName = currentVendorId
-        ? AIEngine.Instance.Vendors.find(v => v.ID === currentVendorId)?.Name || 'default'
+        ? AIEngine.Instance.Vendors.find(v => UUIDsEqual(v.ID, currentVendorId))?.Name || 'default'
         : 'default';
 
       this.logStatus(
@@ -4760,8 +4760,8 @@ export class AIPromptRunner {
     switch (strategy) {
       case 'SameModelDifferentVendor':
         // Only consider same model with different vendors
-        candidates = availableCandidates.filter(c => 
-          c.model.ID === currentModel.ID && c.vendorId !== currentVendorId
+        candidates = availableCandidates.filter(c =>
+          UUIDsEqual(c.model.ID, currentModel.ID) && !UUIDsEqual(c.vendorId, currentVendorId)
         );
         break;
         
@@ -4769,12 +4769,12 @@ export class AIPromptRunner {
         // Consider all models, apply model strategy preference
         candidates = availableCandidates;
         if (modelStrategy === 'RequireSameModel') {
-          candidates = candidates.filter(c => c.model.ID === currentModel.ID);
+          candidates = candidates.filter(c => UUIDsEqual(c.model.ID, currentModel.ID));
         } else if (modelStrategy === 'PreferSameModel') {
           // Sort to put same model first
           candidates.sort((a, b) => {
-            const aSameModel = a.model.ID === currentModel.ID ? 1 : 0;
-            const bSameModel = b.model.ID === currentModel.ID ? 1 : 0;
+            const aSameModel = UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
+            const bSameModel = UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
             return bSameModel - aSameModel;
           });
         } else if (modelStrategy === 'PreferDifferentModel') {

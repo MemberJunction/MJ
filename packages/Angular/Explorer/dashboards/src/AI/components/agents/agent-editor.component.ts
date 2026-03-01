@@ -4,6 +4,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
 import { NavigationService } from '@memberjunction/ng-shared';
 import * as d3 from 'd3';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface AgentHierarchyNode {
   id: string;
@@ -96,7 +97,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       });
 
       this.allAgents = result.Results as MJAIAgentEntityExtended[];
-      this.currentAgent = this.allAgents.find(a => a.ID === this.agentId) || null;
+      this.currentAgent = this.allAgents.find(a => UUIDsEqual(a.ID, this.agentId)) || null;
 
       if (this.currentAgent) {
         this.buildHierarchy();
@@ -130,7 +131,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private findRootAgent(agent: MJAIAgentEntityExtended): MJAIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
-      const parent = this.allAgents.find(a => a.ID === current.ParentID);
+      const parent = this.allAgents.find(a => UUIDsEqual(a.ID, current.ParentID))
       if (!parent) break;
       current = parent;
     }
@@ -139,7 +140,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private buildHierarchyTree(agent: MJAIAgentEntityExtended): AgentHierarchyNode {
     const children = this.allAgents
-      .filter(a => a.ParentID === agent.ID)
+      .filter(a => UUIDsEqual(a.ParentID, agent.ID))
       .map(child => this.buildHierarchyTree(child));
 
     const node: AgentHierarchyNode = {

@@ -7,6 +7,7 @@ import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJAc
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { UUIDsEqual } from '@memberjunction/global';
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
   title?: string;
@@ -443,19 +444,19 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public removePrompt(prompt: MJAIPromptEntityExtended) {
     // Remove from UI
-    const promptIndex = this.linkedPrompts.findIndex(p => p.ID === prompt.ID);
+    const promptIndex = this.linkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID))
     if (promptIndex >= 0) {
       this.linkedPrompts.splice(promptIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentPromptLinks.findIndex(ap => ap.PromptID === prompt.ID);
+    const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID))
     if (linkIndex >= 0) {
       this.agentPromptLinks.splice(linkIndex, 1);
     }
     
     // Remove from newly created prompts if it was created in this dialog
-    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => p.ID === prompt.ID);
+    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID))
     if (newPromptIndex >= 0) {
       this.newlyCreatedPrompts.splice(newPromptIndex, 1);
     }
@@ -471,13 +472,13 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public removeAction(action: MJActionEntity) {
     // Remove from UI
-    const actionIndex = this.linkedActions.findIndex(a => a.ID === action.ID);
+    const actionIndex = this.linkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID))
     if (actionIndex >= 0) {
       this.linkedActions.splice(actionIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentActionLinks.findIndex(aa => aa.ActionID === action.ID);
+    const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID))
     if (linkIndex >= 0) {
       this.agentActionLinks.splice(linkIndex, 1);
     }

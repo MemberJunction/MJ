@@ -2,6 +2,7 @@ import { Component, Input, OnInit } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationDetailRatingEntity } from '@memberjunction/core-entities';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Component for displaying and managing multi-user ratings on conversation messages.
@@ -161,7 +162,7 @@ export class ConversationMessageRatingComponent implements OnInit {
         this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
         this.totalRatings = ratings.length;
 
-        const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
+        const currentUserRating = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId))
         this.currentUserRating = currentUserRating?.Rating ?? null;
     }
 

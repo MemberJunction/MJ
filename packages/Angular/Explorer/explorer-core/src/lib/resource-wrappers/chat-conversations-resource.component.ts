@@ -1,7 +1,7 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
@@ -595,7 +595,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onConversationDeleted(deletedId: string): void {
     if (this.selectedConversationId === deletedId) {
-      const remaining = this.conversationData.conversations.filter(c => c.ID !== deletedId);
+      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId))
       if (remaining.length > 0) {
         void this.selectConversation(remaining[0].ID);
         this.updateUrl();

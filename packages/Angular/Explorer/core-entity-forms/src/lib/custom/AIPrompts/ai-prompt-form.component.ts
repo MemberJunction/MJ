@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ViewContainerRef, inject } from '@angular/core';
 import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJAIPromptModelEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIPromptTypeEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -843,10 +843,10 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             // Load model vendors for this model, filtering by TypeID for inference providers only
             const engine = AIEngineBase.Instance;
             await engine.Config(false);
-            const modelVendors = engine.ModelVendors.filter(mv => mv.ModelID === modelId && mv.TypeID === this.__InferenceProvider_VendorTypeDefinitionID);
+            const modelVendors = engine.ModelVendors.filter(mv => UUIDsEqual(mv.ModelID, modelId) && UUIDsEqual(mv.TypeID, this.__InferenceProvider_VendorTypeDefinitionID))
             
             // filter vendors to just the vendors in the modelVendors array in VendorID
-            const vendors = engine.Vendors.filter(v => modelVendors.some(mv => mv.VendorID === v.ID));
+            const vendors = engine.Vendors.filter(v => modelVendors.some(mv => UUIDsEqual(mv.VendorID, v.ID)))
 
             const result = { vendors, modelVendors };
             this.modelVendorsMap.set(modelId, result);
@@ -873,7 +873,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         const modelVendorData = this.modelVendorsMap.get(modelId);
         if (!modelVendorData) return 'Unknown';
         
-        const modelVendor = modelVendorData.modelVendors.find(mv => mv.VendorID === vendorId);
+        const modelVendor = modelVendorData.modelVendors.find(mv => UUIDsEqual(mv.VendorID, vendorId))
         return modelVendor?.Status || 'Unknown';
     }
 
@@ -959,7 +959,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         try {
             const engine = AIEngineBase.Instance;
             await engine.Config(false);
-            this.promptModels = engine.PromptModels.filter(pm => pm.PromptID === this.record.ID);
+            this.promptModels = engine.PromptModels.filter(pm => UUIDsEqual(pm.PromptID, this.record.ID))
             this.promptModels.sort((a, b) => {
                 // first sort on priority (descending), then by created date (ascending)
                 return b.Priority - a.Priority || new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
@@ -1071,7 +1071,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
      */
     public getModelDisplayName(modelId: string): string {
         if (!modelId) return '';
-        const model = this.availableModels.find(m => m.ID === modelId);
+        const model = this.availableModels.find(m => UUIDsEqual(m.ID, modelId))
         return model ? model.Name : modelId;
     }
 
@@ -1080,7 +1080,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
      */
     public getVendorDisplayName(vendorId: string): string {
         if (!vendorId) return '';
-        const vendor = this.availableVendors.find(v => v.ID === vendorId);
+        const vendor = this.availableVendors.find(v => UUIDsEqual(v.ID, vendorId))
         return vendor ? vendor.Name : vendorId;
     }
 
@@ -1089,7 +1089,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
      */
     public getPromptTypeDisplayName(typeId: string): string {
         if (!typeId) return '';
-        const type = this.availablePromptTypes.find(t => t.ID === typeId);
+        const type = this.availablePromptTypes.find(t => UUIDsEqual(t.ID, typeId))
         return type ? type.Name : typeId;
     }
 
@@ -1098,7 +1098,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
      */
     public getConfigurationDisplayName(configurationId: string | null): string {
         if (!configurationId) return 'Default';
-        const config = this.availableConfigurations.find(c => c.ID === configurationId);
+        const config = this.availableConfigurations.find(c => UUIDsEqual(c.ID, configurationId))
         return config ? config.Name : configurationId;
     }
 
@@ -1144,7 +1144,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         super.CancelEdit();
         
         // Restore original template state
-        if (this.originalTemplateID !== this.record.TemplateID) {
+        if (!UUIDsEqual(this.originalTemplateID, this.record.TemplateID)) {
             this.record.TemplateID = this.originalTemplateID || '';
             
             // Reload the template to reflect the reverted state

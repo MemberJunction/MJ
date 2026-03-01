@@ -8,6 +8,7 @@ import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@m
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** View mode for the agent editor */
 export type AgentEditorViewMode = 'diagram' | 'list';
@@ -308,7 +309,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
    *  Called on every node move so that rebuildFlowModel() never loses drag changes. */
   private syncPositionsToEntities(): void {
     for (const node of this.nodes) {
-      const step = this.steps.find(s => s.ID === node.ID);
+      const step = this.steps.find(s => UUIDsEqual(s.ID, node.ID))
       if (step) {
         this.transformer.ApplyNodePosition(step, node);
       }
@@ -376,7 +377,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
     // Prevent duplicate
     const exists = this.paths.some(
-      p => p.OriginStepID === event.SourceNodeID && p.DestinationStepID === event.TargetNodeID
+      p => UUIDsEqual(p.OriginStepID, event.SourceNodeID) && UUIDsEqual(p.DestinationStepID, event.TargetNodeID)
     );
     if (exists) return;
 
@@ -396,7 +397,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   protected onNodeSelected(node: FlowNode | null): void {
     if (node) {
-      this.selectedStep = this.steps.find(s => s.ID === node.ID) ?? null;
+      this.selectedStep = this.steps.find(s => UUIDsEqual(s.ID, node.ID)) ?? null;
       this.selectedConnection = null;
       this.selectedPathEntity = null;
       this.showPropertiesPanel = true;
@@ -418,7 +419,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected onConnectionSelected(conn: FlowConnection | null): void {
     if (conn) {
       this.selectedConnection = conn;
-      this.selectedPathEntity = this.paths.find(p => p.ID === conn.ID) ?? null;
+      this.selectedPathEntity = this.paths.find(p => UUIDsEqual(p.ID, conn.ID)) ?? null;
       this.selectedStep = null;
       this.showPropertiesPanel = true;
     } else {
@@ -429,14 +430,14 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   protected onNodeRemoved(node: FlowNode): void {
-    const step = this.steps.find(s => s.ID === node.ID);
+    const step = this.steps.find(s => UUIDsEqual(s.ID, node.ID))
     if (step) {
       // Track for deletion on save (only if it was previously saved)
       if (step.IsSaved) {
         this.deletedStepIDs.push(step.ID);
         // Also mark paths connected to this step for deletion
         const connectedPaths = this.paths.filter(
-          p => p.OriginStepID === step.ID || p.DestinationStepID === step.ID
+          p => UUIDsEqual(p.OriginStepID, step.ID) || UUIDsEqual(p.DestinationStepID, step.ID)
         );
         for (const path of connectedPaths) {
           if (path.IsSaved) {
@@ -444,27 +445,27 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
           }
         }
       }
-      this.steps = this.steps.filter(s => s.ID !== node.ID);
+      this.steps = this.steps.filter(s => !UUIDsEqual(s.ID, node.ID))
       this.paths = this.paths.filter(
-        p => p.OriginStepID !== node.ID && p.DestinationStepID !== node.ID
+        p => !UUIDsEqual(p.OriginStepID, node.ID) && !UUIDsEqual(p.DestinationStepID, node.ID)
       );
       this.markDirty();
     }
   }
 
   protected onConnectionRemoved(conn: FlowConnection): void {
-    const path = this.paths.find(p => p.ID === conn.ID);
+    const path = this.paths.find(p => UUIDsEqual(p.ID, conn.ID))
     if (path) {
       if (path.IsSaved) {
         this.deletedPathIDs.push(path.ID);
       }
-      this.paths = this.paths.filter(p => p.ID !== conn.ID);
+      this.paths = this.paths.filter(p => !UUIDsEqual(p.ID, conn.ID))
       this.markDirty();
     }
   }
 
   protected onConnectionReassigned(event: FlowConnectionReassignedEvent): void {
-    const path = this.paths.find(p => p.ID === event.ConnectionID);
+    const path = this.paths.find(p => UUIDsEqual(p.ID, event.ConnectionID))
     if (!path) return;
 
     // Update the entity's origin/destination to match the new visual endpoints
@@ -495,7 +496,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   protected onStepChanged(step: MJAIAgentStepEntity): void {
     // Update the corresponding flow node in-place and push to generic editor
-    const node = this.nodes.find(n => n.ID === step.ID);
+    const node = this.nodes.find(n => UUIDsEqual(n.ID, step.ID))
     if (node) {
       const newLabel = step.Name;
       const newSubtitle = this.transformer.BuildStepSubtitle(step);
@@ -591,7 +592,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   protected onDeleteStepRequested(step: MJAIAgentStepEntity): void {
-    const node = this.nodes.find(n => n.ID === step.ID);
+    const node = this.nodes.find(n => UUIDsEqual(n.ID, step.ID))
     if (node) {
       this.flowEditor?.SelectNode(step.ID);
       this.flowEditor?.DeleteSelected();
@@ -602,12 +603,12 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   protected onDeletePathRequested(path: MJAIAgentStepPathEntity): void {
-    const conn = this.connections.find(c => c.ID === path.ID);
+    const conn = this.connections.find(c => UUIDsEqual(c.ID, path.ID))
     if (conn) {
       if (path.IsSaved) {
         this.deletedPathIDs.push(path.ID);
       }
-      this.paths = this.paths.filter(p => p.ID !== path.ID);
+      this.paths = this.paths.filter(p => !UUIDsEqual(p.ID, path.ID))
       this.rebuildFlowModel();
       this.markDirty();
     }

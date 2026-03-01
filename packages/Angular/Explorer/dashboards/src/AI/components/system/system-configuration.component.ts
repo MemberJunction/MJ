@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { LogError, LogStatus, CompositeKey } from '@memberjunction/core';
 import { MJAIConfigurationEntity, MJAIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -88,15 +88,15 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       // Create extended configurations with associated data
       this.configurations = configs.map(config => {
         const extended = config as ConfigurationWithParams;
-        extended.params = params.filter(p => p.ConfigurationID === config.ID);
+        extended.params = params.filter(p => UUIDsEqual(p.ConfigurationID, config.ID))
         extended.isExpanded = false;
 
         // Find linked prompts
         if (config.DefaultPromptForContextCompressionID) {
-          extended.compressionPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextCompressionID) || null;
+          extended.compressionPrompt = prompts.find(p => UUIDsEqual(p.ID, config.DefaultPromptForContextCompressionID)) || null;
         }
         if (config.DefaultPromptForContextSummarizationID) {
-          extended.summarizationPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextSummarizationID) || null;
+          extended.summarizationPrompt = prompts.find(p => UUIDsEqual(p.ID, config.DefaultPromptForContextSummarizationID)) || null;
         }
 
         return extended;

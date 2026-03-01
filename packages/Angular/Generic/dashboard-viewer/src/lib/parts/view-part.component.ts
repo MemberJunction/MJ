@@ -1,5 +1,5 @@
 import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata, EntityInfo } from '@memberjunction/core';
@@ -164,7 +164,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                     this.entityInfo = md.Entities.find(e => e.Name === viewEntity!.Entity) || null;
                 } else if (viewEntity.EntityID) {
                     // Last resort: look up by EntityID
-                    this.entityInfo = md.Entities.find(e => e.ID === viewEntity!.EntityID) || null;
+                    this.entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
                 }
 
                 if (!this.entityInfo) {

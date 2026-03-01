@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJDashboardEntity, MJDashboardPermissionEntity, DashboardEngine, MJUserEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a user share with their permissions
@@ -111,7 +112,7 @@ export class DashboardShareDialogComponent implements OnChanges {
             // Build user shares list
             this.UserShares = [];
             for (const permission of existingShares) {
-                const user = this.allUsers.find(u => u.ID === permission.UserID);
+                const user = this.allUsers.find(u => UUIDsEqual(u.ID, permission.UserID))
                 if (user) {
                     this.UserShares.push({
                         Permission: permission,
@@ -148,7 +149,7 @@ export class DashboardShareDialogComponent implements OnChanges {
 
         // Exclude dashboard owner and already shared users
         this.AvailableUsers = this.allUsers.filter(user =>
-            user.ID !== this.Dashboard!.UserID && !sharedUserIds.has(user.ID)
+            !UUIDsEqual(user.ID, this.Dashboard!.UserID) && !sharedUserIds.has(user.ID)
         );
     }
 

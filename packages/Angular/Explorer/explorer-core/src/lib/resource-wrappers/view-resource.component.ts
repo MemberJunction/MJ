@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
+import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
@@ -239,7 +239,7 @@ export class UserViewResource extends BaseResourceComponent {
         }
 
         // Load the entity info
-        const entity = this.metadata.Entities.find(e => e.ID === this.viewEntity!.EntityID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID))
 
         if (!entity) {
             throw new Error(`Entity for view not found`);

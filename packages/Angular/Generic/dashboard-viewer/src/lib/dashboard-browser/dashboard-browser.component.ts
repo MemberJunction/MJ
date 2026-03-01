@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -388,7 +389,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public OnCategoryChange(categoryId: string | null): void {
         this._selectedCategoryId = categoryId;
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.CategoryChange.emit({ CategoryId: categoryId, Category: category });
         this.applyFilters();
@@ -410,7 +411,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public NavigateToCategory(categoryId: string | null): void {
         this._selectedCategoryId = categoryId;
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.CategoryChange.emit({ CategoryId: categoryId, Category: category });
         this.applyFilters();
@@ -422,7 +423,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public NavigateUp(): void {
         if (!this._selectedCategoryId) return;
 
-        const currentCategory = this.Categories.find(c => c.ID === this._selectedCategoryId);
+        const currentCategory = this.Categories.find(c => UUIDsEqual(c.ID, this._selectedCategoryId));
         const parentId = currentCategory?.ParentID || null;
         this.NavigateToCategory(parentId);
     }
@@ -439,7 +440,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public get CurrentCategory(): MJDashboardCategoryEntity | null {
         if (!this._selectedCategoryId) return null;
-        return this.Categories.find(c => c.ID === this._selectedCategoryId) || null;
+        return this.Categories.find(c => UUIDsEqual(c.ID, this._selectedCategoryId)) || null;
     }
 
     // ========================================
@@ -760,8 +761,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Get count of dashboards and sub-categories in a category
      */
     public GetCategoryContentCount(category: MJDashboardCategoryEntity): { dashboards: number; categories: number } {
-        const dashboards = this.Dashboards.filter(d => d.CategoryID === category.ID).length;
-        const categories = this.Categories.filter(c => c.ParentID === category.ID).length;
+        const dashboards = this.Dashboards.filter(d => UUIDsEqual(d.CategoryID, category.ID)).length;
+        const categories = this.Categories.filter(c => UUIDsEqual(c.ParentID, category.ID)).length;
         return { dashboards, categories };
     }
 
@@ -904,7 +905,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public GetCategoryName(categoryId: string | null): string {
         if (!categoryId) return 'Uncategorized';
-        const category = this.Categories.find(c => c.ID === categoryId);
+        const category = this.Categories.find(c => UUIDsEqual(c.ID, categoryId));
         return category?.Name || 'Unknown';
     }
 
@@ -1151,7 +1152,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         // Find categories that are children of the current category
         // Handle both null and undefined ParentID for root-level categories
         if (this._selectedCategoryId) {
-            this.ChildCategories = this.Categories.filter(c => c.ParentID === this._selectedCategoryId);
+            this.ChildCategories = this.Categories.filter(c => UUIDsEqual(c.ParentID, this._selectedCategoryId));
         } else {
             // At root level - show categories with no parent (null or undefined)
             this.ChildCategories = this.Categories.filter(c => !c.ParentID);
@@ -1182,7 +1183,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         let currentId: string | null = this._selectedCategoryId;
 
         while (currentId) {
-            const category = this.Categories.find(c => c.ID === currentId);
+            const category = this.Categories.find(c => UUIDsEqual(c.ID, currentId));
             if (category) {
                 path.unshift(category);
                 currentId = category.ParentID;
@@ -1207,8 +1208,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     private selectRange(fromId: string, toId: string): void {
-        const fromIndex = this.FilteredDashboards.findIndex(d => d.ID === fromId);
-        const toIndex = this.FilteredDashboards.findIndex(d => d.ID === toId);
+        const fromIndex = this.FilteredDashboards.findIndex(d => UUIDsEqual(d.ID, fromId));
+        const toIndex = this.FilteredDashboards.findIndex(d => UUIDsEqual(d.ID, toId));
 
         if (fromIndex === -1 || toIndex === -1) return;
 

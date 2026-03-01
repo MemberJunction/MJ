@@ -3,6 +3,7 @@ import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SchedulingKPIs {
   totalActiveJobs: number;
@@ -394,7 +395,7 @@ export class SchedulingInstrumentationService {
     const allRuns = runsResult.Results as MJScheduledJobRunEntity[];
 
     return types.map(type => {
-      const jobsOfType = allJobs.filter(j => j.JobTypeID === type.ID);
+      const jobsOfType = allJobs.filter(j => UUIDsEqual(j.JobTypeID, type.ID))
       const activeJobs = jobsOfType.filter(j => j.Status === 'Active');
       const jobIds = new Set(jobsOfType.map(j => j.ID));
       const runsOfType = allRuns.filter(r => jobIds.has(r.ScheduledJobID));

@@ -1,6 +1,6 @@
 import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, UserInfo } from "@memberjunction/core";
 import { TypeTablesCache } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 
 /**
  * Represents metadata about an Angular component that is used in the generated code.
@@ -241,7 +241,7 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
         if (relationshipInfo.DisplayComponentID && relationshipInfo.DisplayComponentID.length > 0) {
             // get the component from the component info provided
             await TypeTablesCache.Instance.Config(false, contextUser);
-            const component = TypeTablesCache.Instance.EntityRelationshipDisplayComponents.find(x => x.ID === relationshipInfo.DisplayComponentID);
+            const component = TypeTablesCache.Instance.EntityRelationshipDisplayComponents.find(x => UUIDsEqual(x.ID, relationshipInfo.DisplayComponentID));
             if (component) {
                 key = component.Name;
             }

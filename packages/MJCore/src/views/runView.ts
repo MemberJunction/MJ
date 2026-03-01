@@ -1,4 +1,4 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
@@ -356,7 +356,7 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => e.ID === entityID);
+            const entity = p.Entities.find(e => UUIDsEqual(e.ID, entityID));
             if (entity)
                 return entity.Name
         }

@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJDashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface DashboardPreferencesResult {
   saved: boolean;
@@ -76,7 +77,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       if (this.scope === 'Global') {
         return d.Scope === 'Global' && !d.ApplicationID;
       } else {
-        return d.ApplicationID === this.applicationId; // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
+        return UUIDsEqual(d.ApplicationID, this.applicationId) // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
       }
     });
 
@@ -98,7 +99,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
-        const app = appList.Results.find((a: MJApplicationEntity) => a.ID === this.applicationId);
+        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.applicationId))
         this.applicationName = app?.Name || 'Unknown Application';
       }
     } catch (error) {
@@ -144,7 +145,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     
     // Get configured dashboards in the right order
     this.configuredDashboards = this.currentUserPreferences
-      .map(pref => this.allAvailableDashboards.find(d => d.ID === pref.DashboardID))
+      .map(pref => this.allAvailableDashboards.find(d => UUIDsEqual(d.ID, pref.DashboardID)))
       .filter((d): d is MJDashboardEntityExtended => d !== undefined);
     
     // Get available dashboards (not configured)
@@ -187,7 +188,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   public addDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.availableDashboards.findIndex(d => d.ID === dashboard.ID);
+      const index = this.availableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID))
       if (index !== -1) {
         this.availableDashboards.splice(index, 1);
         this.configuredDashboards.push(dashboard);
@@ -206,7 +207,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   public removeDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.configuredDashboards.findIndex(d => d.ID === dashboard.ID);
+      const index = this.configuredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID))
       if (index !== -1) {
         this.configuredDashboards.splice(index, 1);
         this.availableDashboards.push(dashboard);

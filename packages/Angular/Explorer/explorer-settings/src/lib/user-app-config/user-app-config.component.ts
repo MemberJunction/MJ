@@ -3,6 +3,7 @@ import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJUserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents an app item in the configuration UI
@@ -384,7 +385,7 @@ export class UserAppConfigComponent {
 
   private buildAppConfigItems(systemApps: BaseApplication[], userApps: UserAppRow[]): AppConfigItem[] {
     return systemApps.map(app => {
-      const userApp = userApps.find(ua => ua.ApplicationID === app.ID);
+      const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID))
       return {
         app,
         userAppId: userApp?.ID ?? null,

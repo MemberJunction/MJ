@@ -7,7 +7,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { CreateAgentService, CreateAgentDialogResult, CreateAgentResult } from '@memberjunction/ng-agents';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -360,7 +360,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
     // Apply agent type filter
     if (this.currentFilters.agentType !== 'all') {
-      filtered = filtered.filter(agent => agent.TypeID === this.currentFilters.agentType);
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.currentFilters.agentType))
     }
 
     // Apply parent agent filter
@@ -368,7 +368,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       if (this.currentFilters.parentAgent === 'none') {
         filtered = filtered.filter(agent => !agent.ParentID);
       } else {
-        filtered = filtered.filter(agent => agent.ParentID === this.currentFilters.parentAgent);
+        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.currentFilters.parentAgent))
       }
     }
 
@@ -503,7 +503,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    */
   public getParentAgentName(agent: MJAIAgentEntityExtended): string | null {
     if (!agent.ParentID) return null;
-    const parent = this.agents.find(a => a.ID === agent.ParentID);
+    const parent = this.agents.find(a => UUIDsEqual(a.ID, agent.ParentID))
     return parent?.Name || 'Unknown Parent';
   }
 

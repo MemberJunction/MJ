@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -206,7 +206,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     public onCredentialSaved(credential: MJCredentialEntity): void {
         // Check if it's a new credential or update
-        const existingIndex = this.credentials.findIndex(c => c.ID === credential.ID);
+        const existingIndex = this.credentials.findIndex(c => UUIDsEqual(c.ID, credential.ID))
         if (existingIndex >= 0) {
             // Update existing
             this.credentials[existingIndex] = credential;
@@ -219,7 +219,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     public onCredentialDeleted(credentialId: string): void {
-        this.credentials = this.credentials.filter(c => c.ID !== credentialId);
+        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credentialId))
         this.selectedCredentials.delete(credentialId);
         this.applyFilters();
         this.cdr.markForCheck();
@@ -242,7 +242,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             const success = await credential.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential "${credential.Name}" deleted successfully`, 'success', 3000);
-                this.credentials = this.credentials.filter(c => c.ID !== credential.ID);
+                this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credential.ID))
                 this.selectedCredentials.delete(credential.ID);
                 this.applyFilters();
             } else {
@@ -340,13 +340,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId))
             if (credential) {
                 try {
                     const success = await credential.Delete();
                     if (success) {
                         successCount++;
-                        this.credentials = this.credentials.filter(c => c.ID !== credId);
+                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId))
                     } else {
                         failCount++;
                     }
@@ -434,7 +434,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
         // Filter by type
         if (this.selectedTypeFilter) {
-            filtered = filtered.filter(c => c.CredentialTypeID === this.selectedTypeFilter);
+            filtered = filtered.filter(c => UUIDsEqual(c.CredentialTypeID, this.selectedTypeFilter))
         }
 
         // Filter by search text
@@ -462,7 +462,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     // === Helpers ===
 
     public getTypeById(typeId: string): MJCredentialTypeEntity | undefined {
-        return this.types.find(t => t.ID === typeId);
+        return this.types.find(t => UUIDsEqual(t.ID, typeId))
     }
 
     public getTypesByCategory(): Map<string, MJCredentialTypeEntity[]> {
@@ -635,7 +635,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId))
             if (credential && credential.IsActive !== active) {
                 try {
                     credential.IsActive = active;
@@ -679,13 +679,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId))
             if (credential) {
                 try {
                     const success = await credential.Delete();
                     if (success) {
                         successCount++;
-                        this.credentials = this.credentials.filter(c => c.ID !== credId);
+                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId))
                     } else {
                         failCount++;
                     }

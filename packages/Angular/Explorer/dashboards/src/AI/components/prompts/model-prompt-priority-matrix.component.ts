@@ -4,6 +4,7 @@ import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface PromptModelAssociation {
   promptId: string;
@@ -169,8 +170,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     
     // Create associations for existing database records
     dbAssociations.forEach(dbAssoc => {
-      const prompt = this.prompts.find(p => p.ID === dbAssoc.PromptID);
-      const model = this.models.find(m => m.ID === dbAssoc.ModelID);
+      const prompt = this.prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID))
+      const model = this.models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID))
       
       if (prompt && model) {
         this.associations.push({
@@ -249,8 +250,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     }
     
     const cellKey = this.getCellKey(
-      this.prompts.findIndex(p => p.ID === cell.promptId),
-      this.models.findIndex(m => m.ID === cell.modelId)
+      this.prompts.findIndex(p => UUIDsEqual(p.ID, cell.promptId)),
+      this.models.findIndex(m => UUIDsEqual(m.ID, cell.modelId))
     );
     
     if (this.selectedCells.has(cellKey)) {
@@ -330,8 +331,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   public createAssociation(promptId: string, modelId: string, priority: number = 1): void {
-    const prompt = this.prompts.find(p => p.ID === promptId);
-    const model = this.models.find(m => m.ID === modelId);
+    const prompt = this.prompts.find(p => UUIDsEqual(p.ID, promptId))
+    const model = this.models.find(m => UUIDsEqual(m.ID, modelId))
     
     if (!prompt || !model) return;
     

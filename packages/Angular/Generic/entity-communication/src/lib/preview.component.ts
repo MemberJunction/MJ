@@ -1,6 +1,7 @@
 import { Component, Output, EventEmitter, Input, OnInit } from '@angular/core';
 import { CommunicationEngineBase, Message, ProcessedMessage } from '@memberjunction/communication-types';
 import { EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
@@ -54,7 +55,7 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
     })
     this.templates = result.Results;
     this.templates.forEach(template => {
-      template.Content = content.Results.filter(c => c.TemplateID === template.ID);
+      template.Content = content.Results.filter(c => UUIDsEqual(c.TemplateID, template.ID));
     });
   }
 

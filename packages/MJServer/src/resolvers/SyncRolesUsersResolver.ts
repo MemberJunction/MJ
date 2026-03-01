@@ -1,6 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -382,7 +383,7 @@ export class SyncRolesAndUsersResolver {
                         const dbRole = dbRoles.find(r => r.Name.trim().toLowerCase() === role.Name.trim().toLowerCase());
                         if (dbRole) {
                             // now we need to make sure there is a user role that matches this user and role
-                            if (!dbUserRoles.find(ur => ur.UserID === dbUser.ID && ur.RoleID === dbRole.ID)) {
+                            if (!dbUserRoles.find(ur => UUIDsEqual(ur.UserID, dbUser.ID) && UUIDsEqual(ur.RoleID, dbRole.ID))) {
                                 // we need to add a user role
                                 const ur = await md.GetEntityObject<MJUserRoleEntity>("MJ: User Roles", u);
                                 ur.UserID = dbUser.ID;
@@ -392,9 +393,9 @@ export class SyncRolesAndUsersResolver {
                         }
                     }
                     // now, we check for DB user roles that are NOT in the user.Roles property as they are no longer part of the user's roles
-                    const thisUserDBRoles = dbUserRoles.filter(ur => ur.UserID === dbUser.ID);
+                    const thisUserDBRoles = dbUserRoles.filter(ur => UUIDsEqual(ur.UserID, dbUser.ID));
                     for (const dbUserRole of thisUserDBRoles) {
-                        const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => rr.ID === dbUserRole.RoleID)?.Name.trim().toLowerCase());
+                        const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => UUIDsEqual(rr.ID, dbUserRole.RoleID))?.Name.trim().toLowerCase());
                         if (!role && !this.IsStandardRole(dbUserRole.Role)) {
                             // this user role is no longer in the user's roles, we need to remove it
                             //dbUserRole.TransactionGroup = tg;

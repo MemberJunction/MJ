@@ -1,5 +1,5 @@
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
@@ -758,7 +758,7 @@ export class ParallelExecutionCoordinator {
 
       // Load the judge prompt from AIEngine
       await AIEngine.Instance.Config(false);
-      const judgePrompt = AIEngine.Instance.Prompts.find((p) => p.ID === selectorPromptId);
+      const judgePrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, selectorPromptId));
 
       if (!judgePrompt) {
         LogError(`Judge prompt with ID ${selectorPromptId} not found`);

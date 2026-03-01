@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
@@ -133,7 +133,7 @@ export class FindBestAgentAction extends BaseAction {
             const agentActionsMap = new Map<string, string[]>();
             for (const agent of filteredAgents) {
                 const agentActions = AIEngine.Instance.AgentActions
-                    .filter(aa => aa.AgentID === agent.agentId && aa.Status === 'Active')
+                    .filter(aa => UUIDsEqual(aa.AgentID, agent.agentId) && aa.Status === 'Active')
                     .map(aa => aa.Action);  // Get action name
                 agentActionsMap.set(agent.agentId, agentActions);
             }

@@ -4,6 +4,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-page tasks view with task list and Gantt chart
@@ -164,7 +165,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
     // Auto-drill into task if activeTaskId changes
     if (changes['activeTaskId'] && this.activeTaskId) {
-      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
+      const task = this.allTasks.find(t => UUIDsEqual(t.ID, this.activeTaskId))
       if (task) {
         this.onTaskClick(task);
       }
@@ -267,7 +268,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         const allHierarchy = hierarchyResult.Results || [];
 
         // For list view: Filter out the clicked task itself - only show its children/descendants
-        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
+        this.subTasks = allHierarchy.filter(t => !UUIDsEqual(t.ID, task.ID))
 
         // For Gantt view: Include the parent task so hierarchy works correctly
         this.subTasksWithParent = allHierarchy;

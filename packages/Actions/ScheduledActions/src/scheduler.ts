@@ -2,7 +2,7 @@ import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Meta
 import { MJScheduledActionEntityExtended, MJScheduledActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended, ActionParam, ActionResult, RunActionParams } from "@memberjunction/actions-base";
 import cronParser from 'cron-parser';
-import { SafeJSONParse } from "@memberjunction/global";
+import { SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { ActionEngineServer } from "@memberjunction/actions";
 
@@ -29,7 +29,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
     protected override AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // associate params with actions
         this.ScheduledActions.forEach(scheduledAction => {
-            scheduledAction.Params = this.ScheduledActionParams.filter(param => param.ScheduledActionID === scheduledAction.ID);
+            scheduledAction.Params = this.ScheduledActionParams.filter(param => UUIDsEqual(param.ScheduledActionID, scheduledAction.ID));
         });
 
         return;
@@ -61,7 +61,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         const now = new Date();
         for (const scheduledAction of this.ScheduledActions) {
             if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
-                const action: MJActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+                const action: MJActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, scheduledAction.ActionID));
                 const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
                 const result = await ActionEngineServer.Instance.RunAction({
                     Action: action,
@@ -92,7 +92,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         const now = new Date();
         const canRun: boolean = scheduledAction.CronExpression ? ScheduledActionEngine.IsActionDue(scheduledAction, now) : true;
         if (canRun) {
-            const action: MJActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+            const action: MJActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, scheduledAction.ActionID));
             const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
@@ -108,7 +108,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         const returnValues: ActionParam[] = [];
         const allParams = ActionEngineServer.Instance.ActionParams;
         for (const sap of scheduledAction.Params) {
-            const param = allParams.find(p => p.ID === sap.ActionParamID);
+            const param = allParams.find(p => UUIDsEqual(p.ID, sap.ActionParamID));
             let value: any = null;
 
             switch (sap.ValueType) {

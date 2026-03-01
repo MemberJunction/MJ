@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 interface FieldSchemaProperty {
@@ -75,7 +76,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
     }
 
     public get selectedType(): MJCredentialTypeEntity | null {
-        return this.credentialTypes.find(t => t.ID === this.selectedTypeId) || null;
+        return this.credentialTypes.find(t => UUIDsEqual(t.ID, this.selectedTypeId)) || null;
     }
 
     public get panelTitle(): string {
