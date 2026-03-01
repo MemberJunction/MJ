@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (287 classes)
+// @memberjunction/core-entities (289 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -252,6 +252,7 @@ import {
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
+    MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
@@ -275,6 +276,7 @@ import {
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJSQLDialectEntity,
     MJScheduledActionEntity,
     MJScheduledActionEntityExtended,
     MJScheduledActionParamEntity,
@@ -684,6 +686,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
+    MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
@@ -707,6 +710,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJSQLDialectEntity,
     MJScheduledActionEntity,
     MJScheduledActionEntityExtended,
     MJScheduledActionParamEntity,
@@ -855,7 +859,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 388;
+export const CLASS_REGISTRATIONS_COUNT = 390;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -15,12 +15,12 @@ Code review of `postgres-5-0-implementation` branch identified significant code 
 - [x] **Task 7**: ProcessEntityRows — analyzed, stays in providers. Datetime handling is SQL Server-specific; encryption logic moves to generic-database-provider in Phase 3 (Task 9). Base class already has correct `PostProcessRows` hook.
 
 ## Phase 3: Larger Refactoring (Commit 3)
-- [ ] **Task 8**: Refactor InternalRunView into base class with abstract methods
-- [ ] **Task 9**: Create `@memberjunction/generic-database-provider` package
-- [ ] **Task 10**: Refactor remaining methods (Load, GetDatasetByName, RunViewsWithCacheCheck, RunQueriesWithCacheCheck)
+- [x] **Task 8**: Refactor InternalRunView into base class with abstract methods — DONE. Moved InternalRunView, InternalRunViews, getRunTimeViewFieldString, getRunTimeViewFieldArray, createViewUserSearchSQL to GenericDatabaseProvider with dialect-neutral SQL. Added abstract BuildPaginationSQL (SQL Server: OFFSET/FETCH, PG: LIMIT/OFFSET), virtual BuildTopClause (SQL Server: TOP N, PG: empty), virtual BuildNonPaginatedLimitSQL (PG: LIMIT N), virtual TransformExternalSQLClause (PG: quotes mixed-case identifiers), virtual executeSQLForUserViewRunLogging (SQL Server: spCreateUserViewRunWithDetail). PG gets full view features for free: saved views, permissions, aggregates, RLS, search, encryption. 17 tests in GenericDatabaseProvider, all 83 SQLServer + 60 PG + 519 MJCore tests pass.
+- [x] **Task 9**: Create `@memberjunction/generic-database-provider` package — DONE. Contains: HandleEntityActions, HandleEntityAIActions, GetEntityAIActions, EnqueueAfterSaveAIAction (virtual for transaction deferral), OnValidateBeforeSave, OnBeforeSave/AfterSave/BeforeDelete/AfterDelete Execute hooks, PostProcessRows (encryption decryption), RenderViewWhereClause. Both SQL Server and PG providers now extend GenericDatabaseProvider. SQL Server overrides EnqueueAfterSaveAIAction for transaction-deferred task logic.
+- [x] **Task 10**: Refactor remaining methods (Load, GetDatasetByName, RunViewsWithCacheCheck, RunQueriesWithCacheCheck) — DONE. Moved to GenericDatabaseProvider: isCacheCurrent, RunViewsWithCacheCheck (with buildWhereClauseForCacheCheck, getBatchedServerCacheStatus, runFullQueryAndReturn, runDifferentialQueryAndReturn, getDeletedRecordIDsSince, getUpdatedRowsSince), RunQueriesWithCacheCheck (with resolveQueryInfo, findQueryInEngine, refreshQueryInfoFromEntity, resolveCategoryPath, getBatchedQueryCacheStatus, runFullQueryAndReturnForQuery), Load (with char trimming, relationship loading, PostProcessRows), GetDatasetByName (with BuildParameterPlaceholder, getColumnsForDatasetItem). All use dialect-neutral quoting via QuoteIdentifier/QuoteSchemaAndView. Virtual methods getBatchedServerCacheStatus, getBatchedQueryCacheStatus default to parallel individual queries (PG-compatible); SQL Server overrides for ExecuteSQLBatch multi-result-set batching. SQL Server also overrides GetDatasetByName for batch optimization, BuildParameterPlaceholder for @p-style params. Removed 13 methods from SQL Server, added 1 new override. 36 tests in GenericDatabaseProvider, all 83 SQL Server + 60 PG + 519 MJCore tests pass (698 total).
 
 ## Phase 4: PG Provider Update (Commit 4)
-- [ ] **Task 11**: Refactor PG data provider to use new base class / generic provider
+- [x] **Task 11**: Refactor PG data provider to use new base class / generic provider — DONE. Removed 13 methods now inherited from GenericDatabaseProvider: Load, GetDatasetByName, RunViewsWithCacheCheck, getBatchedServerCacheStatus, isCacheCurrent, runFullQueryAndReturn, runDifferentialQueryAndReturn, getDeletedRecordIDsSince, getUpdatedRowsSince, buildWhereClauseForCacheCheck, buildPKWhereClause, formatFieldValue, viewName. Removed 8 unused imports. PG now inherits: PostProcessRows (encryption), char field trimming, relationship loading in Load, full cache check suite. All 60 PG tests + 519 MJCore + 83 SQL Server + 36 GenericDP tests pass (698 total).
 
 ---
 
@@ -112,5 +112,5 @@ After all above refactoring:
 
 ## Status
 - **Started**: 2026-02-28
-- **Current Phase**: 1
+- **Current Phase**: ALL PHASES COMPLETE (Tasks 1-11 done)
 - **Last Updated**: 2026-02-28

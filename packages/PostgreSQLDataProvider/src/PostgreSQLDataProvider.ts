@@ -1,16 +1,12 @@
 import pg from 'pg';
 import {
-    DatabaseProviderBase,
     DatabasePlatform,
     ExecuteSQLOptions,
-    RunViewResult,
-    RunViewParams,
     RunQueryResult,
     RunQueryParams,
     UserInfo,
     EntityInfo,
     EntityFieldInfo,
-    EntityPermissionType,
     ProviderType,
     CompositeKey,
     EntityDependency,
@@ -18,17 +14,9 @@ import {
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
-    LogStatus,
-    DatasetResultType,
-    DatasetItemResultType,
     DatasetStatusResultType,
     DatasetStatusEntityUpdateDateType,
     DatasetItemFilterType,
-    RunViewWithCacheCheckParams,
-    RunViewWithCacheCheckResult,
-    RunViewsWithCacheCheckResponse,
-    IEntityDataProvider,
-    IRunReportProvider,
     TransactionGroupBase,
     ILocalStorageProvider,
     IMetadataProvider,
@@ -36,6 +24,7 @@ import {
     RunQuerySQLFilterManager,
 } from '@memberjunction/core';
 
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { PGConnectionManager } from './pgConnectionManager.js';
@@ -56,7 +45,7 @@ const pgDialect = new PostgreSQLDialect();
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
-export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEntityDataProvider, IRunReportProvider {
+export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
@@ -306,50 +295,23 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
         return new PostgreSQLTransactionGroup();
     }
 
-    // ─── RunView Implementation ──────────────────────────────────────
+    // ─── RunView Implementation (inherited from GenericDatabaseProvider) ──────
 
-    protected async InternalRunView<T>(
-        params: RunViewParams,
-        contextUser?: UserInfo
-    ): Promise<RunViewResult<T>> {
-        const entityInfo = this.resolveEntityInfo(params);
-        if (!entityInfo) {
-            return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: 'Entity not found for params' };
-        }
-
-        const startTime = Date.now();
-        const fields = this.buildFieldList(params, entityInfo);
-        const whereSQL = this.buildWhereClause(params, entityInfo, contextUser);
-        const orderBySQL = this.resolveOrderBy(params, entityInfo);
-        const selectSQL = this.buildSelectSQL(entityInfo, fields, whereSQL, orderBySQL, params.MaxRows, params.StartRow);
-
-        try {
-            const rows = await this.ExecuteSQL<T>(selectSQL, undefined, { description: `RunView: ${entityInfo.Name}` }, contextUser);
-
-            let totalRowCount = rows.length;
-            if (params.MaxRows && rows.length >= params.MaxRows) {
-                totalRowCount = await this.executeCountQuery(entityInfo, whereSQL, contextUser);
-            }
-
-            return {
-                Success: true,
-                Results: rows,
-                RowCount: rows.length,
-                TotalRowCount: totalRowCount,
-                ExecutionTime: Date.now() - startTime,
-                ErrorMessage: '',
-            };
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: Date.now() - startTime, ErrorMessage: msg };
-        }
+    protected override BuildPaginationSQL(maxRows: number, startRow: number): string {
+        return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
 
-    protected async InternalRunViews<T>(
-        params: RunViewParams[],
-        contextUser?: UserInfo
-    ): Promise<RunViewResult<T>[]> {
-        return Promise.all(params.map(p => this.InternalRunView<T>(p, contextUser)));
+    protected override BuildNonPaginatedLimitSQL(maxRows: number): string {
+        return `LIMIT ${maxRows}`;
+    }
+
+    /**
+     * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
+     * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
+     */
+    protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
+        if (!clause || clause.length === 0) return clause;
+        return this.quoteIdentifiersInSQL(clause, entityInfo);
     }
 
     // ─── RunQuery Implementation ─────────────────────────────────────
@@ -431,22 +393,7 @@ export class PostgreSQLDataProvider extends DatabaseProviderBase implements IEnt
 
     // ─── IEntityDataProvider ─────────────────────────────────────────
 
-    async Load(
-        entity: BaseEntity,
-        compositeKey: CompositeKey,
-        _EntityRelationshipsToLoad: string[],
-        user: UserInfo
-    ): Promise<Record<string, unknown>> {
-        const entityInfo = entity.EntityInfo;
-        const whereClause = this.buildPKWhereClause(entityInfo, compositeKey);
-        const sql = `SELECT * FROM ${this.viewName(entityInfo)} WHERE ${whereClause}`;
-
-        const rows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, { description: `Load: ${entityInfo.Name}` }, user);
-        if (rows.length === 0) {
-            throw new Error(`Record not found: ${entityInfo.Name} [${compositeKey.ToString()}]`);
-        }
-        return rows[0];
-    }
+    // Load is inherited from GenericDatabaseProvider
 
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
@@ -541,129 +488,7 @@ SELECT * FROM delete_result`;
 
     // ─── Dataset Methods ─────────────────────────────────────────────
 
-    async GetDatasetByName(
-        datasetName: string,
-        itemFilters?: DatasetItemFilterType[],
-        contextUser?: UserInfo
-    ): Promise<DatasetResultType> {
-        const sSQL = `SELECT
-                        di.*,
-                        e."BaseView" AS "EntityBaseView",
-                        e."SchemaName" AS "EntitySchemaName",
-                        di."__mj_UpdatedAt" AS "DatasetItemUpdatedAt",
-                        d."__mj_UpdatedAt" AS "DatasetUpdatedAt"
-                    FROM
-                        ${this._schemaName}."vwDatasets" d
-                    INNER JOIN
-                        ${this._schemaName}."vwDatasetItems" di
-                    ON
-                        d."ID" = di."DatasetID"
-                    INNER JOIN
-                        ${this._schemaName}."vwEntities" e
-                    ON
-                        di."EntityID" = e."ID"
-                    WHERE
-                        d."Name" = $1`;
-
-        const items = await this.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
-
-        if (items && items.length > 0) {
-            const results: DatasetItemResultType[] = [];
-
-            for (const item of items) {
-                const entitySchemaName = String(item.EntitySchemaName ?? this._schemaName);
-                const entityBaseView = String(item.EntityBaseView);
-                const code = String(item.Code);
-                const entityName = String(item.Entity);
-                const entityID = String(item.EntityID);
-                const dateFieldToCheck = String(item.DateFieldToCheck ?? '__mj_UpdatedAt');
-                const whereClause = item.WhereClause ? String(item.WhereClause) : '';
-
-                // Build filter SQL
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === code);
-                    if (filter) {
-                        filterSQL = (whereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
-                    }
-                }
-
-                // Build query for this dataset item
-                const itemSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entitySchemaName, entityBaseView)} ${whereClause ? 'WHERE ' + whereClause : ''}${filterSQL}`;
-
-                try {
-                    const itemData = await this.ExecuteSQL<Record<string, unknown>>(itemSQL, undefined, { description: `Dataset item: ${code}` }, contextUser);
-
-                    const itemUpdatedAt = new Date(String(item.DatasetItemUpdatedAt));
-                    const datasetUpdatedAt = new Date(String(item.DatasetUpdatedAt));
-                    const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-                    let latestUpdateDate = new Date(1900, 1, 1);
-                    if (itemData && itemData.length > 0) {
-                        for (const row of itemData) {
-                            const rowDate = row[dateFieldToCheck];
-                            if (rowDate && new Date(String(rowDate)) > latestUpdateDate) {
-                                latestUpdateDate = new Date(String(rowDate));
-                            }
-                        }
-                    }
-
-                    if (datasetMaxUpdatedAt > latestUpdateDate) {
-                        latestUpdateDate = datasetMaxUpdatedAt;
-                    }
-
-                    results.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        Code: code,
-                        Results: itemData,
-                        LatestUpdateDate: latestUpdateDate,
-                        Success: true,
-                    });
-                } catch (err) {
-                    LogError(`GetDatasetByName: Error fetching item ${code}: ${err instanceof Error ? err.message : String(err)}`);
-                    results.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        Code: code,
-                        Results: [],
-                        LatestUpdateDate: new Date(0),
-                        Success: false,
-                    });
-                }
-            }
-
-            const bSuccess = results.every(r => r.Success);
-            const latestUpdateDate = results.reduce(
-                (acc, result) => {
-                    if (result?.LatestUpdateDate) {
-                        const theDate = new Date(result.LatestUpdateDate);
-                        if (theDate.getTime() > acc.getTime()) return theDate;
-                    }
-                    return acc;
-                },
-                new Date(0),
-            );
-
-            return {
-                DatasetID: String(items[0].DatasetID),
-                DatasetName: datasetName,
-                Success: bSuccess,
-                Status: '',
-                LatestUpdateDate: latestUpdateDate,
-                Results: results,
-            };
-        } else {
-            return {
-                DatasetID: '',
-                DatasetName: datasetName,
-                Success: false,
-                Status: 'No Dataset or Items found for DatasetName: ' + datasetName,
-                LatestUpdateDate: new Date(0),
-                Results: [],
-            };
-        }
-    }
+    // GetDatasetByName is inherited from GenericDatabaseProvider
 
     async GetDatasetStatusByName(
         datasetName: string,
@@ -761,339 +586,24 @@ SELECT * FROM delete_result`;
 
     // ─── Cache Check Methods ─────────────────────────────────────────
 
-    async RunViewsWithCacheCheck<T>(
-        params: RunViewWithCacheCheckParams[],
-        contextUser?: UserInfo
-    ): Promise<RunViewsWithCacheCheckResponse<T>> {
-        try {
-            const user = contextUser || this.CurrentUser;
-            if (!user) {
-                return { success: false, results: [], errorMessage: 'No user context available' };
-            }
+    // RunViewsWithCacheCheck is inherited from GenericDatabaseProvider
 
-            // Separate items that need cache check from those that don't
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
-            const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
-            const errorResults: RunViewWithCacheCheckResult<T>[] = [];
+    // getBatchedServerCacheStatus is inherited from GenericDatabaseProvider
 
-            for (let i = 0; i < params.length; i++) {
-                const item = params[i];
-                if (!item.cacheStatus) {
-                    itemsWithoutCacheCheck.push({ index: i, item });
-                    continue;
-                }
+    // isCacheCurrent is inherited from GenericDatabaseProvider
 
-                const entityInfo = this.Entities.find(
-                    (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase()
-                );
-                if (!entityInfo) {
-                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: `Entity ${item.params.EntityName} not found in metadata` });
-                    continue;
-                }
+    // runFullQueryAndReturn is inherited from GenericDatabaseProvider
 
-                try {
-                    this.CheckUserReadPermissions(entityInfo.Name, user);
-                    const whereSQL = this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                    itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
-                } catch (e) {
-                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
-                }
-            }
+    // runDifferentialQueryAndReturn is inherited from GenericDatabaseProvider
 
-            // Execute cache status checks
-            const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+    // getDeletedRecordIDsSince is inherited from GenericDatabaseProvider
 
-            // Determine current vs stale
-            const differentialItems: Array<{
-                index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
-                clientMaxUpdatedAt: string; clientRowCount: number;
-                serverStatus: { maxUpdatedAt?: string; rowCount?: number };
-            }> = [];
-            const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
-            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+    // getUpdatedRowsSince is inherited from GenericDatabaseProvider
 
-            for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
-                const serverStatus = cacheStatusResults.get(index);
-                if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
-                    continue;
-                }
-
-                if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ viewIndex: index, status: 'current' });
-                } else if (entityInfo.TrackRecordChanges) {
-                    differentialItems.push({
-                        index, params: item.params, entityInfo, whereSQL,
-                        clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                        clientRowCount: item.cacheStatus!.rowCount,
-                        serverStatus,
-                    });
-                } else {
-                    staleItemsNoTracking.push({ index, params: item.params });
-                }
-            }
-
-            // Run all queries in parallel
-            const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
-                ...itemsWithoutCacheCheck.map(({ index, item }) =>
-                    this.runFullQueryAndReturn<T>(item.params, index, contextUser)
-                ),
-                ...staleItemsNoTracking.map(({ index, params: vp }) =>
-                    this.runFullQueryAndReturn<T>(vp, index, contextUser)
-                ),
-                ...differentialItems.map(({ index, params: vp, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
-                    this.runDifferentialQueryAndReturn<T>(vp, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser)
-                ),
-            ];
-
-            const fullQueryResults = await Promise.all(queryPromises);
-            const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
-            allResults.sort((a, b) => a.viewIndex - b.viewIndex);
-
-            return { success: true, results: allResults };
-        } catch (e) {
-            LogError(e);
-            return { success: false, results: [], errorMessage: e instanceof Error ? e.message : String(e) };
-        }
-    }
-
-    private async getBatchedServerCacheStatus(
-        items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
-        contextUser?: UserInfo
-    ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
-        const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
-        if (items.length === 0) return results;
-
-        // Execute each status query individually since PG doesn't have multi-result-set batching
-        const promises = items.map(async ({ index, entityInfo, whereSQL }) => {
-            try {
-                const statusSQL = `SELECT COUNT(*) AS "TotalRows", MAX("__mj_UpdatedAt") AS "MaxUpdatedAt" FROM ${this.viewName(entityInfo)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
-                const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, { description: `CacheStatus: ${entityInfo.Name}` }, contextUser);
-                if (rows && rows.length > 0) {
-                    const row = rows[0];
-                    results.set(index, {
-                        success: true,
-                        rowCount: Number(row.TotalRows),
-                        maxUpdatedAt: row.MaxUpdatedAt ? new Date(String(row.MaxUpdatedAt)).toISOString() : undefined,
-                    });
-                } else {
-                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-                }
-            } catch (e) {
-                results.set(index, { success: false, errorMessage: e instanceof Error ? e.message : String(e) });
-            }
-        });
-
-        await Promise.all(promises);
-        return results;
-    }
-
-    private isCacheCurrent(
-        clientStatus: { maxUpdatedAt: string; rowCount: number },
-        serverStatus: { maxUpdatedAt?: string; rowCount?: number }
-    ): boolean {
-        if (clientStatus.rowCount !== serverStatus.rowCount) return false;
-        const clientDate = new Date(clientStatus.maxUpdatedAt);
-        const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
-        if (!serverDate) return clientStatus.rowCount === 0;
-        return clientDate.toISOString() === serverDate.toISOString();
-    }
-
-    private async runFullQueryAndReturn<T>(
-        params: RunViewParams,
-        viewIndex: number,
-        contextUser?: UserInfo
-    ): Promise<RunViewWithCacheCheckResult<T>> {
-        const result = await this.InternalRunView<T>(params, contextUser);
-        if (!result.Success) {
-            return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
-        }
-        const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
-    }
-
-    private async runDifferentialQueryAndReturn<T>(
-        params: RunViewParams,
-        entityInfo: EntityInfo,
-        clientMaxUpdatedAt: string,
-        clientRowCount: number,
-        serverStatus: { maxUpdatedAt?: string; rowCount?: number },
-        whereSQL: string,
-        viewIndex: number,
-        contextUser?: UserInfo
-    ): Promise<RunViewWithCacheCheckResult<T>> {
-        try {
-            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
-            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
-
-            // Validation: detect hidden deletes
-            const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
-            const newInserts = updatedRows.filter(row => {
-                const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
-                if (!createdAt) return false;
-                return new Date(String(createdAt)) > clientMaxUpdatedDate;
-            }).length;
-
-            const serverRowCount = serverStatus.rowCount ?? 0;
-            const impliedDeletes = clientRowCount + newInserts - serverRowCount;
-            const actualDeletes = deletedRecordIDs.length;
-
-            if (impliedDeletes < 0) {
-                LogStatus(`Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-            }
-            if (impliedDeletes > actualDeletes) {
-                LogStatus(`Differential validation failed for ${entityInfo.Name}: hidden deletes detected (implied=${impliedDeletes}, actual=${actualDeletes}). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-            }
-
-            const newMaxUpdatedAt = updatedRows.length > 0
-                ? this.extractMaxUpdatedAt(updatedRows)
-                : serverStatus.maxUpdatedAt || new Date().toISOString();
-
-            return {
-                viewIndex,
-                status: 'differential',
-                differentialData: { updatedRows, deletedRecordIDs },
-                maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: serverStatus.rowCount,
-            };
-        } catch (e) {
-            LogError(e);
-            return { viewIndex, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) };
-        }
-    }
-
-    private async getDeletedRecordIDsSince(
-        entityID: string,
-        sinceTimestamp: string,
-        contextUser?: UserInfo
-    ): Promise<string[]> {
-        try {
-            const sql = `SELECT DISTINCT "RecordID" FROM ${this._schemaName}."vwRecordChanges" WHERE "EntityID" = $1 AND "Type" = 'Delete' AND "ChangedAt" > $2`;
-            const results = await this.ExecuteSQL<Record<string, unknown>>(sql, [entityID, sinceTimestamp], undefined, contextUser);
-            return results.map(r => String(r.RecordID));
-        } catch (e) {
-            LogError(e);
-            return [];
-        }
-    }
-
-    private async getUpdatedRowsSince<T>(
-        params: RunViewParams,
-        entityInfo: EntityInfo,
-        sinceTimestamp: string,
-        whereSQL: string,
-        contextUser?: UserInfo
-    ): Promise<T[]> {
-        try {
-            const timestampFilter = `"__mj_UpdatedAt" > '${sinceTimestamp}'`;
-            const combinedWhere = whereSQL
-                ? `(${whereSQL}) AND ${timestampFilter}`
-                : timestampFilter;
-
-            const fields = params.Fields && params.Fields.length > 0
-                ? params.Fields.map(f => pgDialect.QuoteIdentifier(f)).join(', ')
-                : '*';
-
-            let sql = `SELECT ${fields} FROM ${this.viewName(entityInfo)} WHERE ${combinedWhere}`;
-
-            const orderByStr = this.ResolveSQL(params.OrderBy ?? '');
-            if (orderByStr) {
-                sql += ` ORDER BY ${this.quoteIdentifiersInSQL(orderByStr, entityInfo)}`;
-            }
-
-            return await this.ExecuteSQL<T>(sql, undefined, undefined, contextUser);
-        } catch (e) {
-            LogError(e);
-            return [];
-        }
-    }
-
-    private buildWhereClauseForCacheCheck(
-        params: RunViewParams,
-        entityInfo: EntityInfo,
-        user: UserInfo
-    ): string {
-        const parts: string[] = [];
-
-        let extraFilter = this.ResolveSQL(params.ExtraFilter ?? '');
-        if (extraFilter) {
-            extraFilter = this.quoteIdentifiersInSQL(extraFilter, entityInfo);
-            parts.push(`(${extraFilter})`);
-        }
-
-        // Row Level Security
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                parts.push(`(${rlsWhereClause})`);
-            }
-        }
-
-        return parts.join(' AND ');
-    }
+    // buildWhereClauseForCacheCheck is inherited from GenericDatabaseProvider
 
 
     // ─── SQL Building Helpers ────────────────────────────────────────
-
-    private buildSelectSQL(
-        entityInfo: EntityInfo,
-        fields: string[],
-        whereSQL: string,
-        orderBySQL: string,
-        maxRows?: number,
-        startRow?: number
-    ): string {
-        const fieldList = fields.map(f => pgDialect.QuoteIdentifier(f)).join(', ');
-        let sql = `SELECT ${fieldList} FROM ${this.viewName(entityInfo)}`;
-
-        if (whereSQL) sql += ` WHERE ${whereSQL}`;
-        if (orderBySQL) sql += ` ORDER BY ${orderBySQL}`;
-
-        if (maxRows != null) {
-            const lc = pgDialect.LimitClause(maxRows, startRow);
-            if (lc.suffix) sql += ` ${lc.suffix}`;
-        }
-
-        return sql;
-    }
-
-    private buildCountSQL(entityInfo: EntityInfo, whereSQL: string): string {
-        let sql = `SELECT COUNT(*) AS count FROM ${this.viewName(entityInfo)}`;
-        if (whereSQL) sql += ` WHERE ${whereSQL}`;
-        return sql;
-    }
-
-    private async executeCountQuery(entityInfo: EntityInfo, whereSQL: string, contextUser?: UserInfo): Promise<number> {
-        const sql = this.buildCountSQL(entityInfo, whereSQL);
-        const rows = await this.ExecuteSQL<{ count: string }>(sql, undefined, { description: `Count: ${entityInfo.Name}` }, contextUser);
-        return rows.length > 0 ? parseInt(rows[0].count, 10) : 0;
-    }
-
-    private resolveEntityInfo(params: RunViewParams): EntityInfo | undefined {
-        if (params.EntityName) {
-            return this.Entities.find(e => e.Name === params.EntityName);
-        }
-        return undefined;
-    }
-
-    private buildFieldList(params: RunViewParams, entityInfo: EntityInfo): string[] {
-        if (params.Fields && params.Fields.length > 0) {
-            return params.Fields;
-        }
-        return entityInfo.Fields.map(f => f.Name);
-    }
-
-    private buildWhereClause(params: RunViewParams, entityInfo: EntityInfo, _contextUser?: UserInfo): string {
-        const parts: string[] = [];
-        let extraFilter = this.ResolveSQL(params.ExtraFilter ?? '');
-        if (extraFilter) {
-            extraFilter = this.quoteIdentifiersInSQL(extraFilter, entityInfo);
-            parts.push(extraFilter);
-        }
-        return parts.join(' AND ');
-    }
 
     /**
      * Quotes bare column identifiers in a SQL fragment (e.g. ExtraFilter) so that
@@ -1146,42 +656,11 @@ SELECT * FROM delete_result`;
         return token;
     }
 
-    private resolveOrderBy(params: RunViewParams, entityInfo: EntityInfo): string {
-        const orderBy = this.ResolveSQL(params.OrderBy ?? '');
-        if (orderBy) return this.quoteIdentifiersInSQL(orderBy, entityInfo);
+    // buildPKWhereClause was removed (only used by Load, now inherited)
 
-        // Default: order by first PK field
-        const pks = entityInfo.PrimaryKeys;
-        if (pks.length > 0) {
-            return pgDialect.QuoteIdentifier(pks[0].Name);
-        }
-        return '';
-    }
+    // formatFieldValue was removed (only used by buildPKWhereClause, now inherited)
 
-    private buildPKWhereClause(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
-        const conditions: string[] = [];
-        for (const keyValue of compositeKey.KeyValuePairs) {
-            const field = entityInfo.Fields.find(f => f.Name === keyValue.FieldName);
-            if (!field) continue;
-            const value = this.formatFieldValue(field, keyValue.Value);
-            conditions.push(`${pgDialect.QuoteIdentifier(keyValue.FieldName)} = ${value}`);
-        }
-        return conditions.join(' AND ');
-    }
-
-    private formatFieldValue(field: EntityFieldInfo, value: unknown): string {
-        if (value == null) return 'NULL';
-        const tsType = field.TSType;
-        if (tsType === 'number') return String(value);
-        if (tsType === 'boolean') return pgDialect.BooleanLiteral(Boolean(value));
-        const strValue = String(value).replace(/'/g, "''");
-        return `'${strValue}'`;
-    }
-
-    private viewName(entityInfo: EntityInfo): string {
-        const schema = entityInfo.SchemaName || this._schemaName;
-        return pgDialect.QuoteSchema(schema, entityInfo.BaseView);
-    }
+    // viewName was removed (all callers now inherited from GenericDatabaseProvider)
 
     // ─── CRUD Function Helpers ───────────────────────────────────────
 
