@@ -314,7 +314,8 @@ export class MemoryManagerAgent extends BaseAgent {
             return [];
         }
 
-        const agentIds = agentsUsingMemory.map(a => `'${a.ID}'`).join(',');
+        // Pass a real JS array — the SQL template uses {{ agentIds | sqlIn }}
+        const agentIds = agentsUsingMemory.map(a => a.ID);
 
         // Use RunQuery to fetch all data in a single optimized query
         const rq = new RunQuery();

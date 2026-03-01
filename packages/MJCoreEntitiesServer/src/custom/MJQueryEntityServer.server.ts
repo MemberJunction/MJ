@@ -1,10 +1,24 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult } from "@memberjunction/core";
-import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
+import {
+    removeNPrefix,
+    convertIdentifiers,
+    convertCommonFunctions,
+    convertDateFunctions,
+    convertCharIndex,
+    convertStuff,
+    convertIIF,
+    convertConvertFunction,
+    convertCastTypes,
+    convertTopToLimit,
+    convertStringConcat,
+    removeCollate,
+} from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
 import { SQLParser } from "./sql-parser";
 
@@ -96,6 +110,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
             // This prevents connection pool exhaustion from long-running AI operations
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
                 await this.extractAndSyncDataAsync();
+                // Auto-convert SQL to other dialects if configured
+                await this.autoConvertDialectsAsync();
                 await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 // If SQL is empty, ensure UsesTemplate is false and remove all related data
@@ -169,7 +185,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
             await Promise.all([
                 this.removeAllQueryParameters(),
                 this.removeAllQueryFields(),
-                this.removeAllQueryEntities()
+                this.removeAllQueryEntities(),
+                this.removeAllQuerySQLRecordsAsync()
             ]);
             
             // Save the updated UsesTemplate flag
@@ -903,7 +920,162 @@ export class MJQueryEntityServer extends MJQueryEntity {
         }
     }
 
-    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {                
+    /**
+     * Auto-converts the query's SQL to other dialects based on the queryDialects
+     * configuration stored in GlobalObjectStore. Best-effort: failures never block the save.
+     */
+    private async autoConvertDialectsAsync(): Promise<void> {
+        try {
+            // Read config from GlobalObjectStore (set by MJServer at startup)
+            const config = MJGlobal.Instance.GetGlobalObjectStore()?.['queryDialects'] as
+                { autoConvertOnSave?: boolean; targetPlatforms?: string[] } | undefined;
+
+            if (!config?.autoConvertOnSave || !config.targetPlatforms?.length) {
+                return; // Auto-convert disabled or no targets configured
+            }
+
+            if (!this.SQL || this.SQL.trim().length === 0) {
+                return; // Nothing to convert
+            }
+
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            const dialects = md.SQLDialects;
+
+            // Determine source dialect from query's SQLDialectID
+            const sourceDialect = this.SQLDialectID
+                ? dialects.find(d => d.ID === this.SQLDialectID)
+                : dialects.find(d => d.PlatformKey === 'sqlserver'); // Default to T-SQL
+
+            if (!sourceDialect) {
+                console.warn(`Query "${this.Name}" - Could not determine source dialect, skipping auto-convert`);
+                return;
+            }
+
+            // Process each target platform independently
+            for (const targetPlatformKey of config.targetPlatforms) {
+                try {
+                    // Skip if target is same as source
+                    if (targetPlatformKey === sourceDialect.PlatformKey) {
+                        continue;
+                    }
+
+                    const targetDialect = dialects.find(d => d.PlatformKey === targetPlatformKey);
+                    if (!targetDialect) {
+                        console.warn(`Query "${this.Name}" - Target dialect "${targetPlatformKey}" not found, skipping`);
+                        continue;
+                    }
+
+                    // Currently only T-SQL → PostgreSQL is supported
+                    if (sourceDialect.PlatformKey !== 'sqlserver' || targetPlatformKey !== 'postgresql') {
+                        console.warn(`Query "${this.Name}" - Conversion from "${sourceDialect.PlatformKey}" to "${targetPlatformKey}" not yet supported`);
+                        continue;
+                    }
+
+                    const convertedSQL = this.convertTSQLToPostgreSQL(this.SQL);
+                    await this.upsertQuerySQLRecord(targetDialect, convertedSQL, md);
+
+                } catch (platformError) {
+                    // Per-platform isolation: failing on one target doesn't affect others
+                    console.warn(`Query "${this.Name}" - Auto-convert to "${targetPlatformKey}" failed:`, platformError);
+                }
+            }
+        } catch (e) {
+            // Best-effort: never block the save
+            console.warn(`Query "${this.Name}" - Auto-convert dialects failed:`, e);
+        }
+    }
+
+    /**
+     * Converts T-SQL to PostgreSQL using SQLConverter ExpressionHelper transforms.
+     * Applies the standard transform pipeline for statement-level conversions.
+     */
+    private convertTSQLToPostgreSQL(sql: string): string {
+        let result = sql;
+        result = removeNPrefix(result);
+        result = convertIdentifiers(result);
+        result = convertCommonFunctions(result);
+        result = convertDateFunctions(result);
+        result = convertCharIndex(result);
+        result = convertStuff(result);
+        result = convertIIF(result);
+        result = convertConvertFunction(result);
+        result = convertCastTypes(result);
+        result = convertTopToLimit(result);
+        result = convertStringConcat(result);
+        result = removeCollate(result);
+        return result;
+    }
+
+    /**
+     * Creates or updates a QuerySQL record for the given dialect.
+     */
+    private async upsertQuerySQLRecord(
+        targetDialect: SQLDialectInfo,
+        convertedSQL: string,
+        md: IMetadataProvider
+    ): Promise<void> {
+        const rv = this.RunViewProviderToUse;
+
+        // Look for existing QuerySQL record for this query + dialect
+        const existingResult = await rv.RunView<MJQuerySQLEntity>({
+            EntityName: 'MJ: Query SQLs',
+            ExtraFilter: `QueryID='${this.ID}' AND SQLDialectID='${targetDialect.ID}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+
+        if (!existingResult.Success) {
+            console.warn(`Query "${this.Name}" - Failed to look up existing QuerySQL record: ${existingResult.ErrorMessage}`);
+            return;
+        }
+
+        let record: MJQuerySQLEntity;
+        if (existingResult.Results?.length > 0) {
+            // Update existing
+            record = existingResult.Results[0];
+        } else {
+            // Create new
+            record = await md.GetEntityObject<MJQuerySQLEntity>('MJ: Query SQLs', this.ContextCurrentUser);
+            record.QueryID = this.ID;
+            record.SQLDialectID = targetDialect.ID;
+        }
+
+        record.SQL = convertedSQL;
+
+        const saved = await record.Save();
+        if (!saved) {
+            console.warn(`Query "${this.Name}" - Failed to save QuerySQL record for dialect "${targetDialect.Name}"`);
+        }
+    }
+
+    /**
+     * Removes all QuerySQL records for this query. Called during cleanup operations.
+     */
+    private async removeAllQuerySQLRecordsAsync(): Promise<void> {
+        try {
+            if (!this.IsSaved) return;
+
+            const rv = this.RunViewProviderToUse;
+            const result = await rv.RunView<MJQuerySQLEntity>({
+                EntityName: 'MJ: Query SQLs',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+
+            if (!result.Success) {
+                console.warn(`Query "${this.Name}" - Failed to load QuerySQL records for cleanup: ${result.ErrorMessage}`);
+                return;
+            }
+
+            const deletePromises = (result.Results || []).map(r => r.Delete());
+            if (deletePromises.length > 0) {
+                await Promise.all(deletePromises);
+            }
+        } catch (e) {
+            console.warn(`Query "${this.Name}" - Failed to remove QuerySQL records:`, e);
+        }
+    }
+
+    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         const result = await super.Load(ID, EntityRelationshipsToLoad);        
         await this.RefreshRelatedMetadata(false);
         return result;

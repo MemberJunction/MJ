@@ -5,7 +5,7 @@
 --
 -- Parameters:
 --   @since (optional): ISO date string - only include conversations with new activity after this date
---   @agentIds: Comma-separated list of agent IDs that have memory enabled
+--   @agentIds: Array of agent IDs that have memory enabled (rendered via sqlIn filter)
 
 SELECT
     c.ID as ConversationID,
@@ -16,7 +16,7 @@ SELECT
         SELECT TOP 1 ar.ID
         FROM [__mj].[vwAIAgentRuns] ar
         WHERE ar.ConversationID = c.ID
-        AND ar.AgentID IN ({{ agentIds }})
+        AND ar.AgentID IN {{ agentIds | sqlIn }}
         ORDER BY ar.StartedAt DESC
     ) as AgentRunID,
 
@@ -75,7 +75,7 @@ WHERE EXISTS (
 AND EXISTS (
     SELECT 1 FROM [__mj].[vwAIAgentRuns] ar
     WHERE ar.ConversationID = c.ID
-    AND ar.AgentID IN ({{ agentIds }})
+    AND ar.AgentID IN {{ agentIds | sqlIn }}
 )
 
 ORDER BY c.__mj_UpdatedAt DESC

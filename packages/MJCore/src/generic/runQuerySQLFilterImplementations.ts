@@ -8,6 +8,7 @@
  */
 
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
+import { DatabasePlatform } from './platformSQL';
 
 /**
  * Dangerous SQL keywords that should be blocked in expressions
@@ -111,17 +112,19 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `'${date.toISOString()}'`;
     },
     
-    sqlBoolean: (value: any) => {
+    sqlBoolean: (value: unknown) => {
+        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
         return value ? '1' : '0';
     },
-    
-    sqlIdentifier: (value: any) => {
+
+    sqlIdentifier: (value: unknown) => {
         if (!value) throw new Error('Identifier cannot be empty');
         const identifier = String(value);
         // Basic SQL injection prevention for identifiers
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
             throw new Error(`Invalid SQL identifier: ${identifier}`);
         }
+        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
         return `[${identifier}]`;
     },
     
@@ -210,20 +213,76 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
     }));
 
 /**
- * Singleton class for managing RunQuery SQL filters with implementations
+ * Creates a platform-aware sqlBoolean filter implementation.
+ * SQL Server uses 1/0, PostgreSQL uses true/false.
+ */
+function createPlatformSqlBoolean(platform: DatabasePlatform): (value: unknown) => string {
+    return (value: unknown) => {
+        if (platform === 'postgresql') {
+            return value ? 'true' : 'false';
+        }
+        return value ? '1' : '0';
+    };
+}
+
+/**
+ * Creates a platform-aware sqlIdentifier filter implementation.
+ * SQL Server uses [brackets], PostgreSQL uses "double quotes".
+ */
+function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknown) => string {
+    return (value: unknown) => {
+        if (!value) throw new Error('Identifier cannot be empty');
+        const identifier = String(value);
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+            throw new Error(`Invalid SQL identifier: ${identifier}`);
+        }
+        if (platform === 'postgresql') {
+            return `"${identifier}"`;
+        }
+        return `[${identifier}]`;
+    };
+}
+
+/**
+ * Singleton class for managing RunQuery SQL filters with implementations.
+ * Supports platform-specific filter behavior via SetPlatform().
  */
 export class RunQuerySQLFilterManager {
     private static _instance: RunQuerySQLFilterManager;
     private _filters: Map<string, RunQuerySQLFilter>;
+    private _platform: DatabasePlatform = 'sqlserver';
 
     private constructor() {
         this._filters = new Map();
-        // Initialize with all filters that have implementations
+        this.initializeFilters();
+    }
+
+    /**
+     * Initializes or reinitializes all filters with the current platform setting.
+     */
+    private initializeFilters(): void {
+        this._filters.clear();
         RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS.forEach(filter => {
             if (filter.implementation) {
-                this._filters.set(filter.name, filter);
+                this._filters.set(filter.name, { ...filter });
             }
         });
+        // Override platform-sensitive filters with platform-aware versions
+        this.applyPlatformOverrides();
+    }
+
+    /**
+     * Applies platform-specific overrides for sqlBoolean and sqlIdentifier filters.
+     */
+    private applyPlatformOverrides(): void {
+        const boolFilter = this._filters.get('sqlBoolean');
+        if (boolFilter) {
+            boolFilter.implementation = createPlatformSqlBoolean(this._platform);
+        }
+        const idFilter = this._filters.get('sqlIdentifier');
+        if (idFilter) {
+            idFilter.implementation = createPlatformSqlIdentifier(this._platform);
+        }
     }
 
     /**
@@ -234,6 +293,24 @@ export class RunQuerySQLFilterManager {
             this._instance = new RunQuerySQLFilterManager();
         }
         return this._instance;
+    }
+
+    /**
+     * Gets the current database platform for this filter manager.
+     */
+    public get Platform(): DatabasePlatform {
+        return this._platform;
+    }
+
+    /**
+     * Sets the database platform, updating platform-sensitive filters accordingly.
+     * Call this during provider initialization to match the active database platform.
+     */
+    public SetPlatform(platform: DatabasePlatform): void {
+        if (this._platform !== platform) {
+            this._platform = platform;
+            this.applyPlatformOverrides();
+        }
     }
 
     /**
@@ -268,7 +345,7 @@ export class RunQuerySQLFilterManager {
      * @returns The filtered result
      * @throws Error if filter is not found or execution fails
      */
-    public executeFilter(filterName: string, value: any): any {
+    public executeFilter(filterName: string, value: unknown): unknown {
         const filter = this._filters.get(filterName);
         if (!filter || !filter.implementation) {
             throw new Error(`Filter '${filterName}' not found or has no implementation`);

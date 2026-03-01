@@ -212,7 +212,7 @@ export class RunAIAgentResolver extends ResolverBase {
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: MJAIAgentEntityExtended) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.GetAgentByID(agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);

@@ -1721,7 +1721,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Only apply sort state if:
     // 1. No explicit OrderBy in Params
     // 2. No sort already set via gridState (either prop or from view)
-    const hasExplicitOrderBy = this._params?.OrderBy && this._params.OrderBy.trim().length > 0;
+    const orderByValue = this._params?.OrderBy;
+    const hasExplicitOrderBy = orderByValue != null && (typeof orderByValue === 'string' ? orderByValue.trim().length > 0 : !!orderByValue.default);
     const hasSortFromGridState = this._gridState?.sortSettings && this._gridState.sortSettings.length > 0;
 
     if (!hasExplicitOrderBy && !hasSortFromGridState && this._sortState.length === 0) {
@@ -1821,7 +1822,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Build the ExtraFilter from params or view entity
       let extraFilter: string | undefined;
       if (this._params?.ExtraFilter) {
-        extraFilter = this._params.ExtraFilter;
+        extraFilter = typeof this._params.ExtraFilter === 'string' ? this._params.ExtraFilter : this._params.ExtraFilter.default;
       } else if (this._viewEntity?.WhereClause) {
         extraFilter = this._viewEntity.WhereClause;
       }
@@ -2742,8 +2743,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Create GridRunViewParams for events (backward compatibility)
     const gridParams: GridRunViewParams = {
       entityName: runViewParams.EntityName || this._entityInfo?.Name || '',
-      extraFilter: runViewParams.ExtraFilter || '',
-      orderBy: runViewParams.OrderBy || '',
+      extraFilter: (typeof runViewParams.ExtraFilter === 'string' ? runViewParams.ExtraFilter : runViewParams.ExtraFilter?.default) || '',
+      orderBy: (typeof runViewParams.OrderBy === 'string' ? runViewParams.OrderBy : runViewParams.OrderBy?.default) || '',
       maxRows: runViewParams.MaxRows || 0,
       fields: runViewParams.Fields,
       searchString: runViewParams.UserSearchString || ''
@@ -2903,7 +2904,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         .join(', ');
     }
     // Fall back to OrderBy from Params if set
-    return this._params?.OrderBy || '';
+    const orderByParam = this._params?.OrderBy;
+    if (!orderByParam) return '';
+    return typeof orderByParam === 'string' ? orderByParam : orderByParam.default;
   }
 
   // ========================================

@@ -80,6 +80,15 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SQLDialectID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -186,7 +195,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="EmbeddingVector"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -351,6 +360,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryEntities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Query SQLs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJQuerySQLs"
+        SectionName="Query SQLs"
+        Icon="fa fa-terminal"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJQuerySQLs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query SQLs','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query SQLs')"
+                [AllowLoad]="IsSectionExpanded('mJQuerySQLs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJQuerySQLs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
