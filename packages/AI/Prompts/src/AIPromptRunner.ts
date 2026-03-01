@@ -2907,7 +2907,7 @@ export class AIPromptRunner {
     if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
       promptRun.ModelID = currentModel.ID;
     }
-    if (currentVendorId && currentVendorId !== promptRun.VendorID) {
+    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
       promptRun.VendorID = currentVendorId;
     }
   }
@@ -3521,7 +3521,7 @@ export class AIPromptRunner {
     // Count how many times we've retried this specific model/vendor for rate limits
     const rateLimitRetryCount = failoverAttempts.filter(a =>
       UUIDsEqual(a.modelId, currentModel.ID) &&
-      a.vendorId === currentVendorId &&
+      UUIDsEqual(a.vendorId, currentVendorId) &&
       a.errorType === 'RateLimit'
     ).length;
 

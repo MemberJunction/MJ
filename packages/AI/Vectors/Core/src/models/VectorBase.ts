@@ -74,7 +74,7 @@ export class VectorBase {
     protected GetAIModel(id?: string): MJAIModelEntityExtended {
         let model: MJAIModelEntityExtended;
         if(id){
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
+            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && UUIDsEqual(m.ID, id));
         }
         else{
             model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings");
