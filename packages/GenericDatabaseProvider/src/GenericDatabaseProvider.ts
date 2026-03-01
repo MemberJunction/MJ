@@ -54,7 +54,7 @@ import {
     StripStopWords,
 } from '@memberjunction/core';
 
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
@@ -334,7 +334,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected override GetEntityAIActions(entityInfo: EntityInfo, before: boolean): MJEntityAIActionEntity[] {
         return AIEngine.Instance.EntityAIActions.filter(
-            (a) => a.EntityID === entityInfo.ID && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
+            (a) => UUIDsEqual(a.EntityID, entityInfo.ID) && a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'),
         );
     }
 
@@ -687,7 +687,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName!.trim().toLowerCase()) ?? null;
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             } else {
-                entityInfo = this.Entities.find((e) => e.ID === viewEntity!.EntityID) ?? null;
+                entityInfo = this.Entities.find((e) => UUIDsEqual(e.ID, viewEntity!.EntityID)) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
             }
 
@@ -1534,7 +1534,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         );
         if (freshEntity) return this.refreshQueryInfoFromEntity(freshEntity);
 
-        if (params.QueryID) return this.Queries.find(q => q.ID === params.QueryID);
+        if (params.QueryID) return this.Queries.find(q => UUIDsEqual(q.ID, params.QueryID));
 
         if (params.QueryName) {
             const matchingQueries = this.Queries.filter(
@@ -1601,7 +1601,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
         const freshInfo = new QueryInfo(entity.GetAll());
-        const existingIndex = this.Queries.findIndex(q => q.ID === freshInfo.ID);
+        const existingIndex = this.Queries.findIndex(q => UUIDsEqual(q.ID, freshInfo.ID));
         if (existingIndex >= 0) {
             this.Queries[existingIndex] = freshInfo;
         } else {
@@ -2067,7 +2067,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
         if (specifiedColumns.length > 0) {
-            const entity = this.Entities.find(e => e.ID === item['EntityID']);
+            const entity = this.Entities.find(e => UUIDsEqual(e.ID, item['EntityID'] as string));
             if (!entity && this.Entities.length > 0) {
                 LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
                 return null;

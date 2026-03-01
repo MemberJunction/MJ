@@ -5,6 +5,7 @@ import { DatabasePlatform } from "./platformSQL";
 import { PlatformVariantsJSON, ParsePlatformVariants, ResolvePlatformVariant } from "./platformVariants";
 import { UserInfo } from "./securityInfo";
 import { QueryCacheConfig } from "./QueryCacheConfig";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
     IQueryInfoBase,
     IQueryFieldInfoBase,
@@ -83,12 +84,12 @@ export class QuerySQLInfo extends BaseInfo {
 
     /** Gets the parent query info */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 
     /** Gets the SQL dialect info */
     get SQLDialectInfo(): SQLDialectInfo {
-        return Metadata.Provider.SQLDialects.find(d => d.ID === this.SQLDialectID);
+        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
     }
 }
 
@@ -351,7 +352,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryCategoryInfo} The category this query belongs to, or undefined if not categorized
      */
     get CategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => c.ID === this.CategoryID);
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));
     }
 
     /**
@@ -546,7 +547,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryCategoryInfo} The parent category, or undefined if this is a top-level category
      */
     get ParentCategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => c.ID === this.ParentID);
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));
     }
 
     /**
@@ -645,7 +646,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {EntityInfo} The source entity metadata, or undefined if not linked to an entity
      */
     get SourceEntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => e.ID === this.SourceEntityID);
+        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
     }
 
     /**
@@ -653,7 +654,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.ID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));
     }
 }
 
@@ -693,7 +694,7 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
      * @returns {QueryInfo} The query metadata this permission controls
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 }
 
@@ -749,15 +750,15 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
-    
+
     /**
      * Gets the entity information for the entity involved in this query.
      * @returns {EntityInfo} The entity metadata
      */
     get EntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => e.ID === this.EntityID);
+        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
     }
 }
 
@@ -835,7 +836,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
     
     /**
