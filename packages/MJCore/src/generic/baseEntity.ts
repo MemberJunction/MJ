@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -2835,7 +2835,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!parentEntityInfo) return;
 
         const siblingChildEntities = parentEntityInfo.ChildEntities.filter(
-            e => e.ID !== this.EntityInfo.ID
+            e => !UUIDsEqual(e.ID, this.EntityInfo.ID)
         );
         if (siblingChildEntities.length === 0) return;
 

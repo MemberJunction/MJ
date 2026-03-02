@@ -3,6 +3,7 @@ import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a view in the dropdown
@@ -180,11 +181,11 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
 
         // Separate into owned and shared
         this.myViews = accessibleViews
-          .filter(v => v.UserID === userId)
+          .filter(v => UUIDsEqual(v.UserID, userId))
           .map(v => this.mapViewToListItem(v, true));
 
         this.sharedViews = accessibleViews
-          .filter(v => v.UserID !== userId)
+          .filter(v => !UUIDsEqual(v.UserID, userId))
           .map(v => this.mapViewToListItem(v, false));
 
         // Update selected view reference

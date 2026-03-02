@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import { DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
@@ -178,7 +178,7 @@ export class BaseApplication {
 
       // Find preferences for this app with App scope
       const appPreferences = allPreferences.filter(
-        p => p.Scope === 'App' && p.ApplicationID === this.ID
+        p => p.Scope === 'App' && UUIDsEqual(p.ApplicationID, this.ID)
       );
 
       // First, look for user-specific preferences
@@ -219,13 +219,13 @@ export class BaseApplication {
     const sorted = [...preferences].sort((a, b) => a.DisplayOrder - b.DisplayOrder);
 
     // First, look for user-specific preference
-    const userPreference = sorted.find(p => p.UserID === currentUserId);
+    const userPreference = sorted.find(p => UUIDsEqual(p.UserID, currentUserId));
     if (userPreference) {
       return userPreference;
     }
 
     // Fall back to system default (UserID is null)
-    const systemDefault = sorted.find(p => p.UserID === null);
+    const systemDefault = sorted.find(p => p.UserID == null)
     return systemDefault || null;
   }
 

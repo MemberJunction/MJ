@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity } from "@memberjunction/core";
 import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
@@ -39,7 +39,7 @@ export abstract class EntityActionInvocationBase {
     public async MapParams(params: MJActionParamEntity[], entityActionParams: MJEntityActionParamEntity[], entityObject: BaseEntity): Promise<ActionParam[]> {
         const returnValues: ActionParam[] = [];
         for (const eap of entityActionParams) {
-            const param = params.find(p => p.ID === eap.ActionParamID);
+            const param = params.find(p => UUIDsEqual(p.ID, eap.ActionParamID));
             let value: any = null;
 
             switch (eap.ValueType) {
@@ -142,10 +142,10 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
             // prepare the variables for the action
-            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
             const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
             const filters = params.EntityAction.Filters.map(f => {
-                const filter = ActionEngineServer.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
+                const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
                 return filter;
             })
             
@@ -196,7 +196,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
             // prepare the variables for the action
-            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
 
             // get the priority sub-class for the SingleRecord invocation type that we need now
             const invocationInstance = MJGlobal.Instance.ClassFactory.CreateInstance<EntityActionInvocationBase>(EntityActionInvocationBase, 'SingleRecord'); // get the single record class
@@ -241,14 +241,14 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
             // make sure the action engine is good to go, the below won't do anything if it was already configured
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
-            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
             const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
             
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: params.EntityAction.Filters.map(f => {
-                    const filter = ActionEngineServer.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
+                    const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
                     return filter;
                 }),
                 Params: internalParams

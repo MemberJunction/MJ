@@ -1,6 +1,7 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 
@@ -22,7 +23,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             this.TryThrowIfNotLoaded();
 
             const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.ID === params.EntityID);    
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);
     
@@ -49,7 +50,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
     
             const entityMessageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);
-            const entityMessageType = entityMessageTypes.find(m => m.BaseMessageTypeID === providerMessageType.CommunicationBaseMessageTypeID);
+            const entityMessageType = entityMessageTypes.find(m => UUIDsEqual(m.BaseMessageTypeID, providerMessageType.CommunicationBaseMessageTypeID));
             if (!entityMessageType) {
                 throw new Error(`Entity ${params.EntityID} does not support message type ${providerMessageType.CommunicationBaseMessageType}`);
             }

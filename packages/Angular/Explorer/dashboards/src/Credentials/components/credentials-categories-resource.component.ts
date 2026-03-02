@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 import { ResourceData, MJCredentialCategoryEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -247,8 +247,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             const success = await node.category.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Category "${node.category.Name}" deleted successfully`, 'success', 3000);
-                this.categories = this.categories.filter(c => c.ID !== node.category.ID);
-                if (this.selectedNode?.category.ID === node.category.ID) {
+                this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, node.category.ID));
+                if (UUIDsEqual(this.selectedNode?.category.ID, node.category.ID)) {
                     this.selectedNode = null;
                 }
                 this.buildTree();
@@ -265,7 +265,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     // === Panel Event Handlers ===
 
     public onCategorySaved(category: MJCredentialCategoryEntity): void {
-        const existingIndex = this.categories.findIndex(c => c.ID === category.ID);
+        const existingIndex = this.categories.findIndex(c => UUIDsEqual(c.ID, category.ID));
 
         if (existingIndex >= 0) {
             this.categories[existingIndex] = category;
@@ -278,8 +278,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     }
 
     public onCategoryDeleted(categoryId: string): void {
-        this.categories = this.categories.filter(c => c.ID !== categoryId);
-        if (this.selectedNode?.category.ID === categoryId) {
+        this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, categoryId));
+        if (UUIDsEqual(this.selectedNode?.category.ID, categoryId)) {
             this.selectedNode = null;
         }
         this.buildTree();
@@ -289,7 +289,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     // === Selection ===
 
     public selectNode(node: CategoryNode): void {
-        this.selectedNode = this.selectedNode?.category.ID === node.category.ID ? null : node;
+        this.selectedNode = UUIDsEqual(this.selectedNode?.category.ID, node.category.ID) ? null : node;
         this.cdr.markForCheck();
     }
 

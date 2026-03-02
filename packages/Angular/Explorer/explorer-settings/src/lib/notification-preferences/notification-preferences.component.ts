@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
 import { MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * View model for managing notification preferences in the UI.
@@ -92,7 +93,7 @@ export class NotificationPreferencesComponent implements OnInit {
 
       // Build view models from cached data
       this.viewModels = types.map((type) => {
-        const existingPref = prefs.find((p) => p.NotificationTypeID === type.ID);
+        const existingPref = prefs.find((p) => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         // Get channel values: user preference > type default
         const inAppEnabled = existingPref?.InAppEnabled ?? type.DefaultInApp ?? true;

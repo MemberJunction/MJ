@@ -14,6 +14,7 @@ import {
   RegistryComponentMetadata
 } from './registry-provider';
 import { UserInfo, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { 
   MJComponentEntity, 
   MJComponentRegistryEntity,
@@ -219,11 +220,11 @@ export class ComponentRegistryService {
     await this.initialize(contextUser);
     
     // Find component in metadata
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
-    
+
     const key = this.getComponentKey(component.Name, component.Namespace, component.Version, component.SourceRegistryID);
     
     // Check if already compiled and cached
@@ -473,11 +474,11 @@ export class ComponentRegistryService {
   ): Promise<ComponentSpec> {
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
-    
+
     if (!component.SourceRegistryID) {
       // LOCAL: Use specification from database
       if (!component.Specification) {
@@ -497,7 +498,7 @@ export class ComponentRegistryService {
     
     // Need to fetch from external registry
     const registry = this.componentEngine.ComponentRegistries?.find(
-      r => r.ID === component.SourceRegistryID
+      r => UUIDsEqual(r.ID, component.SourceRegistryID)
     );
     
     if (!registry) {
@@ -684,7 +685,7 @@ export class ComponentRegistryService {
     for (const dep of dependencies) {
       // Find the dependency component
       const depComponent = this.componentEngine.Components.find(
-        (c: MJComponentEntity) => c.ID === dep.DependencyComponentID
+        (c: MJComponentEntity) => UUIDsEqual(c.ID, dep.DependencyComponentID)
       );
       
       if (depComponent) {
@@ -720,7 +721,7 @@ export class ComponentRegistryService {
     
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       return { componentId, dependencies: [] };
     }

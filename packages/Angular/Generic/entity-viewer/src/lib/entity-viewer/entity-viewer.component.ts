@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -553,7 +554,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Third try: Look up by EntityID
     if (viewEntity.EntityID) {
-      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
       if (entityById) {
         return entityById;
       }
@@ -1303,7 +1304,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
-      : md.Entities.find(e => e.ID === event.relatedEntityId);
+      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
 
     if (!relatedEntity) {
       return;

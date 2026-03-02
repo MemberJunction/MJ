@@ -5,7 +5,7 @@ import { MJAIVendorEntity, MJAIModelTypeEntity, ResourceData, UserInfoEngine } f
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface ModelDisplayData extends MJAIModelEntityExtended {
@@ -382,12 +382,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       }
 
       // Vendor filter
-      if (this.selectedVendor !== 'all' && model.VendorID !== this.selectedVendor) {
+      if (this.selectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.selectedVendor)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && model.AIModelTypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.selectedType)) {
         return false;
       }
 

@@ -4,7 +4,7 @@ import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import { BatchWorker } from './BatchWorker';
@@ -57,14 +57,14 @@ export class EntityVectorSyncer extends VectorBase {
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     const md = new Metadata();
-    const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === params.entityID);
+    const entity: EntityInfo | undefined = md.Entities.find((e) => UUIDsEqual(e.ID, params.entityID));
     if (!entity) {
       throw new Error(`Entity with ID ${params.entityID} not found.`);
     }
 
     LogStatus(`Vectorizing entity ${entity.Name} using Entity Document ${entityDocument.Name}`);
 
-    const template: MJTemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: MJTemplateEntityExtended) => t.ID === entityDocument.TemplateID);
+    const template: MJTemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, entityDocument.TemplateID));
     if(!template){
       throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
     }
@@ -212,7 +212,7 @@ export class EntityVectorSyncer extends VectorBase {
     AIModel: MJAIModelEntity
   ): Promise<MJEntityDocumentEntity> {
     const md = new Metadata();
-    const entity = md.Entities.find((e) => e.ID === EntityID);
+    const entity = md.Entities.find((e) => UUIDsEqual(e.ID, EntityID));
     if (!entity) throw new Error(`Entity with ID ${EntityID} not found.`);
 
     const EDTemplate: string = entity.Fields.map((ef) => {

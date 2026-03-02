@@ -16,6 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -1649,7 +1650,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
+                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;

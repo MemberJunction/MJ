@@ -1,4 +1,5 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ERDNode, ERDField, ERDFieldValue, ERDLink } from '../interfaces/erd-types';
 
 /**
@@ -82,7 +83,7 @@ export function getOriginalEntityFromERDNode(node: ERDNode): EntityInfo | null {
  * Finds an EntityInfo by node ID from an array.
  */
 export function findEntityByNodeId(nodeId: string, entities: EntityInfo[]): EntityInfo | undefined {
-  return entities.find(e => e.ID === nodeId);
+  return entities.find(e => UUIDsEqual(e.ID, nodeId));
 }
 
 /**
@@ -170,7 +171,7 @@ export function buildERDDataFromEntities(
     if (includeOutgoing) {
       for (const field of entity.Fields) {
         if (field.RelatedEntityID) {
-          const relatedEntity = allEntities.find(e => e.ID === field.RelatedEntityID);
+          const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
           if (relatedEntity) {
             addNode(relatedEntity);
 
@@ -180,7 +181,7 @@ export function buildERDDataFromEntities(
               targetNodeId: field.RelatedEntityID,
               sourceField: entityFieldToERDField(field),
               targetField: pkField ? entityFieldToERDField(pkField) : undefined,
-              isSelfReference: entity.ID === field.RelatedEntityID,
+              isSelfReference: UUIDsEqual(entity.ID, field.RelatedEntityID),
               relationshipType: 'many-to-one'
             });
           }
@@ -205,7 +206,7 @@ export function buildERDDataFromEntities(
               targetNodeId: entity.ID,
               sourceField: entityFieldToERDField(fkField),
               targetField: pkField ? entityFieldToERDField(pkField) : undefined,
-              isSelfReference: relEntity.ID === entity.ID,
+              isSelfReference: UUIDsEqual(relEntity.ID, entity.ID),
               relationshipType: 'many-to-one'
             });
           }
@@ -232,7 +233,7 @@ export function buildERDDataFromEntities(
         if (includeOutgoing) {
           for (const field of entity.Fields) {
             if (field.RelatedEntityID && !addedNodeIds.has(field.RelatedEntityID)) {
-              const relatedEntity = allEntities.find(e => e.ID === field.RelatedEntityID);
+              const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
               if (relatedEntity) {
                 addNode(relatedEntity);
                 nextDepthEntities.push(relatedEntity);
@@ -243,7 +244,7 @@ export function buildERDDataFromEntities(
                   targetNodeId: field.RelatedEntityID,
                   sourceField: entityFieldToERDField(field),
                   targetField: pkField ? entityFieldToERDField(pkField) : undefined,
-                  isSelfReference: entity.ID === field.RelatedEntityID,
+                  isSelfReference: UUIDsEqual(entity.ID, field.RelatedEntityID),
                   relationshipType: 'many-to-one'
                 });
               }
@@ -269,7 +270,7 @@ export function buildERDDataFromEntities(
                   targetNodeId: entity.ID,
                   sourceField: entityFieldToERDField(fkField),
                   targetField: pkField ? entityFieldToERDField(pkField) : undefined,
-                  isSelfReference: relEntity.ID === entity.ID,
+                  isSelfReference: UUIDsEqual(relEntity.ID, entity.ID),
                   relationshipType: 'many-to-one'
                 });
               }

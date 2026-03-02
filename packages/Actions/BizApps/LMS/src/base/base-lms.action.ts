@@ -1,6 +1,6 @@
 import { ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -67,7 +67,7 @@ export abstract class BaseLMSAction extends BaseAction {
     const safeIntegrationName = this.validateIntegrationName(this.integrationName);
 
     // Check cache first
-    if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
+    if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
       return this._companyIntegration;
     }
 

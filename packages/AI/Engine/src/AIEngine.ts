@@ -7,7 +7,7 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
@@ -1024,9 +1024,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     ): NoteMatchResult[] {
         const notes = this.AgentNotes.filter(n => {
             if (n.Status !== 'Active') return false;
-            if (agentId && n.AgentID !== agentId && n.AgentID !== null) return false;
-            if (userId && n.UserID !== userId && n.UserID !== null) return false;
-            if (companyId && n.CompanyID !== companyId && n.CompanyID !== null) return false;
+            if (agentId && !UUIDsEqual(n.AgentID, agentId) && n.AgentID !== null) return false;
+            if (userId && !UUIDsEqual(n.UserID, userId) && n.UserID !== null) return false;
+            if (companyId && !UUIDsEqual(n.CompanyID, companyId) && n.CompanyID !== null) return false;
             if (additionalFilter && !additionalFilter(this.packageNoteMetadata(n))) return false;
             return true;
         });
@@ -1128,9 +1128,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     ): ExampleMatchResult[] {
         const examples = this.AgentExamples.filter(e => {
             if (e.Status !== 'Active') return false;
-            if (agentId && e.AgentID !== agentId) return false;
-            if (userId && e.UserID !== userId && e.UserID !== null) return false;
-            if (companyId && e.CompanyID !== companyId && e.CompanyID !== null) return false;
+            if (agentId && !UUIDsEqual(e.AgentID, agentId)) return false;
+            if (userId && !UUIDsEqual(e.UserID, userId) && e.UserID !== null) return false;
+            if (companyId && !UUIDsEqual(e.CompanyID, companyId) && e.CompanyID !== null) return false;
             if (additionalFilter && !additionalFilter(this.packageExampleMetadata(e))) return false;
             return true;
         });
@@ -1162,11 +1162,11 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public async ExecuteEntityAIAction(params: EntityAIActionParams): Promise<BaseResult> {
         const startTime = new Date();
         try {
-            const entityAction = this.EntityAIActions.find(ea => ea.ID === params.entityAIActionId);
+            const entityAction = this.EntityAIActions.find(ea => UUIDsEqual(ea.ID, params.entityAIActionId));
             if (!entityAction)
                 throw new Error(`Entity AI Action ${params.entityAIActionId} not found.`);
 
-            const action = this.Actions.find(a => a.ID === entityAction.AIActionID);
+            const action = this.Actions.find(a => UUIDsEqual(a.ID, entityAction.AIActionID));
             if (!action)
                 throw new Error(`Action ${entityAction.AIActionID} not found, from the EntityAIAction ${params.entityAIActionId}.`);
 
@@ -1183,7 +1183,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
             const userMessage = params.userPrompt ? params.userPrompt : this.markupUserMessage(params.entityRecord, entityAction.UserMessage);
 
             const modelId = entityAction.AIModelID || action.DefaultModelID;
-            const model = this.Models.find(m => m.ID === modelId);
+            const model = this.Models.find(m => UUIDsEqual(m.ID, modelId));
 
             const entityParams = {
                 name: entityAction.Name,
@@ -1265,13 +1265,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
      */
     public async ExecuteAIAction(params: AIActionParams): Promise<BaseResult> {
-        const action = this.Actions.find(a => a.ID === params.actionId);
+        const action = this.Actions.find(a => UUIDsEqual(a.ID, params.actionId));
         if (!action)
             throw new Error(`Action ${params.actionId} not found.`);
         if (action.IsActive === false)
             throw new Error(`Action ${params.actionId} is not active.`);
 
-        const model = this.Models.find(m => m.ID === params.modelId);
+        const model = this.Models.find(m => UUIDsEqual(m.ID, params.modelId));
         if (!model)
             throw new Error(`Model ${params.modelId} not found.`);
         if (model.IsActive === false)

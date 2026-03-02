@@ -20,6 +20,7 @@ import {
     InMemoryLocalStorageProvider,
     RunQuerySQLFilterManager,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
@@ -332,7 +333,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         try {
             // Look up the query from metadata
             const queryInfo = this.Queries.find(q =>
-                (params.QueryID && q.ID === params.QueryID) ||
+                (params.QueryID && UUIDsEqual(q.ID, params.QueryID)) ||
                 (params.QueryName && q.Name === params.QueryName)
             );
             if (!queryInfo) {

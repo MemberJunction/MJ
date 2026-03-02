@@ -8,7 +8,7 @@ import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/core-entities-server";
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -514,7 +514,7 @@ export class ManageMetadataBase {
             const existingParentId = childResult.recordset[0].ParentID;
 
             // Skip if already set correctly
-            if (existingParentId === parentId) {
+            if (UUIDsEqual(existingParentId, parentId)) {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
             } else {
                // Set ParentID on the child entity
@@ -1672,11 +1672,11 @@ export class ManageMetadataBase {
             let batchSQL = '';
             batch.forEach((f) => {
                // for each field determine if an existing relationship exists, if not, create it
-               const relationships = allRelationships.filter((r: { EntityID: any; RelatedEntityID: any; }) => r.EntityID===f.RelatedEntityID && r.RelatedEntityID===f.EntityID);
+               const relationships = allRelationships.filter((r: { EntityID: string; RelatedEntityID: string; }) => UUIDsEqual(r.EntityID, f.RelatedEntityID) && UUIDsEqual(r.RelatedEntityID, f.EntityID));
                if (relationships && relationships.length === 0) {
                   // no relationship exists, so create it
-                  const e = md.Entities.find(e => e.ID === f.EntityID)!;
-                  const parentEntity = md.Entities.find(e => e.ID === f.RelatedEntityID);
+                  const e = md.Entities.find(e => UUIDsEqual(e.ID, f.EntityID))!;
+                  const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, f.RelatedEntityID));
                   const parentEntityName = parentEntity ? parentEntity.Name : f.RelatedEntityID;
                   // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
@@ -3793,7 +3793,7 @@ export class ManageMetadataBase {
    ): Promise<void> {
       try {
          // Filter fields for this entity (client-side filtering)
-         const fields = allFields.filter((f: any) => f.EntityID === entity.ID);
+         const fields = allFields.filter((f: any) => UUIDsEqual(f.EntityID, entity.ID));
 
          // Determine if this is a new entity (for DefaultForNewUser decision)
          const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
@@ -3866,7 +3866,7 @@ export class ManageMetadataBase {
          if (visited.has(currentParentID)) break; // circular reference guard
          visited.add(currentParentID);
 
-         const parentEntity = allEntities.find(e => e.ID === currentParentID);
+         const parentEntity = allEntities.find(e => UUIDsEqual(e.ID, currentParentID));
          if (!parentEntity) break;
 
          parentChain.push({ entityID: parentEntity.ID, entityName: parentEntity.Name });
@@ -3902,7 +3902,7 @@ export class ManageMetadataBase {
       allEntities: EntityInfo[]
    ): { entityID: string; entityName: string } | null {
       for (const parent of parentChain) {
-         const parentEntity = allEntities.find(e => e.ID === parent.entityID);
+         const parentEntity = allEntities.find(e => UUIDsEqual(e.ID, parent.entityID));
          if (!parentEntity) continue;
 
          // Check if this parent has a non-virtual field with this name

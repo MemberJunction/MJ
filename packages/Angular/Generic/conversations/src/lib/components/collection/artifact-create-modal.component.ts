@@ -3,6 +3,7 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating new artifacts and adding them to collections
@@ -240,7 +241,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
-      if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+      if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
         const permission = await this.permissionService.checkPermission(
           this.collectionId,
           this.currentUser.ID,

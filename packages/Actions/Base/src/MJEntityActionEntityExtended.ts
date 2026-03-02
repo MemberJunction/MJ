@@ -1,6 +1,6 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { MJEntityActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { EntityActionEngineBase } from "./EntityActionEngine-Base";
 
 @RegisterClass(BaseEntity, 'MJ: Entity Actions')
@@ -15,7 +15,7 @@ export class MJEntityActionEntityExtended extends MJEntityActionEntity {
     public get Filters(): MJEntityActionFilterEntity[] {
         if (!this._filters) {
             // don't have the data loaded yet so get it from the EntityActionEngine
-            this._filters = EntityActionEngineBase.Instance.Filters?.filter(f => f.EntityActionID === this.ID) ?? [];
+            this._filters = EntityActionEngineBase.Instance.Filters?.filter(f => UUIDsEqual(f.EntityActionID, this.ID)) ?? [];
         }
         return this._filters;
     }
@@ -26,7 +26,7 @@ export class MJEntityActionEntityExtended extends MJEntityActionEntity {
     public get Invocations(): MJEntityActionInvocationEntity[] {
         if (!this._invocations) {
             // load the data from the EntityActionEngine
-            this._invocations = EntityActionEngineBase.Instance.Invocations?.filter(i => i.EntityActionID === this.ID) ?? [];
+            this._invocations = EntityActionEngineBase.Instance.Invocations?.filter(i => UUIDsEqual(i.EntityActionID, this.ID)) ?? [];
         }
         return this._invocations
     }
@@ -34,7 +34,7 @@ export class MJEntityActionEntityExtended extends MJEntityActionEntity {
     public get Params(): MJEntityActionParamEntity[] {
         if (!this._params) {
             // load the data from the EntityActionEngine
-            this._params = EntityActionEngineBase.Instance.Params?.filter(p => p.EntityActionID === this.ID) ?? [];
+            this._params = EntityActionEngineBase.Instance.Params?.filter(p => UUIDsEqual(p.EntityActionID, this.ID)) ?? [];
         }
         return this._params;
     }

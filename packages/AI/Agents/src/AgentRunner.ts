@@ -11,7 +11,7 @@
  */
 
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
@@ -64,7 +64,7 @@ export class AgentRunner {
             await AIEngine.Instance.Config(false, params.contextUser);
             
             // Find the agent type to get the DriverClass
-            const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === params.agent.TypeID);
+            const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
             if (!agentType) {
                 throw new Error(`Agent type not found for ID: ${params.agent.TypeID}`);
             }
@@ -573,7 +573,7 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
         const creationMode = agent?.ArtifactCreationMode;
 
         if (creationMode === 'Never') {

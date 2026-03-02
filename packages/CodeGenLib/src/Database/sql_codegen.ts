@@ -13,7 +13,7 @@ import { ManageMetadataBase } from './manage-metadata';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
 
@@ -179,7 +179,7 @@ export class SQLCodeGenBase {
             // First, separate entities that need cascade delete regeneration from others
             const entitiesWithoutCascadeRegeneration = includedEntities.filter(e => !this.entitiesNeedingDeleteSPRegeneration.has(e.ID));
             const entitiesForCascadeRegeneration = this.orderedEntitiesForDeleteSPRegeneration
-                .map(id => includedEntities.find(e => e.ID === id))
+                .map(id => includedEntities.find(e => UUIDsEqual(e.ID, id)))
                 .filter(e => e !== undefined) as EntityInfo[];
 
             // Generate SQL for entities that don't need cascade delete regeneration
@@ -1079,7 +1079,7 @@ export class SQLCodeGenBase {
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
         return entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
-            field.RelatedEntityID === entity.ID
+            UUIDsEqual(field.RelatedEntityID, entity.ID)
         );
     }
 
@@ -1346,7 +1346,7 @@ export class SQLCodeGenBase {
 
             // 2. Handle configured additional fields
             if (config.fields && config.fields.length > 0) {
-                const currentEntity = md.Entities.find(e => e.ID === ef.EntityID);
+                const currentEntity = md.Entities.find(e => UUIDsEqual(e.ID, ef.EntityID));
                 for (const fieldConfig of config.fields) {
                     const fieldName = fieldConfig.field;
                     const alias = fieldConfig.alias || this.generateDefaultAlias(ef.Name, fieldName);
@@ -1503,7 +1503,7 @@ export class SQLCodeGenBase {
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
-                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                    if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
 
                         if (cascadeSql !== '') {
@@ -1643,10 +1643,10 @@ export class SQLCodeGenBase {
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
-                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                    if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)
                         // These don't create inter-entity dependencies for ordering purposes
-                        if (e.ID === entity.ID) {
+                        if (UUIDsEqual(e.ID, entity.ID)) {
                             continue;
                         }
 
@@ -1706,9 +1706,9 @@ export class SQLCodeGenBase {
         // Log the dependency map
         logStatus(`Cascade delete dependency map built:`);
         for (const [dependedOnEntityId, dependentEntityIds] of this.cascadeDeleteDependencies) {
-            const dependedOnEntity = entities.find(e => e.ID === dependedOnEntityId);
+            const dependedOnEntity = entities.find(e => UUIDsEqual(e.ID, dependedOnEntityId));
             const dependentNames = Array.from(dependentEntityIds)
-                .map(id => entities.find(e => e.ID === id)?.Name || id)
+                .map(id => entities.find(e => UUIDsEqual(e.ID, id))?.Name || id)
                 .join(', ');
             logStatus(`  ${dependedOnEntity?.Name || dependedOnEntityId} is depended on by: ${dependentNames}`);
         }
@@ -1802,7 +1802,7 @@ export class SQLCodeGenBase {
 
                     // Store the entity IDs that need regeneration (only if spDeleteGenerated=true)
                     for (const entityId of entitiesNeedingRegeneration) {
-                        const entity = entities.find(e => e.ID === entityId);
+                        const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                         if (entity && entity.spDeleteGenerated) {
                             this.entitiesNeedingDeleteSPRegeneration.add(entityId);
                             logStatus(`  - Marked ${entity.Name} for delete SP regeneration (cascade dependency)`);
@@ -1820,7 +1820,7 @@ export class SQLCodeGenBase {
                     if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
                         logStatus(`Ordered entities for delete SP regeneration:`);
                         this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
-                            const entity = entities.find(e => e.ID === entityId);
+                            const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                             logStatus(`  ${index + 1}. ${entity?.Name || entityId}`);
                         });
                     }
@@ -1874,7 +1874,7 @@ export class SQLCodeGenBase {
 
             if (visiting.has(entityId)) {
                 // Circular dependency detected - mark it but don't fail
-                const entity = entities.find(e => e.ID === entityId);
+                const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                 logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
                 circularDeps.add(entityId);
                 return false; // Signal circular dependency but continue processing
@@ -1906,7 +1906,7 @@ export class SQLCodeGenBase {
                 if (!success && circularDeps.has(entityId)) {
                     // Entity is part of circular dependency - add it anyway in arbitrary order
                     // The SQL will still be generated, just not in perfect dependency order
-                    logStatus(`  - Adding ${entities.find(e => e.ID === entityId)?.Name || entityId} despite circular dependency`);
+                    logStatus(`  - Adding ${entities.find(e => UUIDsEqual(e.ID, entityId))?.Name || entityId} despite circular dependency`);
                     visited.add(entityId);
                     ordered.push(entityId);
                 }
