@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo, EntityRecordNameInput } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJVersionLabelEntityType, MJVersionLabelItemEntityType, MJVersionLabelRestoreEntityType, MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { MicroViewData, FieldChangeView } from '../types';
 import { EntityLinkClickEvent } from '../record-micro-view/record-micro-view.component';
@@ -238,7 +239,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // =========================================================================
 
     private computeChildLabels(): void {
-        this.ChildLabels = this.AllLabels.filter(l => l.ParentID === this.Label.ID);
+        this.ChildLabels = this.AllLabels.filter(l => UUIDsEqual(l.ParentID, this.Label.ID));
     }
 
     private async loadLabelItems(): Promise<void> {
@@ -595,7 +596,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
                 return;
             }
 
-            const entityInfo = this.metadata.Entities.find(e => e.ID === entityId);
+            const entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
             if (!entityInfo) {
                 this.DependencyTree = [];
                 this.dependenciesLoaded = true;
@@ -698,9 +699,9 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
             // Find related labels (same entity + record)
             this.RelatedLabels = this.AllLabels.filter(l =>
-                l.ID !== this.Label.ID &&
-                l.EntityID === this.Label.EntityID &&
-                l.RecordID === this.Label.RecordID &&
+                !UUIDsEqual(l.ID, this.Label.ID) &&
+                UUIDsEqual(l.EntityID, this.Label.EntityID) &&
+                UUIDsEqual(l.RecordID, this.Label.RecordID) &&
                 l.RecordID != null
             );
 
@@ -948,14 +949,14 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
     public resolveEntityName(entityId: string | null | undefined): string {
         if (!entityId) return 'Unknown';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : 'Unknown';
     }
 
     /** Resolve icon CSS class for an entity by ID, falling back to generic table icon. */
     public resolveEntityIcon(entityId: string): string {
         if (!entityId) return 'fa-solid fa-table';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity?.Icon || 'fa-solid fa-table';
     }
 

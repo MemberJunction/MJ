@@ -85,7 +85,7 @@ import {
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
-import { SQLExpressionValidator } from '@memberjunction/global';
+import { SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 /**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
@@ -482,7 +482,7 @@ export class SQLServerDataProvider
           } else if (CategoryPath) {
             const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
             if (resolvedCategoryId) {
-              matches = matches && q.CategoryID === resolvedCategoryId;
+              matches = matches && UUIDsEqual(q.CategoryID, resolvedCategoryId);
             } else {
               matches = matches && q.Category.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
             }

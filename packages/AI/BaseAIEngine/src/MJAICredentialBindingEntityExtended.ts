@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseEntity, RunView, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 import { MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from './BaseAIEngine';
@@ -63,7 +63,7 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
         }
 
         // Compare credential types
-        if (credential.CredentialTypeID !== vendorCredentialTypeId) {
+        if (!UUIDsEqual(credential.CredentialTypeID, vendorCredentialTypeId)) {
             const vendorName = this.getVendorNameForError();
             const expectedTypeName = this.getExpectedCredentialTypeName();
 
@@ -86,23 +86,23 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
         switch (this.BindingType) {
             case 'Vendor': {
                 // Direct vendor binding - get type from the vendor
-                const vendor = engine.Vendors.find(v => v.ID === this.AIVendorID);
+                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
                 return vendor?.CredentialTypeID ?? null;
             }
             case 'ModelVendor': {
                 // ModelVendor binding - get vendor from ModelVendor, then get type
-                const modelVendor = engine.ModelVendors.find(mv => mv.ID === this.AIModelVendorID);
+                const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => v.ID === modelVendor.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
                     return vendor?.CredentialTypeID ?? null;
                 }
                 return null;
             }
             case 'PromptModel': {
                 // PromptModel binding - get vendor from PromptModel's VendorID
-                const promptModel = engine.PromptModels.find(pm => pm.ID === this.AIPromptModelID);
+                const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => v.ID === promptModel.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
                     return vendor?.CredentialTypeID ?? null;
                 }
                 return null;
@@ -120,21 +120,21 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
 
         switch (this.BindingType) {
             case 'Vendor': {
-                const vendor = engine.Vendors.find(v => v.ID === this.AIVendorID);
+                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
                 return vendor?.CredentialType ?? null;
             }
             case 'ModelVendor': {
-                const modelVendor = engine.ModelVendors.find(mv => mv.ID === this.AIModelVendorID);
+                const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => v.ID === modelVendor.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
                     return vendor?.CredentialType ?? null;
                 }
                 return null;
             }
             case 'PromptModel': {
-                const promptModel = engine.PromptModels.find(pm => pm.ID === this.AIPromptModelID);
+                const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => v.ID === promptModel.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
                     return vendor?.CredentialType ?? null;
                 }
                 return null;
@@ -152,21 +152,21 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
 
         switch (this.BindingType) {
             case 'Vendor': {
-                const vendor = engine.Vendors.find(v => v.ID === this.AIVendorID);
+                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
                 return vendor?.Name ?? this.AIVendorID ?? 'Unknown';
             }
             case 'ModelVendor': {
-                const modelVendor = engine.ModelVendors.find(mv => mv.ID === this.AIModelVendorID);
+                const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => v.ID === modelVendor.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
                     return vendor?.Name ?? modelVendor.Vendor ?? 'Unknown';
                 }
                 return this.AIModelVendorID ?? 'Unknown';
             }
             case 'PromptModel': {
-                const promptModel = engine.PromptModels.find(pm => pm.ID === this.AIPromptModelID);
+                const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => v.ID === promptModel.VendorID);
+                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
                     return vendor?.Name ?? promptModel.Vendor ?? 'Unknown';
                 }
                 return this.AIPromptModelID ?? 'Unknown';
@@ -193,7 +193,7 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
         }, this.ContextCurrentUser);
 
         if (result.Success && result.Results && result.Results.length > 0) {
-            return result.Results.find(c => c.ID === this.CredentialID)
+            return result.Results.find(c => UUIDsEqual(c.ID, this.CredentialID))
         }
 
         return null;

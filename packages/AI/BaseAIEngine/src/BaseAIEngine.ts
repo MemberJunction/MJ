@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -297,7 +298,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         //rather than the getter methods because the engine's Loaded property is still false
         for(const PromptCategory of this._promptCategories){
             this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
-                return prompt.CategoryID === PromptCategory.ID;
+                return UUIDsEqual(prompt.CategoryID, PromptCategory.ID);
             }).forEach((prompt: MJAIPromptEntityExtended) => {
                 PromptCategory.Prompts.push(prompt);
             });
@@ -306,20 +307,20 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // handle association agent actions, models, and notes with agents
         for(const agent of this._agents){
             this._agentActions.filter((action: MJAIAgentActionEntity) => {
-                return action.AgentID === agent.ID;
+                return UUIDsEqual(action.AgentID, agent.ID);
             }).forEach((action: MJAIAgentActionEntity) => {
                 agent.Actions.push(action);
             });
 
             this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
-                return note.AgentID === agent.ID;
+                return UUIDsEqual(note.AgentID, agent.ID);
             }).forEach((note: MJAIAgentNoteEntity) => {
                 agent.Notes.push(note);
             });
         }
 
         for (const model of this._models) {
-            this._modelVendors.filter(mv => mv.ModelID === model.ID)
+            this._modelVendors.filter(mv => UUIDsEqual(mv.ModelID, model.ID))
             .forEach((mv: MJAIModelVendorEntity) => {
                 model.ModelVendors.push(mv);
             });
@@ -375,9 +376,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
         const now = new Date();
-        const activeCosts = this._modelCosts.filter(cost => 
-            cost.ModelID === modelID && 
-            cost.VendorID === vendorID &&
+        const activeCosts = this._modelCosts.filter(cost =>
+            UUIDsEqual(cost.ModelID, modelID) &&
+            UUIDsEqual(cost.VendorID, vendorID) &&
             cost.ProcessingType === processingType &&
             cost.Status === 'Active' &&
             (!cost.StartedAt || new Date(cost.StartedAt) <= now) &&
@@ -422,20 +423,20 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     ): MJAIAgentEntityExtended[] {
         // Get child agents (ParentID relationship)
         const childAgents = this._agents.filter(a =>
-            a.ParentID === agentID &&
+            UUIDsEqual(a.ParentID, agentID) &&
             (!status || a.Status === status)
         );
 
         // Get related agents (AgentRelationships)
         const relStatus = relationshipStatus ?? 'Active'; // Default to Active for relationships
         const activeRelationships = this._agentRelationships.filter(ar =>
-            ar.AgentID === agentID &&
+            UUIDsEqual(ar.AgentID, agentID) &&
             ar.Status === relStatus
         );
 
         // Get the actual agent entities for related agents
         const relatedAgents = activeRelationships
-            .map(ar => this._agents.find(a => a.ID === ar.SubAgentID))
+            .map(ar => this._agents.find(a => UUIDsEqual(a.ID, ar.SubAgentID)))
             .filter(a => a != null && (!status || a.Status === status));
 
         // Combine and deduplicate by ID
@@ -443,8 +444,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         const allSubAgents: MJAIAgentEntityExtended[] = [];
 
         for (const agent of [...childAgents, ...relatedAgents]) {
-            if (!uniqueAgentIDs.has(agent.ID)) {
-                uniqueAgentIDs.add(agent.ID);
+            if (!uniqueAgentIDs.has(NormalizeUUID(agent.ID))) {
+                uniqueAgentIDs.add(NormalizeUUID(agent.ID));
                 allSubAgents.push(agent);
             }
         }
@@ -487,7 +488,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of configuration presets sorted by Priority
      */
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
-        let presets = this._agentConfigurations.filter(ac => ac.AgentID === agentId);
+        let presets = this._agentConfigurations.filter(ac => UUIDsEqual(ac.AgentID, agentId));
 
         if (activeOnly) {
             presets = presets.filter(ac => ac.Status === 'Active');
@@ -514,7 +515,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this._agentConfigurations.find(
-            ac => ac.AgentID === agentId &&
+            ac => UUIDsEqual(ac.AgentID, agentId) &&
                   ac.Name === presetName &&
                   ac.Status === 'Active'
         );
@@ -574,11 +575,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
                 switch (bindingType) {
                     case 'Vendor':
-                        return b.AIVendorID === targetId;
+                        return UUIDsEqual(b.AIVendorID, targetId);
                     case 'ModelVendor':
-                        return b.AIModelVendorID === targetId;
+                        return UUIDsEqual(b.AIModelVendorID, targetId);
                     case 'PromptModel':
-                        return b.AIPromptModelID === targetId;
+                        return UUIDsEqual(b.AIPromptModelID, targetId);
                     default:
                         return false;
                 }
@@ -664,7 +665,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of configuration parameters for the specified configuration
      */
     public GetConfigurationParams(configurationId: string): MJAIConfigurationParamEntity[] {
-        return this._configurationParams.filter(p => p.ConfigurationID === configurationId);
+        return this._configurationParams.filter(p => UUIDsEqual(p.ConfigurationID, configurationId));
     }
 
     /**
@@ -675,7 +676,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetConfigurationParam(configurationId: string, paramName: string): MJAIConfigurationParamEntity | null {
         return this._configurationParams.find(p =>
-            p.ConfigurationID === configurationId &&
+            UUIDsEqual(p.ConfigurationID, configurationId) &&
             p.Name.toLowerCase() === paramName.toLowerCase()
         ) || null;
     }
@@ -735,7 +736,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 );
             }
 
-            const config = this._configurations.find(c => c.ID === currentId);
+            const config = this._configurations.find(c => UUIDsEqual(c.ID, currentId));
             if (!config) break;
 
             visitedIds.add(currentId);
@@ -780,7 +781,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         for (let i = chain.length - 1; i >= 0; i--) {
             const configParams = this._configurationParams.filter(
-                p => p.ConfigurationID === chain[i].ID
+                p => UUIDsEqual(p.ConfigurationID, chain[i].ID)
             );
             for (const param of configParams) {
                 paramMap.set(param.Name.toLowerCase(), param);
@@ -844,11 +845,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         const agentModalityRecords = this._agentModalities.filter(
-            am => am.AgentID === agentId && am.Direction === direction
+            am => UUIDsEqual(am.AgentID, agentId) && am.Direction === direction
         );
 
         return agentModalityRecords
-            .map(am => this._modalities.find(m => m.ID === am.ModalityID))
+            .map(am => this._modalities.find(m => UUIDsEqual(m.ID, am.ModalityID)))
             .filter((m): m is MJAIModalityEntity => m !== undefined);
     }
 
@@ -860,11 +861,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         const modelModalityRecords = this._modelModalities.filter(
-            mm => mm.ModelID === modelId && mm.Direction === direction
+            mm => UUIDsEqual(mm.ModelID, modelId) && mm.Direction === direction
         );
 
         return modelModalityRecords
-            .map(mm => this._modalities.find(m => m.ID === mm.ModalityID))
+            .map(mm => this._modalities.find(m => UUIDsEqual(m.ID, mm.ModalityID)))
             .filter((m): m is MJAIModalityEntity => m !== undefined);
     }
 
@@ -967,7 +968,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // Check agent-specific modality settings first (highest priority)
         const agentModality = this._agentModalities.find(
-            am => am.AgentID === agentId && am.ModalityID === modality.ID && am.Direction === 'Input'
+            am => UUIDsEqual(am.AgentID, agentId) && UUIDsEqual(am.ModalityID, modality.ID) && am.Direction === 'Input'
         );
 
         if (agentModality) {
@@ -1025,7 +1026,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // Check model-specific modality settings
         const modelModality = this._modelModalities.find(
-            mm => mm.ModelID === modelId && mm.ModalityID === modality.ID && mm.Direction === 'Input'
+            mm => UUIDsEqual(mm.ModelID, modelId) && UUIDsEqual(mm.ModalityID, modality.ID) && mm.Direction === 'Input'
         );
 
         if (modelModality && modelModality.IsSupported) {
@@ -1133,8 +1134,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of agent steps
      */
     public GetAgentSteps(agentId: string, status?: string): MJAIAgentStepEntity[] {
-        return this._agentSteps.filter(step => 
-            step.AgentID === agentId && 
+        return this._agentSteps.filter(step =>
+            UUIDsEqual(step.AgentID, agentId) &&
             (!status || step.Status === status)
         );
     }
@@ -1145,7 +1146,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The step or null if not found
      */
     public GetAgentStepByID(stepId: string): MJAIAgentStepEntity | null {
-        return this._agentSteps.find(step => step.ID === stepId) || null;
+        return this._agentSteps.find(step => UUIDsEqual(step.ID, stepId)) || null;
     }
 
     /**
@@ -1154,7 +1155,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of paths from the step
      */
     public GetPathsFromStep(stepId: string): MJAIAgentStepPathEntity[] {
-        return this._agentStepPaths.filter(path => path.OriginStepID === stepId);
+        return this._agentStepPaths.filter(path => UUIDsEqual(path.OriginStepID, stepId));
     }
 
     /**

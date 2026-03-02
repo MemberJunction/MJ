@@ -14,6 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -313,7 +314,7 @@ async function validateApiKey(
         }
 
         // Get user from UserCache to ensure EntityPermissions are loaded
-        const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.User?.ID);
+        const cachedUser = UserCache.Instance.Users.find(u => UUIDsEqual(u.ID, validation.User?.ID));
         if (!cachedUser) {
             return { valid: false, error: 'User not found in cache' };
         }
@@ -1441,7 +1442,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action.ID).length
+                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
                     })));
                 }
             });
@@ -1471,7 +1472,7 @@ async function loadActionTools(
                         let action: MJActionEntityExtended | null = null;
 
                         if (props.actionId) {
-                            action = actionEngine.Actions.find((a: MJActionEntityExtended) => a.ID === props.actionId) || null;
+                            action = actionEngine.Actions.find((a: MJActionEntityExtended) => UUIDsEqual(a.ID, props.actionId as string)) || null;
                             if (!action) {
                                 return JSON.stringify({
                                     success: false,
@@ -1494,7 +1495,7 @@ async function loadActionTools(
                         }
 
                         // Build action params
-                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
+                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                         const paramsRecord = props.params as Record<string, unknown> | undefined;
                         const runParams: RunActionParams = {
                             Action: action,
@@ -1541,7 +1542,7 @@ async function loadActionTools(
 
                     let action: MJActionEntityExtended | null = null;
                     if (props.actionId) {
-                        action = actionEngine.Actions.find((a: MJActionEntityExtended) => a.ID === props.actionId) || null;
+                        action = actionEngine.Actions.find((a: MJActionEntityExtended) => UUIDsEqual(a.ID, props.actionId as string)) || null;
                     } else if (props.actionName) {
                         action = actionEngine.Actions.find((a: MJActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
                     }
@@ -1550,7 +1551,7 @@ async function loadActionTools(
                         return JSON.stringify({ error: "Action not found" });
                     }
 
-                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
+                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                     return JSON.stringify({
                         actionId: action.ID,
                         actionName: action.Name,
@@ -1644,7 +1645,7 @@ function addActionExecuteTool(
     sessionContext: MCPSessionContext
 ): void {
     const actionEngine = ActionEngineServer.Instance;
-    const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action.ID);
+    const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID));
 
     // Build Zod schema for action parameters
     const paramSchema: Record<string, z.ZodTypeAny> = {};
@@ -1800,7 +1801,7 @@ async function loadAgentTools(
                         let agent: MJAIAgentEntityExtended | null = null;
 
                         if (props.agentId) {
-                            agent = aiEngine.Agents.find(a => a.ID === props.agentId) || null;
+                            agent = aiEngine.Agents.find(a => UUIDsEqual(a.ID, props.agentId as string)) || null;
                             if (!agent) {
                                 return JSON.stringify({
                                     success: false,
@@ -2517,7 +2518,7 @@ async function loadPromptTools(
                         let prompt: MJAIPromptEntityExtended | undefined;
 
                         if (props.promptId) {
-                            prompt = aiEngine.Prompts.find((p: MJAIPromptEntityExtended) => p.ID === props.promptId);
+                            prompt = aiEngine.Prompts.find((p: MJAIPromptEntityExtended) => UUIDsEqual(p.ID, props.promptId as string));
                             if (!prompt) {
                                 return JSON.stringify({
                                     success: false,

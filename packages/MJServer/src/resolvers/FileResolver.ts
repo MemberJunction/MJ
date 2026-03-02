@@ -1,4 +1,5 @@
 import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions, RunView } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -748,8 +749,8 @@ export class FileResolver extends FileResolverBase {
 
     // Log any accounts that weren't found
     if (accountEntities.length < input.AccountIDs.length) {
-      const foundIDs = new Set(accountEntities.map((a) => a.ID));
-      const missingIDs = input.AccountIDs.filter((id) => !foundIDs.has(id));
+      const foundIDs = new Set(accountEntities.map((a) => NormalizeUUID(a.ID)));
+      const missingIDs = input.AccountIDs.filter((id) => !foundIDs.has(NormalizeUUID(id)));
       console.warn(`[FileResolver] Accounts not found: ${missingIDs.join(', ')}`);
     }
 

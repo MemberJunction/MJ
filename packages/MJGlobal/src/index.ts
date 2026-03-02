@@ -7,6 +7,7 @@ export * from './BaseSingleton'
 export * from './DeepDiff'
 export * from './ClassUtils'
 export * from './util/PatternUtils';
+export * from './util/UUIDUtils';
 export * from './ValidationTypes'
 export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'

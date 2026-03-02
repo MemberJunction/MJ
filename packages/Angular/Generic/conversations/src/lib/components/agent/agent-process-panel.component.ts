@@ -5,6 +5,7 @@ import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { DialogService } from '../../services/dialog.service';
 import { AgentStateService, AgentStatus, AgentWithStatus } from '../../services/agent-state.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface AgentProcess extends AgentWithStatus {
   expanded: boolean;
@@ -337,7 +338,7 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
       .subscribe(agents => {
         // Preserve expanded state for existing processes
         this.activeProcesses = agents.map(agent => {
-          const existing = this.activeProcesses.find(p => p.run.ID === agent.run.ID);
+          const existing = this.activeProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID));
           return {
             ...agent,
             expanded: existing ? existing.expanded : false

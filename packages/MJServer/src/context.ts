@@ -16,6 +16,7 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
@@ -103,7 +104,7 @@ export const getUserPayload = async (
         // Get the user from UserCache to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
         const cachedUser = UserCache.Instance.Users.find(
-          u => u.ID === validationResult.User.ID
+          u => UUIDsEqual(u.ID, validationResult.User.ID)
         );
 
         // Use cached user if available, otherwise fall back to the validation result

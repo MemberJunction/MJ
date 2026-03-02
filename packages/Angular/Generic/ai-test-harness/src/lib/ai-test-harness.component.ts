@@ -12,7 +12,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
@@ -614,7 +614,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const prompt = this.entity as MJAIPromptEntityExtended;
             if (prompt.AIModelTypeID) {
                 filteredModels = AIEngineBase.Instance.Models.filter(
-                    model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
+                    model => UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID) && model.IsActive
                 );
             } else {
                 // No model type restriction, show all active models
@@ -673,7 +673,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         try {
             // Get prompt-specific model associations
             const promptModels = AIEngineBase.Instance.PromptModels.filter(
-                pm => pm.PromptID === prompt.ID && 
+                pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
                       (pm.Status === 'Active' || pm.Status === 'Preview')
             );
             
@@ -685,7 +685,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 // Find the first active model
                 for (const pm of promptModels) {
-                    const model = AIEngineBase.Instance.Models.find(m => m.ID === pm.ModelID && m.IsActive);
+                    const model = AIEngineBase.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID) && m.IsActive);
                     if (model) {
                         defaultModel = model;
                         break;
@@ -697,7 +697,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             if (!defaultModel) {
                 const candidates = AIEngineBase.Instance.Models.filter(
                     m => m.IsActive && 
-                         (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
+                         (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
                 );
                 
                 if (candidates.length > 0) {
@@ -740,7 +740,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Get vendors that offer this model - same logic as loadVendorsForModel
             const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
-                mv => mv.ModelID === this.defaultModel.ID && 
+                mv => UUIDsEqual(mv.ModelID, this.defaultModel.ID) &&
                       mv.Status === 'Active' &&
                       mv.Type?.trim().toLowerCase() === 'inference provider'
             );
@@ -748,7 +748,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Map to vendor objects with priority from ModelVendor
             const vendorObjects: any[] = [];
             for (const mv of modelVendors) {
-                const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+                const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, mv.VendorID));
                 if (vendor) {
                     vendorObjects.push({
                         ID: vendor.ID,
@@ -757,10 +757,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     });
                 }
             }
-            
+
             // Sort by priority (lower number = higher priority)
             vendorObjects.sort((a, b) => a.Priority - b.Priority);
-            
+
             this.availableVendors = vendorObjects;
             
             // Select the highest priority vendor
@@ -840,7 +840,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Get model-specific vendors
         const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
-            mv => mv.ModelID === this.selectedModelId && 
+            mv => UUIDsEqual(mv.ModelID, this.selectedModelId) &&
                   mv.Status === 'Active' &&
                   mv.Type?.trim().toLowerCase() === 'inference provider'
         );
@@ -848,7 +848,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Map to vendor objects with priority from ModelVendor
         const vendorObjects: any[] = [];
         for (const mv of modelVendors) {
-            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === mv.VendorID);
+            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, mv.VendorID));
             if (vendor) {
                 // For now, include all vendors. TODO: Filter by vendor type when available
                 vendorObjects.push({

@@ -8,9 +8,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Stub all heavy external dependencies
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => () => {},
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        RegisterClass: () => () => {},
+    };
+});
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: {

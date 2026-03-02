@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata, RunView } from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -52,7 +52,7 @@ export class CheckUserPermissionAction extends BaseAction {
             switch (permissionType) {
                 case 'Role':
                     // Get user's roles from UserCache
-                    const cachedUser = UserCache.Users?.find(u => u.ID === userID);
+                    const cachedUser = UserCache.Users?.find(u => UUIDsEqual(u.ID, userID));
                     if (cachedUser && cachedUser.UserRoles) {
                         cachedUser.UserRoles.forEach(ur => userRoles.push(ur.Role));
                         hasPermission = cachedUser.UserRoles.some(ur => ur.Role === permissionName);

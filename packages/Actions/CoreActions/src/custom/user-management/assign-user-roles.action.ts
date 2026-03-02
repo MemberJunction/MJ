@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata } from "@memberjunction/core";
 import { MJUserRoleEntity } from "@memberjunction/core-entities";
@@ -59,7 +59,7 @@ export class AssignUserRolesAction extends BaseAction {
 
             // Validate user exists - check UserCache first
             // For newly created users, the cache might not be updated yet
-            const user = UserCache.Users?.find(u => u.ID === userID);
+            const user = UserCache.Users?.find(u => UUIDsEqual(u.ID, userID));
             const existingRoleIDs = user?.UserRoles ? user.UserRoles.map(ur => ur.RoleID) : [];
 
             // Get all roles and validate they exist using Metadata cache
@@ -85,7 +85,7 @@ export class AssignUserRolesAction extends BaseAction {
             const errors: string[] = [];
 
             for (const role of foundRoles) {
-                if (existingRoleIDs.includes(role.ID)) {
+                if (existingRoleIDs.some(id => UUIDsEqual(id, role.ID))) {
                     skippedRoles.push(role.Name);
                     continue;
                 }

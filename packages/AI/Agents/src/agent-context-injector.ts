@@ -1,4 +1,5 @@
 import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
@@ -463,19 +464,19 @@ export class AgentContextInjector {
             }
 
             // Must match the agent
-            if (example.AgentID !== params.agentId) {
+            if (!UUIDsEqual(example.AgentID, params.agentId)) {
                 return false;
             }
 
             // Check MJ-internal scoping priority (any of these conditions can match)
             const matchesPriority1 = params.userId && params.companyId &&
-                example.UserID === params.userId && example.CompanyID === params.companyId;
+                UUIDsEqual(example.UserID, params.userId) && UUIDsEqual(example.CompanyID, params.companyId);
 
             const matchesPriority2 = params.userId &&
-                example.UserID === params.userId && example.CompanyID == null;
+                UUIDsEqual(example.UserID, params.userId) && example.CompanyID == null;
 
             const matchesPriority3 = params.companyId &&
-                example.UserID == null && example.CompanyID === params.companyId;
+                example.UserID == null && UUIDsEqual(example.CompanyID, params.companyId);
 
             const matchesPriority4 = example.UserID == null && example.CompanyID == null;
 

@@ -1,5 +1,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJDataContextEntity, MJDataContextItemEntity } from '@memberjunction/core-entities';
 
 @Component({
@@ -112,7 +113,7 @@ export class DataContextComponent implements OnInit {
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
     const md = new Metadata();
-    return md.Entities.find(e => e.ID === entityId)?.Name;
+    return md.Entities.find(e => UUIDsEqual(e.ID, entityId))?.Name;
   }
 
   public async getViewName(viewId: string): Promise<string | undefined> {

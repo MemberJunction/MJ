@@ -5,7 +5,7 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -593,7 +593,7 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
     const userInfos = users.map((user: Record<string, unknown>) => {
       const userWithRoles = {
         ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) => role.UserID === user.ID),
+        UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
       };
       return new UserInfo(Metadata.Provider, userWithRoles);
     });

@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended } from "../custom/MJUserViewEntityExtended";
 
 /**
@@ -81,7 +82,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @returns The view entity or undefined if not found
      */
     public GetViewById(viewId: string): MJUserViewEntityExtended | undefined {
-        return this.AllViews.find(v => v.ID === viewId);
+        return this.AllViews.find(v => UUIDsEqual(v.ID, viewId));
     }
 
     /**
@@ -104,7 +105,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      */
     public GetViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.EntityID === entityId)
+            .filter(v => UUIDsEqual(v.EntityID, entityId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -140,7 +141,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      */
     public GetViewsForUser(userId: string): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.UserID === userId)
+            .filter(v => UUIDsEqual(v.UserID, userId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -150,7 +151,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      */
     public GetSharedViews(): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.IsShared && v.UserID !== this._contextUserId)
+            .filter(v => v.IsShared && !UUIDsEqual(v.UserID, this._contextUserId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -168,14 +169,14 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
 
         return this.AllViews
             .filter(v =>
-                v.EntityID === entityId &&
-                (v.UserID === this._contextUserId || v.IsShared)
+                UUIDsEqual(v.EntityID, entityId) &&
+                (UUIDsEqual(v.UserID, this._contextUserId) || v.IsShared)
             )
             .filter(v => v.UserCanView) // Respect permission checks
             .sort((a, b) => {
                 // Sort: owned first, then by name
-                const aOwned = a.UserID === this._contextUserId;
-                const bOwned = b.UserID === this._contextUserId;
+                const aOwned = UUIDsEqual(a.UserID, this._contextUserId);
+                const bOwned = UUIDsEqual(b.UserID, this._contextUserId);
                 if (aOwned && !bOwned) return -1;
                 if (!aOwned && bOwned) return 1;
                 return a.Name.localeCompare(b.Name);
@@ -194,7 +195,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
     public GetMyViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         if (!this._contextUserId) return [];
         return this.AllViews
-            .filter(v => v.EntityID === entityId && v.UserID === this._contextUserId)
+            .filter(v => UUIDsEqual(v.EntityID, entityId) && UUIDsEqual(v.UserID, this._contextUserId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -206,9 +207,9 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
     public GetSharedViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         return this.AllViews
             .filter(v =>
-                v.EntityID === entityId &&
+                UUIDsEqual(v.EntityID, entityId) &&
                 v.IsShared &&
-                v.UserID !== this._contextUserId
+                !UUIDsEqual(v.UserID, this._contextUserId)
             )
             .filter(v => v.UserCanView)
             .sort((a, b) => a.Name.localeCompare(b.Name));
@@ -245,7 +246,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      */
     public ViewNameExistsForEntity(entityId: string, viewName: string): boolean {
         return this.AllViews.some(v =>
-            v.EntityID === entityId &&
+            UUIDsEqual(v.EntityID, entityId) &&
             v.Name.toLowerCase() === viewName.toLowerCase()
         );
     }

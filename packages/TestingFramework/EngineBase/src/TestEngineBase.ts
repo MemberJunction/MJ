@@ -9,6 +9,7 @@ import {
     IMetadataProvider,
     UserInfo
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJTestTypeEntity,
     MJTestEntity,
@@ -138,7 +139,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get test type by ID
      */
     public GetTestTypeByID(id: string): MJTestTypeEntity | undefined {
-        return this._testTypes.find(t => t.ID === id);
+        return this._testTypes.find(t => UUIDsEqual(t.ID, id));
     }
 
     /**
@@ -152,7 +153,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get test by ID
      */
     public GetTestByID(id: string): MJTestEntity | undefined {
-        return this._tests.find(t => t.ID === id);
+        return this._tests.find(t => UUIDsEqual(t.ID, id));
     }
 
     /**
@@ -166,7 +167,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get test suite by ID
      */
     public GetTestSuiteByID(id: string): MJTestSuiteEntity | undefined {
-        return this._testSuites.find(s => s.ID === id);
+        return this._testSuites.find(s => UUIDsEqual(s.ID, id));
     }
 
     /**
@@ -180,7 +181,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get test rubric by ID
      */
     public GetTestRubricByID(id: string): MJTestRubricEntity | undefined {
-        return this._testRubrics.find(r => r.ID === id);
+        return this._testRubrics.find(r => UUIDsEqual(r.ID, id));
     }
 
     /**
@@ -194,7 +195,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get tests by type
      */
     public GetTestsByType(typeId: string): MJTestEntity[] {
-        return this._tests.filter(t => t.TypeID === typeId);
+        return this._tests.filter(t => UUIDsEqual(t.TypeID, typeId));
     }
 
     /**
@@ -227,8 +228,8 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
             }
         }
         return tests.sort((a, b) => {
-            const aSuiteTest = suiteTests.find(st => st.TestID === a.ID);
-            const bSuiteTest = suiteTests.find(st => st.TestID === b.ID);
+            const aSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, a.ID));
+            const bSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, b.ID));
             if (aSuiteTest && bSuiteTest) {
                 return aSuiteTest.Sequence - bSuiteTest.Sequence;
             }
