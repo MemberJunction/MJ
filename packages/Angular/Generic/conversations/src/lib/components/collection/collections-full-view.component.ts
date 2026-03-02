@@ -236,7 +236,7 @@ import { UUIDsEqual } from '@memberjunction/global';
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
-                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                 (click)="onItemClick(item, $event)"
                 (dblclick)="onItemDoubleClick(item, $event)"
                 (contextmenu)="onItemContextMenu(item, $event)">
@@ -370,7 +370,7 @@ import { UUIDsEqual } from '@memberjunction/global';
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
-                    [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                    [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                     (click)="onItemClick(item, $event)"
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
@@ -1333,6 +1333,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  IsArtifactActive(item: CollectionViewItem): boolean {
+    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+  }
 
   // Context menu state
   public showContextMenu: boolean = false;
