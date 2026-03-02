@@ -163,9 +163,21 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
+        const previousEntity = super.Data?.Configuration?.Entity;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+        const newEntity = value?.Configuration?.Entity;
+
+        // Load on first set, or when the view/entity has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
             this.dataLoaded = true;
+            // Reset state before loading new view
+            this.entityInfo = null;
+            this.viewEntity = null;
+            this.gridState = null;
+            this.errorMessage = null;
             this.loadView();
         }
     }

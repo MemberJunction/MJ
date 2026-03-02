@@ -478,9 +478,22 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+
+        // Load on first set, or when the dashboard has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId) {
             this.dataLoaded = true;
+            // Destroy previous component before loading new one
+            if (this.componentRef) {
+                this.componentRef.destroy();
+                this.componentRef = null;
+            }
+            this.clearError();
+            this.configDashboard = null;
+            this.viewerInstance = null;
             this.loadDashboard();
         }
     }

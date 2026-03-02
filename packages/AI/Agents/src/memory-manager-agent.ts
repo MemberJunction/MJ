@@ -397,7 +397,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const filter = `
             ID IN (
                 SELECT DISTINCT ar.ID
-                FROM __mj.AIAgentRun ar
+                FROM __mj.vwAIAgentRuns ar
                 INNER JOIN __mj.vwConversations c ON ar.ConversationID = c.ID
                 INNER JOIN __mj.vwConversationDetails cd ON cd.ConversationID = c.ID
                 INNER JOIN __mj.vwConversationDetailArtifacts cda ON cda.ConversationDetailID = cd.ID
