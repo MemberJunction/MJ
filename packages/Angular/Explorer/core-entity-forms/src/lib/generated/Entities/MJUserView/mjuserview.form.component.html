@@ -330,7 +330,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Relationships','DisplayUserViewGUID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Relationships','DisplayUserViewID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Relationships')"
                 [AllowLoad]="IsSectionExpanded('mJEntityRelationships')"
                 [ShowToolbar]="false"

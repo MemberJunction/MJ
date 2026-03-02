@@ -229,6 +229,11 @@ export class RunCodeGenBase {
           } else {
             succeedSpinner('SQL scripts and execution completed');
           }
+          // Refresh metadata again after SQL scripts execution because the stale
+          // entity relationship cleanup (step 3.5) runs inside manageSQLScriptsAndExecution,
+          // AFTER the entity field sync. The first refresh (above) loaded metadata before
+          // those DB changes, so the in-memory metadata still has stale relationships.
+          await provider.Refresh();
         } else {
           warnSpinner('SQL output directory NOT found in config file, skipping...');
         }

@@ -244,6 +244,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // ─── SQL Server Path (existing behavior) ───────────────────────
     console.log('Database type: SQL Server');
     const pool = new sql.ConnectionPool(createMSSQLConfig());
+
+    // Handle connection-level errors from dead/stale connections in the pool.
+    // Without this handler, when Azure drops idle TCP connections, the pool silently
+    // hands out dead connections that throw "Final state" errors on next use.
+    pool.on('error', (err) => {
+      console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+    });
+
     await pool.connect();
 
     dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
@@ -256,6 +264,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         password: configInfo.dbReadOnlyPassword,
       };
       const readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+
+      readOnlyPool.on('error', (err) => {
+        console.error('[ConnectionPool] Read-only pool connection error (stale connection evicted):', err.message);
+      });
+
       await readOnlyPool.connect();
 
       dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));

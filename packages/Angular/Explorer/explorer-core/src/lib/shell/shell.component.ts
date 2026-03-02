@@ -393,6 +393,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
+    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
+    // its value when the shell subscribed (line above), but this.initialized was false
+    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
+    // manually trigger the first URL sync to set the browser URL from workspace state.
+    const initConfig = this.workspaceManager.GetConfiguration();
+    if (initConfig && initConfig.activeTabId) {
+      await this.syncActiveAppWithTab(initConfig);
+      this.syncUrlWithWorkspace(initConfig);
+    }
+
     // Force change detection to sync Angular's expected values after all async
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
     // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode

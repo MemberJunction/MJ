@@ -145,7 +145,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','AuthorizationName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','AuthorizationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
                 [ShowToolbar]="false"
@@ -170,7 +170,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuthorizationName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuthorizationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
                 [ShowToolbar]="false"

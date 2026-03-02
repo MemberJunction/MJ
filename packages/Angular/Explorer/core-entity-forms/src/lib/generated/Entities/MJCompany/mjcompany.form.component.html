@@ -113,7 +113,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','CompanyName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','CompanyID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
                 [ShowToolbar]="false"
@@ -144,31 +144,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEmployees', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Workflows Section -->
-    <mj-collapsible-panel
-        SectionKey="mJWorkflows"
-        SectionName="Workflows"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJWorkflows')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflows','CompanyName')"
-                [NewRecordValues]="NewRecordValues('MJ: Workflows')"
-                [AllowLoad]="IsSectionExpanded('mJWorkflows')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJWorkflows', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
