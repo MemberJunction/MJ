@@ -289,6 +289,18 @@ export class SQLCodeGenBase {
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
+            // STEP 3.5 - Clean up stale entity relationships now that entity fields are fully synced.
+            // This must run AFTER manageEntityFields deletes stale fields (for dropped columns),
+            // otherwise the stale EntityField records make the relationships appear valid.
+            startSpinner('Cleaning up stale entity relationships...');
+            if (! await manageMD.cleanupStaleEntityRelationships(pool, configInfo.excludeSchemas)) {
+                failSpinner('Failed to clean up stale entity relationships');
+                overallSuccess = false;
+            }
+            else {
+                succeedSpinner('Stale entity relationships cleaned up');
+            }
+
             // STEP 4- Apply permissions, executing all .permissions files
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();

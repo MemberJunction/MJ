@@ -21,7 +21,6 @@ export class MJCompanyFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
             { sectionKey: 'mJEmployees', sectionName: 'Employees', isExpanded: false },
-            { sectionKey: 'mJWorkflows', sectionName: 'Workflows', isExpanded: false },
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false }

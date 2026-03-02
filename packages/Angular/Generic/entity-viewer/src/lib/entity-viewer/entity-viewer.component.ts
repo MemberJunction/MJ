@@ -98,12 +98,21 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     return this._entity;
   }
   set entity(value: EntityInfo | null) {
+    const previousEntity = this._entity;
     this._entity = value;
 
     // Detect date fields for timeline support
     this.detectDateFields();
 
     if (this._initialized) {
+      // If entity changed to a different entity, clear stale view entity
+      // that belongs to the old entity (its WhereClause, SortState, etc. reference old fields)
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+          this._viewEntity = null;
+        }
+      }
+
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display

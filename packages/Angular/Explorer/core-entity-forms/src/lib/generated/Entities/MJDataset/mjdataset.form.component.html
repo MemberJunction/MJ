@@ -77,7 +77,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dataset Items','DatasetName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dataset Items','DatasetID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dataset Items')"
                 [AllowLoad]="IsSectionExpanded('mJDatasetItems')"
                 [ShowToolbar]="false"

@@ -93,7 +93,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','ID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','VectorDatabaseID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
                 [ShowToolbar]="false"

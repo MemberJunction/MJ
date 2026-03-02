@@ -138,7 +138,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuditLogTypeName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuditLogTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
                 [ShowToolbar]="false"
