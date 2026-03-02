@@ -947,6 +947,11 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Display helpers
     // =========================================================================
 
+    /** Check if a label is the parent of the current Label (case-insensitive UUID comparison). */
+    public IsParentLabel(pl: MJVersionLabelEntityType): boolean {
+        return UUIDsEqual(pl.ID, this.Label.ParentID);
+    }
+
     public resolveEntityName(entityId: string | null | undefined): string {
         if (!entityId) return 'Unknown';
         const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));

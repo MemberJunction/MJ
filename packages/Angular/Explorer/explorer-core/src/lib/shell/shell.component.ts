@@ -2400,6 +2400,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Redirect to the first available app (fallback)
    */
+  /** Case-insensitive UUID check whether an app is the currently active app. */
+  public IsActiveApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.activeApp?.ID);
+  }
+
   private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
     if (apps.length > 0) {
       const firstApp = apps[0];

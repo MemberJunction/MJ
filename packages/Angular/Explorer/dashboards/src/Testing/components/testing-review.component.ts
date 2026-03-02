@@ -17,6 +17,7 @@ import {
   TestRunWithFeedbackSummary,
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 type ViewMode = 'queue' | 'history';
 type HistorySort = 'date' | 'rating' | 'test-name';
@@ -121,7 +122,7 @@ interface ReviewFormState {
           } @else {
             <div class="queue-list">
               @for (item of PendingItems; track item.testRunID) {
-                <div class="queue-item" [class.expanded]="ExpandedItemId === item.testRunID">
+                <div class="queue-item" [class.expanded]="IsItemExpanded(item.testRunID)">
                   <div class="queue-item-header" (click)="ToggleExpand(item.testRunID)">
                     <div class="item-info">
                       <div class="item-name">{{ item.testName }}</div>
@@ -145,13 +146,13 @@ interface ReviewFormState {
                         }
                       </span>
                       <button class="expand-toggle">
-                        <i class="fa-solid" [class.fa-chevron-down]="ExpandedItemId !== item.testRunID"
-                           [class.fa-chevron-up]="ExpandedItemId === item.testRunID"></i>
+                        <i class="fa-solid" [class.fa-chevron-down]="!IsItemExpanded(item.testRunID)"
+                           [class.fa-chevron-up]="IsItemExpanded(item.testRunID)"></i>
                       </button>
                     </div>
                   </div>
 
-                  @if (ExpandedItemId === item.testRunID) {
+                  @if (IsItemExpanded(item.testRunID)) {
                     <div class="review-form-panel">
                       <!-- Rating -->
                       <div class="form-section">
@@ -1305,8 +1306,12 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   //  Queue interactions
   // ------------------------------------------------------------------
 
+  IsItemExpanded(testRunID: string): boolean {
+    return UUIDsEqual(this.ExpandedItemId, testRunID);
+  }
+
   ToggleExpand(testRunID: string): void {
-    if (this.ExpandedItemId === testRunID) {
+    if (UUIDsEqual(this.ExpandedItemId, testRunID)) {
       this.ExpandedItemId = null;
     } else {
       this.ExpandedItemId = testRunID;
@@ -1356,7 +1361,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
 
   SkipItem(): void {
     const currentIndex = this.PendingItems.findIndex(
-      i => i.testRunID === this.ExpandedItemId
+      i => UUIDsEqual(i.testRunID, this.ExpandedItemId)
     );
     this.ExpandedItemId = null;
     this.resetForm();

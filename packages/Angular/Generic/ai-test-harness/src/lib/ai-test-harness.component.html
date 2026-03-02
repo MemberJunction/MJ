@@ -383,7 +383,7 @@
                         <div class="setting-help">
                           @if (agentConfigurationId) {
                             @for (config of availableConfigurations; track config.ID) {
-                              @if (config.ID === agentConfigurationId && config.Description) {
+                              @if (IsConfigMatchById(config, agentConfigurationId) && config.Description) {
                                 {{ config.Description }}
                               }
                             }
@@ -508,7 +508,7 @@
                         <div class="setting-help">
                           @if (selectedConfigurationId) {
                             @for (config of availableConfigurations; track config.ID) {
-                              @if (config.ID === selectedConfigurationId && config.Description) {
+                              @if (IsConfigMatchById(config, selectedConfigurationId) && config.Description) {
                                 {{ config.Description }}
                               }
                             }

@@ -127,7 +127,7 @@
         <div class="category-queries">
           @for (query of node.queries; track trackByQuery($index, query)) {
             <div class="query-item"
-              [class.selected]="selectedQuery?.ID === query.ID"
+              [class.selected]="IsQuerySelected(query)"
               [class.hidden]="!isQueryVisible(query)"
               (click)="selectQuery(query, $event)">
               <i class="fa-solid fa-file-code query-icon"></i>

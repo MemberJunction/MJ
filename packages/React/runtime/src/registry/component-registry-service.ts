@@ -677,7 +677,7 @@ export class ComponentRegistryService {
     
     // Get dependencies from metadata cache
     const dependencies = this.componentEngine.ComponentDependencies?.filter(
-      d => d.ComponentID === componentId
+      d => UUIDsEqual(d.ComponentID, componentId)
     ) || [];
     
     const result: ComponentDependencyInfo[] = [];

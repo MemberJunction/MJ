@@ -154,7 +154,7 @@ interface TestRunStatRow {
                 @for (tt of FilteredTestTypes; track tt.ID) {
                   <div
                     class="sidebar-item"
-                    [class.active]="SelectedSidebar.Type === 'testType' && SelectedSidebar.ID === tt.ID"
+                    [class.active]="SelectedSidebar.Type === 'testType' && IsSidebarSelected(tt.ID)"
                     (click)="SelectSidebarItem({ Type: 'testType', ID: tt.ID })"
                   >
                     <i class="fa-solid fa-tag"></i>
@@ -457,7 +457,7 @@ interface TestRunStatRow {
       <div
         class="sidebar-item suite-tree-item"
         [style.paddingLeft.px]="16 + depth * 14"
-        [class.active]="SelectedSidebar.Type === 'suite' && SelectedSidebar.ID === node.ID"
+        [class.active]="SelectedSidebar.Type === 'suite' && IsSidebarSelected(node.ID)"
         (click)="SelectSidebarItem({ Type: 'suite', ID: node.ID })"
       >
         @if (node.Children.length > 0) {
@@ -1943,6 +1943,10 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     this.buildSuiteTree();
     this.computeCounts();
     this.applyFilters();
+  }
+
+  IsSidebarSelected(id: string): boolean {
+    return UUIDsEqual(this.SelectedSidebar.ID, id);
   }
 
   SelectSidebarItem(selection: SidebarSelection): void {

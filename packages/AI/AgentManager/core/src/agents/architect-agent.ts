@@ -2,7 +2,7 @@ import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJActionEntity } from "@memberjunction/core-entities";
 import { RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Architect Agent - Transforms technical design into validated AgentSpec JSON
@@ -305,7 +305,7 @@ export class AgentArchitectAgent extends BaseAgent {
                 return { errors };
             }
 
-            const foundIds = new Set(result.Results.map(a => a.ID));
+            const foundIds = new Set(result.Results.map(a => NormalizeUUID(a.ID)));
 
             // Check which actions weren't found
             for (const action of actions) {
@@ -314,7 +314,7 @@ export class AgentArchitectAgent extends BaseAgent {
                     continue;
                 }
 
-                if (!foundIds.has(action.ActionID)) {
+                if (!foundIds.has(NormalizeUUID(action.ActionID))) {
                     errors.push(`❌ Action with ID "${action.ActionID}" not found in database. Please use "Find Candidate Actions" or "List Actions" to get valid action IDs.`);
                 }
             }

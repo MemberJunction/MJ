@@ -767,7 +767,7 @@
               <div class="run-selector-list">
                 @for (run of suiteRuns; track run) {
                   <div class="run-selector-item"
-                    [class.selected]="compareRunA?.ID === run.ID"
+                    [class.selected]="IsCompareRunA(run)"
                     (click)="selectCompareRunA(run)">
                     <div class="selector-status" [style.background-color]="getRunStatusColor(run.Status)"></div>
                     <div class="selector-content">
@@ -805,9 +805,9 @@
               <div class="run-selector-list">
                 @for (run of suiteRuns; track run) {
                   <div class="run-selector-item"
-                    [class.selected]="compareRunB?.ID === run.ID"
-                    [class.disabled]="compareRunA?.ID === run.ID"
-                    (click)="compareRunA?.ID !== run.ID && selectCompareRunB(run)">
+                    [class.selected]="IsCompareRunB(run)"
+                    [class.disabled]="IsCompareRunA(run)"
+                    (click)="!IsCompareRunA(run) && selectCompareRunB(run)">
                     <div class="selector-status" [style.background-color]="getRunStatusColor(run.Status)"></div>
                     <div class="selector-content">
                       <div class="selector-date">{{ run.StartedAt | date:'short' }}</div>
