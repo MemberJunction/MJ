@@ -10057,5 +10057,94 @@
       "lastModified": "2026-02-27T20:01:06.160Z",
       "checksum": "b1e90e85cc58bf29bdb72a46335b22ea91ac46c457d68e9910c317f1ca130001"
     }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.5 Plus",
+      "PowerRank": 16,
+      "Description": "Alibaba Cloud's frontier multimodal hybrid reasoning model from the Qwen 3.5 series (397B total parameters, 17B active via sparse MoE). Features a 1M token context window and 65K output capacity. Supports text, image, and video input with built-in thinking mode for extended reasoning. Knowledge cutoff of February 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "8D952982-87C5-4861-A31A-9E29A0679485"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.161Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.5-plus-02-15",
+            "MaxInputTokens": 983616,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "80A0DEEF-DA41-4257-89E7-1DEBA2E3C584"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.176Z",
+            "checksum": "55004829a23700619a058b9ad16ff0d96e5893cf11bd27441c9c939e02e49b45"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-02-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.4,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.5 Plus pricing via OpenRouter/Alibaba Cloud as of February 2026. Standard tier (<=256K context): $0.40/$2.40 per 1M tokens. Extended context (>256K): $0.50/$3.00 per 1M tokens. Base tier pricing shown."
+          },
+          "primaryKey": {
+            "ID": "6CD0EB92-385B-41CB-BDAD-0C073FC049E1"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.217Z",
+            "checksum": "912566e5f23932b1766d45da013ba8f640cec3364a9948685140708e1a2bfade"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F78652ED-908B-4BE8-AD22-CE26751397C5"
+    },
+    "sync": {
+      "lastModified": "2026-03-02T00:20:15.042Z",
+      "checksum": "fd880f4ad75b59058f7da992a8370f19351ec7befac58c792ef36eef87547eb0"
+    }
   }
 ]
