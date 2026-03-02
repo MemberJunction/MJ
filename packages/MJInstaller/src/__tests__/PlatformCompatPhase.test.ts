@@ -165,6 +165,65 @@ describe('PlatformCompatPhase', () => {
         expect(writtenContent.scripts.copy).toBe('cpy "src/lib/styles/**" dist/');
       });
 
+      it('should replace single-quoted paths without wildcards on Windows', async () => {
+        mockFs.FindFiles.mockResolvedValue(['/test/install/packages/foo/package.json']);
+        mockFs.ReadText.mockResolvedValue(pkgJson({
+          'copy-assets': "cpy 'src/lib/_tokens.scss' dist/lib --flat",
+        }));
+
+        const ctx = makeContext({ DetectedOS: 'windows' });
+        const result = await phase.Run(ctx);
+
+        expect(result.ScriptsPatched).toHaveLength(1);
+        const writtenContent = JSON.parse(mockFs.WriteText.mock.calls[0][1] as string);
+        expect(writtenContent.scripts['copy-assets']).toBe('cpy "src/lib/_tokens.scss" dist/lib --flat');
+      });
+
+      it('should not replace single quotes inside node -e code on Windows', async () => {
+        mockFs.FindFiles.mockResolvedValue(['/test/install/packages/foo/package.json']);
+        mockFs.ReadText.mockResolvedValue(pkgJson({
+          prebuild: `node -e "try { require.resolve('turbo') } catch (e) { console.error('missing'); process.exit(1); }"`,
+        }));
+
+        const ctx = makeContext({ DetectedOS: 'windows' });
+        const result = await phase.Run(ctx);
+
+        // No patching needed — single quotes inside node -e are JS string delimiters
+        expect(result.ScriptsPatched).toHaveLength(0);
+      });
+
+      it('should not replace single quotes with paths inside node -e code on Windows', async () => {
+        // Even if the JS code contains '/' (which would match the path heuristic),
+        // the node -e safety net must protect it from replacement.
+        mockFs.FindFiles.mockResolvedValue(['/test/install/packages/foo/package.json']);
+        mockFs.ReadText.mockResolvedValue(pkgJson({
+          prebuild: `node -e "const p = require('path/posix'); console.log(p.join('a/b','c'))"`,
+        }));
+
+        const ctx = makeContext({ DetectedOS: 'windows' });
+        const result = await phase.Run(ctx);
+
+        expect(result.ScriptsPatched).toHaveLength(0);
+      });
+
+      it('should patch single-quoted globs but preserve node -e code in the same script', async () => {
+        // A script that chains a node -e check with a glob command. Only the glob
+        // part should be patched; the node -e block must be left untouched.
+        mockFs.FindFiles.mockResolvedValue(['/test/install/packages/foo/package.json']);
+        mockFs.ReadText.mockResolvedValue(pkgJson({
+          prebuild: `node -e "require('turbo')" && cpy 'src/**/*.js' dist/`,
+        }));
+
+        const ctx = makeContext({ DetectedOS: 'windows' });
+        const result = await phase.Run(ctx);
+
+        expect(result.ScriptsPatched).toHaveLength(1);
+        const writtenContent = JSON.parse(mockFs.WriteText.mock.calls[0][1] as string);
+        expect(writtenContent.scripts.prebuild).toBe(
+          `node -e "require('turbo')" && cpy "src/**/*.js" dist/`
+        );
+      });
+
       it('should not duplicate cross-env prefix when script already has it', async () => {
         mockFs.FindFiles.mockResolvedValue(['/test/install/packages/foo/package.json']);
         mockFs.ReadText.mockResolvedValue(pkgJson({

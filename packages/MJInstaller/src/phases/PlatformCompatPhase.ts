@@ -52,14 +52,21 @@ const UNIX_ENV_PATTERN = /^([A-Z_]+=\S+\s+)+/;
 const BASH_CONDITIONAL_PATTERN = /^if\s+\[/;
 
 /**
- * Regex matching single-quoted arguments containing glob wildcards.
+ * Regex matching single-quoted file path or glob arguments in npm scripts.
  *
  * On Windows `cmd.exe`, single quotes are passed literally to commands
- * (they're NOT quote characters in `cmd.exe`). This breaks glob patterns
- * like `cpy 'src/lib/styles/**'` because the tool receives the path with
- * quotes embedded. Double quotes work correctly on both platforms.
+ * (they're NOT quote characters in `cmd.exe`). This breaks any tool
+ * receiving a path with embedded quotes — both glob patterns like
+ * `cpy 'src/lib/styles/**'` and plain paths like `cpy 'src/lib/_tokens.scss'`.
+ * Double quotes work correctly on both platforms.
+ *
+ * We match single-quoted args containing `/` (path separator) or `*` (glob
+ * wildcard). As an additional safety net, `node -e "..."` and `node -p "..."`
+ * blocks are stripped before testing this pattern, so JS string delimiters
+ * like `require.resolve('turbo')` are never matched even if they contain
+ * `/` or `*`.
  */
-const SINGLE_QUOTED_ARG_PATTERN = /'[^']*\*[^']*'/;
+const SINGLE_QUOTED_ARG_PATTERN = /'[^']*[/*][^']*'/;
 
 /**
  * Input context for the platform compatibility phase.
@@ -91,6 +98,7 @@ export interface PlatformCompatResult {
   StaleFilesRemoved: number;
 }
 
+/** Minimal shape of a `package.json` used for script patching. */
 interface PackageJson {
   name?: string;
   scripts?: Record<string, string>;
@@ -98,6 +106,7 @@ interface PackageJson {
   dependencies?: Record<string, string>;
 }
 
+/** Minimal shape of a `tsconfig.json` used for test-exclusion patching. */
 interface TsconfigJson {
   include?: string[];
   exclude?: string[];
@@ -324,15 +333,63 @@ export class PlatformCompatPhase {
   }
 
   private hasSingleQuotedGlobs(script: string): boolean {
-    return SINGLE_QUOTED_ARG_PATTERN.test(script);
+    // Don't flag scripts where all single quotes live inside node -e/node -p code
+    const stripped = this.stripEmbeddedNodeCode(script);
+    return SINGLE_QUOTED_ARG_PATTERN.test(stripped);
   }
 
   /**
-   * Replaces single-quoted arguments with double-quoted equivalents.
+   * Replaces single-quoted file path/glob arguments with double-quoted equivalents.
    * e.g. cpy 'src/lib/styles/**' → cpy "src/lib/styles/**"
+   *
+   * Only replaces single-quoted args containing `/` or `*` (file paths and globs).
+   * As a safety net, `node -e "..."` and `node -p "..."` embedded code blocks are
+   * preserved verbatim — single quotes inside those are JS string delimiters that
+   * must not be converted to double quotes.
    */
   private replaceSingleQuotes(script: string): string {
-    return script.replace(/'([^']+)'/g, '"$1"');
+    return this.withEmbeddedNodeCodePreserved(script, (segment) =>
+      segment.replace(/'([^']*[/*][^']*)'/g, '"$1"')
+    );
+  }
+
+  /**
+   * Regex matching `node -e "..."` or `node -p "..."` inline code blocks.
+   * Captures the entire block so we can exclude it from single-quote replacement.
+   */
+  private static readonly NODE_EVAL_PATTERN = /node\s+-[ep]\s+"[^"]*"/g;
+
+  /**
+   * Returns the script with all `node -e "..."` / `node -p "..."` blocks removed,
+   * so callers can test the remaining text for patterns without false positives
+   * from embedded JS code.
+   */
+  private stripEmbeddedNodeCode(script: string): string {
+    return script.replace(PlatformCompatPhase.NODE_EVAL_PATTERN, '');
+  }
+
+  /**
+   * Applies `transform` to every part of `script` that is NOT inside a
+   * `node -e "..."` or `node -p "..."` block, preserving those blocks verbatim.
+   */
+  private withEmbeddedNodeCodePreserved(
+    script: string,
+    transform: (segment: string) => string
+  ): string {
+    const parts: string[] = [];
+    let lastIndex = 0;
+
+    for (const match of script.matchAll(PlatformCompatPhase.NODE_EVAL_PATTERN)) {
+      // Transform the gap before this node -e block
+      parts.push(transform(script.slice(lastIndex, match.index)));
+      // Keep the node -e block untouched
+      parts.push(match[0]);
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Transform the remainder after the last node -e block (or the whole string if none)
+    parts.push(transform(script.slice(lastIndex)));
+    return parts.join('');
   }
 
   /**

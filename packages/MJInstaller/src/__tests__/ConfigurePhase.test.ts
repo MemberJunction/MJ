@@ -460,7 +460,7 @@ describe('ConfigurePhase', () => {
 
       const envContent = findWrittenContent('.env');
       expect(envContent).toBeDefined();
-      expect(envContent).toContain('PORT=4001');
+      expect(envContent).toContain('GRAPHQL_PORT=4001');
     });
 
     it('should include AI vendor keys when provided', async () => {

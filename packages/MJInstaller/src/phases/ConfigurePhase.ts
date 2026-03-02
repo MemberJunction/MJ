@@ -315,7 +315,7 @@ AI_VENDOR_API_KEY__OpenAILLM='${config.OpenAIKey ?? ''}'
 AI_VENDOR_API_KEY__MistralLLM='${config.MistralKey ?? ''}'
 AI_VENDOR_API_KEY__AnthropicLLM='${config.AnthropicKey ?? ''}'
 
-PORT=${config.APIPort}
+GRAPHQL_PORT=${config.APIPort}
 
 UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000

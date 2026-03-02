@@ -20,7 +20,7 @@ vi.mock('../adapters/ProcessRunner.js', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock global fetch for health checks
+// Mock global fetch for HTTP health confirmation
 // ---------------------------------------------------------------------------
 
 const mockFetch = vi.fn();
@@ -34,6 +34,17 @@ import { SmokeTestPhase } from '../phases/SmokeTestPhase.js';
 import { InstallerError } from '../errors/InstallerError.js';
 
 // ---------------------------------------------------------------------------
+// Types for ProcessRunner mock options
+// ---------------------------------------------------------------------------
+
+interface MockRunOptions {
+  Cwd?: string;
+  TimeoutMs?: number;
+  OnStdout?: (line: string) => void;
+  OnStderr?: (line: string) => void;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -45,6 +56,48 @@ function makeContext(overrides?: Partial<SmokeTestContext>): SmokeTestContext {
     Emitter: emitter,
     ...overrides,
   };
+}
+
+/**
+ * Configure the ProcessRunner.Run mock to emit stdout lines via OnStdout.
+ * Uses queueMicrotask so lines are emitted asynchronously (after the call
+ * returns control) but before any timer-based timeouts fire.
+ */
+function mockRunWithStdout(
+  apiLines: string[],
+  explorerLines: string[]
+): void {
+  mockRunner.Run.mockImplementation(
+    async (_cmd: string, args: string[], options?: MockRunOptions) => {
+      const isApi = args.includes('start:api');
+      const isExplorer = args.includes('start:explorer');
+      const lines = isApi ? apiLines : isExplorer ? explorerLines : [];
+
+      if (options?.OnStdout && lines.length > 0) {
+        queueMicrotask(() => {
+          for (const line of lines) {
+            options.OnStdout!(line);
+          }
+        });
+      }
+
+      return { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
+    }
+  );
+}
+
+/**
+ * Flush all microtasks and pending timers. This handles the common case
+ * where readiness resolves via queueMicrotask (no timer advancement needed)
+ * and also handles the timeout path.
+ */
+async function flushAll(): Promise<void> {
+  // Flush microtasks first (readiness via stdout)
+  await vi.advanceTimersByTimeAsync(0);
+  // Then advance timers for the timeout path and process promise resolution
+  for (let i = 0; i < 60; i++) {
+    await vi.advanceTimersByTimeAsync(5000);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -71,15 +124,21 @@ describe('SmokeTestPhase', () => {
 
     // Default: mj_generatedentities exists (preCheck passes)
     mockFs.DirectoryExists.mockResolvedValue(true);
-    mockFs.FileExists.mockResolvedValue(true);
 
-    // Default: processes start fine
-    mockRunner.Run.mockResolvedValue({
-      ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false,
-    });
+    // Default: no project files found for port detection (uses config defaults)
+    mockFs.FileExists.mockResolvedValue(false);
+    mockFs.ReadText.mockResolvedValue('');
+
+    // Default: both services emit readiness markers
+    mockRunWithStdout(
+      ['Starting server...', '🚀 Server ready at http://localhost:4000/'],
+      ['Compiling...', 'Application bundle generation complete.']
+    );
+
+    // Default: process cleanup succeeds
     mockRunner.killByPort.mockReturnValue(undefined);
 
-    // Default: health checks succeed immediately
+    // Default: HTTP health confirmation succeeds
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
   });
 
@@ -97,14 +156,9 @@ describe('SmokeTestPhase', () => {
 
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
-
-      // Advance time past all health check sleeps
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
+      await flushAll();
 
       const result = await runPromise;
-      // If preCheck passed, we should get results
       expect(result).toBeDefined();
     });
 
@@ -112,13 +166,10 @@ describe('SmokeTestPhase', () => {
       mockFs.DirectoryExists.mockResolvedValue(false);
 
       const ctx = makeContext();
-
-      // preCheck rejects before any timers, so we can await directly
       await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
 
-      // Verify the error code in a separate assertion
-      const ctx2 = makeContext();
       mockFs.DirectoryExists.mockResolvedValue(false);
+      const ctx2 = makeContext();
       await expect(phase.Run(ctx2)).rejects.toMatchObject({
         Code: 'MISSING_GENERATED_ENTITIES',
       });
@@ -133,10 +184,7 @@ describe('SmokeTestPhase', () => {
 
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
+      await flushAll();
 
       const result = await runPromise;
       expect(result).toBeDefined();
@@ -144,195 +192,278 @@ describe('SmokeTestPhase', () => {
   });
 
   // =========================================================================
-  // Service health checks
+  // Port detection
   // =========================================================================
 
-  describe('Health checks', () => {
-    it('should return both services running when healthy', async () => {
-      mockFetch.mockResolvedValue({ ok: true, status: 200 });
+  describe('Port detection', () => {
+    it('should detect API port from GRAPHQL_PORT in .env', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        p.includes('MJAPI') && p.endsWith('.env')
+      );
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.endsWith('.env')) return 'DB_HOST=localhost\nGRAPHQL_PORT=4001\nDB_DATABASE=MJ';
+        return '';
+      });
 
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
+      await flushAll();
 
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
+      const result = await runPromise;
+      expect(result.ApiUrl).toBe('http://localhost:4001/');
+    });
+
+    it('should fall back to PORT if GRAPHQL_PORT not found', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        p.includes('.env') && p.includes('MJAPI')
+      );
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.endsWith('.env')) return 'PORT=5000\nDB_HOST=localhost';
+        return '';
+      });
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ApiUrl).toBe('http://localhost:5000/');
+    });
+
+    it('should detect Explorer port from package.json --port flag', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        p.includes('MJExplorer') && p.includes('package.json')
+      );
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('package.json')) {
+          return JSON.stringify({ scripts: { start: 'ng serve --port 4201' } });
+        }
+        return '';
+      });
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ExplorerUrl).toBe('http://localhost:4201/');
+    });
+
+    it('should fall back to config ports when project files missing', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockResolvedValue(false);
+
+      const config: PartialInstallConfig = {
+        ...sampleConfig(),
+        APIPort: 5000,
+        ExplorerPort: 5200,
+      };
+      const ctx = makeContext({ Config: config });
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ApiUrl).toBe('http://localhost:5000/');
+      expect(result.ExplorerUrl).toBe('http://localhost:5200/');
+    });
+
+    it('should use default ports (4000, 4200) when no config or project files', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockResolvedValue(false);
+
+      const ctx = makeContext({ Config: {} });
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ApiUrl).toBe('http://localhost:4000/');
+      expect(result.ExplorerUrl).toBe('http://localhost:4200/');
+    });
+  });
+
+  // =========================================================================
+  // Stdout-based readiness detection
+  // =========================================================================
+
+  describe('Readiness detection', () => {
+    it('should detect both services as running via stdout markers', async () => {
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
 
       const result = await runPromise;
       expect(result.ApiRunning).toBe(true);
       expect(result.ExplorerRunning).toBe(true);
     });
 
-    it('should report API unhealthy when fetch always rejects', async () => {
-      // Both services fail
-      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+    it('should detect API via "Server ready at" marker', async () => {
+      mockRunWithStdout(
+        ['Loading entities...', 'Server ready at http://localhost:4000/'],
+        ['Application bundle generation complete.']
+      );
 
-      // processRunner.Run should resolve eventually (timeout)
-      mockRunner.Run.mockResolvedValue({
-        ExitCode: 1, Stdout: '', Stderr: '', TimedOut: true,
-      });
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ApiRunning).toBe(true);
+    });
+
+    it('should detect Explorer via "Compiled successfully" marker', async () => {
+      mockRunWithStdout(
+        ['Server ready at http://localhost:4000/'],
+        ['Building...', 'Compiled successfully.']
+      );
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ExplorerRunning).toBe(true);
+    });
+
+    it('should detect Explorer via "Local:" URL marker', async () => {
+      mockRunWithStdout(
+        ['Server ready at http://localhost:4000/'],
+        ['Building...', 'Local:   http://localhost:4201/']
+      );
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ExplorerRunning).toBe(true);
+    });
+
+    it('should fail immediately on EADDRINUSE fatal error', async () => {
+      mockRunWithStdout(
+        ['Starting server...', 'Error: listen EADDRINUSE: address already in use :::4000'],
+        ['Application bundle generation complete.']
+      );
 
       const { emitter, emitSpy } = createMockEmitter();
       const ctx = makeContext({ Emitter: emitter });
       const runPromise = phase.Run(ctx);
+      await flushAll();
 
-      // Advance enough time for all health check retries
+      const result = await runPromise;
+      expect(result.ApiRunning).toBe(false);
+      expect(result.ExplorerRunning).toBe(true);
+
+      const warns = emittedEvents(emitSpy, 'warn');
+      const apiWarn = warns.find((w) =>
+        (w as { Message: string }).Message.includes('MJAPI failed to start')
+      );
+      expect(apiWarn).toBeDefined();
+      expect((apiWarn as { Message: string }).Message).toContain('EADDRINUSE');
+    });
+
+    it('should fail when process exits before becoming ready', async () => {
+      mockRunner.Run.mockImplementation(
+        async (_cmd: string, args: string[], options?: MockRunOptions) => {
+          const isExplorer = args.includes('start:explorer');
+          if (isExplorer && options?.OnStdout) {
+            queueMicrotask(() => {
+              options.OnStdout!('Application bundle generation complete.');
+            });
+          }
+          // API exits immediately with error code
+          return { ExitCode: 1, Stdout: '', Stderr: 'crash', TimedOut: false };
+        }
+      );
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      const result = await runPromise;
+      expect(result.ApiRunning).toBe(false);
+    });
+
+    it('should fail with timeout when no readiness marker is emitted', async () => {
+      // Emit lines that don't match any readiness pattern
+      mockRunWithStdout(
+        ['Loading...', 'Still loading...'],
+        ['Compiling...', 'Still compiling...']
+      );
+
+      // Make process resolve late (not immediately) so timeout fires first
+      mockRunner.Run.mockImplementation(
+        async (_cmd: string, _args: string[], options?: MockRunOptions) => {
+          if (options?.OnStdout) {
+            queueMicrotask(() => {
+              options.OnStdout!('Loading...');
+            });
+          }
+          // Return a promise that resolves very late
+          return new Promise((resolve) => {
+            setTimeout(() => resolve({
+              ExitCode: 0, Stdout: '', Stderr: '', TimedOut: true,
+            }), 300_000);
+          });
+        }
+      );
+
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+
+      // Advance past both readiness timeouts (120s API + 240s Explorer)
       for (let i = 0; i < 100; i++) {
         await vi.advanceTimersByTimeAsync(5000);
       }
 
       const result = await runPromise;
       expect(result.ApiRunning).toBe(false);
-
-      const warns = emittedEvents(emitSpy, 'warn');
-      expect(warns.some((w: Record<string, unknown>) =>
-        (w.Message as string).includes('MJAPI did not respond')
-      )).toBe(true);
-    });
-
-    it('should report Explorer unhealthy when fetch fails for Explorer only', async () => {
-      let fetchCallCount = 0;
-      mockFetch.mockImplementation(async (url: string) => {
-        // API health checks succeed, Explorer health checks fail
-        if (url.includes('4000') || url.includes(':4000')) {
-          return { ok: true, status: 200 };
-        }
-        throw new Error('ECONNREFUSED');
-      });
-
-      mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
-        if (args.includes('start:explorer')) {
-          return { ExitCode: 1, Stdout: '', Stderr: '', TimedOut: true };
-        }
-        return { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
-      });
-
-      const { emitter, emitSpy } = createMockEmitter();
-      const ctx = makeContext({ Emitter: emitter });
-      const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 100; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      const result = await runPromise;
-      expect(result.ApiRunning).toBe(true);
       expect(result.ExplorerRunning).toBe(false);
     });
+  });
 
-    it('should use 127.0.0.1 instead of localhost for health checks', async () => {
+  // =========================================================================
+  // HTTP health confirmation
+  // =========================================================================
+
+  describe('HTTP health confirmation', () => {
+    it('should use 127.0.0.1 instead of localhost for HTTP check', async () => {
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
+      await flushAll();
 
       await runPromise;
 
-      // Check that fetch was called with 127.0.0.1
       const fetchCalls = mockFetch.mock.calls.map((c: [string]) => c[0]);
+      expect(fetchCalls.length).toBeGreaterThan(0);
       expect(fetchCalls.every((url: string) => url.includes('127.0.0.1'))).toBe(true);
-      expect(fetchCalls.every((url: string) => !url.includes('localhost'))).toBe(true);
     });
-  });
 
-  // =========================================================================
-  // Cleanup
-  // =========================================================================
+    it('should still report ready when stdout succeeds but HTTP fails', async () => {
+      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
 
-  describe('Cleanup', () => {
-    it('should call killByPort with correct ports', async () => {
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
+      await flushAll();
 
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      await runPromise;
-
-      expect(mockRunner.killByPort).toHaveBeenCalledWith(4000);
-      expect(mockRunner.killByPort).toHaveBeenCalledWith(4200);
+      const result = await runPromise;
+      // Stdout says ready, HTTP failed — we trust stdout
+      expect(result.ApiRunning).toBe(true);
+      expect(result.ExplorerRunning).toBe(true);
     });
   });
 
   // =========================================================================
-  // Port configuration
+  // Parallel startup
   // =========================================================================
 
-  describe('Port configuration', () => {
-    it('should use custom ports from config', async () => {
-      const config: PartialInstallConfig = {
-        ...sampleConfig(),
-        APIPort: 5000,
-        ExplorerPort: 5200,
-      };
-
-      const ctx = makeContext({ Config: config });
-      const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      const result = await runPromise;
-
-      expect(result.ApiUrl).toContain('5000');
-      expect(result.ExplorerUrl).toContain('5200');
-      expect(mockRunner.killByPort).toHaveBeenCalledWith(5000);
-      expect(mockRunner.killByPort).toHaveBeenCalledWith(5200);
-    });
-
-    it('should use default ports (4000, 4200) when config does not specify', async () => {
-      const config: PartialInstallConfig = {};
-
-      const ctx = makeContext({ Config: config });
-      const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      const result = await runPromise;
-
-      expect(result.ApiUrl).toBe('http://localhost:4000/');
-      expect(result.ExplorerUrl).toBe('http://localhost:4200/');
-    });
-
-    it('should reflect port config in ApiUrl and ExplorerUrl', async () => {
-      const config: PartialInstallConfig = {
-        ...sampleConfig(),
-        APIPort: 8080,
-        ExplorerPort: 3000,
-      };
-
-      const ctx = makeContext({ Config: config });
-      const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      const result = await runPromise;
-
-      expect(result.ApiUrl).toBe('http://localhost:8080/');
-      expect(result.ExplorerUrl).toBe('http://localhost:3000/');
-    });
-  });
-
-  // =========================================================================
-  // Service startup commands
-  // =========================================================================
-
-  describe('Service startup', () => {
-    it('should start correct commands: npm run start:api and npm run start:explorer', async () => {
+  describe('Parallel startup', () => {
+    it('should start both commands: npm run start:api and npm run start:explorer', async () => {
       const ctx = makeContext();
       const runPromise = phase.Run(ctx);
-
-      for (let i = 0; i < 60; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
+      await flushAll();
 
       await runPromise;
 
@@ -346,6 +477,110 @@ describe('SmokeTestPhase', () => {
         (c: [string, string[]]) => c[0] === 'npm' && c[1]?.includes('start:explorer')
       );
       expect(explorerCall).toBeDefined();
+    });
+  });
+
+  // =========================================================================
+  // Cleanup
+  // =========================================================================
+
+  describe('Cleanup', () => {
+    it('should call killByPort with detected ports', async () => {
+      const ctx = makeContext();
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      await runPromise;
+
+      expect(mockRunner.killByPort).toHaveBeenCalledWith(4000);
+      expect(mockRunner.killByPort).toHaveBeenCalledWith(4200);
+    });
+
+    it('should call killByPort with custom config ports', async () => {
+      const config: PartialInstallConfig = {
+        ...sampleConfig(),
+        APIPort: 5000,
+        ExplorerPort: 5200,
+      };
+
+      const ctx = makeContext({ Config: config });
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      await runPromise;
+
+      expect(mockRunner.killByPort).toHaveBeenCalledWith(5000);
+      expect(mockRunner.killByPort).toHaveBeenCalledWith(5200);
+    });
+  });
+
+  // =========================================================================
+  // Error reporting
+  // =========================================================================
+
+  describe('Error reporting', () => {
+    it('should include captured output in failure warning', async () => {
+      mockRunner.Run.mockImplementation(
+        async (_cmd: string, args: string[], options?: MockRunOptions) => {
+          const isExplorer = args.includes('start:explorer');
+          if (isExplorer && options?.OnStdout) {
+            queueMicrotask(() => {
+              options.OnStdout!('Application bundle generation complete.');
+            });
+          }
+          if (!isExplorer && options?.OnStdout) {
+            queueMicrotask(() => {
+              options.OnStdout!('Starting server...');
+              options.OnStdout!('Error: listen EADDRINUSE: port 4000');
+            });
+          }
+          return { ExitCode: 1, Stdout: '', Stderr: '', TimedOut: false };
+        }
+      );
+
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Emitter: emitter });
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      await runPromise;
+
+      const warns = emittedEvents(emitSpy, 'warn');
+      const apiWarn = warns.find((w) =>
+        (w as { Message: string }).Message.includes('MJAPI failed to start')
+      );
+      expect(apiWarn).toBeDefined();
+      expect((apiWarn as { Message: string }).Message).toContain('Starting server...');
+      expect((apiWarn as { Message: string }).Message).toContain('EADDRINUSE');
+    });
+
+    it('should report "(No output captured)" when process produces no output', async () => {
+      mockRunner.Run.mockImplementation(
+        async (_cmd: string, args: string[], options?: MockRunOptions) => {
+          const isExplorer = args.includes('start:explorer');
+          if (isExplorer && options?.OnStdout) {
+            queueMicrotask(() => {
+              options.OnStdout!('Application bundle generation complete.');
+            });
+          }
+          // API produces no output and exits immediately
+          return { ExitCode: 1, Stdout: '', Stderr: '', TimedOut: false };
+        }
+      );
+
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Emitter: emitter });
+      const runPromise = phase.Run(ctx);
+      await flushAll();
+
+      await runPromise;
+
+      const warns = emittedEvents(emitSpy, 'warn');
+      const apiWarn = warns.find((w) =>
+        (w as { Message: string }).Message.includes('MJAPI failed to start')
+      );
+      expect(apiWarn).toBeDefined();
+      expect((apiWarn as { Message: string }).Message).toContain('No output captured');
     });
   });
 });

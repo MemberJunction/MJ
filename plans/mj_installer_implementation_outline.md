@@ -2,7 +2,7 @@
 
 > **Package:** `@memberjunction/installer` (`packages/MJInstaller/`)
 >
-> **Status:** Core engine implemented and functional. All 9 phases work end-to-end. CLI integration complete for `mj install` and `mj doctor`.
+> **Status:** Core engine implemented and functional. All 9 phases work end-to-end. CLI integration complete for `mj install` and `mj doctor`. Smoke test redesigned with stdout-based readiness detection. Platform compat phase hardened with `node -e` safety net.
 >
 > **Branch:** `feature/mj-install-v2` (targets `next`)
 >
@@ -104,11 +104,11 @@ packages/MJInstaller/
 │       ├── ScaffoldPhase.test.ts       # Download + extract (21 tests)
 │       ├── ConfigurePhase.test.ts      # Config generation (32 tests)
 │       ├── DatabaseProvisionPhase.test.ts # DB provisioning (18 tests)
-│       ├── PlatformCompatPhase.test.ts # Platform fixes (35 tests)
+│       ├── PlatformCompatPhase.test.ts # Platform fixes (38 tests)
 │       ├── DependencyPhase.test.ts     # npm install/build (22 tests)
 │       ├── MigratePhase.test.ts        # Migration (10 tests)
 │       ├── CodeGenPhase.test.ts        # CodeGen + pipeline (33 tests)
-│       ├── SmokeTestPhase.test.ts      # Smoke tests (24 tests)
+│       ├── SmokeTestPhase.test.ts      # Smoke tests (22 tests)
 │       └── integration/
 │           └── cross-platform-smoke.ts # CI integration smoke (runs via npx tsx)
 ```
@@ -184,6 +184,30 @@ interface InstallResult {
 
 ## Event API
 
+```mermaid
+sequenceDiagram
+    participant Engine as InstallerEngine
+    participant Phase as Phase (e.g., CodeGen)
+    participant Emitter as InstallerEventEmitter
+    participant CLI as CLI Frontend
+
+    Engine->>Emitter: Emit("phase:start", { Phase: "codegen" })
+    Emitter->>CLI: Render ora spinner
+
+    Phase->>Emitter: Emit("step:progress", { Message: "Running codegen..." })
+    Emitter->>CLI: Update spinner text (verbose only)
+
+    Phase->>Emitter: Emit("prompt", { PromptId, Resolve })
+    Emitter->>CLI: Render inquirer prompt
+    CLI->>Phase: event.Resolve(answer)
+
+    Phase->>Emitter: Emit("warn", { Message: "Known-issue patch applied" })
+    Emitter->>CLI: chalk.yellow("⚠ ...")
+
+    Engine->>Emitter: Emit("phase:end", { Phase: "codegen", Success: true })
+    Emitter->>CLI: spinner.succeed()
+```
+
 The engine communicates exclusively through 8 typed events:
 
 | Event | When | CLI Rendering |
@@ -241,6 +265,30 @@ Every error includes a suggested fix. Examples:
 
 Execution order: `preflight → scaffold → configure → database → platform → dependencies → migrate → codegen → smoke_test`
 
+```mermaid
+flowchart LR
+    A[Preflight] --> B[Scaffold]
+    B --> C[Configure]
+    C --> D[Database]
+    D --> E[Platform]
+    E --> F[Dependencies]
+    F --> G[Migrate]
+    G --> H[CodeGen]
+    H --> I[Smoke Test]
+
+    style A fill:#4a9,stroke:#333,color:#fff
+    style B fill:#4a9,stroke:#333,color:#fff
+    style C fill:#4a9,stroke:#333,color:#fff
+    style D fill:#e94,stroke:#333,color:#fff
+    style E fill:#4a9,stroke:#333,color:#fff
+    style F fill:#4a9,stroke:#333,color:#fff
+    style G fill:#4a9,stroke:#333,color:#fff
+    style H fill:#4a9,stroke:#333,color:#fff
+    style I fill:#4a9,stroke:#333,color:#fff
+```
+
+Each phase is checkpointed — if a phase fails (e.g., **Database** in red above), resume picks up from that phase.
+
 ### Phase 1 — Preflight
 
 **Checks:** Node.js >= 22, npm available, disk space >= 2 GB, ports available (4000, 4200), SQL Server reachable (TCP), target DB exists, OS detection, write permissions.
@@ -274,9 +322,13 @@ Skippable with `--skip-db`.
 
 ### Phase 5 — Platform Compatibility
 
-**Purpose:** Fix Unix-only env var syntax (`FOO=bar command`) in `package.json` scripts for Windows.
+**Purpose:** Fix Unix-only env var syntax (`FOO=bar command`) and single-quoted arguments in `package.json` scripts for Windows.
 
-On Windows: adds `cross-env` dependency and patches affected scripts. Idempotent — already-patched scripts are skipped.
+On Windows: adds `cross-env` dependency and patches affected scripts. Also converts single-quoted glob patterns and paths (e.g., `'src/**/*.js'`) to double quotes — Windows `cmd.exe` passes single quotes literally, breaking tools like `cpy` and `rimraf`. Idempotent — already-patched scripts are skipped.
+
+**Safety net for embedded JS code:** Scripts containing `node -e "..."` or `node -p "..."` blocks are handled specially — the embedded JavaScript is preserved verbatim during single-quote replacement. This prevents mangling of JS string literals that happen to contain `/` or `*` characters. The `NODE_EVAL_PATTERN` regex identifies these blocks, and `withEmbeddedNodeCodePreserved()` splits the script around them so only non-JS segments are transformed.
+
+**Single-quote detection:** The `SINGLE_QUOTED_ARG_PATTERN` regex (`/'[^']*[/*][^']*'/`) targets single-quoted arguments containing `/` (paths) or `*` (globs), avoiding false positives on plain string literals like `'production'`.
 
 Also handles `--max-old-space-size` advisory for Node >= 24.
 
@@ -300,6 +352,20 @@ The most complex phase. Two sub-parts:
 3. If artifacts missing, retry once. If still missing after retry, hard stop.
 
 **Part B — Post-codegen pipeline (4 steps):**
+
+```mermaid
+flowchart LR
+    CG["mj codegen\n(Part A)"] --> S1["Step 1\nForce-rebuild\ncodegen output\npackages"]
+    S1 --> S2["Step 2\nRegenerate\nclass manifests"]
+    S2 --> S3["Step 3\nRebuild\nmanifest packages"]
+    S3 --> S4["Step 4\nApply known-issue\npatches"]
+
+    FastCheck{"--fast mode\nmanifests OK?"} -.->|skip| S4
+    FastCheck -.->|stale| S1
+
+    style CG fill:#69c,stroke:#333,color:#fff
+    style S4 fill:#e94,stroke:#333,color:#fff
+```
 
 | Step | What | Default Output |
 |---|---|---|
@@ -330,11 +396,55 @@ The `mj doctor` command also checks for known issues and reports their status.
 
 ### Phase 9 — Smoke Test
 
-Starts MJAPI (`npm run start:api`, 120s timeout) and Explorer (`npm run start:explorer`, 210s timeout). Verifies both respond to health checks.
+Starts MJAPI and Explorer **in parallel** and uses **stdout-based readiness detection** instead of blind HTTP polling. Verifies both services start and respond to a single HTTP confirmation request.
 
 Skippable with `--skip-start` or automatically skipped in `--fast` mode.
 
-**Known limitation:** On fresh installs, both services often fail to respond within the timeout, wasting ~5.5 minutes. Needs investigation in a future PR.
+**Architecture (ReadinessWatcher):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Waiting: Created
+
+    Waiting --> Ready: stdout matches\nreadiness pattern
+    Waiting --> Failed: stdout matches\nfatal error pattern
+    Waiting --> Failed: process exits\n(non-zero or premature)
+    Waiting --> Failed: readiness timeout\nexpires
+
+    Ready --> [*]: Promise resolves\n{ Ready: true }
+    Failed --> [*]: Promise resolves\n{ Ready: false, Reason }
+
+    note right of Waiting: Captures last ~50 lines\nin ring buffer
+    note right of Ready: Single HTTP confirm\nfetch follows
+```
+
+A `ReadinessWatcher` class monitors each service's stdout for readiness markers and fatal errors. It exposes `OnStdout`, `OnStderr`, `OnProcessExit`, and `OnTimeout` hooks, and a `Promise` that resolves with `{ Ready: boolean; Reason?: string; Output: string[] }`.
+
+**Readiness patterns** (derived from source code analysis):
+- **MJAPI**: `Server ready at` (from `MJServer/src/index.ts` line 402)
+- **Explorer**: `Compiled successfully`, `Application bundle generation complete`, `Local:` URL (Angular CLI / Vite dev server)
+- **Fatal errors** (immediate failure): `EADDRINUSE`, `Cannot find module`, `FATAL ERROR`
+
+**Port detection from project files:**
+- `detectApiPort()` — parses `.env` for `GRAPHQL_PORT=` (primary), `PORT=` (fallback), then `config.APIPort`, default 4000
+- `detectExplorerPort()` — parses Explorer's `package.json` start script for `--port (\d+)`, then `config.ExplorerPort`, default 4200
+
+**Timeout tuning:**
+- API: 120s readiness + 30s buffer (150s process lifetime)
+- Explorer: 240s readiness + 30s buffer (270s process lifetime)
+
+**Verification flow per service:**
+1. Create `ReadinessWatcher` with service-specific patterns and timeout
+2. Start process via `ProcessRunner.Run()`, wire `OnStdout`/`OnStderr` callbacks
+3. Set separate readiness timeout → `watcher.OnTimeout()`
+4. Wire process exit → `watcher.OnProcessExit(code)` for early-exit detection
+5. `await watcher.Promise`
+6. If ready → single HTTP confirmation fetch (not a polling loop)
+7. If not ready → return failure with captured output and reason
+
+**Error reporting:** On failure, `reportServiceFailure()` emits a `warn` event with the failure reason and the last 20 lines of captured output for diagnosis.
+
+**Parallel startup:** Both services are started concurrently via `Promise.all`, so total time = max(API startup, Explorer startup) instead of sum.
 
 ---
 
@@ -374,9 +484,21 @@ Skippable with `--skip-start` or automatically skipped in `--fast` mode.
 
 When the engine runs, configuration is resolved in layers — each layer overrides the previous:
 
+```mermaid
+flowchart LR
+    A["Plan.Config\n(defaults)"] --> B["MJ_INSTALL_*\nenv vars"]
+    B --> C["--config file\n(JSON)"]
+    C --> D["RunOptions.Config\n(programmatic)"]
+    D --> E["Final\nInstallConfig"]
+
+    style A fill:#cde,stroke:#369
+    style B fill:#bdf,stroke:#369
+    style C fill:#aef,stroke:#369
+    style D fill:#9ff,stroke:#369
+    style E fill:#6c6,stroke:#363,color:#fff
 ```
-Plan.Config (defaults) → MJ_INSTALL_* env vars → --config file → RunOptions.Config (programmatic)
-```
+
+Each layer overrides fields from the previous layer. Missing fields fall through to earlier layers.
 
 If `--yes` is set and a field is still unresolved after all layers, the engine uses `InstallConfigDefaults` values. Any prompt that would fire in interactive mode is auto-resolved with its default value (see Prompt Safety Net below).
 
@@ -533,6 +655,35 @@ const result = await engine.Run(plan, {
 
 ## Checkpoint / Resume
 
+```mermaid
+flowchart TD
+    Start["engine.Run(plan)"] --> CheckFile{"State file\nexists?"}
+
+    CheckFile -- No --> Fresh["Start from Phase 1"]
+    CheckFile -- Yes --> NoResume{"--no-resume\nflag?"}
+
+    NoResume -- Yes --> Fresh
+    NoResume -- No --> Load["Load .mj-install-state.json"]
+
+    Load --> FindPhase["Find first non-completed phase"]
+    FindPhase --> ResumePhase["Resume from that phase"]
+
+    Fresh --> Execute["Execute phases sequentially"]
+    ResumePhase --> Execute
+
+    Execute --> PhaseResult{"Phase\nresult?"}
+    PhaseResult -- Success --> SaveOK["Save state: completed"]
+    PhaseResult -- Failure --> SaveFail["Save state: failed"]
+    PhaseResult -- Skip --> SaveSkip["Save state: skipped"]
+
+    SaveOK --> NextPhase{"More\nphases?"}
+    SaveSkip --> NextPhase
+    SaveFail --> Stop["Stop — user can fix and re-run"]
+
+    NextPhase -- Yes --> Execute
+    NextPhase -- No --> Done["InstallResult"]
+```
+
 State file: `.mj-install-state.json` in the install directory.
 
 ```json
@@ -623,6 +774,95 @@ MJ Install Complete
   Warnings: 1
 ```
 
+### Example: Full Interactive Install Walkthrough
+
+This walks through a complete fresh install from an empty directory with verbose output.
+
+**Prerequisites:**
+- Node.js >= 22, npm available
+- SQL Server instance running with an empty target database (e.g., `MemberJunction`)
+- The `mj` CLI installed globally (`npm install -g @memberjunction/cli`)
+
+**Step 1 — Run the installer:**
+
+```bash
+# Create an empty directory and run the installer into it
+mkdir C:\dev\mj-testing\fresh-install
+npx mj install --dir C:\dev\mj-testing\fresh-install --no-resume --verbose
+```
+
+- `--dir` points to the empty target directory
+- `--no-resume` ensures a clean start (ignores any prior checkpoint state)
+- `--verbose` shows `step:progress` messages and detailed diagnostics
+
+**Step 2 — Answer prompts:**
+
+The installer will prompt you interactively for:
+1. **Release version** — pick from available tags (e.g., `v5.4.1`)
+2. **Database connection** — host, port, database name, trust cert
+3. **CodeGen credentials** — SQL user/password for `MJ_CodeGen` login
+4. **API credentials** — SQL user/password for `MJ_Connect` login
+5. **Ports** — MJAPI port (default 4000), Explorer port (default 4200)
+6. **Auth provider** — Entra ID, Auth0, or None
+7. **Auth-specific values** — tenant ID, client ID, etc. (depends on provider choice)
+8. **AI API keys** (optional) — OpenAI, Anthropic, Mistral
+
+**Step 3 — Database provisioning:**
+
+The installer generates idempotent SQL scripts for creating logins, users, and roles. It will prompt you to run these in SSMS (or another SQL client), then validates by connecting as `MJ_CodeGen` and `MJ_Connect`.
+
+**Step 4 — Review and adjust generated config files:**
+
+After the configure phase completes, the installer has written these files into your target directory. You can review and tweak them before the remaining phases run (the installer prompts before overwriting existing files):
+
+| File | Location | What to Check |
+|---|---|---|
+| `.env` | `{dir}/packages/MJAPI/.env` | `GRAPHQL_PORT`, DB credentials, auth provider settings, AI keys |
+| `mj.config.cjs` | `{dir}/mj.config.cjs` | Database host/name, auth provider config |
+| `environment.ts` | `{dir}/packages/MJExplorer/src/environments/environment.ts` | API URL, auth provider client config |
+| `environment.development.ts` | `{dir}/packages/MJExplorer/src/environments/environment.development.ts` | Dev-mode overrides |
+
+Common adjustments:
+- Change `GRAPHQL_PORT` in `.env` if 4000 is already in use
+- Update auth provider values if you entered placeholders during prompts
+- Add AI API keys you skipped during the interactive flow
+
+**Step 5 — Let the remaining phases run:**
+
+After config, the installer continues automatically through:
+- **Platform compatibility** — patches Windows-incompatible scripts
+- **Dependencies** — `npm install` + `npm run build` (takes ~2-3 minutes)
+- **Migrate** — runs database migrations
+- **CodeGen** — generates entity classes + post-codegen pipeline (~4-5 minutes)
+- **Smoke test** — starts MJAPI and Explorer in parallel, verifies they respond
+
+**Step 6 — Verify the result:**
+
+```bash
+# Check the install health
+npx mj doctor --dir C:\dev\mj-testing\fresh-install --verbose
+
+# Or start services manually
+cd C:\dev\mj-testing\fresh-install
+npm run start:api       # MJAPI on configured port
+npm run start:explorer  # Explorer on configured port
+```
+
+**Shortcut — re-run after fixing config:**
+
+If you need to fix a config file and re-run, the checkpoint system picks up where it left off:
+
+```bash
+# Edit .env or environment.ts as needed, then:
+npx mj install --dir C:\dev\mj-testing\fresh-install --verbose
+# Resumes from the first incomplete phase (skips already-completed phases)
+
+# Or force a completely fresh start:
+npx mj install --dir C:\dev\mj-testing\fresh-install --no-resume --verbose
+```
+
+---
+
 ### `mj doctor`
 
 **Location:** `packages/MJCLI/src/commands/doctor/index.ts`
@@ -679,13 +919,13 @@ TCP connectivity check (raw socket), SQL Server login validation, query executio
 
 ## Testing
 
-### Unit Tests (411 tests, 20 files)
+### Unit Tests (425 tests, 20 files)
 
 All unit tests use **Vitest** with full mocking of external dependencies (no database, no network, no filesystem). Tests run in ~1 second.
 
 **Running tests:**
 ```bash
-cd packages/MJInstaller && npm run test        # Run all 411 tests
+cd packages/MJInstaller && npm run test        # Run all 425 tests
 cd packages/MJInstaller && npm run test:watch   # Watch mode
 ```
 
@@ -695,7 +935,7 @@ cd packages/MJInstaller && npm run test:watch   # Watch mode
 |---|---|---|---|
 | **Models** | 6 | 110 | InstallConfig defaults/merging/env-vars/config-file-loading, InstallPlan creation/Summarize, InstallState persistence/checkpoint, Diagnostics model, InstallerError codes/suggested fixes, InstallerEvents typed emitter |
 | **Adapters** | 4 | 111 | FileSystemAdapter (ZIP extract, disk space, read/write, search, timestamps), GitHubReleaseProvider (list releases, download, pre-release filtering), ProcessRunner (spawn, timeout, kill, output capture), SqlServerAdapter (TCP check, login validation, query execution) |
-| **Phases** | 9 | 249 | All 9 phases tested individually — preflight checks, scaffold download/extract, configure file generation, database script generation, platform compatibility patches, dependency install/build, migration orchestration, codegen + post-codegen pipeline, smoke test startup/health checks |
+| **Phases** | 9 | 263 | All 9 phases tested individually — preflight checks, scaffold download/extract, configure file generation (GRAPHQL_PORT), database script generation, platform compatibility patches (single-quote + node -e safety net), dependency install/build, migration orchestration, codegen + post-codegen pipeline, smoke test (ReadinessWatcher + port detection + parallel startup + error reporting) |
 | **Engine** | 1 | 41 | Full orchestration: CreatePlan, Run (success + failure + skip), DryRun early return, Doctor, Resume from checkpoint, event emission, error handling, config chain resolution (env vars + config file + priority override), prompt safety net (auto-resolve in --yes mode) |
 
 **Mock architecture:**
@@ -721,7 +961,7 @@ Runs automatically on pushes to `feature/mj-install-v2` and PRs to `next`. Also 
 **What runs per platform:**
 1. `npm ci` — full monorepo install (validates workspace resolution)
 2. `npm run build -w packages/MJInstaller` — TypeScript compilation
-3. `npm run test -w packages/MJInstaller` — all 371 unit tests
+3. `npm run test -w packages/MJInstaller` — all 425 unit tests
 4. `npx tsx .../cross-platform-smoke.ts` — integration smoke test
 
 **Integration smoke test** (`cross-platform-smoke.ts`):
@@ -769,7 +1009,7 @@ A standalone script (not Vitest — runs via `npx tsx`) that exercises real plat
 - [x] Full `index.ts` public API exports
 - [x] MJInstaller builds clean (`npm run build`)
 - [x] DryRun early return in `InstallerEngine.Run()`
-- [x] 371 unit tests across 20 Vitest test files (models, adapters, phases, engine)
+- [x] 425 unit tests across 20 Vitest test files (models, adapters, phases, engine)
 - [x] Cross-platform CI via GitHub Actions (Ubuntu, macOS arm64, Windows) — all passing
 - [x] Integration smoke test exercising real platform APIs (Doctor, CreatePlan, DryRun, filesystem)
 - [x] Non-interactive mode (`--yes`) with full config chain resolution
@@ -778,12 +1018,16 @@ A standalone script (not Vitest — runs via `npx tsx`) that exercises real plat
 - [x] `resolveFromEnvironment()`, `loadConfigFile()`, `mergeConfigs()` utility functions
 - [x] Prompt safety net in `--yes` mode (auto-resolves unexpected prompts with defaults)
 - [x] CLI `--config` / `-c` flag wired through to engine
+- [x] ConfigurePhase `.env` fix: `PORT=` → `GRAPHQL_PORT=` (matches MJServer's `config.ts` which reads `GRAPHQL_PORT`)
+- [x] SmokeTestPhase redesigned with stdout-based readiness detection (ReadinessWatcher), port detection from project files, parallel startup, error reporting with captured output
+- [x] PlatformCompatPhase hardened with `node -e`/`node -p` safety net to prevent mangling embedded JS code during single-quote replacement
+- [x] PlatformCompatPhase single-quote regex refined to `/'[^']*[/*][^']*'/` — targets paths and globs only, avoids false positives on plain string literals
 
 ## What Remains (Future PRs)
 
 ### High Priority
 
-- [ ] **Smoke test investigation**: Both MJAPI and Explorer fail to respond on fresh installs, wasting ~5.5 minutes. Need to investigate root cause (likely first-run metadata loading timeout).
+- [x] ~~**Smoke test investigation**~~: Root causes identified and fixed — port mismatch (4200 vs 4201), `.env` variable mismatch (`PORT` vs `GRAPHQL_PORT`), blind HTTP polling replaced with stdout-based readiness detection, sequential startup replaced with parallel. **Done.**
 - [ ] **MJCLI build fixes**: Pre-existing build errors in unrelated MJCLI modules (`app/*`, `codegen/*`, `sync/*`, `hooks/prerun.ts`) about missing module declarations. Not caused by installer changes but prevent full MJCLI build.
 
 ### Medium Priority
@@ -814,9 +1058,9 @@ A standalone script (not Vitest — runs via `npx tsx`) that exercises real plat
 | dependencies | `npm install` + `npm run build` |
 | migrate | Database migrations |
 | codegen | CodeGen + post-codegen pipeline |
-| smoke_test | Both services timed out (known issue) |
+| smoke_test | Parallel startup, stdout readiness detection, single HTTP confirm |
 | **Total** | With `--fast`: (skip smoke test + optimize post-codegen) |
 
 ---
 
-*This document reflects the actual implementation as of February 2026. Updated from the original implementation outline to serve as an ongoing reference.*
+*This document reflects the actual implementation as of March 2026. Updated from the original implementation outline to serve as an ongoing reference.*

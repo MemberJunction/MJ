@@ -2,19 +2,23 @@
  * Phase I — Smoke Test
  *
  * The final phase in the install pipeline. Starts MJAPI and Explorer as
- * background processes, verifies they respond to HTTP health checks, then
- * cleans up the processes. This confirms the install is functional end-to-end.
+ * background processes, verifies they become ready, then cleans up.
+ * This confirms the install is functional end-to-end.
  *
  * Key behaviors:
  * - **Pre-check**: Verifies `mj_generatedentities` exists (MJAPI can't start without it).
- * - **Service startup**: Runs `npm run start:api` and `npm run start:explorer` as
- *   background processes with configurable timeouts.
- * - **Health checks**: Polls each service's HTTP endpoint at 5-second intervals.
- *   Uses `127.0.0.1` instead of `localhost` to avoid IPv6 resolution issues on Windows.
+ * - **Port detection**: Reads actual port numbers from project files (`.env`, `package.json`)
+ *   rather than trusting installer config defaults.
+ * - **Stdout-based readiness**: Watches process stdout for service-specific readiness markers
+ *   (e.g., "Server ready at" for MJAPI, "Compiled successfully" for Explorer). Falls back to
+ *   a single HTTP health check as confirmation.
+ * - **Parallel startup**: Both services are started concurrently to minimize total wait time.
+ * - **Error reporting**: On failure, the last 20 lines of captured output are included in the
+ *   warning so users can diagnose what went wrong.
  * - **Port-based cleanup**: Kills processes by port number after verification, since
  *   on Windows `child.kill()` only terminates the shell, not turbo/node grandchildren.
  *
- * This phase is automatically skipped in `--fast` mode (saves ~5.5 minutes).
+ * This phase is automatically skipped in `--fast` mode.
  *
  * @module phases/SmokeTestPhase
  * @see ProcessRunner — handles process spawning and port-based cleanup.
@@ -28,14 +32,49 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 
-/** Maximum time to wait for MJAPI to start responding (ms). */
-const API_STARTUP_TIMEOUT = 90_000;
-/** Maximum time to wait for Explorer to start responding (ms). */
-const EXPLORER_STARTUP_TIMEOUT = 180_000;
-/** Interval between HTTP health check attempts (ms). */
-const HEALTH_CHECK_INTERVAL = 5_000;
-/** Maximum number of health check retries before declaring failure. */
-const MAX_HEALTH_RETRIES = 24;
+// ---------------------------------------------------------------------------
+// Timeout constants
+// ---------------------------------------------------------------------------
+
+/** Maximum time to wait for MJAPI stdout readiness marker (ms). */
+const API_READINESS_TIMEOUT = 120_000;
+/** Maximum time to keep the MJAPI process alive — readiness + 30s buffer (ms). */
+const API_PROCESS_TIMEOUT = 150_000;
+/** Maximum time to wait for Explorer stdout readiness marker (ms). */
+const EXPLORER_READINESS_TIMEOUT = 240_000;
+/** Maximum time to keep the Explorer process alive — readiness + 30s buffer (ms). */
+const EXPLORER_PROCESS_TIMEOUT = 270_000;
+
+// ---------------------------------------------------------------------------
+// Readiness patterns (from MJServer/src/index.ts and Angular CLI output)
+// ---------------------------------------------------------------------------
+
+/** Stdout patterns indicating MJAPI is ready. */
+const API_READY_PATTERNS: RegExp[] = [/Server ready at/i];
+
+/** Stdout patterns indicating Explorer dev server is ready. */
+const EXPLORER_READY_PATTERNS: RegExp[] = [
+  /Compiled successfully/i,
+  /Application bundle generation complete/i,
+  /Local:\s+http/i,
+];
+
+/** Stdout/stderr patterns indicating a fatal startup error (no point waiting). */
+const FATAL_ERROR_PATTERNS: RegExp[] = [
+  /EADDRINUSE/i,
+  /Cannot find module/i,
+  /FATAL ERROR/i,
+  /Error: listen/i,
+];
+
+/** Maximum output lines to keep in the ring buffer for error reporting. */
+const MAX_CAPTURED_LINES = 50;
+/** Maximum output lines to include in failure diagnostics. */
+const MAX_DIAGNOSTIC_LINES = 20;
+
+// ---------------------------------------------------------------------------
+// Public interfaces
+// ---------------------------------------------------------------------------
 
 /**
  * Input context for the smoke test phase.
@@ -57,18 +96,147 @@ export interface SmokeTestContext {
  * @see SmokeTestPhase.Run
  */
 export interface SmokeTestResult {
-  /** Whether MJAPI responded to HTTP health checks within the timeout. */
+  /** Whether MJAPI became ready within the timeout. */
   ApiRunning: boolean;
-  /** Whether Explorer responded to HTTP health checks within the timeout. */
+  /** Whether Explorer became ready within the timeout. */
   ExplorerRunning: boolean;
   /** The API URL that was verified (e.g., `"http://localhost:4000/"`). */
   ApiUrl: string;
-  /** The Explorer URL that was verified (e.g., `"http://localhost:4200/"`). */
+  /** The Explorer URL that was verified (e.g., `"http://localhost:4201/"`). */
   ExplorerUrl: string;
 }
 
+// ---------------------------------------------------------------------------
+// Internal interfaces
+// ---------------------------------------------------------------------------
+
+/** Result of readiness detection for a single service. */
+interface ReadinessResult {
+  Ready: boolean;
+  Reason?: string;
+  Output: string[];
+}
+
+/** Result of a single service verification. */
+interface ServiceVerificationResult {
+  Running: boolean;
+  Output: string[];
+  Reason?: string;
+}
+
+/** Detected port numbers from project files. */
+interface DetectedPorts {
+  ApiPort: number;
+  ExplorerPort: number;
+}
+
+// ---------------------------------------------------------------------------
+// ReadinessWatcher
+// ---------------------------------------------------------------------------
+
 /**
- * Phase I — Starts MJAPI and Explorer, verifies HTTP health, then cleans up.
+ * Watches process stdout/stderr for readiness or fatal-error patterns.
+ *
+ * Resolves its {@link Promise} with `{ Ready: true }` when a readiness pattern
+ * matches, or `{ Ready: false, Reason }` when a fatal error is detected, the
+ * process exits prematurely, or the timeout expires.
+ */
+class ReadinessWatcher {
+  private resolvePromise!: (result: ReadinessResult) => void;
+  readonly Promise: Promise<ReadinessResult>;
+  private settled = false;
+  private capturedOutput: string[] = [];
+  private readonly timeoutMs: number;
+
+  constructor(
+    private readyPatterns: RegExp[],
+    private fatalPatterns: RegExp[],
+    timeoutMs: number
+  ) {
+    this.timeoutMs = timeoutMs;
+    this.Promise = new Promise<ReadinessResult>((resolve) => {
+      this.resolvePromise = resolve;
+    });
+  }
+
+  /** Feed a line of stdout to check against readiness/fatal patterns. */
+  OnStdout(line: string): void {
+    this.pushLine(line);
+    if (this.settled) return;
+
+    if (this.matchesAny(line, this.readyPatterns)) {
+      this.settle({ Ready: true, Output: this.capturedOutput });
+      return;
+    }
+    this.checkFatal(line);
+  }
+
+  /** Feed a line of stderr. */
+  OnStderr(line: string): void {
+    this.pushLine(`[stderr] ${line}`);
+    if (this.settled) return;
+    this.checkFatal(line);
+  }
+
+  /** Called when the process exits before readiness is detected. */
+  OnProcessExit(exitCode: number): void {
+    if (this.settled) return;
+    this.settle({
+      Ready: false,
+      Reason: `Process exited with code ${exitCode} before becoming ready`,
+      Output: this.capturedOutput,
+    });
+  }
+
+  /** Called when the readiness timeout expires. */
+  OnTimeout(): void {
+    if (this.settled) return;
+    this.settle({
+      Ready: false,
+      Reason: `Readiness timeout (${Math.round(this.timeoutMs / 1000)}s) expired`,
+      Output: this.capturedOutput,
+    });
+  }
+
+  /** Get a copy of all captured output. */
+  GetCapturedOutput(): string[] {
+    return [...this.capturedOutput];
+  }
+
+  private settle(result: ReadinessResult): void {
+    this.settled = true;
+    this.resolvePromise(result);
+  }
+
+  private pushLine(line: string): void {
+    this.capturedOutput.push(line);
+    if (this.capturedOutput.length > MAX_CAPTURED_LINES) {
+      this.capturedOutput.shift();
+    }
+  }
+
+  private checkFatal(line: string): void {
+    if (this.matchesAny(line, this.fatalPatterns)) {
+      this.settle({
+        Ready: false,
+        Reason: `Fatal error detected: ${line.trim()}`,
+        Output: this.capturedOutput,
+      });
+    }
+  }
+
+  private matchesAny(line: string, patterns: RegExp[]): boolean {
+    return patterns.some((p) => p.test(line));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SmokeTestPhase
+// ---------------------------------------------------------------------------
+
+/**
+ * Phase I — Starts MJAPI and Explorer in parallel, detects readiness via
+ * stdout markers, confirms with HTTP, then cleans up.
  *
  * @example
  * ```typescript
@@ -88,7 +256,8 @@ export class SmokeTestPhase {
   private fileSystem = new FileSystemAdapter();
 
   /**
-   * Execute the smoke test phase: pre-check, start services, verify health, clean up.
+   * Execute the smoke test phase: pre-check, detect ports, start services
+   * in parallel, verify readiness, clean up.
    *
    * @param context - Smoke test input with directory, config, and emitter.
    * @returns Health check results for MJAPI and Explorer.
@@ -96,46 +265,50 @@ export class SmokeTestPhase {
    */
   async Run(context: SmokeTestContext): Promise<SmokeTestResult> {
     const { Config: config, Emitter: emitter } = context;
-    const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4200;
-    const apiUrl = `http://localhost:${apiPort}/`;
-    const explorerUrl = `http://localhost:${explorerPort}/`;
 
     // Pre-check: verify generated entities exist
     await this.preCheck(context.Dir, emitter);
 
-    // Step 1: Start and verify MJAPI
-    const apiRunning = await this.verifyService(
-      context.Dir,
-      'npm',
-      ['run', 'start:api'],
-      apiUrl,
-      apiPort,
-      'MJAPI',
-      API_STARTUP_TIMEOUT,
-      emitter
-    );
+    // Detect actual ports from project files
+    const ports = await this.detectServicePorts(context.Dir, config, emitter);
+    const apiUrl = `http://localhost:${ports.ApiPort}/`;
+    const explorerUrl = `http://localhost:${ports.ExplorerPort}/`;
 
-    // Step 2: Start and verify Explorer
-    const explorerRunning = await this.verifyService(
-      context.Dir,
-      'npm',
-      ['run', 'start:explorer'],
-      explorerUrl,
-      explorerPort,
-      'Explorer',
-      EXPLORER_STARTUP_TIMEOUT,
-      emitter
-    );
+    // Start both services in parallel
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'smoke_test',
+      Message: 'Starting MJAPI and Explorer in parallel...',
+    });
 
-    // Clean up: kill all processes we started so they don't remain as orphans.
-    // On Windows, shell-spawned processes (npm → turbo → node) aren't killed
-    // by child.kill() — only the top-level cmd.exe shell dies. Port-based
-    // cleanup ensures the actual service processes are terminated.
-    this.cleanupServices(apiPort, explorerPort, emitter);
+    const [apiResult, explorerResult] = await Promise.all([
+      this.verifyService(
+        context.Dir, 'npm', ['run', 'start:api'],
+        apiUrl, 'MJAPI',
+        API_READINESS_TIMEOUT, API_PROCESS_TIMEOUT,
+        API_READY_PATTERNS, emitter
+      ),
+      this.verifyService(
+        context.Dir, 'npm', ['run', 'start:explorer'],
+        explorerUrl, 'Explorer',
+        EXPLORER_READINESS_TIMEOUT, EXPLORER_PROCESS_TIMEOUT,
+        EXPLORER_READY_PATTERNS, emitter
+      ),
+    ]);
+
+    // Report failures with diagnostic output
+    if (!apiResult.Running) {
+      this.reportServiceFailure('MJAPI', apiResult, emitter);
+    }
+    if (!explorerResult.Running) {
+      this.reportServiceFailure('Explorer', explorerResult, emitter);
+    }
+
+    // Clean up all processes by port
+    this.cleanupServices(ports.ApiPort, ports.ExplorerPort, emitter);
 
     // Summary
-    if (apiRunning && explorerRunning) {
+    if (apiResult.Running && explorerResult.Running) {
       emitter.Emit('log', {
         Type: 'log',
         Level: 'info',
@@ -144,8 +317,8 @@ export class SmokeTestPhase {
     }
 
     return {
-      ApiRunning: apiRunning,
-      ExplorerRunning: explorerRunning,
+      ApiRunning: apiResult.Running,
+      ExplorerRunning: explorerResult.Running,
       ApiUrl: apiUrl,
       ExplorerUrl: explorerUrl,
     };
@@ -160,7 +333,6 @@ export class SmokeTestPhase {
     const exists = await this.fileSystem.DirectoryExists(genEntitiesPath);
 
     if (!exists) {
-      // Also check GeneratedEntities at root
       const altPath = path.join(dir, 'GeneratedEntities');
       const altExists = await this.fileSystem.DirectoryExists(altPath);
 
@@ -182,6 +354,78 @@ export class SmokeTestPhase {
   }
 
   // ---------------------------------------------------------------------------
+  // Port detection
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Detect actual service ports by reading project files.
+   *
+   * - MJAPI: reads `.env` for `GRAPHQL_PORT` (primary), `PORT` (fallback).
+   * - Explorer: reads `MJExplorer/package.json` start script for `--port`.
+   * - Falls back to config values, then hardcoded defaults.
+   */
+  private async detectServicePorts(
+    dir: string,
+    config: PartialInstallConfig,
+    emitter: InstallerEventEmitter
+  ): Promise<DetectedPorts> {
+    const apiPort = await this.detectApiPort(dir, config);
+    const explorerPort = await this.detectExplorerPort(dir, config);
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'info',
+      Message: `Detected ports — MJAPI: ${apiPort}, Explorer: ${explorerPort}`,
+    });
+
+    return { ApiPort: apiPort, ExplorerPort: explorerPort };
+  }
+
+  private async detectApiPort(dir: string, config: PartialInstallConfig): Promise<number> {
+    const envPaths = [
+      path.join(dir, 'packages', 'MJAPI', '.env'),
+      path.join(dir, '.env'),
+    ];
+
+    for (const envPath of envPaths) {
+      try {
+        if (await this.fileSystem.FileExists(envPath)) {
+          const content = await this.fileSystem.ReadText(envPath);
+
+          // Primary: GRAPHQL_PORT (what MJServer actually reads)
+          const graphqlMatch = content.match(/^GRAPHQL_PORT\s*=\s*(\d+)/m);
+          if (graphqlMatch) return parseInt(graphqlMatch[1], 10);
+
+          // Fallback: PORT (legacy variable name)
+          const portMatch = content.match(/^PORT\s*=\s*(\d+)/m);
+          if (portMatch) return parseInt(portMatch[1], 10);
+        }
+      } catch {
+        // File read failed, try next path
+      }
+    }
+
+    return config.APIPort ?? 4000;
+  }
+
+  private async detectExplorerPort(dir: string, config: PartialInstallConfig): Promise<number> {
+    const pkgJsonPath = path.join(dir, 'packages', 'MJExplorer', 'package.json');
+    try {
+      if (await this.fileSystem.FileExists(pkgJsonPath)) {
+        const content = await this.fileSystem.ReadText(pkgJsonPath);
+        const pkg = JSON.parse(content) as { scripts?: Record<string, string> };
+        const startScript = pkg.scripts?.start ?? '';
+        const match = startScript.match(/--port\s+(\d+)/);
+        if (match) return parseInt(match[1], 10);
+      }
+    } catch {
+      // File read or parse failed, fall through
+    }
+
+    return config.ExplorerPort ?? 4200;
+  }
+
+  // ---------------------------------------------------------------------------
   // Service verification
   // ---------------------------------------------------------------------------
 
@@ -190,22 +434,29 @@ export class SmokeTestPhase {
     command: string,
     args: string[],
     url: string,
-    port: number,
     label: string,
-    timeoutMs: number,
+    readinessTimeoutMs: number,
+    processTimeoutMs: number,
+    readyPatterns: RegExp[],
     emitter: InstallerEventEmitter
-  ): Promise<boolean> {
+  ): Promise<ServiceVerificationResult> {
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'smoke_test',
       Message: `Starting ${label}...`,
     });
 
+    const watcher = new ReadinessWatcher(readyPatterns, FATAL_ERROR_PATTERNS, readinessTimeoutMs);
+
+    // Readiness timeout — separate from process lifetime timeout
+    const readinessTimer = setTimeout(() => watcher.OnTimeout(), readinessTimeoutMs);
+
     // Start the service in the background
     const processPromise = this.processRunner.Run(command, args, {
       Cwd: dir,
-      TimeoutMs: timeoutMs,
+      TimeoutMs: processTimeoutMs,
       OnStdout: (line: string) => {
+        watcher.OnStdout(line);
         emitter.Emit('step:progress', {
           Type: 'step:progress',
           Phase: 'smoke_test',
@@ -213,6 +464,7 @@ export class SmokeTestPhase {
         });
       },
       OnStderr: (line: string) => {
+        watcher.OnStderr(line);
         emitter.Emit('log', {
           Type: 'log',
           Level: 'verbose',
@@ -221,78 +473,92 @@ export class SmokeTestPhase {
       },
     });
 
-    // Wait for the service to become healthy
-    const healthy = await this.waitForHealth(url, label, timeoutMs, emitter);
+    // When the process exits, notify the watcher (handles early crashes)
+    processPromise
+      .then((result) => watcher.OnProcessExit(result.ExitCode))
+      .catch(() => watcher.OnProcessExit(1));
 
-    if (!healthy) {
-      // The process may still be running — it will be killed by timeout
-      emitter.Emit('warn', {
-        Type: 'warn',
-        Phase: 'smoke_test',
-        Message: `${label} did not respond to health checks within ${Math.round(timeoutMs / 1000)}s.`,
+    // Wait for readiness via stdout
+    const readinessResult = await watcher.Promise;
+    clearTimeout(readinessTimer);
+
+    if (readinessResult.Ready) {
+      // Confirm with a single HTTP health check
+      const httpOk = await this.singleHealthCheck(url);
+      if (httpOk) {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'info',
+          Message: `${label} is ready at ${url} (stdout + HTTP confirmed).`,
+        });
+      } else {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'info',
+          Message: `${label} stdout indicates ready but HTTP not responding. Treating as ready.`,
+        });
+      }
+
+      // Suppress unhandled rejection from the background process
+      processPromise.catch(() => { /* expected: process killed after smoke test */ });
+
+      return { Running: true, Output: watcher.GetCapturedOutput() };
+    }
+
+    // Not ready — wait for the process to finish before returning
+    processPromise.catch(() => { /* suppress */ });
+
+    return {
+      Running: false,
+      Output: watcher.GetCapturedOutput(),
+      Reason: readinessResult.Reason,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // HTTP health check (single attempt, not polling)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Single HTTP health check. Uses `127.0.0.1` instead of `localhost` to
+   * avoid IPv6 resolution issues on Windows.
+   */
+  private async singleHealthCheck(url: string): Promise<boolean> {
+    const healthUrl = url.replace('localhost', '127.0.0.1');
+    try {
+      const response = await fetch(healthUrl, {
+        signal: AbortSignal.timeout(5000),
       });
-
-      // Wait for the process to finish (it will be killed by timeout)
-      await processPromise;
+      return response.ok || response.status < 500;
+    } catch {
       return false;
     }
-
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'info',
-      Message: `${label} is running at ${url}`,
-    });
-
-    // Don't await the process — we've confirmed it's healthy.
-    // The process will be killed when the timeout fires or the parent exits.
-    // We use a detached approach: we don't need the process to keep running.
-    // Let the timeout kill it.
-    processPromise.catch(() => {
-      // Expected: process killed after smoke test
-    });
-
-    return true;
   }
 
-  private async waitForHealth(
-    url: string,
+  // ---------------------------------------------------------------------------
+  // Error reporting
+  // ---------------------------------------------------------------------------
+
+  private reportServiceFailure(
     label: string,
-    timeoutMs: number,
+    result: ServiceVerificationResult,
     emitter: InstallerEventEmitter
-  ): Promise<boolean> {
-    const maxRetries = Math.min(MAX_HEALTH_RETRIES, Math.floor(timeoutMs / HEALTH_CHECK_INTERVAL));
+  ): void {
+    const tailLines = result.Output.slice(-MAX_DIAGNOSTIC_LINES);
+    const outputSnippet = tailLines.length > 0
+      ? `\nLast ${tailLines.length} lines of output:\n${tailLines.map((l) => `  ${l.trim()}`).join('\n')}`
+      : '\n(No output captured)';
 
-    // On Windows, "localhost" may resolve to ::1 (IPv6) while the server
-    // binds to 0.0.0.0 (IPv4 only). Use 127.0.0.1 for reliable connectivity.
-    const healthUrl = url.replace('localhost', '127.0.0.1');
-
-    for (let i = 0; i < maxRetries; i++) {
-      await this.sleep(HEALTH_CHECK_INTERVAL);
-
-      emitter.Emit('step:progress', {
-        Type: 'step:progress',
-        Phase: 'smoke_test',
-        Message: `Checking ${label} health (attempt ${i + 1}/${maxRetries})...`,
-      });
-
-      try {
-        const response = await fetch(healthUrl, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (response.ok || response.status < 500) {
-          return true;
-        }
-      } catch {
-        // Service not ready yet, continue waiting
-      }
-    }
-
-    return false;
+    emitter.Emit('warn', {
+      Type: 'warn',
+      Phase: 'smoke_test',
+      Message: `${label} failed to start.${result.Reason ? ` Reason: ${result.Reason}` : ''}${outputSnippet}`,
+    });
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+  // ---------------------------------------------------------------------------
+  // Cleanup
+  // ---------------------------------------------------------------------------
 
   /**
    * Kill any processes still listening on the smoke test ports.
