@@ -14,6 +14,7 @@
 
 import express from 'express';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { OAuthManager, MCPClientManager } from '@memberjunction/ai-mcp-client';
 import type { MCPServerOAuthConfig } from '@memberjunction/ai-mcp-client';
@@ -201,7 +202,7 @@ export class OAuthCallbackHandler {
             }
 
             // Get the actual user from cache
-            const contextUser = UserCache.Users.find(u => u.ID === authState.userId);
+            const contextUser = UserCache.Users.find(u => UUIDsEqual(u.ID, authState.userId));
             if (!contextUser) {
                 LogError(`[OAuth Callback] User ${authState.userId} not found in cache`);
                 this.redirectToError(res, 'server_error', 'User context not found', authState.frontendReturnUrl);
@@ -289,7 +290,7 @@ export class OAuthCallbackHandler {
             }
 
             // Verify user owns this state
-            if (authState.userId !== contextUser.ID) {
+            if (!UUIDsEqual(authState.userId, contextUser.ID)) {
                 res.status(403).json({
                     success: false,
                     errorCode: 'forbidden',
@@ -491,7 +492,7 @@ export class OAuthCallbackHandler {
             }
 
             // Verify the authenticated user owns this authorization state
-            if (authState.userId !== contextUser.ID) {
+            if (!UUIDsEqual(authState.userId, contextUser.ID)) {
                 LogError(`[OAuth Exchange] User ${contextUser.ID} attempted to exchange code for state owned by ${authState.userId}`);
                 res.status(403).json({
                     success: false,

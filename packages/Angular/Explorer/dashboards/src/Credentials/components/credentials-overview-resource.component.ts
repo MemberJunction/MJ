@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity, MJAuditLogEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 interface CategoryStat {
@@ -248,7 +248,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
         this.typeStats = this.types.map(type => {
-            const typeCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
+            const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
 
             return {
                 typeId: type.ID,
@@ -272,7 +272,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         for (const type of this.types) {
             const category = type.Category;
             const existing = categoryMap.get(category);
-            const categoryCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
+            const categoryCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
 
             if (existing) {
                 existing.count += categoryCredentials.length;

@@ -8,6 +8,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -1880,7 +1881,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -1912,7 +1913,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1921,7 +1922,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1930,7 +1931,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canShare(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1963,7 +1964,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
   }
 
   // Sharing methods

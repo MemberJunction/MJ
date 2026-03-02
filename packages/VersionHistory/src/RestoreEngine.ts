@@ -8,6 +8,7 @@ import {
     LogError,
     LogStatus,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntityType,
@@ -223,7 +224,7 @@ export class RestoreEngine {
         );
         const md = new Metadata();
         return items.filter(item => {
-            const entityInfo = md.Entities.find(e => e.ID === item.EntityID);
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, item.EntityID));
             const entityName = entityInfo?.Name ?? '';
             return selectedSet.has(`${entityName}::${item.RecordID}`);
         });
@@ -245,7 +246,7 @@ export class RestoreEngine {
             if (visited.has(entityId)) return 0; // Cycle — break it
             visited.add(entityId);
 
-            const entityInfo = md.Entities.find(e => e.ID === entityId);
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
             if (!entityInfo) {
                 levelMap.set(entityId, 0);
                 return 0;
@@ -254,7 +255,7 @@ export class RestoreEngine {
             // Find all FK fields pointing to other entities
             let maxParentLevel = -1;
             for (const field of entityInfo.Fields) {
-                if (field.RelatedEntityID && field.RelatedEntityID !== entityId) {
+                if (field.RelatedEntityID && !UUIDsEqual(field.RelatedEntityID, entityId)) {
                     const parentLevel = computeLevel(field.RelatedEntityID);
                     maxParentLevel = Math.max(maxParentLevel, parentLevel);
                 }
@@ -317,7 +318,7 @@ export class RestoreEngine {
      */
     private resolveEntityInfo(entityId: string): EntityInfo | null {
         const md = new Metadata();
-        return md.Entities.find(e => e.ID === entityId) ?? null;
+        return md.Entities.find(e => UUIDsEqual(e.ID, entityId)) ?? null;
     }
 
     /**
@@ -438,7 +439,7 @@ export class RestoreEngine {
 
         // Capture current state of each record that will be restored
         for (const item of items) {
-            const entityInfo = md.Entities.find(e => e.ID === item.EntityID);
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, item.EntityID));
             if (!entityInfo) continue;
 
             const key = new CompositeKey([{

@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryEntity,
     MJQueryCategoryEntity,
@@ -101,22 +102,22 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
 
     /** Get all field definitions for a specific query */
     public GetQueryFields(queryId: string): MJQueryFieldEntity[] {
-        return this._fields.filter(f => f.QueryID === queryId);
+        return this._fields.filter(f => UUIDsEqual(f.QueryID, queryId));
     }
 
     /** Get all parameter definitions for a specific query */
     public GetQueryParameters(queryId: string): MJQueryParameterEntity[] {
-        return this._parameters.filter(p => p.QueryID === queryId);
+        return this._parameters.filter(p => UUIDsEqual(p.QueryID, queryId));
     }
 
     /** Get all permission records for a specific query */
     public GetQueryPermissions(queryId: string): MJQueryPermissionEntity[] {
-        return this._permissions.filter(p => p.QueryID === queryId);
+        return this._permissions.filter(p => UUIDsEqual(p.QueryID, queryId));
     }
 
     /** Get all queries belonging to a specific category */
     public GetQueriesByCategory(categoryId: string): MJQueryEntity[] {
-        return this._queries.filter(q => q.CategoryID === categoryId);
+        return this._queries.filter(q => UUIDsEqual(q.CategoryID, categoryId));
     }
 
     /** Find a category by name (case-insensitive) */

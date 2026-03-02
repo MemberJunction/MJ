@@ -12,6 +12,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, Metadata, QueryInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -200,7 +201,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.metadata.Queries.find(q => q.ID === this._queryId) || null;
+        this.QueryInfo = this.metadata.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;

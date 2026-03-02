@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
-import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
@@ -870,7 +870,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
               this.originConversation = conversation;
 
               // Check if user has access (is owner or participant)
-              const userIsOwner = conversation.UserID === this.currentUser.ID;
+              const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID);
 
               // Check if user is a participant
               const participantResult = await rv.RunView({

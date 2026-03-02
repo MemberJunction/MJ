@@ -20,6 +20,7 @@ import {
     parseBase64DataUrl,
     createBase64DataUrl
 } from '@memberjunction/ai';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -591,10 +592,10 @@ export class ConversationUtility {
 
     // Try to look up actual name if ID provided
     if (content.type === 'agent' && agents) {
-      const agent = agents.find(a => a.ID === content.id);
+      const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) name = agent.Name;
     } else if (content.type === 'user' && users) {
-      const user = users.find(u => u.ID === content.id);
+      const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     }
 
@@ -610,10 +611,10 @@ export class ConversationUtility {
 
     // Try to look up actual name if ID provided
     if (content.type === 'agent' && agents) {
-      const agent = agents.find(a => a.ID === content.id);
+      const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) name = agent.Name;
     } else if (content.type === 'user' && users) {
-      const user = users.find(u => u.ID === content.id);
+      const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     }
 

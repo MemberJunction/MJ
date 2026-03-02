@@ -16,6 +16,7 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
@@ -96,7 +97,7 @@ export const getUserPayload = async (
         // Get the user from UserCache to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
         const cachedUser = UserCache.Instance.Users.find(
-          u => u.ID === validationResult.User.ID
+          u => UUIDsEqual(u.ID, validationResult.User.ID)
         );
 
         // Use cached user if available, otherwise fall back to the validation result
@@ -247,22 +248,59 @@ export const contextFunction =
       console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
     }
 
-    // now create a new instance of SQLServerDataProvider for each request
-    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
-    const p = new SQLServerDataProvider();
-    await p.Config(config);
+    // Create per-request provider instance based on database type
+    const dbType = process.env.DB_TYPE?.toLowerCase();
+    const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
 
-    let rp = null;
-    try {
-      const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
-      if (readOnlyDataSource) {
-        rp = new SQLServerDataProvider();
-        const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
-        await rp.Config(rConfig);
+    let p: DatabaseProviderBase;
+    if (isPostgres) {
+      const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+      const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+      const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+      const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
+      const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
+      const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+      const pgProvider = new PostgreSQLDataProvider();
+      const pgConfig = new PostgreSQLProviderConfigData(
+        { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPass },
+        mj_core_schema,
+        0,
+        undefined,
+        undefined,
+        false, // use existing metadata from global provider
+      );
+
+      // Share the connection pool from the primary provider to avoid pool exhaustion.
+      // Each per-request provider was creating its own pool, leading to "too many clients" errors.
+      const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+      if (primaryProvider?.DatabaseConnection) {
+        await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
+      } else {
+        await pgProvider.Config(pgConfig);
       }
+      p = pgProvider;
+    } else {
+      const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+      const sqlProvider = new SQLServerDataProvider();
+      await sqlProvider.Config(config);
+      p = sqlProvider as unknown as DatabaseProviderBase;
     }
-    catch (e) {
-      // no read only data source available, so rp will remain null, this is OK!
+
+    let rp: DatabaseProviderBase | null = null;
+    if (!isPostgres) {
+      try {
+        const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+        if (readOnlyDataSource) {
+          const roProvider = new SQLServerDataProvider();
+          const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
+          await roProvider.Config(rConfig);
+          rp = roProvider as unknown as DatabaseProviderBase;
+        }
+      }
+      catch (_err) {
+        // no read only data source available, so rp will remain null, this is OK!
+      }
     }
 
     const providers = [{
@@ -276,12 +314,12 @@ export const contextFunction =
       });
     }
 
-    const contextResult = { 
-      dataSource, 
-      dataSources, 
+    const contextResult = {
+      dataSource,
+      dataSources,
       userPayload: userPayload,
       providers,
     };
-    
+
     return contextResult;
   };

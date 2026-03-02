@@ -1,4 +1,5 @@
 import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.
@@ -31,7 +32,7 @@ export abstract class EntityDocumentTemplateParserBase {
     }
 
     const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.ID === EntityID);
+    const entityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, EntityID));
     if (!entityInfo) {
       throw new Error(`Entity with ID ${EntityID} not found.`);
     }

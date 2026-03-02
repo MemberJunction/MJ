@@ -1,5 +1,6 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, FieldCategoryInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
+import { UUIDsEqual } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue, configInfo } from '../Config/config';
@@ -823,7 +824,7 @@ ${indentedFormHTML}
             let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
 
             // check to see if we have > 1 related entities for this entity for the current RelatedEntityID
-            const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
+            const relationships = sortedRelatedEntities.filter(re => UUIDsEqual(re.RelatedEntityID, relatedEntity.RelatedEntityID));
             if (relationships.length > 1) {
                 // we have more than one related entity for this entity, so we need to append the field name to the tab name
                 let fkeyField = relatedEntity.RelatedEntityJoinField;
@@ -878,7 +879,7 @@ ${indentedFormHTML}
             }
             // If no custom icon, try to use the related entity's icon
             else {
-                const re: EntityInfo | undefined = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID))
                 if (re && re.Icon && re.Icon.length > 0) {
                     icon = `<span class="${re.Icon} tab-header-icon"></span>`;
                     iconClass = re.Icon;
@@ -891,7 +892,7 @@ ${indentedFormHTML}
 
             // Build section key from the stable entity name (not the display name which can change).
             // When multiple relationships point to the same entity, append the join field for uniqueness.
-            const sameEntityRelationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
+            const sameEntityRelationships = sortedRelatedEntities.filter(re => UUIDsEqual(re.RelatedEntityID, relatedEntity.RelatedEntityID));
             const sectionKey = sameEntityRelationships.length > 1
                 ? this.camelCase(relatedEntity.RelatedEntity + ' ' + relatedEntity.RelatedEntityJoinField)
                 : this.camelCase(relatedEntity.RelatedEntity);

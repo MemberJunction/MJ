@@ -1,6 +1,7 @@
 import { Component, OnInit, EventEmitter, Output, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAPIScopeEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 /** Scope tree node structure */
 interface ScopeTreeNode {
     scope: MJAPIScopeEntity;
@@ -173,7 +174,7 @@ export class APIScopesPanelComponent implements OnInit {
         this.EditParentId = scope.ParentID;
         this.EditIsActive = scope.IsActive;
         this.SelectedParentScope = scope.ParentID
-            ? this.FlatScopes.find(s => s.ID === scope.ParentID) || null
+            ? this.FlatScopes.find(s => UUIDsEqual(s.ID, scope.ParentID)) || null
             : null;
         this.ShowEditDialog = true;
     }
@@ -278,7 +279,7 @@ export class APIScopesPanelComponent implements OnInit {
         const excludeIds = new Set<string>([this.EditingScope.ID]);
         const addDescendants = (parentId: string) => {
             for (const scope of this.FlatScopes) {
-                if (scope.ParentID === parentId && !excludeIds.has(scope.ID)) {
+                if (UUIDsEqual(scope.ParentID, parentId) && !excludeIds.has(scope.ID)) {
                     excludeIds.add(scope.ID);
                     addDescendants(scope.ID);
                 }

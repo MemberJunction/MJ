@@ -1,5 +1,6 @@
 import { EntityField } from "./baseEntity";
 import { EntityInfo } from "./entityInfo";
+import { UUIDsEqual } from "@memberjunction/global";
 
 
 /**
@@ -500,7 +501,16 @@ export class CompositeKey extends FieldValueCollection {
 
         for( const [index, kvPair] of kvPairs.entries()){
             const sourcekvPair = this.KeyValuePairs[index];
-            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
+            if(kvPair.FieldName !== sourcekvPair.FieldName){
+                return false;
+            }
+            // Use case-insensitive comparison for string values (handles UUID case differences
+            // between SQL Server uppercase and PostgreSQL lowercase)
+            if (typeof kvPair.Value === 'string' && typeof sourcekvPair.Value === 'string') {
+                if (!UUIDsEqual(kvPair.Value, sourcekvPair.Value)) {
+                    return false;
+                }
+            } else if (kvPair.Value !== sourcekvPair.Value) {
                 return false;
             }
         }

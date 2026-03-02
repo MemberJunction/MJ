@@ -1,4 +1,5 @@
 import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
@@ -55,7 +56,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     const types = UserInfoEngine.Instance.NotificationTypes;
 
     // Try by ID first
-    const byId = types.find(t => t.ID === nameOrId);
+    const byId = types.find(t => UUIDsEqual(t.ID, nameOrId));
     if (byId) return byId;
 
     // Try by name (case-insensitive)
@@ -261,13 +262,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await templateEngine.Config(false, contextUser);
 
     // Find the email template from the cached Templates array
-    const templateEntity = templateEngine.Templates.find((t) => t.ID === emailTemplateId);
+    const templateEntity = templateEngine.Templates.find((t) => UUIDsEqual(t.ID, emailTemplateId));
     if (!templateEntity) {
       throw new Error(`Email template not found: ${emailTemplateId}`);
     }
 
     // Get user from cache (server-side optimization - no database query)
-    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    const user = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
     if (!user) {
       throw new Error('User not found for email delivery');
     }
@@ -318,13 +319,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await templateEngine.Config(false, contextUser);
 
     // Find the SMS template from the cached Templates array
-    const templateEntity = templateEngine.Templates.find((t) => t.ID === smsTemplateId);
+    const templateEntity = templateEngine.Templates.find((t) => UUIDsEqual(t.ID, smsTemplateId));
     if (!templateEntity) {
       throw new Error(`SMS template not found: ${smsTemplateId}`);
     }
 
     // Get user from cache (server-side optimization - no database query)
-    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    const user = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
     if (!user) {
       throw new Error('User not found for SMS delivery');
     }

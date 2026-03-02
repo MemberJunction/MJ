@@ -7,6 +7,7 @@ import { TestEngine, VariableResolver } from '@memberjunction/testing-engine';
 import { TestVariableDefinition } from '@memberjunction/testing-engine-base';
 import { UserInfo } from '@memberjunction/core';
 import { MJTestEntity, MJTestSuiteEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ListFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
@@ -128,7 +129,7 @@ export class ListCommand {
         if (flags.type) {
             const type = engine.GetTestTypeByName(flags.type);
             if (type) {
-                tests = tests.filter(t => t.TypeID === type.ID);
+                tests = tests.filter(t => UUIDsEqual(t.TypeID, type.ID));
             }
         }
 
@@ -153,7 +154,7 @@ export class ListCommand {
         const types = engine.TestTypes;
 
         for (const test of tests) {
-            const type = types.find(t => t.ID === test.TypeID);
+            const type = types.find(t => UUIDsEqual(t.ID, test.TypeID));
             const typeName = type?.Name || 'Unknown';
 
             if (!typeMap.has(typeName)) {
@@ -181,7 +182,7 @@ export class ListCommand {
 
                 // Show variables if flag is set
                 if (flags.showVariables) {
-                    const testType = types.find(t => t.ID === test.TypeID);
+                    const testType = types.find(t => UUIDsEqual(t.ID, test.TypeID));
                     if (testType?.VariablesSchema) {
                         const variables = resolver.getAvailableVariables(
                             testType.VariablesSchema,

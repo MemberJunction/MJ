@@ -8,7 +8,7 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface PromptWithTemplate extends Omit<MJAIPromptEntityExtended, 'Template'> {
@@ -422,12 +422,12 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       }
 
       // Category filter
-      if (this.selectedCategory !== 'all' && prompt.CategoryID !== this.selectedCategory) {
+      if (this.selectedCategory !== 'all' && !UUIDsEqual(prompt.CategoryID, this.selectedCategory)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && prompt.TypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(prompt.TypeID, this.selectedType)) {
         return false;
       }
 

@@ -7,6 +7,7 @@ import {
     ChangeDetectorRef
 } from '@angular/core';
 import { MJDashboardCategoryEntity, MJDashboardEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Event emitted when a breadcrumb item is clicked for navigation
@@ -124,7 +125,7 @@ export class DashboardBreadcrumbComponent {
      */
     public OnNavigate(categoryId: string | null): void {
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.Navigate.emit({ CategoryId: categoryId, Category: category });
     }
@@ -141,7 +142,7 @@ export class DashboardBreadcrumbComponent {
      */
     public get CurrentCategory(): MJDashboardCategoryEntity | null {
         if (!this._currentCategoryId) return null;
-        return this.Categories.find(c => c.ID === this._currentCategoryId) || null;
+        return this.Categories.find(c => UUIDsEqual(c.ID, this._currentCategoryId)) || null;
     }
 
     // ========================================
@@ -209,7 +210,7 @@ export class DashboardBreadcrumbComponent {
         let currentId: string | null = this._currentCategoryId;
 
         while (currentId) {
-            const category = this.Categories.find(c => c.ID === currentId);
+            const category = this.Categories.find(c => UUIDsEqual(c.ID, currentId));
             if (category) {
                 path.unshift(category);
                 currentId = category.ParentID;

@@ -7,6 +7,7 @@ import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -65,8 +66,8 @@ import { takeUntil } from 'rxjs/operators';
             <div class="chat-list" [class.expanded]="pinnedExpanded">
               @for (conversation of pinnedConversations; track conversation.ID) {
                 <div class="conversation-item"
-                     [class.active]="conversation.ID === selectedConversationId"
-                     [class.renamed]="conversation.ID === renamedConversationId"
+                     [class.active]="IsConversationActive(conversation)"
+                     [class.renamed]="IsConversationRenamed(conversation)"
                      (click)="handleConversationClick(conversation)">
                   @if (isSelectionMode) {
                     <div class="conversation-checkbox">
@@ -94,7 +95,7 @@ import { takeUntil } from 'rxjs/operators';
                       <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                         <i class="fas fa-ellipsis"></i>
                       </button>
-                      @if (openMenuConversationId === conversation.ID) {
+                      @if (IsMenuOpen(conversation)) {
                         <div class="context-menu" (click)="$event.stopPropagation()">
                           <button class="menu-item" (click)="togglePin(conversation, $event)">
                             <i class="fas fa-thumbtack"></i>
@@ -130,8 +131,8 @@ import { takeUntil } from 'rxjs/operators';
           <div class="chat-list" [class.expanded]="directMessagesExpanded">
             @for (conversation of unpinnedConversations; track conversation.ID) {
               <div class="conversation-item"
-                   [class.active]="conversation.ID === selectedConversationId"
-                   [class.renamed]="conversation.ID === renamedConversationId"
+                   [class.active]="IsConversationActive(conversation)"
+                   [class.renamed]="IsConversationRenamed(conversation)"
                    (click)="handleConversationClick(conversation)">
                 @if (isSelectionMode) {
                   <div class="conversation-checkbox">
@@ -159,7 +160,7 @@ import { takeUntil } from 'rxjs/operators';
                     <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                       <i class="fas fa-ellipsis"></i>
                     </button>
-                    @if (openMenuConversationId === conversation.ID) {
+                    @if (IsMenuOpen(conversation)) {
                       <div class="context-menu" (click)="$event.stopPropagation()">
                         <button class="menu-item" (click)="togglePin(conversation, $event)">
                           <i class="fas fa-thumbtack"></i>
@@ -851,6 +852,18 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public togglePinned(): void {
     this.pinnedExpanded = !this.pinnedExpanded;
+  }
+
+  IsConversationActive(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.selectedConversationId);
+  }
+
+  IsConversationRenamed(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.renamedConversationId);
+  }
+
+  IsMenuOpen(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.openMenuConversationId, conversation.ID);
   }
 
   selectConversation(conversation: MJConversationEntity): void {

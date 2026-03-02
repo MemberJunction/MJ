@@ -3,7 +3,7 @@ import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } f
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
-import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
@@ -136,7 +136,7 @@ export class SharedService {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
   }
   public ResourceTypeByID(id: string): MJResourceTypeEntity | undefined {
-    return SharedService._resourceTypes.find(rt => rt.ID === id);
+    return SharedService._resourceTypes.find(rt => UUIDsEqual(rt.ID, id));
   }
   public ResourceTypeByName(name: string): MJResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
