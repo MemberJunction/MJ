@@ -5,13 +5,19 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
     "@memberjunction/sql-dialect": "5.4.1",
     "@memberjunction/sqlglot-ts": "5.0.0"

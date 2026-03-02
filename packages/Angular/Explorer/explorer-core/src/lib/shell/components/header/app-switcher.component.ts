@@ -60,6 +60,16 @@ export class AppSwitcherComponent {
     }
   }
 
+  /** Case-insensitive UUID check whether an app is the currently active app. */
+  IsActiveApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.activeApp?.ID);
+  }
+
+  /** Case-insensitive UUID check whether an app is the one currently loading. */
+  IsLoadingApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.loadingAppId);
+  }
+
   /**
    * Close dropdown when clicking outside
    */

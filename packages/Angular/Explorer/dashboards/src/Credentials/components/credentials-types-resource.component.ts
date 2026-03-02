@@ -415,6 +415,11 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         return grouped;
     }
 
+    /** Case-insensitive UUID check whether a credential type is the currently selected type. */
+    public IsTypeSelected(type: TypeWithStats): boolean {
+        return UUIDsEqual(this.selectedType?.ID, type.ID);
+    }
+
     public getTotalCredentialCount(): number {
         return this.types.reduce((sum, t) => sum + t.credentialCount, 0);
     }

@@ -5,7 +5,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJTestRunEntity, MJTestRunFeedbackEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJTestSuiteFormComponent } from '../../generated/Entities/MJTestSuite/mjtestsuite.form.component';
@@ -1898,6 +1898,16 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     } catch (error) {
       console.warn('Failed to save shortcuts setting:', error);
     }
+  }
+
+  /** Case-insensitive UUID check whether a run is the currently selected Run A (baseline). */
+  public IsCompareRunA(run: MJTestSuiteRunEntity): boolean {
+    return UUIDsEqual(this.compareRunA?.ID, run.ID);
+  }
+
+  /** Case-insensitive UUID check whether a run is the currently selected Run B (compare). */
+  public IsCompareRunB(run: MJTestSuiteRunEntity): boolean {
+    return UUIDsEqual(this.compareRunB?.ID, run.ID);
   }
 }
 

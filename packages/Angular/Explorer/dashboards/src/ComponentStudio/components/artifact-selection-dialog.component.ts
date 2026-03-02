@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -349,5 +350,15 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       );
       return null;
     }
+  }
+
+  /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
+  IsArtifactSelected(artifact: MJArtifactEntity): boolean {
+    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+  }
+
+  /** Case-insensitive UUID check whether a version is the currently selected version. */
+  IsVersionSelected(version: MJArtifactVersionEntity): boolean {
+    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
   }
 }
