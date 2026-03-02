@@ -16,6 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -702,8 +703,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     paramType = 'RunDynamicViewInput';
                     innerParams.EntityName = params.EntityName;
                 }
-                innerParams.ExtraFilter = params.ExtraFilter ? params.ExtraFilter : '';
-                innerParams.OrderBy = params.OrderBy ? params.OrderBy : '';
+                // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunView
+                innerParams.ExtraFilter = params.ExtraFilter ? (params.ExtraFilter as string) : '';
+                innerParams.OrderBy = params.OrderBy ? (params.OrderBy as string) : '';
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
                 innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
@@ -863,8 +865,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.EntityName = param.EntityName;
                     }
 
-                    innerParam.ExtraFilter = param.ExtraFilter || '';
-                    innerParam.OrderBy = param.OrderBy || '';
+                    // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunViews
+                    innerParam.ExtraFilter = (param.ExtraFilter as string) || '';
+                    innerParam.OrderBy = (param.OrderBy as string) || '';
                     innerParam.UserSearchString = param.UserSearchString || '';
                     // pass it straight through, either null or array of strings
                     innerParam.Fields = param.Fields;
@@ -982,8 +985,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const input = params.map(item => ({
                 params: {
                     EntityName: item.params.EntityName || '',
-                    ExtraFilter: item.params.ExtraFilter || '',
-                    OrderBy: item.params.OrderBy || '',
+                    // ExtraFilter/OrderBy are resolved to strings by ProviderBase
+                    ExtraFilter: (item.params.ExtraFilter as string) || '',
+                    OrderBy: (item.params.OrderBy as string) || '',
                     Fields: item.params.Fields,
                     UserSearchString: item.params.UserSearchString || '',
                     IgnoreMaxRows: item.params.IgnoreMaxRows || false,
@@ -1646,7 +1650,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
+                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;

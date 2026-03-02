@@ -32,6 +32,7 @@
     "@memberjunction/ai-heygen": "5.4.1",
     "@memberjunction/ai-lmstudio": "5.4.1",
     "@memberjunction/ai-local-embeddings": "5.4.1",
+    "@memberjunction/ai-minimax": "5.4.1",
     "@memberjunction/ai-mistral": "5.4.1",
     "@memberjunction/ai-ollama": "5.4.1",
     "@memberjunction/ai-openai": "5.4.1",

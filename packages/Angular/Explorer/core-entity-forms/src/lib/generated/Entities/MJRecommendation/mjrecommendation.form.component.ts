@@ -18,7 +18,7 @@ export class MJRecommendationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'recommendationCore', sectionName: 'Recommendation Core', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'recommendationItems', sectionName: 'Recommendation Items', isExpanded: false }
+            { sectionKey: 'mJRecommendationItems', sectionName: 'Recommendation Items', isExpanded: false }
         ]);
     }
 }

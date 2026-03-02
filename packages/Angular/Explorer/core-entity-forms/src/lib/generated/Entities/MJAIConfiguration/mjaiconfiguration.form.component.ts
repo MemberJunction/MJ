@@ -20,14 +20,14 @@ export class MJAIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
             { sectionKey: 'inheritanceSettings', sectionName: 'Inheritance Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'MJ: AI Agent Configurations', isExpanded: false },
-            { sectionKey: 'mJAIAgentPrompts', sectionName: 'MJ: AI Agent Prompts', isExpanded: false },
-            { sectionKey: 'mJAIConfigurationParams', sectionName: 'MJ: AI Configuration Params', isExpanded: false },
-            { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
-            { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
-            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
-            { sectionKey: 'mJAIConfigurations', sectionName: 'MJ: AI Configurations', isExpanded: false }
+            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'AI Agent Configurations', isExpanded: false },
+            { sectionKey: 'mJAIAgentPrompts', sectionName: 'AI Agent Prompts', isExpanded: false },
+            { sectionKey: 'mJAIConfigurationParams', sectionName: 'AI Configuration Params', isExpanded: false },
+            { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
+            { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
+            { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false }
         ]);
     }
 }

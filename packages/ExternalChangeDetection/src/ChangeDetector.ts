@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeEntity, MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
+import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
 
@@ -106,7 +107,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             if (!entity) {
                 throw new Error("entity parameter is required");
             }
-            else if (!this.EligibleEntities.find(e => e.ID === entity.ID)) {
+            else if (!this.EligibleEntities.find(e => UUIDsEqual(e.ID, entity.ID))) {
                 throw new Error(`Entity ${entity.Name} is not eligible for external change detection. Refer to the documentation on the EligibleEntities and IneligibleEntities properties for more information.`);
             }
 
@@ -333,7 +334,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             const entities: {entity: EntityInfo, keys: CompositeKey[]}[] = [];
             const provider = <SQLServerDataProvider>this.ProviderToUse;
             for (const c of changes) {
-                let e= entities.find(e => e.entity.ID === c.Entity.ID)
+                let e= entities.find(e => UUIDsEqual(e.entity.ID, c.Entity.ID))
                 if (!e) {
                     e = {
                         entity: c.Entity,

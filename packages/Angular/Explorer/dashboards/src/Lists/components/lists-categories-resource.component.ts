@@ -1,5 +1,5 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity, MJListEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -158,7 +158,7 @@ interface CategoryViewModel {
         <div class="category-node" [style.padding-left.px]="vm.depth * 20">
           <div
             class="node-content"
-            [class.selected]="selectedCategory?.ID === vm.category.ID"
+            [class.selected]="IsCategorySelected(vm.category)"
             (click)="selectCategory(vm.category)"
             (keydown.enter)="selectCategory(vm.category)"
             (keydown.space)="selectCategory(vm.category); $event.preventDefault()"
@@ -167,7 +167,7 @@ interface CategoryViewModel {
             tabindex="0"
             role="treeitem"
             [attr.aria-expanded]="hasChildren(vm.category) ? vm.isExpanded : null"
-            [attr.aria-selected]="selectedCategory?.ID === vm.category.ID"
+            [attr.aria-selected]="IsCategorySelected(vm.category)"
             [attr.aria-label]="vm.category.Name + ' - ' + vm.listCount + ' lists'">
             @if (hasChildren(vm.category)) {
               <button
@@ -1017,7 +1017,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const buildVm = (category: MJListCategoryEntity, depth: number): CategoryViewModel => {
       const lists = this.listsByCategoryId.get(category.ID) || [];
-      const children = this.categories.filter(c => c.ParentID === category.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
 
       return {
         category,
@@ -1030,7 +1030,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const processCategory = (category: MJListCategoryEntity, depth: number) => {
       this.categoryViewModels.push(buildVm(category, depth));
-      const children = this.categories.filter(c => c.ParentID === category.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
       for (const child of children) {
         processCategory(child, depth + 1);
       }
@@ -1051,7 +1051,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         return;
       }
       this.availableParents.push({ ID: cat.ID, displayName: prefix + cat.Name });
-      const children = this.categories.filter(c => c.ParentID === cat.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
       for (const child of children) {
         addCategory(child, prefix + '\u00A0\u00A0');
       }
@@ -1059,14 +1059,14 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const topLevel = this.categories.filter(c => !c.ParentID);
     for (const cat of topLevel) {
-      if (this.editingCategory?.ID !== cat.ID) {
+      if (!UUIDsEqual(this.editingCategory?.ID, cat.ID)) {
         addCategory(cat, '');
       }
     }
   }
 
   private isDescendantOf(category: MJListCategoryEntity, ancestor: MJListCategoryEntity): boolean {
-    if (category.ID === ancestor.ID) return true;
+    if (UUIDsEqual(category.ID, ancestor.ID)) return true;
     if (!category.ParentID) return false;
     const parent = this.categoryMap.get(category.ParentID);
     return parent ? this.isDescendantOf(parent, ancestor) : false;
@@ -1077,11 +1077,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   }
 
   getChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
-    return this.categoryViewModels.filter(vm => vm.category.ParentID === parent.ID);
+    return this.categoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID));
   }
 
   hasChildren(category: MJListCategoryEntity): boolean {
-    return this.categories.some(c => c.ParentID === category.ID);
+    return this.categories.some(c => UUIDsEqual(c.ParentID, category.ID));
   }
 
   toggleExpand(event: Event, vm: CategoryViewModel) {
@@ -1103,6 +1103,10 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     }
   }
 
+  IsCategorySelected(category: MJListCategoryEntity): boolean {
+    return UUIDsEqual(this.selectedCategory?.ID, category.ID);
+  }
+
   selectCategory(category: MJListCategoryEntity) {
     this.selectedCategory = category;
     this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
@@ -1120,7 +1124,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
   getSelectedCategoryChildCount(): number {
     if (!this.selectedCategory) return 0;
-    return this.categories.filter(c => c.ParentID === this.selectedCategory!.ID).length;
+    return this.categories.filter(c => UUIDsEqual(c.ParentID, this.selectedCategory!.ID)).length
   }
 
   createCategory() {
@@ -1148,7 +1152,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.categoryToDelete = this.selectedCategory;
     const categoryName = this.categoryToDelete.Name;
     const listsInCategory = this.listsByCategoryId.get(this.categoryToDelete.ID) || [];
-    const childCategories = this.categories.filter(c => c.ParentID === this.categoryToDelete!.ID);
+    const childCategories = this.categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID));
 
     let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {

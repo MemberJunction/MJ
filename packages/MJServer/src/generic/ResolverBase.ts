@@ -405,9 +405,18 @@ export class ResolverBase {
 
         if (viewInput.ViewName) {
           viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'MJ: User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
+          // Populate EntityName on the input so callers (e.g. RunViews resolver) can
+          // look up the entity without re-querying the view
+          if (viewInfo && !viewInput.EntityName) {
+            viewInput.EntityName = viewInfo.Entity;
+          }
         } else if (viewInput.ViewID) {
           viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
+          // Populate EntityName on the input so callers can look up the entity
+          if (viewInfo && !viewInput.EntityName) {
+            viewInput.EntityName = viewInfo.Entity;
+          }
         } else if (viewInput.EntityName) {
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
           if (!entity) {

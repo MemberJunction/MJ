@@ -24,6 +24,9 @@ export class FormStateService {
     /** Track loading promises to prevent duplicate loads */
     private loadingPromises = new Map<string, Promise<void>>();
 
+    /** Track which entities are currently in edit mode (saves suppressed) */
+    private editingEntities = new Set<string>();
+
     private metadata = new Metadata();
 
     /**
@@ -306,6 +309,24 @@ export class FormStateService {
     }
 
     /**
+     * Set edit mode for an entity. While in edit mode, state changes update
+     * the in-memory BehaviorSubject (so the UI stays reactive) but skip
+     * database persistence. When edit mode ends, a single save is queued
+     * to persist the final layout state.
+     * @param entityName The entity name
+     * @param editing Whether the form is entering (true) or exiting (false) edit mode
+     */
+    setEditMode(entityName: string, editing: boolean): void {
+        if (editing) {
+            this.editingEntities.add(entityName);
+        } else {
+            this.editingEntities.delete(entityName);
+            // Persist the final state once on exit
+            this.queueSave(entityName);
+        }
+    }
+
+    /**
      * Get the count of expanded sections.
      * @param entityName The entity name
      * @param sectionKeys Array of section keys to check
@@ -397,8 +418,14 @@ export class FormStateService {
 
     /**
      * Queue a debounced save using UserInfoEngine's centralized debounce.
+     * Skipped when the entity is in edit mode to avoid persisting transient
+     * layout changes made while editing a record.
      */
     private queueSave(entityName: string): void {
+        if (this.editingEntities.has(entityName)) {
+            return;
+        }
+
         const userId = this.metadata.CurrentUser?.ID;
         if (!userId) {
             return;

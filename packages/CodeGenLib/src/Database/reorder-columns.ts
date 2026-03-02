@@ -1,8 +1,8 @@
-import sql from 'mssql';
+import { CodeGenConnection } from './codeGenDatabaseProvider';
 
 export async function generateReorderTableColumnsScript(
     tableName: string, 
-    dataSource: sql.ConnectionPool
+    dataSource: CodeGenConnection
 ): Promise<string> {
     const schemaName = await fetchSchemaName(tableName, dataSource);
     const columns = await fetchColumns(schemaName, tableName, dataSource);
@@ -25,25 +25,25 @@ export async function generateReorderTableColumnsScript(
 }
 
 // Step 1: Fetch schema name
-async function fetchSchemaName(tableName: string, dataSource: sql.ConnectionPool): Promise<string> {
+async function fetchSchemaName(tableName: string, dataSource: CodeGenConnection): Promise<string> {
     const query = `
         SELECT TABLE_SCHEMA
         FROM INFORMATION_SCHEMA.TABLES
         WHERE TABLE_NAME = '${tableName}';
     `;
-    const result = await dataSource.request().query(query);
+    const result = await dataSource.query(query);
     return result.recordset[0]?.TABLE_SCHEMA;
 }
 
 // Step 2: Fetch columns and current order
-async function fetchColumns(schemaName: string, tableName: string, dataSource: sql.ConnectionPool): Promise<any[]> {
+async function fetchColumns(schemaName: string, tableName: string, dataSource: CodeGenConnection): Promise<any[]> {
     const query = `
         SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = '${schemaName}' AND TABLE_NAME = '${tableName}'
         ORDER BY ORDINAL_POSITION;
     `;
-    const result = await dataSource.request().query(query);
+    const result = await dataSource.query(query);
     return result.recordset;
 }
 
@@ -74,7 +74,7 @@ function copyDataToTempTable(tempTableName: string, tableName: string, orderedCo
 }
 
 // Step 5: Drop constraints and indexes on the original table
-async function dropConstraintsAndIndexes(schemaName: string, tableName: string, dataSource: sql.ConnectionPool): Promise<string> {
+async function dropConstraintsAndIndexes(schemaName: string, tableName: string, dataSource: CodeGenConnection): Promise<string> {
     let script = '';
     const fullTableName = `[${schemaName}].[${tableName}]`;
 
@@ -84,7 +84,7 @@ async function dropConstraintsAndIndexes(schemaName: string, tableName: string, 
         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
         WHERE TABLE_SCHEMA = '${schemaName}' AND TABLE_NAME = '${tableName}';
     `;
-    const constraintsResult = await dataSource.request().query(constraintsQuery);
+    const constraintsResult = await dataSource.query(constraintsQuery);
     const constraints = constraintsResult.recordset;
     constraints.forEach((row: any)  => {
         script += `ALTER TABLE ${fullTableName} DROP CONSTRAINT [${row.CONSTRAINT_NAME}];
@@ -99,7 +99,7 @@ async function dropConstraintsAndIndexes(schemaName: string, tableName: string, 
         INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
         WHERE i.object_id = OBJECT_ID('${fullTableName}') AND is_primary_key = 0 AND is_unique_constraint = 0;
     `;
-    const indexesResult = await dataSource.request().query(indexesQuery);
+    const indexesResult = await dataSource.query(indexesQuery);
     const indexes = indexesResult.recordset;
     indexes.forEach((row: any) => {
         script += `DROP INDEX [${row.index_name}] ON ${fullTableName};
@@ -110,7 +110,7 @@ async function dropConstraintsAndIndexes(schemaName: string, tableName: string, 
 }
 
 // Step 6: Drop foreign keys from external tables pointing to the original table
-async function dropExternalForeignKeys(schemaName: string, tableName: string, dataSource: sql.ConnectionPool): Promise<string> {
+async function dropExternalForeignKeys(schemaName: string, tableName: string, dataSource: CodeGenConnection): Promise<string> {
     let script = '';
     const fullTableName = `[${schemaName}].[${tableName}]`;
 
@@ -127,7 +127,7 @@ async function dropExternalForeignKeys(schemaName: string, tableName: string, da
             WHERE TABLE_SCHEMA = '${schemaName}' AND TABLE_NAME = '${tableName}'
         );
     `;
-    const externalForeignKeysResult = await dataSource.request().query(externalForeignKeysQuery);
+    const externalForeignKeysResult = await dataSource.query(externalForeignKeysQuery);
     const externalForeignKeys = externalForeignKeysResult.recordset;
     externalForeignKeys.forEach((row: any) => {
         const referencingTable = `[${schemaName}].[${row.REFERENCING_TABLE_NAME}]`;
@@ -148,7 +148,7 @@ function dropOriginalTableAndRenameTemp(schemaName: string, tableName: string, t
 }
 
 // Step 8: Recreate constraints and indexes on the reordered table
-async function recreateConstraintsAndIndexes(schemaName: string, tableName: string, dataSource: sql.ConnectionPool): Promise<string> {
+async function recreateConstraintsAndIndexes(schemaName: string, tableName: string, dataSource: CodeGenConnection): Promise<string> {
     let script = '';
     const fullTableName = `[${schemaName}].[${tableName}]`;
 
@@ -178,7 +178,7 @@ async function recreateConstraintsAndIndexes(schemaName: string, tableName: stri
             ON tc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME
         WHERE tc.TABLE_SCHEMA = '${schemaName}' AND tc.TABLE_NAME = '${tableName}';
     `;
-    const constraintsResult = await dataSource.request().query(constraintsQuery);
+    const constraintsResult = await dataSource.query(constraintsQuery);
     const constraints = constraintsResult.recordset;
     constraints.forEach((row: any) => {
         if (row.CONSTRAINT_TYPE === 'PRIMARY KEY') {
@@ -204,7 +204,7 @@ async function recreateConstraintsAndIndexes(schemaName: string, tableName: stri
         INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
         WHERE i.object_id = OBJECT_ID('${fullTableName}') AND is_primary_key = 0 AND is_unique_constraint = 0;
     `;
-    const indexesResult = await dataSource.request().query(indexesQuery);
+    const indexesResult = await dataSource.query(indexesQuery);
     const indexes = indexesResult.recordset;
     indexes.forEach((row: any) => {
         const unique = row.is_unique ? 'UNIQUE' : '';
@@ -216,7 +216,7 @@ async function recreateConstraintsAndIndexes(schemaName: string, tableName: stri
 }
 
 // Step 9: Recreate foreign keys from external tables pointing to the reordered table
-async function recreateExternalForeignKeys(schemaName: string, tableName: string, dataSource: sql.ConnectionPool): Promise<string> {
+async function recreateExternalForeignKeys(schemaName: string, tableName: string, dataSource: CodeGenConnection): Promise<string> {
     let script = '';
 
     const externalForeignKeysQuery = `
@@ -233,7 +233,7 @@ async function recreateExternalForeignKeys(schemaName: string, tableName: string
             ON rc.UNIQUE_CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
         WHERE kcu.TABLE_SCHEMA = '${schemaName}' AND kcu.TABLE_NAME = '${tableName}';
     `;
-    const externalForeignKeysResult = await dataSource.request().query(externalForeignKeysQuery);
+    const externalForeignKeysResult = await dataSource.query(externalForeignKeysQuery);
     const externalForeignKeys = externalForeignKeysResult.recordset;
     externalForeignKeys.forEach((row: any) => {
         const referencingTable = `[${schemaName}].[${row.REFERENCING_TABLE_NAME}]`;
@@ -245,6 +245,6 @@ async function recreateExternalForeignKeys(schemaName: string, tableName: string
 }
 
 // Usage example
-// const dataSource = /* sql.ConnectionPool instance */;
+// const dataSource = /* CodeGenConnection instance */;
 // const script = await generateReorderTableColumnsScript('YourTableName', dataSource);
 // console.log(script); // Outputs the SQL script to reorder columns

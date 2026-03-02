@@ -6,7 +6,7 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
 
 /**
  * The possible status values for a record change
@@ -195,7 +195,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => f.ID === fID);
+            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));
     }
 
     constructor (initData: any) {
@@ -933,15 +933,20 @@ export class EntityFieldInfo extends BaseInfo {
     }    
 
     /**
-     * Readonly array of SQL Server date/time functions that return the current date/time
+     * Readonly array of SQL date/time functions that return the current date/time.
+     * Includes both SQL Server and PostgreSQL variants.
      */
     private static readonly SQL_CURRENT_DATE_FUNCTIONS: readonly string[] = [
         'getdate()',
-        'getutcdate()', 
+        'getutcdate()',
         'sysdatetimeoffset()',
         'current_timestamp',
         'sysdatetime()',
-        'sysutcdatetime()'
+        'sysutcdatetime()',
+        'now()',
+        'clock_timestamp()',
+        'statement_timestamp()',
+        'transaction_timestamp()'
     ] as const;
 
     /**
@@ -1518,7 +1523,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        return Metadata.Provider?.Entities?.find(e => e.ID === this.ParentID) ?? null;
+        return Metadata.Provider?.Entities?.find(e => UUIDsEqual(e.ID, this.ParentID)) ?? null;
     }
 
     /**
@@ -1531,7 +1536,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => e.ParentID === this.ID) ?? [];
+        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
     }
 
     /**
@@ -1641,7 +1646,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
+                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -1675,7 +1680,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -1711,7 +1716,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
@@ -1734,7 +1739,7 @@ export class EntityInfo extends BaseInfo {
                 }
                 if (matchObject) {
                     // we have a match, so add it to the list if it isn't already there
-                    const existingMatch: RowLevelSecurityFilterInfo = rlsList.find((r) => r.ID === matchObject.ID);
+                    const existingMatch: RowLevelSecurityFilterInfo = rlsList.find((r) => UUIDsEqual(r.ID, matchObject.ID));
                     if (!existingMatch)
                         rlsList.push(matchObject);
                 }

@@ -19,8 +19,8 @@ export class MJSkillFormComponent extends BaseFormComponent {
             { sectionKey: 'skillIdentification', sectionName: 'Skill Identification', isExpanded: true },
             { sectionKey: 'skillHierarchy', sectionName: 'Skill Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'employeeSkills', sectionName: 'Employee Skills', isExpanded: false },
-            { sectionKey: 'skills', sectionName: 'Skills', isExpanded: false }
+            { sectionKey: 'mJEmployeeSkills', sectionName: 'Employee Skills', isExpanded: false },
+            { sectionKey: 'mJSkills', sectionName: 'Skills', isExpanded: false }
         ]);
     }
 }

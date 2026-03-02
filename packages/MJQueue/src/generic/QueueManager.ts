@@ -2,7 +2,7 @@
 import { TaskBase, QueueBase } from "./QueueBase";
 import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjunction/core";
 import { MJQueueEntity, MJQueueTaskEntity, MJQueueTypeEntity } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import os from 'os';
 
 /**
@@ -94,7 +94,7 @@ export class QueueManager {
   public async AddTask(QueueTypeID: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
     try {
       // STEP 1: Find the queue type
-      const queueType = QueueManager.QueueTypes.find(qt => qt.ID == QueueTypeID);
+      const queueType = QueueManager.QueueTypes.find(qt => UUIDsEqual(qt.ID, QueueTypeID));
       if (queueType == null) 
         throw new Error(`Queue Type ID ${QueueTypeID} not found.`)
 

@@ -2,6 +2,7 @@ import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
@@ -1634,7 +1635,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       
       if (result.Success && result.Results && result.Results.length > 0) {
         for (const childRun of result.Results) {
-          if (!agentRunIds.includes(childRun.ID)) {
+          if (!agentRunIds.some(id => UUIDsEqual(id, childRun.ID))) {
             agentRunIds.push(childRun.ID);
             await findChildRuns(childRun.ID); // Recursively find children
           }

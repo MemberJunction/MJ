@@ -82,10 +82,10 @@ flowchart TD
 
 ## Data Sources
 
-### AI Agents (`__mj.vwAIAgents`)
+### AI Agents (`[__mj].vwAIAgents`)
 - **Name** — Agent display name (used for grouping)
 
-### AI Agent Runs (`__mj.vwAIAgentRuns`)
+### AI Agent Runs (`[__mj].vwAIAgentRuns`)
 - **AgentID** — Links each run to its agent (JOIN key)
 - **Status** — Run outcome (`Completed`, `Failed`, etc.)
 - **StartedAt** — Execution timestamp (used for date filtering)
@@ -212,7 +212,7 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
         { "ColumnName1": "value2", "ColumnName2": 17 }
       ],
       "metadata": {
-        "sql": "SELECT a.Name AS AgentName, COUNT(r.ID) AS TotalRuns FROM __mj.vwAIAgents a INNER JOIN __mj.vwAIAgentRuns r ON r.AgentID = a.ID GROUP BY a.Name ORDER BY TotalRuns DESC",
+        "sql": "SELECT a.Name AS AgentName, COUNT(r.ID) AS TotalRuns FROM [__mj].vwAIAgents a INNER JOIN [__mj].vwAIAgentRuns r ON r.AgentID = a.ID GROUP BY a.Name ORDER BY TotalRuns DESC",
         "rowCount": 2,
         "executionTimeMs": 45
       }
@@ -278,7 +278,7 @@ Each column object in the `columns` array **MUST** include enriched metadata. Th
 ## SQL Guidelines
 
 ### Always Use Views
-- Reference `SchemaName.vwEntityName`, never raw tables — e.g., `__mj.vwMembers`, `dbo.vwOrders`, `sales.vwProducts`
+- Reference `SchemaName.vwEntityName`, never raw tables — e.g., `[__mj].vwMembers`, `dbo.vwOrders`, `sales.vwProducts`
 - **Use each entity's actual `SchemaName`** from Get Entity Details — do NOT assume all entities are in `__mj`
 - Views include computed fields and proper joins
 
@@ -300,10 +300,10 @@ SELECT
     -- Count distinct attended events per member
     COUNT(er.ID)                          AS TotalEventsAttended
 
-FROM __mj.vwMembers m                    -- SchemaName: __mj
+FROM [__mj].vwMembers m                    -- SchemaName: __mj
 
     -- Link to event registrations (one member → many registrations)
-    INNER JOIN __mj.vwEventRegistrations er
+    INNER JOIN [__mj].vwEventRegistrations er
         ON m.ID = er.MemberID
 
 WHERE
@@ -331,7 +331,8 @@ SELECT
     -- Success rate: completed runs as a percentage of total
     ROUND(
         100.0 * SUM(
-            CASE WHEN r.Status = 'Completed' THEN 1 ELSE 0 END
+            CASE WHEN r.Status = 'Completed' THEN 1 ELSE 0
+END
         ) / NULLIF(COUNT(r.ID), 0),
         1
     )                                     AS SuccessRatePct,
@@ -349,10 +350,10 @@ SELECT
     -- Most recent execution timestamp
     MAX(r.StartedAt)                      AS LastRunAt
 
-FROM __mj.vwAIAgents a
+FROM [__mj].vwAIAgents a
 
     -- Each agent has zero or more execution runs
-    INNER JOIN __mj.vwAIAgentRuns r
+    INNER JOIN [__mj].vwAIAgentRuns r
         ON r.AgentID = a.ID
 
 WHERE

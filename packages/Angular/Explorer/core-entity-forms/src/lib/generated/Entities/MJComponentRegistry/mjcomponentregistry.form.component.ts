@@ -19,7 +19,7 @@ export class MJComponentRegistryFormComponent extends BaseFormComponent {
             { sectionKey: 'registryCoreInfo', sectionName: 'Registry Core Info', isExpanded: true },
             { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJComponents', sectionName: 'MJ: Components', isExpanded: false }
+            { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false }
         ]);
     }
 }

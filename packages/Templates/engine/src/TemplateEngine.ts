@@ -1,7 +1,7 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
@@ -308,7 +308,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         });
         
         // Then add/override with content-specific parameters
-        params.filter(p => (p as any).TemplateContentID === contentId).forEach(p => {
+        params.filter(p => UUIDsEqual((p as any).TemplateContentID, contentId)).forEach(p => {
             paramsByName.set(p.Name, p);
         });
         

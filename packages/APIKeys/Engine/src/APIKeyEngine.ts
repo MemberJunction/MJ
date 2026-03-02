@@ -20,6 +20,7 @@ import {
     MJAPIScopeEntity,
     MJUserEntity
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
@@ -344,7 +345,7 @@ export class APIKeyEngine {
 
             if (keyApps.length > 0) {
                 // Key has app restrictions - check if this app is allowed
-                const boundToThisApp = keyApps.some((ka: MJAPIKeyApplicationEntity) => ka.ApplicationID === appId);
+                const boundToThisApp = keyApps.some((ka: MJAPIKeyApplicationEntity) => UUIDsEqual(ka.ApplicationID, appId));
                 if (!boundToThisApp) {
                     return { IsValid: false, Error: 'API key not authorized for this application' };
                 }

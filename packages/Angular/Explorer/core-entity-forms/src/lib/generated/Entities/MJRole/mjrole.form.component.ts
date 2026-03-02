@@ -18,14 +18,14 @@ export class MJRoleFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'coreRoleDetails', sectionName: 'Core Role Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'authorizationRoles', sectionName: 'Authorization Roles', isExpanded: false },
-            { sectionKey: 'employeeRoles', sectionName: 'Employee Roles', isExpanded: false },
-            { sectionKey: 'entityPermissions', sectionName: 'Entity Permissions', isExpanded: false },
-            { sectionKey: 'queryPermissions', sectionName: 'Query Permissions', isExpanded: false },
-            { sectionKey: 'userRoles', sectionName: 'User Roles', isExpanded: false },
-            { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MJ: MCP Server Connection Permissions', isExpanded: false },
-            { sectionKey: 'resourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
-            { sectionKey: 'mJAIAgentPermissions', sectionName: 'MJ: AI Agent Permissions', isExpanded: false }
+            { sectionKey: 'mJAuthorizationRoles', sectionName: 'Authorization Roles', isExpanded: false },
+            { sectionKey: 'mJEmployeeRoles', sectionName: 'Employee Roles', isExpanded: false },
+            { sectionKey: 'mJEntityPermissions', sectionName: 'Entity Permissions', isExpanded: false },
+            { sectionKey: 'mJQueryPermissions', sectionName: 'Query Permissions', isExpanded: false },
+            { sectionKey: 'mJUserRoles', sectionName: 'User Roles', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MCP Server Connection Permissions', isExpanded: false },
+            { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
+            { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false }
         ]);
     }
 }

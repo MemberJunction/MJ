@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from '@memberjunction/core';
 import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
@@ -138,7 +138,7 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
 
                 // Calculate average duration
                 const completedRuns = jobRuns.filter(r =>
-                    r.ScheduledJobID === stats.JobID &&
+                    UUIDsEqual(r.ScheduledJobID, stats.JobID) &&
                     r.Status === 'Completed' &&
                     r.StartedAt &&
                     r.CompletedAt

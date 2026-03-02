@@ -19,7 +19,7 @@ export class MJAIModelVendorFormComponent extends BaseFormComponent {
             { sectionKey: 'modelVendorLinkage', sectionName: 'Model-Vendor Linkage', isExpanded: true },
             { sectionKey: 'implementationConfiguration', sectionName: 'Implementation Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAICredentialBindings', sectionName: 'MJ: AI Credential Bindings', isExpanded: false }
+            { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false }
         ]);
     }
 }

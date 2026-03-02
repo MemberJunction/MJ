@@ -34,6 +34,7 @@
     "@memberjunction/doc-utils": "5.4.1",
     "@memberjunction/global": "5.4.1",
     "@memberjunction/skip-types": "5.4.1",
+    "@memberjunction/sql-converter": "5.4.1",
     "@memberjunction/sqlserver-dataprovider": "5.4.1",
     "node-sql-parser": "^5.4.0",
     "nunjucks": "^3.2.4",

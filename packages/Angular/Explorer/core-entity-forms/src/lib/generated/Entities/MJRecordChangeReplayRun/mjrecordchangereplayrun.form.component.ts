@@ -19,7 +19,7 @@ export class MJRecordChangeReplayRunFormComponent extends BaseFormComponent {
             { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
             { sectionKey: 'runTimingStatus', sectionName: 'Run Timing & Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'recordChanges', sectionName: 'Record Changes', isExpanded: false }
+            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false }
         ]);
     }
 }

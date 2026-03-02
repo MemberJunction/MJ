@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from 
 import { CommonModule } from '@angular/common';
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Simple list view for tasks
@@ -18,7 +19,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
             <div
               class="task-item"
               [class.completed]="task.Status === 'Complete'"
-              [class.selected]="selectedTask?.ID === task.ID"
+              [class.selected]="IsTaskSelected(task)"
               (click)="onTaskClick(task)">
               <!-- Status Icon -->
               <div class="status-icon" [class.complete]="task.Status === 'Complete'">
@@ -301,6 +302,10 @@ export class SimpleTaskViewerComponent implements OnChanges {
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public selectedTask: MJTaskEntity | null = null;
+
+  public IsTaskSelected(task: MJTaskEntity): boolean {
+    return UUIDsEqual(this.selectedTask?.ID, task.ID);
+  }
   public detailPanelWidth: number = 400;
 
   private isResizing = false;

@@ -94,23 +94,23 @@
 
     <!-- Entities Section -->
     <mj-collapsible-panel
-        SectionKey="entities"
+        SectionKey="mJUserApplicationEntities"
         SectionName="Entities"
         Icon="fa fa-link"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entities')"
+        [BadgeCount]="GetSectionRowCount('mJUserApplicationEntities')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Application Entities','UserApplicationID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Application Entities')"
-                [AllowLoad]="IsSectionExpanded('entities')"
+                [AllowLoad]="IsSectionExpanded('mJUserApplicationEntities')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entities', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserApplicationEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

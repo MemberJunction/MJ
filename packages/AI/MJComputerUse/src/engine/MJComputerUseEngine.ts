@@ -15,6 +15,7 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
@@ -275,7 +276,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
 
         let prompt: MJAIPromptEntityExtended | undefined;
         if (ref.PromptId) {
-            prompt = AIEngine.Instance.Prompts.find(p => p.ID === ref.PromptId);
+            prompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, ref.PromptId));
         } else if (ref.PromptName) {
             prompt = AIEngine.Instance.Prompts.find(p => p.Name === ref.PromptName);
         }
@@ -581,7 +582,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         ref: ActionRef
     ): MJActionEntity | undefined {
         if (ref.ActionId) {
-            return actionEngine.Actions.find(a => a.ID === ref.ActionId);
+            return actionEngine.Actions.find(a => UUIDsEqual(a.ID, ref.ActionId));
         }
         if (ref.ActionName) {
             return actionEngine.Actions.find(a => a.Name === ref.ActionName);

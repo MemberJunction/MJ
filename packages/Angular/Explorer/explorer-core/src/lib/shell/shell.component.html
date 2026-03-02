@@ -15,7 +15,7 @@
         @for (app of leftOfSwitcherApps; track app) {
           <button
             class="nav-bar-app-btn"
-            [class.active]="app.ID === activeApp?.ID"
+            [class.active]="IsActiveApp(app)"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"
@@ -67,7 +67,7 @@
           @for (app of leftOfUserMenuApps; track app) {
             <button
               class="nav-bar-app-btn"
-              [class.active]="app.ID === activeApp?.ID"
+              [class.active]="IsActiveApp(app)"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"

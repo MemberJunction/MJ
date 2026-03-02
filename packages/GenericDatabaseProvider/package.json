@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/generic-database-provider",
+  "type": "module",
+  "version": "5.4.1",
+  "description": "Shared database provider logic for MemberJunction — intermediate base class between DatabaseProviderBase and platform-specific providers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/uuid": "^11.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "dependencies": {
+    "@memberjunction/actions": "5.4.1",
+    "@memberjunction/actions-base": "5.4.1",
+    "@memberjunction/aiengine": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/encryption": "5.4.1",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/queue": "5.4.1",
+    "sql-formatter": "^15.7.0",
+    "uuid": "^13.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

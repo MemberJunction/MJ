@@ -14,7 +14,7 @@ import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
-import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Configuration for parallel processing
 const PARALLEL_BATCH_SIZE = 1; // Number of records to process in parallel at each dependency level
@@ -161,7 +161,7 @@ export class PushService {
     try {
       // Initialize SQL logger if enabled and not dry-run
       if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as SQLServerDataProvider;
+        const provider = Metadata.Provider as GenericDatabaseProvider;
         
         if (options.verbose) {
           callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);

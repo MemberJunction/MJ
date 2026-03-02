@@ -8,7 +8,7 @@
  * @since 3.0.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseReranker, RerankParams, RerankResult } from '@memberjunction/ai';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -96,7 +96,7 @@ export class LLMReranker extends BaseReranker {
         }
 
         const prompts = AIEngine.Instance.Prompts;
-        const prompt = prompts.find(p => p.ID === this._promptID);
+        const prompt = prompts.find(p => UUIDsEqual(p.ID, this._promptID));
 
         if (!prompt) {
             LogError(`LLMReranker: Prompt not found with ID: ${this._promptID}`);

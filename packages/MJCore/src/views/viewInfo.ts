@@ -2,6 +2,7 @@ import { BaseInfo } from '../generic/baseInfo'
 import { EntityFieldInfo, EntityInfo } from '../generic/entityInfo'
 import { IMetadataProvider } from '../generic/interfaces';
 import { LogError } from '../generic/logging';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export class ViewColumnInfo extends BaseInfo {
     ID: number = null
@@ -157,7 +158,7 @@ export class ViewInfo extends BaseInfo {
                 this.copyInitData(initData)
                 if (initData.EntityID) {
                     const mdEntities = md.Entities;
-                    const match = mdEntities.find(e => e.ID == initData.EntityID) 
+                    const match = mdEntities.find(e => UUIDsEqual(e.ID, initData.EntityID))
                     if (match)
                         this._EntityInfo = match 
                 }

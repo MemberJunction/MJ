@@ -21,6 +21,7 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -292,7 +293,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const message = this.messages.find(m => m.ID === event.conversationDetailId);
+        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
@@ -302,12 +303,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // The sessionId is persisted in localStorage and reused on refresh, so WebSocket events
     // normally arrive correctly. However, there's a brief timing gap between page load and
     // WebSocket reconnection where events can be lost. The catch-up check in
-    // detectAndReconnectToInProgressRuns() is the primary fallback; polling is the last resort.
+    // detectAndReconcileAgentRuns() is the primary fallback; polling is the last resort.
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
         if (!this.conversationId) return;
-        const conversationAgents = agents.filter(a => a.run.ConversationID === this.conversationId);
+        const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
           // Agents just completed — reload messages to pick up final response and any
@@ -367,7 +368,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         .find(msg =>
           msg.Role === 'AI' &&
           msg.AgentID &&
-          msg.AgentID !== this.conversationManagerAgent?.ID
+          !UUIDsEqual(msg.AgentID, this.conversationManagerAgent?.ID)
         );
 
       if (lastNonSageAgent?.AgentID) {
@@ -548,7 +549,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         this.cdr.detectChanges();
       }
 
-      await this.detectAndReconnectToInProgressRuns(conversationId);
+      await this.detectAndReconcileAgentRuns(conversationId);
       await this.handlePendingArtifactNavigation();
 
     } catch (error) {
@@ -798,7 +799,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
+    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
 
     if (existingIndex >= 0) {
       // Update existing message in place (replace with updated version)
@@ -2102,15 +2103,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Detect in-progress agent runs/tasks and reconnect to their streaming updates.
-   * Called after loading a conversation to resume progress tracking.
+   * Detect and reconcile agent run states against conversation detail statuses.
+   * Called after loading a conversation to handle two scenarios:
    *
-   * Also handles the "timing gap" scenario: if an agent completed between the page
-   * refresh and the WebSocket reconnection, the completion PubSub event is lost.
-   * We catch this by comparing message status against the agent run status from
-   * the database — if the run is already complete, we handle the completion immediately.
+   * 1. **In-progress catch-up**: If an agent completed between page refresh and
+   *    WebSocket reconnection, the completion PubSub event is lost. We catch this
+   *    by comparing message status against the agent run status from the database.
+   *
+   * 2. **Stale error correction**: If the client previously marked a conversation
+   *    detail as 'Error' (e.g., due to WebSocket timeout) but the server actually
+   *    completed successfully, we detect the mismatch and correct it. This prevents
+   *    the race condition where the client overwrites a server-completed record.
    */
-  private async detectAndReconnectToInProgressRuns(conversationId: string): Promise<void> {
+  private async detectAndReconcileAgentRuns(conversationId: string): Promise<void> {
+    await this.reconnectInProgressRuns();
+    await this.correctStaleErrorMessages();
+  }
+
+  /**
+   * Reconnect to in-progress agent runs whose completion events were missed.
+   */
+  private async reconnectInProgressRuns(): Promise<void> {
     const inProgressMessages = this.messages.filter(
       m => m.Status === 'In-Progress' && m.Role === 'AI'
     );
@@ -2139,6 +2152,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         await this.handleMessageCompletion(message, agentRun.ID);
       } else {
         LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
+      }
+    }
+  }
+
+  /**
+   * Detect conversation details marked as 'Error' by the client whose corresponding
+   * agent run actually completed successfully on the server. This corrects the race
+   * condition where the client overwrote a server-completed record with an error status.
+   */
+  private async correctStaleErrorMessages(): Promise<void> {
+    const errorMessages = this.messages.filter(
+      m => m.Status === 'Error' && m.Role === 'AI'
+    );
+
+    if (errorMessages.length === 0) {
+      return;
+    }
+
+    for (const message of errorMessages) {
+      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      if (agentRun && agentRun.Status === 'Completed') {
+        LogStatusEx({message: `🔧 Correcting stale error: message ${message.ID} shows Error but agent run ${agentRun.ID} completed successfully`, verboseOnly: true});
+        await this.handleMessageCompletion(message, agentRun.ID);
       }
     }
   }

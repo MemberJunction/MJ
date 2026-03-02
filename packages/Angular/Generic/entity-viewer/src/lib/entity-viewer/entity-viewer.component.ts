@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -97,12 +98,21 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     return this._entity;
   }
   set entity(value: EntityInfo | null) {
+    const previousEntity = this._entity;
     this._entity = value;
 
     // Detect date fields for timeline support
     this.detectDateFields();
 
     if (this._initialized) {
+      // If entity changed to a different entity, clear stale view entity
+      // that belongs to the old entity (its WhereClause, SortState, etc. reference old fields)
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+          this._viewEntity = null;
+        }
+      }
+
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display
@@ -553,7 +563,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Third try: Look up by EntityID
     if (viewEntity.EntityID) {
-      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
       if (entityById) {
         return entityById;
       }
@@ -1303,7 +1313,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
-      : md.Entities.find(e => e.ID === event.relatedEntityId);
+      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
 
     if (!relatedEntity) {
       return;

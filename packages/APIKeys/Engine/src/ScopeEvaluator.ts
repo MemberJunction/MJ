@@ -11,6 +11,7 @@ import {
     MJAPIKeyApplicationEntity,
     MJAPIKeyScopeEntity
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { PatternMatcher } from './PatternMatcher';
 import {
@@ -73,7 +74,7 @@ export class ScopeEvaluator {
         const keyApps = this.Base.GetKeyApplicationsByKeyId(request.APIKeyId);
 
         if (keyApps.length > 0) {
-            const boundToThisApp = keyApps.some(ka => ka.ApplicationID === request.ApplicationId);
+            const boundToThisApp = keyApps.some(ka => UUIDsEqual(ka.ApplicationID, request.ApplicationId));
             if (!boundToThisApp) {
                 return {
                     Allowed: false,

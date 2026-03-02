@@ -3,7 +3,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { MJConversationDetailEntity, MJConversationEntity, MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -95,7 +95,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
     // Apply type filter if selected
     if (this.selectedTypeFilter) {
-      temp = temp.filter(n => n.NotificationTypeID === this.selectedTypeFilter);
+      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.selectedTypeFilter));
     }
 
     // Apply text filter if it is not empty
@@ -340,7 +340,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public getNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
     if (!typeId) return null;
-    return this.notificationTypes.find(t => t.ID === typeId) || null;
+    return this.notificationTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
   }
 
   public getTypeIcon(notification: MJUserNotificationEntity): string {

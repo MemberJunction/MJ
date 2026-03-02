@@ -20,7 +20,7 @@ export class MJWorkspaceFormComponent extends BaseFormComponent {
             { sectionKey: 'workspaceDetails', sectionName: 'Workspace Details', isExpanded: true },
             { sectionKey: 'administrativeInfo', sectionName: 'Administrative Info', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'workspaceItems', sectionName: 'Workspace Items', isExpanded: false }
+            { sectionKey: 'mJWorkspaceItems', sectionName: 'Workspace Items', isExpanded: false }
         ]);
     }
 }

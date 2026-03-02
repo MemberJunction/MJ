@@ -1,6 +1,6 @@
-import sql from 'mssql';
+import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { logError, logStatus } from "./status_logging";
-import { configInfo, mj_core_schema } from "../Config/config";
+import { configInfo, dbType, mj_core_schema } from "../Config/config";
 
 
 export type IntegrityCheckResult = {
@@ -12,7 +12,30 @@ export type IntegrityCheckResult = {
 export type RunIntegrityCheck = {
     Name: string;
     Enabled: boolean;
-    Run: (pool: sql.ConnectionPool) => Promise<IntegrityCheckResult>;
+    Run: (pool: CodeGenConnection) => Promise<IntegrityCheckResult>;
+}
+
+/**
+ * Returns a quoted identifier appropriate for the current database platform.
+ * SQL Server uses [brackets], PostgreSQL uses "double quotes".
+ */
+function qi(name: string): string {
+    if (dbType() === 'postgresql') {
+        return '"' + name + '"';
+    }
+    return '[' + name + ']';
+}
+
+/**
+ * Returns the SQL syntax for limiting results to 1 row.
+ * SQL Server: SELECT TOP 1 * FROM ...
+ * PostgreSQL: SELECT * FROM ... LIMIT 1
+ */
+function selectOne(schema: string, viewName: string): string {
+    if (dbType() === 'postgresql') {
+        return `SELECT * FROM ${qi(schema)}.${qi(viewName)} LIMIT 1`;
+    }
+    return `SELECT TOP 1 * FROM ${qi(schema)}.${qi(viewName)}`;
 }
 
 /**
@@ -33,7 +56,7 @@ export class SystemIntegrityBase {
      * will be run. If false, all checks will be run.
      * @param pool
      */
-    public static async RunIntegrityChecks(pool: sql.ConnectionPool, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
+    public static async RunIntegrityChecks(pool: CodeGenConnection, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
         let results: IntegrityCheckResult[] = [];
         try {
             const runPromises = [];
@@ -76,7 +99,7 @@ export class SystemIntegrityBase {
      * @param pool
      * @returns
      */
-    public static async CheckEntityFieldSequences(pool: sql.ConnectionPool): Promise<IntegrityCheckResult> {
+    public static async CheckEntityFieldSequences(pool: CodeGenConnection): Promise<IntegrityCheckResult> {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, "");
     }
 
@@ -86,15 +109,16 @@ export class SystemIntegrityBase {
      * @param entityName
      * @returns
      */
-    public static async CheckSinleEntityFieldSequences(pool: sql.ConnectionPool, entityName: string): Promise<IntegrityCheckResult> {
-        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, `WHERE Entity='${entityName}'`);
+    public static async CheckSinleEntityFieldSequences(pool: CodeGenConnection, entityName: string): Promise<IntegrityCheckResult> {
+        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, `WHERE ${qi('Entity')}='${entityName}'`);
     }
 
-    protected static async CheckEntityFieldSequencesInternal(pool: sql.ConnectionPool, filter: string): Promise<IntegrityCheckResult> {
+    protected static async CheckEntityFieldSequencesInternal(pool: CodeGenConnection, filter: string): Promise<IntegrityCheckResult> {
         try {
-            const sSQL = `SELECT ID, Entity, SchemaName, BaseView, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
-            const resultResult = await pool.request().query(sSQL);
-      const result = resultResult.recordset;
+            const schema = mj_core_schema();
+            const sSQL = `SELECT ${qi('ID')}, ${qi('Entity')}, ${qi('SchemaName')}, ${qi('BaseView')}, ${qi('EntityID')}, ${qi('Name')}, ${qi('Sequence')} FROM ${qi(schema)}.${qi('vwEntityFields')} ${filter} ORDER BY ${qi('Entity')}, ${qi('Sequence')}`;
+            const resultResult = await pool.query(sSQL);
+            const result = resultResult.recordset;
             if (!result || result.length === 0) {
                 throw new Error("No entity fields found");
             }
@@ -109,12 +133,15 @@ export class SystemIntegrityBase {
                 for (const row of result) {
                     if (lastEntity !== row.Entity) {
                         // we have a new entity, check all the fields in this entity
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const fields = result.filter((f: any) => f.Entity === row.Entity);
                         // check for duplicate sequences, and build a list of duplicate sequences to include the field name in the message along with the sequence
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const duplicates = fields.filter((f: any) => fields.filter((f2: any) => f2.Sequence === f.Sequence).length > 1);
                         if (duplicates.length > 0) {
                             success = false;
                             message += `Entity ${row.Entity} has duplicate Entity Field sequences:\n`;
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             message += duplicates.map((d: any) => `      * ${d.Name} (${d.Sequence})`).join("\n");
                             message += "\n";
                         }
@@ -132,11 +159,11 @@ export class SystemIntegrityBase {
                             if (success) {
                                 // finally, check to see if the metadata sequence numbers match the physical order of the columns in the
                                 // underlying base view. This is critical for calling the spUpdate/spCreate procs correctly.
-                                // we will do this by SELECT TOP 1 * from the base view
+                                // we will do this by selecting one row from the base view
                                 const entity = row.Entity;
-                                const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
-                                const sampleResultResult = await pool.request().query(sampleSQL);
-      const sampleResult = sampleResultResult.recordset;
+                                const sampleSQL = selectOne(row.SchemaName, row.BaseView);
+                                const sampleResultResult = await pool.query(sampleSQL);
+                                const sampleResult = sampleResultResult.recordset;
                                 // now check the order of the columns in the result set relative to the
                                 // fields array
                                 if (sampleResult && sampleResult.length > 0) {
@@ -145,7 +172,7 @@ export class SystemIntegrityBase {
                                     for (const field of fields) {
                                         if (columns[i] !== field.Name) {
                                             success = false;
-                                            message += `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view [${row.SchemaName}].[${row.BaseView}] for position ${i+1}. Expected ${field.Name} but found ${columns[i]}\n`;
+                                            message += `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view ${qi(row.SchemaName)}.${qi(row.BaseView)} for position ${i+1}. Expected ${field.Name} but found ${columns[i]}\n`;
                                         }
                                         i++;
                                     }

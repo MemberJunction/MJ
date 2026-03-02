@@ -20,8 +20,8 @@ export class MJTemplateCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
             { sectionKey: 'managementAudit', sectionName: 'Management Audit', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'templateCategories', sectionName: 'Template Categories', isExpanded: false },
-            { sectionKey: 'templates', sectionName: 'Templates', isExpanded: false }
+            { sectionKey: 'mJTemplateCategories', sectionName: 'Template Categories', isExpanded: false },
+            { sectionKey: 'mJTemplates', sectionName: 'Templates', isExpanded: false }
         ]);
     }
 }

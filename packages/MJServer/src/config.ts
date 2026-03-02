@@ -140,6 +140,13 @@ const scheduledJobsSchema = z.object({
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
 });
 
+const queryDialectSchema = z.object({
+  /** When true, saving a Query entity auto-generates QuerySQL entries for configured target dialects */
+  autoConvertOnSave: zodBooleanWithTransforms().default(false),
+  /** List of SQLDialect PlatformKey values to auto-convert to (e.g., ['postgresql']) */
+  targetPlatforms: z.array(z.string()).optional().default([]),
+});
+
 const telemetrySchema = z.object({
   enabled: zodBooleanWithTransforms().default(
     process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
@@ -158,6 +165,7 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
+  queryDialects: queryDialectSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -201,6 +209,7 @@ export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
+export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

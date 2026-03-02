@@ -21,6 +21,7 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
 import { SuggestedResponse } from '../../models/conversation-state.model';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents an attachment on a message for display
@@ -254,7 +255,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentID);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentID));
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
@@ -400,7 +401,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
-      const agent = agents.find(a => a.ID === content.id);
+      const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) {
         name = agent.Name;
         iconClass = agent.IconClass || '';
@@ -421,7 +422,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         }
       }
     } else if (content.type === 'user' && users) {
-      const user = users.find(u => u.ID === content.id);
+      const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     }
 
@@ -664,7 +665,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Check if current user has already rated this message
     if (this.ratings && this.ratings.length > 0) {
       const currentUserId = this.currentUser?.ID;
-      const userHasRated = this.ratings.some(r => r.UserID === currentUserId);
+      const userHasRated = this.ratings.some(r => UUIDsEqual(r.UserID, currentUserId));
 
       // If user already rated, don't show inline (accessible via gear menu)
       if (userHasRated) return false;
@@ -1165,7 +1166,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
-    return this.conversation?.UserID === this.currentUser.ID;
+    return UUIDsEqual(this.conversation?.UserID, this.currentUser.ID);
   }
 
   /**
