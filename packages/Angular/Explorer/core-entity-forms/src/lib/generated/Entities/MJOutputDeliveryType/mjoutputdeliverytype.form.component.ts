@@ -18,7 +18,7 @@ export class MJOutputDeliveryTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'deliveryTypeDetails', sectionName: 'Delivery Type Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false }
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false }
         ]);
     }
 }

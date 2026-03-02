@@ -1,5 +1,50 @@
 # @memberjunction/react-runtime
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

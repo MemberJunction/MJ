@@ -2,6 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
@@ -24,6 +25,10 @@ export class AgentStateService implements OnDestroy {
   private pollSubscription?: Subscription;
   private currentUser?: UserInfo;
   private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
+  private pollCycleCount = 0;
+  /** Minimum poll cycles before allowing auto-stop. Prevents premature shutdown
+   *  when fire-and-forget ACK returns before the server creates the agent run record. */
+  private readonly minimumPollCycles = 3;
 
   // Public observable streams
   public readonly activeAgents$ = this._activeAgents$.asObservable();
@@ -42,6 +47,7 @@ export class AgentStateService implements OnDestroy {
   startPolling(currentUser: UserInfo, conversationId?: string): void {
     this.currentUser = currentUser;
     this.stopPolling();
+    this.pollCycleCount = 0;
 
     // Initial load
     this.loadActiveAgents(conversationId);
@@ -69,7 +75,7 @@ export class AgentStateService implements OnDestroy {
   getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
     if (conversationId) {
       return this.activeAgents$.pipe(
-        map(agents => agents.filter(a => a.run.ConversationID === conversationId)),
+        map(agents => agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId))),
         shareReplay(1)
       );
     }
@@ -81,7 +87,7 @@ export class AgentStateService implements OnDestroy {
    * @param agentRunId The agent run ID
    */
   getAgent(agentRunId: string): AgentWithStatus | undefined {
-    return this._activeAgents$.value.find(a => a.run.ID === agentRunId);
+    return this._activeAgents$.value.find(a => UUIDsEqual(a.run.ID, agentRunId));
   }
 
   /**
@@ -100,8 +106,9 @@ export class AgentStateService implements OnDestroy {
       return;
     }
 
+    this.pollCycleCount++;
     const timestamp = new Date().toISOString();
-    LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`, verboseOnly: true});
+    LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'}, cycle: ${this.pollCycleCount})`, verboseOnly: true});
 
     try {
       const rv = new RunView();
@@ -130,9 +137,11 @@ export class AgentStateService implements OnDestroy {
         const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
 
-        // Stop polling if no active agents (optimization to reduce DB load)
-        if (runs.length === 0 && this.pollSubscription) {
-          LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - No active agents, stopping polling`, verboseOnly: true});
+        // Stop polling if no active agents AND minimum cycles met (optimization to reduce DB load).
+        // The minimum cycle guard prevents premature shutdown when fire-and-forget returns
+        // before the server has created the agent run record.
+        if (runs.length === 0 && this.pollSubscription && this.pollCycleCount >= this.minimumPollCycles) {
+          LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - No active agents after ${this.pollCycleCount} cycles, stopping polling`, verboseOnly: true});
           this.stopPolling();
         }
       }

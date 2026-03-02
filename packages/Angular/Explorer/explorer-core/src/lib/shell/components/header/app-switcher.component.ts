@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, HostListener, ViewChild } from '@angular/core';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * App switcher dropdown in the header.
@@ -54,7 +55,7 @@ export class AppSwitcherComponent {
    */
   selectApp(app: BaseApplication): void {
     this.showDropdown = false;
-    if (app.ID !== this.activeApp?.ID || this.isViewingSystemTab) {
+    if (!UUIDsEqual(app.ID, this.activeApp?.ID) || this.isViewingSystemTab) {
       this.appSelected.emit(app.ID);
     }
   }
@@ -79,7 +80,7 @@ export class AppSwitcherComponent {
     // Use setTimeout to ensure ViewChild is available
     setTimeout(() => {
       if (this.appConfigDialog) {
-        this.appConfigDialog.open();
+        this.appConfigDialog.Open();
       }
     }, 0);
   }

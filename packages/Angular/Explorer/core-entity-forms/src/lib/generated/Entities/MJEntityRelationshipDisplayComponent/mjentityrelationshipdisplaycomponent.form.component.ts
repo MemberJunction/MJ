@@ -18,7 +18,7 @@ export class MJEntityRelationshipDisplayComponentFormComponent extends BaseFormC
         this.initSections([
             { sectionKey: 'componentDefinition', sectionName: 'Component Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityRelationships', sectionName: 'Entity Relationships', isExpanded: false }
+            { sectionKey: 'mJEntityRelationships', sectionName: 'Entity Relationships', isExpanded: false }
         ]);
     }
 }

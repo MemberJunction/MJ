@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult } from "@memberjunction/core";
 import { MJUserViewEntity } from "../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissionEngine";
@@ -92,8 +92,30 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 return s.field + (desc ? ' DESC' : '');
             }).join(', ')
         }
-        else
-            return ''
+
+        // Fall back to GridState.sortSettings when SortState is empty.
+        // Sort may be stored only in GridState if the view was configured via the
+        // grid UI before SortState sync was added.
+        return this.buildOrderByFromGridState();
+    }
+
+    /**
+     * Attempts to build an ORDER BY clause from GridState.sortSettings.
+     * Returns an empty string if GridState has no sort settings.
+     */
+    private buildOrderByFromGridState(): string {
+        if (!this.GridState) return '';
+        try {
+            const gridState = JSON.parse(this.GridState) as ViewGridState;
+            if (gridState.sortSettings && gridState.sortSettings.length > 0) {
+                return gridState.sortSettings
+                    .map(s => s.field + (s.dir === 'desc' ? ' DESC' : ''))
+                    .join(', ');
+            }
+        } catch {
+            // Invalid GridState JSON — ignore
+        }
+        return '';
     }
 
     /**
@@ -202,7 +224,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         // in this case we need to make sure we ge the _ViewEntityInfo property set up correctly
         if (data && data.EntityID) {
             const md = new Metadata();
-            const match = md.Entities.find(e => e.ID === data.EntityID)
+            const match = md.Entities.find(e => UUIDsEqual(e.ID, data.EntityID))
             if (match) {
                 this._ViewEntityInfo = match
             }
@@ -242,7 +264,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     }
     private CalculateUserCanView(): boolean {
         const md = new Metadata();
-        const bOwner = this.UserID === md.CurrentUser.ID;
+        const bOwner = UUIDsEqual(this.UserID, md.CurrentUser.ID);
         if (bOwner) {
             return true
         }
@@ -292,7 +314,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
             const md = new Metadata();
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
-            if (this.UserID === user.ID || user.Type.trim().toLowerCase() === 'owner' ) {
+            if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner' ) {
                 return this.CheckPermissions(EntityPermissionType.Delete, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
             }
             else {
@@ -313,7 +335,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // so of course they can save it
             const md = new Metadata();
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
-            if (this.UserID === user.ID || user.Type.trim().toLowerCase() === 'owner') {
+            if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner') {
                 return this.CheckPermissions(EntityPermissionType.Update, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
             }
             else {
@@ -345,7 +367,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         if (result) {
             const md = new Metadata();
             // first, cache a copy of the entity info for the entity that is used in this view
-            const match = md.Entities.find(e => e.ID === this.EntityID) 
+            const match = md.Entities.find(e => UUIDsEqual(e.ID, this.EntityID))
             if (match)
                 this._ViewEntityInfo = match 
             else
@@ -530,7 +552,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         if (FieldName.toLowerCase() == 'entityid') {
             // we're updating the entityID, need to upate the _ViewEntityInfo property so it is always in sync
             const md = new Metadata();
-            const match = md.Entities.find(e => e.ID === Value)
+            const match = md.Entities.find(e => UUIDsEqual(e.ID, Value))
             if (match)
                 this._ViewEntityInfo = match 
             else

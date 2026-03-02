@@ -21,6 +21,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -702,7 +703,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     return lastAIMessage?.AgentID || null;
@@ -1249,6 +1250,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       this.markMessageComplete(convoDetail);
     }
 
+    // Race condition guard: Before writing Error, reload from DB to check if the server
+    // already completed this record. The server and client write to the same conversation
+    // detail record — if the server completed successfully but a client-side timeout or
+    // WebSocket disconnect triggered this error path, we must not overwrite the server's
+    // successful completion with an error status.
+    if (status === 'Error' && convoDetail.ID) {
+      await convoDetail.Load(convoDetail.ID);
+      if (convoDetail.Status === 'Complete') {
+        // Server already completed — emit updated message, don't overwrite with error
+        this.messageSent.emit(convoDetail);
+        return;
+      }
+    }
+
     // Guard clause: Don't re-save if already complete/errored (prevents duplicate saves)
     // Task has already been removed by markMessageComplete() above
     if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
@@ -1304,7 +1319,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     if (agentMessages.length === 0) {
       return { payload: null, artifactInfo: null };
@@ -1530,19 +1545,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
         await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult);
 
-        // Server created artifacts - emit event to trigger UI reload
-        if (subResult.payload && Object.keys(subResult.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
-          console.log('🎨 Server created artifact for sub-agent message:', agentResponseMessage.ID);
-          // Re-emit to trigger artifact display
-          this.messageSent.emit(agentResponseMessage);
-        }
+        // Always emit artifactCreated to trigger UI reload — the server may have created
+        // artifacts even when the result payload is empty (e.g., remote stage server).
+        // onArtifactCreated will reload from DB and discover any artifacts that exist.
+        this.artifactCreated.emit({
+          artifactId: '',
+          versionId: '',
+          versionNumber: 0,
+          conversationDetailId: agentResponseMessage.ID,
+          name: ''
+        });
+        this.messageSent.emit(agentResponseMessage);
 
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1578,17 +1591,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
           await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
 
-          // Server created artifacts - emit event to trigger UI reload
-          if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
-            this.artifactCreated.emit({
-              artifactId: '',
-              versionId: '',
-              versionNumber: 0,
-              conversationDetailId: agentResponseMessage.ID,
-              name: ''
-            });
-            this.messageSent.emit(agentResponseMessage);
-          }
+          // Always emit artifactCreated to trigger UI reload (same as initial attempt)
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
+          this.messageSent.emit(agentResponseMessage);
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {
@@ -1624,7 +1635,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     if (!lastAIMessage || !lastAIMessage.AgentID) {
@@ -1635,7 +1646,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     // Load the agent entity to get its name
-    const previousAgent = AIEngineBase.Instance.Agents.find(a => a.ID === lastAIMessage.AgentID);
+    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID));
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1910,7 +1921,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
@@ -1977,7 +1988,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service

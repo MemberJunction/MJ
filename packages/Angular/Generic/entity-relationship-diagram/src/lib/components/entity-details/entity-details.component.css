@@ -1,11 +1,11 @@
 /**
- * Entity Details Component - MD3 Styled
- * Material Design 3 theming for the entity details panel
+ * Entity Details Component - MJ Design Token Styled
+ * MemberJunction design tokens for the entity details panel
  */
 
 .details-panel {
   height: 100%;
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -42,20 +42,21 @@
   border-bottom: none;
 }
 
-/* Panel Header - MD3 Surface Container */
+/* Panel Header */
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: var(--mat-sys-surface-container);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .panel-header h3 {
   margin: 0;
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-on-surface);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
 }
 
 .panel-actions {
@@ -64,27 +65,27 @@
   align-items: center;
 }
 
-/* MD3 Filled Button for Open */
+/* Filled Button for Open */
 .open-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
   border: none;
   border-radius: 20px;
-  font: var(--mat-sys-label-small);
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: var(--mat-sys-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .open-btn:hover {
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
-/* MD3 Icon Button for Close */
+/* Icon Button for Close */
 .close-btn {
   display: inline-flex;
   align-items: center;
@@ -93,7 +94,7 @@
   height: 32px;
   padding: 0;
   background: transparent;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -101,21 +102,21 @@
 }
 
 .close-btn:hover {
-  background: var(--mat-sys-surface-container-highest);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-primary);
 }
 
 /* Entity Info Section */
 .entity-info {
   padding: 16px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
-  font: var(--mat-sys-body-small);
+  font-size: 12px;
 }
 
 .info-row:last-child {
@@ -124,40 +125,40 @@
 
 .info-row label {
   font-weight: 600;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   min-width: 60px;
 }
 
 .info-row span {
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
   flex: 1;
   text-align: right;
 }
 
-/* MD3 Status Badges */
+/* Status Badges */
 .status-badge {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
   border-radius: 8px;
-  font: var(--mat-sys-label-small);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
 .status-badge.status-active {
-  background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  background: var(--mj-color-success-100);
+  color: var(--mj-color-success-800);
 }
 
 .status-badge.status-deprecated {
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background: var(--mj-color-warning-50);
+  color: var(--mj-color-warning-900);
 }
 
 .status-badge.status-disabled {
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
+  background: var(--mj-color-error-100);
+  color: var(--mj-color-error-700);
 }
 
 .extra-padding {
@@ -167,7 +168,7 @@
 /* Fields and Relationships Sections */
 .fields-section,
 .relationships-section {
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .fields-section .section-header,
@@ -177,9 +178,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--mat-sys-surface-container-low);
+  background: var(--mj-bg-surface-sunken);
   border: none;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .fields-section .section-header .section-title-group,
@@ -192,11 +193,12 @@
 .fields-section h4,
 .relationships-section h4 {
   margin: 0;
-  font: var(--mat-sys-title-small);
-  color: var(--mat-sys-on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
 }
 
-/* MD3 Expand Button */
+/* Expand Button */
 .expand-btn {
   display: inline-flex;
   align-items: center;
@@ -205,7 +207,7 @@
   height: 28px;
   padding: 0;
   background: transparent;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -213,8 +215,8 @@
 }
 
 .expand-btn:hover {
-  background: var(--mat-sys-surface-container-highest);
-  color: var(--mat-sys-on-surface);
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-primary);
 }
 
 .expand-btn .fa-solid {
@@ -245,23 +247,23 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  font: var(--mat-sys-label-small);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface-variant);
-  border: 1px solid var(--mat-sys-outline-variant);
+  font-size: 11px;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .filter-btn:hover {
-  background: var(--mat-sys-surface-container);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .filter-btn.active {
-  background: var(--mat-sys-primary);
-  border-color: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 /* Fields and Related Entities Lists */
@@ -283,28 +285,28 @@
 
 .fields-list::-webkit-scrollbar-track,
 .related-entities-list::-webkit-scrollbar-track {
-  background: var(--mat-sys-surface-container);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 3px;
 }
 
 .fields-list::-webkit-scrollbar-thumb,
 .related-entities-list::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-outline);
+  background: var(--mj-color-neutral-400);
   border-radius: 3px;
 }
 
 .fields-list::-webkit-scrollbar-thumb:hover,
 .related-entities-list::-webkit-scrollbar-thumb:hover {
-  background: var(--mat-sys-on-surface-variant);
+  background: var(--mj-text-secondary);
 }
 
-/* Field Items - MD3 Card Style */
+/* Field Items - Card Style */
 .field-item {
   padding: 10px;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
-  font: var(--mat-sys-body-small);
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
   transition: all 0.2s ease;
@@ -312,44 +314,44 @@
 
 .field-item:hover {
   transform: translateY(-1px);
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .field-item.field-expanded {
-  box-shadow: var(--mat-sys-elevation-3);
+  box-shadow: var(--mj-shadow-lg);
   transform: scale(1.01);
 }
 
-/* Primary Key Field - Tertiary Accent */
+/* Primary Key Field - Success Accent */
 .field-item.primary-key-field {
-  border-color: var(--mat-sys-tertiary);
-  background: var(--mat-sys-tertiary-container);
-  border-left: 4px solid var(--mat-sys-tertiary);
+  border-color: var(--mj-status-success);
+  background: var(--mj-color-success-100);
+  border-left: 4px solid var(--mj-status-success);
 }
 
 .field-item.primary-key-field.field-expanded {
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--mat-sys-tertiary) 20%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
 }
 
 /* Foreign Key Field - Primary Accent */
 .field-item.foreign-key-field {
-  border-color: var(--mat-sys-primary);
-  background: var(--mat-sys-primary-container);
-  border-left: 4px solid var(--mat-sys-primary);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-color-accent-300);
+  border-left: 4px solid var(--mj-brand-primary);
 }
 
 .field-item.foreign-key-field.field-expanded {
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 /* Regular Field */
 .field-item.regular-field {
-  border-color: var(--mat-sys-outline-variant);
-  background: var(--mat-sys-surface-container-low);
+  border-color: var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .field-item.regular-field.field-expanded {
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .field-header {
@@ -367,7 +369,7 @@
 
 .field-name {
   font-weight: 600;
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -378,14 +380,14 @@
 }
 
 .field-icon.fa-key {
-  color: var(--mat-sys-tertiary);
+  color: var(--mj-status-success);
 }
 
 .field-icon.fa-link {
-  color: var(--mat-sys-primary);
+  color: var(--mj-brand-primary);
 }
 
-/* MD3 Field Badges */
+/* Field Badges */
 .field-badges {
   display: flex;
   gap: 4px;
@@ -396,30 +398,29 @@
   align-items: center;
   padding: 1px 6px;
   border-radius: 4px;
-  font: var(--mat-sys-label-small);
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .field-badge.primary-key {
-  background: var(--mat-sys-tertiary);
-  color: var(--mat-sys-on-tertiary);
+  background: var(--mj-status-success);
+  color: var(--mj-brand-on-primary);
 }
 
 .field-badge.foreign-key {
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .field-type {
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-label-small);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
 }
 
 .field-relation {
-  color: var(--mat-sys-primary);
-  font: var(--mat-sys-label-small);
+  color: var(--mj-brand-primary);
+  font-size: 11px;
   margin-top: 4px;
 }
 
@@ -437,7 +438,7 @@
   height: 24px;
   padding: 0;
   background: transparent;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -446,14 +447,14 @@
 
 .field-info-btn:hover,
 .field-values-btn:hover {
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-primary);
+  background: var(--mj-color-accent-300);
+  color: var(--mj-brand-primary);
 }
 
 .field-info-btn.expanded,
 .field-values-btn.expanded {
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-primary);
+  background: var(--mj-color-accent-300);
+  color: var(--mj-brand-primary);
 }
 
 .field-info-btn .fa-solid,
@@ -465,15 +466,15 @@
 .field-description {
   margin-top: 8px;
   padding: 8px;
-  background: var(--mat-sys-surface-container-low);
-  border-left: 3px solid var(--mat-sys-primary);
+  background: var(--mj-bg-surface-sunken);
+  border-left: 3px solid var(--mj-brand-primary);
   border-radius: 0 8px 8px 0;
   animation: fadeIn 0.3s ease-in-out;
 }
 
 .field-description .description-text {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+  color: var(--mj-text-secondary);
   line-height: 1.4;
   font-style: italic;
 }
@@ -495,19 +496,19 @@
   }
 }
 
-/* Field Values - Secondary Accent */
+/* Field Values - Warning Accent */
 .field-values {
   margin-top: 8px;
   padding: 8px;
-  background: var(--mat-sys-secondary-container);
-  border-left: 3px solid var(--mat-sys-secondary);
+  background: var(--mj-color-warning-50);
+  border-left: 3px solid var(--mj-color-warning-500);
   border-radius: 0 8px 8px 0;
   animation: fadeIn 0.3s ease-in-out;
 }
 
 .field-values .values-header {
-  font: var(--mat-sys-label-small);
-  color: var(--mat-sys-on-secondary-container);
+  font-size: 11px;
+  color: var(--mj-color-warning-900);
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -521,9 +522,8 @@
 .field-values .value-tag {
   display: inline-block;
   padding: 2px 8px;
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-label-small);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
   font-size: 9px;
   border-radius: 12px;
   font-weight: 500;
@@ -531,11 +531,11 @@
   max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
-  border: 1px solid var(--mat-sys-outline-variant);
+  border: 1px solid var(--mj-border-default);
 }
 
 .field-values .value-tag:hover {
-  background: var(--mat-sys-surface-container-highest);
+  background: var(--mj-bg-surface-active);
   cursor: default;
 }
 
@@ -543,8 +543,8 @@
 .field-comprehensive-details {
   margin-top: 12px;
   padding: 12px;
-  background: var(--mat-sys-surface-container);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   animation: slideDown 0.3s ease-out;
 }
@@ -553,16 +553,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font: var(--mat-sys-label-medium);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .field-comprehensive-details .details-header .fa-solid {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 .field-comprehensive-details .details-grid {
@@ -574,52 +574,52 @@
   display: grid;
   grid-template-columns: 100px 1fr;
   gap: 8px;
-  font: var(--mat-sys-body-small);
+  font-size: 12px;
   align-items: center;
 }
 
 .field-comprehensive-details .detail-label {
   font-weight: 600;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   text-align: right;
 }
 
 .field-comprehensive-details .detail-value {
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
   font-family: "Courier New", monospace;
-  background: var(--mat-sys-surface);
+  background: var(--mj-bg-page);
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid var(--mat-sys-outline-variant);
+  border: 1px solid var(--mj-border-default);
 }
 
 .field-comprehensive-details .detail-value.nullable-yes,
 .field-comprehensive-details .detail-value.nullable-no {
-  color: var(--mat-sys-on-surface);
-  background: var(--mat-sys-surface);
-  border-color: var(--mat-sys-outline-variant);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  border-color: var(--mj-border-default);
 }
 
 .field-comprehensive-details .detail-value.virtual-yes {
-  color: var(--mat-sys-on-secondary-container);
-  background: var(--mat-sys-secondary-container);
-  border-color: var(--mat-sys-secondary);
+  color: var(--mj-color-warning-900);
+  background: var(--mj-color-warning-50);
+  border-color: var(--mj-color-warning-500);
 }
 
 .field-comprehensive-details .detail-value.virtual-no {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 .field-comprehensive-details .detail-value.default-value {
-  color: var(--mat-sys-on-tertiary-container);
-  background: var(--mat-sys-tertiary-container);
-  border-color: var(--mat-sys-tertiary);
+  color: var(--mj-color-success-800);
+  background: var(--mj-color-success-100);
+  border-color: var(--mj-status-success);
 }
 
 .field-comprehensive-details .detail-value.related-entity {
-  color: var(--mat-sys-on-primary-container);
-  background: var(--mat-sys-primary-container);
-  border-color: var(--mat-sys-primary);
+  color: var(--mj-color-brand-900);
+  background: var(--mj-color-accent-300);
+  border-color: var(--mj-brand-primary);
   cursor: pointer;
   user-select: none;
   transition: all 0.2s ease;
@@ -630,7 +630,7 @@
 
 .field-comprehensive-details .detail-value.related-entity:hover {
   text-decoration: underline;
-  background: color-mix(in srgb, var(--mat-sys-primary-container) 80%, var(--mat-sys-primary) 20%);
+  background: color-mix(in srgb, var(--mj-color-accent-300) 80%, var(--mj-brand-primary) 20%);
   transform: translateX(2px);
 }
 
@@ -645,53 +645,53 @@
 }
 
 .field-comprehensive-details .detail-value.auto-increment {
-  color: var(--mat-sys-on-tertiary-container);
-  background: var(--mat-sys-tertiary-container);
-  border-color: var(--mat-sys-tertiary);
+  color: var(--mj-color-success-800);
+  background: var(--mj-color-success-100);
+  border-color: var(--mj-status-success);
 }
 
 .field-comprehensive-details .comprehensive-description-top {
   margin-bottom: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .field-comprehensive-details .comprehensive-description-top .description-content {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface);
+  font-size: 12px;
+  color: var(--mj-text-primary);
   line-height: 1.4;
   font-style: italic;
-  background: var(--mat-sys-primary-container);
+  background: var(--mj-color-accent-300);
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid var(--mat-sys-primary);
-  border-left: 4px solid var(--mat-sys-primary);
+  border: 1px solid var(--mj-brand-primary);
+  border-left: 4px solid var(--mj-brand-primary);
 }
 
 /* Field Values in Comprehensive Details */
 .field-comprehensive-details .field-values-comprehensive {
   margin-bottom: 12px;
   padding: 12px;
-  background: var(--mat-sys-secondary-container);
-  border: 1px solid var(--mat-sys-secondary);
+  background: var(--mj-color-warning-50);
+  border: 1px solid var(--mj-color-warning-500);
   border-radius: 8px;
-  border-left: 4px solid var(--mat-sys-secondary);
+  border-left: 4px solid var(--mj-color-warning-500);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  font: var(--mat-sys-label-medium);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--mat-sys-on-secondary-container);
+  color: var(--mj-color-warning-900);
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-secondary) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-color-warning-500) 30%, transparent);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-header .fa-solid {
-  color: var(--mat-sys-secondary);
+  color: var(--mj-color-warning-500);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid {
@@ -707,23 +707,23 @@
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-track {
-  background: var(--mat-sys-secondary-container);
+  background: var(--mj-color-warning-50);
   border-radius: 2px;
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-secondary);
+  background: var(--mj-color-warning-500);
   border-radius: 2px;
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-thumb:hover {
-  background: var(--mat-sys-on-secondary-container);
+  background: var(--mj-color-warning-900);
 }
 
 .field-comprehensive-details .field-values-comprehensive .value-item {
   padding: 8px;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
 }
 
@@ -735,26 +735,24 @@
 }
 
 .field-comprehensive-details .field-values-comprehensive .value-item .value-main .value-text {
-  font: var(--mat-sys-label-small);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--mat-sys-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .field-comprehensive-details .field-values-comprehensive .value-item .value-main .value-code {
-  font: var(--mat-sys-label-small);
   font-size: 9px;
-  color: var(--mat-sys-on-secondary-container);
-  background: var(--mat-sys-secondary-container);
+  color: var(--mj-color-warning-900);
+  background: var(--mj-color-warning-50);
   padding: 1px 4px;
   border-radius: 4px;
-  border: 1px solid var(--mat-sys-secondary);
+  border: 1px solid var(--mj-color-warning-500);
   font-family: "Courier New", monospace;
 }
 
 .field-comprehensive-details .field-values-comprehensive .value-item .value-description {
-  font: var(--mat-sys-body-small);
   font-size: 9px;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   line-height: 1.3;
   font-style: italic;
   margin-top: 2px;
@@ -773,15 +771,15 @@
   }
 }
 
-/* Related Entity Items - MD3 List Item Style */
+/* Related Entity Items - List Item Style */
 .related-entity-item {
   padding: 12px 14px;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   cursor: pointer;
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface);
+  font-size: 14px;
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -793,10 +791,10 @@
 }
 
 .related-entity-item:hover {
-  background: var(--mat-sys-primary-container);
-  border-color: var(--mat-sys-primary);
+  background: var(--mj-color-accent-300);
+  border-color: var(--mj-brand-primary);
   transform: translateX(4px);
-  box-shadow: var(--mat-sys-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .related-entity-item:hover .zoom-indicator {
@@ -805,7 +803,7 @@
 }
 
 .related-entity-item:hover .fa-database {
-  color: var(--mat-sys-primary);
+  color: var(--mj-brand-primary);
   transform: scale(1.1);
 }
 
@@ -816,13 +814,13 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(to bottom, var(--mat-sys-primary), var(--mat-sys-secondary));
+  background: linear-gradient(to bottom, var(--mj-brand-primary), var(--mj-color-warning-500));
   border-radius: 0 3px 3px 0;
 }
 
 .related-entity-item .fa-solid {
   margin-right: 10px;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mj-text-secondary);
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
@@ -841,7 +839,7 @@
 
 .related-entity-item .zoom-indicator {
   opacity: 0.4;
-  color: var(--mat-sys-primary);
+  color: var(--mj-brand-primary);
   font-size: 11px;
   transition: all 0.2s ease;
   flex-shrink: 0;

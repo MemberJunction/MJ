@@ -1,5 +1,80 @@
 # @memberjunction/ai-agents
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-reranker@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Minor Changes
+
+- bc993b8: migration file due to metadata update (fix entity name in AI Agent data preloading for DB Research Agent)
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/ai-reranker@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/aiengine@5.3.1
+- @memberjunction/ai-prompts@5.3.1
+- @memberjunction/ai-reranker@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Minor Changes
+
+- ebf057a: migration
+
+### Patch Changes
+
+- 1692c53: Viewing System fixes for sorting and filtering. Memory manager SQL fix.
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/aiengine@5.3.0
+  - @memberjunction/ai-prompts@5.3.0
+  - @memberjunction/ai-reranker@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

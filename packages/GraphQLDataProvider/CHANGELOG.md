@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

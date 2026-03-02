@@ -1,6 +1,6 @@
 import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError, IMetadataProvider, BaseEnginePropertyConfig } from '@memberjunction/core';
 import { MJListDetailEntityType, MJListEntity, MJListEntityType, MJRecommendationEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
 
@@ -161,7 +161,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
 
     const entityID: string = list.EntityID;
-    const entity: EntityInfo = md.Entities.find((e) => e.ID == entityID);
+    const entity: EntityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, entityID));
     const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
 
     const listDetailsResult = rvListDetailsResult[1];

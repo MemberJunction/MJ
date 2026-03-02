@@ -1,3 +1,4 @@
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   BaseCommunicationProvider,
   CreateDraftParams,
@@ -943,7 +944,7 @@ export class GmailProvider extends BaseCommunicationProvider {
       // Filter by parent if specified (Gmail doesn't have nested labels in the API the same way)
       // User labels can have "/" in names to simulate hierarchy
       if (params.ParentFolderID) {
-        const parent = folders.find(f => f.ID === params.ParentFolderID);
+        const parent = folders.find(f => UUIDsEqual(f.ID, params.ParentFolderID));
         if (parent) {
           const parentPrefix = parent.Name + '/';
           return {

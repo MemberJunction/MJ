@@ -175,60 +175,60 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: Open App Dependencies Section -->
+    <!-- Open App Dependencies (Open App ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJOpenAppDependencies"
-        SectionName="MJ: Open App Dependencies"
+        SectionKey="mJOpenAppDependenciesOpenAppID"
+        SectionName="Open App Dependencies (Open App ID)"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenAppDependencies')"
+        [BadgeCount]="GetSectionRowCount('mJOpenAppDependenciesOpenAppID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
                 [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
+                [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesOpenAppID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependencies', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesOpenAppID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Open App Dependencies Section -->
+    <!-- Open App Dependencies (Depends On App ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJOpenAppDependencies"
-        SectionName="MJ: Open App Dependencies"
+        SectionKey="mJOpenAppDependenciesDependsOnAppID"
+        SectionName="Open App Dependencies (Depends On App ID)"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenAppDependencies')"
+        [BadgeCount]="GetSectionRowCount('mJOpenAppDependenciesDependsOnAppID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
                 [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJOpenAppDependencies')"
+                [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesDependsOnAppID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependencies', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesDependsOnAppID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Open App Install Histories Section -->
+    <!-- Open App Install Histories Section -->
     <mj-collapsible-panel
         SectionKey="mJOpenAppInstallHistories"
-        SectionName="MJ: Open App Install Histories"
+        SectionName="Open App Install Histories"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"

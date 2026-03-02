@@ -133,23 +133,23 @@
 
     <!-- Reports Section -->
     <mj-collapsible-panel
-        SectionKey="reports"
+        SectionKey="mJReports"
         SectionName="Reports"
         Icon="fa-solid fa-chart-line"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('reports')"
+        [BadgeCount]="GetSectionRowCount('mJReports')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Reports','OutputWorkflowID')"
                 [NewRecordValues]="NewRecordValues('MJ: Reports')"
-                [AllowLoad]="IsSectionExpanded('reports')"
+                [AllowLoad]="IsSectionExpanded('mJReports')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJReports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -158,23 +158,23 @@
 
     <!-- Workflow Runs Section -->
     <mj-collapsible-panel
-        SectionKey="workflowRuns"
+        SectionKey="mJWorkflowRuns"
         SectionName="Workflow Runs"
         Icon="fa fa-running"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('workflowRuns')"
+        [BadgeCount]="GetSectionRowCount('mJWorkflowRuns')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflow Runs','WorkflowName')"
                 [NewRecordValues]="NewRecordValues('MJ: Workflow Runs')"
-                [AllowLoad]="IsSectionExpanded('workflowRuns')"
+                [AllowLoad]="IsSectionExpanded('mJWorkflowRuns')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('workflowRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJWorkflowRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

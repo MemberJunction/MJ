@@ -1,5 +1,136 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.4.1
+- @memberjunction/ai-agents@5.4.1
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/ai-reranker@5.4.1
+- @memberjunction/actions-apollo@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions-bizapps-accounting@5.4.1
+- @memberjunction/actions-bizapps-crm@5.4.1
+- @memberjunction/actions-bizapps-formbuilders@5.4.1
+- @memberjunction/actions-bizapps-lms@5.4.1
+- @memberjunction/actions-bizapps-social@5.4.1
+- @memberjunction/core-actions@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/doc-utils@5.4.1
+- @memberjunction/encryption@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/data-context-server@5.4.1
+- @memberjunction/scheduling-actions@5.4.1
+- @memberjunction/scheduling-engine-base@5.4.1
+- @memberjunction/scheduling-engine@5.4.1
+- @memberjunction/templates@5.4.1
+- @memberjunction/testing-engine@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [c9a760c]
+- Updated dependencies [bc993b8]
+- Updated dependencies [cde53a9]
+- Updated dependencies [9604926]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-agents@5.4.0
+  - @memberjunction/actions-bizapps-lms@5.4.0
+  - @memberjunction/ai-agent-manager@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/ai-reranker@5.4.0
+  - @memberjunction/actions-apollo@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions-bizapps-accounting@5.4.0
+  - @memberjunction/actions-bizapps-crm@5.4.0
+  - @memberjunction/actions-bizapps-formbuilders@5.4.0
+  - @memberjunction/actions-bizapps-social@5.4.0
+  - @memberjunction/core-actions@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/doc-utils@5.4.0
+  - @memberjunction/encryption@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/scheduling-actions@5.4.0
+  - @memberjunction/scheduling-engine-base@5.4.0
+  - @memberjunction/scheduling-engine@5.4.0
+  - @memberjunction/templates@5.4.0
+  - @memberjunction/testing-engine@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/data-context-server@5.4.0
+  - @memberjunction/core@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.3.1
+- @memberjunction/ai-agents@5.3.1
+- @memberjunction/ai-engine-base@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/ai-provider-bundle@5.3.1
+- @memberjunction/ai-reranker@5.3.1
+- @memberjunction/actions-apollo@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/actions-bizapps-accounting@5.3.1
+- @memberjunction/actions-bizapps-crm@5.3.1
+- @memberjunction/actions-bizapps-formbuilders@5.3.1
+- @memberjunction/actions-bizapps-lms@5.3.1
+- @memberjunction/actions-bizapps-social@5.3.1
+- @memberjunction/core-actions@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/doc-utils@5.3.1
+- @memberjunction/encryption@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/core-entities-server@5.3.1
+- @memberjunction/data-context-server@5.3.1
+- @memberjunction/scheduling-actions@5.3.1
+- @memberjunction/scheduling-engine-base@5.3.1
+- @memberjunction/scheduling-engine@5.3.1
+- @memberjunction/templates@5.3.1
+- @memberjunction/testing-engine@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [ebf057a]
+- Updated dependencies [1692c53]
+  - @memberjunction/ai-agents@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-agent-manager@5.3.0
+  - @memberjunction/core-actions@5.3.0
+  - @memberjunction/scheduling-engine@5.3.0
+  - @memberjunction/testing-engine@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/ai-reranker@5.3.0
+  - @memberjunction/actions-apollo@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/actions-bizapps-accounting@5.3.0
+  - @memberjunction/actions-bizapps-crm@5.3.0
+  - @memberjunction/actions-bizapps-formbuilders@5.3.0
+  - @memberjunction/actions-bizapps-lms@5.3.0
+  - @memberjunction/actions-bizapps-social@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/doc-utils@5.3.0
+  - @memberjunction/encryption@5.3.0
+  - @memberjunction/core-entities-server@5.3.0
+  - @memberjunction/scheduling-actions@5.3.0
+  - @memberjunction/scheduling-engine-base@5.3.0
+  - @memberjunction/templates@5.3.0
+  - @memberjunction/ai-provider-bundle@5.3.0
+  - @memberjunction/data-context-server@5.3.0
+  - @memberjunction/core@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

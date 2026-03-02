@@ -5,6 +5,7 @@ import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilCha
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SubAgentSelectorResult {
   selectedAgents: MJAIAgentEntityExtended[];
@@ -156,7 +157,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
     // Type filter
     if (typeId !== 'all') {
-      filtered = filtered.filter(agent => agent.TypeID === typeId);
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, typeId));
     }
 
     // Search filter
@@ -197,7 +198,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const agents = this.allAgents$.value;
     
     // Find the agent and toggle its selection
-    const agentToUpdate = agents.find(a => a.ID === agent.ID);
+    const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
       agentToUpdate.selected = !agentToUpdate.selected;
       
@@ -206,7 +207,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
           // Single select mode - clear other selections
           selected.clear();
           agents.forEach(a => {
-            if (a.ID !== agent.ID) {
+            if (!UUIDsEqual(a.ID, agent.ID)) {
               a.selected = false;
             }
           });
@@ -221,7 +222,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered agents to reflect selection state
       const filtered = this.filteredAgents$.value;
-      const filteredAgent = filtered.find(a => a.ID === agent.ID);
+      const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
         filteredAgent.selected = agentToUpdate.selected;
         this.filteredAgents$.next(filtered);

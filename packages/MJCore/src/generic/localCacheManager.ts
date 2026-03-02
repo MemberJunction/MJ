@@ -435,8 +435,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
-        const filter = (params.ExtraFilter || '').trim();
-        const orderBy = (params.OrderBy || '').trim();
+        const rawFilter = params.ExtraFilter;
+        const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
+        const rawOrderBy = params.OrderBy;
+        const orderBy = (typeof rawOrderBy === 'string' ? rawOrderBy : rawOrderBy ? JSON.stringify(rawOrderBy) : '').trim();
         const resultType = params.ResultType || 'simple';
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;

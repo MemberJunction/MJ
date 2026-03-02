@@ -4,7 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
 
 interface AppStats {
@@ -23,7 +23,7 @@ interface FilterOptions {
   standalone: false,
   selector: 'mj-application-management',
   templateUrl: './application-management.component.html',
-  styleUrls: ['./application-management.component.css']
+  styleUrls: ['../shared/styles/_admin-patterns.css', './application-management.component.css']
 })
 @RegisterClass(BaseDashboard, 'ApplicationManagement')
 export class ApplicationManagementComponent extends BaseDashboard implements OnDestroy {
@@ -228,7 +228,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   public getEntityInfo(entityId: string): any {
-    return this.metadata.Entities.find(e => e.ID === entityId);
+    return this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
   }
   
   public createNewApplication(): void {

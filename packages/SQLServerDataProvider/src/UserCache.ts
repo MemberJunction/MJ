@@ -1,5 +1,5 @@
 import { LogError, Metadata, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import sql from 'mssql';
 
 const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
@@ -59,7 +59,7 @@ export class UserCache {
         const r = rResult.recordset;
         if (u) {
           this._users = u.map((user: any) => {
-            user.UserRoles = r.filter((role: any) => role.UserID === user.ID);
+            user.UserRoles = r.filter((role: any) => UUIDsEqual(role.UserID, user.ID));
             const uI = new UserInfo(Metadata.Provider, user)
             return uI;
           })

@@ -9,7 +9,7 @@ import {
   ResourceData
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
@@ -43,7 +43,7 @@ interface PermissionLevel {
   standalone: false,
   selector: 'mj-entity-permissions',
   templateUrl: './entity-permissions.component.html',
-  styleUrls: ['./entity-permissions.component.css']
+  styleUrls: ['../shared/styles/_admin-patterns.css', './entity-permissions.component.css']
 })
 @RegisterClass(BaseDashboard, 'EntityPermissions')
 export class EntityPermissionsComponent extends BaseDashboard implements OnDestroy {
@@ -347,7 +347,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   public getRoleName(roleId: string): string {
-    const role = this.roles.find(r => r.ID === roleId);
+    const role = this.roles.find(r => UUIDsEqual(r.ID, roleId));
     return role?.Name || 'Unknown Role';
   }
   

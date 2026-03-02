@@ -18,7 +18,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
@@ -259,7 +259,7 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        const partType = this.partTypes.find(pt => pt.ID === partTypeId);
+        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, partTypeId));
         if (!partType) {
             this.error.emit({ message: `Unknown panel type: ${partTypeId}` });
             return;
@@ -384,7 +384,7 @@ export class DashboardViewerComponent implements OnDestroy {
     public getPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
         const panel = this.getPanel(panelId);
         if (!panel) return null;
-        return this.partTypes.find(pt => pt.ID === panel.partTypeId) ?? null;
+        return this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId)) ?? null;
     }
 
     /**
@@ -690,7 +690,7 @@ export class DashboardViewerComponent implements OnDestroy {
      * Panel comes directly from GL's componentState - no lookup needed.
      */
     private createPanelComponent(panel: DashboardPanel, container: HTMLElement): void {
-        const partType = this.partTypes.find(pt => pt.ID === panel.partTypeId);
+        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
         // Create the panel wrapper with header and content
         const wrapper = document.createElement('div');

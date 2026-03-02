@@ -3,6 +3,7 @@ import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
 import { SafeJSONParse } from "@memberjunction/global";
+import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -304,107 +305,77 @@ export class GraphQLAIClient {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string
     ): Promise<ExecuteAgentResult> {
-        let subscription: any;
-
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            LogStatusEx({message: '[GraphQLAIClient] Received statusUpdate message', verboseOnly: true, additionalArgs: [message]});
-                            const parsed = JSON.parse(message);
-                            LogStatusEx({message: '[GraphQLAIClient] Parsed message', verboseOnly: true, additionalArgs: [parsed]});
-
-                            // Filter for ExecutionProgress messages from RunAIAgentResolver
-                            if (parsed.resolver === 'RunAIAgentResolver' &&
-                                parsed.type === 'ExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
-
-                                LogStatusEx({message: '[GraphQLAIClient] Forwarding progress to callback', verboseOnly: true, additionalArgs: [parsed.data.progress]});
-                                // Forward progress to callback with agentRunId in metadata
-                                const progressWithRunId = {
-                                    ...parsed.data.progress,
-                                    metadata: {
-                                        ...(parsed.data.progress.metadata || {}),
-                                        agentRunId: parsed.data.agentRunId
-                                    }
-                                };
-                                params.onProgress!(progressWithRunId);
-                            } else {
-                                LogStatusEx({message: '[GraphQLAIClient] Message does not match filter criteria', verboseOnly: true, additionalArgs: [{
-                                    resolver: parsed.resolver,
-                                    type: parsed.type,
-                                    status: parsed.status,
-                                    hasProgress: !!parsed.data?.progress
-                                }]});
-                            }
-                        } catch (e) {
-                            // Log parsing errors for debugging
-                            console.error('[GraphQLAIClient] Failed to parse progress message:', e, 'Raw message:', message);
-                        }
-                    });
-            }
-
-            // Build the mutation
-            const mutation = gql`
-                mutation RunAIAgent(
-                    $agentId: String!,
-                    $messages: String!,
-                    $sessionId: String!,
-                    $data: String,
-                    $payload: String,
-                    $templateData: String,
-                    $lastRunId: String,
-                    $autoPopulateLastRunPayload: Boolean,
-                    $configurationId: String,
-                    $conversationDetailId: String,
-                    $createArtifacts: Boolean,
-                    $createNotification: Boolean,
-                    $sourceArtifactId: String,
-                    $sourceArtifactVersionId: String
-                ) {
-                    RunAIAgent(
-                        agentId: $agentId,
-                        messages: $messages,
-                        sessionId: $sessionId,
-                        data: $data,
-                        payload: $payload,
-                        templateData: $templateData,
-                        lastRunId: $lastRunId,
-                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
-                        configurationId: $configurationId,
-                        conversationDetailId: $conversationDetailId,
-                        createArtifacts: $createArtifacts,
-                        createNotification: $createNotification,
-                        sourceArtifactId: $sourceArtifactId,
-                        sourceArtifactVersionId: $sourceArtifactVersionId
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Prepare variables
+            const mutation = this.buildRunAIAgentMutation();
             const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
+            // Enable fire-and-forget to avoid Azure proxy timeouts
+            variables.fireAndForget = true;
 
-            // Execute the mutation
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
-
-            // Process and return the result
-            return this.processAgentResult(result.RunAIAgent?.result);
+            return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunAIAgent',
+                operationLabel: 'RunAIAgent',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
+                extractResult: (parsed) => this.extractAgentResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardAgentProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+            });
         } catch (e) {
             return this.handleAgentError(e);
-        } finally {
-            // Always clean up subscription
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
+    }
+
+    /**
+     * Build the RunAIAgent mutation document including fireAndForget parameter.
+     */
+    private buildRunAIAgentMutation(): string {
+        return gql`
+            mutation RunAIAgent(
+                $agentId: String!,
+                $messages: String!,
+                $sessionId: String!,
+                $data: String,
+                $payload: String,
+                $templateData: String,
+                $lastRunId: String,
+                $autoPopulateLastRunPayload: Boolean,
+                $configurationId: String,
+                $conversationDetailId: String,
+                $createArtifacts: Boolean,
+                $createNotification: Boolean,
+                $sourceArtifactId: String,
+                $sourceArtifactVersionId: String,
+                $fireAndForget: Boolean
+            ) {
+                RunAIAgent(
+                    agentId: $agentId,
+                    messages: $messages,
+                    sessionId: $sessionId,
+                    data: $data,
+                    payload: $payload,
+                    templateData: $templateData,
+                    lastRunId: $lastRunId,
+                    autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                    configurationId: $configurationId,
+                    conversationDetailId: $conversationDetailId,
+                    createArtifacts: $createArtifacts,
+                    createNotification: $createNotification,
+                    sourceArtifactId: $sourceArtifactId,
+                    sourceArtifactVersionId: $sourceArtifactVersionId,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
     }
 
     /**
@@ -470,11 +441,28 @@ export class GraphQLAIClient {
      */
     private handleAgentError(e: unknown): ExecuteAgentResult {
         const error = e as Error;
-        LogError(`Error running AI agent: ${error}`);
+        const errorMessage = error?.message || String(e);
+        LogError(`Error running AI agent: ${errorMessage}`);
+
+        // Provide a meaningful error message that helps the user understand what happened.
+        // CORS/network errors from Azure proxy timeouts appear as "Failed to fetch".
+        const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
+        const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
+
+        let userMessage: string;
+        if (isFetchError) {
+            userMessage = 'Lost connection to the server. The agent may still be running. Please refresh to check the latest status.';
+        } else if (isTimeoutError) {
+            userMessage = errorMessage; // Already has a helpful message from the completion timeout
+        } else {
+            userMessage = errorMessage;
+        }
+
         return {
             success: false,
-            agentRun: undefined
-        };
+            agentRun: undefined,
+            errorMessage: userMessage
+        } as ExecuteAgentResult;
     }
 
     /**
@@ -506,114 +494,219 @@ export class GraphQLAIClient {
     public async RunAIAgentFromConversationDetail(
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
-        let subscription: ReturnType<typeof this._dataProvider.PushStatusUpdates.prototype.subscribe> | undefined;
-
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            const parsed = JSON.parse(message);
+            const mutation = this.buildConversationDetailMutation();
+            const variables = this.prepareConversationDetailVariables(params);
 
-                            // Filter for ExecutionProgress messages from RunAIAgentResolver
-                            if (parsed.resolver === 'RunAIAgentResolver' &&
-                                parsed.type === 'ExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
-
-                                // Forward progress to callback with agentRunId in metadata
-                                const progressWithRunId = {
-                                    ...parsed.data.progress,
-                                    metadata: {
-                                        ...(parsed.data.progress.metadata || {}),
-                                        agentRunId: parsed.data.agentRunId
-                                    }
-                                };
-                                params.onProgress!(progressWithRunId);
-                            }
-                        } catch (e) {
-                            console.error('[GraphQLAIClient] Failed to parse progress message:', e);
-                        }
-                    });
-            }
-
-            // Build the mutation
-            const mutation = gql`
-                mutation RunAIAgentFromConversationDetail(
-                    $conversationDetailId: String!,
-                    $agentId: String!,
-                    $sessionId: String!,
-                    $maxHistoryMessages: Int,
-                    $data: String,
-                    $payload: String,
-                    $lastRunId: String,
-                    $autoPopulateLastRunPayload: Boolean,
-                    $configurationId: String,
-                    $createArtifacts: Boolean,
-                    $createNotification: Boolean,
-                    $sourceArtifactId: String,
-                    $sourceArtifactVersionId: String
-                ) {
-                    RunAIAgentFromConversationDetail(
-                        conversationDetailId: $conversationDetailId,
-                        agentId: $agentId,
-                        sessionId: $sessionId,
-                        maxHistoryMessages: $maxHistoryMessages,
-                        data: $data,
-                        payload: $payload,
-                        lastRunId: $lastRunId,
-                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
-                        configurationId: $configurationId,
-                        createArtifacts: $createArtifacts,
-                        createNotification: $createNotification,
-                        sourceArtifactId: $sourceArtifactId,
-                        sourceArtifactVersionId: $sourceArtifactVersionId
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Prepare variables
-            const variables: Record<string, unknown> = {
-                conversationDetailId: params.conversationDetailId,
-                agentId: params.agentId,
-                sessionId: this._dataProvider.sessionId
-            };
-
-            // Add optional parameters
-            if (params.maxHistoryMessages !== undefined) variables.maxHistoryMessages = params.maxHistoryMessages;
-            if (params.data !== undefined) {
-                variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
-            }
-            if (params.payload !== undefined) {
-                variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
-            }
-            if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
-            if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
-            if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
-            if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
-            if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
-            if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
-            if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
-
-            // Execute the mutation
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
-
-            // Process and return the result
-            return this.processAgentResult(result.RunAIAgentFromConversationDetail?.result);
+            return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunAIAgentFromConversationDetail',
+                operationLabel: 'RunAIAgentFromConversationDetail',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) =>
+                    this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
+                extractResult: (parsed) => this.extractAgentResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+            });
         } catch (e) {
             return this.handleAgentError(e);
-        } finally {
-            // Always clean up subscription
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
+    }
+
+    /**
+     * Build the RunAIAgentFromConversationDetail mutation document.
+     */
+    private buildConversationDetailMutation(): string {
+        return gql`
+            mutation RunAIAgentFromConversationDetail(
+                $conversationDetailId: String!,
+                $agentId: String!,
+                $sessionId: String!,
+                $maxHistoryMessages: Int,
+                $data: String,
+                $payload: String,
+                $lastRunId: String,
+                $autoPopulateLastRunPayload: Boolean,
+                $configurationId: String,
+                $createArtifacts: Boolean,
+                $createNotification: Boolean,
+                $sourceArtifactId: String,
+                $sourceArtifactVersionId: String,
+                $fireAndForget: Boolean
+            ) {
+                RunAIAgentFromConversationDetail(
+                    conversationDetailId: $conversationDetailId,
+                    agentId: $agentId,
+                    sessionId: $sessionId,
+                    maxHistoryMessages: $maxHistoryMessages,
+                    data: $data,
+                    payload: $payload,
+                    lastRunId: $lastRunId,
+                    autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                    configurationId: $configurationId,
+                    createArtifacts: $createArtifacts,
+                    createNotification: $createNotification,
+                    sourceArtifactId: $sourceArtifactId,
+                    sourceArtifactVersionId: $sourceArtifactVersionId,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
+    }
+
+    /**
+     * Prepare variables for RunAIAgentFromConversationDetail mutation.
+     */
+    private prepareConversationDetailVariables(
+        params: RunAIAgentFromConversationDetailParams
+    ): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            conversationDetailId: params.conversationDetailId,
+            agentId: params.agentId,
+            sessionId: this._dataProvider.sessionId,
+            fireAndForget: true
+        };
+
+        if (params.maxHistoryMessages !== undefined) variables.maxHistoryMessages = params.maxHistoryMessages;
+        if (params.data !== undefined) {
+            variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
+        }
+        if (params.payload !== undefined) {
+            variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
+        }
+        if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
+        if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
+        if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
+        if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
+        if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
+        if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
+
+        return variables;
+    }
+
+    // ===== Agent Event Matching =====
+
+    /**
+     * Check if a PubSub message is the completion event for an agent execution.
+     * Used by RunAIAgent which doesn't have a conversationDetailId to correlate on.
+     */
+    private isAgentCompletionEvent(parsed: Record<string, unknown>): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunAIAgentResolver' &&
+            parsed.type === 'StreamingContent' &&
+            data?.type === 'complete';
+    }
+
+    /**
+     * Check if a PubSub message is the completion event for a specific conversation detail.
+     * Used by RunAIAgentFromConversationDetail which correlates by conversationDetailId.
+     */
+    private isConversationDetailCompletionEvent(
+        parsed: Record<string, unknown>,
+        conversationDetailId: string
+    ): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunAIAgentResolver' &&
+            parsed.type === 'StreamingContent' &&
+            data?.type === 'complete' &&
+            data?.conversationDetailId === conversationDetailId;
+    }
+
+    // ===== Agent Result Extraction =====
+
+    /**
+     * Extract an ExecuteAgentResult from a completion PubSub message.
+     * The server publishes the full result JSON in the completion event data.
+     */
+    private extractAgentResult(parsed: Record<string, unknown>): ExecuteAgentResult {
+        const data = parsed.data as Record<string, unknown>;
+        const resultJson = data.result as string | undefined;
+        if (resultJson) {
+            return SafeJSONParse(resultJson) as ExecuteAgentResult;
+        }
+        // Fallback: construct a minimal result from the event data
+        return {
+            success: data.success as boolean,
+            agentRun: undefined,
+        } as ExecuteAgentResult;
+    }
+
+    // ===== Agent Progress Forwarding =====
+
+    /**
+     * Forward agent execution progress from PubSub to the AgentExecutionProgressCallback.
+     * Maps server-side `currentStep` to the callback's expected `step` field.
+     */
+    private forwardAgentProgress(
+        parsed: Record<string, unknown>,
+        onProgress: NonNullable<ExecuteAgentParams['onProgress']>
+    ): void {
+        if (parsed.resolver !== 'RunAIAgentResolver' ||
+            parsed.type !== 'ExecutionProgress' ||
+            parsed.status !== 'ok') {
+            return;
+        }
+
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const progress = data?.progress as Record<string, unknown> | undefined;
+        if (!progress) return;
+
+        onProgress({
+            step: (progress.currentStep as string) as 'initialization',
+            percentage: progress.percentage as number | undefined,
+            message: progress.message as string,
+            metadata: progress as Record<string, unknown>,
+        });
+    }
+
+    /**
+     * Forward agent execution progress from PubSub to the conversation detail progress callback.
+     * Passes `currentStep` directly since the callback interface already uses that field name.
+     */
+    private forwardConversationDetailProgress(
+        parsed: Record<string, unknown>,
+        onProgress: NonNullable<RunAIAgentFromConversationDetailParams['onProgress']>
+    ): void {
+        if (parsed.resolver !== 'RunAIAgentResolver' ||
+            parsed.type !== 'ExecutionProgress' ||
+            parsed.status !== 'ok') {
+            return;
+        }
+
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const progress = data?.progress as Record<string, unknown> | undefined;
+        if (!progress) return;
+
+        onProgress({
+            currentStep: progress.currentStep as string,
+            percentage: progress.percentage as number | undefined,
+            message: progress.message as string,
+            metadata: progress as Record<string, unknown>,
+        });
+    }
+
+    // ===== Agent Error Result =====
+
+    /**
+     * Create an error ExecuteAgentResult for fire-and-forget failures.
+     */
+    private createAgentErrorResult(errorMessage: string): ExecuteAgentResult {
+        return {
+            success: false,
+            agentRun: undefined,
+            errorMessage,
+        } as ExecuteAgentResult;
     }
 
     /**

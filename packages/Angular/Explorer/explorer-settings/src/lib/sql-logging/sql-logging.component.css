@@ -1,62 +1,12 @@
 /* =============================================================================
-   SQL Logging Component - Material Design 3 Styles
-   Following MD3 Design System with custom color palette and design tokens
+   SQL Logging Component - Component-Specific Styles
+   Shared patterns are in ../shared/styles/_admin-patterns.css
    ============================================================================= */
 
-/* MD3 Design Tokens - Color Palette */
+/* -----------------------------------------------------------------------------
+   Host Override - SQL Logging uses block/scroll layout instead of flex
+   ----------------------------------------------------------------------------- */
 :host {
-  /* Primary - Deep Blue */
-  --md-primary: #0076B6;
-  --md-on-primary: #FFFFFF;
-  --md-primary-container: #AAE7FD;
-  --md-on-primary-container: #001F2A;
-
-  /* Secondary - Light Orange */
-  --md-secondary: #F5A623;
-  --md-on-secondary: #FFFFFF;
-  --md-secondary-container: #FFECD6;
-  --md-on-secondary-container: #2D1600;
-
-  /* Tertiary - Light Green */
-  --md-tertiary: #4CAF50;
-  --md-on-tertiary: #FFFFFF;
-  --md-tertiary-container: #C8E6C9;
-  --md-on-tertiary-container: #002204;
-
-  /* Error - Red */
-  --md-error: #D32F2F;
-  --md-on-error: #FFFFFF;
-  --md-error-container: #FFCDD2;
-  --md-on-error-container: #410002;
-
-  /* Surface Colors */
-  --md-surface: #FAFCFF;
-  --md-surface-container-lowest: #FFFFFF;
-  --md-surface-container-low: #F3F5F9;
-  --md-surface-container: #EDF0F4;
-  --md-surface-container-high: #E7EAEE;
-  --md-surface-container-highest: #E1E3E8;
-  --md-on-surface: #191C20;
-  --md-on-surface-variant: #43474E;
-  --md-outline: #74777F;
-  --md-outline-variant: #C4C6D0;
-
-  /* Elevation (Box Shadows) */
-  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
-  --md-elevation-4: 0 6px 12px rgba(0, 0, 0, 0.1), 0 12px 24px rgba(0, 0, 0, 0.08);
-  --md-elevation-5: 0 8px 16px rgba(0, 0, 0, 0.12), 0 16px 32px rgba(0, 0, 0, 0.1);
-
-  /* Corner Radii */
-  --md-corner-extra-small: 4px;
-  --md-corner-small: 8px;
-  --md-corner-medium: 12px;
-  --md-corner-large: 16px;
-  --md-corner-extra-large: 28px;
-  --md-corner-full: 9999px;
-
-  /* Host element layout */
   display: block;
   height: 100%;
   width: 100%;
@@ -76,7 +26,7 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   position: relative;
-  background: var(--md-surface);
+  background: var(--mj-bg-page);
   padding: 1rem;
 }
 
@@ -107,14 +57,12 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Action Buttons
+   Action Buttons Override - Different layout (margin-bottom, no padding/bg)
    ----------------------------------------------------------------------------- */
 .action-buttons {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
+  padding: 0;
+  background: transparent;
 }
 
 @media (max-width: 639px) {
@@ -161,7 +109,7 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Button System - MD3 Pattern
+   Button System - SQL Logging uses .btn-* instead of .mj-btn-*
    ----------------------------------------------------------------------------- */
 .btn-primary,
 .btn-secondary,
@@ -174,7 +122,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   border: none;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
@@ -182,20 +130,20 @@
   min-width: 44px;
 }
 
-/* Primary Button - Dark blue, lightens on hover */
+/* Primary Button */
 .btn-primary {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #3395C8;
-  box-shadow: var(--md-elevation-2);
+  background: var(--mj-brand-primary-light);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .btn-primary:active:not(:disabled) {
-  background: #4BA5D4;
+  background: var(--mj-color-brand-300);
   transform: scale(0.98);
 }
 
@@ -208,22 +156,22 @@
   font-size: 0.875rem;
 }
 
-/* Secondary Button - Light, darkens/fills on hover */
+/* Secondary Button */
 .btn-secondary {
-  background: var(--md-surface);
-  color: var(--md-primary);
-  border: 1px solid var(--md-outline);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  border: 1px solid var(--mj-border-strong);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  border-color: var(--md-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .btn-secondary:active:not(:disabled) {
-  background: #005A8C;
-  border-color: #005A8C;
+  background: var(--mj-brand-primary-active);
+  border-color: var(--mj-brand-primary-active);
 }
 
 .btn-secondary:disabled {
@@ -235,20 +183,20 @@
   font-size: 0.875rem;
 }
 
-/* Danger Button - Dark red, lightens on hover */
+/* Danger Button */
 .btn-danger {
-  background: var(--md-error);
-  color: var(--md-on-error);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #E57373;
-  box-shadow: var(--md-elevation-2);
+  background: var(--mj-color-error-300);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .btn-danger:active:not(:disabled) {
-  background: #EF9A9A;
+  background: var(--mj-color-error-200);
   transform: scale(0.98);
 }
 
@@ -268,7 +216,7 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Statistics Grid - MD3 Cards
+   Statistics Grid - Collapsible Cards
    ----------------------------------------------------------------------------- */
 .stats-toggle-container {
   margin-bottom: 1.5rem;
@@ -280,23 +228,23 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
-  background: var(--md-surface-container-low);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 56px;
 }
 
 .stats-toggle-button:hover {
-  background: var(--md-surface-container);
-  border-color: var(--md-primary);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-bg-surface-active);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .stats-toggle-button.expanded {
-  border-color: var(--md-primary);
-  background: var(--md-primary-container);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-brand-accent-subtle);
   margin-bottom: 1rem;
 }
 
@@ -309,9 +257,9 @@
 .stats-toggle-icon {
   width: 48px;
   height: 48px;
-  border-radius: var(--md-corner-medium);
-  background: var(--md-primary-container);
-  color: var(--md-primary);
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-brand-accent-subtle);
+  color: var(--mj-brand-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -320,8 +268,8 @@
 }
 
 .stats-toggle-button.expanded .stats-toggle-icon {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .stats-toggle-text {
@@ -333,29 +281,29 @@
 .stats-toggle-title {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   margin: 0;
 }
 
 .stats-toggle-button.expanded .stats-toggle-title {
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .stats-toggle-subtitle {
   font-size: 0.8125rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   margin: 0;
 }
 
 .stats-toggle-arrow {
   font-size: 1.25rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .stats-toggle-button.expanded .stats-toggle-arrow {
   transform: rotate(180deg);
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .stats-grid {
@@ -384,12 +332,10 @@
 }
 
 @media (min-width: 768px) {
-  /* Hide toggle button on desktop - stats always visible */
   .stats-toggle-button {
     display: none;
   }
 
-  /* Always show stats grid on desktop */
   .stats-grid {
     max-height: none;
     opacity: 1;
@@ -411,28 +357,24 @@
   }
 }
 
-/* Static Display Card - Non-interactive */
+/* Static Display Card */
 .stat-card {
-  background: var(--md-surface-container-low);
-  border-radius: var(--md-corner-medium);
+  background: var(--mj-bg-surface-card);
+  border-radius: var(--mj-radius-lg);
   padding: 1.25rem;
-  box-shadow: var(--md-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
   display: flex;
   align-items: center;
   gap: 1rem;
-  border: 1px solid var(--md-outline-variant);
+  border: 1px solid var(--mj-border-default);
   cursor: default;
 }
 
+/* Stat Icon Override - Different sizes */
 .stat-icon {
   width: 56px;
   height: 56px;
-  border-radius: var(--md-corner-medium);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1.5rem;
-  flex-shrink: 0;
 }
 
 @media (max-width: 639px) {
@@ -444,38 +386,26 @@
 }
 
 .stat-icon-status {
-  background: var(--md-tertiary-container);
-  color: var(--md-tertiary);
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success);
 }
 
 .stat-icon-active {
-  background: var(--md-primary-container);
-  color: var(--md-primary);
+  background: var(--mj-brand-accent-subtle);
+  color: var(--mj-brand-primary);
 }
 
 .stat-icon-limit {
-  background: var(--md-secondary-container);
-  color: #B5751A;
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
 }
 
 .stat-icon-total {
-  background: var(--md-tertiary-container);
-  color: var(--md-tertiary);
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success);
 }
 
-.stat-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-content .stat-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--md-on-surface);
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
+/* Stat Value Override for mobile */
 @media (max-width: 639px) {
   .stat-content .stat-value {
     font-size: 1.5rem;
@@ -483,38 +413,20 @@
   }
 }
 
-.stat-content .stat-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--md-on-surface-variant);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 0.25rem;
-}
-
 /* -----------------------------------------------------------------------------
-   Content Area
+   Content Area Override - Different styling
    ----------------------------------------------------------------------------- */
 .content-area {
   flex: 1;
-  overflow: visible;
   min-height: 0;
-  position: relative;
-  background: var(--md-surface-container);
-  border-radius: var(--md-corner-medium);
-  border: 1px solid var(--md-outline-variant);
-  padding: 1rem;
+  background: var(--mj-bg-surface-card);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: none;
 }
 
 @media (min-width: 640px) {
   .content-area {
     padding: 1.25rem;
-  }
-}
-
-@media (min-width: 768px) {
-  .content-area {
-    padding: 1.5rem;
   }
 }
 
@@ -549,10 +461,10 @@
   flex: 0 0 380px;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
   overflow: hidden;
-  background: var(--md-surface);
+  background: var(--mj-bg-surface);
   max-height: 600px;
 }
 
@@ -577,8 +489,8 @@
 
 .panel-header {
   padding: 1rem;
-  background: var(--md-surface-container-low);
-  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -597,7 +509,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
@@ -624,7 +536,6 @@
     gap: 0.25rem;
   }
 
-  /* Hide checkbox label text on mobile, show only checkbox */
   .panel-actions .checkbox-label {
     font-size: 0;
     gap: 0;
@@ -653,9 +564,9 @@
    Session Cards
    ----------------------------------------------------------------------------- */
 .session-card {
-  background: var(--md-surface);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-small);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   padding: 1rem;
   margin-bottom: 0.75rem;
   cursor: pointer;
@@ -667,18 +578,18 @@
 }
 
 .session-card:hover {
-  box-shadow: var(--md-elevation-1);
-  border-color: var(--md-primary);
+  box-shadow: var(--mj-shadow-sm);
+  border-color: var(--mj-brand-primary);
 }
 
 .session-card.selected {
-  border-color: var(--md-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
-  background: var(--md-primary-container);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+  background: var(--mj-brand-accent-subtle);
 }
 
 .session-card:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -698,7 +609,7 @@
   margin: 0 0 0.5rem 0;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -708,7 +619,7 @@
   display: flex;
   gap: 1rem;
   font-size: 0.8125rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   flex-wrap: wrap;
 }
 
@@ -726,11 +637,11 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Badges - MD3 Chips
+   Badges - Chips
    ----------------------------------------------------------------------------- */
 .badge {
   padding: 0.375rem 0.875rem;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -741,21 +652,21 @@
 }
 
 .badge-user {
-  background: var(--md-primary-container);
-  color: var(--md-primary);
-  border: 1px solid var(--md-primary);
+  background: var(--mj-brand-accent-subtle);
+  color: var(--mj-brand-primary);
+  border: 1px solid var(--mj-brand-primary);
 }
 
 .badge-migration {
-  background: var(--md-tertiary-container);
-  color: #1B5E20;
-  border: 1px solid var(--md-tertiary);
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+  border: 1px solid var(--mj-status-success);
 }
 
 .badge-type {
-  background: var(--md-secondary-container);
-  color: #7A4D0C;
-  border: 1px solid var(--md-secondary);
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning);
 }
 
 /* -----------------------------------------------------------------------------
@@ -765,9 +676,9 @@
   padding: 0.625rem;
   border: none;
   background: transparent;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   font-size: 1rem;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 44px;
@@ -778,18 +689,18 @@
 }
 
 .action-btn:hover {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .action-btn:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
 .action-btn-danger:hover {
-  background: var(--md-error);
-  color: var(--md-on-error);
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
 }
 
 /* -----------------------------------------------------------------------------
@@ -799,10 +710,10 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
   overflow: hidden;
-  background: var(--md-surface);
+  background: var(--mj-bg-surface);
   min-height: 400px;
 }
 
@@ -812,7 +723,7 @@
   }
 }
 
-/* Code editor keeps its dark theme for readability (per design guide exception) */
+/* Code editor keeps its dark theme for readability */
 .log-content {
   flex: 1;
   overflow: hidden;
@@ -877,39 +788,13 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Empty State - MD3 Pattern
+   Empty State Override - Different icon.warning styling
    ----------------------------------------------------------------------------- */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 4rem 2rem;
-  gap: 1rem;
-}
-
-.empty-state .empty-icon {
-  font-size: 4rem;
-  color: var(--md-outline-variant);
-  margin-bottom: 0.5rem;
-}
-
 .empty-state .empty-icon.warning {
-  color: var(--md-secondary);
-}
-
-.empty-state .empty-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--md-on-surface);
-  margin: 0;
+  color: var(--mj-status-warning);
 }
 
 .empty-state .empty-subtext {
-  font-size: 1rem;
-  color: var(--md-on-surface-variant);
-  margin: 0;
   max-width: 400px;
 }
 
@@ -917,27 +802,27 @@
    Info Box
    ----------------------------------------------------------------------------- */
 .info-box {
-  background: var(--md-surface-container);
-  border-radius: var(--md-corner-medium);
+  background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-lg);
   padding: 1.5rem;
   margin-top: 1.5rem;
   text-align: left;
   max-width: 500px;
-  border: 1px solid var(--md-outline-variant);
+  border: 1px solid var(--mj-border-default);
 }
 
 .info-box h4 {
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .info-box ol {
   margin: 0;
   padding-left: 1.25rem;
   font-size: 1rem;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .info-box ol li {
@@ -945,62 +830,38 @@
 }
 
 .info-box code {
-  background: var(--md-surface-container-high);
+  background: var(--mj-bg-surface-active);
   padding: 0.125rem 0.5rem;
-  border-radius: var(--md-corner-extra-small);
+  border-radius: var(--mj-radius-sm);
   font-size: 0.8125rem;
   font-family: "Consolas", "Monaco", "Courier New", monospace;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 /* -----------------------------------------------------------------------------
-   Loading Container - Uses mj-loading component
+   Loading Container Override
    ----------------------------------------------------------------------------- */
 .loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
   min-height: 300px;
 }
 
 .loading-text {
   font-size: 1rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   margin-top: 1rem;
 }
 
 /* -----------------------------------------------------------------------------
-   Modal Dialogs - MD3 Pattern
+   Modal Dialog Overrides - SQL Logging has its own modal patterns
    ----------------------------------------------------------------------------- */
 .modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-  animation: fadeIn 0.2s cubic-bezier(0, 0, 0.2, 1);
+  background: var(--mj-bg-overlay);
 }
 
 .modal-dialog {
-  background: var(--md-surface);
-  border-radius: var(--md-corner-extra-large);
-  box-shadow: var(--md-elevation-5);
-  max-width: 500px;
   width: 90%;
-  max-height: 90vh;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s cubic-bezier(0, 0, 0.2, 1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1022,7 +883,7 @@
   .modal-dialog {
     width: 95%;
     max-height: 85vh;
-    border-radius: 20px;
+    border-radius: var(--mj-radius-2xl);
   }
 
   .modal-dialog.fullscreen {
@@ -1032,11 +893,6 @@
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--md-outline-variant);
   flex-shrink: 0;
 }
 
@@ -1044,16 +900,6 @@
   .modal-header {
     padding: 1rem 1.25rem;
   }
-}
-
-.modal-header .modal-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.375rem;
-  font-weight: 600;
-  color: var(--md-on-surface);
-  margin: 0;
 }
 
 /* Modal Header Actions */
@@ -1068,10 +914,10 @@
   padding: 0.625rem;
   border: none;
   background: transparent;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   font-size: 1.125rem;
   cursor: pointer;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 44px;
   min-height: 44px;
@@ -1082,43 +928,16 @@
 }
 
 .modal-action-btn:hover {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .modal-action-btn:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-
-.modal-header .modal-close {
-  padding: 0.625rem;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-size: 1.25rem;
-  cursor: pointer;
-  border-radius: var(--md-corner-full);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-header .modal-close:hover {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-
-.modal-header .modal-close:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
 .modal-body {
-  padding: 1.5rem;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   flex: 1;
@@ -1131,19 +950,13 @@
 }
 
 .modal-footer {
-  display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid var(--md-outline-variant);
-  background: var(--md-surface-container-low);
   flex-shrink: 0;
 }
 
 @media (max-width: 639px) {
   .modal-footer {
     padding: 1rem 1.25rem;
-    flex-direction: column;
   }
 
   .modal-footer .btn-primary,
@@ -1154,7 +967,7 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Form Elements - MD3 Pattern
+   Form Elements
    ----------------------------------------------------------------------------- */
 .form-group {
   margin-bottom: 1.5rem;
@@ -1164,7 +977,7 @@
   display: block;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   margin-bottom: 0.5rem;
 }
 
@@ -1174,33 +987,33 @@
   width: 100%;
   min-height: 44px;
   padding: 0.875rem 1rem;
-  border: 2px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-small);
+  border: 2px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   font-size: 1rem;
-  background: var(--md-surface);
-  color: var(--md-on-surface);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .form-input:hover,
 .form-select:hover,
 .form-textarea:hover {
-  border-color: var(--md-primary);
-  background: var(--md-surface-container-lowest);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
 }
 
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--md-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
-  background: var(--md-surface);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+  background: var(--mj-bg-surface);
 }
 
 .form-input::placeholder,
 .form-textarea::placeholder {
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   opacity: 0.7;
 }
 
@@ -1210,7 +1023,7 @@
 
 .form-hint {
   font-size: 0.8125rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   margin-top: 0.375rem;
 }
 
@@ -1225,7 +1038,7 @@
   align-items: center;
   gap: 0.625rem;
   font-size: 1rem;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   cursor: pointer;
   min-height: 44px;
   padding: 0.25rem 0;
@@ -1235,7 +1048,7 @@
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: var(--md-primary);
+  accent-color: var(--mj-brand-primary);
   flex-shrink: 0;
 }
 
@@ -1243,9 +1056,9 @@
 .form-section {
   margin-top: 1.5rem;
   padding: 1.25rem;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
-  background: var(--md-surface-container-low);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .form-section-title {
@@ -1255,11 +1068,11 @@
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .form-section-title i {
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
   font-size: 1.125rem;
 }
 
@@ -1270,12 +1083,12 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Confirmation Dialog - MD3 Pattern
+   Confirmation Dialog
    ----------------------------------------------------------------------------- */
 .confirm-dialog {
-  background: var(--md-surface);
-  border-radius: var(--md-corner-extra-large);
-  box-shadow: var(--md-elevation-5);
+  background: var(--mj-bg-page);
+  border-radius: var(--mj-radius-2xl);
+  box-shadow: var(--mj-shadow-2xl);
   max-width: 420px;
   width: 90%;
   padding: 2rem;
@@ -1286,7 +1099,7 @@
 @media (max-width: 639px) {
   .confirm-dialog {
     padding: 1.5rem;
-    border-radius: 20px;
+    border-radius: var(--mj-radius-2xl);
   }
 }
 
@@ -1294,7 +1107,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: var(--md-secondary-container);
+  background: var(--mj-status-warning-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1303,7 +1116,7 @@
 
 .confirm-dialog-icon i {
   font-size: 1.75rem;
-  color: #B5751A;
+  color: var(--mj-status-warning-text);
 }
 
 .confirm-dialog-content {
@@ -1314,18 +1127,18 @@
   margin: 0 0 0.75rem 0;
   font-size: 1.375rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .confirm-dialog-message {
   margin: 0;
   font-size: 1rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   line-height: 1.6;
 }
 
 .confirm-dialog-message strong {
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   font-weight: 600;
 }
 
@@ -1333,10 +1146,10 @@
   display: block;
   margin-top: 0.75rem;
   padding: 0.75rem;
-  background: var(--md-surface-container);
-  border-radius: var(--md-corner-small);
+  background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-md);
   font-size: 0.8125rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 .confirm-dialog-actions {
@@ -1366,28 +1179,8 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Animations - MD3 Easing
+   SQL-Logging-specific Animations
    ----------------------------------------------------------------------------- */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 @keyframes expandIn {
   from {
     transform: scale(0.95);
@@ -1411,32 +1204,6 @@
     transform: scale(1) translateY(0);
     opacity: 1;
   }
-}
-
-/* -----------------------------------------------------------------------------
-   Reduced Motion Support
-   ----------------------------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* -----------------------------------------------------------------------------
-   Focus Indicators - Accessibility
-   ----------------------------------------------------------------------------- */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-a:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
 }
 
 /* -----------------------------------------------------------------------------

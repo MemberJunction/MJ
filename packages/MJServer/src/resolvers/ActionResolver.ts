@@ -6,7 +6,7 @@ import { ActionParam, ActionResult } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
-import { CopyScalarsAndArrays } from "@memberjunction/global";
+import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
 import { GetReadOnlyProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
@@ -221,7 +221,7 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private findActionById(actionID: string): any {
-    const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionID);
+    const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, actionID));
     if (!action) {
       throw new Error(`Action with ID ${actionID} not found`);
     }
@@ -377,7 +377,7 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private getEntityAction(actionID: string): any {
-    const entityAction = EntityActionEngineServer.Instance.EntityActions.find(ea => ea.ID === actionID);
+    const entityAction = EntityActionEngineServer.Instance.EntityActions.find(ea => UUIDsEqual(ea.ID, actionID));
     if (!entityAction) {
       throw new Error(`EntityAction with ID ${actionID} not found`);
     }
@@ -419,7 +419,7 @@ export class ActionResolver extends ResolverBase {
         throw new Error(`Entity with name ${input.EntityName} not found`);
       }
     } else if (input.EntityID) {
-      entity = md.Entities.find(e => e.ID === input.EntityID);
+      entity = md.Entities.find(e => UUIDsEqual(e.ID, input.EntityID));
       if (!entity) {
         throw new Error(`Entity with ID ${input.EntityID} not found`);
       }

@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Other'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -495,8 +495,8 @@ export const MJActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
@@ -16416,7 +16416,7 @@ export const MJQuerySchema = z.object({
         * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`),
     CacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: CacheTTLMinutes
-        * * Display Name: Cache TTL Minutes
+        * * Display Name: Cache TTL (Minutes)
         * * SQL Data Type: int
         * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.`),
     CacheMaxSize: z.number().nullable().describe(`
@@ -16440,14 +16440,25 @@ export const MJQuerySchema = z.object({
         * * Display Name: Cache Validation SQL
         * * SQL Data Type: nvarchar(MAX)
         * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
+    SQLDialectID: z.string().describe(`
+        * * Field Name: SQLDialectID
+        * * Display Name: SQL Dialect
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+        * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
+        * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(50)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
+    SQLDialect: z.string().describe(`
+        * * Field Name: SQLDialect
+        * * Display Name: SQL Dialect Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJQueryEntityType = z.infer<typeof MJQuerySchema>;
@@ -16822,6 +16833,54 @@ export const MJQueryPermissionSchema = z.object({
 });
 
 export type MJQueryPermissionEntityType = z.infer<typeof MJQueryPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Query SQLs
+ */
+export const MJQuerySQLSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    QueryID: z.string().describe(`
+        * * Field Name: QueryID
+        * * Display Name: Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the query this SQL variant belongs to`),
+    SQLDialectID: z.string().describe(`
+        * * Field Name: SQLDialectID
+        * * Display Name: SQL Dialect
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+        * * Description: Foreign key to the SQL dialect this SQL is written in`),
+    SQL: z.string().describe(`
+        * * Field Name: SQL
+        * * Display Name: SQL Query
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The SQL query text in the specified dialect. May include Nunjucks template parameters.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Query Name
+        * * SQL Data Type: nvarchar(255)`),
+    SQLDialect: z.string().describe(`
+        * * Field Name: SQLDialect
+        * * Display Name: Dialect Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJQuerySQLEntityType = z.infer<typeof MJQuerySQLSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queue Tasks
@@ -18877,6 +18936,69 @@ export const MJSkillSchema = z.object({
 export type MJSkillEntityType = z.infer<typeof MJSkillSchema>;
 
 /**
+ * zod schema definition for the entity MJ: SQL Dialects
+ */
+export const MJSQLDialectSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name for the SQL dialect (e.g., T-SQL, PostgreSQL)`),
+    PlatformKey: z.string().describe(`
+        * * Field Name: PlatformKey
+        * * Display Name: Platform Key
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Lowercase identifier matching DatabasePlatform type in code (e.g., sqlserver, postgresql). Used by providers to find their dialect at runtime.`),
+    DatabaseName: z.string().describe(`
+        * * Field Name: DatabaseName
+        * * Display Name: Database Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the database engine (e.g., SQL Server, PostgreSQL, MySQL)`),
+    LanguageName: z.string().describe(`
+        * * Field Name: LanguageName
+        * * Display Name: Language Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the SQL language variant (e.g., T-SQL, PL/pgSQL, SQL/PSM)`),
+    VendorName: z.string().nullable().describe(`
+        * * Field Name: VendorName
+        * * Display Name: Vendor Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Primary vendor or organization behind this database (e.g., Microsoft, PostgreSQL Global Development Group)`),
+    WebURL: z.string().nullable().describe(`
+        * * Field Name: WebURL
+        * * Display Name: Web URL
+        * * SQL Data Type: nvarchar(500)
+        * * Description: URL to the database vendor or documentation website`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: CSS class or icon reference for UI display`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of this SQL dialect and its characteristics`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJSQLDialectEntityType = z.infer<typeof MJSQLDialectSchema>;
+
+/**
  * zod schema definition for the entity MJ: Tagged Items
  */
 export const MJTaggedItemSchema = z.object({
@@ -19673,6 +19795,138 @@ export const MJTestRunFeedbackSchema = z.object({
 });
 
 export type MJTestRunFeedbackEntityType = z.infer<typeof MJTestRunFeedbackSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Run Output Types
+ */
+export const MJTestRunOutputTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this output type represents and when it is used`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJTestRunOutputTypeEntityType = z.infer<typeof MJTestRunOutputTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Run Outputs
+ */
+export const MJTestRunOutputSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TestRunID: z.string().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: Foreign key to the parent test run that produced this output`),
+    OutputTypeID: z.string().describe(`
+        * * Field Name: OutputTypeID
+        * * Display Name: Output Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Run Output Types (vwTestRunOutputTypes.ID)
+        * * Description: Foreign key to the output type category (Screenshot, Log, Video, etc.)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Chronological ordering for storyboarding outputs across steps`),
+    StepNumber: z.number().nullable().describe(`
+        * * Field Name: StepNumber
+        * * Display Name: Step Number
+        * * SQL Data Type: int
+        * * Description: Which step produced this output, for step-based tests like Computer Use`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this output (e.g., Step 3 Screenshot)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional context about this output`),
+    MimeType: z.string().nullable().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type of the output data (e.g., image/png, text/plain, application/json, video/mp4)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Size of the output data in bytes`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int
+        * * Description: Width in pixels for image or video outputs`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int
+        * * Description: Height in pixels for image or video outputs`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: decimal(10, 3)
+        * * Description: Duration in seconds for audio or video outputs`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Technical Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object with additional metadata about this output (e.g., URL at time of capture, tool calls, error info)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    TestRun: z.string().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OutputType: z.string().describe(`
+        * * Field Name: OutputType
+        * * Display Name: Output Type Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJTestRunOutputEntityType = z.infer<typeof MJTestRunOutputSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Runs
@@ -23278,17 +23532,17 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * Other
     *   * MediaOutput
-    *   * Scalar
     *   * Other
+    *   * Scalar
     *   * Scalar
     *   * Simple Object
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Scalar' | 'Other' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -65022,7 +65276,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: CacheTTLMinutes
-    * * Display Name: Cache TTL Minutes
+    * * Display Name: Cache TTL (Minutes)
     * * SQL Data Type: int
     * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.
     */
@@ -65087,8 +65341,23 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: SQLDialectID
+    * * Display Name: SQL Dialect
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+    * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
+    * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.
+    */
+    get SQLDialectID(): string {
+        return this.Get('SQLDialectID');
+    }
+    set SQLDialectID(value: string) {
+        this.Set('SQLDialectID', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
     */
     get Category(): string | null {
@@ -65097,11 +65366,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: SQLDialect
+    * * Display Name: SQL Dialect Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SQLDialect(): string {
+        return this.Get('SQLDialect');
     }
 }
 
@@ -66037,6 +66315,129 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
     */
     get Role(): string {
         return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: Query SQLs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: QuerySQL
+ * * Base View: vwQuerySQLs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Query SQLs')
+export class MJQuerySQLEntity extends BaseEntity<MJQuerySQLEntityType> {
+    /**
+    * Loads the MJ: Query SQLs record from the database
+    * @param ID: string - primary key value to load the MJ: Query SQLs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJQuerySQLEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: QueryID
+    * * Display Name: Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the query this SQL variant belongs to
+    */
+    get QueryID(): string {
+        return this.Get('QueryID');
+    }
+    set QueryID(value: string) {
+        this.Set('QueryID', value);
+    }
+
+    /**
+    * * Field Name: SQLDialectID
+    * * Display Name: SQL Dialect
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+    * * Description: Foreign key to the SQL dialect this SQL is written in
+    */
+    get SQLDialectID(): string {
+        return this.Get('SQLDialectID');
+    }
+    set SQLDialectID(value: string) {
+        this.Set('SQLDialectID', value);
+    }
+
+    /**
+    * * Field Name: SQL
+    * * Display Name: SQL Query
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The SQL query text in the specified dialect. May include Nunjucks template parameters.
+    */
+    get SQL(): string {
+        return this.Get('SQL');
+    }
+    set SQL(value: string) {
+        this.Set('SQL', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: SQLDialect
+    * * Display Name: Dialect Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SQLDialect(): string {
+        return this.Get('SQLDialect');
     }
 }
 
@@ -71510,6 +71911,174 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
 
 /**
+ * MJ: SQL Dialects - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SQLDialect
+ * * Base View: vwSQLDialects
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: SQL Dialects')
+export class MJSQLDialectEntity extends BaseEntity<MJSQLDialectEntityType> {
+    /**
+    * Loads the MJ: SQL Dialects record from the database
+    * @param ID: string - primary key value to load the MJ: SQL Dialects record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSQLDialectEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name for the SQL dialect (e.g., T-SQL, PostgreSQL)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: PlatformKey
+    * * Display Name: Platform Key
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Lowercase identifier matching DatabasePlatform type in code (e.g., sqlserver, postgresql). Used by providers to find their dialect at runtime.
+    */
+    get PlatformKey(): string {
+        return this.Get('PlatformKey');
+    }
+    set PlatformKey(value: string) {
+        this.Set('PlatformKey', value);
+    }
+
+    /**
+    * * Field Name: DatabaseName
+    * * Display Name: Database Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the database engine (e.g., SQL Server, PostgreSQL, MySQL)
+    */
+    get DatabaseName(): string {
+        return this.Get('DatabaseName');
+    }
+    set DatabaseName(value: string) {
+        this.Set('DatabaseName', value);
+    }
+
+    /**
+    * * Field Name: LanguageName
+    * * Display Name: Language Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the SQL language variant (e.g., T-SQL, PL/pgSQL, SQL/PSM)
+    */
+    get LanguageName(): string {
+        return this.Get('LanguageName');
+    }
+    set LanguageName(value: string) {
+        this.Set('LanguageName', value);
+    }
+
+    /**
+    * * Field Name: VendorName
+    * * Display Name: Vendor Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Primary vendor or organization behind this database (e.g., Microsoft, PostgreSQL Global Development Group)
+    */
+    get VendorName(): string | null {
+        return this.Get('VendorName');
+    }
+    set VendorName(value: string | null) {
+        this.Set('VendorName', value);
+    }
+
+    /**
+    * * Field Name: WebURL
+    * * Display Name: Web URL
+    * * SQL Data Type: nvarchar(500)
+    * * Description: URL to the database vendor or documentation website
+    */
+    get WebURL(): string | null {
+        return this.Get('WebURL');
+    }
+    set WebURL(value: string | null) {
+        this.Set('WebURL', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(500)
+    * * Description: CSS class or icon reference for UI display
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of this SQL dialect and its characteristics
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Tagged Items - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: TaggedItem
@@ -73631,6 +74200,350 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
     */
     get ReviewerUser(): string {
         return this.Get('ReviewerUser');
+    }
+}
+
+
+/**
+ * MJ: Test Run Output Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRunOutputType
+ * * Base View: vwTestRunOutputTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Run Output Types')
+export class MJTestRunOutputTypeEntity extends BaseEntity<MJTestRunOutputTypeEntityType> {
+    /**
+    * Loads the MJ: Test Run Output Types record from the database
+    * @param ID: string - primary key value to load the MJ: Test Run Output Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestRunOutputTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name identifying this output type (e.g., Screenshot, Log, Data, Video)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this output type represents and when it is used
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Test Run Outputs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestRunOutput
+ * * Base View: vwTestRunOutputs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Run Outputs')
+export class MJTestRunOutputEntity extends BaseEntity<MJTestRunOutputEntityType> {
+    /**
+    * Loads the MJ: Test Run Outputs record from the database
+    * @param ID: string - primary key value to load the MJ: Test Run Outputs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestRunOutputEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: Foreign key to the parent test run that produced this output
+    */
+    get TestRunID(): string {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeID
+    * * Display Name: Output Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Run Output Types (vwTestRunOutputTypes.ID)
+    * * Description: Foreign key to the output type category (Screenshot, Log, Video, etc.)
+    */
+    get OutputTypeID(): string {
+        return this.Get('OutputTypeID');
+    }
+    set OutputTypeID(value: string) {
+        this.Set('OutputTypeID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Chronological ordering for storyboarding outputs across steps
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StepNumber
+    * * Display Name: Step Number
+    * * SQL Data Type: int
+    * * Description: Which step produced this output, for step-based tests like Computer Use
+    */
+    get StepNumber(): number | null {
+        return this.Get('StepNumber');
+    }
+    set StepNumber(value: number | null) {
+        this.Set('StepNumber', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this output (e.g., Step 3 Screenshot)
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Additional context about this output
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type of the output data (e.g., image/png, text/plain, application/json, video/mp4)
+    */
+    get MimeType(): string | null {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string | null) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Size of the output data in bytes
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    * * Description: Width in pixels for image or video outputs
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    * * Description: Height in pixels for image or video outputs
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: decimal(10, 3)
+    * * Description: Duration in seconds for audio or video outputs
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Technical Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object with additional metadata about this output (e.g., URL at time of capture, tool calls, error info)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string {
+        return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: OutputType
+    * * Display Name: Output Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OutputType(): string {
+        return this.Get('OutputType');
     }
 }
 

@@ -16,6 +16,7 @@ import {
     AgentActionSpec,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a single database mutation performed by AgentSpecSync
@@ -667,7 +668,7 @@ export class AgentSpecSync {
      */
     private mapPromptEntityToSpec(agentPrompt: any, fullPrompts: any[]): any {
         // Find the full prompt data by matching PromptID
-        const fullPrompt = fullPrompts.find((p: any) => p.ID === agentPrompt.PromptID);
+        const fullPrompt = fullPrompts.find((p: any) => UUIDsEqual(p.ID, agentPrompt.PromptID));
 
         if (!fullPrompt) {
             // Fallback if prompt not found
@@ -1775,12 +1776,12 @@ export class AgentSpecSync {
         return {
             // Orphaned actions: DB actions not in spec.Actions
             actions: dbState.actions.filter(dbAction =>
-                !spec.Actions?.some(specAction => specAction.AgentActionID === dbAction.ID)
+                !spec.Actions?.some(specAction => UUIDsEqual(specAction.AgentActionID, dbAction.ID))
             ),
 
             // Orphaned prompt junctions: DB prompts not in spec.Prompts
             prompts: dbState.prompts.filter(dbPrompt =>
-                !spec.Prompts?.some(specPrompt => (specPrompt as any).ID === dbPrompt.ID)
+                !spec.Prompts?.some(specPrompt => UUIDsEqual((specPrompt as any).ID, dbPrompt.ID))
             ),
 
             // Orphaned relationships: DB relationships not in spec.SubAgents (related type)
@@ -1792,12 +1793,12 @@ export class AgentSpecSync {
 
             // Orphaned steps: DB steps not in spec.Steps
             steps: dbState.steps.filter(dbStep =>
-                !spec.Steps?.some(specStep => specStep.ID === dbStep.ID)
+                !spec.Steps?.some(specStep => UUIDsEqual(specStep.ID, dbStep.ID))
             ),
 
             // Orphaned paths: DB paths not in spec.Paths
             paths: dbState.paths.filter(dbPath =>
-                !spec.Paths?.some(specPath => specPath.ID === dbPath.ID)
+                !spec.Paths?.some(specPath => UUIDsEqual(specPath.ID, dbPath.ID))
             ),
 
             // Orphaned child agents: DB children not in spec.SubAgents (child type)

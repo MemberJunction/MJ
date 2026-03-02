@@ -176,23 +176,23 @@
 
     <!-- Scheduled Action Params Section -->
     <mj-collapsible-panel
-        SectionKey="scheduledActionParams"
+        SectionKey="mJScheduledActionParams"
         SectionName="Scheduled Action Params"
         Icon="fa fa-calendar-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('scheduledActionParams')"
+        [BadgeCount]="GetSectionRowCount('mJScheduledActionParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Action Params','ScheduledActionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Action Params')"
-                [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
+                [AllowLoad]="IsSectionExpanded('mJScheduledActionParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJScheduledActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

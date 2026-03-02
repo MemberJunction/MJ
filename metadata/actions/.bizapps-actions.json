@@ -1140,6 +1140,60 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "SendWelcomeEmail",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to send a welcome email to the new user",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AF654874-06F0-4433-9A8A-A7ADB950B9C4"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:02.145Z",
+            "checksum": "70f8ab8e167c7e9634d386cab395f891db3636dcd1a5a0c11129fb9776e96ec3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Tags to assign to the user",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AB3EB772-AE6E-433F-B85C-0A14964CDD9F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:02.159Z",
+            "checksum": "b6edf0de106eca6845acb8563eea85052e8e275cb3a183d9e881df2fab11a1d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomFields",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Custom field values for the user profile",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B84EA100-2401-4C39-8E17-EBE8A46FDC2B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:02.167Z",
+            "checksum": "31a09673f6dab30f67a9e3a335a255fa4c9941c437dd056e9a178169cd1416c5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "EnrollInCourses",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -5199,7 +5253,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -5210,26 +5264,45 @@
             "ID": "4953F45E-D237-4607-80E0-ED8FF567E96F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.045Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:03.981Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course ID to enroll in",
+            "Description": "Course or bundle ID to enroll in",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "4C933904-1A37-4C26-9B16-19CD822F6077"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.048Z",
-            "checksum": "79dd23e95db86cd1ea46882b1809440907d7f393fc658af6f41eb5317b9bc29e"
+            "lastModified": "2026-02-27T03:51:03.991Z",
+            "checksum": "457f256ae33e90220dce2d0ba77017b821d9116d2e730d6fe9b45c956c040650"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProductType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of product to enroll in (course or bundle)",
+            "IsRequired": false,
+            "DefaultValue": "course"
+          },
+          "primaryKey": {
+            "ID": "7FD583DF-2B5A-4F00-A0DF-13D3D3B51F8A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:03.950Z",
+            "checksum": "8db77f53bcbac9ff2dd2725ecfa85d27f15c203cda0d42925afb5d038a46eeaa"
           }
         },
         {
@@ -5254,36 +5327,92 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "JustifyEnrollment",
+            "Name": "Justification",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Reason for enrollment",
-            "IsRequired": false
+            "IsRequired": false,
+            "DefaultValue": "API Enrollment"
           },
           "primaryKey": {
             "ID": "BEFBADF4-A47C-4032-9E70-5EE0EADCC26B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.053Z",
-            "checksum": "67ca57a7c113218c64fcb7a5dd89a0f32a213e5d830c42a069c148092bf32b15"
+            "lastModified": "2026-02-27T03:51:04.002Z",
+            "checksum": "442e1cae730c71af7747b93537df5107878daaaffeb44ab7ae71589458ec9ba4"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "EnrollmentId",
-            "Type": "Output",
+            "Name": "NotifyUser",
+            "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Enrollment record ID"
+            "Description": "Whether to notify the user about enrollment",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "9498217B-A2E6-42EA-99BD-9C6A1DFDC3D3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.068Z",
+            "checksum": "bbb6dcefdc5703f0a9edd187f2a196c94158b6e85afa39994374f0e342c9c4d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Enrollment start date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "74367D90-89CD-4C7A-B394-7AEEEFC399C2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.080Z",
+            "checksum": "08ccd0ef68eda1f05007238a9b394bed689899def3331b2947798795a77e2bb3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExpiryDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Enrollment expiry date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6F8FCD6B-860A-46FD-83FE-340D9DD3688A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.092Z",
+            "checksum": "cf3a86c127cb4908ba6da28e9b7f427891875962f4e3b22a4306c10c583e5036"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EnrollmentDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Enrollment details including ID and status"
           },
           "primaryKey": {
             "ID": "E97955C1-F8C3-4F61-8C5A-3610B32EDF62"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.055Z",
-            "checksum": "5cb960d1f0059471cb13e199c434388bc57d744c8ea6b169c1b6e67da4bb408c"
+            "lastModified": "2026-02-27T03:51:04.121Z",
+            "checksum": "16cdc44c90eb578c3b36dee27947aee0907ca4b20878dae786a7a21bf48216c9"
           }
         },
         {
@@ -5310,59 +5439,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "User enrolled successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "F778FC95-70EA-48B4-8BBF-D4DC17C2AAE5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.061Z",
-            "checksum": "6231541662b2fef2138cc0cf1b851133063614875098d66ac53a0bd2468f1f5b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "USER_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "User not found"
-          },
-          "primaryKey": {
-            "ID": "F4F45E83-7E2D-40C0-A89E-A317A55E45A2"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.064Z",
-            "checksum": "03234fb55c475f7f875158877e7559b92871b5f54a87c5305fd5c482cef3c24e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "COURSE_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "Course not found"
-          },
-          "primaryKey": {
-            "ID": "17FD75A7-77B2-45F8-8B59-C5A7CEC73486"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.180Z",
-            "checksum": "fa26c1b133d107a978b1baf05a226c192c9e00d55a8423d46592b46d79f0afb5"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "ALREADY_ENROLLED",
-            "IsSuccess": false,
-            "Description": "User already enrolled in course"
-          },
-          "primaryKey": {
-            "ID": "E016BE7C-0CF0-4F88-9252-466F1DE66FDE"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.182Z",
-            "checksum": "1f889f773c450d6bc01c0fa95bcd2165c8dc0ec9b6af1ad42c03f91c93fb3ae3"
+            "lastModified": "2026-02-27T03:51:04.137Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -5395,7 +5479,7 @@
       "Name": "LearnWorlds - Get User Details",
       "Description": "Retrieves detailed information about a LearnWorlds user",
       "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
-      "DriverClass": "GetUserDetailsAction",
+      "DriverClass": "GetLearnWorldsUserDetailsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-user"
@@ -5423,7 +5507,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -5434,8 +5518,46 @@
             "ID": "28C5D8E4-D3DB-48A4-9B00-08425A79AAB6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.190Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:04.146Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeEnrollments",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include user's course enrollments",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "F86C9A8E-3477-4F3C-9DFB-210EB6FCC2DB"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.101Z",
+            "checksum": "d0839597e99325a32086c5f2f6b6130ab0ec7ae9f91318876ab26e2e105fbe87"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeStats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include user statistics",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "953A6FE0-3152-4441-B6F5-10AE9375158E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.215Z",
+            "checksum": "063c46a7a9c3d0229a5be035c2308469245ea8bdee23358ba0b6f220f8d91de7"
           }
         },
         {
@@ -5445,31 +5567,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Complete user information"
+            "Description": "User profile details including enrollments and stats"
           },
           "primaryKey": {
             "ID": "A4BDD6AF-A988-4D2D-8909-9B2B228D34E7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.192Z",
-            "checksum": "3f5768234550a7643d34e770b4903ce24565c15f964ae768d5d5017b43e411d3"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Enrollments",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": true,
-            "Description": "User's course enrollments"
-          },
-          "primaryKey": {
-            "ID": "4674B425-1ECA-42E8-BCC5-CADB8835917B"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.195Z",
-            "checksum": "3c60b6fe127010c42a4a12fddf20fe71750b635c375e1d25eb76a21d6e7ba1f9"
+            "lastModified": "2026-02-27T03:51:04.266Z",
+            "checksum": "13e8d0913f51064d218cccfc4f3c5c458fc2901c0b846cd9a93f1a4b43a2eb9a"
           }
         },
         {
@@ -5479,14 +5584,14 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "User summary"
+            "Description": "Summary of retrieved user information"
           },
           "primaryKey": {
             "ID": "F73A00EC-94C2-4135-89DE-A81CD77F6DC7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.198Z",
-            "checksum": "d20fc708f6f98807513b93014897449fe32ad3b930e70a7601c639ef46cb9d3e"
+            "lastModified": "2026-02-27T03:51:04.276Z",
+            "checksum": "6f906642a79ab2b3646cd006edb1529916b045b1872ac6cb0ec7bf02d67b8d83"
           }
         }
       ],
@@ -5496,29 +5601,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "User details retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "B18E8FD9-1416-4892-92B1-B5115F6DEB40"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.200Z",
-            "checksum": "99ed60552cb6be81e914d19729c4cc29c68f4dda2feb0e563b2ebd685a176082"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "USER_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "User not found"
-          },
-          "primaryKey": {
-            "ID": "8503C043-ACA2-4774-BAAD-405B09E03F5B"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.202Z",
-            "checksum": "03234fb55c475f7f875158877e7559b92871b5f54a87c5305fd5c482cef3c24e"
+            "lastModified": "2026-02-27T03:51:04.284Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -5542,8 +5632,8 @@
       "ID": "64C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.367Z",
-      "checksum": "dbbfd6320d8b5188e0e7815512f749aaf2e8b866c526ccd2ea0e7138d2428df0"
+      "lastModified": "2026-02-27T03:51:01.107Z",
+      "checksum": "843cf1dcad73000afd783d3f6e4f97153d4fb72a6b7115777ddc8be49c0340d8"
     }
   },
   {
@@ -5579,7 +5669,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -5590,27 +5680,120 @@
             "ID": "F9A9D479-FACF-4378-94A9-234F36F50117"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.296Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:04.293Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "IncludeCompleted",
+            "Name": "Status",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Include completed courses",
+            "Description": "Filter by enrollment status",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A44907FA-6CA9-47D1-993C-902E578B394A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.224Z",
+            "checksum": "2fdedf87a2c0a10f58d57e691ed1c8b3d3e2a51a091c78ef9ca52b5cf48cf7da"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeExpired",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include expired enrollments",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "080397B4-CEBC-4C5C-9679-4827B5A1E6E8"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.236Z",
+            "checksum": "6d7b8150d97e20a6feca6f917fa32cf61e2a993c6ba5d45d5f240c1ac5695caa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeCourseDetails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include full course details for each enrollment",
             "IsRequired": false,
             "DefaultValue": "true"
           },
           "primaryKey": {
-            "ID": "73C9FD11-9A6B-4BA6-8B5A-8805ED8664F6"
+            "ID": "8F15F7C3-FF07-4027-B7E4-F9D6093C611F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.297Z",
-            "checksum": "6ced65f58ff69d605d884925041185680b5832237629970acef5006b43b07822"
+            "lastModified": "2026-02-27T03:51:04.246Z",
+            "checksum": "d260b159cfcff0f980d1a30193a91d249f2ee15aa317a908a692704ec82b41ed"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort results by",
+            "IsRequired": false,
+            "DefaultValue": "enrolled_at"
+          },
+          "primaryKey": {
+            "ID": "9EC59CAD-BF4E-436A-9334-C30170B68FF1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.355Z",
+            "checksum": "3fe871c2bd884f4f46f7acb76c6f1015a9ffdba40559aa0f746c8b76813d4b5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort direction (asc or desc)",
+            "IsRequired": false,
+            "DefaultValue": "desc"
+          },
+          "primaryKey": {
+            "ID": "A09B96D5-DCD2-41E8-8FCA-D94601E473F8"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.365Z",
+            "checksum": "ae03c583ede404c8bcbf392b920c8fb6d6f77100ab115200198135acc1fbb15a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77B3A333-C8C2-454B-985D-B9501F0329C0"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.375Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
           }
         },
         {
@@ -5620,14 +5803,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "User's enrollments"
+            "Description": "List of user enrollments"
           },
           "primaryKey": {
             "ID": "B95A4651-F5D8-409A-BC63-143285E7F50F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.299Z",
-            "checksum": "6a178c874a840187540a460648a95962b4d42a0e64bde8fa1ccbd46428ed2a28"
+            "lastModified": "2026-02-27T03:51:04.413Z",
+            "checksum": "68ca963e43e7efe6164a8dcbd821a37ab32f96febad111fac81269318d035cd7"
           }
         },
         {
@@ -5637,31 +5820,31 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Total enrollments"
+            "Description": "Total number of enrollments"
           },
           "primaryKey": {
             "ID": "0C4F0EFC-09BF-468B-AE11-4ED2277083F8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.300Z",
-            "checksum": "452cd2ea5888197b303005c86e86cc620b33330103b4b474077bad3924382ab1"
+            "lastModified": "2026-02-27T03:51:04.424Z",
+            "checksum": "fef7d716d53ef162f8326c7a52aab43d5ed767610745db8c3ac900124a2422dd"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CompletedCount",
+            "Name": "Summary",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Completed courses"
+            "Description": "Summary of enrollment data"
           },
           "primaryKey": {
-            "ID": "804D153C-54EB-435F-8E03-25BA77E8E46A"
+            "ID": "4AE744A7-184E-4234-A018-73E6308A19DC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.303Z",
-            "checksum": "9869580789331a026061b364a9be17978e522039b17ac681ce2bf7bdf2263d55"
+            "lastModified": "2026-02-27T03:51:04.385Z",
+            "checksum": "b2df3d450999ec85d99fc810ff73e45ad47112278a15c65733f13511e42e8ecf"
           }
         }
       ],
@@ -5671,29 +5854,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Enrollments retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "A6E4A696-B7CA-4EA6-8570-086CE4AA2041"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.305Z",
-            "checksum": "1589d7f983f590078a53cff438163486a8d92c3e753738e3cea12e5c6bbc79f3"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "USER_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "User not found"
-          },
-          "primaryKey": {
-            "ID": "0783A029-7852-4582-BFD3-A6777662D384"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.308Z",
-            "checksum": "03234fb55c475f7f875158877e7559b92871b5f54a87c5305fd5c482cef3c24e"
+            "lastModified": "2026-02-27T03:51:04.432Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -5726,7 +5894,7 @@
       "Name": "LearnWorlds - Get Courses",
       "Description": "Retrieves available courses from LearnWorlds",
       "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
-      "DriverClass": "GetCoursesAction",
+      "DriverClass": "GetLearnWorldsCoursesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-book"
@@ -5754,19 +5922,19 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CategoryId",
+            "Name": "SearchText",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by category",
+            "Description": "Search text to filter courses by name or description",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "AA94B0BB-2FAD-4599-B68A-55BC05AB0CF2"
+            "ID": "3ED5EF31-86EF-400B-9AAE-7121FED8BDB3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.434Z",
-            "checksum": "6984c4c31d871a5cbd4420aa911de8141009c63a1548821d5ac88c8cacd2067d"
+            "lastModified": "2026-02-27T03:51:04.394Z",
+            "checksum": "bce747fc559b30fb2f165c73705ce49255af7eb4ef4f5be3d5e7a213453dd3f0"
           }
         },
         {
@@ -5776,35 +5944,272 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by status (draft, published, coming_soon)",
-            "IsRequired": false,
-            "DefaultValue": "published"
+            "Description": "Filter courses by status",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "F36B1028-76CE-4EF4-9073-1A3FF860785D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.436Z",
-            "checksum": "1192f7cb9ffd48f4e9bfba1ea0b6167624bda529d511d39306f47beb1c29d58d"
+            "lastModified": "2026-02-27T03:51:04.566Z",
+            "checksum": "fd3da62d2918001cf7fcca329bcfa6f9a2439fdbe8405b5643d0cc719017c8f9"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Limit",
+            "Name": "CategoryID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum courses to return",
+            "Description": "Filter by category ID",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AA94B0BB-2FAD-4599-B68A-55BC05AB0CF2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.577Z",
+            "checksum": "a352cdbddbc3d4bdfe92f0f0338012dd53013cc4395c0704d493ad4916d92a38"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Level",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by course level",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C279C1EA-7651-455F-9989-7CE94C3D9B5A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.481Z",
+            "checksum": "c91ac4e93aa65b4397a680e59441380af5df3d929ab16761c51a9d66c955eadf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Language",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by course language",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "79B54E24-EBE7-4C17-AF1F-77FB6E369F4C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.491Z",
+            "checksum": "6df37e10b9d281fc9983a27181122a0fb1f53325159a8307e93c0bd00fad43b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OnlyFree",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only return free courses",
             "IsRequired": false,
-            "DefaultValue": "100"
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "FA714FA5-F771-48AF-93CE-75D36155F1C1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.501Z",
+            "checksum": "16bab54b948b3674e84eb7b25e4421d382438be72327ba7dc5d1f0ecd417ff8a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinPrice",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum price filter",
+            "IsRequired": false,
+            "DefaultValue": "0"
+          },
+          "primaryKey": {
+            "ID": "316A23AE-C771-41EA-A579-8CE38EAD2B63"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.510Z",
+            "checksum": "1a44d94c5bfe8c53441d612a51fe7e5d86193df674988f10788d8357483f00dc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxPrice",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum price filter",
+            "IsRequired": false,
+            "DefaultValue": "0"
+          },
+          "primaryKey": {
+            "ID": "2F5AD277-418B-45F9-9381-2A72E7EEF5B2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.521Z",
+            "checksum": "23eee906c6875f13cd107f5914388b278a92b818007b3d42552e15b603a31bb7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by tags",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0EBACB49-7317-4F54-A7F0-5B68F5F772BC"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.531Z",
+            "checksum": "4d701fa0c0fd001d96c0a3cafb3c428e65c4bb45c50ee9a3258af098f2adc158"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InstructorID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by instructor ID",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8355F880-B4E1-4F1E-9353-410846672013"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.541Z",
+            "checksum": "e872322314944977a87614004b1670a4c806dfe9711fd5f6a8cf4f8e4c158229"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedAfter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter courses created after this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA336E81-BDA1-4787-A688-4DD7C79F10D9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.550Z",
+            "checksum": "e5da26c568daa09c20e7fcb1a8397887b8b127d92bc69570dc1c1c073a3018f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedBefore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter courses created before this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "55FF048D-4927-42F4-97E2-A4D9F87504AC"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.639Z",
+            "checksum": "c5ab1b65f078433ebaa9fc282701d3b635e2b3f91913c5ce8b86c6bf7d24bce5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort results by",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0FB81B75-83A2-4F18-B561-4FE334455901"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.651Z",
+            "checksum": "43e51d628481c8d663f76866c0bf4d71488bd96654ca7ea5118f60b4e7511592"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort direction (asc or desc)",
+            "IsRequired": false,
+            "DefaultValue": "desc"
+          },
+          "primaryKey": {
+            "ID": "A38E81A4-272A-4373-AA41-5423A63B25E1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.662Z",
+            "checksum": "ae03c583ede404c8bcbf392b920c8fb6d6f77100ab115200198135acc1fbb15a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeEnrollmentStats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include enrollment statistics for each course",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "8EDE7D0D-3825-4F31-ABC4-BD19EEC8867C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.673Z",
+            "checksum": "aeefb3327b3889cf670959f8481071e034642f0ec4f7b6cfe37823464bf22463"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "D3740AF3-B408-4446-BAE0-A00F391731C7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.438Z",
-            "checksum": "6937eba4cb319c699312a1da1a88c8be2f31d3f0d8ff4ecbbfb2a915cddb6be6"
+            "lastModified": "2026-02-27T03:51:04.703Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
           }
         },
         {
@@ -5814,14 +6219,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of courses"
+            "Description": "List of courses matching the filters"
           },
           "primaryKey": {
             "ID": "4F63867C-1F1C-4DA6-B1DD-0FE4D4FED19A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.441Z",
-            "checksum": "fcd8d2055a5f42503e3375a44d4f63bc99ceaa279d570a0d7ef53beea28a8bb1"
+            "lastModified": "2026-02-27T03:51:04.714Z",
+            "checksum": "7d8c783ecbd9e5b3dd8ce795e779e279718c06a9bb6126f7eb02bee7952f0f9f"
           }
         },
         {
@@ -5831,14 +6236,31 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Total courses available"
+            "Description": "Total number of matching courses"
           },
           "primaryKey": {
             "ID": "92BB3675-697C-482D-B572-3D6EE95CA8B6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.443Z",
-            "checksum": "257210d32b28eb9c63d2a70a143d51df3003c2153fdf0d6142630e17112cb668"
+            "lastModified": "2026-02-27T03:51:04.725Z",
+            "checksum": "5dade36fec4794300432142e1609c3e545daa8be6f5a93ba55d42447e49228a6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Summary of course catalog query"
+          },
+          "primaryKey": {
+            "ID": "C834D040-9130-48F6-A8AE-6409C149D0F1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.682Z",
+            "checksum": "bea291aca59ce09373300ddb95afdae25ff2eb92db72cdb49e504904ff66e9de"
           }
         }
       ],
@@ -5848,29 +6270,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Courses retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "E42D06AC-C336-44FE-B602-96E7B32B2823"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.446Z",
-            "checksum": "fca1c4a90c5ea898731ed1b34e6c4e700f9ddd761cb3edc3405877d5eaf30677"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "NO_COURSES",
-            "IsSuccess": true,
-            "Description": "No courses found"
-          },
-          "primaryKey": {
-            "ID": "C203940B-0F1B-4BEC-A0E3-60A4A97DEE0B"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.449Z",
-            "checksum": "04254f4ee430ef7d22c5c9ff8a9a9681ba9321ce246f8735890c2b5af061fb18"
+            "lastModified": "2026-02-27T03:51:04.735Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -5894,8 +6301,8 @@
       "ID": "68C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.369Z",
-      "checksum": "f484852f27b6c51abb6b539d0e21ba8a5bb301fdb77b339aba95e89177e9e66d"
+      "lastModified": "2026-02-27T03:51:01.122Z",
+      "checksum": "eb895cb373fdbc6576e7552fdb1f0d0f6bea8979042a404e26610cc68fa03422"
     }
   },
   {
@@ -5903,7 +6310,7 @@
       "Name": "LearnWorlds - Get Course Details",
       "Description": "Retrieves detailed information about a specific course",
       "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
-      "DriverClass": "GetCourseDetailsAction",
+      "DriverClass": "GetLearnWorldsCourseDetailsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-book-open"
@@ -5931,19 +6338,76 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course ID",
+            "Description": "Course ID to retrieve details for",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "E3E65147-01E0-43AB-94A2-2250F635CEE9"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.566Z",
-            "checksum": "131aa60c89fb6aa25d6b91c5a0681c45f1715efaad0c5ffab01b6cf224b574a6"
+            "lastModified": "2026-02-27T03:51:04.851Z",
+            "checksum": "c4cf8efcfa9816e9723696bd76aa168fc882fc856a3a71d7c72c764f45d49d3d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeModules",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include course module details",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "7B9543F1-8FFF-470C-BD95-4FA23B9B34C9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.810Z",
+            "checksum": "3eece529a19c4915bed30772941836667ac0c4b56701d5e84c86fa1dc4f82533"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeInstructors",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include instructor information",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "53C697F2-2F8B-4B77-82DA-26185045D94A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.822Z",
+            "checksum": "f302ba59a5d42a2f0d0f5bf4a63f3493365ea4db8ba6cce2c8d2eaecf0ef7561"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeStats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include course statistics",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "1FF0C589-ED15-436D-B4C6-3295D8F00EB7"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.831Z",
+            "checksum": "dfce14a194194e7fdf3e05c844ce2596a45b56efe5472623dc4bb012b7f17228"
           }
         },
         {
@@ -5953,31 +6417,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Complete course information"
+            "Description": "Full course details including modules and instructors"
           },
           "primaryKey": {
             "ID": "9C95A4AC-720A-4C2A-B458-DC8AFE7483FB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.568Z",
-            "checksum": "48bb3269f8aecd716f929882d2b48ecdefac1510c5b41f95f089a28371d59764"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Modules",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": true,
-            "Description": "Course modules and content"
-          },
-          "primaryKey": {
-            "ID": "C77081AA-69A9-4881-A02D-1717477A6F06"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.571Z",
-            "checksum": "952effc3b85633f35fffd41f72deae99fbe9a56a134b4a532b75cce4443e20cb"
+            "lastModified": "2026-02-27T03:51:04.862Z",
+            "checksum": "f66bb87a3cadcb6e3255e9ef5b3561710dbcebd99407aa4c43c1607ea2b595a3"
           }
         },
         {
@@ -5987,14 +6434,14 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course summary"
+            "Description": "Summary of course information"
           },
           "primaryKey": {
             "ID": "D1DD74F4-760C-4CCE-A6F3-0735D93E79F7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.574Z",
-            "checksum": "8861485c88efe2c63a0732f498e0022f17aa85785f7e662e68740436c67522c0"
+            "lastModified": "2026-02-27T03:51:04.872Z",
+            "checksum": "edb54a1da075de8487d6d40549603742d7c907833c6edccef2602e15e760fb60"
           }
         }
       ],
@@ -6004,29 +6451,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Course details retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "4EA74552-02F5-4B9B-9FDC-AB6B530D32C0"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.577Z",
-            "checksum": "575fa578ba82445e2e97abf7735b1ebded67aa21766cb2a45b5aa428b015f05b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "COURSE_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "Course not found"
-          },
-          "primaryKey": {
-            "ID": "E52C6406-91BF-452C-9AA8-5E9445B93489"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.579Z",
-            "checksum": "fa26c1b133d107a978b1baf05a226c192c9e00d55a8423d46592b46d79f0afb5"
+            "lastModified": "2026-02-27T03:51:04.884Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6050,8 +6482,8 @@
       "ID": "6AC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.369Z",
-      "checksum": "5a25a496fadd2cb6a44106250a203617781a7e93fb56e9c275edf1e4575e4511"
+      "lastModified": "2026-02-27T03:51:01.136Z",
+      "checksum": "32ac71ab883bd8a372c3e1d701254a683329fd3980acc59a569e8b10d828ad9c"
     }
   },
   {
@@ -6059,7 +6491,7 @@
       "Name": "LearnWorlds - Get User Progress",
       "Description": "Gets a user's progress in a specific course",
       "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
-      "DriverClass": "GetUserProgressAction",
+      "DriverClass": "GetLearnWorldsUserProgressAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-line"
@@ -6087,7 +6519,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -6098,77 +6530,98 @@
             "ID": "ABD26D92-71AC-461B-8181-FD8BCBFE5054"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.587Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:05.006Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course ID",
-            "IsRequired": true
+            "Description": "Course ID to get progress for (optional, returns all if omitted)",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "9CDB58DD-C99E-4408-B2A5-62EBC1B34A0F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.589Z",
-            "checksum": "131aa60c89fb6aa25d6b91c5a0681c45f1715efaad0c5ffab01b6cf224b574a6"
+            "lastModified": "2026-02-27T03:51:05.017Z",
+            "checksum": "f337aefdce665b1de17a0b6af0533ba9f602fcb6e695750ea29e3b80b17056f7"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Progress",
+            "Name": "IncludeUnitDetails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include unit-level progress details",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "7A2FD832-725A-43F7-86CD-F2124B6B180C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.956Z",
+            "checksum": "ceb9ea01f0bd5117f7e90ec69ff96fdf8498894da852f61b8e3005d71c8d4806"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeLessonDetails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include lesson-level progress details",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "16F99B97-5DA5-4DD5-A58D-FF1579E3C1E9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:04.968Z",
+            "checksum": "5d377b1c28f9fefef9ac6a7ad40c2de2a96ecbe1848fb477829a5e1f15f07cc7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserProgress",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Progress details"
+            "Description": "User's learning progress data"
           },
           "primaryKey": {
-            "ID": "3D5B04F9-0158-4337-9E9C-9BD98EAF487E"
+            "ID": "73B895B1-5781-4AB4-80F3-77B4AB1CD7A5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.706Z",
-            "checksum": "e97989906db4e14351e45ab2e943634a4ec379386f5f6392c522c2bfe1781fe1"
+            "lastModified": "2026-02-27T03:51:04.978Z",
+            "checksum": "ee0a11e34cc85b172bbdd19742d49dc8c7dfd128d656bbdd7b021abbe82f35b4"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CompletionPercentage",
+            "Name": "Summary",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Completion percentage"
+            "Description": "Summary of user progress"
           },
           "primaryKey": {
-            "ID": "6D04232D-913D-4F7A-B5AE-DFA8D1632C7D"
+            "ID": "423B37AB-A76F-4961-A3B3-5BC905719A22"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.708Z",
-            "checksum": "d905467f363a2a144c791e4cd22285abd081c4d6219d3bdfbe6ff0abeecec2ff"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LastAccessedDate",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Last accessed date"
-          },
-          "primaryKey": {
-            "ID": "C14E8837-1D0C-4D2D-B9B6-0BD03FCD9040"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.711Z",
-            "checksum": "b817c5b3b8764ce75620b1cdcfd54caf4759bfc7659c61e8dddb16523e971003"
+            "lastModified": "2026-02-27T03:51:04.986Z",
+            "checksum": "7274a83c458a93012ec34ebd6d6d38ef98f85ae732eeeab312a7f1d019d79d26"
           }
         }
       ],
@@ -6178,29 +6631,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Progress retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "6AA63014-1593-4082-8637-978CA288F901"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.714Z",
-            "checksum": "24e404751dfad89b7cd233d8877dde6a15e03d4c66d9e28a904f151cb33a3d1b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "NOT_ENROLLED",
-            "IsSuccess": false,
-            "Description": "User not enrolled in course"
-          },
-          "primaryKey": {
-            "ID": "CA8F4566-A7B5-42CC-B217-0F694BFAF1A0"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.716Z",
-            "checksum": "6bf8aaad6b9b05c90cd1c2fe947de37768e34fd0d9443a20907013bc3357dbb7"
+            "lastModified": "2026-02-27T03:51:05.026Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6224,8 +6662,8 @@
       "ID": "6CC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.370Z",
-      "checksum": "29dc269887421e5a8c053f8de9a70bf93feebdfeef07d224107baed2621d124d"
+      "lastModified": "2026-02-27T03:51:01.149Z",
+      "checksum": "508bd05e787f13aceabab592b9a5cafc5d33da8df41f6a60807702d513f0e9aa"
     }
   },
   {
@@ -6261,7 +6699,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -6272,44 +6710,62 @@
             "ID": "044AA857-DA6F-42BC-8B7D-00CF588B7F7D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.724Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:05.035Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course ID",
+            "Description": "Course ID to update progress for",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "D74678C0-B85B-4ACD-8343-76F1B362BE64"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.727Z",
-            "checksum": "131aa60c89fb6aa25d6b91c5a0681c45f1715efaad0c5ffab01b6cf224b574a6"
+            "lastModified": "2026-02-27T03:51:05.150Z",
+            "checksum": "9d6539229de82abd15fdaa1f08ca208c3620ebd0656c8befde7934130f9d0b45"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UnitId",
+            "Name": "LessonID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Unit/lesson ID to mark complete",
-            "IsRequired": true
+            "Description": "Lesson ID to update progress for",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "A6AFDD46-C311-43A1-94BF-8E419E6BD59F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.730Z",
-            "checksum": "b3dd514f48e870cef5235235d71055090b3e818b05b3449dc18b7e8f966d50cc"
+            "lastModified": "2026-02-27T03:51:05.161Z",
+            "checksum": "b3978d1286e50c6246afe7206c747d51512ddf62a42f448269fbe1de15fca6a4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressPercentage",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Progress percentage (0-100)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "75712E91-BDFA-45D8-AE6D-83904B662561"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.170Z",
+            "checksum": "d2c83dcdab08952c2712c301e8828bf2f78e34c0faef144a192307e7a9cdd5cf"
           }
         },
         {
@@ -6319,33 +6775,86 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Mark as completed",
-            "IsRequired": false,
-            "DefaultValue": "true"
+            "Description": "Whether the lesson/course is completed",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "56ED2C71-DCDD-46EB-B9A1-299CCB592A74"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.846Z",
-            "checksum": "af9ea460b311a2e8c7d967a153ed86d25ddd8e10d3afa30401cabb6b82762d9f"
+            "lastModified": "2026-02-27T03:51:05.178Z",
+            "checksum": "5238585f279fe40dd782ac2f9d08430aa342140d9c43e1299873eaeaacea53aa"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "NewProgress",
+            "Name": "TimeSpent",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Time spent in seconds",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "309B6D2B-21FB-4A3E-A283-599B2E189B21"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.100Z",
+            "checksum": "95659c4eb4e72b1f8dc3ea8236f31790d3bb3b5d14930bc2544d0a6bbf43eff9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Score",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Score achieved (if applicable)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3791A58-0B65-4168-BDFE-5C1E61048094"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.110Z",
+            "checksum": "2fe9d46887785204345fdad7eb7749cfd3fb549e5870d674e8fb40a88ce886f3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Additional notes about the progress update",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3B2E4038-BA97-4BCB-9321-A25D39C91CC6"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.122Z",
+            "checksum": "30a05271dcf15623ffb7ab3c6a1cb7fc256f2ee463aa4f62f1970943b11d2366"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressDetails",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Updated progress info"
+            "Description": "Updated progress details"
           },
           "primaryKey": {
-            "ID": "75712E91-BDFA-45D8-AE6D-83904B662561"
+            "ID": "42677886-79B8-46BF-9479-63A090C3418B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.849Z",
-            "checksum": "3412e3ecb62e7d0e6fe40a87e20c187c2102eec3662f6af6923e704798dd4669"
+            "lastModified": "2026-02-27T03:51:05.131Z",
+            "checksum": "96a39b6d901e2b45f523febca1110e0ed55a44a9943d3edd04525e74d4ba0fd0"
           }
         },
         {
@@ -6355,14 +6864,14 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Update summary"
+            "Description": "Summary of the progress update"
           },
           "primaryKey": {
             "ID": "82D7A9CB-A544-4566-B037-E8D547E259FC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.852Z",
-            "checksum": "c640fe3fd8a6356e7e4ec706fcbcca2d5849a6b67cf2feaff326a5ab11c8772d"
+            "lastModified": "2026-02-27T03:51:05.189Z",
+            "checksum": "3d775fb9c1178f19e7939dd6248a6952a82938860930ab9e8f1397d34697cdab"
           }
         }
       ],
@@ -6372,44 +6881,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Progress updated successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "FCBB0211-6EE1-4F6B-9ACE-0D44A0063358"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.855Z",
-            "checksum": "ceb0a5b4d0e4431e87e2635f8442129d1ee1828149ff465a798ff7c4e740c845"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "NOT_ENROLLED",
-            "IsSuccess": false,
-            "Description": "User not enrolled in course"
-          },
-          "primaryKey": {
-            "ID": "2CC201E0-9B91-4198-B5D0-F09F20C9B010"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.858Z",
-            "checksum": "6bf8aaad6b9b05c90cd1c2fe947de37768e34fd0d9443a20907013bc3357dbb7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "UNIT_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "Unit not found in course"
-          },
-          "primaryKey": {
-            "ID": "8AEEFFAD-71D7-4789-AA9C-06A20ECF8EF0"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.861Z",
-            "checksum": "2bc41477823af092052e8c47a84dfb29f0ff58078481e9a4728d2d69e543fdee"
+            "lastModified": "2026-02-27T03:51:05.200Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6470,37 +6949,148 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "LearnWorlds user ID",
-            "IsRequired": true
+            "Description": "LearnWorlds user ID (optional filter)",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "5ED9AED0-689D-48BA-A617-DFFBB1513B38"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.869Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:05.329Z",
+            "checksum": "343b0fded119e6dcbe2578232d86fbf15917a48b31d0238c5f3c7b5a067b6e64"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by specific course",
+            "Description": "Course ID filter",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "3F73D657-B498-4158-B445-1C9F93C689F2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.871Z",
-            "checksum": "104011df3e552d3ee28b9cc65a08400bc9fc423fd55760f334fe5cb93a49098f"
+            "lastModified": "2026-02-27T03:51:05.340Z",
+            "checksum": "2f7d42e00c5310430fc436259f80b8f137b9e2e5db5854e369140aa84350dd82"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateFrom",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter certificates issued after this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CE4E3929-401B-416E-8B91-9DD40E1EBE07"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.258Z",
+            "checksum": "7ed6501b4a60bd1ecbce416d19586933d954924082571dc7291f71567ea36af0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateTo",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter certificates issued before this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7099D28A-8B54-4F38-B9CA-06DE2A56A4DE"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.267Z",
+            "checksum": "f7aa7b21262875a1588d151dc8b6c7eeff377d20c801576c38b1f5c9091416a3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDownloadLinks",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include certificate download links",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "9DF2264A-8979-4208-ADF5-27CC9B83AA41"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.278Z",
+            "checksum": "ecca1fd746b0144ff1e687d4f9184878ea7f6bc1565a5fd78eabcd0c7c4948c5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort results by",
+            "IsRequired": false,
+            "DefaultValue": "issued_at"
+          },
+          "primaryKey": {
+            "ID": "7649EA06-FCAC-4D90-BAED-DAF255CF6991"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.292Z",
+            "checksum": "d37568c59b3bc782c879950f02f58ad6db11bda32564b5331885d59bd7ee781b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort direction (asc or desc)",
+            "IsRequired": false,
+            "DefaultValue": "desc"
+          },
+          "primaryKey": {
+            "ID": "59A20970-5826-4D76-9BCD-1FCD19F50ADF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.304Z",
+            "checksum": "ae03c583ede404c8bcbf392b920c8fb6d6f77100ab115200198135acc1fbb15a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4F63C19B-2398-4B5C-873B-707EDB9EC530"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.313Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
           }
         },
         {
@@ -6510,14 +7100,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of certificates"
+            "Description": "List of certificates"
           },
           "primaryKey": {
             "ID": "629FC249-7FE6-4264-AE9B-23B0C6E9BAD1"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.970Z",
-            "checksum": "8de2830c79f2abbbe7c192fa199cc174c22a04650bd02d75c77b6e232d6895dd"
+            "lastModified": "2026-02-27T03:51:05.455Z",
+            "checksum": "74b5cb8dd2bf5a8ff6c4609ddd061b7db4a1a4c7705bd46857344ca9b9c70abb"
           }
         },
         {
@@ -6527,14 +7117,31 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Total certificates earned"
+            "Description": "Total number of certificates"
           },
           "primaryKey": {
             "ID": "0E00E042-2DE0-4010-BDEA-AB9CB6BC7F5C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.973Z",
-            "checksum": "6a1c7de6bc8c0a1cfd1492a75ccfafa3565fbffb855b01dde7640ee3064df640"
+            "lastModified": "2026-02-27T03:51:05.467Z",
+            "checksum": "994eabf43ff186267269ab22376212213289eafd71ca8842438d53bfcc42a14e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Summary of certificate data"
+          },
+          "primaryKey": {
+            "ID": "FF37BE7A-19BA-43C2-9AA4-0A1C103F9579"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.424Z",
+            "checksum": "fad560de56f9b66a23d8c86a7085b5f948e441b1efe88b9ca5622d8b5df85218"
           }
         }
       ],
@@ -6544,29 +7151,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Certificates retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "AB6F6BD6-D36B-4D47-98A4-F4B6B2E57B53"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.975Z",
-            "checksum": "800b54a39c1e15b971b89b8ae2bf5e6615c080dc917738dd7f7475ed38e2a905"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "USER_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "User not found"
-          },
-          "primaryKey": {
-            "ID": "BA3636D9-1656-4CAD-8BD8-61BD4DBD7828"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:12.977Z",
-            "checksum": "03234fb55c475f7f875158877e7559b92871b5f54a87c5305fd5c482cef3c24e"
+            "lastModified": "2026-02-27T03:51:05.475Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6627,106 +7219,143 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Course ID",
+            "Description": "Course ID to get analytics for",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "28FFAB02-45FF-44E3-A2D3-2EF081D3D82D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.985Z",
-            "checksum": "131aa60c89fb6aa25d6b91c5a0681c45f1715efaad0c5ffab01b6cf224b574a6"
+            "lastModified": "2026-02-27T03:51:05.487Z",
+            "checksum": "fc5ebdaa4b9ff10f08aae0bfdc0be930f94bd3ed68dc81898c1b6a63cd6204c6"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "StartDate",
+            "Name": "DateFrom",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Start date for analytics",
+            "Description": "Start date for analytics period (ISO format)",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "1DAF800F-DFF3-4793-A506-3992E1B66EAB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.988Z",
-            "checksum": "dc9d89a8221f9cd3d4a23ab7bcb023506ae319b6cc13664fd495227fb7eed0e2"
+            "lastModified": "2026-02-27T03:51:05.498Z",
+            "checksum": "55b7db7356bf61845dcf7b690d63a8346244c5633c8b723dd1fc7360fa0eecd2"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "EndDate",
+            "Name": "DateTo",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "End date for analytics",
+            "Description": "End date for analytics period (ISO format)",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "97CC94D9-85AB-4534-B8CA-EE3834126E54"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.990Z",
-            "checksum": "3109d5d07043e6476c80d7af30e2019466807ceaded9e1f3634b061d4acde292"
+            "lastModified": "2026-02-27T03:51:05.507Z",
+            "checksum": "155b4b8f2dfe2eec4d28a8ec6e263437a07d78b291251466086b49b5cc1adfde"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Analytics",
+            "Name": "IncludeUserBreakdown",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include per-user analytics breakdown",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4FA9709-BD13-4B01-B648-1A51DFC306B9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.434Z",
+            "checksum": "42426081fbe17c7f09ab7e1d6513adc9e2d31363d5bca6da6eff510cab6343ab"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeModuleStats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include per-module statistics",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CBF0F101-87D6-4F64-BD7B-0CCE96BCC848"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.558Z",
+            "checksum": "4904a88f7c5434265f3190097dda5066d72e821ba47223cd7769462d4f027d78"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeRevenue",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include revenue analytics",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D6461DD8-76D4-475A-94DE-00B22EF2FBD9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.568Z",
+            "checksum": "fedf37897d6535fedbf080baae4201c1820a5b2e0680e8a4aa6a9d2f468ff3c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CourseAnalytics",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Analytics data"
+            "Description": "Course analytics data"
           },
           "primaryKey": {
-            "ID": "85F0D7A4-49D4-4C0A-9CEE-6F7925F0ECF6"
+            "ID": "C628056A-3D93-4417-9706-75780E357D55"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:12.993Z",
-            "checksum": "10c23e08d38fa7d324a019a2218ad859473305d9780fc0924e43cdf3b5114bde"
+            "lastModified": "2026-02-27T03:51:05.578Z",
+            "checksum": "4a0524ca1f4d13e7dc08132c164135f3812ff4f6bef580247a3fb03414fd787e"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "EnrollmentCount",
+            "Name": "Summary",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Number of enrollments"
+            "Description": "Summary of course analytics"
           },
           "primaryKey": {
-            "ID": "4BCFC08A-6D59-4C89-904A-37646390F0B4"
+            "ID": "489CF684-0DF0-4681-8210-07720786AA6B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.117Z",
-            "checksum": "701435b0fbdfc0ebae9b931de22a6121a065417d50ccf0fe1c4675f8efeca6c4"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "CompletionRate",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Course completion rate"
-          },
-          "primaryKey": {
-            "ID": "28E66F7C-C2AD-4661-BA79-09747A956EF9"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:13.120Z",
-            "checksum": "24889a70c25708c456d2b14d47f54715fc48391e530e5386c18f7b43741d05bb"
+            "lastModified": "2026-02-27T03:51:05.587Z",
+            "checksum": "dd6bfa4f8f854adfea42448cea7d1b01431cae6d0be219af5b9803b35f1c02f9"
           }
         }
       ],
@@ -6736,29 +7365,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Analytics retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "258441DA-BFD3-473E-BC49-E83CBFF0C692"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.122Z",
-            "checksum": "9b94de919e48c1fbe666fa6b85ef377d29fde605dd12b6dcf0cee890d632aab2"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "COURSE_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "Course not found"
-          },
-          "primaryKey": {
-            "ID": "B87F2A78-BD34-4DC6-B0BA-C0E035A6A2E5"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:13.125Z",
-            "checksum": "fa26c1b133d107a978b1baf05a226c192c9e00d55a8423d46592b46d79f0afb5"
+            "lastModified": "2026-02-27T03:51:05.630Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6791,7 +7405,7 @@
       "Name": "LearnWorlds - Get Users",
       "Description": "Retrieves a list of users from LearnWorlds with filtering options",
       "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
-      "DriverClass": "GetUsersAction",
+      "DriverClass": "GetLearnWorldsUsersAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-users"
@@ -6819,19 +7433,55 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Email",
+            "Name": "SearchText",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by email",
+            "Description": "Search text to filter users by name or email",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "8F4CB69F-5E21-48F1-8CC5-2E245F5E3FD8"
+            "ID": "CCB3272A-2795-466B-9933-EF86B9030722"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.132Z",
-            "checksum": "31b4647cb3202be2df295293e0e7c9a4c16dd65312a0321741e1f0cf2e6b8ca7"
+            "lastModified": "2026-02-27T03:51:05.597Z",
+            "checksum": "030466b9ca0f21af1a55fc1e2306a3c860a1a685927954a25155722486ead402"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Role",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by user role",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "96FD38D4-B7B6-42CE-8F21-535997CB9F86"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.607Z",
+            "checksum": "83c4398fca44b1793cb7fbc4d91baaacf6e28e5571c42b1e14b0e2839d9bfa15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by user status",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FC400B0C-4BEB-4391-812C-F0D4323B9546"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.616Z",
+            "checksum": "8bb2ef6ccc92e5de1acc62b1321a397227881f8d70997487b8538487f4692d2e"
           }
         },
         {
@@ -6840,7 +7490,7 @@
             "Name": "Tags",
             "Type": "Input",
             "ValueType": "Scalar",
-            "IsArray": true,
+            "IsArray": false,
             "Description": "Filter by tags",
             "IsRequired": false
           },
@@ -6848,45 +7498,119 @@
             "ID": "0FD43567-ABE8-4BE7-9C0F-E1FD67FF6A35"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.134Z",
-            "checksum": "287fc84ecb3d7a613c5213f37a9fff8939f9a57a72c0ef0e17beba18679353eb"
+            "lastModified": "2026-02-27T03:51:05.763Z",
+            "checksum": "4d701fa0c0fd001d96c0a3cafb3c428e65c4bb45c50ee9a3258af098f2adc158"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "EnrolledInCourse",
+            "Name": "CreatedAfter",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by course enrollment",
+            "Description": "Filter users created after this date (ISO format)",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "37379F1F-5D3B-400C-A0B8-759E46B1FC98"
+            "ID": "74E7DE91-7069-425F-B78B-0C987DE72A3D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.136Z",
-            "checksum": "58fe07b0f3ca3fd9066db9f8871b2ef4e1196b289772327629bea39eb62ab19d"
+            "lastModified": "2026-02-27T03:51:05.692Z",
+            "checksum": "43576815c58f56cdf241642671b3d49b83972cfb64f1aea7c7c81bb18848e186"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Limit",
+            "Name": "CreatedBefore",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum users to return",
+            "Description": "Filter users created before this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5ABAE80-2339-47FB-B049-FDC5756F273D"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.705Z",
+            "checksum": "6fd7ad58a2365a4687d0c88a997f4f850670ff931c80ee286fefed2fa209fec0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort results by",
             "IsRequired": false,
-            "DefaultValue": "100"
+            "DefaultValue": "created"
+          },
+          "primaryKey": {
+            "ID": "75F98172-A1CB-4541-BFEF-9F5E385C3EEE"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.716Z",
+            "checksum": "a96452a24f48e3e65c5fbb529fd1257d11219de53d1baced71dde6a4a8c84ab4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort direction (asc or desc)",
+            "IsRequired": false,
+            "DefaultValue": "desc"
+          },
+          "primaryKey": {
+            "ID": "DB55CBA0-E8E4-4DC9-8FFA-C53E237648EC"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.727Z",
+            "checksum": "ae03c583ede404c8bcbf392b920c8fb6d6f77100ab115200198135acc1fbb15a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeCourseStats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include course statistics for each user",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "699E8437-B30D-4BD8-98BF-9212931E3BA3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.737Z",
+            "checksum": "73e789bdfbe1f1f99a668bc7ba519389cebfcbf73aa3767798b8bdf2067e502c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "44F8C38D-4645-4C9B-84F6-B7825AD69999"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.139Z",
-            "checksum": "819481606939ce467f18f30a67e521498d35f145df64ed78c69bc0b45d1a0217"
+            "lastModified": "2026-02-27T03:51:05.774Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
           }
         },
         {
@@ -6896,14 +7620,14 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of users"
+            "Description": "List of users matching the filters"
           },
           "primaryKey": {
             "ID": "8F619343-E7DC-4461-9E72-B58F2E0A5A86"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.256Z",
-            "checksum": "178cc7d87599e538e0d036655a0dc90cbf4e2ab0c1b1cc1b52d68f6f28470af6"
+            "lastModified": "2026-02-27T03:51:05.784Z",
+            "checksum": "4f8726d085037f8868f62acafbc360a029e47572e304be809a49a42c582f752e"
           }
         },
         {
@@ -6913,14 +7637,31 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Total number of users"
+            "Description": "Total number of matching users"
           },
           "primaryKey": {
             "ID": "D97765C3-6DD4-442D-BFAA-9E2D85D84D14"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.257Z",
-            "checksum": "536531184304fc354dfa899026a97fb606d69acce6f265e1f60441f466951ca8"
+            "lastModified": "2026-02-27T03:51:05.794Z",
+            "checksum": "7fdf43734c590b1f5d6701d5a39afb0952713df04626e65984da70d3b3f69aaa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Summary of user query"
+          },
+          "primaryKey": {
+            "ID": "AC900185-277C-4E51-A1CF-D9E05DFBF767"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.746Z",
+            "checksum": "2409c7d52965fb9e63856531a45842991e0301d98b45360551710cc47468a9b3"
           }
         }
       ],
@@ -6930,29 +7671,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Users retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "0D841E24-2194-4DF3-AF10-0DE9BA32BF77"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.259Z",
-            "checksum": "49e62756b4a5308537a1d960acb3f13b2f8e6508f0a65ad5568a6fe73dc97bfc"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "NO_USERS",
-            "IsSuccess": true,
-            "Description": "No users found"
-          },
-          "primaryKey": {
-            "ID": "E8649A49-02FE-4EF8-B1D8-5187765FC7A9"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:13.260Z",
-            "checksum": "2fe410507f2bb6bdeca6cbba31831254acab032e0e5b9f60368d55502c3731e0"
+            "lastModified": "2026-02-27T03:51:05.911Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -6976,8 +7702,8 @@
       "ID": "75C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.557Z",
-      "checksum": "046f55e057eff366ecc65e5e3f03ae71dda8e8f03eac3719a46433001cdd5690"
+      "lastModified": "2026-02-27T03:51:01.375Z",
+      "checksum": "4247e2a836095b88309d4e6615fdf12b63ad2767ad143d7d4d0c74dd8c9f3ce4"
     }
   },
   {
@@ -7013,55 +7739,204 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserId",
+            "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "LearnWorlds user ID",
-            "IsRequired": true
+            "Description": "LearnWorlds user ID (optional filter)",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "7FEC55D5-65C3-4D74-9D46-23F5BDBBC284"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.266Z",
-            "checksum": "d1c5e908e8bb78586ec4afb585945b9a11f8743ec6c978794cf1df325fae47e1"
+            "lastModified": "2026-02-27T03:51:05.921Z",
+            "checksum": "343b0fded119e6dcbe2578232d86fbf15917a48b31d0238c5f3c7b5a067b6e64"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CourseId",
+            "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by specific course",
+            "Description": "Course ID filter",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "AD64745B-5D4D-4EF2-9AEF-18A5B5978232"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.267Z",
-            "checksum": "104011df3e552d3ee28b9cc65a08400bc9fc423fd55760f334fe5cb93a49098f"
+            "lastModified": "2026-02-27T03:51:05.930Z",
+            "checksum": "2f7d42e00c5310430fc436259f80b8f137b9e2e5db5854e369140aa84350dd82"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "QuizId",
+            "Name": "QuizID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by specific quiz",
+            "Description": "Quiz ID filter",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "BF007429-7711-4C27-8A62-C58C0B011BAB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.269Z",
-            "checksum": "6579fee8ba7673cef7f1ade847b7ee1e2d5cfa0af4bf2c0c3914407650f4bf2d"
+            "lastModified": "2026-02-27T03:51:05.940Z",
+            "checksum": "3d1ca98a53d818952a51ed542c711c016df739f8a0f1e18abc2a11242e09f98c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeQuestions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include quiz questions",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "13DF55BF-B12F-4032-A5F6-6EEA1BBCBAC3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.863Z",
+            "checksum": "b04c25779b205c61ce8575cab2b48e62653e94059647d3a83d4ed1f19e5160cb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeAnswers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include user answers",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "2F7DE331-E33A-416B-82AB-CA974181DF35"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.873Z",
+            "checksum": "19c039e482307362bbe59cea1fcbf931289c15e006728f9a5d3bb6e84ed0b356"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PassingOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only return passing quiz results",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "7C9481A4-6F02-4EBE-8352-AA768BFD8D48"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.883Z",
+            "checksum": "16e85361f7acbed5ce33d791663c719f48e2caed6d22bb82dea1256f9fdf6602"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateFrom",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter results after this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BBDB75C8-0608-47DE-87EF-49326FC3F917"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.891Z",
+            "checksum": "77efe77ecf97e6346043a9039cedf039a0de644797bb4bb6e0665b6fbb49b8b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateTo",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter results before this date (ISO format)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "09C6FF92-D6D3-45FC-A6B9-F2C53DA26BCA"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:05.994Z",
+            "checksum": "770e1ce89da0cc5f7e791765f7ae9f9a36f92657b015e48621ffe320d9e59fdb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort results by",
+            "IsRequired": false,
+            "DefaultValue": "completed_at"
+          },
+          "primaryKey": {
+            "ID": "7AF19739-DCD5-4F3F-A35D-AE6CC41E9B82"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.004Z",
+            "checksum": "4bc4188cee58d102b5bc82c917276d007b2c59be38756902d9f7a3c1980ea96e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortOrder",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort direction (asc or desc)",
+            "IsRequired": false,
+            "DefaultValue": "desc"
+          },
+          "primaryKey": {
+            "ID": "8FB459E3-28C3-4CD6-A039-EDE84C0D4C00"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.016Z",
+            "checksum": "ae03c583ede404c8bcbf392b920c8fb6d6f77100ab115200198135acc1fbb15a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8809AA58-BE8C-4DD4-AD61-BC31220679DF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.028Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
           }
         },
         {
@@ -7071,48 +7946,48 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of quiz results"
+            "Description": "List of quiz results"
           },
           "primaryKey": {
             "ID": "B2D66FB3-8CF5-4FF7-990C-E0D5BA5FFBE1"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.270Z",
-            "checksum": "66dccb8a226f4b0bd6f2f8024ae781d90ffb3f5144a3bf3ac74b4cf6cdf648dc"
+            "lastModified": "2026-02-27T03:51:06.071Z",
+            "checksum": "2dfc2b2858bcd02d78c3957ec5a564a2e5607484ffeb6a750352d375cecf7acc"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "BestScore",
+            "Name": "TotalCount",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Best score achieved"
+            "Description": "Total number of quiz results"
           },
           "primaryKey": {
-            "ID": "AA204CF1-4F67-4437-A921-08C270FDE38A"
+            "ID": "62079DDE-AE81-488C-A92A-1ABB02812F38"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.356Z",
-            "checksum": "ac5272720885685e9eb419f29408ec446d1aa0e19179d106f40a2cd6a23e6e75"
+            "lastModified": "2026-02-27T03:51:06.038Z",
+            "checksum": "5891029668f8c3a66048047ef1ba317f7309cba370c1cdb26d5d4a5c9a119119"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "AverageScore",
+            "Name": "Summary",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Average score"
+            "Description": "Summary of quiz results"
           },
           "primaryKey": {
-            "ID": "5548DA4C-091E-49F6-BA21-545984747ECF"
+            "ID": "86902FDF-00EC-41E4-B8CB-33365E3F5821"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.358Z",
-            "checksum": "d9ed169af15472b5c6d30267ed4a4127fabba55ed705f517739ecb2f318692b3"
+            "lastModified": "2026-02-27T03:51:06.047Z",
+            "checksum": "b982f96e32f60419c04ad9ca12d076d2aaa62fd42595bc88e15623f3740f20a0"
           }
         }
       ],
@@ -7122,29 +7997,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Quiz results retrieved successfully"
+            "Description": "Operation completed successfully"
           },
           "primaryKey": {
             "ID": "A7DEB40C-51AC-4706-9876-517F782669E8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:13.360Z",
-            "checksum": "628277d8240b376dbd493ac52555c372979718145ab270ddb077d1009b7a4dd3"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "USER_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "User not found"
-          },
-          "primaryKey": {
-            "ID": "476D4826-E9FA-48FE-89AB-8F41721D35CE"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:13.362Z",
-            "checksum": "03234fb55c475f7f875158877e7559b92871b5f54a87c5305fd5c482cef3c24e"
+            "lastModified": "2026-02-27T03:51:06.080Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
           }
         },
         {
@@ -7170,6 +8030,1545 @@
     "sync": {
       "lastModified": "2026-02-13T21:08:55.558Z",
       "checksum": "53c0c1f02fc521cc41063ebc082005e05e0e04b93ff7a4e294f7fefd50835245"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Attach Tags",
+      "Description": "Attaches one or more tags to a LearnWorlds user",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "AttachTagsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-tags"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B588AF3D-EEB8-49E8-A0E2-D7D148C135DF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.056Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "48146CCB-EAF6-4CBD-87F2-0E89CC5CEA92"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.119Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Tags to attach to the user",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "679913C0-7E66-4A25-9432-E9E421A22A85"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.129Z",
+            "checksum": "51cfea8370b71f08d67f51a204df1736d30583d31f614c81fdfe9784f5dd9030"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the operation was successful"
+          },
+          "primaryKey": {
+            "ID": "FF75C08C-F73B-40A3-907D-5D021D9B7330"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.139Z",
+            "checksum": "827794600e7dc4ee29598ba30a147f55d98dc3fc861401b5a48abf964eb12b8c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultTags",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Updated list of tags on the user"
+          },
+          "primaryKey": {
+            "ID": "A60005C4-2A87-4DA1-8BB1-CD5EFDE2E8BF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.148Z",
+            "checksum": "15dd998535fa1d3c5ca9f012acec2b3ae9169273dcb5cb8b79f7497e58e06772"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "CC804E30-DD08-4BAD-A71D-95E81609C1F3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.165Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "E930DC97-77CD-4B80-928F-16A525C8BACA"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.174Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DCE5945A-3108-43A6-B1F9-E9D69EF617C4"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.297Z",
+      "checksum": "2869440f3a193327eaa58bc6d70326449d6bb8cd2faee1a3edca72f45315cfd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Detach Tags",
+      "Description": "Detaches one or more tags from a LearnWorlds user",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "DetachTagsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-tag"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "80BA2B84-B001-450D-8BB4-E2B71506148F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.188Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BD7AAEBC-08A2-4638-BAD8-4F9CD2926798"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.198Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Tags to detach from the user",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "890AF3FF-B2F7-4119-843C-298E7242F82F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.207Z",
+            "checksum": "0b01f1ebef2afe7c2c64bb56dd2f3483ee1f8da32d64951924eda0dc81105b72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the operation was successful"
+          },
+          "primaryKey": {
+            "ID": "308A577F-CA74-41E3-9C38-22848866B6FF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.216Z",
+            "checksum": "827794600e7dc4ee29598ba30a147f55d98dc3fc861401b5a48abf964eb12b8c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultTags",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Updated list of tags on the user"
+          },
+          "primaryKey": {
+            "ID": "0B3C59BF-68FF-4B04-BE9F-76ED4702FE7B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.249Z",
+            "checksum": "15dd998535fa1d3c5ca9f012acec2b3ae9169273dcb5cb8b79f7497e58e06772"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "38E6B841-660F-401B-8E0E-FE89E2F6A45F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.257Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "E260A464-190E-4776-81AC-FB53D06FB7D1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.267Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4652495C-D5C1-4725-AFE2-388454CE97A2"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.310Z",
+      "checksum": "1f9ebe4a19f8751fcd30f0a9236a9dbebb8434c79476aadcbc03d4e9add7fbe2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Get Bulk Data",
+      "Description": "Orchestrates bulk data retrieval from LearnWorlds, fetching users, courses, bundles, enrollments, progress, certificates, and quiz results into a single sync payload",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "GetLearnWorldsBulkDataAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-database"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "80D678C8-E018-484C-A72B-968ABFC8EAA2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.278Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeUsers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include users in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D8D66FF4-574A-4A17-B99C-20C067EADD21"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.286Z",
+            "checksum": "91f145c033db5bc5f77dc4f5f10147b3a6efd201f7fcee1bbb43c3719c6e27d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeCourses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include courses in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4EEDC2A-5861-459D-A613-C64A5E35837D"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.296Z",
+            "checksum": "2ba2b78a2c7c6f5c8553983565d698b711ada8d4c9be38215c143a3e1a022844"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeBundles",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include bundles in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD1176D6-E6DA-43A1-9A8A-5F7B469780E0"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.306Z",
+            "checksum": "dd1ada4faf49477c9f6022b1c73ce1861f72954c38f3765543d847b46d8742af"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeEnrollments",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include enrollments in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6062568D-34E7-407C-9FEE-C31D5B204AEF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.316Z",
+            "checksum": "79e7834e5624c99de036b0362ebc9e5d7d4445b4c33682b107e9ee6ab7891b79"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeProgress",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include progress data in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D8CA9C06-9B07-4279-BFC7-44DCA16864F1"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.326Z",
+            "checksum": "75fba369f7055ac06082a72c33b9d1d3cf198bcc69e30ebf78ac2d338b05c56b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeCertificates",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include certificates in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0E90F89D-CA67-4D13-8737-5761E63C505C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.334Z",
+            "checksum": "fec8deeaf6aed3008e405f65a7a741448ed49323ce0837dfd50d253271e931bc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeQuizResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include quiz results in the sync payload",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "91A23BB5-E169-4771-A2CE-17EF4CFF8CFF"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.369Z",
+            "checksum": "0009a07abb51ef20e2e6225e79a410357bc4152d156217c503c6d6299069f7f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResultsPerEntity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results per entity type",
+            "IsRequired": false,
+            "DefaultValue": "100"
+          },
+          "primaryKey": {
+            "ID": "7C1A2DF3-F60C-45B0-BC77-0F326AD95D41"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.379Z",
+            "checksum": "c8ff425691c3913264bf20a0ad77d824f14e4643f6dc02ef476db4acf31b7543"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SyncPayload",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete sync payload containing all requested data"
+          },
+          "primaryKey": {
+            "ID": "FCFF26C7-F3ED-476B-88EB-E28DA8B71864"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.388Z",
+            "checksum": "8858a053199dfb9beb0e9c55ec11137381cc78828f914a5ece42bfebd5eed8f0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalApiCalls",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of API calls made"
+          },
+          "primaryKey": {
+            "ID": "CA6025A8-B0EB-4A01-9614-CBE1FF716EA5"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.398Z",
+            "checksum": "6c0187b2774b728f9ca75d397d9edd1cb57b2532f0762cbd52cf07ac00e55cbb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Errors",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "List of errors encountered during sync"
+          },
+          "primaryKey": {
+            "ID": "3D1F7B6A-6827-4B60-8805-8D3FE5168EC9"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.408Z",
+            "checksum": "d28f8e45eda76658c0de49d658276418419a456717e88488835349ec106540a8"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D71C2AF3-F0CD-4078-8706-F1DEEA326734"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.418Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Some operations failed"
+          },
+          "primaryKey": {
+            "ID": "2B649C79-15EC-4106-B649-8F2A7575C5E3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.428Z",
+            "checksum": "3965b84df05bdac0e76c1b9e07900565ae4c481005e0d37815eca4c2e6e87b89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "C559DD6F-33EC-4F01-8BCB-37DBF3606FA4"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.438Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D8DF07CA-BB03-4CD6-A5E1-A89961E57C21"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.322Z",
+      "checksum": "7bcc06d382d0b3c6ae7df971160eec4d5d450a2f46475afdcd79e71330117030"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Get Bundles",
+      "Description": "Retrieves course bundles from LearnWorlds with optional search filtering",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "GetBundlesAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-layer-group"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8C0046C0-C750-41B0-90B3-4530FA212AF3"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.450Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search text to filter bundles by name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AC4ED248-2E0D-4245-9B6F-F60BB3B00280"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.459Z",
+            "checksum": "970e82f02c5022a58528d8b46db4b59ac7dbabaf3b787f66df07053c332bc776"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "367A2990-76B6-4B42-A66E-9F860EF8F190"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.495Z",
+            "checksum": "a9a0e2378d4078c0921a7070e3a97c063dcce52e30dd2f20df876b042504ddf1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Bundles",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "List of course bundles"
+          },
+          "primaryKey": {
+            "ID": "B4938811-FABC-43D8-92C4-AADD1C22937B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.506Z",
+            "checksum": "777f3b1fbfc52a5986ef834e82e607d5c21c98240f29c227158de87bca23df9f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of bundles"
+          },
+          "primaryKey": {
+            "ID": "D2552216-9619-48EB-946A-A767A2C35FDD"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.516Z",
+            "checksum": "359460303c5e6783189e2f07bc1e0db8a6edb210c9018fc8f285add67e08c471"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "41F49012-F497-49F2-ABEB-2424B2260D34"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.527Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "0BBEA65E-2AB1-4807-9FF8-C2B3383E11FB"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.537Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AD9E61C5-B22B-4A52-867E-8E0C017C065B"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.334Z",
+      "checksum": "2be654922bcd23df274224e9c1cb8fd8073da3c9f79670c2bca65e89a3bc4423"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Onboard Learner",
+      "Description": "Orchestrates full learner onboarding: create or find user, enroll in courses/bundles, and generate SSO login URL",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "OnboardLearnerAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-user-graduate"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D466D29B-D4F5-4159-A1BA-D1098BB155C4"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.547Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Learner's email address",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "ABF14216-0777-4674-ADB5-3A2014869910"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.556Z",
+            "checksum": "26ca12b3f07ede38cf7c25517d35c4472f92c68da95a0ff4a5ac4971f55e5641"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Learner's first name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "40C89CCD-8908-4CB9-B313-BF276EB9A52A"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.565Z",
+            "checksum": "7ff2fd6547fb46e0880f8e3591db8eeb62d6d22278e7ae140f244d529fe07802"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Learner's last name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "378BA126-8A36-42B0-931C-BA2C4FC2285C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.575Z",
+            "checksum": "48676e6523979bed5e41a9607aa256ca565359ae70945b644df297dfeb595434"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Role",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User role (defaults to student)",
+            "IsRequired": false,
+            "DefaultValue": "student"
+          },
+          "primaryKey": {
+            "ID": "37088148-A50B-4A81-A58E-331B1C8C70C6"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.583Z",
+            "checksum": "31e437cfca30fb18069c346cf3fb404f593d02c7e9168da0208067d097d14722"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Tags to assign to the learner",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "72862CE6-EB90-4B76-BB47-4101A38E3D5D"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.620Z",
+            "checksum": "44e4a64e23ab783be4b91299756ebdfeb9a9f45eca6b88a4655d9b0802bcbf7d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomFields",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Custom field values for the learner profile",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1B713EDD-9782-44FB-8AD7-EA60CFFA8A9B"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.630Z",
+            "checksum": "64d74590665e133666cef37dedc59a6f090cbcd73cc79869680a2a9712ecebe9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CourseIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Course IDs to enroll the learner in",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5C6249AF-7EC2-456A-AECE-2B1EECDB9E2E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.641Z",
+            "checksum": "a0d74dab77e4e049d68caff10ece795362863dd22b0ef79122cc902ff571c84b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BundleIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Bundle IDs to enroll the learner in",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "59DA01C0-6CC2-48B5-AC07-97743A1A36AB"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.650Z",
+            "checksum": "f573e58341f94a291837d292e3ae1dc044566211c33056af46558a6716c4c307"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RedirectTo",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "URL to redirect to after SSO login",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BAC139C-84AF-47C4-805B-610602537E57"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.660Z",
+            "checksum": "2f7645f73e2ef95b26262a1c050bbcfbc3bae0f918f33ebaefd687f4c600956a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SendWelcomeEmail",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to send a welcome email",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "3ABBC797-BCB4-485F-990E-455ABA0B4692"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.669Z",
+            "checksum": "60ee6690028e8eb84fd1a6b62239f3c38cee4144b2e658b0cc6c4daa6b749ed9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LoginURL",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "SSO login URL for the learner"
+          },
+          "primaryKey": {
+            "ID": "F90A2CD9-2BA1-43EE-838A-EA3F84711E74"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.678Z",
+            "checksum": "9823ad55f12d744da774abf86732f2991a509bb63535051be374b72617f6c77a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LearnWorldsUserId",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID"
+          },
+          "primaryKey": {
+            "ID": "7AFDAF59-7E3A-4463-B3D1-B537F7F51D09"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.688Z",
+            "checksum": "c9be9401f3903e09efccf1faba2baadd3308a78ae73fb05c46c7681d0a1ccc9a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsNewUser",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether a new user was created"
+          },
+          "primaryKey": {
+            "ID": "519071DB-BC68-4968-A629-EC821E4620AD"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.700Z",
+            "checksum": "dc4023185a371cf880590aa694bf461675b4317f6bc6658799390052d9738dfb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Enrollments",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Enrollment results for each course/bundle"
+          },
+          "primaryKey": {
+            "ID": "260D9A2C-4870-4FBA-8602-9BDE5674559E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.709Z",
+            "checksum": "f90ad5589328239dbed0f0b52c6c3fdd9e8c3f2605cece295173e840aece3ba0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Errors",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Errors encountered during onboarding"
+          },
+          "primaryKey": {
+            "ID": "2912F490-BE53-4344-B481-6E48FABD0D10"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.743Z",
+            "checksum": "aa912be1ab340e60ad7d2947a2d38aebaf24b1c8d938c5cf0e6f56205209e9e6"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "E05223AA-0CF0-4873-998E-98505F66A5A0"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.752Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Some operations failed"
+          },
+          "primaryKey": {
+            "ID": "A60BA5C7-F410-4CA2-8F46-492F48044201"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.760Z",
+            "checksum": "3965b84df05bdac0e76c1b9e07900565ae4c481005e0d37815eca4c2e6e87b89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid input parameters"
+          },
+          "primaryKey": {
+            "ID": "75E78700-6C87-40C2-9DE6-2703CFA6BC8C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.770Z",
+            "checksum": "a68d06849ff4b065224f8f0bd9dcfe53979289b99b43856ed3e3055b7fdf0e44"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "40CC494F-2C85-4007-AF77-6D17CC1598FC"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.780Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FB7D4AD2-5D94-453C-99FC-35C08B386E66"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.354Z",
+      "checksum": "4b64cf68f4fb3d0df9717608ee91b253f5d974ed8d2306b00382e53231b753a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - SSO Login",
+      "Description": "Generates an SSO login URL for a LearnWorlds user",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "SSOLoginAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-right-to-bracket"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "23591B34-0C88-409C-A0D6-BAE64EA2E52C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.790Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User's email address (either Email or UserID must be provided)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "705DF5EA-79CD-4398-BC4C-3BD593D9BBA0"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.801Z",
+            "checksum": "8f4d46fe5cc51e6d780abcd7dd9c46e0b275dd9143661b2ffdeaa3db88657e13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID (either Email or UserID must be provided)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "547FC0DE-C9B7-4EB0-9875-33EF348D561F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.810Z",
+            "checksum": "11b9a41bfb4b7c40b1f5eb3c021b9b218642a6fd3f8ee3cce843f84f23d26e53"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RedirectTo",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "URL to redirect to after SSO login",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "94651C75-7DBF-4927-8A3C-A4215BCE97F2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.820Z",
+            "checksum": "2f7645f73e2ef95b26262a1c050bbcfbc3bae0f918f33ebaefd687f4c600956a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LoginURL",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "SSO login URL for the user"
+          },
+          "primaryKey": {
+            "ID": "766051BA-6ECC-409C-AC30-ECD5E4377B11"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.828Z",
+            "checksum": "2d4ddddb3c05b5066f49ba4f88eb30992bac7566cf2784907a8c17022580ad2a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LearnWorldsUserID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID"
+          },
+          "primaryKey": {
+            "ID": "23B32ADD-3222-4995-87F6-052BA3337BF2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.863Z",
+            "checksum": "81342f251fe8c9d3fd4778ae30bb3e9799ca68229446e2f687ac461f567f8e2f"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "FF7334FE-CE2B-4BA2-B4E1-AE25CAD52355"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.873Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "CFBCE3AC-E1BC-4803-B0D5-3E577C3EACDD"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.882Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E0F498DA-D398-4CDE-B17A-1BA162EEA6D0"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.522Z",
+      "checksum": "d33f2a02c4f52baa3afff42f46402dc8fb7b12b349ffea82ff15ecbb610ea471"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LearnWorlds - Update User",
+      "Description": "Updates an existing user profile in LearnWorlds",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=LearnWorlds&Parent=LMS",
+      "DriverClass": "UpdateUserAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-user-pen"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The ID of the company for multi-tenant support",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5D5E2304-021F-4A3D-AB63-5947E251921C"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.892Z",
+            "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "LearnWorlds user ID",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "75EE9AE1-A386-4FB2-92A3-B7C349B18C4E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.903Z",
+            "checksum": "74f5d9bdc3bbab7581bb3e42c2ae6781c24700078e6f211ec9b7aa6baff28948"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated email address",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "57AE8A08-078A-48F9-8D19-93977E740814"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.913Z",
+            "checksum": "d67e2786fd8db0abf5530c8b06bf29a8c33c551e4c5e3eaece8cd565b9986764"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Username",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated username",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "825CE138-FE3A-440D-9980-3D324A0B1002"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.923Z",
+            "checksum": "8c2c3584130de2df50578591cc041870bf8e6032f338f9ae3f3f5561e589fef6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Password",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated password (min 6 characters)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB535504-98DB-49D6-818D-635E97AF7663"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.933Z",
+            "checksum": "96e9d3dd6013361ea023007a3f78af0d2da36f3fda19ed71fc1324dd1d87388f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated first name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF349DFF-0D14-4B7D-A05C-75A95E833622"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.944Z",
+            "checksum": "18d2784799087d1e7fdc336e67286dd2203e213f37f376aebe1a17ff9802c2d5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated last name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "39570D55-F5CB-4DC3-A0AE-7548A813F37E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.952Z",
+            "checksum": "3020ede90c458cfe3903d608dfa33d0633bb4690abff2499aba5900cb9d6b877"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Role",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated user role",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "476D85A3-046E-4C95-8ED4-FA115CCD342D"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:06.991Z",
+            "checksum": "e134e753f160d3b1cc239453dc9d3fd660875ab34e9db5742e0ad8a4406869b6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsActive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether user account is active",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C9306EB-C30D-4E89-B4CC-380AC830ADE2"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.001Z",
+            "checksum": "46cdec29c3da5dda69b5b4c7f7cc8d337f24598cd0f35d59a0e9b4483665c6db"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Updated tags for the user",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C834CCFF-DA28-4A2B-901A-E5312F24089E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.011Z",
+            "checksum": "f5e3958efa43952da0ef8b224dcad00afcca37ce39e90ffae94b308575ee5023"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomFields",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Updated custom field values",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E45CCD2D-8DAC-46EC-8DD5-22C2BDEB071E"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.022Z",
+            "checksum": "c0d334fbfc492e4e4d50bcc45ca22b21e21d55c68e22fcdd74966bf2c8f2d087"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Updated user profile details"
+          },
+          "primaryKey": {
+            "ID": "3CBFD6C5-71AC-4100-BA8D-CC073B56BFF8"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.032Z",
+            "checksum": "e8662dae7f1f7703bb829110ec73aede6d095ef22d2ce3e83c8832e0baf2dd9b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Summary of the update operation"
+          },
+          "primaryKey": {
+            "ID": "A5A1BCF6-BEE5-4F70-9179-C7D08BCBD2EC"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.042Z",
+            "checksum": "8d17ce94383c41fd29cb40bba373f1c70cd61e939e3974c3e2d6d217eb51c6de"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "C7D17571-446A-4BCF-A20D-78533D73538F"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.051Z",
+            "checksum": "aa9b376f9700c3d4adfb537bb633695958ef11d17704d7adad8564acaa8684de"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid input parameters"
+          },
+          "primaryKey": {
+            "ID": "63A81FA8-020D-44B4-8A71-875474940601"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.060Z",
+            "checksum": "a68d06849ff4b065224f8f0bd9dcfe53979289b99b43856ed3e3055b7fdf0e44"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          },
+          "primaryKey": {
+            "ID": "DF5D66F6-1302-44C5-8C50-CD19094FF227"
+          },
+          "sync": {
+            "lastModified": "2026-02-27T03:51:07.070Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3CDE4163-878C-4FE2-AF2C-8B51BDE4F651"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T03:51:01.531Z",
+      "checksum": "df885d712e2696c8a2ca2750935435828ac7ab43b42858650214fcccff6473f6"
     }
   },
   {

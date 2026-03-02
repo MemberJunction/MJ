@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionExecutionLogEntity, MJActionEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
@@ -262,7 +262,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     // Apply action filter
     const actionId = this.selectedAction$.value;
     if (actionId !== 'all') {
-      filtered = filtered.filter(e => e.ActionID === actionId);
+      filtered = filtered.filter(e => UUIDsEqual(e.ActionID, actionId));
     }
 
     // Apply search filter

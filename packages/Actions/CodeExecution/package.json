@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/code-execution",
   "type": "module",
-  "version": "5.2.0",
+  "version": "5.4.1",
   "description": "Sandboxed code execution service for MemberJunction actions and agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,8 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "5.2.0",
-    "@memberjunction/global": "5.2.0",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/global": "5.4.1",
     "isolated-vm": "^6.0.2",
     "lodash": "^4.17.23",
     "date-fns": "^3.0.0",

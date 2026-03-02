@@ -242,50 +242,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: AI Agent Step Paths Section -->
+    <!-- AI Agent Step Paths (Destination Step ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentStepPaths"
-        SectionName="MJ: AI Agent Step Paths"
+        SectionKey="mJAIAgentStepPathsDestinationStepID"
+        SectionName="AI Agent Step Paths (Destination Step ID)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPathsDestinationStepID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','DestinationStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentStepPathsDestinationStepID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPathsDestinationStepID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Step Paths Section -->
+    <!-- AI Agent Step Paths (Origin Step ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentStepPaths"
-        SectionName="MJ: AI Agent Step Paths"
+        SectionKey="mJAIAgentStepPathsOriginStepID"
+        SectionName="AI Agent Step Paths (Origin Step ID)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPaths')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentStepPathsOriginStepID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','OriginStepID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentStepPaths')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentStepPathsOriginStepID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPaths', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPathsOriginStepID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

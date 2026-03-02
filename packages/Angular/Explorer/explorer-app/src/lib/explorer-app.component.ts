@@ -8,10 +8,11 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, Inject, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
-import { take } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { take, takeUntil } from 'rxjs/operators';
 import { LogError, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
@@ -24,15 +25,21 @@ import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstra
   styleUrls: ['./explorer-app.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class MJExplorerAppComponent implements OnInit {
+export class MJExplorerAppComponent implements OnInit, OnDestroy {
+  private static readonly THEME_STORAGE_KEY = 'mj-login-theme';
+
   public title = 'MJ Explorer';
   public initialPath = '/';
   public HasError = false;
-  public ErrorMessage: any = '';
+  public ErrorMessage: string = '';
   public subHeaderText: string = "Welcome back! Please log in to your account.";
   public showValidationOnly = false;
   /** True when the current URL is the OAuth callback route - used for conditional rendering */
   public isOAuthCallback = false;
+  /** Tracks whether the login page is in dark mode */
+  public IsDarkMode = false;
+
+  private destroy$ = new Subject<void>();
 
   constructor(
     private router: Router,
@@ -83,15 +90,15 @@ export class MJExplorerAppComponent implements OnInit {
         if (!retried) {
           // Show error to user
           this.HasError = true;
-          this.ErrorMessage = result.error.userMessage;
+          this.ErrorMessage = result.error.userMessage || result.error.message;
           LogError('Error Logging In: ' + result.error.message);
           throw new Error(result.error.message);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.HasError = true;
-      this.ErrorMessage = err;
-      LogError('Error Logging In: ' + err);
+      this.ErrorMessage = err instanceof Error ? err.message : String(err);
+      LogError('Error Logging In: ' + this.ErrorMessage);
       throw err;
     }
   }
@@ -159,8 +166,58 @@ export class MJExplorerAppComponent implements OnInit {
     // Note: We still run setupAuth() to restore the user's session
     this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
+    // Apply saved or OS-preferred theme for the login page
+    this.applyLoginTheme();
+
+    // Re-apply login theme when the user logs out (ThemeService.Reset() clears data-theme)
+    this.authBase.isAuthenticated()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((authenticated: boolean) => {
+        if (!authenticated) {
+          this.applyThemeToDOM();
+        }
+      });
+
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
     this.setupAuth();
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Load saved theme preference from localStorage, falling back to OS preference
+   */
+  private applyLoginTheme(): void {
+    const saved = localStorage.getItem(MJExplorerAppComponent.THEME_STORAGE_KEY);
+    if (saved) {
+      this.IsDarkMode = saved === 'dark';
+    } else {
+      this.IsDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    this.applyThemeToDOM();
+  }
+
+  /**
+   * Set or remove the data-theme attribute on the document root
+   */
+  private applyThemeToDOM(): void {
+    if (this.IsDarkMode) {
+      this.document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      this.document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  /**
+   * Toggle between light and dark themes, persisting the choice
+   */
+  public ToggleTheme(): void {
+    this.IsDarkMode = !this.IsDarkMode;
+    localStorage.setItem(MJExplorerAppComponent.THEME_STORAGE_KEY, this.IsDarkMode ? 'dark' : 'light');
+    this.applyThemeToDOM();
   }
 }

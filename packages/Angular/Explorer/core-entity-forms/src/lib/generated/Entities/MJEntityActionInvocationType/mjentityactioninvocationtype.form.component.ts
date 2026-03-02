@@ -18,7 +18,7 @@ export class MJEntityActionInvocationTypeFormComponent extends BaseFormComponent
         this.initSections([
             { sectionKey: 'invocationTypeDefinition', sectionName: 'Invocation Type Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityActionInvocations', sectionName: 'Entity Action Invocations', isExpanded: false }
+            { sectionKey: 'mJEntityActionInvocations', sectionName: 'Entity Action Invocations', isExpanded: false }
         ]);
     }
 }

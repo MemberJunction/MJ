@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/ng-notifications
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

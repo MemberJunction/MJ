@@ -1,6 +1,6 @@
 import { ActionParam } from '@memberjunction/actions-base';
 import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -94,7 +94,7 @@ export abstract class BaseFormBuilderAction extends BaseAction {
      * Gets the company integration record for the specified company and form platform
      */
     protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
-        if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
+        if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
             return this._companyIntegration;
         }
 

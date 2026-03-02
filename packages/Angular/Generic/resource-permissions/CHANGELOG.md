@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.4.1
+- @memberjunction/ng-container-directives@5.4.1
+- @memberjunction/ng-generic-dialog@5.4.1
+- @memberjunction/ng-notifications@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-container-directives@5.4.0
+  - @memberjunction/ng-generic-dialog@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/ng-generic-dialog@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/ng-generic-dialog@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

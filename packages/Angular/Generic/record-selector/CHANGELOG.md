@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/ng-record-selector
 
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-container-directives@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-container-directives@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-shared@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

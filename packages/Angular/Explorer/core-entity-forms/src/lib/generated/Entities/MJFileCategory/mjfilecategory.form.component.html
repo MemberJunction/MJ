@@ -93,23 +93,23 @@
 
     <!-- File Categories Section -->
     <mj-collapsible-panel
-        SectionKey="fileCategories"
+        SectionKey="mJFileCategories"
         SectionName="File Categories"
         Icon="fa fa-folder"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('fileCategories')"
+        [BadgeCount]="GetSectionRowCount('mJFileCategories')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: File Categories')"
-                [AllowLoad]="IsSectionExpanded('fileCategories')"
+                [AllowLoad]="IsSectionExpanded('mJFileCategories')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('fileCategories', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -118,23 +118,23 @@
 
     <!-- Files Section -->
     <mj-collapsible-panel
-        SectionKey="files"
+        SectionKey="mJFiles"
         SectionName="Files"
         Icon="fa fa-file"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('files')"
+        [BadgeCount]="GetSectionRowCount('mJFiles')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Files','CategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Files')"
-                [AllowLoad]="IsSectionExpanded('files')"
+                [AllowLoad]="IsSectionExpanded('mJFiles')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('files', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJFiles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

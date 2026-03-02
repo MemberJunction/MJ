@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/aiengine@5.3.1
+- @memberjunction/ai-prompts@5.3.1
+- @memberjunction/ai-provider-bundle@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/config@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/core-entities-server@5.3.1
+- @memberjunction/global@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+- @memberjunction/server-bootstrap-lite@5.3.1
+
+## 5.3.0
+
+### Minor Changes
+
+- 24d54d2: metadata and migrations
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/server-bootstrap-lite@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/aiengine@5.3.0
+  - @memberjunction/ai-prompts@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/core-entities-server@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/ai-provider-bundle@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/config@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Minor Changes

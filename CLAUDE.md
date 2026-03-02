@@ -141,6 +141,12 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 
 The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
 
+- **[UUID Comparison Guide](guides/UUID_COMPARISON_GUIDE.md)**: Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase):
+  - Always use `UUIDsEqual()` instead of `===` for UUID comparisons
+  - Use `NormalizeUUID()` for Set/Map key operations
+  - Angular template binding patterns
+  - Automated enforcement tests
+
 - **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
   - State management with getter/setters
@@ -148,7 +154,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
-When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
+When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
 
@@ -260,6 +266,10 @@ describe('ClassName', () => {
 - **Every PR** must pass unit tests before merging (GitHub Actions gate)
 - **Every release** runs the full-stack regression suite via Docker Compose
 - Tests are cached by Turborepo — unchanged packages skip test execution
+
+## Switching Database Platforms (SQL Server ↔ PostgreSQL)
+
+When developing against both SQL Server and PostgreSQL on the same URL/port (e.g., `localhost:4000`), **you must clear your browser cache** after switching backends. The `GraphQLDataProvider` client caches entity metadata and query results in the browser. Since SQL Server returns UUIDs uppercase and PostgreSQL returns them lowercase, stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache (or use an incognito window) whenever you switch the backend database platform behind the same endpoint.
 
 ## Docker Environments
 

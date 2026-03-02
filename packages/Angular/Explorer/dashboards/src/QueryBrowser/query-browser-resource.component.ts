@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, filter } from 'rxjs/operators';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -138,7 +138,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             // Parse initial URL state
             const urlState = this.parseUrlState();
             if (urlState?.queryId) {
-                const query = this.queries.find(q => q.ID === urlState.queryId);
+                const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
                 if (query) {
                     this.selectedQuery = query;
                     this.expandCategoryForQuery(query);
@@ -162,7 +162,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Create nodes for all categories
         for (const category of this.categories) {
-            const queriesInCategory = this.queries.filter(q => q.CategoryID === category.ID);
+            const queriesInCategory = this.queries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
             categoryMap.set(category.ID, {
                 category,
                 children: [],
@@ -296,7 +296,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public isQueryVisible(query: QueryInfo): boolean {
         if (!this.searchText) return true;
-        return this.filteredQueries.some(q => q.ID === query.ID);
+        return this.filteredQueries.some(q => UUIDsEqual(q.ID, query.ID));
     }
 
     public hasVisibleContent(node: CategoryNode): boolean {
@@ -431,9 +431,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Apply the state without triggering URL updates
         this.skipUrlUpdate = true;
         if (urlState?.queryId) {
-            const query = this.queries.find(q => q.ID === urlState.queryId);
+            const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
             if (query) {
-                if (this.selectedQuery?.ID !== query.ID) {
+                if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
                     this.selectedQuery = query;
                     this.expandCategoryForQuery(query);
                 }
@@ -474,7 +474,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         const expandCategory = (nodes: CategoryNode[], targetCategoryId: string): boolean => {
             for (const node of nodes) {
-                if (node.category.ID === targetCategoryId) {
+                if (UUIDsEqual(node.category.ID, targetCategoryId)) {
                     node.expanded = true;
                     return true;
                 }
@@ -494,7 +494,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      */
     private expandCategoryForQueryRecursive(nodes: CategoryNode[], targetCategoryId: string): boolean {
         for (const node of nodes) {
-            if (node.category.ID === targetCategoryId) {
+            if (UUIDsEqual(node.category.ID, targetCategoryId)) {
                 node.expanded = true;
                 return true;
             }

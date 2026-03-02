@@ -111,6 +111,55 @@ RecentAccessService.Instance.TrackAccess({
 const recentItems = RecentAccessService.Instance.RecentItems;
 ```
 
+### ThemeService
+
+Manages application-wide theming with built-in light/dark modes and pluggable custom theme support. Preferences are persisted per-user via `UserInfoEngine`.
+
+```typescript
+import { ThemeService, ThemeDefinition } from '@memberjunction/ng-shared-generic';
+
+const themeService = inject(ThemeService);
+
+// Register a custom theme before Initialize()
+themeService.RegisterTheme({
+  Id: 'my-dark',
+  Name: 'My Dark',
+  BaseTheme: 'dark',
+  CssUrl: 'assets/themes/my-dark.css',
+  IsBuiltIn: false
+});
+
+// Switch themes at runtime
+await themeService.SetTheme('my-dark');
+
+// React to theme changes
+themeService.AppliedTheme$.subscribe(themeId => {
+  console.log('Active theme:', themeId);
+});
+```
+
+Key properties: `Preference$`, `AppliedTheme$`, `AvailableThemes`, `IsInitialized`.
+
+Key methods: `RegisterTheme()`, `RegisterThemes()`, `Initialize()`, `SetTheme()`, `Reset()`.
+
+### Design Tokens
+
+This package ships `_tokens.scss`, the CSS custom property foundation for the entire MJ design system. Tokens cover colors, typography, spacing, effects, and z-index.
+
+Use semantic tokens in component SCSS:
+
+```scss
+.my-panel {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
+  padding: var(--mj-space-4);
+  border-radius: var(--mj-radius-md);
+}
+```
+
+For the full token catalog, architecture details, custom theme creation guide, and best practices, see **[THEMING.md](./THEMING.md)**.
+
 ## Dependencies
 
 - [@memberjunction/core](../../MJCore/README.md) -- Core MJ framework

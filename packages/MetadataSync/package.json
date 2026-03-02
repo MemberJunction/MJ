@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/metadata-sync",
   "type": "module",
-  "version": "5.2.0",
+  "version": "5.4.1",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "metadata",
@@ -29,14 +29,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/server-bootstrap-lite": "5.2.0",
-    "@memberjunction/config": "5.2.0",
-    "@memberjunction/core": "5.2.0",
-    "@memberjunction/core-entities": "5.2.0",
-    "@memberjunction/core-entities-server": "5.2.0",
-    "@memberjunction/global": "5.2.0",
-    "@memberjunction/graphql-dataprovider": "5.2.0",
-    "@memberjunction/sqlserver-dataprovider": "5.2.0",
+    "@memberjunction/server-bootstrap-lite": "5.4.1",
+    "@memberjunction/config": "5.4.1",
+    "@memberjunction/core": "5.4.1",
+    "@memberjunction/core-entities": "5.4.1",
+    "@memberjunction/core-entities-server": "5.4.1",
+    "@memberjunction/generic-database-provider": "5.4.1",
+    "@memberjunction/global": "5.4.1",
+    "@memberjunction/graphql-dataprovider": "5.4.1",
+    "@memberjunction/sqlserver-dataprovider": "5.4.1",
     "axios": "^1.13.4",
     "chalk": "^5.6.2",
     "chokidar": "^5.0.0",

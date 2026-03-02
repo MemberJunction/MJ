@@ -6,7 +6,7 @@ import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import sql from 'mssql';
+import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -34,7 +34,7 @@ export class EntitySubClassGeneratorBase {
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
    * @returns 
    */
-  public async generateAllEntitySubClasses(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
+  public async generateAllEntitySubClasses(pool: CodeGenConnection, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
     try {
       // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
       const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
@@ -71,7 +71,7 @@ export const loadModule = () => {
    * @param entity
    * @param includeFileHeader
    */
-  public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
@@ -94,7 +94,7 @@ export const loadModule = () => {
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
+          // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
@@ -272,7 +272,7 @@ ${fields}
     return entity.ParentEntityInfo?.Name ?? 'parent entity';
   }
 
-  public async LogAndGenerateValidateFunction(pool: sql.ConnectionPool, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
+  public async LogAndGenerateValidateFunction(pool: CodeGenConnection, entity: EntityInfo, skipDBUpdate: boolean): Promise<string | null> {
     // first generate the validate function
     const ret = this.GenerateValidateFunction(entity);
     if (ret && ret.code) {
@@ -413,8 +413,8 @@ ${validationFunctions}`
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
-          const sortedValues = [...e.EntityFieldValues].sort((a, b) => a.Sequence - b.Sequence);
+          // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want

@@ -1,5 +1,96 @@
 # @memberjunction/ng-conversations
 
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-testing@5.4.1
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/ng-artifacts@5.4.1
+- @memberjunction/ng-base-types@5.4.1
+- @memberjunction/ng-code-editor@5.4.1
+- @memberjunction/ng-container-directives@5.4.1
+- @memberjunction/ng-markdown@5.4.1
+- @memberjunction/ng-notifications@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/ng-tasks@5.4.1
+- @memberjunction/graphql-dataprovider@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-testing@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/ng-artifacts@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-tasks@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/ng-container-directives@5.4.0
+  - @memberjunction/ng-markdown@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.3.1
+- @memberjunction/ai@5.3.1
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/ng-testing@5.3.1
+- @memberjunction/ng-artifacts@5.3.1
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-code-editor@5.3.1
+- @memberjunction/ng-container-directives@5.3.1
+- @memberjunction/ng-markdown@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-tasks@5.3.1
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+- Updated dependencies [7af1846]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-artifacts@5.3.0
+  - @memberjunction/ng-testing@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ai-engine-base@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-tasks@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/ng-container-directives@5.3.0
+  - @memberjunction/ng-markdown@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
 ## 5.2.0
 
 ### Patch Changes

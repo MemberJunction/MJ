@@ -73,6 +73,7 @@ Thumbs.db
 .vscode/chrome
 
 *.env
+.env.*
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -155,3 +156,4 @@ coverage/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt
+docker/workbench/.env.database

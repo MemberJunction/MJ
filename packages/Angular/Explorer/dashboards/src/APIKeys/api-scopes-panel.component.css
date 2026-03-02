@@ -25,17 +25,17 @@
     gap: 10px;
     font-size: 18px;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     margin: 0 0 4px 0;
 }
 
 .panel-title i {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .panel-subtitle {
     font-size: 14px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     margin: 0;
 }
 
@@ -55,11 +55,11 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
 }
 
 .stat.active {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .stat i {
@@ -77,20 +77,20 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .btn-icon:hover {
-    background: var(--item-hover, #f3f4f6);
+    background: var(--mj-bg-surface-hover);
 }
 
 .btn-icon i {
     font-size: 14px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
 }
 
 .btn-create {
@@ -98,8 +98,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
     font-weight: 600;
@@ -110,7 +110,7 @@
 
 .btn-create:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
 }
 
 /* Messages */
@@ -125,28 +125,28 @@
 }
 
 .message.success {
-    background: #d1fae5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+    background: var(--mj-color-success-100);
+    color: var(--mj-color-success-800);
+    border: 1px solid var(--mj-status-success-border);
 }
 
 .message.error {
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fca5a5;
+    background: var(--mj-color-error-100);
+    color: var(--mj-color-error-700);
+    border: 1px solid var(--mj-status-error-border);
 }
 
 /* Scope Tree */
 .scope-tree {
     flex: 1;
     overflow-y: auto;
-    background: var(--card-background, #ffffff);
+    background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--mj-shadow-md);
 }
 
 .scope-node {
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--mj-border-default);
 }
 
 .scope-node:last-child {
@@ -161,7 +161,7 @@
 }
 
 .node-content:hover {
-    background: var(--item-hover, #f9fafb);
+    background: var(--mj-bg-surface-hover);
 }
 
 .node-content.inactive {
@@ -177,13 +177,13 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     transition: transform 0.2s ease;
     flex-shrink: 0;
 }
 
 .expand-btn:hover {
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
 }
 
 .expand-placeholder {
@@ -212,7 +212,7 @@
 
 .scope-icon i {
     font-size: 14px;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .scope-details {
@@ -226,15 +226,15 @@
     gap: 8px;
     font-size: 14px;
     font-weight: 500;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     flex-wrap: wrap;
 }
 
 .full-path {
     font-family: monospace;
     font-size: 12px;
-    color: var(--text-tertiary, #9ca3af);
-    background: var(--tag-background, #f3f4f6);
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
     padding: 2px 6px;
     border-radius: 4px;
 }
@@ -244,8 +244,8 @@
     font-weight: 500;
     padding: 2px 6px;
     border-radius: 4px;
-    background: #f3f4f6;
-    color: #6b7280;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
 }
 
 .scope-meta {
@@ -262,14 +262,14 @@
 }
 
 .resource-type {
-    color: var(--text-secondary, #6b7280);
-    background: var(--tag-background, #f3f4f6);
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-sunken);
     padding: 2px 6px;
     border-radius: 4px;
 }
 
 .description {
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -294,17 +294,17 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .btn-node-action:hover {
-    background: #10b981;
-    border-color: #10b981;
-    color: white;
+    background: var(--mj-status-success);
+    border-color: var(--mj-status-success);
+    color: var(--mj-text-inverse);
 }
 
 .btn-node-action i {
@@ -322,7 +322,7 @@
     align-items: center;
     justify-content: center;
     padding: 48px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     text-align: center;
 }
 
@@ -350,9 +350,8 @@
 :host ::ng-deep kendo-window {
     border-radius: 16px !important;
     overflow: hidden;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15),
-                0 10px 30px rgba(0, 0, 0, 0.1),
-                0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: var(--mj-shadow-2xl) !important;
+    background: var(--mj-bg-surface) !important;
 }
 
 :host ::ng-deep kendo-window .k-window-content {
@@ -360,6 +359,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: var(--mj-bg-surface) !important;
 }
 
 :host ::ng-deep kendo-window-titlebar {
@@ -367,8 +367,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 18px 24px !important;
-    background: linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%) !important;
-    border-bottom: 1px solid #e5e7eb !important;
+    background: var(--mj-bg-page) !important;
+    border-bottom: 1px solid var(--mj-border-default) !important;
 }
 
 .dialog-title {
@@ -377,17 +377,17 @@
     gap: 12px;
     font-weight: 600;
     font-size: 17px;
-    color: #1f2937;
+    color: var(--mj-text-primary);
 }
 
 .dialog-title i {
-    color: #10b981;
+    color: var(--mj-status-success);
     font-size: 18px;
 }
 
 .window-close-btn {
     margin-left: auto;
-    color: #9ca3af;
+    color: var(--mj-text-muted);
     transition: all 0.2s ease;
     width: 32px;
     height: 32px;
@@ -398,8 +398,8 @@
 }
 
 .window-close-btn:hover {
-    color: #374151;
-    background: rgba(0, 0, 0, 0.05);
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
 }
 
 .window-close-btn i {
@@ -426,7 +426,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: #374151;
+    color: var(--mj-text-primary);
     margin-bottom: 8px;
     letter-spacing: 0.01em;
 }
@@ -447,20 +447,22 @@
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 14px;
-    border-color: #e5e7eb;
+    border-color: var(--mj-border-default);
+    background: var(--mj-bg-surface) !important;
+    color: var(--mj-text-primary) !important;
     transition: all 0.2s ease;
 }
 
 :host ::ng-deep .form-input:focus-within,
 :host ::ng-deep .form-textarea:focus-within,
 :host ::ng-deep .form-field .k-dropdownlist.k-focus {
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 10%, transparent);
 }
 
 .field-hint {
     display: block;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--mj-text-secondary);
     margin-top: 6px;
     line-height: 1.4;
 }
@@ -480,15 +482,15 @@
     gap: 12px;
     cursor: pointer;
     padding: 12px 16px;
-    background: #f9fafb;
+    background: var(--mj-bg-page);
     border-radius: 10px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--mj-border-default);
     transition: all 0.2s ease;
 }
 
 .checkbox-label:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
 }
 
 .checkbox-label input {
@@ -498,14 +500,14 @@
 
 .checkbox-label span:first-of-type {
     font-weight: 600;
-    color: #374151;
+    color: var(--mj-text-primary);
     font-size: 14px;
 }
 
 .checkbox-hint {
     display: block;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--mj-text-secondary);
     margin-top: 4px;
     line-height: 1.4;
 }
@@ -515,8 +517,8 @@
     display: flex;
     gap: 12px;
     padding: 20px 24px;
-    background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
+    background: var(--mj-bg-page);
+    border-top: 1px solid var(--mj-border-default);
     margin: 0 -24px -24px -24px;
 }
 
@@ -529,12 +531,12 @@
 }
 
 :host ::ng-deep .dialog-actions .k-button-solid-primary {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
     border: none;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
 }
 
 :host ::ng-deep .dialog-actions .k-button-solid-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
 }

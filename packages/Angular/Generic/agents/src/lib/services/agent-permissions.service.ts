@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -106,7 +107,7 @@ export class AgentPermissionsService {
      */
     public async ResolveOwnerName(ownerUserId: string | null): Promise<string> {
         if (!ownerUserId) return 'Not Set';
-        const cached = this.users.find(u => u.ID === ownerUserId);
+        const cached = this.users.find(u => UUIDsEqual(u.ID, ownerUserId));
         if (cached) return cached.Name;
         const md = new Metadata();
         const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
@@ -146,8 +147,8 @@ export class AgentPermissionsService {
         return this.permissions.map(p => {
             const grantType: 'user' | 'role' = p.UserID ? 'user' : 'role';
             const grantedToName = p.UserID
-                ? this.users.find(u => u.ID === p.UserID)?.Name || 'Unknown User'
-                : this.roles.find(r => r.ID === p.RoleID)?.Name || 'Unknown Role';
+                ? this.users.find(u => UUIDsEqual(u.ID, p.UserID))?.Name || 'Unknown User'
+                : this.roles.find(r => UUIDsEqual(r.ID, p.RoleID))?.Name || 'Unknown Role';
 
             const effectiveCanDelete = p.CanDelete || false;
             const effectiveCanEdit = effectiveCanDelete || (p.CanEdit || false);
