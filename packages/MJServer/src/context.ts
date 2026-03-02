@@ -27,7 +27,14 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    jwt.verify(token, getSigningKeys(issuer), options, (err, jwt) => {
+    const verifyOptions: jwt.VerifyOptions = {};
+    if (Array.isArray(options.audience)) {
+      verifyOptions.audience = options.audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = options.audience;
+    }
+
+    jwt.verify(token, getSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
