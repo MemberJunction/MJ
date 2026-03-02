@@ -1,5 +1,22 @@
 # @memberjunction/ng-explorer-app
 
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ng-explorer-core@5.5.0
+  - @memberjunction/ng-bootstrap@5.5.0
+  - @memberjunction/ng-auth-services@5.5.0
+  - @memberjunction/ng-workspace-initializer@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

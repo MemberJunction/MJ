@@ -1,5 +1,27 @@
 # @memberjunction/ng-ai-test-harness
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-container-directives@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

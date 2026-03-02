@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

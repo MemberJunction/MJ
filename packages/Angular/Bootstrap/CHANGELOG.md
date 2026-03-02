@@ -1,5 +1,34 @@
 # @memberjunction/ng-bootstrap
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/ng-core-entity-forms@5.5.0
+  - @memberjunction/ng-explorer-core@5.5.0
+  - @memberjunction/ng-dashboards@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/ng-auth-services@5.5.0
+  - @memberjunction/ng-explorer-settings@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-artifacts@5.5.0
+  - @memberjunction/ng-dashboard-viewer@5.5.0
+  - @memberjunction/ng-file-storage@5.5.0
+  - @memberjunction/communication-types@5.5.0
+  - @memberjunction/entity-communications-base@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes
