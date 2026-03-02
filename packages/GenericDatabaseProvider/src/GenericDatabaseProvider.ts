@@ -1551,7 +1551,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             if (params.CategoryID) {
-                const byId = matchingQueries.find(q => q.CategoryID === params.CategoryID);
+                const byId = matchingQueries.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
                 if (byId) return byId;
             }
 
@@ -1586,7 +1586,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (CategoryPath) {
                 const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
                 if (resolvedCategoryId) {
-                    const byPath = matches.find(q => q.CategoryID === resolvedCategoryId);
+                    const byPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
                     if (byPath) return byPath;
                 }
             }
@@ -1622,7 +1622,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         for (const segment of segments) {
             const parentId: string | null = currentCategory !== null ? currentCategory.ID : null;
             currentCategory = this.QueryCategories.find(cat =>
-                cat.Name.trim().toLowerCase() === segment.toLowerCase() && cat.ParentID === parentId,
+                cat.Name.trim().toLowerCase() === segment.toLowerCase() && UUIDsEqual(cat.ParentID, parentId),
             ) ?? null;
             if (!currentCategory) return null;
         }

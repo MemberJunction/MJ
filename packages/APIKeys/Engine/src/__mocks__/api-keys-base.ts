@@ -86,17 +86,17 @@ export class APIKeysEngineBase {
 
     GetApplicationScopeRules(applicationId: string, scopeId: string): MJAPIApplicationScopeEntity[] {
         return _applicationScopes.filter(
-            rule => rule.ApplicationID === applicationId && rule.ScopeID === scopeId
+            rule => UUIDsEqual(rule.ApplicationID, applicationId) && UUIDsEqual(rule.ScopeID, scopeId)
         );
     }
 
     GetKeyApplicationsByKeyId(apiKeyId: string): MJAPIKeyApplicationEntity[] {
-        return _keyApplications.filter(ka => ka.APIKeyID === apiKeyId);
+        return _keyApplications.filter(ka => UUIDsEqual(ka.APIKeyID, apiKeyId));
     }
 
     GetKeyScopeRules(apiKeyId: string, scopeId: string): MJAPIKeyScopeEntity[] {
         return _keyScopes.filter(
-            ks => ks.APIKeyID === apiKeyId && ks.ScopeID === scopeId
+            ks => UUIDsEqual(ks.APIKeyID, apiKeyId) && UUIDsEqual(ks.ScopeID, scopeId)
         );
     }
 }

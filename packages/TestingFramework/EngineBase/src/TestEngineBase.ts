@@ -195,7 +195,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * Get tests by type
      */
     public GetTestsByType(typeId: string): MJTestEntity[] {
-        return this._tests.filter(t => t.TypeID === typeId);
+        return this._tests.filter(t => UUIDsEqual(t.TypeID, typeId));
     }
 
     /**

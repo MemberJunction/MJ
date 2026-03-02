@@ -228,7 +228,7 @@ export class RerankerService {
     ): Promise<{ driverClass: string | null; apiKey: string | null; apiName: string | null }> {
         // Find the active model vendor relationship
         const modelVendors = AIEngine.Instance.ModelVendors.filter(
-            mv => mv.ModelID === model.ID && mv.Status === 'Active'
+            mv => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active'
         );
 
         if (modelVendors.length === 0) {

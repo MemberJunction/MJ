@@ -178,7 +178,7 @@ export class BaseApplication {
 
       // Find preferences for this app with App scope
       const appPreferences = allPreferences.filter(
-        p => p.Scope === 'App' && p.ApplicationID === this.ID
+        p => p.Scope === 'App' && UUIDsEqual(p.ApplicationID, this.ID)
       );
 
       // First, look for user-specific preferences

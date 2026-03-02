@@ -1319,7 +1319,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     if (agentMessages.length === 0) {
       return { payload: null, artifactInfo: null };
@@ -1988,7 +1988,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service

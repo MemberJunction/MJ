@@ -828,7 +828,7 @@ ${compactHistory}${artifactContext}
 
       // O(1) lookup for agent run from pre-loaded data
       const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || agentRun.AgentID !== agentId || agentRun.Status !== 'Completed') {
+      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
         continue;
       }
 

@@ -2161,7 +2161,7 @@ export class AIPromptRunner {
 
     // Then add other vendors in priority order
     for (const vendor of modelVendors) {
-      if (vendor.VendorID !== preferredVendorId) {
+      if (!UUIDsEqual(vendor.VendorID, preferredVendorId)) {
         modelCandidates.push({
           model,
           vendorId: vendor.VendorID,

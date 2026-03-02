@@ -1495,7 +1495,7 @@ async function loadActionTools(
                         }
 
                         // Build action params
-                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
+                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                         const paramsRecord = props.params as Record<string, unknown> | undefined;
                         const runParams: RunActionParams = {
                             Action: action,
@@ -1551,7 +1551,7 @@ async function loadActionTools(
                         return JSON.stringify({ error: "Action not found" });
                     }
 
-                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => p.ActionID === action!.ID);
+                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                     return JSON.stringify({
                         actionId: action.ID,
                         actionName: action.Name,
