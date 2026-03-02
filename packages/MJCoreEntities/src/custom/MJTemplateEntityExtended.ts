@@ -1,6 +1,6 @@
 import { BaseEntity, ValidationResult } from "@memberjunction/core";
 import { MJTemplateContentEntity, MJTemplateEntity, MJTemplateParamEntity } from "../generated/entity_subclasses";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, 'MJ: Templates')
 export class MJTemplateEntityExtended extends MJTemplateEntity {
@@ -69,7 +69,7 @@ export class MJTemplateEntityExtended extends MJTemplateEntity {
         // Return both global parameters and content-specific parameters
         return this.Params.filter(p =>
             !p.TemplateContentID || // Global param (applies to all contents)
-            p.TemplateContentID === contentId // Content-specific param
+            UUIDsEqual(p.TemplateContentID, contentId) // Content-specific param
         );
     }
 

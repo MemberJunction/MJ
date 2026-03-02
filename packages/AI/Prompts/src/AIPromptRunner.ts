@@ -1665,7 +1665,7 @@ export class AIPromptRunner {
     }
 
     // Check model type compatibility
-    if (prompt.AIModelTypeID && model.AIModelTypeID !== prompt.AIModelTypeID) {
+    if (prompt.AIModelTypeID && !UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID)) {
       return [];
     }
 

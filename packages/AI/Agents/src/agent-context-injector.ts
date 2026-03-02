@@ -534,10 +534,10 @@ export class AgentContextInjector {
         }
 
         // Primary scope must match (both entity ID and record ID)
-        if (entity.PrimaryScopeRecordID !== primaryScopeRecordId) {
+        if (!UUIDsEqual(entity.PrimaryScopeRecordID, primaryScopeRecordId)) {
             return false;
         }
-        if (primaryScopeEntityId && entity.PrimaryScopeEntityID && entity.PrimaryScopeEntityID !== primaryScopeEntityId) {
+        if (primaryScopeEntityId && entity.PrimaryScopeEntityID && !UUIDsEqual(entity.PrimaryScopeEntityID, primaryScopeEntityId)) {
             return false;
         }
 

@@ -2348,7 +2348,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (success) {
                         // Remove from unified list
                         const index = this.allSubAgents.findIndex(s =>
-                            s.type === 'related' && s.relationship?.ID === item.relationship!.ID
+                            s.type === 'related' && UUIDsEqual(s.relationship?.ID, item.relationship!.ID)
                         );
                         if (index >= 0) {
                             this.allSubAgents.splice(index, 1);

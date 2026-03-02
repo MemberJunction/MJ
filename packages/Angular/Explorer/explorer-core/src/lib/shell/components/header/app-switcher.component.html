@@ -18,14 +18,14 @@
       @for (app of apps; track app) {
         <div
           class="app-switcher-item"
-          [class.active]="app.ID === activeApp?.ID"
-          [class.loading]="app.ID === loadingAppId"
+          [class.active]="IsActiveApp(app)"
+          [class.loading]="IsLoadingApp(app)"
           [style.--item-color]="app.GetColor()"
           (click)="selectApp(app)">
-          @if (app.ID === loadingAppId) {
+          @if (IsLoadingApp(app)) {
             <i class="fa-solid fa-spinner fa-spin"></i>
           }
-          @if (app.ID !== loadingAppId) {
+          @if (!IsLoadingApp(app)) {
             <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
           }
           <span>{{ app.Name }}</span>

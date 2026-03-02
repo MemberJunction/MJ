@@ -8,7 +8,7 @@
  * Each test stores data with one case and looks it up with the opposite case,
  * simulating a cross-database scenario.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 // Pass through real UUID utilities — these are the functions we're testing integration with
 vi.mock('@memberjunction/global', async () => {
@@ -62,9 +62,16 @@ const UUID_OTHER = 'BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF';
 
 describe('UUID Cross-Database Compliance', () => {
     describe('MCPEngine', () => {
-        it('should find server by ID regardless of UUID case', async () => {
-            const { MCPEngine } = await import('../engines/MCPEngine');
-            const engine = MCPEngine.Instance;
+        let MCPEngineClass: Awaited<typeof import('../engines/MCPEngine')>['MCPEngine'];
+
+        // First dynamic import resolves the full module graph — can be slow on CI
+        beforeAll(async () => {
+            const mod = await import('../engines/MCPEngine');
+            MCPEngineClass = mod.MCPEngine;
+        }, 15000);
+
+        it('should find server by ID regardless of UUID case', () => {
+            const engine = MCPEngineClass.Instance;
 
             // Simulate data loaded from SQL Server (uppercase)
             (engine as Record<string, unknown>)['_Servers'] = [
@@ -78,9 +85,8 @@ describe('UUID Cross-Database Compliance', () => {
             expect(found?.Name).toBe('Test Server');
         });
 
-        it('should find connection by ID regardless of UUID case', async () => {
-            const { MCPEngine } = await import('../engines/MCPEngine');
-            const engine = MCPEngine.Instance;
+        it('should find connection by ID regardless of UUID case', () => {
+            const engine = MCPEngineClass.Instance;
 
             (engine as Record<string, unknown>)['_Connections'] = [
                 { ID: UUID_LOWER, Name: 'Test Connection' },
@@ -92,9 +98,8 @@ describe('UUID Cross-Database Compliance', () => {
             expect(found?.Name).toBe('Test Connection');
         });
 
-        it('should find tool by ID regardless of UUID case', async () => {
-            const { MCPEngine } = await import('../engines/MCPEngine');
-            const engine = MCPEngine.Instance;
+        it('should find tool by ID regardless of UUID case', () => {
+            const engine = MCPEngineClass.Instance;
 
             (engine as Record<string, unknown>)['_Tools'] = [
                 { ID: UUID_UPPER, Name: 'Test Tool' },

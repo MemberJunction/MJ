@@ -569,4 +569,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         this.zone.run(() => this.cdr.markForCheck());
     }
+
+    /** Case-insensitive UUID check whether a query is the currently selected query. */
+    public IsQuerySelected(query: QueryInfo): boolean {
+        return UUIDsEqual(this.selectedQuery?.ID, query.ID);
+    }
 }

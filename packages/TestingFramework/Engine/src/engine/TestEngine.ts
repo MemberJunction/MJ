@@ -17,7 +17,7 @@ import {
     MJTestSuiteRunEntity,
     MJTestTypeEntity
 } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
@@ -420,7 +420,7 @@ export class TestEngine extends TestEngineBase {
         options: SuiteRunOptions
     ): MJTestEntity[] {
         // Get suite test mappings to access sequence numbers
-        const suiteTests = this.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+        const suiteTests = this.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId));
 
         // Create a map of testId -> sequence for efficient lookup
         const testSequenceMap = new Map<string, number>();

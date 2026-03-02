@@ -263,7 +263,7 @@
                   <span class="hierarchy-label">Parent:</span>
                   <span class="hierarchy-name">
                     @for (pl of AllLabels; track pl) {
-                      @if (pl.ID === Label.ParentID) {
+                      @if (IsParentLabel(pl)) {
                         <span>{{pl.Name}}</span>
                       }
                     }

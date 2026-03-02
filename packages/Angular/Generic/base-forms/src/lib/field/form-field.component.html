@@ -102,13 +102,13 @@
               <input type="text"
                 class="mj-forms-field-input"
                 [value]="FormatValue()"
-                (change)="OnInputChange($event)">
+                (input)="OnInputChange($event)">
             }
             @case ('textarea') {
               <textarea
                 class="mj-forms-field-input mj-forms-field-input--textarea"
                 [value]="FormatValue()"
-                (change)="OnInputChange($event)"></textarea>
+                (input)="OnInputChange($event)"></textarea>
             }
             @case ('number') {
               <input type="number"
