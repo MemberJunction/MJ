@@ -25,8 +25,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'clean',
   'migrate',
 
-  // Install wizard - uses zod, recast, fs-extra only
+  // Install wizard - uses @memberjunction/installer engine (lightweight, no bootstrap)
   'install',
+
+  // Doctor - uses @memberjunction/installer engine (lightweight, no bootstrap)
+  'doctor',
 
   // Topic index commands (just display help text, no heavy imports)
   'ai',

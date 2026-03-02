@@ -1,0 +1,1314 @@
+/**
+ * Phase H — CodeGen + Validation
+ *
+ * Runs `mj codegen` to generate TypeScript entity classes, action classes,
+ * SQL objects, and Angular form components from database schema and metadata.
+ * Validates that required artifacts are produced and applies post-codegen
+ * fixups to ensure class registration manifests and known-issue patches
+ * are current.
+ *
+ * **Artifact verification** is two-tier:
+ * - `mj_generatedentities` in `node_modules/` — **critical** (blocks install if missing).
+ * - `packages/GeneratedEntities` — **secondary** (warns if missing, does not block).
+ *
+ * **Retry strategy**: If codegen fails on the first attempt (common when AFTER
+ * commands leave stale `dist/` from a partial build), the phase runs a full
+ * `npm run build` to restore consistency, then retries codegen once. Timeouts
+ * are not retried (they indicate deeper connectivity or performance issues).
+ *
+ * **Post-codegen pipeline** (4 steps after successful codegen):
+ * 1. Force-rebuild codegen output packages (`.d.ts` exports must reflect new classes).
+ * 2. Regenerate class registration manifest `.ts` files via `npm run mj:manifest`.
+ * 3. Force-rebuild manifest packages (compile freshly generated `.ts` to `.js`).
+ * 4. Apply known-issue source patches and rebuild affected packages.
+ *
+ * **Fast mode** (`--fast`): Quick-checks manifest files for stale entity names
+ * and compares source/dist timestamps. If everything looks current, Steps 1-3
+ * are skipped entirely (saving ~2-3 minutes). Step 4 always runs.
+ *
+ * @module phases/CodeGenPhase
+ * @see DependencyPhase — must complete before codegen (packages must be built).
+ * @see MigratePhase — must complete before codegen (schema must be current).
+ * @see SmokeTestPhase — runs after codegen to verify the generated code works.
+ */
+
+import path from 'node:path';
+import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
+import { InstallerError } from '../errors/InstallerError.js';
+import { ProcessRunner } from '../adapters/ProcessRunner.js';
+import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+
+/**
+ * Input context for the codegen phase.
+ *
+ * @see CodeGenPhase.Run
+ */
+export interface CodeGenContext {
+  /** Absolute path to the repo root (where `npx mj codegen` is executed). */
+  Dir: string;
+  /** Event emitter for progress, warn, and log events. */
+  Emitter: InstallerEventEmitter;
+  /**
+   * Fast mode: skip post-codegen Steps 1-3 (force-rebuild + manifest regen +
+   * manifest rebuild) if manifest files already look correct. Step 4
+   * (known-issue patches) always runs regardless of this flag.
+   */
+  Fast?: boolean;
+}
+
+/**
+ * Result of the codegen phase.
+ *
+ * @see CodeGenPhase.Run
+ */
+export interface CodeGenResult {
+  /** Whether codegen completed successfully (exited 0 and critical artifacts exist). */
+  Success: boolean;
+  /** Whether **all** artifacts were verified (both critical and secondary). */
+  ArtifactsVerified: boolean;
+  /** Whether a full rebuild + retry was needed to produce artifacts. */
+  RetryUsed: boolean;
+}
+
+/**
+ * A known issue that can be detected and patched in source files of the
+ * installed repo. Each patch targets a specific file and applies a
+ * deterministic text transformation.
+ */
+export interface KnownIssuePatch {
+  /** Unique identifier for this patch */
+  Id: string;
+  /** Human-readable description of the issue and fix */
+  Description: string;
+  /** File to patch, relative to the repo root */
+  RelativePath: string;
+  /** Package directory (relative to repo root) that needs rebuilding after the patch */
+  PackageRelativeDir: string;
+  /** Returns true if the file content contains the known issue (needs patching) */
+  NeedsPatch: (content: string) => boolean;
+  /** Apply the patch and return the new file content */
+  Apply: (content: string) => string;
+}
+
+/** Result of a known-issue diagnostic check (used by mj doctor) */
+export interface KnownIssueDiagnostic {
+  /** Patch ID */
+  Id: string;
+  /** Whether the issue was found, already fixed, or couldn't be checked */
+  Status: 'needs_patch' | 'ok' | 'skipped';
+  /** Description of the issue */
+  Description: string;
+  /** File path relative to repo root */
+  RelativePath: string;
+}
+
+/**
+ * Phase H — Runs MJ CodeGen, verifies artifacts, and applies post-codegen fixups.
+ *
+ * This is the most complex phase in the install pipeline. After code generation
+ * succeeds, it runs a 4-step post-codegen pipeline to ensure class registration
+ * manifests are current and known source-level issues are patched.
+ *
+ * @example
+ * ```typescript
+ * const codeGen = new CodeGenPhase();
+ * const result = await codeGen.Run({
+ *   Dir: '/path/to/install',
+ *   Emitter: emitter,
+ *   Fast: false,
+ * });
+ * if (result.RetryUsed) {
+ *   console.log('CodeGen needed a rebuild + retry');
+ * }
+ * ```
+ */
+export class CodeGenPhase {
+  private processRunner = new ProcessRunner();
+  private fileSystem = new FileSystemAdapter();
+
+  /**
+   * Execute the codegen phase: run `mj codegen`, verify artifacts, retry if needed,
+   * then run the post-codegen pipeline (manifest regen + known-issue patches).
+   *
+   * @param context - Codegen input with directory, emitter, and fast-mode flag.
+   * @returns Codegen result with success status, artifact verification, and retry flag.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry.
+   */
+  async Run(context: CodeGenContext): Promise<CodeGenResult> {
+    const { Emitter: emitter } = context;
+
+    // --- First attempt ---
+    const firstResult = await this.attemptCodeGen(context.Dir, emitter);
+
+    if (firstResult.Success) {
+      // Codegen succeeded — regenerate class registration manifests and rebuild.
+      // The manifests (mj-class-registrations.ts in ServerBootstrap, etc.) are
+      // generated by `mj codegen manifest`, not by `mj codegen`. The initial
+      // build's `postbuild` may not have run if it was a partial build, so the
+      // pre-built manifests from the release could reference stale entity names.
+      await this.regenerateManifestsAndRebuild(context.Dir, emitter, context.Fast ?? false);
+      return { Success: true, ArtifactsVerified: firstResult.AllArtifactsVerified, RetryUsed: false };
+    }
+
+    // --- First attempt failed (codegen crash OR missing critical artifacts) ---
+    // Common cause: a previous codegen run's AFTER commands failed, leaving
+    // dist/ directories with stale compiled .js that reference generated .ts
+    // files which were never compiled. A full rebuild restores consistency.
+    emitter.Emit('warn', {
+      Type: 'warn',
+      Phase: 'codegen',
+      Message: `First codegen attempt failed: ${firstResult.FailureReason}. Rebuilding packages before retry...`,
+    });
+
+    await this.rebuildPackages(context.Dir, emitter);
+
+    // --- Second attempt (throws on failure — no more retries) ---
+    const secondResult = await this.attemptCodeGen(context.Dir, emitter);
+
+    if (secondResult.Success) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Code generation completed after rebuild + retry.',
+      });
+      await this.regenerateManifestsAndRebuild(context.Dir, emitter, context.Fast ?? false);
+      return { Success: true, ArtifactsVerified: secondResult.AllArtifactsVerified, RetryUsed: true };
+    }
+
+    // Still failing after rebuild + retry
+    throw new InstallerError(
+      'codegen',
+      'CODEGEN_FAILED',
+      `Code generation failed after rebuild and retry: ${secondResult.FailureReason}`,
+      'Run "npm run build" then "mj codegen" manually to see full error output. Verify database connectivity and that migrations have been applied.'
+    );
+  }
+
+  /**
+   * Runs codegen and verifies artifacts. Returns a result object instead of
+   * throwing, so the caller can decide whether to retry.
+   * Only timeouts throw immediately (not recoverable by rebuild).
+   */
+  private async attemptCodeGen(
+    dir: string,
+    emitter: InstallerEventEmitter
+  ): Promise<{ Success: boolean; AllArtifactsVerified: boolean; AfterCommandsFailed: boolean; FailureReason: string }> {
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Running code generation...',
+    });
+
+    const codegenResult = await this.runCodeGen(dir, emitter);
+
+    if (!codegenResult.Success) {
+      return { Success: false, AllArtifactsVerified: false, AfterCommandsFailed: false, FailureReason: codegenResult.ErrorSummary };
+    }
+
+    // Codegen exited 0 — verify artifacts
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Verifying generated artifacts...',
+    });
+
+    const artifacts = await this.verifyArtifacts(dir, emitter);
+
+    if (artifacts.CriticalPassed) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Code generation completed and artifacts verified.',
+      });
+      return {
+        Success: true,
+        AllArtifactsVerified: artifacts.AllPassed,
+        AfterCommandsFailed: codegenResult.AfterCommandsFailed,
+        FailureReason: '',
+      };
+    }
+
+    return { Success: false, AllArtifactsVerified: false, AfterCommandsFailed: codegenResult.AfterCommandsFailed, FailureReason: 'critical artifact mj_generatedentities not found' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // CodeGen execution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Execute `npx mj codegen` and return structured results.
+   *
+   * Detects AFTER command failures in the codegen output — these indicate that
+   * post-generation build steps failed, leaving `dist/` directories with stale
+   * compiled `.js` that references generated `.ts` files which were never compiled.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress reporting.
+   * @returns Structured result with success flag, AFTER-command failure detection, and error summary.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 10 minutes.
+   */
+  private async runCodeGen(
+    dir: string,
+    emitter: InstallerEventEmitter
+  ): Promise<{ Success: boolean; AfterCommandsFailed: boolean; ErrorSummary: string }> {
+    const result = await this.processRunner.Run('npx', ['mj', 'codegen'], {
+      Cwd: dir,
+      TimeoutMs: 600_000, // 10 minutes
+      OnStdout: (line: string) => {
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'codegen',
+          Message: line.trim(),
+        });
+      },
+      OnStderr: (line: string) => {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `[codegen:stderr] ${line.trim()}`,
+        });
+      },
+    });
+
+    // Timeouts are not recoverable by rebuild — throw immediately
+    if (result.TimedOut) {
+      throw new InstallerError(
+        'codegen',
+        'CODEGEN_TIMEOUT',
+        'Code generation timed out after 10 minutes.',
+        'Run "mj codegen" manually. Check that the database is accessible and migrations are applied.'
+      );
+    }
+
+    if (result.ExitCode !== 0) {
+      const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+      return { Success: false, AfterCommandsFailed: false, ErrorSummary: `exit code ${result.ExitCode}: ${lastLines}` };
+    }
+
+    // Log AFTER command output if present
+    this.saveAfterLog(dir, result.Stdout, result.Stderr, emitter);
+
+    // Detect AFTER command failures: codegen exited 0 but post-generation
+    // build steps failed, leaving dist/ directories with stale .js that
+    // reference generated .ts files which were never compiled.
+    const afterFailed = /COMMAND:.*FAILED/i.test(result.Stderr);
+
+    return { Success: true, AfterCommandsFailed: afterFailed, ErrorSummary: '' };
+  }
+
+  /**
+   * Save CodeGen AFTER command output to a log file for diagnostics.
+   *
+   * Non-critical — failures to write the log are silently ignored.
+   *
+   * @param dir - Repo root directory.
+   * @param stdout - Full stdout from the codegen process.
+   * @param stderr - Full stderr from the codegen process.
+   * @param emitter - Event emitter for verbose logging.
+   */
+  private saveAfterLog(dir: string, stdout: string, stderr: string, emitter: InstallerEventEmitter): void {
+    if (!stdout.includes('AFTER') && !stderr.includes('AFTER')) return;
+
+    const logDir = path.join(dir, 'logs');
+    const logPath = path.join(logDir, 'mj-codegen-after.log');
+    this.fileSystem.WriteText(logPath, stdout + '\n' + stderr)
+      .then(() => {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `CodeGen AFTER output saved to ${logPath}`,
+        });
+      })
+      .catch(() => {
+        // non-critical
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Artifact verification
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Verify that codegen produced the expected artifacts.
+   *
+   * Two-tier check:
+   * - **Critical**: `node_modules/mj_generatedentities` must exist (MJAPI can't start without it).
+   * - **Secondary**: `packages/GeneratedEntities` is expected but absence is only a warning.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for diagnostic logging.
+   * @returns Object indicating whether critical and all artifacts passed verification.
+   */
+  private async verifyArtifacts(
+    dir: string,
+    emitter: InstallerEventEmitter
+  ): Promise<{ CriticalPassed: boolean; AllPassed: boolean }> {
+    // Critical: mj_generatedentities must exist in node_modules for the app to run.
+    // Secondary: packages/GeneratedEntities is expected but its absence is a warning, not a blocker.
+    const criticalPath = path.join(dir, 'node_modules', 'mj_generatedentities');
+    const secondaryPath = path.join(dir, 'packages', 'GeneratedEntities');
+
+    const criticalExists = await this.fileSystem.DirectoryExists(criticalPath);
+    const secondaryExists = await this.fileSystem.DirectoryExists(secondaryPath);
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `[codegen] mj_generatedentities package: ${criticalExists ? 'found' : 'NOT found'}`,
+    });
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `[codegen] packages/GeneratedEntities directory: ${secondaryExists ? 'found' : 'NOT found'}`,
+    });
+
+    if (!secondaryExists && criticalExists) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: 'packages/GeneratedEntities not found. This is non-critical but may indicate an incomplete codegen run.',
+      });
+    }
+
+    return {
+      CriticalPassed: criticalExists,
+      AllPassed: criticalExists && secondaryExists,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rebuild packages (recovery before retry)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Packages that contain generated code managed by CodeGen. Build failures in
+   * only these packages are tolerated — codegen will regenerate the stale code.
+   */
+  private static readonly CODEGEN_MANAGED_PACKAGES = [
+    'ng-core-entity-forms',
+    'server-bootstrap-lite',
+    'server-bootstrap',
+    'ng-bootstrap',
+  ];
+
+  /**
+   * Full workspace rebuild to restore consistency before retrying codegen.
+   *
+   * Runs `npm run build` at the repo root. Tolerates build failures in
+   * codegen-managed packages (they contain stale generated code that the
+   * retry will regenerate). Non-codegen build failures are hard errors.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress and warning reporting.
+   * @throws {InstallerError} With code `CODEGEN_FAILED` on timeout or non-codegen build failures.
+   */
+  private async rebuildPackages(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Rebuilding packages to restore consistent state...',
+    });
+
+    const result = await this.processRunner.Run('npm', ['run', 'build'], {
+      Cwd: dir,
+      TimeoutMs: 1_800_000, // 30 minutes — same as DependencyPhase
+      OnStdout: (line: string) => {
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'codegen',
+          Message: line.trim(),
+        });
+      },
+      OnStderr: (line: string) => {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `[codegen:rebuild:stderr] ${line.trim()}`,
+        });
+      },
+    });
+
+    if (result.TimedOut) {
+      throw new InstallerError(
+        'codegen',
+        'CODEGEN_FAILED',
+        'Package rebuild timed out after 30 minutes during codegen retry preparation.',
+        'Run "npm run build" manually at the repo root, then re-run "mj codegen".'
+      );
+    }
+
+    if (result.ExitCode === 0) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Package rebuild completed successfully.',
+      });
+      return;
+    }
+
+    // Build failed — tolerate failures in codegen-managed packages only.
+    // These contain stale generated code that codegen will regenerate.
+    // Codegen itself only needs server-side packages (not Angular forms).
+    const combinedOutput = result.Stdout + '\n' + result.Stderr;
+    const failedPackages = this.extractFailedTurboPackages(combinedOutput);
+    const onlyCodegenFailures = failedPackages.length > 0
+      && failedPackages.every(pkg =>
+        CodeGenPhase.CODEGEN_MANAGED_PACKAGES.some(pattern => pkg.includes(pattern))
+      );
+
+    if (onlyCodegenFailures) {
+      const failList = failedPackages.join(', ');
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: `Rebuild partially succeeded. Failed packages (${failList}) contain stale generated code — codegen will fix them.`,
+      });
+      return;
+    }
+
+    const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+    throw new InstallerError(
+      'codegen',
+      'CODEGEN_FAILED',
+      `Package rebuild failed (exit code ${result.ExitCode}):\n${lastLines}`,
+      'Run "npm run build" manually at the repo root to see full error output, then re-run "mj codegen".'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Post-codegen manifest regeneration + rebuild
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Known stale entity import patterns to check for in manifest files.
+   * These are entity class names that were renamed with the "MJ" prefix
+   * in 5.0.0+ but may still appear in stale pre-built manifests from
+   * release zips that were not fully compiled after renaming.
+   */
+  private static readonly STALE_ENTITY_PATTERNS = [
+    'AIActionEntity',           // renamed to MJAIActionEntity
+    'AIAgentActionEntity',      // renamed to MJAIAgentActionEntity
+    'EntityAIActionEntity',     // renamed to MJEntityAIActionEntity
+  ];
+
+  /**
+   * Manifest source files that should be regenerated after codegen.
+   * Paths are relative to the repo root.
+   */
+  private static readonly MANIFEST_SOURCE_PATHS = [
+    'packages/ServerBootstrap/src/generated/mj-class-registrations.ts',
+    'packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts',
+    'packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts',
+  ];
+
+  /**
+   * After codegen succeeds, ensure class registration manifests and their
+   * compiled output are up-to-date, and apply known source-level fixes.
+   *
+   * The flow:
+   *  1. Force-rebuild codegen output packages so their .d.ts exports reflect
+   *     the latest generated entity class names.
+   *  2. Regenerate manifest .ts files using `npm run mj:manifest` (which reads
+   *     .d.ts to verify exported classes).
+   *  3. Force-rebuild the manifest packages so the compiled .js matches
+   *     the freshly generated .ts source.
+   *  4. Apply known-issue source patches (e.g. null-safety fixes for fresh
+   *     installs) and rebuild affected packages.
+   */
+  private async regenerateManifestsAndRebuild(dir: string, emitter: InstallerEventEmitter, fast: boolean): Promise<void> {
+    // In fast mode, quick-check manifests first. If they already look correct
+    // (no stale entity names), skip the expensive Steps 1-3 entirely.
+    if (fast) {
+      const manifestsClean = await this.quickCheckManifests(dir, emitter);
+      if (manifestsClean) {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'info',
+          Message: 'Fast mode: manifests look correct — skipping post-codegen rebuild steps 1-3.',
+        });
+        // Still apply known-issue patches (Step 4) — fast and essential.
+        await this.applyKnownIssuePatches(dir, emitter);
+        return;
+      }
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Fast mode: stale manifest content detected — falling back to full rebuild.',
+      });
+    }
+
+    // Step 1: Force-rebuild codegen output packages.
+    // After `mj codegen`, packages like MJCoreEntities have regenerated
+    // .ts source, but turbo may serve stale cached .d.ts if the hash is
+    // unchanged. Force-rebuilding ensures .d.ts exports are current.
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Post-codegen step 1/4: force-rebuilding codegen output packages...',
+    });
+    await this.forceRebuildCodegenOutputPackages(dir, emitter);
+
+    // Step 2: Regenerate manifest .ts files.
+    // The manifest generator scans source for @RegisterClass decorators and
+    // verifies them against .d.ts exports. Step 1 ensures .d.ts is current.
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Post-codegen step 2/4: regenerating class registration manifests...',
+    });
+    const manifestRegenOk = await this.regenerateManifests(dir, emitter);
+
+    // If manifest regeneration failed (e.g. mj CLI can't load the codegen
+    // command), fall back to directly patching the stale entity names in the
+    // manifest .ts files. This handles the common case where the only issue
+    // is the entity class rename (FooEntity → MJFooEntity).
+    if (!manifestRegenOk) {
+      await this.patchStaleManifestImports(dir, emitter);
+    }
+
+    // Diagnostic: verify manifest content isn't stale
+    await this.verifyManifestContent(dir, emitter);
+
+    // Step 3: Force-rebuild manifest packages.
+    // Manifest .ts files were just updated — must force-compile to .js.
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Post-codegen step 3/4: force-rebuilding manifest packages...',
+    });
+    await this.forceRebuildManifestPackages(dir, emitter);
+
+    // Step 4: Apply known-issue patches.
+    // Proactively fix source-level issues (e.g. null-safety bugs) that only
+    // manifest on fresh installs with empty datasets/metadata.
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Post-codegen step 4/4: applying known-issue patches...',
+    });
+    await this.applyKnownIssuePatches(dir, emitter);
+  }
+
+  /**
+   * Codegen output packages whose source vs dist timestamps must match
+   * for fast mode to skip the rebuild. If codegen regenerated the source
+   * (entity_subclasses.ts) but the compiled output (entity_subclasses.d.ts)
+   * is older, Steps 1-3 are needed.
+   */
+  private static readonly CODEGEN_TIMESTAMP_CHECKS: Array<{
+    SourceRelPath: string;
+    DistRelPath: string;
+  }> = [
+    {
+      SourceRelPath: 'packages/MJCoreEntities/src/generated/entity_subclasses.ts',
+      DistRelPath: 'packages/MJCoreEntities/dist/generated/entity_subclasses.d.ts',
+    },
+    {
+      SourceRelPath: 'packages/Actions/CoreActions/src/generated/action_subclasses.ts',
+      DistRelPath: 'packages/Actions/CoreActions/dist/generated/action_subclasses.d.ts',
+    },
+  ];
+
+  /**
+   * Quick-check whether the full post-codegen rebuild cycle (Steps 1-3)
+   * can be safely skipped.
+   *
+   * Returns true only if:
+   *  1. No codegen output source files are newer than their compiled dist
+   *     (meaning codegen didn't regenerate them, or they've already been rebuilt).
+   *  2. No manifest files contain known stale entity names.
+   *
+   * If either condition fails, the full rebuild cycle is required.
+   */
+  private async quickCheckManifests(dir: string, emitter: InstallerEventEmitter): Promise<boolean> {
+    // Check 1: Are codegen output packages already compiled and up-to-date?
+    for (const check of CodeGenPhase.CODEGEN_TIMESTAMP_CHECKS) {
+      const srcTime = await this.fileSystem.GetModifiedTime(path.join(dir, check.SourceRelPath));
+      const distTime = await this.fileSystem.GetModifiedTime(path.join(dir, check.DistRelPath));
+
+      if (srcTime == null || distTime == null) {
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'codegen',
+          Message: `Fast mode check: missing file — ${srcTime == null ? check.SourceRelPath : check.DistRelPath}`,
+        });
+        return false;
+      }
+
+      if (srcTime > distTime) {
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'codegen',
+          Message: `Fast mode check: ${check.SourceRelPath} is newer than compiled output — rebuild needed.`,
+        });
+        return false;
+      }
+    }
+
+    // Check 2: Do manifest files contain known stale entity names?
+    for (const relPath of CodeGenPhase.MANIFEST_SOURCE_PATHS) {
+      const fullPath = path.join(dir, relPath);
+      try {
+        const content = await this.fileSystem.ReadText(fullPath);
+        const staleFound = CodeGenPhase.STALE_ENTITY_PATTERNS.filter(
+          name => new RegExp(`\\b${name}\\b`).test(content)
+        );
+        if (staleFound.length > 0) {
+          emitter.Emit('step:progress', {
+            Type: 'step:progress',
+            Phase: 'codegen',
+            Message: `Fast mode check: ${relPath} contains stale names: ${staleFound.join(', ')}`,
+          });
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Force-rebuild ALL packages whose source is generated by codegen.
+   * This ensures their compiled .d.ts exports and .js modules are current.
+   *
+   * Four packages have codegen-generated source in src/generated/:
+   *  - @memberjunction/core-entities  (entity_subclasses.ts)
+   *  - mj_generatedentities           (entity_subclasses.ts)
+   *  - @memberjunction/core-actions   (action_subclasses.ts)
+   *  - mj_generatedactions            (action_subclasses.ts)
+   *
+   * The manifest generator walks the dependency tree and imports from these
+   * packages. If their dist/ is stale (e.g. index.js imports a generated
+   * module that was regenerated but never compiled), manifest generation
+   * fails with ERR_MODULE_NOT_FOUND.
+   */
+  private async forceRebuildCodegenOutputPackages(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const filters = [
+      '--filter=@memberjunction/core-entities',
+      '--filter=mj_generatedentities',
+      '--filter=@memberjunction/core-actions',
+      '--filter=mj_generatedactions',
+    ];
+
+    const result = await this.processRunner.Run(
+      'npx', ['turbo', 'build', '--force', '--log-order=stream', ...filters],
+      {
+        Cwd: dir,
+        TimeoutMs: 600_000, // 10 minutes
+        OnStdout: (line: string) => {
+          emitter.Emit('step:progress', {
+            Type: 'step:progress',
+            Phase: 'codegen',
+            Message: line.trim(),
+          });
+        },
+        OnStderr: (line: string) => {
+          emitter.Emit('log', {
+            Type: 'log',
+            Level: 'verbose',
+            Message: `[codegen:force-rebuild-entities:stderr] ${line.trim()}`,
+          });
+        },
+      }
+    );
+
+    if (result.ExitCode !== 0 || result.TimedOut) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: `Force-rebuild of codegen output packages ${result.TimedOut ? 'timed out' : `failed (exit ${result.ExitCode})`}. Manifest generation may produce stale results.`,
+      });
+      return;
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Codegen output packages force-rebuilt — .d.ts exports are current.',
+    });
+  }
+
+  /**
+   * Manifest packages and their build commands/directories.
+   * We build each package individually (bypassing turbo) because turbo's
+   * `--filter` resolves the full transitive dependency graph, which includes
+   * ng-core-entity-forms. That package contains stale generated entity forms
+   * (codegen just regenerated its source but hasn't compiled it yet), so it
+   * fails to build and turbo skips all packages that depend on it — including
+   * the very bootstrap packages we need to rebuild.
+   *
+   * Building directly with each package's own build command (tsc, ng-packagr)
+   * only requires the .d.ts files from direct TypeScript imports, which
+   * already exist from prior builds. This cleanly sidesteps the turbo issue.
+   */
+  private static readonly MANIFEST_PACKAGE_BUILDS: Array<{
+    Name: string;
+    RelativeDir: string;
+  }> = [
+    {
+      Name: '@memberjunction/server-bootstrap',
+      RelativeDir: 'packages/ServerBootstrap',
+    },
+    {
+      Name: '@memberjunction/server-bootstrap-lite',
+      RelativeDir: 'packages/ServerBootstrapLite',
+    },
+    {
+      Name: '@memberjunction/ng-bootstrap',
+      RelativeDir: 'packages/Angular/Bootstrap',
+    },
+  ];
+
+  /**
+   * Force-rebuild ONLY the packages that contain class registration manifests.
+   * Builds each package individually using its own build command, bypassing
+   * turbo to avoid the ng-core-entity-forms transitive dependency failure.
+   */
+  private async forceRebuildManifestPackages(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const failures: string[] = [];
+
+    for (const pkg of CodeGenPhase.MANIFEST_PACKAGE_BUILDS) {
+      const pkgDir = path.join(dir, pkg.RelativeDir);
+
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'codegen',
+        Message: `Building ${pkg.Name}...`,
+      });
+
+      // Run `npm run build` in the package directory. This invokes the
+      // package's own build script (tsc, ng-packagr, etc.) without turbo,
+      // so it won't pull in transitive dependencies that fail to build.
+      const result = await this.processRunner.Run(
+        'npm', ['run', 'build'],
+        {
+          Cwd: pkgDir,
+          TimeoutMs: 300_000, // 5 minutes per package
+          OnStdout: (line: string) => {
+            emitter.Emit('step:progress', {
+              Type: 'step:progress',
+              Phase: 'codegen',
+              Message: `[${pkg.Name}] ${line.trim()}`,
+            });
+          },
+          OnStderr: (line: string) => {
+            emitter.Emit('log', {
+              Type: 'log',
+              Level: 'verbose',
+              Message: `[codegen:force-rebuild-manifests:stderr] [${pkg.Name}] ${line.trim()}`,
+            });
+          },
+        }
+      );
+
+      if (result.TimedOut || result.ExitCode !== 0) {
+        const reason = result.TimedOut ? 'timed out' : `exit ${result.ExitCode}`;
+        failures.push(`${pkg.Name} (${reason})`);
+        emitter.Emit('warn', {
+          Type: 'warn',
+          Phase: 'codegen',
+          Message: `Build of ${pkg.Name} ${reason}. Attempting remaining packages...`,
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: `Force-rebuild of manifest packages partially failed: ${failures.join('; ')}. MJAPI/Explorer may fail to start.`,
+      });
+      return;
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Manifest packages force-rebuilt successfully.',
+    });
+  }
+
+  /**
+   * Regenerate class registration manifest `.ts` files by running `npm run mj:manifest`.
+   *
+   * The manifest generator scans source for `@RegisterClass` decorators, verifies
+   * them against `.d.ts` exports (from Step 1), and emits updated manifest files
+   * with static import paths that prevent tree-shaking.
+   *
+   * @param dir - Repo root directory.
+   * @param emitter - Event emitter for progress and warning reporting.
+   * @returns `true` if manifest regeneration succeeded, `false` if it failed or timed out.
+   */
+  private async regenerateManifests(dir: string, emitter: InstallerEventEmitter): Promise<boolean> {
+    const result = await this.processRunner.Run('npm', ['run', 'mj:manifest'], {
+      Cwd: dir,
+      TimeoutMs: 300_000, // 5 minutes
+      OnStdout: (line: string) => {
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'codegen',
+          Message: line.trim(),
+        });
+      },
+      OnStderr: (line: string) => {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `[codegen:manifest:stderr] ${line.trim()}`,
+        });
+      },
+    });
+
+    if (result.TimedOut) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: 'Manifest regeneration timed out. Will attempt to patch stale imports directly.',
+      });
+      return false;
+    }
+
+    if (result.ExitCode !== 0) {
+      // Include last few lines of stderr to help diagnose the failure
+      const stderrTail = this.lastNLines(result.Stderr, 5).trim();
+      const detail = stderrTail ? ` (${stderrTail})` : '';
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: `Manifest regeneration failed (exit ${result.ExitCode})${detail}. Will attempt to patch stale imports directly.`,
+      });
+      return false;
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: 'Manifest regeneration completed (exit 0).',
+    });
+    return true;
+  }
+
+  /**
+   * Diagnostic: read each manifest .ts file and check for known stale entity
+   * import names. Emits warnings with detailed info to help troubleshoot
+   * persistent stale-manifest issues.
+   */
+  private async verifyManifestContent(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    for (const relPath of CodeGenPhase.MANIFEST_SOURCE_PATHS) {
+      const fullPath = path.join(dir, relPath);
+      try {
+        const content = await this.fileSystem.ReadText(fullPath);
+        // Use word-boundary regex to avoid false positives from substring
+        // matches (e.g. "AIActionEntity" inside "MJAIActionEntity" — no
+        // \b between J and A since both are word characters).
+        const staleFound = CodeGenPhase.STALE_ENTITY_PATTERNS.filter(
+          name => new RegExp(`\\b${name}\\b`).test(content)
+        );
+        const lineCount = content.split('\n').length;
+        const importCount = (content.match(/^import /gm) || []).length;
+
+        if (staleFound.length > 0) {
+          emitter.Emit('warn', {
+            Type: 'warn',
+            Phase: 'codegen',
+            Message: `Manifest diagnostic: ${relPath} (${lineCount} lines, ${importCount} imports) contains stale entity names: ${staleFound.join(', ')}`,
+          });
+        } else {
+          emitter.Emit('log', {
+            Type: 'log',
+            Level: 'verbose',
+            Message: `Manifest diagnostic: ${relPath} — OK (${lineCount} lines, ${importCount} imports, no stale names detected)`,
+          });
+        }
+      } catch {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `Manifest diagnostic: ${relPath} — could not read file`,
+        });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fallback: directly patch stale entity names in manifest .ts files
+  // ---------------------------------------------------------------------------
+
+  /**
+   * When `mj codegen manifest` fails, this method directly patches the
+   * manifest .ts files by adding the "MJ" prefix to entity class names
+   * that are missing it.
+   *
+   * The 5.0/5.1 entity rename added an "MJ" prefix to all core entity classes
+   * (e.g. AIActionEntity → MJAIActionEntity). The pre-built manifest .ts files
+   * from the release zip may still reference the old names.
+   *
+   * Strategy: read entity_subclasses.ts (regenerated by codegen) to build an
+   * exact old→new rename map. Only names that have a corresponding MJ-prefixed
+   * class in entity_subclasses.ts are renamed. This avoids touching server
+   * entity classes (e.g. ApplicationEntityServerEntity) or extended classes
+   * (e.g. EntityEntityExtended) that legitimately don't have the MJ prefix.
+   */
+  private async patchStaleManifestImports(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    // Build rename map from entity_subclasses.ts source. After codegen + Step 1,
+    // this file contains all MJ-prefixed entity class definitions.
+    const renameMap = await this.buildEntityRenameMap(dir, emitter);
+    if (renameMap.size === 0) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: 'Could not build entity rename map from entity_subclasses.ts. Skipping manifest patching.',
+      });
+      return;
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: `Built rename map with ${renameMap.size} entity class mappings from entity_subclasses.ts.`,
+    });
+
+    for (const relPath of CodeGenPhase.MANIFEST_SOURCE_PATHS) {
+      const fullPath = path.join(dir, relPath);
+      try {
+        await this.patchSingleManifest(fullPath, renameMap, relPath, emitter);
+      } catch {
+        emitter.Emit('warn', {
+          Type: 'warn',
+          Phase: 'codegen',
+          Message: `Failed to patch manifest: ${relPath}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Read entity_subclasses.ts source and build a map of old→new entity class
+   * names. For each `export class MJFooEntity`, we add FooEntity → MJFooEntity.
+   *
+   * Tries the source .ts first (most up-to-date after codegen), then falls
+   * back to the compiled .d.ts.
+   */
+  private async buildEntityRenameMap(dir: string, emitter: InstallerEventEmitter): Promise<Map<string, string>> {
+    const renameMap = new Map<string, string>();
+
+    // Try source first, then compiled .d.ts as fallback
+    const candidates = [
+      path.join(dir, 'packages', 'MJCoreEntities', 'src', 'generated', 'entity_subclasses.ts'),
+      path.join(dir, 'packages', 'MJCoreEntities', 'dist', 'generated', 'entity_subclasses.d.ts'),
+    ];
+
+    let content = '';
+    for (const filePath of candidates) {
+      try {
+        content = await this.fileSystem.ReadText(filePath);
+        if (content.length > 0) break;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    if (!content) return renameMap;
+
+    // Match class definitions: "export class MJFooEntity" or "export declare class MJFooEntity"
+    const classPattern = /export\s+(?:declare\s+)?class\s+(MJ\w+Entity)\b/g;
+    let match: RegExpExecArray | null;
+    while ((match = classPattern.exec(content)) !== null) {
+      const newName = match[1]; // e.g. MJAIActionEntity
+      const oldName = newName.slice(2); // e.g. AIActionEntity (strip "MJ" prefix)
+      renameMap.set(oldName, newName);
+    }
+
+    return renameMap;
+  }
+
+  /**
+   * Patch a single manifest .ts file using the entity rename map.
+   * Only renames class names that have a known MJ-prefixed counterpart
+   * in entity_subclasses.ts.
+   */
+  private async patchSingleManifest(
+    fullPath: string,
+    renameMap: Map<string, string>,
+    relPath: string,
+    emitter: InstallerEventEmitter
+  ): Promise<void> {
+    let content = await this.fileSystem.ReadText(fullPath);
+    const replacements: Array<{ OldName: string; NewName: string }> = [];
+
+    // Check which old names from the rename map appear in the manifest.
+    // Use word boundaries so \bAIActionEntity\b won't match inside
+    // MJAIActionEntity (no word boundary between J and A).
+    for (const [oldName, newName] of renameMap) {
+      const wordPattern = new RegExp(`\\b${oldName}\\b`, 'g');
+      if (wordPattern.test(content)) {
+        replacements.push({ OldName: oldName, NewName: newName });
+      }
+    }
+
+    if (replacements.length === 0) {
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'codegen',
+        Message: `Manifest patch: ${relPath} — no stale entity names found to patch.`,
+      });
+      return;
+    }
+
+    // Apply replacements, longest first to avoid partial matches.
+    replacements.sort((a, b) => b.OldName.length - a.OldName.length);
+    for (const { OldName, NewName } of replacements) {
+      const wordPattern = new RegExp(`\\b${OldName}\\b`, 'g');
+      content = content.replace(wordPattern, NewName);
+    }
+
+    await this.fileSystem.WriteText(fullPath, content);
+
+    const preview = replacements.slice(0, 3).map(r => `${r.OldName}→${r.NewName}`).join(', ');
+    const extra = replacements.length > 3 ? `, +${replacements.length - 3} more` : '';
+    emitter.Emit('warn', {
+      Type: 'warn',
+      Phase: 'codegen',
+      Message: `Manifest patch: ${relPath} — replaced ${replacements.length} stale entity names (${preview}${extra})`,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Known-issue patching — proactive source-level fixes for fresh installs
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Registry of known issues that affect fresh installs. Each entry describes
+   * a source-level bug (typically null-safety issues in code that assumes
+   * non-empty datasets) and how to patch it.
+   *
+   * When a new issue is discovered during fresh-install testing, add an entry
+   * here rather than modifying the source package — this keeps the fix
+   * localized to the installer and avoids touching upstream code.
+   */
+  private static readonly KNOWN_ISSUE_PATCHES: KnownIssuePatch[] = [
+    {
+      Id: 'resource-permission-engine-null-safety',
+      Description:
+        'ResourcePermissionEngine._ResourceTypes and _Permissions may be undefined on fresh installs ' +
+        'with empty datasets. Add null-safe access to prevent "can\'t access property ResourceTypes" errors.',
+      RelativePath: 'packages/MJCoreEntities/src/custom/ResourcePermissions/ResourcePermissionEngine.ts',
+      PackageRelativeDir: 'packages/MJCoreEntities',
+      NeedsPatch: (content: string): boolean =>
+        content.includes('this._ResourceTypes.ResourceTypes') &&
+        !content.includes('this._ResourceTypes?.ResourceTypes'),
+      Apply: (content: string): string =>
+        content
+          .replace(
+            'return this._ResourceTypes.ResourceTypes;',
+            'return this._ResourceTypes?.ResourceTypes ?? [];'
+          )
+          .replace(
+            /return this\._Permissions;/,
+            'return this._Permissions ?? [];'
+          ),
+    },
+  ];
+
+  /**
+   * Step 4 of post-codegen fixup: apply known source-level patches to the
+   * fresh install's files and rebuild any affected packages.
+   *
+   * This handles issues like null-safety bugs that only manifest on fresh
+   * installs (empty datasets, missing metadata, etc.) without requiring
+   * changes to the upstream source packages.
+   */
+  private async applyKnownIssuePatches(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const packagesToRebuild = new Set<string>();
+    let appliedCount = 0;
+
+    for (const patch of CodeGenPhase.KNOWN_ISSUE_PATCHES) {
+      const fullPath = path.join(dir, patch.RelativePath);
+      try {
+        const content = await this.fileSystem.ReadText(fullPath);
+        if (patch.NeedsPatch(content)) {
+          const patched = patch.Apply(content);
+          await this.fileSystem.WriteText(fullPath, patched);
+          packagesToRebuild.add(patch.PackageRelativeDir);
+          appliedCount++;
+
+          emitter.Emit('warn', {
+            Type: 'warn',
+            Phase: 'codegen',
+            Message: `Known-issue patch applied: ${patch.Id} (${patch.RelativePath})`,
+          });
+        }
+      } catch {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: `Known-issue patch ${patch.Id}: could not read ${patch.RelativePath}, skipping.`,
+        });
+      }
+    }
+
+    if (appliedCount === 0) {
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'codegen',
+        Message: 'Known-issue patches: no patches needed (all files already up-to-date).',
+      });
+      return;
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: `Applied ${appliedCount} known-issue patch(es). Rebuilding ${packagesToRebuild.size} affected package(s)...`,
+    });
+
+    // Rebuild each affected package
+    for (const pkgRelDir of packagesToRebuild) {
+      await this.rebuildSinglePackage(dir, pkgRelDir, emitter);
+    }
+  }
+
+  /**
+   * Rebuild a single package by running `npm run build` in its directory.
+   */
+  private async rebuildSinglePackage(dir: string, pkgRelDir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const pkgDir = path.join(dir, pkgRelDir);
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'codegen',
+      Message: `Rebuilding ${pkgRelDir}...`,
+    });
+
+    const result = await this.processRunner.Run(
+      'npm', ['run', 'build'],
+      {
+        Cwd: pkgDir,
+        TimeoutMs: 300_000, // 5 minutes
+        OnStdout: (line: string) => {
+          emitter.Emit('step:progress', {
+            Type: 'step:progress',
+            Phase: 'codegen',
+            Message: `[${pkgRelDir}] ${line.trim()}`,
+          });
+        },
+        OnStderr: (line: string) => {
+          emitter.Emit('log', {
+            Type: 'log',
+            Level: 'verbose',
+            Message: `[codegen:known-issue-rebuild:stderr] [${pkgRelDir}] ${line.trim()}`,
+          });
+        },
+      }
+    );
+
+    if (result.TimedOut || result.ExitCode !== 0) {
+      const reason = result.TimedOut ? 'timed out' : `exit ${result.ExitCode}`;
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'codegen',
+        Message: `Rebuild of ${pkgRelDir} ${reason} after known-issue patching.`,
+      });
+    }
+  }
+
+  /**
+   * Run known-issue diagnostic checks against the target directory.
+   * Used by `mj doctor` to detect issues that the installer would
+   * automatically patch during a fresh install.
+   *
+   * Returns an array of diagnostic results — one per known issue that
+   * was detected (or confirmed absent) in the target directory.
+   */
+  async RunKnownIssueChecks(dir: string, emitter: InstallerEventEmitter): Promise<KnownIssueDiagnostic[]> {
+    const results: KnownIssueDiagnostic[] = [];
+
+    for (const patch of CodeGenPhase.KNOWN_ISSUE_PATCHES) {
+      const fullPath = path.join(dir, patch.RelativePath);
+      try {
+        const content = await this.fileSystem.ReadText(fullPath);
+        if (patch.NeedsPatch(content)) {
+          results.push({
+            Id: patch.Id,
+            Status: 'needs_patch',
+            Description: patch.Description,
+            RelativePath: patch.RelativePath,
+          });
+
+          emitter.Emit('diagnostic', {
+            Type: 'diagnostic',
+            Check: `Known issue: ${patch.Id}`,
+            Status: 'warn',
+            Message: patch.Description,
+            SuggestedFix: `Run "mj install" to auto-patch, or manually edit ${patch.RelativePath}`,
+          });
+        } else {
+          results.push({
+            Id: patch.Id,
+            Status: 'ok',
+            Description: patch.Description,
+            RelativePath: patch.RelativePath,
+          });
+
+          emitter.Emit('diagnostic', {
+            Type: 'diagnostic',
+            Check: `Known issue: ${patch.Id}`,
+            Status: 'pass',
+            Message: `${patch.Id}: not present or already patched`,
+          });
+        }
+      } catch {
+        results.push({
+          Id: patch.Id,
+          Status: 'skipped',
+          Description: patch.Description,
+          RelativePath: patch.RelativePath,
+        });
+
+        emitter.Emit('diagnostic', {
+          Type: 'diagnostic',
+          Check: `Known issue: ${patch.Id}`,
+          Status: 'info',
+          Message: `${patch.Id}: file not found (${patch.RelativePath}), skipping`,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Utilities
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Extract failed package names from turbo's output.
+   * Turbo outputs lines like: "Failed:    @memberjunction/ng-core-entity-forms#build"
+   * Note: the "Failed:" summary goes to stdout, not stderr.
+   */
+  private extractFailedTurboPackages(output: string): string[] {
+    const packages: string[] = [];
+    const failedPattern = /Failed:\s+(@[^#\s]+)#build/g;
+    let match: RegExpExecArray | null;
+    while ((match = failedPattern.exec(output)) !== null) {
+      packages.push(match[1]);
+    }
+    return [...new Set(packages)];
+  }
+
+  /**
+   * Extract the last N lines from a string (for truncated error output).
+   *
+   * @param text - The full text to extract from.
+   * @param n - Number of trailing lines to keep.
+   * @returns The last `n` lines joined with newlines.
+   */
+  private lastNLines(text: string, n: number): string {
+    const lines = text.split('\n');
+    return lines.slice(-n).join('\n');
+  }
+}
