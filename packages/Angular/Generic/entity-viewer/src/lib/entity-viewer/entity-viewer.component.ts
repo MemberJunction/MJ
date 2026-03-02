@@ -107,8 +107,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     if (this._initialized) {
       // If entity changed to a different entity, clear stale view entity
       // that belongs to the old entity (its WhereClause, SortState, etc. reference old fields)
-      if (value && previousEntity && value.ID !== previousEntity.ID) {
-        if (this._viewEntity && this._viewEntity.EntityID !== value.ID) {
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
           this._viewEntity = null;
         }
       }
