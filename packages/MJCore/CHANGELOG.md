@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.6.0
+
+### Minor Changes
+
+- 4547d05: Grant UI role Create/Update permissions on 9 agent and conversation entities so end users can use agents like Sage
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+  - @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Minor Changes

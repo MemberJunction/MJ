@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.6.0
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes
