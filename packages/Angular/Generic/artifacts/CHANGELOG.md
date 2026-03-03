@@ -1,5 +1,28 @@
 # @memberjunction/ng-artifacts
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ng-react@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-base-types@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-export-service@5.5.0
+  - @memberjunction/ng-markdown@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-query-viewer@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-trees@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

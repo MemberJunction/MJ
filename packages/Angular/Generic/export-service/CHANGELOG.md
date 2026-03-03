@@ -1,5 +1,13 @@
 # @memberjunction/ng-export-service
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [df2457c]
+  - @memberjunction/export-engine@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes
