@@ -38,10 +38,10 @@ vi.mock('@memberjunction/core', () => {
     static DefaultFieldDelimiter = '||';
   }
   const EntityFieldTSType = {
-    Boolean: 'Boolean',
+    Boolean: 'boolean',
     Date: 'Date',
-    Number: 'Number',
-    String: 'String',
+    Number: 'number',
+    String: 'string',
   };
   return {
     BaseEngine: class {
