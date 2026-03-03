@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Grant UI Role Create/Update Permissions for Agent & Conversation Entities
--- Migration: v5.5.x
+-- Migration: v5.6.x
 -- Date: 2026-03-02
 -- ============================================================================
 -- Problem: End users assigned the "UI" role cannot use agents (e.g. Sage)
