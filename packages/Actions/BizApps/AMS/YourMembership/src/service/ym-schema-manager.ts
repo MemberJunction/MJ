@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 
 /**
@@ -10,11 +11,23 @@ export class YMSchemaManager {
     private schemaName: string;
     private contextUser: UserInfo;
     private dbProvider: DatabaseProviderBase;
+    /** Optional log file path set by the sync engine for detailed SQL logging */
+    public LogFilePath: string | null = null;
 
     constructor(schemaName: string, contextUser: UserInfo, dbProvider: DatabaseProviderBase) {
         this.schemaName = schemaName;
         this.contextUser = contextUser;
         this.dbProvider = dbProvider;
+    }
+
+    private writeLog(message: string): void {
+        if (!this.LogFilePath) return;
+        const line = `[${new Date().toISOString()}] [SchemaManager] ${message}\n`;
+        try {
+            fs.appendFileSync(this.LogFilePath, line);
+        } catch {
+            // Silent fail — don't break sync for logging issues
+        }
     }
 
     /**
@@ -60,11 +73,23 @@ export class YMSchemaManager {
         let totalUpdated = 0;
         const batchSize = 500;
 
-        for (let i = 0; i < records.length; i += batchSize) {
-            const batch = records.slice(i, i + batchSize);
+        // Deduplicate by composite source ID — the API can return overlapping pages
+        const deduped = this.deduplicateBySourceId(records, pkFields);
+        if (deduped.length < records.length) {
+            this.writeLog(`Deduplicated ${records.length} → ${deduped.length} records (removed ${records.length - deduped.length} duplicates)`);
+        }
+
+        const totalBatches = Math.ceil(deduped.length / batchSize);
+        this.writeLog(`Upserting ${deduped.length} records into ${fullTableName} (${totalBatches} batches, PK: ${pkFields.join('|')})`);
+
+        for (let i = 0; i < deduped.length; i += batchSize) {
+            const batchNum = Math.floor(i / batchSize) + 1;
+            const batch = deduped.slice(i, i + batchSize);
+            this.writeLog(`  Batch ${batchNum}/${totalBatches}: ${batch.length} records`);
             const result = await this.mergeBatch(fullTableName, batch, pkFields);
             totalInserted += result.Inserted;
             totalUpdated += result.Updated;
+            this.writeLog(`  Batch ${batchNum} result: ${result.Inserted} inserted, ${result.Updated} updated`);
         }
 
         return { Inserted: totalInserted, Updated: totalUpdated };
@@ -79,6 +104,22 @@ export class YMSchemaManager {
     }
 
     // ─── Private helpers ─────────────────────────────────────────
+
+    /**
+     * Removes duplicate records based on composite source ID.
+     * Keeps the last occurrence (latest from the API) when duplicates exist.
+     */
+    private deduplicateBySourceId(
+        records: Record<string, unknown>[],
+        pkFields: string[]
+    ): Record<string, unknown>[] {
+        const seen = new Map<string, Record<string, unknown>>();
+        for (const record of records) {
+            const sourceId = this.buildSourceId(record, pkFields);
+            seen.set(sourceId, record); // last wins
+        }
+        return Array.from(seen.values());
+    }
 
     /** Column names reserved by the sync framework that cannot come from YM data */
     private static readonly RESERVED_COLUMNS = new Set(['id', 'ym_sourceid', 'ym_lastsyncedat']);
@@ -250,7 +291,15 @@ export class YMSchemaManager {
             return await this.dbProvider.ExecuteSQL(sql, undefined, undefined, this.contextUser);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            const stack = error instanceof Error ? error.stack : '';
             LogError(`YM SchemaManager SQL error: ${message}`);
+            this.writeLog(`SQL ERROR: ${message}`);
+            if (stack) {
+                this.writeLog(`Stack: ${stack}`);
+            }
+            // Log the SQL that failed (truncate if very long)
+            const sqlPreview = sql.length > 2000 ? sql.substring(0, 2000) + '...(truncated)' : sql;
+            this.writeLog(`Failed SQL: ${sqlPreview}`);
             throw error;
         }
     }

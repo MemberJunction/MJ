@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { YM_ENDPOINT_REGISTRY, type YMEndpointConfig, type YMEndpointName } from '../types/ym-endpoint-config';
 import type { YMSyncOptions, YMSyncResult, YMEndpointSyncResult } from '../types/ym-sync-types';
@@ -15,6 +17,9 @@ const YM_API_BASE = 'https://ws.yourmembership.com';
  * 3. Ensures the target SQL table exists (creates/alters as needed)
  * 4. Upserts records into the table
  */
+/** Directory where YM sync logs are written */
+const YM_LOG_DIR = path.join(process.cwd(), 'ym-sync-logs');
+
 export class YMSyncEngine {
     private clientId: string;
     private apiKey: string;
@@ -22,6 +27,7 @@ export class YMSyncEngine {
     private schemaManager: YMSchemaManager;
     private sessionId: string | null = null;
     private sessionCreatedAt = 0;
+    private logFilePath: string;
 
     constructor(
         clientId: string,
@@ -35,6 +41,33 @@ export class YMSyncEngine {
         this.apiKey = apiKey;
         this.apiPassword = apiPassword;
         this.schemaManager = new YMSchemaManager(schemaName, contextUser, dbProvider);
+        this.logFilePath = this.initLogFile();
+        this.schemaManager.LogFilePath = this.logFilePath;
+    }
+
+    /**
+     * Creates the log directory and returns the path to a timestamped log file.
+     */
+    private initLogFile(): string {
+        if (!fs.existsSync(YM_LOG_DIR)) {
+            fs.mkdirSync(YM_LOG_DIR, { recursive: true });
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filePath = path.join(YM_LOG_DIR, `ym-sync-${timestamp}.log`);
+        this.writeLog(`=== YM Sync started at ${new Date().toISOString()} ===`);
+        return filePath;
+    }
+
+    /**
+     * Appends a timestamped message to the log file.
+     */
+    private writeLog(message: string): void {
+        const line = `[${new Date().toISOString()}] ${message}\n`;
+        try {
+            fs.appendFileSync(this.logFilePath ?? path.join(YM_LOG_DIR, 'ym-sync-fallback.log'), line);
+        } catch {
+            // If file logging fails, don't break the sync — console only
+        }
     }
 
     /**
@@ -44,7 +77,9 @@ export class YMSyncEngine {
         const startTime = Date.now();
 
         // Authenticate before starting
+        this.writeLog('Authenticating...');
         await this.ensureSession();
+        this.writeLog('Ensuring schema exists...');
         await this.schemaManager.EnsureSchemaExists();
 
         const endpointNames = options.Endpoints.length > 0
@@ -70,9 +105,18 @@ export class YMSyncEngine {
 
             const result = await this.syncEndpoint(endpointName, config, options);
             endpointResults.push(result);
+
+            if (result.Errors.length > 0) {
+                this.writeLog(`ERRORS for ${endpointName}: ${JSON.stringify(result.Errors)}`);
+            }
         }
 
-        return this.buildSyncResult(endpointResults, startTime);
+        const finalResult = this.buildSyncResult(endpointResults, startTime);
+        this.writeLog(`=== Sync complete. Success: ${finalResult.Success}, Total synced: ${finalResult.TotalRecordsSynced}, Errors: ${finalResult.TotalErrors}, Duration: ${finalResult.DurationMs}ms ===`);
+        this.writeLog(`Full result: ${JSON.stringify(finalResult, null, 2)}`);
+        this.writeLog(`Log file: ${this.logFilePath}`);
+        LogStatus(`YM Sync: Log file written to ${this.logFilePath}`);
+        return finalResult;
     }
 
     // ─── Session management ──────────────────────────────────────
@@ -143,9 +187,11 @@ export class YMSyncEngine {
 
         try {
             LogStatus(`YM Sync: Fetching ${endpointName}...`);
+            this.writeLog(`--- Starting endpoint: ${endpointName} (table: ${config.TargetTable}) ---`);
 
             const records = await this.fetchAllPages(config, options.MaxRecordsPerEndpoint);
             recordsFetched = records.length;
+            this.writeLog(`${endpointName}: Fetched ${recordsFetched} records`);
 
             if (records.length === 0) {
                 LogStatus(`YM Sync: No records found for ${endpointName}`);
@@ -169,14 +215,18 @@ export class YMSyncEngine {
             recordsInserted = upsertResult.Inserted;
             recordsUpdated = upsertResult.Updated;
 
-            LogStatus(
-                `YM Sync: ${endpointName} complete — ${recordsFetched} fetched, ` +
-                `${recordsInserted} inserted, ${recordsUpdated} updated`
-            );
+            const summary = `${endpointName} complete — ${recordsFetched} fetched, ${recordsInserted} inserted, ${recordsUpdated} updated`;
+            LogStatus(`YM Sync: ${summary}`);
+            this.writeLog(summary);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            const stack = error instanceof Error ? error.stack : '';
             errors.push(message);
             LogError(`YM Sync: Error syncing ${endpointName}: ${message}`);
+            this.writeLog(`ERROR syncing ${endpointName}: ${message}`);
+            if (stack) {
+                this.writeLog(`Stack trace: ${stack}`);
+            }
         }
 
         return this.buildEndpointResult(
