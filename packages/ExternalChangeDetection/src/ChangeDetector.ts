@@ -300,8 +300,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 castValue2 = value2 ? parseFloat(value2) : 0;
                 return {differ: castValue1 !== castValue2, castValue1, castValue2};
             case EntityFieldTSType.Boolean:
-                castValue1 = value1 ? true : false;
-                castValue2 = value2 ? true : false;
+                castValue1 = this.CastToBoolean(value1);
+                castValue2 = this.CastToBoolean(value2);
                 return {differ: castValue1 !== castValue2, castValue1, castValue2};
             default:
                 castValue1 = value1 ? value1.toString().trim() : '';
@@ -310,6 +310,17 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
+    /**
+     * Casts a value to a boolean, properly handling string representations like 'false' and '0'
+     * which are truthy in JavaScript but should be treated as false.
+     */
+    protected CastToBoolean(value: unknown): boolean {
+        if (typeof value === 'string') {
+            const lower = value.toLowerCase().trim();
+            return lower === 'true' || lower === '1';
+        }
+        return !!value;
+    }
 
     protected async GetLatestRecordChangesDataForEntityRecord(change: ChangeDetectionItem): Promise<any> {
         try {
