@@ -1,0 +1,95 @@
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import type { MJCompanyIntegrationSyncWatermarkEntity } from '@memberjunction/core-entities';
+
+/**
+ * Service for loading and updating sync watermarks used for incremental data fetching.
+ * Watermarks track the "last known position" so each sync only fetches changes since the last run.
+ */
+export class WatermarkService {
+    /**
+     * Loads the current watermark for a specific entity map direction.
+     *
+     * @param entityMapID - The CompanyIntegrationEntityMap ID to load the watermark for
+     * @param contextUser - User context for data access
+     * @returns The watermark entity if found, or null if no watermark exists yet
+     */
+    public async Load(
+        entityMapID: string,
+        contextUser: UserInfo
+    ): Promise<MJCompanyIntegrationSyncWatermarkEntity | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
+            EntityName: 'MJ: Company Integration Sync Watermarks',
+            ExtraFilter: `EntityMapID='${entityMapID}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object',
+        }, contextUser);
+
+        if (!result.Success || result.Results.length === 0) return null;
+        return result.Results[0];
+    }
+
+    /**
+     * Updates or creates the watermark for a specific entity map.
+     * If a watermark record already exists, it is updated in place.
+     * If none exists, a new record is created.
+     *
+     * @param entityMapID - The CompanyIntegrationEntityMap ID to update the watermark for
+     * @param newValue - The new watermark value to store
+     * @param contextUser - User context for data access
+     */
+    public async Update(
+        entityMapID: string,
+        newValue: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const existing = await this.Load(entityMapID, contextUser);
+        if (existing) {
+            await this.UpdateExistingWatermark(existing, newValue);
+        } else {
+            await this.CreateNewWatermark(entityMapID, newValue, contextUser);
+        }
+    }
+
+    /**
+     * Updates an existing watermark record with a new value and timestamp.
+     */
+    private async UpdateExistingWatermark(
+        watermark: MJCompanyIntegrationSyncWatermarkEntity,
+        newValue: string
+    ): Promise<void> {
+        watermark.WatermarkValue = newValue;
+        watermark.LastSyncAt = new Date();
+        const saved = await watermark.Save();
+        if (!saved) {
+            throw new Error(`Failed to update watermark for EntityMapID=${watermark.EntityMapID}`);
+        }
+    }
+
+    /**
+     * Creates a new watermark record for the given entity map.
+     */
+    private async CreateNewWatermark(
+        entityMapID: string,
+        newValue: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const watermark = await md.GetEntityObject<MJCompanyIntegrationSyncWatermarkEntity>(
+            'MJ: Company Integration Sync Watermarks',
+            contextUser
+        );
+        watermark.NewRecord();
+        watermark.EntityMapID = entityMapID;
+        watermark.WatermarkValue = newValue;
+        watermark.Direction = 'Pull';
+        watermark.WatermarkType = 'Timestamp';
+        watermark.LastSyncAt = new Date();
+        watermark.RecordsSynced = 0;
+
+        const saved = await watermark.Save();
+        if (!saved) {
+            throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}`);
+        }
+    }
+}

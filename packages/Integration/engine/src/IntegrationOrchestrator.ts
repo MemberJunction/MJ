@@ -1,0 +1,519 @@
+import { CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import type {
+    MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationRunDetailEntity,
+    MJCompanyIntegrationRecordMapEntity,
+    MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
+} from '@memberjunction/core-entities';
+import type {
+    SyncResult,
+    SyncRecordError,
+    MappedRecord,
+    IntegrationRunStatus,
+    SyncTriggerType,
+} from './types.js';
+import { ConnectorFactory } from './ConnectorFactory.js';
+import { FieldMappingEngine } from './FieldMappingEngine.js';
+import { MatchEngine } from './MatchEngine.js';
+import { WatermarkService } from './WatermarkService.js';
+import type { BaseIntegrationConnector, FetchContext } from './BaseIntegrationConnector.js';
+
+/** Default batch size for fetching records from external systems */
+const DEFAULT_BATCH_SIZE = 200;
+
+/**
+ * Top-level orchestrator that runs an end-to-end integration sync.
+ * Coordinates connector, field mapping, match resolution, and entity persistence.
+ */
+export class IntegrationOrchestrator {
+    private readonly fieldMappingEngine = new FieldMappingEngine();
+    private readonly matchEngine = new MatchEngine();
+    private readonly watermarkService = new WatermarkService();
+
+    /**
+     * Executes a full sync run for a company integration.
+     * Creates a run record, processes each entity map, and records results.
+     *
+     * @param companyIntegrationID - ID of the CompanyIntegration to sync
+     * @param contextUser - User context for all data operations
+     * @param triggerType - What triggered this sync (defaults to 'Manual')
+     * @returns Aggregate sync result with record counts and errors
+     */
+    public async RunSync(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType = 'Manual'
+    ): Promise<SyncResult> {
+        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
+        const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser);
+
+        try {
+            const result = await this.ExecuteEntityMaps(config, run, contextUser);
+            await this.FinalizeRun(run, result, contextUser);
+            return result;
+        } catch (err) {
+            await this.FailRun(run, err, contextUser);
+            throw err;
+        }
+    }
+
+    /**
+     * Loads all configuration needed for a sync run.
+     */
+    private async LoadRunConfiguration(
+        companyIntegrationID: string,
+        contextUser: UserInfo
+    ): Promise<RunConfiguration> {
+        const rv = new RunView();
+
+        const [ciResult, entityMapsResult, integrationsResult, sourceTypesResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: `ID='${companyIntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            },
+            {
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND SyncEnabled=1 AND Status='Active'`,
+                OrderBy: 'Priority ASC',
+                ResultType: 'entity_object',
+            },
+            {
+                EntityName: 'MJ: Integrations',
+                ExtraFilter: '',
+                ResultType: 'entity_object',
+            },
+            {
+                EntityName: 'MJ: Integration Source Types',
+                ExtraFilter: `Status='Active'`,
+                ResultType: 'entity_object',
+            },
+        ], contextUser);
+
+        const companyIntegration = (ciResult.Results as MJCompanyIntegrationEntity[])[0];
+        if (!companyIntegration) {
+            throw new Error(`CompanyIntegration not found: ${companyIntegrationID}`);
+        }
+
+        const integration = (integrationsResult.Results as MJIntegrationEntity[])
+            .find(i => i.Get('ID') === companyIntegration.IntegrationID);
+        if (!integration) {
+            throw new Error(`Integration not found for CompanyIntegration: ${companyIntegrationID}`);
+        }
+
+        const connector = ConnectorFactory.Resolve(
+            integration,
+            sourceTypesResult.Results as MJIntegrationSourceTypeEntity[]
+        );
+
+        return {
+            companyIntegration,
+            entityMaps: entityMapsResult.Results as MJCompanyIntegrationEntityMapEntity[],
+            integration,
+            connector,
+        };
+    }
+
+    /**
+     * Creates a new CompanyIntegrationRun record to track this sync.
+     */
+    private async CreateRunRecord(
+        companyIntegration: MJCompanyIntegrationEntity,
+        triggerType: SyncTriggerType,
+        contextUser: UserInfo
+    ): Promise<MJCompanyIntegrationRunEntity> {
+        const md = new Metadata();
+        const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
+            'MJ: Company Integration Runs',
+            contextUser
+        );
+        run.NewRecord();
+        run.CompanyIntegrationID = companyIntegration.Get('ID');
+        run.RunByUserID = contextUser.ID;
+        run.StartedAt = new Date();
+        run.Status = 'In Progress';
+        run.TotalRecords = 0;
+        run.ConfigData = JSON.stringify({ triggerType });
+
+        const saved = await run.Save();
+        if (!saved) {
+            throw new Error('Failed to create CompanyIntegrationRun record');
+        }
+        return run;
+    }
+
+    /**
+     * Processes all entity maps, aggregating results.
+     */
+    private async ExecuteEntityMaps(
+        config: RunConfiguration,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo
+    ): Promise<SyncResult> {
+        const aggregate: SyncResult = {
+            Success: true,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsDeleted: 0,
+            RecordsErrored: 0,
+            RecordsSkipped: 0,
+            Errors: [],
+        };
+
+        for (const entityMap of config.entityMaps) {
+            const mapResult = await this.ProcessSingleEntityMap(
+                config, entityMap, run, contextUser
+            );
+            this.MergeResult(aggregate, mapResult);
+        }
+
+        return aggregate;
+    }
+
+    /**
+     * Processes a single entity map: fetch → map → match → apply.
+     */
+    private async ProcessSingleEntityMap(
+        config: RunConfiguration,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo
+    ): Promise<SyncResult> {
+        const fieldMaps = await this.LoadFieldMaps(entityMap.Get('ID'), contextUser);
+        const watermark = await this.watermarkService.Load(entityMap.Get('ID'), contextUser);
+
+        const result: SyncResult = {
+            Success: true,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsDeleted: 0,
+            RecordsErrored: 0,
+            RecordsSkipped: 0,
+            Errors: [],
+        };
+
+        let hasMore = true;
+        let currentWatermark = watermark?.WatermarkValue ?? null;
+
+        while (hasMore) {
+            const ctx: FetchContext = {
+                CompanyIntegration: config.companyIntegration,
+                ObjectName: entityMap.ExternalObjectName,
+                WatermarkValue: currentWatermark,
+                BatchSize: DEFAULT_BATCH_SIZE,
+                ContextUser: contextUser,
+            };
+
+            const batch = await config.connector.FetchChanges(ctx);
+            const mapped = this.fieldMappingEngine.Apply(
+                batch.Records, fieldMaps, entityMap.Entity
+            );
+            const resolved = await this.matchEngine.Resolve(
+                mapped, entityMap, fieldMaps, contextUser
+            );
+
+            await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+
+            if (batch.NewWatermarkValue) {
+                currentWatermark = batch.NewWatermarkValue;
+            }
+            hasMore = batch.HasMore;
+        }
+
+        if (currentWatermark) {
+            await this.watermarkService.Update(entityMap.Get('ID'), currentWatermark, contextUser);
+            result.WatermarkAfter = currentWatermark;
+        }
+
+        await this.CreateRunDetail(run, entityMap, result, contextUser);
+        return result;
+    }
+
+    /**
+     * Loads active field maps for a given entity map.
+     */
+    private async LoadFieldMaps(
+        entityMapID: string,
+        contextUser: UserInfo
+    ): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
+            OrderBy: 'Priority ASC',
+            ResultType: 'entity_object',
+        }, contextUser);
+
+        return result.Success ? result.Results : [];
+    }
+
+    /**
+     * Applies resolved records to MJ, handling each individually for error isolation.
+     */
+    private async ApplyRecords(
+        records: MappedRecord[],
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        for (const record of records) {
+            result.RecordsProcessed++;
+            try {
+                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
+            } catch (err) {
+                result.RecordsErrored++;
+                result.Errors.push({
+                    ExternalID: record.ExternalRecord.ExternalID,
+                    ChangeType: record.ChangeType,
+                    ErrorMessage: err instanceof Error ? err.message : String(err),
+                    ExternalRecord: record.ExternalRecord,
+                });
+            }
+        }
+    }
+
+    /**
+     * Applies a single record change (Create, Update, Delete, or Skip).
+     */
+    private async ApplySingleRecord(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        switch (record.ChangeType) {
+            case 'Create':
+                await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+                result.RecordsCreated++;
+                break;
+            case 'Update':
+                await this.UpdateRecord(record, contextUser);
+                result.RecordsUpdated++;
+                break;
+            case 'Delete':
+                await this.DeleteRecord(record, entityMap, contextUser);
+                result.RecordsDeleted++;
+                break;
+            case 'Skip':
+                result.RecordsSkipped++;
+                break;
+        }
+    }
+
+    /**
+     * Creates a new MJ record and saves a record map entry.
+     */
+    private async CreateRecord(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        entity.NewRecord();
+        this.SetEntityFields(entity, record.MappedFields);
+
+        const saved = await entity.Save();
+        if (!saved) {
+            throw new Error(`Failed to create ${record.MJEntityName} record`);
+        }
+
+        await this.SaveRecordMap(
+            companyIntegration.Get('ID'),
+            record.ExternalRecord.ExternalID,
+            entityMap.EntityID,
+            entity.Get('ID'),
+            contextUser
+        );
+    }
+
+    /**
+     * Updates an existing MJ record.
+     */
+    private async UpdateRecord(
+        record: MappedRecord,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            throw new Error('Cannot update record without MatchedMJRecordID');
+        }
+
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID));
+        if (!loaded) {
+            throw new Error(`Failed to load ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+
+        this.SetEntityFields(entity, record.MappedFields);
+        const saved = await entity.Save();
+        if (!saved) {
+            throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+    }
+
+    /**
+     * Deletes (or soft-deletes) an MJ record based on the entity map's DeleteBehavior.
+     */
+    private async DeleteRecord(
+        record: MappedRecord,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            throw new Error('Cannot delete record without MatchedMJRecordID');
+        }
+
+        if (entityMap.DeleteBehavior === 'DoNothing') return;
+
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID));
+        if (!loaded) {
+            throw new Error(`Failed to load ${record.MJEntityName} for deletion: ${record.MatchedMJRecordID}`);
+        }
+
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            throw new Error(`Failed to delete ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+    }
+
+    /**
+     * Builds a CompositeKey for a single ID field.
+     */
+    private BuildCompositeKey(id: string): CompositeKey {
+        const key = new CompositeKey();
+        key.KeyValuePairs.push({ FieldName: 'ID', Value: id });
+        return key;
+    }
+
+    /**
+     * Sets fields on a BaseEntity instance from a field value map.
+     */
+    private SetEntityFields(
+        entity: { Set(fieldName: string, value: unknown): void },
+        fields: Record<string, unknown>
+    ): void {
+        for (const [fieldName, value] of Object.entries(fields)) {
+            entity.Set(fieldName, value);
+        }
+    }
+
+    /**
+     * Creates or updates a CompanyIntegrationRecordMap entry to track the external↔MJ mapping.
+     */
+    private async SaveRecordMap(
+        companyIntegrationID: string,
+        externalID: string,
+        entityID: string,
+        entityRecordID: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const recordMap = await md.GetEntityObject<MJCompanyIntegrationRecordMapEntity>(
+            'MJ: Company Integration Record Maps',
+            contextUser
+        );
+        recordMap.NewRecord();
+        recordMap.CompanyIntegrationID = companyIntegrationID;
+        recordMap.ExternalSystemRecordID = externalID;
+        recordMap.EntityID = entityID;
+        recordMap.EntityRecordID = entityRecordID;
+
+        const saved = await recordMap.Save();
+        if (!saved) {
+            throw new Error(`Failed to save record map for external ID: ${externalID}`);
+        }
+    }
+
+    /**
+     * Creates a CompanyIntegrationRunDetail record for audit/reporting.
+     */
+    private async CreateRunDetail(
+        run: MJCompanyIntegrationRunEntity,
+        entityMap: MJCompanyIntegrationEntityMapEntity,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const detail = await md.GetEntityObject<MJCompanyIntegrationRunDetailEntity>(
+            'MJ: Company Integration Run Details',
+            contextUser
+        );
+        detail.NewRecord();
+        detail.CompanyIntegrationRunID = run.Get('ID');
+        detail.EntityID = entityMap.EntityID;
+        detail.RecordID = `Processed:${result.RecordsProcessed}`;
+        detail.Action = result.RecordsCreated > 0 ? 'INSERT' : 'UPDATE';
+        detail.IsSuccess = result.RecordsErrored === 0;
+
+        await detail.Save();
+    }
+
+    /**
+     * Merges an entity-map-level result into the aggregate result.
+     */
+    private MergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
+        aggregate.RecordsProcessed += mapResult.RecordsProcessed;
+        aggregate.RecordsCreated += mapResult.RecordsCreated;
+        aggregate.RecordsUpdated += mapResult.RecordsUpdated;
+        aggregate.RecordsDeleted += mapResult.RecordsDeleted;
+        aggregate.RecordsErrored += mapResult.RecordsErrored;
+        aggregate.RecordsSkipped += mapResult.RecordsSkipped;
+        aggregate.Errors.push(...mapResult.Errors);
+
+        if (mapResult.RecordsErrored > 0) {
+            aggregate.Success = false;
+        }
+    }
+
+    /**
+     * Finalizes a successful run with aggregate totals.
+     */
+    private async FinalizeRun(
+        run: MJCompanyIntegrationRunEntity,
+        result: SyncResult,
+        _contextUser: UserInfo
+    ): Promise<void> {
+        run.EndedAt = new Date();
+        run.TotalRecords = result.RecordsProcessed;
+        run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+        if (result.Errors.length > 0) {
+            run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
+        }
+        await run.Save();
+    }
+
+    /**
+     * Marks a run as failed after an unrecoverable error.
+     */
+    private async FailRun(
+        run: MJCompanyIntegrationRunEntity,
+        err: unknown,
+        _contextUser: UserInfo
+    ): Promise<void> {
+        run.EndedAt = new Date();
+        run.Status = 'Failed';
+        run.ErrorLog = err instanceof Error ? err.message : String(err);
+        await run.Save();
+    }
+}
+
+/** Internal configuration bundle for a sync run */
+interface RunConfiguration {
+    companyIntegration: MJCompanyIntegrationEntity;
+    entityMaps: MJCompanyIntegrationEntityMapEntity[];
+    integration: MJIntegrationEntity;
+    connector: BaseIntegrationConnector;
+}
