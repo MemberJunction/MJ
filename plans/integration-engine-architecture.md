@@ -877,45 +877,500 @@ Three focused screens cover all operator and developer needs:
 
 ---
 
-## 16. Implementation Phases
+## 16. Build Execution Plan
 
-### Phase 1 — Foundation (Non-Breaking)
+### 16.1 Execution Model
 
-1. Add migration for new additive entities (`Integration Source Types`, `Company Integration Entity Maps`, `Field Maps`, `Sync Watermarks`).
-2. Implement `BaseIntegrationConnector` + `ConnectorFactory`.
-3. Implement `IntegrationOrchestrator` using existing run/detail entities.
-4. Implement `FieldMappingEngine` and `MatchEngine`.
-5. Implement `WatermarkService`.
-6. Seed `MJ: Integration Source Types` rows.
+All implementation is driven by a **supervisor/worker split**:
 
-### Phase 2 — Initial Connectors
+| Role | Who | Responsibilities |
+|------|-----|-----------------|
+| **Supervisor** | This Claude Code VSCode session | Writes task prompts, delivers them to Docker CC, reviews results, decides next task, pushes commits to remote |
+| **Docker CC** | `claude-dev` container | Executes one atomic task at a time, reports PASS/FAIL with details |
 
-1. `HubSpotConnector` (action-backed).
-2. `SqlServerConnector` (direct DB, read-only).
-3. `YourMembershipConnector` (direct API — simple AMS source).
-4. `FileFeedConnector` (CSV via MJ Storage).
+**Prompt delivery pattern** (supervisor runs these from the host):
+```bash
+# Write task prompt to container
+docker exec claude-dev bash -c 'cat > /tmp/task.txt' << 'TASKEOF'
+<task text>
+TASKEOF
 
-### Phase 3 — Additional Connectors
+# Launch Docker CC non-interactively
+docker exec -d claude-dev bash -c \
+  'cd /workspace/MJ && cat /tmp/task.txt | claude --dangerously-skip-permissions -p > /tmp/result.txt 2>&1'
 
-1. `PostgreSQLConnector`.
-2. `MySQLConnector`.
-3. `ExcelConnector` (multi-sheet support).
-4. Recurrent file feed ingestion.
+# Monitor / read result when complete
+docker exec claude-dev tail -f /tmp/result.txt
+```
 
-### Phase 4 — UI
+**Branch & commit pattern:**
+- Docker CC works on branch `claude/integration-engine-build` (same branch, its own local clone)
+- Docker CC commits locally at each milestone
+- Supervisor pushes to remote: `docker exec claude-dev bash -c 'cd /workspace/MJ && git push'`
 
-1. Integration Control Tower (health overview).
-2. Connection Studio (source instance wizard).
-3. Mapping & Activity Workspace (entity/field map editor + run drill-down).
-4. Run diagnostics and watermark health indicators.
-5. Admin controls: manual trigger, backfill, partial replay.
+**Quality standard — non-negotiable for every task:**
+- Every new file has TSDoc/JSDoc on all public members
+- Every new package has a `README.md` explaining purpose, API, and usage examples
+- Zero `any` types; all public members PascalCase, private/protected camelCase
+- `npm run build` stays green after every task — Docker CC fixes any breaks before marking PASS
 
-### Phase 5 — Hardening
+---
 
-1. Distributed locking and concurrency controls (prevent duplicate runs).
-2. Backoff/retry policies per source type.
-3. Performance tuning for large-volume initial loads.
-4. Operational alerts and SLO instrumentation.
+### 16.2 Phase 0 — Environment Bootstrap
+
+> Supervisor + user perform this once. Docker CC not involved until T0.5.
+
+**T0.1** — Start the Docker workbench:
+```bash
+cd docker/workbench && ./start.sh
+```
+Wait for "Claude Dev Workbench Ready".
+
+**T0.2** — User enters container and authenticates (interactive — must be done by user in a terminal):
+```bash
+docker exec -it claude-dev zsh
+# Inside container:
+gh auth login          # GitHub auth — persists in named volume
+auth-setup             # Enter Auth0 credentials
+```
+Auth0 test user for Playwright: `da-robot-tester@bluecypress.io` / `!!SoDamnSecureItHurt$`
+
+**T0.3** — Bootstrap MJ database (user, inside container):
+```bash
+db-bootstrap           # Creates MJ_Workbench + all Flyway migrations
+```
+Acceptance: `sqldbs` shows `MJ_Workbench`; `sqlq "SELECT COUNT(*) FROM __mj.Entity"` > 0.
+
+**T0.4** — Verify MJ stack comes up healthy (user, inside container):
+```bash
+mjapi &
+mjui &
+```
+Acceptance: MJAPI logs "Listening on port 4000"; Explorer compiles and serves.
+
+**T0.5** — Supervisor delivers first Docker CC task: cut the working branch:
+```
+cd /workspace/MJ
+git checkout next && git pull origin next
+git checkout -b claude/integration-engine-build
+git push -u origin claude/integration-engine-build
+```
+Acceptance: `git branch -vv` shows `[origin/claude/integration-engine-build]`.
+
+---
+
+### 16.3 Phase 1 — Mock Source Databases
+
+> These three SQL Server databases replace real SaaS API calls during the entire build. Connectors read from them instead of hitting real HubSpot/Salesforce/YourMembership endpoints. Each lives on the same `sql-claude` SQL Server instance as `MJ_Workbench`.
+
+**T1.1** — Create `MockHubSpot` database and seed data.
+
+Schema mirrors HubSpot CRM API v3 object structure:
+
+| Table | Rows | Key columns |
+|-------|------|-------------|
+| `hs_Contacts` | 300 | `hs_object_id`, `firstname`, `lastname`, `email`, `phone`, `company`, `lifecyclestage`, `hs_lead_status`, `createdate`, `lastmodifieddate`, `hs_email_optout`, `city`, `state`, `zip`, `country`, `hs_is_deleted` |
+| `hs_Companies` | 100 | `hs_object_id`, `name`, `domain`, `industry`, `city`, `state`, `numberofemployees`, `annualrevenue`, `lifecyclestage`, `createdate`, `lastmodifieddate`, `hs_is_deleted` |
+| `hs_Deals` | 150 | `hs_object_id`, `dealname`, `amount`, `dealstage`, `closedate`, `pipeline`, `hubspot_owner_id`, `associated_company_id`, `associated_contact_id`, `createdate`, `lastmodifieddate`, `hs_is_deleted` |
+| `hs_Owners` | 20 | `owner_id`, `email`, `firstname`, `lastname`, `userid`, `createdat`, `updatedat`, `archived` |
+
+Data quality: realistic names/emails, dollar amounts $500–$250k, dates spread over 3 years. Acceptance: stored proc `EXEC MockHubSpot.dbo.sp_MockDataSummary` returns correct row counts.
+
+**T1.2** — Create `MockSalesforce` database and seed data.
+
+| Table | Rows | Key columns |
+|-------|------|-------------|
+| `sf_Contact` | 300 | `Id`, `FirstName`, `LastName`, `Email`, `Phone`, `AccountId`, `Title`, `Department`, `MailingCity`, `MailingState`, `MailingCountry`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
+| `sf_Account` | 100 | `Id`, `Name`, `Industry`, `Type`, `BillingCity`, `BillingState`, `NumberOfEmployees`, `AnnualRevenue`, `Phone`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
+| `sf_Opportunity` | 150 | `Id`, `Name`, `Amount`, `StageName`, `CloseDate`, `AccountId`, `OwnerId`, `Probability`, `Type`, `ForecastCategory`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
+| `sf_User` | 20 | `Id`, `FirstName`, `LastName`, `Email`, `Username`, `IsActive`, `Title`, `Department`, `CreatedDate` |
+
+Referential integrity: every `sf_Contact.AccountId` and `sf_Opportunity.AccountId` must resolve to a `sf_Account.Id`. Acceptance: `EXEC MockSalesforce.dbo.sp_MockDataSummary` correct + FK check query returns 0 orphans.
+
+**T1.3** — Create `MockYourMembership` database and seed data.
+
+| Table | Rows | Key columns |
+|-------|------|-------------|
+| `ym_Members` | 300 | `member_id`, `email`, `first_name`, `last_name`, `membership_level_id`, `join_date`, `expiration_date`, `status` (Active/Expired/Pending), `phone`, `chapter_id`, `created_at`, `updated_at` |
+| `ym_MembershipLevels` | 10 | `level_id`, `name`, `description`, `annual_fee`, `duration_months`, `is_active` |
+| `ym_Events` | 50 | `event_id`, `title`, `description`, `start_date`, `end_date`, `location`, `max_capacity`, `current_capacity`, `status`, `chapter_id`, `created_at` |
+| `ym_EventRegistrations` | 200 | `registration_id`, `event_id`, `member_id`, `registration_date`, `status`, `amount_paid`, `created_at` |
+| `ym_Chapters` | 15 | `chapter_id`, `name`, `description`, `state`, `is_active`, `created_at` |
+
+Acceptance: `EXEC MockYourMembership.dbo.sp_MockDataSummary` correct + zero orphan registrations.
+
+---
+
+### 16.4 Phase 2 — Database Schema (Migrations)
+
+**T2.1** — Migration for `MJ: Integration Source Types`.
+- File: `migrations/v2/V[timestamp]__v2.x_Integration_Source_Types.sql`
+- Creates `__mj.IntegrationSourceType` per Section 6.2 field spec
+- Seeds 3 rows: `SaaS API` / `SaaSAPIConnector`, `Relational Database` / `RelationalDBConnector`, `File Feed` / `FileFeedConnector`
+- Run `mj migrate`, then CodeGen
+- Acceptance: `sqlq "SELECT Name, DriverClass FROM __mj.IntegrationSourceType"` returns 3 rows; `CompanyIntegrationSourceTypeEntity` exists in generated entity subclasses and compiles
+
+**T2.2** — Migration for `MJ: Company Integration Entity Maps`.
+- Creates `__mj.CompanyIntegrationEntityMap` per Section 6.2
+- FK to `__mj.CompanyIntegration(ID)` and `__mj.Entity(ID)`
+- Run migrate + CodeGen
+- Acceptance: Table exists; `CompanyIntegrationEntityMapEntity` in entity_subclasses compiles
+
+**T2.3** — Migration for `MJ: Company Integration Field Maps`.
+- Creates `__mj.CompanyIntegrationFieldMap` per Section 6.3
+- FK to `__mj.CompanyIntegrationEntityMap(ID)`
+- Run migrate + CodeGen
+- Acceptance: Table + `CompanyIntegrationFieldMapEntity` compiles
+
+**T2.4** — Migration for `MJ: Company Integration Sync Watermarks`.
+- Creates `__mj.CompanyIntegrationSyncWatermark` per Section 6.4
+- FK to `__mj.CompanyIntegrationEntityMap(ID)`
+- Run migrate + CodeGen
+- Acceptance: Table + `CompanyIntegrationSyncWatermarkEntity` compiles
+
+**T2.5** — Migration: add `SourceTypeID` FK to `CompanyIntegration`.
+- `ALTER TABLE __mj.CompanyIntegration ADD SourceTypeID UNIQUEIDENTIFIER NULL`
+- FK constraint to `__mj.IntegrationSourceType(ID)`
+- Run migrate + CodeGen
+- Acceptance: Column on `CompanyIntegrationEntity`, nullable, existing rows unaffected
+
+**T2.6** — Verify full build after all migrations.
+- `npm run build` on `packages/MJCoreEntities`
+- Fix any CodeGen output issues
+- Commit: `feat(integration): add integration engine database schema migrations`
+- Acceptance: Zero TypeScript errors; supervisor pushes commit to remote
+
+---
+
+### 16.5 Phase 3 — TypeScript Package Scaffold
+
+**T3.1** — Create `packages/Integration/engine` package (`@memberjunction/integration-engine`).
+- `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/index.ts`
+- `README.md`: purpose, package API summary, example usage
+- Implement `src/types.ts`: all union types + `ExternalRecord`, `MappedRecord`, `SyncResult`, `SyncRecordError`, `DefaultFieldMapping` per Section 7.1
+- `npm run build` green
+- Acceptance: Package builds; types exported from index
+
+**T3.2** — Implement `BaseIntegrationConnector` abstract class.
+- Per Section 5.3: `TestConnection`, `DiscoverObjects`, `DiscoverFields`, `FetchChanges` abstract
+- `GetDefaultFieldMappings` default returns `[]`
+- Full TSDoc on every method (parameters, return value, purpose)
+- Acceptance: `npm run build` green; abstract class exported
+
+**T3.3** — Implement `ConnectorFactory`.
+- Per Section 7.2
+- Unit test (Vitest): register a mock connector class, `ConnectorFactory.Resolve` returns it correctly; throws on unknown driver class
+- Acceptance: `npm run test` green
+
+**T3.4** — Implement `FieldMappingEngine` + all transform types.
+- `transforms.ts` interfaces per Section 8.2
+- `FieldMappingEngine.Apply(records, fieldMaps)` executes pipeline per field map
+- Each transform: `direct`, `regex`, `split`, `combine`, `lookup`, `format`, `substring`, `coerce`, `custom` (sandboxed via `vm.runInNewContext`)
+- Unit tests: one test per transform type with real input/output assertion
+- Acceptance: All transform unit tests pass
+
+**T3.5** — Implement `MatchEngine`.
+- Resolves each `MappedRecord` via `RunView` with key field filters + `CompanyIntegrationRecordMap` lookup
+- Returns Create/Update/Skip decision per record
+- Unit tests with mocked `RunView`: verify correct decisions for new, existing, and deleted records
+- Acceptance: All unit tests pass
+
+**T3.6** — Implement `WatermarkService`.
+- `Load` and `Update` methods per Section 9.4
+- Unit tests mock entity save; verify `Save()` called with correct watermark value
+- Acceptance: All unit tests pass
+
+**T3.7** — Implement `IntegrationOrchestrator`.
+- Full run lifecycle per Section 7.3
+- Per-record error isolation: catch, log to `RunDetail.Details` JSON, continue
+- Integration test using a mock connector returning 5 fake `ExternalRecord`s:
+  - Writes records to `MJ_Workbench` Contacts entity
+  - Creates `CompanyIntegrationRun` with `Status=Completed`
+  - Updates watermark
+- Acceptance: Integration test passes; `CompanyIntegrationRun.Status = 'Completed'`
+
+**T3.8** — Create `packages/Integration/ui-types` package (`@memberjunction/integration-ui-types`).
+- `IntegrationSummary`, `RunStatusSummary`, `ConnectorHealth` view model types
+- No Node/SQL dependencies (Angular-safe)
+- `README.md` explaining which types to use where
+- Acceptance: `npm run build` green
+
+**T3.9** — Commit Phase 3.
+- `feat(integration): implement engine package with orchestrator, field mapping, and match engine`
+- Acceptance: Supervisor pushes commit; `npm run test` in `integration-engine` all green
+
+---
+
+### 16.6 Phase 4 — HubSpot Mock Connector
+
+**T4.1** — Create `packages/Integration/connectors` package (`@memberjunction/integration-connectors`).
+- Depends on `@memberjunction/integration-engine`
+- `README.md`: lists all connectors, explains mock DB pattern, documents how to swap for real APIs
+- Acceptance: Empty package builds clean
+
+**T4.2** — Seed `CompanyIntegration` records for HubSpot mock.
+- `Integration` row: Name=`HubSpot`, SourceTypeID pointing to `SaaS API` source type row
+- `CompanyIntegration` row: Name=`HubSpot (Mock)`, Configuration=`{"server":"sql-claude","database":"MockHubSpot"}`
+- Acceptance: Rows in `MJ_Workbench`; visible in MJ Explorer
+
+**T4.3** — Implement `HubSpotConnector`.
+- `@RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')`
+- `TestConnection`: `SELECT 1` against `MockHubSpot`
+- `DiscoverObjects`: returns the 3 `hs_*` table names with labels
+- `DiscoverFields(objectName)`: reads `INFORMATION_SCHEMA.COLUMNS` from `MockHubSpot`
+- `FetchChanges(ctx)`: `SELECT * FROM MockHubSpot.dbo.[objectName] WHERE lastmodifieddate > @watermark ORDER BY lastmodifieddate` with batch limit; maps rows to `ExternalRecord[]`
+- `GetDefaultFieldMappings('hs_Contacts', 'Contacts')`: returns suggestions mapping `email→Email`, `firstname→FirstName`, `lastname→LastName`, `phone→Phone`, `company→CompanyName`, `lifecyclestage→Status`
+- Full TSDoc on all methods
+- Unit tests: first fetch (no watermark) returns 300 contacts; second fetch (watermark = now) returns 0
+- Acceptance: Unit tests pass
+
+**T4.4** — Create entity maps + field maps for HubSpot mock.
+- `hs_Contacts` → MJ `Contacts` entity (or closest available), field maps from `GetDefaultFieldMappings`
+- `hs_Companies` → MJ `Companies` entity, field maps
+- Acceptance: Rows in entity map + field map tables
+
+**T4.5** — Run first HubSpot mock sync end-to-end.
+- Call `IntegrationOrchestrator.RunSync` for HubSpot mock `CompanyIntegration`
+- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; RunDetails show `RecordsCreated > 0`; `CompanyIntegrationRecordMap` has entries; watermark updated
+
+**T4.6** — Commit Phase 4.
+- `feat(integration): add HubSpot mock connector with end-to-end sync`
+
+---
+
+### 16.7 Phase 5 — Salesforce Mock Connector
+
+**T5.1** — Implement `SalesforceConnector`.
+- `@RegisterClass(BaseIntegrationConnector, 'SalesforceConnector')`
+- Reads from `MockSalesforce`: `sf_Contact`, `sf_Account`, `sf_Opportunity`
+- Incremental: `WHERE LastModifiedDate > @watermark`
+- `GetDefaultFieldMappings('sf_Contact', 'Contacts')`: `Email→Email`, `FirstName→FirstName`, `LastName→LastName`, `Phone→Phone`, `Title→Title`, `Department→Department`
+- Unit tests: 300 contacts on first fetch; watermark advance reduces count
+- Acceptance: Unit tests pass
+
+**T5.2** — Seed `CompanyIntegration` records + entity maps for Salesforce mock.
+- Acceptance: Rows present; MJ Explorer shows Salesforce integration
+
+**T5.3** — Run first Salesforce mock sync end-to-end.
+- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; records created; watermark updated
+
+**T5.4** — Commit Phase 5.
+- `feat(integration): add Salesforce mock connector with end-to-end sync`
+
+---
+
+### 16.8 Phase 6 — YourMembership Mock Connector
+
+**T6.1** — Implement `YourMembershipConnector`.
+- `@RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')`
+- Reads from `MockYourMembership`: `ym_Members`, `ym_Events`, `ym_EventRegistrations`
+- Incremental on `updated_at` / `created_at`
+- `GetDefaultFieldMappings('ym_Members', 'Contacts')`: `email→Email`, `first_name→FirstName`, `last_name→LastName`, `phone→Phone`, `status→Status`, `join_date→JoinDate`
+- Unit tests: 300 members on first fetch
+- Acceptance: Unit tests pass
+
+**T6.2** — Seed `CompanyIntegration` + entity maps.
+- Acceptance: Rows present
+
+**T6.3** — Run first YourMembership mock sync end-to-end.
+- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; records created
+
+**T6.4** — Commit Phase 6.
+- `feat(integration): add YourMembership mock connector with end-to-end sync`
+
+---
+
+### 16.9 Phase 7 — File Feed Connector
+
+**T7.1** — Implement `FileFeedConnector`.
+- `@RegisterClass(BaseIntegrationConnector, 'FileFeedConnector')`
+- Uses `@memberjunction/storage` to read file from `CompanyIntegration.Configuration.StoragePath`
+- `DiscoverObjects`: returns file/sheet names
+- `FetchChanges`: parses CSV (header row → field names) or Excel (sheet selector from `EntityMap.ExternalObjectName`); returns `ExternalRecord[]`
+- Watermark on file last-modified timestamp or content hash
+- Unit test: 100-row CSV returns correct ExternalRecord array
+- Acceptance: Unit tests pass
+
+**T7.2** — Create sample 100-row CSV mock file and `CompanyIntegration` record.
+- CSV: `first_name,last_name,email,phone,company`
+- Store in `/workspace/MJ/packages/Integration/connectors/test-fixtures/sample-contacts.csv`
+- `CompanyIntegration`: Name=`CSV Import (Sample)`, SourceTypeID=`File Feed`
+- Run sync end-to-end
+- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; 100 records created
+
+**T7.3** — Commit Phase 7.
+- `feat(integration): add File Feed connector (CSV/Excel) via MJ Storage`
+
+---
+
+### 16.10 Phase 8 — Angular UI: Control Tower
+
+**T8.1** — Create Integration Dashboard module scaffold.
+- New Angular module in `packages/Angular/Explorer/dashboards/src/lib/integration/`
+- `IntegrationControlTowerComponent` registered with `@RegisterClass(BaseResourceComponent, 'IntegrationControlTower')`
+- `LoadIntegrationDashboard()` tree-shaking prevention function exported from `public-api.ts`
+- Module added to dashboards barrel and `app.module.ts` bootstrap
+- `README.md` in the module folder
+- Acceptance: Component navigable in MJ Explorer (blank page is fine at this step)
+
+**T8.2** — Implement integration health cards.
+- Batch-load all `CompanyIntegration` + most recent `CompanyIntegrationRun` per integration with one `RunViews` call
+- Card per integration: name, source type icon (Font Awesome), last run time (relative), status chip (green=Completed, amber=stale >24h, red=Failed), records synced count
+- Use `<mj-loading>` during data fetch
+- Acceptance: Playwright screenshot shows 4 cards (HubSpot, Salesforce, YourMembership, CSV Import)
+
+**T8.3** — Implement "Run Now" button with live status polling.
+- "Run Now" per card → calls `RunIntegrationSync` action
+- Polls `CompanyIntegrationRun.Status` every 3 seconds until terminal state
+- Card status chip animates during Running; updates to Completed/Failed on finish
+- Acceptance: Playwright test: click Run Now → card shows Running → then Completed
+
+**T8.4** — Implement run history expandable rows.
+- Click card → expand run history (last 10 runs, paginated)
+- Click a run row → drill down showing per-entity-map record counts and any errors
+- Acceptance: Playwright: expand HubSpot card → run history visible with at least 1 row; click row → run detail shows entity maps
+
+---
+
+### 16.11 Phase 9 — Angular UI: Connection Studio
+
+**T9.1** — Create `IntegrationConnectionStudioComponent` wizard.
+- Step 1: Source type selection (loads `MJ: Integration Source Types` as icon cards)
+- Step 2: Configuration form — fields differ by selected source type:
+  - SaaS API: Name, Description, API Base URL, API Key hint
+  - Relational Database: Name, Server, Database Name, Username, Password
+  - File Feed: Name, Storage Path, File Type (CSV/Excel)
+- Step 3: Test connection → Save
+- `README.md` for the wizard
+- Acceptance: Playwright screenshot shows 3 source type cards in step 1
+
+**T9.2** — Implement Test Connection flow.
+- Calls `connector.TestConnection()` via a new `TestIntegrationConnection` action
+- Shows success (green check, message) or failure (red, error detail)
+- "Save" button only enabled after successful test
+- On Save: creates `CompanyIntegration` + `SourceTypeID` record
+- Acceptance: Playwright: select Relational Database → fill MockSalesforce connection details → Test → sees "Connection successful"
+
+---
+
+### 16.12 Phase 10 — Angular UI: Mapping & Activity Workspace
+
+**T10.1** — Create `IntegrationMappingWorkspaceComponent` layout.
+- Left panel (25%): integration selector + entity map list
+- Center panel (50%): field mapping editor for selected entity map
+- Right panel (25%): run detail drill-down
+- `README.md` for the workspace
+- Acceptance: Layout renders without errors; Playwright screenshot shows 3-column layout
+
+**T10.2** — Implement entity map list panel.
+- Loads `CompanyIntegrationEntityMap` for selected integration
+- Enable/disable toggle per entity map (updates `SyncEnabled`)
+- "Add Entity Map" button → dialog: source object picker (calls `DiscoverObjects`), MJ entity picker, conflict resolution selector
+- Acceptance: Playwright: select HubSpot Mock → see Contacts and Companies entity maps with toggles
+
+**T10.3** — Implement field mapping grid.
+- Select entity map → load field maps in a Kendo Grid
+- Source field dropdown from `DiscoverFields`; destination dropdown from MJ entity fields
+- Transform type selector (dropdown) per row; transform config panel slides in on select
+- "Apply Suggestions" button runs `GetDefaultFieldMappings` and populates empty rows
+- Inline save per row
+- Acceptance: Playwright: click Contacts entity map → grid loads ≥5 pre-mapped rows; transform dropdown works
+
+**T10.4** — Implement run detail panel.
+- Shows last `CompanyIntegrationRunDetail` for selected entity map
+- Records created/updated/errored counters
+- Watermark before/after
+- Per-record error table (ExternalID, error message) if any errors
+- Acceptance: After a completed sync, Playwright: select entity map → right panel shows record counts and watermark values
+
+**T10.5** — Commit Phase 8–10.
+- `feat(integration): add Angular UI (Control Tower, Connection Studio, Mapping Workspace)`
+- Acceptance: `npm run build` for MJExplorer zero errors; supervisor pushes commit
+
+---
+
+### 16.13 Phase 11 — End-to-End Playwright Tests
+
+> All tests run headless inside the Docker workbench. Auth0 login uses `da-robot-tester@bluecypress.io` / `!!SoDamnSecureItHurt$`. Screenshots saved to `/workspace/e2e-screenshots/integration/`.
+
+**T11.1** — Auth0 login test.
+- Open `http://localhost:4200`
+- Snapshot → find Login button → click
+- Auth0 redirect → fill email + password → submit
+- Wait for app shell to load
+- Verify nav bar present, zero console errors
+- Screenshot: `integration-01-login.png`
+- Acceptance: PASS
+
+**T11.2** — Control Tower navigation test.
+- Navigate to Integration section (Control Tower)
+- Verify 4 integration cards present (HubSpot, Salesforce, YourMembership, CSV)
+- Each card shows a last-run timestamp and status chip
+- Screenshot: `integration-02-control-tower.png`
+- Acceptance: PASS; zero JS console errors
+
+**T11.3** — Manual sync trigger test.
+- Click "Run Now" on HubSpot Mock card
+- Wait for status to change Running → Completed (max 60 seconds)
+- Verify `RecordsProcessed > 0` shown on card
+- Screenshot: `integration-03-sync-complete.png`
+- Acceptance: PASS; run history row added under HubSpot card
+
+**T11.4** — Run history drill-down test.
+- Expand HubSpot Mock card → see run history
+- Click most recent run → see per-entity-map counters
+- Verify RecordsCreated shown for at least one entity map
+- Screenshot: `integration-04-run-detail.png`
+- Acceptance: PASS
+
+**T11.5** — Connection Studio smoke test.
+- Navigate to Connection Studio
+- Verify 3 source type cards visible
+- Select "Relational Database" → fill MockSalesforce connection (server=sql-claude, db=MockSalesforce, user=sa, password=Claude2Sql99)
+- Click Test Connection → see "Connection successful"
+- Screenshot: `integration-05-connection-test.png`
+- Acceptance: PASS
+
+**T11.6** — Mapping Workspace test.
+- Navigate to Mapping Workspace
+- Select HubSpot Mock integration
+- Select Contacts entity map
+- Verify field mapping grid shows ≥5 rows
+- Change one transform type via dropdown
+- Save inline
+- Screenshot: `integration-06-field-maps.png`
+- Acceptance: PASS; row saved without error
+
+**T11.7** — Full three-source regression run.
+- Trigger RunSync for HubSpot, Salesforce, and YourMembership in sequence
+- For each: verify `CompanyIntegrationRun.Status = 'Completed'`, watermark not null
+- Check MJ entity record counts match expected (Contacts should have ≥300 records after 3 sources)
+- Screenshot: `integration-07-regression-complete.png`
+- Acceptance: All 3 PASS; zero Failed runs; zero JS console errors throughout
+
+**T11.8** — Commit Phase 11 + PR.
+- `test(integration): add end-to-end Playwright tests for integration engine UI`
+- Open PR targeting `next`:
+  - Title: `feat: Integration Engine with mock SaaS, DB, and file connectors`
+  - Body summarizes all phases completed, links to E2E screenshots
+- Acceptance: PR open; all CI checks green; supervisor verifies final state
+
+---
+
+### 16.14 Completion Gate
+
+The build is **done** when ALL of the following are true:
+
+1. `MockHubSpot`, `MockSalesforce`, `MockYourMembership` databases exist with correct row counts verified by summary procs.
+2. All 5 migrations applied cleanly; CodeGen produces compiling entity classes for all 4 new entities.
+3. `npm run build` passes for `integration-engine` and `integration-connectors` packages.
+4. All unit tests (Vitest) pass with zero failures across both packages.
+5. All 3 mock connectors produce correct `ExternalRecord[]` output verified by unit tests.
+6. All 4 end-to-end sync runs (HubSpot, Salesforce, YourMembership, CSV) complete with `Status=Completed`.
+7. Angular UI compiles with zero TypeScript errors; no `any` types introduced.
+8. All 7 Playwright tests PASS with screenshots saved.
+9. Every new package and component has a `README.md` and full TSDoc coverage.
+10. PR `claude/integration-engine-build → next` is open and passing CI.
 
 ---
 
@@ -927,3 +1382,4 @@ Three focused screens cover all operator and developer needs:
 4. Run history, record maps, and audit lineage remain intact.
 5. File operations work against any MJ Storage provider (not just local disk).
 6. Initial production rollout can be phased safely without migration shock.
+7. Mock connectors are clearly documented and trivially swappable for real API implementations.
