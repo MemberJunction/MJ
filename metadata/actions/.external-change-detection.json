@@ -34,7 +34,13 @@
             "Description": "Number of concurrent record replays to process at once.",
             "IsRequired": false
           },
-          "primaryKey": {}
+          "primaryKey": {
+            "ID": "C8C09575-DDEC-408C-8243-C69C6DE48778"
+          },
+          "sync": {
+            "lastModified": "2026-03-03T19:48:28.707Z",
+            "checksum": "6f2f22ba17db7a39300eee04fe1efa9ff2f8df057962d00e914f87181038dc16"
+          }
         },
         {
           "fields": {
@@ -46,7 +52,13 @@
             "Description": "Number of entities to process in parallel during detection.",
             "IsRequired": false
           },
-          "primaryKey": {}
+          "primaryKey": {
+            "ID": "DA2374E3-845A-4398-9913-8D19B06712D1"
+          },
+          "sync": {
+            "lastModified": "2026-03-03T19:48:28.719Z",
+            "checksum": "350a41c66e71c395aaba5dc17ed5c45b33d765e8309e6d6809e8c3ff5106bb27"
+          }
         },
         {
           "fields": {
@@ -58,7 +70,13 @@
             "Description": "If true, detected changes will be automatically replayed through the entity system.",
             "IsRequired": false
           },
-          "primaryKey": {}
+          "primaryKey": {
+            "ID": "C30A537B-DA74-45C0-A2C6-4A2CEAEBA50A"
+          },
+          "sync": {
+            "lastModified": "2026-03-03T19:48:28.732Z",
+            "checksum": "da9c328945720d819fe8afbe33584be496f600c5bb6b5e2513c97b6b31021bf7"
+          }
         },
         {
           "fields": {
@@ -70,7 +88,13 @@
             "Description": "Number of hours a run can be in progress before it is considered stale.",
             "IsRequired": false
           },
-          "primaryKey": {}
+          "primaryKey": {
+            "ID": "EBF8DA63-15D2-41CA-B2E6-C5CA1DCE3F14"
+          },
+          "sync": {
+            "lastModified": "2026-03-03T19:48:28.743Z",
+            "checksum": "52f7710df46e6391909ed1919c96eedb8463052a9a039e742e1802405d03dc9a"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -100,6 +124,10 @@
     },
     "primaryKey": {
       "ID": "E9ED9885-8A46-4EA2-8EAD-69087B9F1E20"
+    },
+    "sync": {
+      "lastModified": "2026-03-03T19:48:28.650Z",
+      "checksum": "9ef2b327350bed7bd5b6a489436581e734543b7e9f4187feab043ea6d371122e"
     }
   }
 ]
