@@ -196,7 +196,7 @@ describe('ExternalChangeDetectorEngine - DoValuesDiffer', () => {
     v1: unknown,
     v2: unknown
   ) => {
-    return (eng as Record<string, Function>)['DoValuesDiffer'](tsType, v1, v2);
+    return (eng as unknown as Record<string, Function>)['DoValuesDiffer'](tsType, v1, v2);
   };
 
   it('should detect boolean differences', () => {
@@ -206,13 +206,13 @@ describe('ExternalChangeDetectorEngine - DoValuesDiffer', () => {
     expect(result.castValue2).toBe(false);
   });
 
-  it('should treat truthy values as true in boolean mode', () => {
-    // The boolean case uses `value ? true : false` (truthy check),
-    // so any truthy string (including 'false') maps to boolean true.
+  it('should convert string booleans', () => {
+    // CastToBoolean properly parses string representations:
+    // 'true' → true, 'false' → false (not treated as truthy string)
     const result = callDoValuesDiffer(engine, TSType.Boolean, 'true', 'false');
-    expect(result.differ).toBe(false); // both truthy → both true → no difference
+    expect(result.differ).toBe(true);
     expect(result.castValue1).toBe(true);
-    expect(result.castValue2).toBe(true); // 'false' is a truthy string
+    expect(result.castValue2).toBe(false);
   });
 
   it('should detect equal booleans', () => {
