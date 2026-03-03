@@ -101,23 +101,23 @@
 
     <!-- Conversation Details Section -->
     <mj-collapsible-panel
-        SectionKey="mJConversationDetails"
+        SectionKey="conversationDetails"
         SectionName="Conversation Details"
         Icon="fa fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversationDetails')"
+        [BadgeCount]="GetSectionRowCount('conversationDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Details','ArtifactVersionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Details')"
-                [AllowLoad]="IsSectionExpanded('mJConversationDetails')"
+                [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversationDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

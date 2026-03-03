@@ -73,14 +73,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -210,6 +202,24 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -240,10 +250,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Run Steps Section -->
+    <!-- MJ: AI Agent Run Steps Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunSteps"
-        SectionName="AI Agent Run Steps"
+        SectionName="MJ: AI Agent Run Steps"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

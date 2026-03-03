@@ -44,6 +44,16 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -76,23 +86,23 @@
 
     <!-- Recommendation Items Section -->
     <mj-collapsible-panel
-        SectionKey="mJRecommendationItems"
+        SectionKey="recommendationItems"
         SectionName="Recommendation Items"
         Icon="fa fa-lightbulb"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRecommendationItems')"
+        [BadgeCount]="GetSectionRowCount('recommendationItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Recommendation Items','RecommendationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Recommendation Items')"
-                [AllowLoad]="IsSectionExpanded('mJRecommendationItems')"
+                [AllowLoad]="IsSectionExpanded('recommendationItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRecommendationItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('recommendationItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

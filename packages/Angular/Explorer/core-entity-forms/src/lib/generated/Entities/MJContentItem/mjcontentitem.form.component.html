@@ -136,23 +136,23 @@
 
     <!-- Content Item Attributes Section -->
     <mj-collapsible-panel
-        SectionKey="mJContentItemAttributes"
+        SectionKey="contentItemAttributes"
         SectionName="Content Item Attributes"
         Icon="fa fa-tag"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentItemAttributes')"
+        [BadgeCount]="GetSectionRowCount('contentItemAttributes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Attributes','ContentItemID')"
                 [NewRecordValues]="NewRecordValues('MJ: Content Item Attributes')"
-                [AllowLoad]="IsSectionExpanded('mJContentItemAttributes')"
+                [AllowLoad]="IsSectionExpanded('contentItemAttributes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentItemAttributes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('contentItemAttributes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -161,23 +161,23 @@
 
     <!-- Content Item Tags Section -->
     <mj-collapsible-panel
-        SectionKey="mJContentItemTags"
+        SectionKey="contentItemTags"
         SectionName="Content Item Tags"
         Icon="fa fa-tag"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentItemTags')"
+        [BadgeCount]="GetSectionRowCount('contentItemTags')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','ItemID')"
                 [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
-                [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
+                [AllowLoad]="IsSectionExpanded('contentItemTags')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('contentItemTags', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

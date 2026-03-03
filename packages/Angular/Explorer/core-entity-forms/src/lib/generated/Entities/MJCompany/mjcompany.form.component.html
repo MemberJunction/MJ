@@ -102,33 +102,33 @@
 
     <!-- Company Integrations Section -->
     <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrations"
+        SectionKey="companyIntegrations"
         SectionName="Company Integrations"
         Icon="fa fa-plug"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrations')"
+        [BadgeCount]="GetSectionRowCount('companyIntegrations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','CompanyID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','CompanyName')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
+                [AllowLoad]="IsSectionExpanded('companyIntegrations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('companyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Employees Section -->
+    <!-- MJ: Employees Section -->
     <mj-collapsible-panel
         SectionKey="mJEmployees"
-        SectionName="Employees"
+        SectionName="MJ: Employees"
         Icon="fa-solid fa-users"
         Variant="related-entity"
         [Form]="this"
@@ -150,10 +150,35 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MCP Server Connections Section -->
+    <!-- Workflows Section -->
+    <mj-collapsible-panel
+        SectionKey="workflows"
+        SectionName="Workflows"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('workflows')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflows','CompanyName')"
+                [NewRecordValues]="NewRecordValues('MJ: Workflows')"
+                [AllowLoad]="IsSectionExpanded('workflows')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('workflows', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: MCP Server Connections Section -->
     <mj-collapsible-panel
         SectionKey="mJMCPServerConnections"
-        SectionName="MCP Server Connections"
+        SectionName="MJ: MCP Server Connections"
         Icon="fa fa-server"
         Variant="related-entity"
         [Form]="this"
@@ -177,33 +202,33 @@
 
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentNotes"
+        SectionKey="aIAgentNotes"
         SectionName="AI Agent Notes"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentNotes')"
+        [BadgeCount]="GetSectionRowCount('aIAgentNotes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','CompanyID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
+                [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Examples Section -->
+    <!-- MJ: AI Agent Examples Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentExamples"
-        SectionName="AI Agent Examples"
+        SectionName="MJ: AI Agent Examples"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

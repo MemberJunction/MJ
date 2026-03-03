@@ -93,23 +93,23 @@
 
     <!-- Data Context Items Section -->
     <mj-collapsible-panel
-        SectionKey="mJDataContextItems"
+        SectionKey="dataContextItems"
         SectionName="Data Context Items"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDataContextItems')"
+        [BadgeCount]="GetSectionRowCount('dataContextItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Data Context Items','DataContextID')"
                 [NewRecordValues]="NewRecordValues('MJ: Data Context Items')"
-                [AllowLoad]="IsSectionExpanded('mJDataContextItems')"
+                [AllowLoad]="IsSectionExpanded('dataContextItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDataContextItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -118,23 +118,23 @@
 
     <!-- Reports Section -->
     <mj-collapsible-panel
-        SectionKey="mJReports"
+        SectionKey="reports"
         SectionName="Reports"
         Icon="fa-solid fa-chart-line"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJReports')"
+        [BadgeCount]="GetSectionRowCount('reports')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Reports','DataContextID')"
                 [NewRecordValues]="NewRecordValues('MJ: Reports')"
-                [AllowLoad]="IsSectionExpanded('mJReports')"
+                [AllowLoad]="IsSectionExpanded('reports')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJReports', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -143,23 +143,23 @@
 
     <!-- Conversations Section -->
     <mj-collapsible-panel
-        SectionKey="mJConversations"
+        SectionKey="conversations"
         SectionName="Conversations"
         Icon="fa-regular fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversations')"
+        [BadgeCount]="GetSectionRowCount('conversations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','DataContextID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversations')"
-                [AllowLoad]="IsSectionExpanded('mJConversations')"
+                [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

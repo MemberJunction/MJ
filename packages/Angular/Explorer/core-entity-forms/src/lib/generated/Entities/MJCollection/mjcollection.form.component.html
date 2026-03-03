@@ -83,14 +83,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -109,6 +101,24 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -143,10 +153,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Collection Artifacts Section -->
+    <!-- MJ: Collection Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJCollectionArtifacts"
-        SectionName="Collection Artifacts"
+        SectionName="MJ: Collection Artifacts"
         Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
@@ -168,10 +178,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Collection Permissions Section -->
+    <!-- MJ: Collection Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJCollectionPermissions"
-        SectionName="Collection Permissions"
+        SectionName="MJ: Collection Permissions"
         Icon="fa fa-folder"
         Variant="related-entity"
         [Form]="this"
@@ -193,10 +203,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Collections Section -->
+    <!-- MJ: Collections Section -->
     <mj-collapsible-panel
         SectionKey="mJCollections"
-        SectionName="Collections"
+        SectionName="MJ: Collections"
         Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"

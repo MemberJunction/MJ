@@ -18,9 +18,10 @@ export class MJFileCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'hierarchyIdentifiers', sectionName: 'Hierarchy Identifiers', isExpanded: true },
             { sectionKey: 'categoryInformation', sectionName: 'Category Information', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJFileCategories', sectionName: 'File Categories', isExpanded: false },
-            { sectionKey: 'mJFiles', sectionName: 'Files', isExpanded: false }
+            { sectionKey: 'fileCategories', sectionName: 'File Categories', isExpanded: false },
+            { sectionKey: 'files', sectionName: 'Files', isExpanded: false }
         ]);
     }
 }

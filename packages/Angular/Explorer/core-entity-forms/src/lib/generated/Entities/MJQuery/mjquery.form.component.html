@@ -80,15 +80,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SQLDialectID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -195,7 +186,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="EmbeddingVector"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -207,6 +198,24 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="PlatformVariants"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -243,23 +252,23 @@
 
     <!-- Data Context Items Section -->
     <mj-collapsible-panel
-        SectionKey="mJDataContextItems"
+        SectionKey="dataContextItems"
         SectionName="Data Context Items"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDataContextItems')"
+        [BadgeCount]="GetSectionRowCount('dataContextItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Data Context Items','QueryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Data Context Items')"
-                [AllowLoad]="IsSectionExpanded('mJDataContextItems')"
+                [AllowLoad]="IsSectionExpanded('dataContextItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDataContextItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -268,23 +277,23 @@
 
     <!-- Query Fields Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueryFields"
+        SectionKey="queryFields"
         SectionName="Query Fields"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueryFields')"
+        [BadgeCount]="GetSectionRowCount('queryFields')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Fields','QueryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Query Fields')"
-                [AllowLoad]="IsSectionExpanded('mJQueryFields')"
+                [AllowLoad]="IsSectionExpanded('queryFields')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueryFields', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('queryFields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -293,33 +302,33 @@
 
     <!-- Query Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueryPermissions"
+        SectionKey="queryPermissions"
         SectionName="Query Permissions"
         Icon="fa fa-shield-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueryPermissions')"
+        [BadgeCount]="GetSectionRowCount('queryPermissions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Permissions','QueryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Query Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJQueryPermissions')"
+                [AllowLoad]="IsSectionExpanded('queryPermissions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueryPermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Query Parameters Section -->
+    <!-- MJ: Query Parameters Section -->
     <mj-collapsible-panel
         SectionKey="mJQueryParameters"
-        SectionName="Query Parameters"
+        SectionName="MJ: Query Parameters"
         Icon="fa fa-code"
         Variant="related-entity"
         [Form]="this"
@@ -343,48 +352,23 @@
 
     <!-- Query Entities Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueryEntities"
+        SectionKey="queryEntities"
         SectionName="Query Entities"
         Icon="fa fa-search"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueryEntities')"
+        [BadgeCount]="GetSectionRowCount('queryEntities')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Entities','QueryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Query Entities')"
-                [AllowLoad]="IsSectionExpanded('mJQueryEntities')"
+                [AllowLoad]="IsSectionExpanded('queryEntities')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueryEntities', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Query SQLs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJQuerySQLs"
-        SectionName="Query SQLs"
-        Icon="fa fa-terminal"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQuerySQLs')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query SQLs','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query SQLs')"
-                [AllowLoad]="IsSectionExpanded('mJQuerySQLs')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQuerySQLs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('queryEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

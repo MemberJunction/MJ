@@ -90,9 +90,19 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -131,10 +141,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Artifact Types Section -->
+    <!-- MJ: AI Agent Artifact Types Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentArtifactTypes"
-        SectionName="AI Agent Artifact Types"
+        SectionName="MJ: AI Agent Artifact Types"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -156,10 +166,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Conversation Artifacts Section -->
+    <!-- MJ: Conversation Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationArtifacts"
-        SectionName="Conversation Artifacts"
+        SectionName="MJ: Conversation Artifacts"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
@@ -181,10 +191,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Types Section -->
+    <!-- MJ: Artifact Types Section -->
     <mj-collapsible-panel
         SectionKey="mJArtifactTypes"
-        SectionName="Artifact Types"
+        SectionName="MJ: Artifact Types"
         Icon="fa fa-puzzle-piece"
         Variant="related-entity"
         [Form]="this"
@@ -206,10 +216,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifacts Section -->
+    <!-- MJ: Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJArtifacts"
-        SectionName="Artifacts"
+        SectionName="MJ: Artifacts"
         Icon="fa fa-file"
         Variant="related-entity"
         [Form]="this"
@@ -233,23 +243,23 @@
 
     <!-- AI Agents Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgents"
+        SectionKey="aIAgents"
         SectionName="AI Agents"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
+        [BadgeCount]="GetSectionRowCount('aIAgents')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','DefaultArtifactTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
+                [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

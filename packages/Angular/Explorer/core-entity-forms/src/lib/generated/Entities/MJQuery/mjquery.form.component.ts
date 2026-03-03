@@ -20,13 +20,13 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceQuality', sectionName: 'Performance & Quality', isExpanded: true },
             { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: false },
             { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
-            { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },
-            { sectionKey: 'mJQueryPermissions', sectionName: 'Query Permissions', isExpanded: false },
-            { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
-            { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false }
+            { sectionKey: 'dataContextItems', sectionName: 'Data Context Items', isExpanded: false },
+            { sectionKey: 'queryFields', sectionName: 'Query Fields', isExpanded: false },
+            { sectionKey: 'queryPermissions', sectionName: 'Query Permissions', isExpanded: false },
+            { sectionKey: 'mJQueryParameters', sectionName: 'MJ: Query Parameters', isExpanded: false },
+            { sectionKey: 'queryEntities', sectionName: 'Query Entities', isExpanded: false }
         ]);
     }
 }

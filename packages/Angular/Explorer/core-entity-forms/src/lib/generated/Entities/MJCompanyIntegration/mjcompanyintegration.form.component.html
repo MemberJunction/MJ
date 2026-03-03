@@ -160,6 +160,33 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SourceTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- Run History & Monitoring Section -->
     <mj-collapsible-panel
         SectionKey="runHistoryMonitoring"
@@ -226,23 +253,23 @@
 
     <!-- Company Integration Record Maps Section -->
     <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrationRecordMaps"
+        SectionKey="companyIntegrationRecordMaps"
         SectionName="Company Integration Record Maps"
         Icon="fa fa-sync"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationRecordMaps')"
+        [BadgeCount]="GetSectionRowCount('companyIntegrationRecordMaps')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Record Maps','CompanyIntegrationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integration Record Maps')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRecordMaps')"
+                [AllowLoad]="IsSectionExpanded('companyIntegrationRecordMaps')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRecordMaps', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRecordMaps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -251,23 +278,23 @@
 
     <!-- Company Integration Runs Section -->
     <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrationRuns"
+        SectionKey="companyIntegrationRuns"
         SectionName="Company Integration Runs"
         Icon="fa fa-briefcase"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationRuns')"
+        [BadgeCount]="GetSectionRowCount('companyIntegrationRuns')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Runs','CompanyIntegrationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integration Runs')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRuns')"
+                [AllowLoad]="IsSectionExpanded('companyIntegrationRuns')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -276,23 +303,23 @@
 
     <!-- Employee Company Integrations Section -->
     <mj-collapsible-panel
-        SectionKey="mJEmployeeCompanyIntegrations"
+        SectionKey="employeeCompanyIntegrations"
         SectionName="Employee Company Integrations"
         Icon="fa fa-link"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEmployeeCompanyIntegrations')"
+        [BadgeCount]="GetSectionRowCount('employeeCompanyIntegrations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Employee Company Integrations','CompanyIntegrationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Employee Company Integrations')"
-                [AllowLoad]="IsSectionExpanded('mJEmployeeCompanyIntegrations')"
+                [AllowLoad]="IsSectionExpanded('employeeCompanyIntegrations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEmployeeCompanyIntegrations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('employeeCompanyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -301,23 +328,48 @@
 
     <!-- Lists Section -->
     <mj-collapsible-panel
-        SectionKey="mJLists"
+        SectionKey="lists"
         SectionName="Lists"
         Icon="fa fa-list-ul"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJLists')"
+        [BadgeCount]="GetSectionRowCount('lists')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Lists','CompanyIntegrationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Lists')"
-                [AllowLoad]="IsSectionExpanded('mJLists')"
+                [AllowLoad]="IsSectionExpanded('lists')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJLists', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: Company Integration Entity Maps Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCompanyIntegrationEntityMaps"
+        SectionName="MJ: Company Integration Entity Maps"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationEntityMaps')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Entity Maps','CompanyIntegrationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Entity Maps')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationEntityMaps')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationEntityMaps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

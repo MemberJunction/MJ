@@ -18,9 +18,10 @@ export class MJAIPromptCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryIdentification', sectionName: 'Category Identification', isExpanded: true },
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
-            { sectionKey: 'mJAIPromptCategories', sectionName: 'AI Prompt Categories', isExpanded: false }
+            { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false },
+            { sectionKey: 'aIPromptCategories', sectionName: 'AI Prompt Categories', isExpanded: false }
         ]);
     }
 }

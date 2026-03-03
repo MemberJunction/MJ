@@ -43,20 +43,12 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -76,6 +68,24 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -112,23 +122,23 @@
 
     <!-- List Categories Section -->
     <mj-collapsible-panel
-        SectionKey="mJListCategories"
+        SectionKey="listCategories"
         SectionName="List Categories"
         Icon="fa fa-list"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJListCategories')"
+        [BadgeCount]="GetSectionRowCount('listCategories')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: List Categories')"
-                [AllowLoad]="IsSectionExpanded('mJListCategories')"
+                [AllowLoad]="IsSectionExpanded('listCategories')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJListCategories', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('listCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -137,23 +147,23 @@
 
     <!-- Lists Section -->
     <mj-collapsible-panel
-        SectionKey="mJLists"
+        SectionKey="lists"
         SectionName="Lists"
         Icon="fa fa-list-ul"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJLists')"
+        [BadgeCount]="GetSectionRowCount('lists')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Lists','CategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Lists')"
-                [AllowLoad]="IsSectionExpanded('mJLists')"
+                [AllowLoad]="IsSectionExpanded('lists')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJLists', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

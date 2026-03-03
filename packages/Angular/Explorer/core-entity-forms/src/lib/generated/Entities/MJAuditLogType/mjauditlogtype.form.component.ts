@@ -18,9 +18,10 @@ export class MJAuditLogTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'logTypeDefinition', sectionName: 'Log Type Definition', isExpanded: true },
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAuditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },
-            { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false }
+            { sectionKey: 'auditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },
+            { sectionKey: 'auditLogs', sectionName: 'Audit Logs', isExpanded: false }
         ]);
     }
 }

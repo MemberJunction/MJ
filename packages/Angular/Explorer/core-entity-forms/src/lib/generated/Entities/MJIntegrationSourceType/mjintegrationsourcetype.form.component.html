@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Output Type Details Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="outputTypeDetails"
-        SectionName="Output Type Details"
-        Icon="fa fa-vial"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -31,16 +31,30 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-cog"
-        [Form]="this"
-        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IconClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -64,25 +78,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Test Run Outputs Section -->
+    <!-- MJ: Company Integrations Section -->
     <mj-collapsible-panel
-        SectionKey="mJTestRunOutputs"
-        SectionName="Test Run Outputs"
-        Icon="fa fa-file-image"
+        SectionKey="mJCompanyIntegrations"
+        SectionName="MJ: Company Integrations"
+        Icon="fa fa-plug"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTestRunOutputs')"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Run Outputs','OutputTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Run Outputs')"
-                [AllowLoad]="IsSectionExpanded('mJTestRunOutputs')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','SourceTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTestRunOutputs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

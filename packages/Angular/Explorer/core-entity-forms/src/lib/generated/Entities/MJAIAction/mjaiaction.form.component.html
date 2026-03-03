@@ -101,23 +101,23 @@
 
     <!-- AI Model Actions Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIModelActions"
+        SectionKey="aIModelActions"
         SectionName="AI Model Actions"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIModelActions')"
+        [BadgeCount]="GetSectionRowCount('aIModelActions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Actions','AIActionID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Actions')"
-                [AllowLoad]="IsSectionExpanded('mJAIModelActions')"
+                [AllowLoad]="IsSectionExpanded('aIModelActions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIModelActions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIModelActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -126,23 +126,23 @@
 
     <!-- Entity AI Actions Section -->
     <mj-collapsible-panel
-        SectionKey="mJEntityAIActions"
+        SectionKey="entityAIActions"
         SectionName="Entity AI Actions"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityAIActions')"
+        [BadgeCount]="GetSectionRowCount('entityAIActions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity AI Actions','AIActionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity AI Actions')"
-                [AllowLoad]="IsSectionExpanded('mJEntityAIActions')"
+                [AllowLoad]="IsSectionExpanded('entityAIActions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityAIActions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('entityAIActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

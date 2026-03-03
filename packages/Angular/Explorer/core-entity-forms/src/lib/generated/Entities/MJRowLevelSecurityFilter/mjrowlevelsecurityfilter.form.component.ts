@@ -18,8 +18,9 @@ export class MJRowLevelSecurityFilterFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifier', sectionName: 'Identifier', isExpanded: true },
             { sectionKey: 'filterDefinition', sectionName: 'Filter Definition', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJEntityPermissions', sectionName: 'Entity Permissions', isExpanded: false }
+            { sectionKey: 'entityPermissions', sectionName: 'Entity Permissions', isExpanded: false }
         ]);
     }
 }

@@ -122,10 +122,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Modalities Section -->
+    <!-- MJ: AI Agent Modalities Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentModalities"
-        SectionName="AI Agent Modalities"
+        SectionName="MJ: AI Agent Modalities"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -147,10 +147,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Model Modalities Section -->
+    <!-- MJ: AI Model Modalities Section -->
     <mj-collapsible-panel
         SectionKey="mJAIModelModalities"
-        SectionName="AI Model Modalities"
+        SectionName="MJ: AI Model Modalities"
         Icon="fa fa-brain"
         Variant="related-entity"
         [Form]="this"
@@ -174,33 +174,33 @@
 
     <!-- AI Model Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIModelTypesDefaultOutputModalityID"
+        SectionKey="aIModelTypes"
         SectionName="AI Model Types"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIModelTypesDefaultOutputModalityID')"
+        [BadgeCount]="GetSectionRowCount('aIModelTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Types','DefaultOutputModalityID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIModelTypesDefaultOutputModalityID')"
+                [AllowLoad]="IsSectionExpanded('aIModelTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIModelTypesDefaultOutputModalityID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIModelTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Run Medias Section -->
+    <!-- MJ: AI Prompt Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunMedias"
-        SectionName="AI Prompt Run Medias"
+        SectionName="MJ: AI Prompt Run Medias"
         Icon="fa fa-image"
         Variant="related-entity"
         [Form]="this"
@@ -222,10 +222,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Conversation Detail Attachments Section -->
+    <!-- MJ: Conversation Detail Attachments Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailAttachments"
-        SectionName="Conversation Detail Attachments"
+        SectionName="MJ: Conversation Detail Attachments"
         Icon="fa fa-paperclip"
         Variant="related-entity"
         [Form]="this"
@@ -247,10 +247,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Run Medias Section -->
+    <!-- MJ: AI Agent Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunMedias"
-        SectionName="AI Agent Run Medias"
+        SectionName="MJ: AI Agent Run Medias"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -274,23 +274,23 @@
 
     <!-- AI Model Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIModelTypesDefaultInputModalityID"
+        SectionKey="aIModelTypes"
         SectionName="AI Model Types"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIModelTypesDefaultInputModalityID')"
+        [BadgeCount]="GetSectionRowCount('aIModelTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Types','DefaultInputModalityID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIModelTypesDefaultInputModalityID')"
+                [AllowLoad]="IsSectionExpanded('aIModelTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIModelTypesDefaultInputModalityID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIModelTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

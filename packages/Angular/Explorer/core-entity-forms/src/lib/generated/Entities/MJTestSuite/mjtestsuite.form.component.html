@@ -17,20 +17,12 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -111,6 +103,24 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -141,10 +151,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Test Suites Section -->
+    <!-- MJ: Test Suites Section -->
     <mj-collapsible-panel
         SectionKey="mJTestSuites"
-        SectionName="Test Suites"
+        SectionName="MJ: Test Suites"
         Icon="fa fa-flask"
         Variant="related-entity"
         [Form]="this"
@@ -166,10 +176,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Test Suite Runs Section -->
+    <!-- MJ: Test Suite Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJTestSuiteRuns"
-        SectionName="Test Suite Runs"
+        SectionName="MJ: Test Suite Runs"
         Icon="fa fa-flask"
         Variant="related-entity"
         [Form]="this"
@@ -191,10 +201,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Test Suite Tests Section -->
+    <!-- MJ: Test Suite Tests Section -->
     <mj-collapsible-panel
         SectionKey="mJTestSuiteTests"
-        SectionName="Test Suite Tests"
+        SectionName="MJ: Test Suite Tests"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"

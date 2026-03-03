@@ -51,14 +51,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -104,6 +96,24 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -134,10 +144,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Projects Section -->
+    <!-- MJ: Projects Section -->
     <mj-collapsible-panel
         SectionKey="mJProjects"
-        SectionName="Projects"
+        SectionName="MJ: Projects"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
@@ -161,33 +171,33 @@
 
     <!-- Conversations Section -->
     <mj-collapsible-panel
-        SectionKey="mJConversations"
+        SectionKey="conversations"
         SectionName="Conversations"
         Icon="fa-regular fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversations')"
+        [BadgeCount]="GetSectionRowCount('conversations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','ProjectID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversations')"
-                [AllowLoad]="IsSectionExpanded('mJConversations')"
+                [AllowLoad]="IsSectionExpanded('conversations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('conversations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Tasks Section -->
+    <!-- MJ: Tasks Section -->
     <mj-collapsible-panel
         SectionKey="mJTasks"
-        SectionName="Tasks"
+        SectionName="MJ: Tasks"
         Icon="fa fa-tasks"
         Variant="related-entity"
         [Form]="this"

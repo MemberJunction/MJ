@@ -136,23 +136,23 @@
 
     <!-- Template Contents Section -->
     <mj-collapsible-panel
-        SectionKey="mJTemplateContents"
+        SectionKey="templateContents"
         SectionName="Template Contents"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTemplateContents')"
+        [BadgeCount]="GetSectionRowCount('templateContents')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
-                [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
+                [AllowLoad]="IsSectionExpanded('templateContents')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('templateContents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -161,48 +161,48 @@
 
     <!-- Template Params Section -->
     <mj-collapsible-panel
-        SectionKey="mJTemplateParams"
+        SectionKey="templateParams"
         SectionName="Template Params"
         Icon="fa fa-cog"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTemplateParams')"
+        [BadgeCount]="GetSectionRowCount('templateParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Params','TemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: Template Params')"
-                [AllowLoad]="IsSectionExpanded('mJTemplateParams')"
+                [AllowLoad]="IsSectionExpanded('templateParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTemplateParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('templateParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- User Notification Types (SMS Template) Section -->
+    <!-- MJ: User Notification Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJUserNotificationTypesSMSTemplateID"
-        SectionName="User Notification Types (SMS Template)"
+        SectionKey="mJUserNotificationTypes"
+        SectionName="MJ: User Notification Types"
         Icon="fa fa-bell"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypesSMSTemplateID')"
+        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','SMSTemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
-                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesSMSTemplateID')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesSMSTemplateID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -211,48 +211,48 @@
 
     <!-- AI Prompts Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIPrompts"
+        SectionKey="aIPrompts"
         SectionName="AI Prompts"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIPrompts')"
+        [BadgeCount]="GetSectionRowCount('aIPrompts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','TemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
-                [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
+                [AllowLoad]="IsSectionExpanded('aIPrompts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- User Notification Types (Email Template) Section -->
+    <!-- MJ: User Notification Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJUserNotificationTypesEmailTemplateID"
-        SectionName="User Notification Types (Email Template)"
+        SectionKey="mJUserNotificationTypes"
+        SectionName="MJ: User Notification Types"
         Icon="fa fa-bell"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypesEmailTemplateID')"
+        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','EmailTemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
-                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesEmailTemplateID')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesEmailTemplateID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -261,23 +261,23 @@
 
     <!-- Entity Documents Section -->
     <mj-collapsible-panel
-        SectionKey="mJEntityDocuments"
+        SectionKey="entityDocuments"
         SectionName="Entity Documents"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityDocuments')"
+        [BadgeCount]="GetSectionRowCount('entityDocuments')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','TemplateID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
-                [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
+                [AllowLoad]="IsSectionExpanded('entityDocuments')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('entityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

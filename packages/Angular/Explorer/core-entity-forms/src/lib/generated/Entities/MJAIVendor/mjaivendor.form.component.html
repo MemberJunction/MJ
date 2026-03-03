@@ -83,10 +83,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Credential Bindings Section -->
+    <!-- MJ: AI Credential Bindings Section -->
     <mj-collapsible-panel
         SectionKey="mJAICredentialBindings"
-        SectionName="AI Credential Bindings"
+        SectionName="MJ: AI Credential Bindings"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
@@ -108,10 +108,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Model Costs Section -->
+    <!-- MJ: AI Model Costs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIModelCosts"
-        SectionName="AI Model Costs"
+        SectionName="MJ: AI Model Costs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -133,10 +133,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Model Vendors Section -->
+    <!-- MJ: AI Model Vendors Section -->
     <mj-collapsible-panel
         SectionKey="mJAIModelVendors"
-        SectionName="AI Model Vendors"
+        SectionName="MJ: AI Model Vendors"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -158,10 +158,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Models Section -->
+    <!-- MJ: AI Prompt Models Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptModels"
-        SectionName="AI Prompt Models"
+        SectionName="MJ: AI Prompt Models"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -183,10 +183,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs Section -->
+    <!-- MJ: AI Prompt Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRuns"
-        SectionName="AI Prompt Runs"
+        SectionName="MJ: AI Prompt Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -210,33 +210,33 @@
 
     <!-- AI Result Cache Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIResultCache"
+        SectionKey="aIResultCache"
         SectionName="AI Result Cache"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIResultCache')"
+        [BadgeCount]="GetSectionRowCount('aIResultCache')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Result Cache','VendorID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Result Cache')"
-                [AllowLoad]="IsSectionExpanded('mJAIResultCache')"
+                [AllowLoad]="IsSectionExpanded('aIResultCache')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIResultCache', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('aIResultCache', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- AI Vendor Types Section -->
+    <!-- MJ: AI Vendor Types Section -->
     <mj-collapsible-panel
         SectionKey="mJAIVendorTypes"
-        SectionName="AI Vendor Types"
+        SectionName="MJ: AI Vendor Types"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -258,10 +258,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Runs Section -->
+    <!-- MJ: AI Agent Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
-        SectionName="AI Agent Runs"
+        SectionName="MJ: AI Agent Runs"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

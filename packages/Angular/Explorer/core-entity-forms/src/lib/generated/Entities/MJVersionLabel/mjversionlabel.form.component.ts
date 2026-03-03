@@ -19,11 +19,12 @@ export class MJVersionLabelFormComponent extends BaseFormComponent {
             { sectionKey: 'labelDefinition', sectionName: 'Label Definition', isExpanded: true },
             { sectionKey: 'scopeTargets', sectionName: 'Scope Targets', isExpanded: true },
             { sectionKey: 'creationMetrics', sectionName: 'Creation Metrics', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJVersionLabelRestoresPreRestoreLabelID', sectionName: 'Version Label Restores (Pre-Restore Label ID)', isExpanded: false },
-            { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false },
-            { sectionKey: 'mJVersionLabelRestoresVersionLabelID', sectionName: 'Version Label Restores (Version Label ID)', isExpanded: false },
-            { sectionKey: 'mJVersionLabels', sectionName: 'Version Labels', isExpanded: false }
+            { sectionKey: 'mJVersionLabelRestores', sectionName: 'MJ: Version Label Restores', isExpanded: false },
+            { sectionKey: 'mJVersionLabelItems', sectionName: 'MJ: Version Label Items', isExpanded: false },
+            { sectionKey: 'mJVersionLabelRestores1', sectionName: 'MJ: Version Label Restores', isExpanded: false },
+            { sectionKey: 'mJVersionLabels', sectionName: 'MJ: Version Labels', isExpanded: false }
         ]);
     }
 }

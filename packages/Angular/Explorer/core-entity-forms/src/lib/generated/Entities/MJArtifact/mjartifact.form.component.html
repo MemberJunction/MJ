@@ -117,10 +117,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Artifact Versions Section -->
+    <!-- MJ: Artifact Versions Section -->
     <mj-collapsible-panel
         SectionKey="mJArtifactVersions"
-        SectionName="Artifact Versions"
+        SectionName="MJ: Artifact Versions"
         Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
@@ -142,10 +142,35 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Permissions Section -->
+    <!-- MJ: Collection Artifacts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCollectionArtifacts"
+        SectionName="MJ: Collection Artifacts"
+        Icon="fa fa-folder-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCollectionArtifacts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','ArtifactID')"
+                [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
+                [AllowLoad]="IsSectionExpanded('mJCollectionArtifacts')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCollectionArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- MJ: Artifact Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJArtifactPermissions"
-        SectionName="Artifact Permissions"
+        SectionName="MJ: Artifact Permissions"
         Icon="fa fa-key"
         Variant="related-entity"
         [Form]="this"

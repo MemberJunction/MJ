@@ -18,9 +18,10 @@ export class MJGeneratedCodeCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryInformation', sectionName: 'Category Information', isExpanded: true },
             { sectionKey: 'hierarchyRelationships', sectionName: 'Hierarchy Relationships', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJGeneratedCodeCategories', sectionName: 'Generated Code Categories', isExpanded: false },
-            { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false }
+            { sectionKey: 'generatedCodeCategories', sectionName: 'Generated Code Categories', isExpanded: false },
+            { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false }
         ]);
     }
 }

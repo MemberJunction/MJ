@@ -66,23 +66,23 @@
 
     <!-- Action Contexts Section -->
     <mj-collapsible-panel
-        SectionKey="mJActionContexts"
+        SectionKey="actionContexts"
         SectionName="Action Contexts"
         Icon="fa fa-link"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJActionContexts')"
+        [BadgeCount]="GetSectionRowCount('actionContexts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Contexts','ContextTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Action Contexts')"
-                [AllowLoad]="IsSectionExpanded('mJActionContexts')"
+                [AllowLoad]="IsSectionExpanded('actionContexts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJActionContexts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('actionContexts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

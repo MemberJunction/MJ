@@ -8,17 +8,26 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Dialect Information Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="dialectInformation"
-        SectionName="Dialect Information"
-        Icon="fa fa-language"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="CompanyIntegrationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ExternalObjectName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -26,7 +35,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DatabaseName"
+            FieldName="ExternalObjectLabel"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -34,72 +43,76 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="LanguageName"
+            FieldName="EntityID"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SyncDirection"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
+            FieldName="SyncEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MatchStrategy"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Integration & Resources Section -->
-    <mj-collapsible-panel
-        SectionKey="integrationResources"
-        SectionName="Integration & Resources"
-        Icon="fa fa-microchip"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="PlatformKey"
-            Type="textbox"
+            FieldName="ConflictResolution"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="VendorName"
-            Type="textbox"
+            FieldName="Priority"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="WebURL"
-            Type="textbox"
+            FieldName="DeleteBehavior"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textbox"
+            FieldName="Status"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-cog"
-        [Form]="this"
-        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -123,50 +136,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Query SQLs Section -->
+    <!-- MJ: Company Integration Field Maps Section -->
     <mj-collapsible-panel
-        SectionKey="mJQuerySQLs"
-        SectionName="Query SQLs"
-        Icon="fa fa-terminal"
+        SectionKey="mJCompanyIntegrationFieldMaps"
+        SectionName="MJ: Company Integration Field Maps"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQuerySQLs')"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query SQLs','SQLDialectID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query SQLs')"
-                [AllowLoad]="IsSectionExpanded('mJQuerySQLs')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQuerySQLs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Queries Section -->
+    <!-- MJ: Company Integration Sync Watermarks Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueries"
-        SectionName="Queries"
-        Icon="fa-solid fa-clipboard-question"
+        SectionKey="mJCompanyIntegrationSyncWatermarks"
+        SectionName="MJ: Company Integration Sync Watermarks"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueries')"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','SQLDialectID')"
-                [NewRecordValues]="NewRecordValues('MJ: Queries')"
-                [AllowLoad]="IsSectionExpanded('mJQueries')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueries', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

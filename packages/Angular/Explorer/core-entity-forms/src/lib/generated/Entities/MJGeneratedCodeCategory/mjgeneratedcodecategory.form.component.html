@@ -43,16 +43,26 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -93,23 +103,23 @@
 
     <!-- Generated Code Categories Section -->
     <mj-collapsible-panel
-        SectionKey="mJGeneratedCodeCategories"
+        SectionKey="generatedCodeCategories"
         SectionName="Generated Code Categories"
         Icon="fa fa-code"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGeneratedCodeCategories')"
+        [BadgeCount]="GetSectionRowCount('generatedCodeCategories')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Code Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Generated Code Categories')"
-                [AllowLoad]="IsSectionExpanded('mJGeneratedCodeCategories')"
+                [AllowLoad]="IsSectionExpanded('generatedCodeCategories')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodeCategories', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('generatedCodeCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -118,23 +128,23 @@
 
     <!-- Generated Codes Section -->
     <mj-collapsible-panel
-        SectionKey="mJGeneratedCodes"
+        SectionKey="generatedCodes"
         SectionName="Generated Codes"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGeneratedCodes')"
+        [BadgeCount]="GetSectionRowCount('generatedCodes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Codes','CategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Generated Codes')"
-                [AllowLoad]="IsSectionExpanded('mJGeneratedCodes')"
+                [AllowLoad]="IsSectionExpanded('generatedCodes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('generatedCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

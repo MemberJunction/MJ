@@ -52,16 +52,26 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -102,23 +112,23 @@
 
     <!-- Audit Log Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJAuditLogTypes"
+        SectionKey="auditLogTypes"
         SectionName="Audit Log Types"
         Icon="fa fa-clipboard-list"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAuditLogTypes')"
+        [BadgeCount]="GetSectionRowCount('auditLogTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
-                [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
+                [AllowLoad]="IsSectionExpanded('auditLogTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAuditLogTypes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('auditLogTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -127,23 +137,23 @@
 
     <!-- Audit Logs Section -->
     <mj-collapsible-panel
-        SectionKey="mJAuditLogs"
+        SectionKey="auditLogs"
         SectionName="Audit Logs"
         Icon="fa-solid fa-fingerprint"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAuditLogs')"
+        [BadgeCount]="GetSectionRowCount('auditLogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuditLogTypeID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuditLogTypeName')"
                 [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
-                [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
+                [AllowLoad]="IsSectionExpanded('auditLogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAuditLogs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('auditLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
