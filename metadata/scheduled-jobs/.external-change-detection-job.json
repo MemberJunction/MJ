@@ -1,0 +1,33 @@
+[
+  {
+    "fields": {
+      "Name": "Daily External Change Detection",
+      "Description": "Detects and reconciles external database changes once per day.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
+      "CronExpression": "0 0 2 * * *", 
+      "Timezone": "UTC",
+      "Status": "Active",
+      "Configuration": {
+        "ActionID": "@lookup:MJ: Actions.DriverClass=__RunExternalChangeDetection",
+        "Params": [
+          {
+            "ActionParamID": "@lookup:MJ: Action Params.Name=ReplayBatchSize&Action.DriverClass=__RunExternalChangeDetection",
+            "ValueType": "Static",
+            "Value": "20"
+          },
+          {
+            "ActionParamID": "@lookup:MJ: Action Params.Name=DetectionBatchSize&Action.DriverClass=__RunExternalChangeDetection",
+            "ValueType": "Static",
+            "Value": "10"
+          },
+          {
+            "ActionParamID": "@lookup:MJ: Action Params.Name=AutoReplay&Action.DriverClass=__RunExternalChangeDetection",
+            "ValueType": "Static",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "primaryKey": {}
+  }
+]
