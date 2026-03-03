@@ -34,7 +34,7 @@ import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
 import mssql from 'mssql';
 import { registerAccessToken, GetDataAccessToken } from '../resolvers/GetDataResolver.js';
 import { BehaviorSubject } from 'rxjs';
@@ -493,7 +493,7 @@ export class SkipSDK {
      * Recursively build category path for a query
      */
     private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);

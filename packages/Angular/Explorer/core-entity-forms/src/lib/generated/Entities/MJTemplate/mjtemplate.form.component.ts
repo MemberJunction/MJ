@@ -20,12 +20,12 @@ export class MJTemplateFormComponent extends BaseFormComponent {
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
             { sectionKey: 'availabilityStatus', sectionName: 'Availability & Status', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'templateContents', sectionName: 'Template Contents', isExpanded: false },
-            { sectionKey: 'templateParams', sectionName: 'Template Params', isExpanded: false },
-            { sectionKey: 'mJUserNotificationTypes', sectionName: 'MJ: User Notification Types', isExpanded: false },
-            { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false },
-            { sectionKey: 'mJUserNotificationTypes1', sectionName: 'MJ: User Notification Types', isExpanded: false },
-            { sectionKey: 'entityDocuments', sectionName: 'Entity Documents', isExpanded: false }
+            { sectionKey: 'mJTemplateContents', sectionName: 'Template Contents', isExpanded: false },
+            { sectionKey: 'mJTemplateParams', sectionName: 'Template Params', isExpanded: false },
+            { sectionKey: 'mJUserNotificationTypesSMSTemplateID', sectionName: 'User Notification Types (SMS Template)', isExpanded: false },
+            { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
+            { sectionKey: 'mJUserNotificationTypesEmailTemplateID', sectionName: 'User Notification Types (Email Template)', isExpanded: false },
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
 }

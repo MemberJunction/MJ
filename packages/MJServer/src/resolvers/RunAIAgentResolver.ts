@@ -10,7 +10,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { getAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -212,7 +212,7 @@ export class RunAIAgentResolver extends ResolverBase {
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: MJAIAgentEntityExtended) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.GetAgentByID(agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);
@@ -544,6 +544,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Public mutation for regular users to run AI agents with authentication.
+     * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
@@ -562,12 +563,33 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
+
+        if (fireAndForget) {
+            // Fire-and-forget mode: start execution in background, return immediately.
+            // The client will receive the result via WebSocket PubSub completion event.
+            this.executeAgentInBackground(
+                p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                conversationDetailId, createArtifacts || false, createNotification || false,
+                sourceArtifactId, sourceArtifactVersionId
+            );
+
+            LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+
+            return {
+                success: true,
+                result: JSON.stringify({ accepted: true, fireAndForget: true })
+            };
+        }
+
+        // Synchronous mode (default): wait for execution to complete
         return this.executeAIAgent(
             p,
             dataSource,
@@ -654,7 +676,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Get agent info for notification message
             await AIEngine.Instance.Config(false, contextUser);
-            const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+            const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
             const agentName = agent?.Name || 'Agent';
 
             // Load conversation detail to get conversation info

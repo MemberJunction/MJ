@@ -18,7 +18,7 @@ export class MJTestRunOutputTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'outputTypeDetails', sectionName: 'Output Type Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTestRunOutputs', sectionName: 'MJ: Test Run Outputs', isExpanded: false }
+            { sectionKey: 'mJTestRunOutputs', sectionName: 'Test Run Outputs', isExpanded: false }
         ]);
     }
 }

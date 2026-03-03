@@ -1,5 +1,80 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-base-application@5.5.0
+  - @memberjunction/ng-entity-form-dialog@5.5.0
+  - @memberjunction/ng-entity-permissions@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-simple-record-list@5.5.0
+  - @memberjunction/ng-base-forms@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-join-grid@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-tabstrip@5.5.0
+  - @memberjunction/ng-user-avatar@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [c28af42]
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-base-forms@5.4.1
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-entity-form-dialog@5.4.1
+  - @memberjunction/ng-entity-permissions@5.4.1
+  - @memberjunction/ng-join-grid@5.4.1
+  - @memberjunction/ng-simple-record-list@5.4.1
+  - @memberjunction/ng-base-application@5.4.1
+  - @memberjunction/ng-code-editor@5.4.1
+  - @memberjunction/ng-notifications@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/ng-tabstrip@5.4.1
+  - @memberjunction/ng-user-avatar@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 081d657: regression fixes
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-entity-form-dialog@5.4.0
+  - @memberjunction/ng-entity-permissions@5.4.0
+  - @memberjunction/ng-simple-record-list@5.4.0
+  - @memberjunction/ng-base-forms@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-join-grid@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-user-avatar@5.4.0
+  - @memberjunction/ng-tabstrip@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

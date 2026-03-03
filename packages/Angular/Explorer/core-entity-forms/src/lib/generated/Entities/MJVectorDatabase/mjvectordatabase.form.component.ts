@@ -18,8 +18,8 @@ export class MJVectorDatabaseFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'vectorDatabaseDetails', sectionName: 'Vector Database Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityDocuments', sectionName: 'Entity Documents', isExpanded: false },
-            { sectionKey: 'vectorIndexes', sectionName: 'Vector Indexes', isExpanded: false }
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
+            { sectionKey: 'mJVectorIndexes', sectionName: 'Vector Indexes', isExpanded: false }
         ]);
     }
 }

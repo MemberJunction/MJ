@@ -18,7 +18,7 @@ export class MJActionContextTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'contextDefinition', sectionName: 'Context Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'actionContexts', sectionName: 'Action Contexts', isExpanded: false }
+            { sectionKey: 'mJActionContexts', sectionName: 'Action Contexts', isExpanded: false }
         ]);
     }
 }

@@ -1,6 +1,6 @@
 import { BaseEntity, CodeNameFromString } from "@memberjunction/core";
 import { MJActionEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { ActionEngineBase } from "./ActionEngine-Base";
 
 @RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
@@ -26,7 +26,7 @@ export class MJActionEntityExtended extends MJActionEntity {
     public get ResultCodes(): MJActionResultCodeEntity[] {
         if (!this._resultCodes) {
             // load the result codes
-            this._resultCodes = ActionEngineBase.Instance.ActionResultCodes.filter(c => c.ActionID === this.ID);
+            this._resultCodes = ActionEngineBase.Instance.ActionResultCodes.filter(c => UUIDsEqual(c.ActionID, this.ID));
         }
         return this._resultCodes;
     }
@@ -35,7 +35,7 @@ export class MJActionEntityExtended extends MJActionEntity {
     public get Params(): MJActionParamEntity[] {
         if (!this._params) {
             // load the inputs
-            this._params = ActionEngineBase.Instance.ActionParams.filter(i => i.ActionID === this.ID);
+            this._params = ActionEngineBase.Instance.ActionParams.filter(i => UUIDsEqual(i.ActionID, this.ID));
         }
         return this._params;
     }
@@ -44,7 +44,7 @@ export class MJActionEntityExtended extends MJActionEntity {
     public get Libraries(): MJActionLibraryEntity[] {
         if (!this._libs) {
             // load the inputs
-            this._libs = ActionEngineBase.Instance.ActionLibraries.filter(l => l.ActionID === this.ID);
+            this._libs = ActionEngineBase.Instance.ActionLibraries.filter(l => UUIDsEqual(l.ActionID, this.ID));
         }
         return this._libs;
     }

@@ -454,6 +454,8 @@ const configInfoSchema = z.object({
   SQLOutput: sqlOutputConfigSchema,
   forceRegeneration: forceRegenerationConfigSchema,
 
+  /** Database platform type: 'mssql' for SQL Server, 'postgresql' for PostgreSQL */
+  dbType: z.enum(['mssql', 'postgresql']).default('mssql'),
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
   codeGenLogin: z.string(),
@@ -480,6 +482,7 @@ const configInfoSchema = z.object({
  */
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // Database connection settings (from environment variables)
+  dbType: (process.env.DB_TYPE as 'mssql' | 'postgresql') ?? 'mssql',
   dbHost: process.env.DB_HOST ?? 'localhost',
   dbPort: 1433,
   dbDatabase: process.env.DB_DATABASE ?? '',
@@ -788,4 +791,12 @@ export const MAX_INDEX_NAME_LENGTH = 128;
  */
 export function mj_core_schema(): string {
   return getSetting('mj_core_schema').value;
+}
+
+/**
+ * Returns the configured database platform type.
+ * Defaults to 'mssql' for backward compatibility.
+ */
+export function dbType(): 'mssql' | 'postgresql' {
+  return configInfo.dbType;
 }

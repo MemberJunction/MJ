@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -36,8 +37,8 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // post-process the template content and params to associate them with a template
         this.Templates.forEach((t) => {
-            t.Content = this.TemplateContents.filter((tc) => tc.TemplateID === t.ID);
-            t.Params = this.TemplateParams.filter((tp) => tp.TemplateID === t.ID);
+            t.Content = this.TemplateContents.filter((tc) => UUIDsEqual(tc.TemplateID, t.ID));
+            t.Params = this.TemplateParams.filter((tp) => UUIDsEqual(tp.TemplateID, t.ID));
         });
     }
 

@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "../generated/entity_subclasses";
 
 /**
@@ -104,7 +105,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * @returns The account entity or undefined if not found
      */
     public GetAccountById(accountId: string): MJFileStorageAccountEntity | undefined {
-        return this.Accounts.find(a => a.ID === accountId);
+        return this.Accounts.find(a => UUIDsEqual(a.ID, accountId));
     }
 
     /**
@@ -113,7 +114,7 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      * @returns The provider entity or undefined if not found
      */
     public GetProviderById(providerId: string): MJFileStorageProviderEntity | undefined {
-        return this.Providers.find(p => p.ID === providerId);
+        return this.Providers.find(p => UUIDsEqual(p.ID, providerId));
     }
 
     /**

@@ -20,7 +20,7 @@ export class MJDuplicateRunFormComponent extends BaseFormComponent {
             { sectionKey: 'approvalInformation', sectionName: 'Approval Information', isExpanded: true },
             { sectionKey: 'processingStatus', sectionName: 'Processing Status', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'duplicateRunDetails', sectionName: 'Duplicate Run Details', isExpanded: false }
+            { sectionKey: 'mJDuplicateRunDetails', sectionName: 'Duplicate Run Details', isExpanded: false }
         ]);
     }
 }

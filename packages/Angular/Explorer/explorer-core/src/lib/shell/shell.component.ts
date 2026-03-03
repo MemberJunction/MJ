@@ -14,7 +14,7 @@ import {
   NavItem
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
-import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
+import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -108,7 +108,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfSwitcherApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   /**
@@ -117,7 +117,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfUserMenuApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of User Menu')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   constructor(
@@ -393,6 +393,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
+    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
+    // its value when the shell subscribed (line above), but this.initialized was false
+    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
+    // manually trigger the first URL sync to set the browser URL from workspace state.
+    const initConfig = this.workspaceManager.GetConfiguration();
+    if (initConfig && initConfig.activeTabId) {
+      await this.syncActiveAppWithTab(initConfig);
+      this.syncUrlWithWorkspace(initConfig);
+    }
+
     // Force change detection to sync Angular's expected values after all async
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
     // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
@@ -442,7 +452,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
     const shouldSetActiveApp = this.initialized &&
                               app &&
-                              currentActiveApp?.ID !== request.ApplicationId &&
+                              !UUIDsEqual(currentActiveApp?.ID, request.ApplicationId) &&
                               (!this.urlBasedNavigation || isUrlBasedTab);
 
     if (shouldSetActiveApp) {
@@ -493,7 +503,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
-    if (currentActiveApp?.ID !== tabAppId) {
+    if (!UUIDsEqual(currentActiveApp?.ID, tabAppId)) {
       // Update the active app to match the tab's application
       await this.appManager.SetActiveApp(tabAppId);
     }
@@ -719,7 +729,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (!app) return false;
 
         const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
-                          tab.applicationId === app.ID;
+                          UUIDsEqual(tab.applicationId, app.ID);
         const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
 
         return appMatches && navMatches;
@@ -736,7 +746,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // First, try to find a tab with isAppDefault for this app
         const defaultTab = tabs.find(tab => {
           const tabConfig = tab.configuration || {};
-          return tab.applicationId === app.ID && tabConfig['isAppDefault'] === true;
+          return UUIDsEqual(tab.applicationId, app.ID) && tabConfig['isAppDefault'] === true;
         });
         if (defaultTab) {
           return defaultTab;
@@ -746,7 +756,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // This handles the case where the default tab was replaced when navigating away
         const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
-          return tabs.find(tab => tab.applicationId === app.ID) || null;
+          return tabs.find(tab => UUIDsEqual(tab.applicationId, app.ID)) || null;
         }
 
         return null;
@@ -1026,7 +1036,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             }
             // For non-Custom resources, match by ResourceType + RecordID
             if (item.ResourceType && item.RecordID) {
-              return item.ResourceType.toLowerCase() === resourceType && item.RecordID === recordId;
+              return item.ResourceType.toLowerCase() === resourceType && UUIDsEqual(item.RecordID, recordId);
             }
             return false;
           });
@@ -1472,7 +1482,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const app = this.appManager.GetAppById(appId);
       if (!app) {
         // Get app info from all system apps to show the name
-        const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+        const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
         const appName = systemApp?.Name || 'this application';
 
         // Clear loading indicator before showing dialog
@@ -1597,7 +1607,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const tabRequest = await app.CreateDefaultTab();
     if (tabRequest) {
       // Set the app as active first if it isn't already
-      if (this.activeApp?.ID !== app.ID) {
+      if (!UUIDsEqual(this.activeApp?.ID, app.ID)) {
         await this.appManager.SetActiveApp(app.ID);
       }
 
@@ -2367,7 +2377,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Timeout - try to get from system apps as fallback
-    const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+    const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
     if (systemApp) {
       await this.navigateToApp(systemApp);
       this.appAccessDialog?.completeProcessing();
@@ -2400,6 +2410,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Redirect to the first available app (fallback)
    */
+  /** Case-insensitive UUID check whether an app is the currently active app. */
+  public IsActiveApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.activeApp?.ID);
+  }
+
   private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
     if (apps.length > 0) {
       const firstApp = apps[0];

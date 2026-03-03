@@ -1,5 +1,51 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-export-service@5.5.0
+  - @memberjunction/ng-filter-builder@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-timeline@5.5.0
+  - @memberjunction/export-engine@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-export-service@5.4.1
+- @memberjunction/ng-filter-builder@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/ng-timeline@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/export-engine@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-export-service@5.4.0
+  - @memberjunction/ng-filter-builder@5.4.0
+  - @memberjunction/ng-timeline@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/export-engine@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

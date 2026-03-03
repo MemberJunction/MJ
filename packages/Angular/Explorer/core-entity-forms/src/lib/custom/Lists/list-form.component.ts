@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
@@ -146,7 +146,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         try {
             // Load entity info for context
             if (this.record?.EntityID) {
-                this.entityInfo = this.metadata.Entities.find(e => e.ID === this.record.EntityID) || null;
+                this.entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.record.EntityID)) || null;
             }
 
             // Load categories for dropdown
@@ -355,7 +355,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         try {
             for (const id of this.selectedItems) {
-                const item = this.listItems.find(i => i.detail.ID === id);
+                const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id));
                 if (item) {
                     await item.detail.Delete();
                 }
@@ -457,7 +457,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
     public get categoryName(): string {
         if (!this.record?.CategoryID) return 'Uncategorized';
-        const category = this.categories.find(c => c.ID === this.record.CategoryID);
+        const category = this.categories.find(c => UUIDsEqual(c.ID, this.record.CategoryID));
         return category?.Name || 'Unknown';
     }
 
@@ -483,7 +483,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public isCurrentUserOwner(): boolean {
-        return this.record?.UserID === this.metadata.CurrentUser?.ID;
+        return UUIDsEqual(this.record?.UserID, this.metadata.CurrentUser?.ID);
     }
 
     public async onCategoryChange(categoryId: string | null): Promise<void> {
@@ -711,7 +711,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public toggleViewSelection(view: MJUserViewEntityExtended): void {
-        const index = this.userViewsToAdd.findIndex(v => v.ID === view.ID);
+        const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
         } else {
@@ -721,7 +721,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => v.ID === view.ID);
+        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {

@@ -20,7 +20,7 @@ export class MJCommunicationRunFormComponent extends BaseFormComponent {
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
             { sectionKey: 'resultNotes', sectionName: 'Result & Notes', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'communicationLogs', sectionName: 'Communication Logs', isExpanded: false }
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false }
         ]);
     }
 }

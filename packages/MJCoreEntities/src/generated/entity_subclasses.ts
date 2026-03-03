@@ -16416,7 +16416,7 @@ export const MJQuerySchema = z.object({
         * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`),
     CacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: CacheTTLMinutes
-        * * Display Name: Cache TTL Minutes
+        * * Display Name: Cache TTL (Minutes)
         * * SQL Data Type: int
         * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.`),
     CacheMaxSize: z.number().nullable().describe(`
@@ -16440,14 +16440,25 @@ export const MJQuerySchema = z.object({
         * * Display Name: Cache Validation SQL
         * * SQL Data Type: nvarchar(MAX)
         * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
+    SQLDialectID: z.string().describe(`
+        * * Field Name: SQLDialectID
+        * * Display Name: SQL Dialect
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+        * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
+        * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(50)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
+    SQLDialect: z.string().describe(`
+        * * Field Name: SQLDialect
+        * * Display Name: SQL Dialect Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJQueryEntityType = z.infer<typeof MJQuerySchema>;
@@ -16822,6 +16833,54 @@ export const MJQueryPermissionSchema = z.object({
 });
 
 export type MJQueryPermissionEntityType = z.infer<typeof MJQueryPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Query SQLs
+ */
+export const MJQuerySQLSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    QueryID: z.string().describe(`
+        * * Field Name: QueryID
+        * * Display Name: Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the query this SQL variant belongs to`),
+    SQLDialectID: z.string().describe(`
+        * * Field Name: SQLDialectID
+        * * Display Name: SQL Dialect
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+        * * Description: Foreign key to the SQL dialect this SQL is written in`),
+    SQL: z.string().describe(`
+        * * Field Name: SQL
+        * * Display Name: SQL Query
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The SQL query text in the specified dialect. May include Nunjucks template parameters.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Query Name
+        * * SQL Data Type: nvarchar(255)`),
+    SQLDialect: z.string().describe(`
+        * * Field Name: SQLDialect
+        * * Display Name: Dialect Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJQuerySQLEntityType = z.infer<typeof MJQuerySQLSchema>;
 
 /**
  * zod schema definition for the entity MJ: Queue Tasks
@@ -18875,6 +18934,69 @@ export const MJSkillSchema = z.object({
 });
 
 export type MJSkillEntityType = z.infer<typeof MJSkillSchema>;
+
+/**
+ * zod schema definition for the entity MJ: SQL Dialects
+ */
+export const MJSQLDialectSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name for the SQL dialect (e.g., T-SQL, PostgreSQL)`),
+    PlatformKey: z.string().describe(`
+        * * Field Name: PlatformKey
+        * * Display Name: Platform Key
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Lowercase identifier matching DatabasePlatform type in code (e.g., sqlserver, postgresql). Used by providers to find their dialect at runtime.`),
+    DatabaseName: z.string().describe(`
+        * * Field Name: DatabaseName
+        * * Display Name: Database Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the database engine (e.g., SQL Server, PostgreSQL, MySQL)`),
+    LanguageName: z.string().describe(`
+        * * Field Name: LanguageName
+        * * Display Name: Language Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the SQL language variant (e.g., T-SQL, PL/pgSQL, SQL/PSM)`),
+    VendorName: z.string().nullable().describe(`
+        * * Field Name: VendorName
+        * * Display Name: Vendor Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Primary vendor or organization behind this database (e.g., Microsoft, PostgreSQL Global Development Group)`),
+    WebURL: z.string().nullable().describe(`
+        * * Field Name: WebURL
+        * * Display Name: Web URL
+        * * SQL Data Type: nvarchar(500)
+        * * Description: URL to the database vendor or documentation website`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(500)
+        * * Description: CSS class or icon reference for UI display`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of this SQL dialect and its characteristics`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJSQLDialectEntityType = z.infer<typeof MJSQLDialectSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tagged Items
@@ -65154,7 +65276,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: CacheTTLMinutes
-    * * Display Name: Cache TTL Minutes
+    * * Display Name: Cache TTL (Minutes)
     * * SQL Data Type: int
     * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.
     */
@@ -65219,8 +65341,23 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: SQLDialectID
+    * * Display Name: SQL Dialect
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+    * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
+    * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.
+    */
+    get SQLDialectID(): string {
+        return this.Get('SQLDialectID');
+    }
+    set SQLDialectID(value: string) {
+        this.Set('SQLDialectID', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
     */
     get Category(): string | null {
@@ -65229,11 +65366,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: SQLDialect
+    * * Display Name: SQL Dialect Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SQLDialect(): string {
+        return this.Get('SQLDialect');
     }
 }
 
@@ -66169,6 +66315,129 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
     */
     get Role(): string {
         return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: Query SQLs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: QuerySQL
+ * * Base View: vwQuerySQLs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Query SQLs')
+export class MJQuerySQLEntity extends BaseEntity<MJQuerySQLEntityType> {
+    /**
+    * Loads the MJ: Query SQLs record from the database
+    * @param ID: string - primary key value to load the MJ: Query SQLs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJQuerySQLEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: QueryID
+    * * Display Name: Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the query this SQL variant belongs to
+    */
+    get QueryID(): string {
+        return this.Get('QueryID');
+    }
+    set QueryID(value: string) {
+        this.Set('QueryID', value);
+    }
+
+    /**
+    * * Field Name: SQLDialectID
+    * * Display Name: SQL Dialect
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
+    * * Description: Foreign key to the SQL dialect this SQL is written in
+    */
+    get SQLDialectID(): string {
+        return this.Get('SQLDialectID');
+    }
+    set SQLDialectID(value: string) {
+        this.Set('SQLDialectID', value);
+    }
+
+    /**
+    * * Field Name: SQL
+    * * Display Name: SQL Query
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The SQL query text in the specified dialect. May include Nunjucks template parameters.
+    */
+    get SQL(): string {
+        return this.Get('SQL');
+    }
+    set SQL(value: string) {
+        this.Set('SQL', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: SQLDialect
+    * * Display Name: Dialect Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SQLDialect(): string {
+        return this.Get('SQLDialect');
     }
 }
 
@@ -71637,6 +71906,174 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: SQL Dialects - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SQLDialect
+ * * Base View: vwSQLDialects
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: SQL Dialects')
+export class MJSQLDialectEntity extends BaseEntity<MJSQLDialectEntityType> {
+    /**
+    * Loads the MJ: SQL Dialects record from the database
+    * @param ID: string - primary key value to load the MJ: SQL Dialects record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSQLDialectEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name for the SQL dialect (e.g., T-SQL, PostgreSQL)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: PlatformKey
+    * * Display Name: Platform Key
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Lowercase identifier matching DatabasePlatform type in code (e.g., sqlserver, postgresql). Used by providers to find their dialect at runtime.
+    */
+    get PlatformKey(): string {
+        return this.Get('PlatformKey');
+    }
+    set PlatformKey(value: string) {
+        this.Set('PlatformKey', value);
+    }
+
+    /**
+    * * Field Name: DatabaseName
+    * * Display Name: Database Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the database engine (e.g., SQL Server, PostgreSQL, MySQL)
+    */
+    get DatabaseName(): string {
+        return this.Get('DatabaseName');
+    }
+    set DatabaseName(value: string) {
+        this.Set('DatabaseName', value);
+    }
+
+    /**
+    * * Field Name: LanguageName
+    * * Display Name: Language Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the SQL language variant (e.g., T-SQL, PL/pgSQL, SQL/PSM)
+    */
+    get LanguageName(): string {
+        return this.Get('LanguageName');
+    }
+    set LanguageName(value: string) {
+        this.Set('LanguageName', value);
+    }
+
+    /**
+    * * Field Name: VendorName
+    * * Display Name: Vendor Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Primary vendor or organization behind this database (e.g., Microsoft, PostgreSQL Global Development Group)
+    */
+    get VendorName(): string | null {
+        return this.Get('VendorName');
+    }
+    set VendorName(value: string | null) {
+        this.Set('VendorName', value);
+    }
+
+    /**
+    * * Field Name: WebURL
+    * * Display Name: Web URL
+    * * SQL Data Type: nvarchar(500)
+    * * Description: URL to the database vendor or documentation website
+    */
+    get WebURL(): string | null {
+        return this.Get('WebURL');
+    }
+    set WebURL(value: string | null) {
+        this.Set('WebURL', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(500)
+    * * Description: CSS class or icon reference for UI display
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of this SQL dialect and its characteristics
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

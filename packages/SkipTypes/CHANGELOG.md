@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+  - @memberjunction/data-context@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/data-context@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.0
+- @memberjunction/data-context@5.4.0
+- @memberjunction/interactive-component-types@5.4.0
+- @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

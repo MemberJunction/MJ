@@ -21,8 +21,8 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
             { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'communicationLogs', sectionName: 'Communication Logs', isExpanded: false },
-            { sectionKey: 'messageTypes', sectionName: 'Message Types', isExpanded: false }
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false }
         ]);
     }
 }

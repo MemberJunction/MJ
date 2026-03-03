@@ -164,8 +164,13 @@ describe('Manifest Validation', () => {
             expect(ValidateManifestObject(m).Success).toBe(false);
         });
 
-        it('should reject schema name starting with __', () => {
-            const m = { ...minimalManifest(), schema: { name: '__mj_reserved' } };
+        it('should accept schema name starting with __ (e.g., __bcsaas)', () => {
+            const m = { ...minimalManifest(), schema: { name: '__bcsaas' } };
+            expect(ValidateManifestObject(m).Success).toBe(true);
+        });
+
+        it('should reject schema name starting with 3+ underscores', () => {
+            const m = { ...minimalManifest(), schema: { name: '___invalid' } };
             expect(ValidateManifestObject(m).Success).toBe(false);
         });
 

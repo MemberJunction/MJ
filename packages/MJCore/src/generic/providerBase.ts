@@ -6,15 +6,16 @@ import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
+import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 
 
 
@@ -88,6 +89,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllQueryEntities', class: QueryEntityInfo },
     { key: 'AllQueryParameters', class: QueryParameterInfo },
+    { key: 'AllSQLDialects', class: SQLDialectInfo },
+    { key: 'AllQuerySQLs', class: QuerySQLInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
     { key: 'AllLibraries', class: LibraryInfo },
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
@@ -547,6 +550,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected get PreRunQueriesResult(): typeof this._preRunQueriesResultType { return this._preRunQueriesResultType; }
 
     // ========================================================================
+    // PLATFORM SQL RESOLUTION
+    // ========================================================================
+
+    /**
+     * Returns the database platform key for this provider.
+     * Override in subclasses to return the appropriate platform.
+     * Defaults to 'sqlserver' for backward compatibility.
+     */
+    get PlatformKey(): DatabasePlatform {
+        return 'sqlserver';
+    }
+
+    /**
+     * Resolves a PlatformSQL value to the appropriate SQL string for this provider's platform.
+     * If the value is a plain string, it is returned as-is (backward compatible).
+     * If the value is a PlatformSQL object, the platform-specific variant is used if available,
+     * otherwise the default variant is used.
+     */
+    public ResolveSQL(value: string | PlatformSQL | undefined | null): string {
+        if (value == null) return '';
+        if (typeof value === 'string') return value;
+        const platformVariant = value[this.PlatformKey];
+        if (platformVariant != null && platformVariant.length > 0) return platformVariant;
+        return value.default;
+    }
+
+    /**
+     * Resolves any PlatformSQL values in RunViewParams to plain strings for the active platform.
+     * Mutates the params object in place so downstream InternalRunView implementations
+     * always receive plain string values for ExtraFilter and OrderBy.
+     */
+    protected ResolvePlatformSQLInParams(params: RunViewParams): void {
+        if (IsPlatformSQL(params.ExtraFilter)) {
+            params.ExtraFilter = this.ResolveSQL(params.ExtraFilter);
+        }
+        if (IsPlatformSQL(params.OrderBy)) {
+            params.OrderBy = this.ResolveSQL(params.OrderBy);
+        }
+    }
+
+    // ========================================================================
     // PRE-PROCESSING HOOKS
     // ========================================================================
 
@@ -560,8 +604,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
 
+        // Resolve any PlatformSQL values to plain strings for the active platform
+        this.ResolvePlatformSQLInParams(params);
+
         // Start telemetry tracking
         const telemetryStart = performance.now();
+        // After ResolvePlatformSQLInParams, ExtraFilter/OrderBy are guaranteed to be strings
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunView',
@@ -569,8 +617,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 EntityName: params.EntityName,
                 ViewID: params.ViewID,
                 ViewName: params.ViewName,
-                ExtraFilter: params.ExtraFilter,
-                OrderBy: params.OrderBy,
+                ExtraFilter: params.ExtraFilter as string,
+                OrderBy: params.OrderBy as string,
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
@@ -645,6 +693,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Pre-processing result with cache status for each view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        // Resolve any PlatformSQL values to plain strings for the active platform
+        for (const p of params) {
+            this.ResolvePlatformSQLInParams(p);
+        }
+
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
@@ -1321,6 +1374,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
         // Start telemetry tracking
+        // Resolve PlatformSQL values before telemetry
+        this.ResolvePlatformSQLInParams(params);
         const eventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunView',
@@ -1328,8 +1383,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 EntityName: params.EntityName,
                 ViewID: params.ViewID,
                 ViewName: params.ViewName,
-                ExtraFilter: params.ExtraFilter,
-                OrderBy: params.OrderBy,
+                ExtraFilter: params.ExtraFilter as string,
+                OrderBy: params.OrderBy as string,
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
@@ -1624,8 +1679,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationID === a.ID)
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationID === a.ID)
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => UUIDsEqual(ae.ApplicationID, a.ID))
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => UUIDsEqual(as.ApplicationID, a.ID))
                     return new ApplicationInfo(a, this);
                 });
 
@@ -1677,14 +1732,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
+                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
             }
 
         for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
-            e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);
-            e.EntitySettings = settings.filter(s => s.EntityID === e.ID);
+            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
+            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
+            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
             result.push(new EntityInfo(e));
         }
 
@@ -1801,6 +1856,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
+    }
+    /**
+     * Gets all SQL dialect definitions.
+     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
+     */
+    public get SQLDialects(): SQLDialectInfo[] {
+        return this._localMetadata.AllSQLDialects;
+    }
+    /**
+     * Gets all query SQL dialect variants.
+     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
+     */
+    public get QuerySQLs(): QuerySQLInfo[] {
+        return this._localMetadata.AllQuerySQLs;
     }
     /**
      * Gets all library definitions in the system.
@@ -2105,7 +2174,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
                     for (const eu of status.EntityUpdateDates) {
-                        const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
+                        const localEntity = localDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
                         if (!localEntity || localEntity.Results.length !== eu.RowCount) {
                             // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
                             // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 

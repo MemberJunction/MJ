@@ -1,5 +1,101 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [2973c64]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/ai-agents@5.5.0
+  - @memberjunction/ai-agent-manager@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/core-entities-server@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-mcp-client@5.5.0
+  - @memberjunction/ai-prompts@5.5.0
+  - @memberjunction/ai-betty-bot@5.5.0
+  - @memberjunction/ai-vector-sync@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/code-execution@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/communication-types@5.5.0
+  - @memberjunction/communication-engine@5.5.0
+  - @memberjunction/content-autotagging@5.5.0
+  - @memberjunction/external-change-detection@5.5.0
+  - @memberjunction/export-engine@5.5.0
+  - @memberjunction/storage@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.4.1
+- @memberjunction/ai-agents@5.4.1
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-mcp-client@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-betty-bot@5.4.1
+- @memberjunction/ai-vector-sync@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/code-execution@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/communication-types@5.4.1
+- @memberjunction/communication-engine@5.4.1
+- @memberjunction/content-autotagging@5.4.1
+- @memberjunction/external-change-detection@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/export-engine@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/storage@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+- Updated dependencies [bc993b8]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-agents@5.4.0
+  - @memberjunction/ai-agent-manager@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-mcp-client@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/ai-vector-sync@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/communication-types@5.4.0
+  - @memberjunction/communication-engine@5.4.0
+  - @memberjunction/content-autotagging@5.4.0
+  - @memberjunction/external-change-detection@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/storage@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/ai-betty-bot@5.4.0
+  - @memberjunction/code-execution@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/export-engine@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

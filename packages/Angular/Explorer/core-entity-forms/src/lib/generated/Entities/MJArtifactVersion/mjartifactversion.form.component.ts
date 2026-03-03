@@ -20,10 +20,10 @@ export class MJArtifactVersionFormComponent extends BaseFormComponent {
             { sectionKey: 'contentMetadata', sectionName: 'Content & Metadata', isExpanded: false },
             { sectionKey: 'ownershipAttribution', sectionName: 'Ownership & Attribution', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJArtifactVersionAttributes', sectionName: 'MJ: Artifact Version Attributes', isExpanded: false },
-            { sectionKey: 'mJCollectionArtifacts', sectionName: 'MJ: Collection Artifacts', isExpanded: false },
-            { sectionKey: 'mJArtifactUses', sectionName: 'MJ: Artifact Uses', isExpanded: false },
-            { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false }
+            { sectionKey: 'mJArtifactVersionAttributes', sectionName: 'Artifact Version Attributes', isExpanded: false },
+            { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
+            { sectionKey: 'mJArtifactUses', sectionName: 'Artifact Uses', isExpanded: false },
+            { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false }
         ]);
     }
 }

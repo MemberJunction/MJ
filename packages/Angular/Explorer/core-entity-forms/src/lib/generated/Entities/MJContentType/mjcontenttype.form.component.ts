@@ -18,8 +18,8 @@ export class MJContentTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'aIModelSettings', sectionName: 'AI Model Settings', isExpanded: true },
-            { sectionKey: 'contentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false }
+            { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }
         ]);
     }
 }

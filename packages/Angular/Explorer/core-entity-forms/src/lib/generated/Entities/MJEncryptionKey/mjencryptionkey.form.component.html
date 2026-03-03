@@ -130,23 +130,23 @@
 
     <!-- Entity Fields Section -->
     <mj-collapsible-panel
-        SectionKey="entityFields"
+        SectionKey="mJEntityFields"
         SectionName="Entity Fields"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityFields')"
+        [BadgeCount]="GetSectionRowCount('mJEntityFields')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Fields','EncryptionKeyID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Fields')"
-                [AllowLoad]="IsSectionExpanded('entityFields')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFields')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityFields', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFields', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

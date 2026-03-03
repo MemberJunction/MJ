@@ -1,5 +1,6 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MJComponentEntity, MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -398,7 +399,7 @@ export class ComponentRegistryExtendedResolver {
             await this.componentEngine.Config(false, userInfo);
             
             const registry = this.componentEngine.ComponentRegistries?.find(
-                r => r.ID === registryId
+                r => UUIDsEqual(r.ID, registryId)
             );
             
             return registry || null;
@@ -457,10 +458,10 @@ export class ComponentRegistryExtendedResolver {
      */
     private createClientForRegistry(registry: MJComponentRegistryEntity): ComponentRegistryClient {
         // Check if there's a configuration for this registry
-        const config = configInfo.componentRegistries?.find(r => 
-            r.id === registry.ID || r.name === registry.Name
+        const config = configInfo.componentRegistries?.find(r =>
+            UUIDsEqual(r.id, registry.ID) || r.name === registry.Name
         );
-        
+
         // Get API key from environment or config
         const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`] ||
                       process.env[`REGISTRY_API_KEY_${registry.Name?.replace(/-/g, '_').toUpperCase()}`] ||
@@ -492,8 +493,8 @@ export class ComponentRegistryExtendedResolver {
      */
     private shouldCache(registry: MJComponentRegistryEntity): boolean {
         // Check config for caching settings
-        const config = configInfo.componentRegistries?.find(r => 
-            r.id === registry.ID || r.name === registry.Name
+        const config = configInfo.componentRegistries?.find(r =>
+            UUIDsEqual(r.id, registry.ID) || r.name === registry.Name
         );
         return config?.cache !== false; // Cache by default
     }
@@ -515,7 +516,7 @@ export class ComponentRegistryExtendedResolver {
             const existingComponent = this.componentEngine.Components?.find(
                 c => c.Name === component.name && 
                      c.Namespace === component.namespace &&
-                     c.SourceRegistryID === registryId
+                     UUIDsEqual(c.SourceRegistryID, registryId)
             );
             
             if (existingComponent) {

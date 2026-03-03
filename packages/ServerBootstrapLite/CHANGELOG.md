@@ -1,5 +1,111 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.5.0
+
+### Patch Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [2973c64]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/ai-agents@5.5.0
+  - @memberjunction/ai-agent-manager@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/core-entities-server@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/ai-reranker@5.5.0
+  - @memberjunction/actions-apollo@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions-bizapps-accounting@5.5.0
+  - @memberjunction/actions-bizapps-crm@5.5.0
+  - @memberjunction/actions-bizapps-formbuilders@5.5.0
+  - @memberjunction/actions-bizapps-lms@5.5.0
+  - @memberjunction/actions-bizapps-social@5.5.0
+  - @memberjunction/core-actions@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/doc-utils@5.5.0
+  - @memberjunction/encryption@5.5.0
+  - @memberjunction/data-context-server@5.5.0
+  - @memberjunction/scheduling-actions@5.5.0
+  - @memberjunction/scheduling-engine-base@5.5.0
+  - @memberjunction/scheduling-engine@5.5.0
+  - @memberjunction/templates@5.5.0
+  - @memberjunction/testing-engine@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.4.1
+- @memberjunction/ai-agents@5.4.1
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/ai-reranker@5.4.1
+- @memberjunction/actions-apollo@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions-bizapps-accounting@5.4.1
+- @memberjunction/actions-bizapps-crm@5.4.1
+- @memberjunction/actions-bizapps-formbuilders@5.4.1
+- @memberjunction/actions-bizapps-lms@5.4.1
+- @memberjunction/actions-bizapps-social@5.4.1
+- @memberjunction/core-actions@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/doc-utils@5.4.1
+- @memberjunction/encryption@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/data-context-server@5.4.1
+- @memberjunction/scheduling-actions@5.4.1
+- @memberjunction/scheduling-engine-base@5.4.1
+- @memberjunction/scheduling-engine@5.4.1
+- @memberjunction/templates@5.4.1
+- @memberjunction/testing-engine@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [c9a760c]
+- Updated dependencies [bc993b8]
+- Updated dependencies [cde53a9]
+- Updated dependencies [9604926]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-agents@5.4.0
+  - @memberjunction/actions-bizapps-lms@5.4.0
+  - @memberjunction/ai-agent-manager@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/ai-reranker@5.4.0
+  - @memberjunction/actions-apollo@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions-bizapps-accounting@5.4.0
+  - @memberjunction/actions-bizapps-crm@5.4.0
+  - @memberjunction/actions-bizapps-formbuilders@5.4.0
+  - @memberjunction/actions-bizapps-social@5.4.0
+  - @memberjunction/core-actions@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/doc-utils@5.4.0
+  - @memberjunction/encryption@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/scheduling-actions@5.4.0
+  - @memberjunction/scheduling-engine-base@5.4.0
+  - @memberjunction/scheduling-engine@5.4.0
+  - @memberjunction/templates@5.4.0
+  - @memberjunction/testing-engine@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/data-context-server@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

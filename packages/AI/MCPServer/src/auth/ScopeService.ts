@@ -8,6 +8,7 @@
  */
 
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { getSystemUser } from '@memberjunction/server';
 import type { APIScopeInfo, ScopeUIConfig } from './types.js';
 
@@ -325,6 +326,6 @@ export function getChildScopeFullPaths(parentFullPath: string, scopes: APIScopeI
   if (!parent) return [];
 
   return scopes
-    .filter((s) => s.ParentID === parent.ID)
+    .filter((s) => UUIDsEqual(s.ParentID, parent.ID))
     .map((s) => s.FullPath);
 }

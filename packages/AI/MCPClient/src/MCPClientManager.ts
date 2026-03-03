@@ -17,6 +17,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
     MJMCPServerEntity,
@@ -1089,7 +1090,7 @@ export class MCPClientManager {
         }
 
         // Update the tool's GeneratedActionID and GeneratedActionCategoryID if needed
-        if (tool.GeneratedActionID !== action.ID || tool.GeneratedActionCategoryID !== categoryId) {
+        if (!UUIDsEqual(tool.GeneratedActionID, action.ID) || !UUIDsEqual(tool.GeneratedActionCategoryID, categoryId)) {
             const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                 MCPClientManager.ENTITY_MCP_TOOLS,
                 contextUser

@@ -12,6 +12,7 @@ import {
 import { MessageAttachment } from '../components/message/message-item.component';
 import { PendingAttachment } from '../components/mention/mention-editor.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Service for managing conversation attachments.
@@ -201,7 +202,7 @@ export class ConversationAttachmentService {
    * Get the AttachmentType from a modality ID
    */
   private getAttachmentTypeFromModality(modalityId: string): AttachmentType {
-    const modality = AIEngineBase.Instance.Modalities.find(m => m.ID === modalityId)
+    const modality = AIEngineBase.Instance.Modalities.find(m => UUIDsEqual(m.ID, modalityId))
 
     const name = modality?.Name?.toLowerCase() || '';
 

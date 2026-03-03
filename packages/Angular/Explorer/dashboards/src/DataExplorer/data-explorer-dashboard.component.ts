@@ -5,7 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
@@ -296,7 +296,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get recentEntities(): EntityInfo[] {
     return this.state.recentEntityAccesses
       .slice(0, 5)
-      .map(r => this.entities.find(e => e.ID === r.entityId))
+      .map(r => this.entities.find(e => UUIDsEqual(e.ID, r.entityId)))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -305,7 +305,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get favoriteEntities(): EntityInfo[] {
     return this.state.favoriteEntities
-      .map(f => this.entities.find(e => e.ID === f.entityId))
+      .map(f => this.entities.find(e => UUIDsEqual(e.ID, f.entityId)))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -2771,7 +2771,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onRecentRecordClick(record: RecentRecordAccess): void {
-    const entity = this.entities.find(e => e.ID === record.entityId);
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2785,7 +2785,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onFavoriteRecordClick(record: FavoriteRecord): void {
-    const entity = this.entities.find(e => e.ID === record.entityId);
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2797,7 +2797,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Get the icon for an entity by ID (for recent records)
    */
   public getEntityIconById(entityId: string): string {
-    const entity = this.metadata.Entities.find(e => e.ID === entityId);
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
     if (entity) {
       return this.getEntityIcon(entity);
     }

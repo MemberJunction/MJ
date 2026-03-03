@@ -20,10 +20,10 @@ export class MJFileFormComponent extends BaseFormComponent {
             { sectionKey: 'classificationStatus', sectionName: 'Classification & Status', isExpanded: true },
             { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'fileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'MJ: AI Prompt Run Medias', isExpanded: false },
-            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'MJ: Conversation Detail Attachments', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'MJ: AI Agent Run Medias', isExpanded: false }
+            { sectionKey: 'mJFileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
+            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false }
         ]);
     }
 }

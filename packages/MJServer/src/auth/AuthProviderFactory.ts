@@ -18,6 +18,7 @@ export class AuthProviderFactory {
   private static instance: AuthProviderFactory;
   private providers: Map<string, IAuthProvider> = new Map();
   private issuerCache: Map<string, IAuthProvider> = new Map();
+  private issuerMultiCache: Map<string, IAuthProvider[]> = new Map();
 
   private constructor() {}
 
@@ -67,8 +68,9 @@ export class AuthProviderFactory {
 
     this.providers.set(provider.name, provider);
     
-    // Clear issuer cache when registering new provider
+    // Clear issuer caches when registering new provider
     this.issuerCache.clear();
+    this.issuerMultiCache.clear();
     
     console.log(`Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`);
   }
@@ -92,6 +94,33 @@ export class AuthProviderFactory {
     }
 
     return undefined;
+  }
+
+  /**
+   * Gets all providers matching an issuer URL.
+   * Unlike getByIssuer() which returns only the first match, this returns
+   * all providers for a given issuer. This is needed when multiple apps
+   * (e.g. MJExplorer + MJCentral) share the same Auth0 domain but have
+   * different audiences (client IDs).
+   */
+  getAllByIssuer(issuer: string): IAuthProvider[] {
+    // Check multi-provider cache first
+    if (this.issuerMultiCache.has(issuer)) {
+      return this.issuerMultiCache.get(issuer)!;
+    }
+
+    const matches: IAuthProvider[] = [];
+    for (const provider of this.providers.values()) {
+      if (provider.matchesIssuer(issuer)) {
+        matches.push(provider);
+      }
+    }
+
+    if (matches.length > 0) {
+      this.issuerMultiCache.set(issuer, matches);
+    }
+
+    return matches;
   }
 
   /**
@@ -121,6 +150,7 @@ export class AuthProviderFactory {
   clear(): void {
     this.providers.clear();
     this.issuerCache.clear();
+    this.issuerMultiCache.clear();
   }
 
   /**

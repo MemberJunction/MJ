@@ -1,5 +1,59 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ng-base-application@5.5.0
+  - @memberjunction/ng-base-types@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/entity-communications-base@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- 8789e86: moved design tokens + added doc
+  - @memberjunction/ai-engine-base@5.4.1
+  - @memberjunction/ng-base-application@5.4.1
+  - @memberjunction/ng-base-types@5.4.1
+  - @memberjunction/ng-notifications@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/entity-communications-base@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/entity-communications-base@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

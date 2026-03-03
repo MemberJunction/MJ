@@ -9,6 +9,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface CollectionNode {
   collection: MJCollectionEntity;
@@ -589,7 +590,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   private async loadUserPermissions(): Promise<void> {
     // Load permissions for collections not owned by current user
     const nonOwnedCollections = this.allCollections.filter(
-      c => c.OwnerID && c.OwnerID !== this.currentUser.ID
+      c => c.OwnerID && !UUIDsEqual(c.OwnerID, this.currentUser.ID)
     );
 
     if (nonOwnedCollections.length === 0) {
@@ -614,16 +615,16 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   private displayChildCollections(parentId: string, editableCollections: MJCollectionEntity[]): void {
-    const childCollections = editableCollections.filter(c => c.ParentID === parentId);
+    const childCollections = editableCollections.filter(c => UUIDsEqual(c.ParentID, parentId));
     this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
   private createNode(collection: MJCollectionEntity, allEditableCollections: MJCollectionEntity[]): CollectionNode {
-    const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
-    const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
+    const hasChildren = allEditableCollections.some(c => UUIDsEqual(c.ParentID, collection.ID));
+    const alreadyContainsArtifact = this.excludeCollectionIds.some(id => UUIDsEqual(id, collection.ID));
     return {
       collection,
-      selected: this.selectedCollections.some(sc => sc.ID === collection.ID),
+      selected: this.selectedCollections.some(sc => UUIDsEqual(sc.ID, collection.ID)),
       hasChildren,
       alreadyContainsArtifact
     };
@@ -631,7 +632,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -646,7 +647,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       return;
     }
 
-    const index = this.selectedCollections.findIndex(c => c.ID === node.collection.ID);
+    const index = this.selectedCollections.findIndex(c => UUIDsEqual(c.ID, node.collection.ID));
     if (index >= 0) {
       this.selectedCollections.splice(index, 1);
       node.selected = false;
@@ -690,7 +691,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   navigateToCollection(collection: MJCollectionEntity): void {
     // Find the index of this collection in the navigation path
-    const index = this.navigationPath.findIndex(n => n.collection.ID === collection.ID);
+    const index = this.navigationPath.findIndex(n => UUIDsEqual(n.collection.ID, collection.ID));
 
     if (index >= 0) {
       // Trim navigation path to this level

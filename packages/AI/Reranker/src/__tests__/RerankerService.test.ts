@@ -11,15 +11,19 @@ const mockModels: Array<{ ID: string; Name: string; IsActive: boolean; APIName: 
 const mockModelVendors: Array<{ ModelID: string; Status: string; Priority: number; DriverClass: string; APIName: string }> = [];
 const mockCreateInstance = vi.fn().mockReturnValue(null);
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: (...args: unknown[]) => mockCreateInstance(...args)
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: (...args: unknown[]) => mockCreateInstance(...args)
+                }
             }
         }
-    }
-}));
+    };
+});
 
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {

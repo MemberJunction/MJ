@@ -1,5 +1,64 @@
 # Change Log - @memberjunction/cli
 
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- 1d3dec4: Add new headless, event-driven installer engine for MemberJunction. Features 9-phase install pipeline (preflight, scaffold, configure, database, platform compat, dependencies, migrate, codegen, smoke test), checkpoint/resume via state file, non-interactive CI/Docker mode (`--yes` + `--config`), `mj doctor` diagnostics, `--fast` optimistic mode, known-issue patching system, stdout-based service readiness detection, cross-platform Windows compatibility fixes, and 425 unit tests across 20 Vitest test files.
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [bf2c142]
+- Updated dependencies [ee9f788]
+- Updated dependencies [1d3dec4]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/server-bootstrap-lite@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/codegen-lib@5.5.0
+  - @memberjunction/sql-converter@5.5.0
+  - @memberjunction/installer@5.5.0
+  - @memberjunction/ai-cli@5.5.0
+  - @memberjunction/config@5.5.0
+  - @memberjunction/db-auto-doc@5.5.0
+  - @memberjunction/metadata-sync@5.5.0
+  - @memberjunction/query-gen@5.5.0
+  - @memberjunction/testing-cli@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.4.1
+- @memberjunction/codegen-lib@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/db-auto-doc@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/metadata-sync@5.4.1
+- @memberjunction/query-gen@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+- @memberjunction/testing-cli@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/codegen-lib@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/metadata-sync@5.4.0
+  - @memberjunction/ai-cli@5.4.0
+  - @memberjunction/query-gen@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/testing-cli@5.4.0
+  - @memberjunction/db-auto-doc@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

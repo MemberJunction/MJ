@@ -20,8 +20,8 @@ export class MJTestFormComponent extends BaseFormComponent {
             { sectionKey: 'testLogic', sectionName: 'Test Logic', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false },
-            { sectionKey: 'mJTestSuiteTests', sectionName: 'MJ: Test Suite Tests', isExpanded: false }
+            { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },
+            { sectionKey: 'mJTestSuiteTests', sectionName: 'Test Suite Tests', isExpanded: false }
         ]);
     }
 }

@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.5.0
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

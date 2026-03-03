@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, CompositeKey, LogError, EntityRecordNameInput } from '@memberjunction/core';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /**
@@ -158,7 +159,7 @@ export class RecentAccessService {
       const items: RecentAccessItem[] = [];
 
       for (const log of userRecordLogs) {
-        const entityInfo = md.Entities.find(e => e.ID === log.EntityID);
+        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, log.EntityID));
         if (!entityInfo) continue;
 
         // Determine resource type based on entity name

@@ -17,8 +17,8 @@ export class MJContentFileTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'contentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false }
+            { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }
         ]);
     }
 }

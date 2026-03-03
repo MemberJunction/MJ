@@ -82,23 +82,23 @@
 
     <!-- Entity Action Filters Section -->
     <mj-collapsible-panel
-        SectionKey="entityActionFilters"
+        SectionKey="mJEntityActionFilters"
         SectionName="Entity Action Filters"
         Icon="fa fa-filter"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityActionFilters')"
+        [BadgeCount]="GetSectionRowCount('mJEntityActionFilters')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Filters','ActionFilterID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Action Filters')"
-                [AllowLoad]="IsSectionExpanded('entityActionFilters')"
+                [AllowLoad]="IsSectionExpanded('mJEntityActionFilters')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityActionFilters', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

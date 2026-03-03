@@ -302,5 +302,19 @@
       "lastModified": "2026-02-12T19:47:36.269Z",
       "checksum": "e6756f7d46f7abfd8214cbd1e548fe5ce5a6ee18f5e2d37246abaa129adc3d55"
     }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax",
+      "Description": "MiniMax is a Chinese AI company developing large language models including the M-series. Known for the MiniMax-M2.5 MoE model (230B total / 10B active parameters) with state-of-the-art coding and agentic capabilities, competing with frontier models at significantly lower cost. MIT licensed open-weights models.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "5C070719-85B1-4C3B-9C9E-3BE8B6B64D7E"
+    },
+    "sync": {
+      "lastModified": "2026-02-27T20:00:58.690Z",
+      "checksum": "5f6cc666c29a2e6daee850de8b3f7da0c41341057d361d0346ff1dcf3e5a19f8"
+    }
   }
 ]

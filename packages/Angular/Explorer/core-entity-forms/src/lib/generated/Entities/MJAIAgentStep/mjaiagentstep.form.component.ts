@@ -21,8 +21,8 @@ export class MJAIAgentStepFormComponent extends BaseFormComponent {
             { sectionKey: 'targetResources', sectionName: 'Target Resources', isExpanded: false },
             { sectionKey: 'visualLayout', sectionName: 'Visual Layout', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentStepPaths', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false },
-            { sectionKey: 'mJAIAgentStepPaths1', sectionName: 'MJ: AI Agent Step Paths', isExpanded: false }
+            { sectionKey: 'mJAIAgentStepPathsDestinationStepID', sectionName: 'AI Agent Step Paths (Destination Step ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentStepPathsOriginStepID', sectionName: 'AI Agent Step Paths (Origin Step ID)', isExpanded: false }
         ]);
     }
 }

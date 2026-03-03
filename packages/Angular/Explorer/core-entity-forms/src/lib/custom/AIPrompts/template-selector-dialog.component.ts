@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { MJTemplateEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface TemplateSelectorConfig {
   /** Title for the dialog */
@@ -190,7 +191,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     // Apply category filter
     if (this.selectedCategory) {
       filtered = filtered.filter(template => 
-        template.CategoryID === this.selectedCategory
+        UUIDsEqual(template.CategoryID, this.selectedCategory)
       );
     }
     
@@ -205,7 +206,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   getCategoryDisplayName(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || 'Unknown Category';
   }
 

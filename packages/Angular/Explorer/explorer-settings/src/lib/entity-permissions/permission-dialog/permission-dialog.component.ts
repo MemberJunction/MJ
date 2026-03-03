@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity, MJEntityEntity, MJRoleEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface PermissionDialogData {
   entity: MJEntityEntity;
@@ -108,7 +109,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
     // Process existing permissions
     for (const permission of this.data.existingPermissions) {
-      const role = this.data.roles.find(r => r.ID === permission.RoleID);
+      const role = this.data.roles.find(r => UUIDsEqual(r.ID, permission.RoleID));
       if (role) {
         console.log(`Processing permission for role ${role.Name}:`, {
           canCreate: permission.CanCreate,
@@ -158,21 +159,21 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     });
 
     // Remove from available roles
-    this.availableRoles = this.availableRoles.filter(r => r.ID !== role.ID);
+    this.availableRoles = this.availableRoles.filter(r => !UUIDsEqual(r.ID, role.ID));
     this.cdr.detectChanges();
   }
 
   public removeRolePermission(rolePermission: RolePermissions): void {
     // Add back to available roles if not new
     if (!rolePermission.isNew) {
-      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
       }
     } else {
       // Add back to available roles
-      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));

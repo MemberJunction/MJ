@@ -1,4 +1,5 @@
 import { Metadata, KeyValuePair, CompositeKey, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   AppContext,
   Arg,
@@ -85,7 +86,7 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
 
-    const e = p.Entities.find((e) => e.ID === params.EntityID);
+    const e = p.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID));
     if (e)
       return {
         EntityID: params.EntityID,
@@ -101,8 +102,8 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
   async SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload, providers }: AppContext) {
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
-    const e = p.Entities.find((e) => e.ID === params.EntityID);
-    const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);
+    const e = p.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID));
+    const u = UserCache.Users.find((u) => UUIDsEqual(u.ID, userPayload.userRecord.ID));
     if (e) {
       await p.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {

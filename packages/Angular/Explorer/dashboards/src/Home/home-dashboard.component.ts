@@ -217,7 +217,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.showConfigDialog = true;
     setTimeout(() => {
       if (this.appConfigDialog) {
-        this.appConfigDialog.open();
+        this.appConfigDialog.Open();
       }
     }, 0);
   }

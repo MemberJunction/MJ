@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
@@ -11,6 +11,7 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunc
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
@@ -154,7 +155,7 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID &&
+        a => !UUIDsEqual(a.ID, agent.ID) &&
              !a.ParentID &&
              a.Status === 'Active' &&
              a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
@@ -559,7 +560,7 @@ export class ConversationAgentService {
         const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
         // check by preset ID or AIConfigurationID - since sometimes we have the actual
         // configuration ID. Since both UUID no collisions should ever be possible.
-        const preset = presets.find(p => p.ID === agentConfigurationPresetId || p.AIConfigurationID === agentConfigurationPresetId);
+        const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId));
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
@@ -569,15 +570,13 @@ export class ConversationAgentService {
         }
       }
 
-      // Build conversation messages for the sub-agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
-      // Prepare parameters with optional payload and progress callback
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
+      // Use fire-and-forget mutation to avoid Azure proxy timeouts (~230s).
+      // Server loads conversation history from DB, avoiding large client→server payload.
+      // Client receives completion via WebSocket PubSub event.
+      const result = await this._aiClient.RunAIAgentFromConversationDetail({
         conversationDetailId: conversationDetailId,
+        agentId: agent.ID,
+        maxHistoryMessages: 20,
         data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
@@ -585,11 +584,20 @@ export class ConversationAgentService {
         },
         ...(payload ? { payload } : {}),
         ...(aiConfigurationId ? { configurationId: aiConfigurationId } : {}),
-        onProgress: onProgress
-      };
-
-      // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
-      const result = await this._aiClient.RunAIAgent(params, sourceArtifactId, sourceArtifactVersionId);
+        createArtifacts: true,
+        createNotification: true,
+        sourceArtifactId: sourceArtifactId,
+        sourceArtifactVersionId: sourceArtifactVersionId,
+        // Adapt progress callback: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
+        onProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.percentage,
+            message: progress.message,
+            metadata: progress.metadata
+          });
+        } : undefined
+      });
 
       return result;
     } catch (error) {
@@ -631,7 +639,7 @@ export class ConversationAgentService {
       }
 
       // Get agent details
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
@@ -820,7 +828,7 @@ ${compactHistory}${artifactContext}
 
       // O(1) lookup for agent run from pre-loaded data
       const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || agentRun.AgentID !== agentId || agentRun.Status !== 'Completed') {
+      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
         continue;
       }
 

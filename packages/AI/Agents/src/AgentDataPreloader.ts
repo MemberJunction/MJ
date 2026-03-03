@@ -13,6 +13,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
@@ -252,7 +253,7 @@ export class AgentDataPreloader {
     ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
         await AIEngine.Instance.Config(false, contextUser);
-        const data = AIEngine.Instance.AgentDataSources.filter(ads => ads.AgentID === agentId);
+        const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId));
         const sortedData = data.sort((a, b) => {
             if (a.ExecutionOrder === b.ExecutionOrder) {
                 return a.Name.localeCompare(b.Name);

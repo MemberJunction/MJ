@@ -1,5 +1,8 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
+import { DatabasePlatform } from "./platformSQL";
+import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * A list of all users who have or had access to the system.
@@ -242,12 +245,17 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * SQL WHERE clause template that filters records based on user context variables
      */
     FilterText: string = null
-    
+    /**
+     * JSON column containing platform-specific SQL variants for the FilterText.
+     * Stores alternative filter SQL for platforms other than the default.
+     */
+    PlatformVariants: string | null = null
+
     /**
      * Timestamp when the filter was created
      */
     __mj_CreatedAt: Date = null
-    
+
     /**
      * Timestamp when the filter was last updated
      */
@@ -256,6 +264,28 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
+    }
+
+    private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
+    /**
+     * Lazily parses and caches the PlatformVariants JSON.
+     */
+    private get ParsedVariants(): PlatformVariantsJSON | null {
+        if (this._parsedVariants === undefined) {
+            this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
+        }
+        return this._parsedVariants;
+    }
+
+    /**
+     * Resolves the FilterText for a given database platform.
+     * Checks PlatformVariants first; falls back to the base FilterText property.
+     * @param platform - The target database platform
+     * @returns The appropriate filter text for the platform
+     */
+    public GetPlatformFilterText(platform: DatabasePlatform): string {
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'FilterText', platform);
+        return variant ?? this.FilterText;
     }
 
     /**
@@ -357,7 +387,7 @@ export class AuthorizationInfo extends BaseInfo {
                 const ari = new AuthorizationRoleInfo(authorizationRoles[i])
                 this._AuthorizationRoles.push(ari)
     
-                const match = mdRoles.find(r => r.ID === ari.RoleID) 
+                const match = mdRoles.find(r => UUIDsEqual(r.ID, ari.RoleID))
                 if (match)
                     ari._setRole(match)
             }
@@ -373,7 +403,7 @@ export class AuthorizationInfo extends BaseInfo {
     public UserCanExecute(user: UserInfo): boolean {
         if (this.IsActive && user && user.UserRoles) {
             for (let i = 0; i < user.UserRoles.length; i++) {
-                const matchingRole = this.Roles.find(r => r.ID === user.UserRoles[i].RoleID)
+                const matchingRole = this.Roles.find(r => UUIDsEqual(r.ID, user.UserRoles[i].RoleID))
                 if (matchingRole)
                     return true; // as soon as we find a single matching role we can bail out as the user can execute
             }
@@ -389,7 +419,7 @@ export class AuthorizationInfo extends BaseInfo {
      */
     public RoleCanExecute(role: RoleInfo): boolean {
         if (this.IsActive) {
-            return this.Roles.find(r => r.ID === role.ID) != null
+            return this.Roles.find(r => UUIDsEqual(r.ID, role.ID)) != null
         }
         return false
     }

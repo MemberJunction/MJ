@@ -1,5 +1,51 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/ng-explorer-core@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-auth-services@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-explorer-core@5.4.1
+  - @memberjunction/ng-auth-services@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/ng-explorer-core@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-auth-services@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

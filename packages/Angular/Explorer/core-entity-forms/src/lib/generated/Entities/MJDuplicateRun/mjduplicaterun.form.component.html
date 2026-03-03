@@ -154,23 +154,23 @@
 
     <!-- Duplicate Run Details Section -->
     <mj-collapsible-panel
-        SectionKey="duplicateRunDetails"
+        SectionKey="mJDuplicateRunDetails"
         SectionName="Duplicate Run Details"
         Icon="fa fa-clone"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('duplicateRunDetails')"
+        [BadgeCount]="GetSectionRowCount('mJDuplicateRunDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Run Details','DuplicateRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Details')"
-                [AllowLoad]="IsSectionExpanded('duplicateRunDetails')"
+                [AllowLoad]="IsSectionExpanded('mJDuplicateRunDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('duplicateRunDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

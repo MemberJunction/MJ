@@ -1,5 +1,65 @@
 # @memberjunction/ai-agents
 
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- 2973c64: no migration, just small code changes
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-prompts@5.5.0
+  - @memberjunction/ai-reranker@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-reranker@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Minor Changes
+
+- bc993b8: migration file due to metadata update (fix entity name in AI Agent data preloading for DB Research Agent)
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/ai-reranker@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

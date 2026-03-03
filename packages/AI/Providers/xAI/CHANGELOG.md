@@ -1,5 +1,32 @@
 # @memberjunction/ai-xai
 
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-openai@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-openai@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.4.0
+- @memberjunction/ai-openai@5.4.0
+- @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

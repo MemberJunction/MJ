@@ -20,11 +20,11 @@ export class MJEmployeeFormComponent extends BaseFormComponent {
             { sectionKey: 'personalContact', sectionName: 'Personal & Contact', isExpanded: true },
             { sectionKey: 'employmentDetails', sectionName: 'Employment Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'employeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
-            { sectionKey: 'employeeRoles', sectionName: 'Employee Roles', isExpanded: false },
-            { sectionKey: 'employeeSkills', sectionName: 'Employee Skills', isExpanded: false },
-            { sectionKey: 'directReports', sectionName: 'Direct Reports', isExpanded: false },
-            { sectionKey: 'users', sectionName: 'Users', isExpanded: false }
+            { sectionKey: 'mJEmployeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
+            { sectionKey: 'mJEmployeeRoles', sectionName: 'Employee Roles', isExpanded: false },
+            { sectionKey: 'mJEmployeeSkills', sectionName: 'Employee Skills', isExpanded: false },
+            { sectionKey: 'mJEmployees', sectionName: 'Direct Reports', isExpanded: false },
+            { sectionKey: 'mJUsers', sectionName: 'Users', isExpanded: false }
         ]);
     }
 }

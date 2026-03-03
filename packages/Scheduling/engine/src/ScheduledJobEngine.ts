@@ -12,7 +12,7 @@ import {
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
@@ -221,7 +221,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     ): Promise<MJScheduledJobRunEntity> {
         await this.Config(false, contextUser);
 
-        const job = this.ScheduledJobs.find(j => j.ID === jobId);
+        const job = this.ScheduledJobs.find(j => UUIDsEqual(j.ID, jobId));
         if (!job) {
             throw new Error(`Scheduled job ${jobId} not found or not active`);
         }
@@ -288,7 +288,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
         try {
             // Get job type
-            const jobType = this.ScheduledJobTypes.find(t => t.ID === job.JobTypeID);
+            const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
             if (!jobType) {
                 throw new Error(`Job type ${job.JobTypeID} not found`);
             }

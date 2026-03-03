@@ -22,7 +22,7 @@ export class MJScheduledJobFormComponent extends BaseFormComponent {
             { sectionKey: 'notificationSettings', sectionName: 'Notification Settings', isExpanded: false },
             { sectionKey: 'distributedLocking', sectionName: 'Distributed Locking', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJScheduledJobRuns', sectionName: 'MJ: Scheduled Job Runs', isExpanded: false }
+            { sectionKey: 'mJScheduledJobRuns', sectionName: 'Scheduled Job Runs', isExpanded: false }
         ]);
     }
 }

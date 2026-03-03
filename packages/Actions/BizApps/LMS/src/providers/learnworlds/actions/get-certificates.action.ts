@@ -2,332 +2,522 @@ import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { UserInfo } from '@memberjunction/core';
+import { GetCertificatesParams, GetCertificatesResult, FormattedCertificate, CertificatesSummary } from '../interfaces';
+
+// ----------------------------------------------------------------
+// File-local interfaces for raw LearnWorlds API shapes
+// ----------------------------------------------------------------
+
+/** Query parameters sent to the certificates endpoint */
+interface LWCertificateQueryParams {
+  limit: number;
+  sort: string;
+  order: string;
+  issued_after?: string;
+  issued_before?: string;
+  [key: string]: string | number | boolean | undefined;
+}
+
+/** Raw certificate data from the LearnWorlds API */
+interface LWRawCertificate {
+  id?: string;
+  certificate_id?: string;
+  user_id?: string;
+  course_id?: string;
+  certificate_number?: string;
+  number?: string;
+  issued_at?: string;
+  created_at?: string;
+  expires_at?: string;
+  status?: string;
+  grade?: number;
+  score?: number;
+  completion_percentage?: number;
+  user?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+  course?: {
+    id?: string;
+    title?: string;
+    duration?: number;
+  };
+  pdf_url?: string;
+  download_url?: string;
+  image_url?: string;
+  public_url?: string;
+  certificate_url?: string;
+  verification_url?: string;
+  verification_code?: string;
+  qr_code_url?: string;
+}
+
+/** Wrapper response that may contain a data array */
+interface LWCertificatesApiResponse {
+  success?: boolean;
+  message?: string;
+  data?: LWRawCertificate[] | LWCertificatesNestedData | LWRawCertificate;
+}
+
+/** Nested data shape when the API wraps certificates inside .data.data */
+interface LWCertificatesNestedData {
+  data?: LWRawCertificate[];
+  id?: string;
+  [key: string]: unknown;
+}
+
+/** User lookup response */
+interface LWUserLookup {
+  success?: boolean;
+  data?: {
+    id?: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
+}
+
+/** Course lookup response */
+interface LWCourseLookup {
+  success?: boolean;
+  data?: {
+    id?: string;
+    title?: string;
+    duration?: number;
+  };
+}
 
 /**
  * Action to retrieve certificates earned by users in LearnWorlds
  */
 @RegisterClass(BaseAction, 'GetCertificatesAction')
 export class GetCertificatesAction extends LearnWorldsBaseAction {
-    /**
-     * Get certificates for a user or course
-     */
-    public async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const { Params, ContextUser } = params;
-        this.params = Params;
-        
+  // ----------------------------------------------------------------
+  // Typed public method – can be called directly from code
+  // ----------------------------------------------------------------
+
+  /**
+   * Get certificates for a user or course.
+   * Throws on any error.
+   */
+  public async GetCertificates(params: GetCertificatesParams, contextUser: UserInfo): Promise<GetCertificatesResult> {
+    this.SetCompanyContext(params.CompanyID);
+
+    const {
+      UserID: userId,
+      CourseID: courseId,
+      DateFrom: dateFrom,
+      DateTo: dateTo,
+      IncludeDownloadLinks: includeDownloadLinksRaw,
+      SortBy: sortBy = 'issued_at',
+      SortOrder: sortOrder = 'desc',
+      MaxResults: maxResults = 100,
+    } = params;
+
+    const includeDownloadLinks = includeDownloadLinksRaw !== false;
+
+    // Require either userId or courseId
+    if (!userId && !courseId) {
+      throw new Error('Either UserID or CourseID is required');
+    }
+
+    // Build query parameters
+    const queryParams: LWCertificateQueryParams = {
+      limit: Math.min(maxResults, LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
+      sort: sortBy,
+      order: sortOrder,
+    };
+
+    const parsedFrom = this.safeParseDateToISO(dateFrom);
+    if (parsedFrom) {
+      queryParams.issued_after = parsedFrom;
+    }
+    const parsedTo = this.safeParseDateToISO(dateTo);
+    if (parsedTo) {
+      queryParams.issued_before = parsedTo;
+    }
+
+    // Validate path segments before URL interpolation
+    if (userId) this.validatePathSegment(userId, 'UserID');
+    if (courseId) this.validatePathSegment(courseId, 'CourseID');
+
+    // Determine endpoint based on parameters
+    const endpoint = this.buildCertificatesEndpoint(userId, courseId);
+
+    // Build query string
+    const queryString = this.buildQueryString(queryParams);
+
+    // Get certificates
+    const certificatesResponse = await this.makeLearnWorldsRequest<LWCertificatesApiResponse>(endpoint + queryString, 'GET', null, contextUser);
+
+    if (certificatesResponse.success === false) {
+      throw new Error(certificatesResponse.message || 'Failed to retrieve certificates');
+    }
+
+    // Handle single certificate vs array
+    const certificatesArray = this.extractCertificatesArray(certificatesResponse);
+
+    // Process each certificate
+    const formattedCertificates = await this.processCertificates(certificatesArray, userId, courseId, includeDownloadLinks, contextUser);
+
+    // Calculate summary
+    const summary = this.buildCertificatesSummary(formattedCertificates, userId, courseId, dateFrom, dateTo);
+
+    return {
+      Certificates: formattedCertificates,
+      TotalCount: formattedCertificates.length,
+      Summary: summary,
+    };
+  }
+
+  // ----------------------------------------------------------------
+  // Framework wrapper – thin delegation to the public method
+  // ----------------------------------------------------------------
+
+  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    const { Params, ContextUser } = params;
+    this.params = Params;
+
+    try {
+      const typedParams = this.extractCertificatesParams(Params);
+      const result = await this.GetCertificates(typedParams, ContextUser);
+
+      this.setOutputParam(Params, 'Certificates', result.Certificates);
+      this.setOutputParam(Params, 'TotalCount', result.TotalCount);
+      this.setOutputParam(Params, 'Summary', result.Summary);
+
+      return this.buildSuccessResult(`Retrieved ${result.TotalCount} certificate(s)`, Params);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      return this.buildErrorResult('ERROR', `Error retrieving certificates: ${msg}`, Params);
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Private helpers
+  // ----------------------------------------------------------------
+
+  private extractCertificatesParams(params: ActionParam[]): GetCertificatesParams {
+    return {
+      CompanyID: this.getRequiredStringParam(params, 'CompanyID'),
+      UserID: this.getOptionalStringParam(params, 'UserID'),
+      CourseID: this.getOptionalStringParam(params, 'CourseID'),
+      DateFrom: this.getOptionalStringParam(params, 'DateFrom'),
+      DateTo: this.getOptionalStringParam(params, 'DateTo'),
+      IncludeDownloadLinks: this.getOptionalBooleanParam(params, 'IncludeDownloadLinks', true),
+      SortBy: this.getOptionalStringParam(params, 'SortBy'),
+      SortOrder: (this.getOptionalStringParam(params, 'SortOrder') || 'desc') as 'asc' | 'desc',
+      MaxResults: this.getOptionalNumberParam(params, 'MaxResults', LearnWorldsBaseAction.LW_MAX_PAGE_SIZE),
+    };
+  }
+
+  private buildCertificatesEndpoint(userId?: string, courseId?: string): string {
+    if (userId && courseId) {
+      return `/users/${userId}/courses/${courseId}/certificate`;
+    } else if (userId) {
+      return `/users/${userId}/certificates`;
+    } else if (courseId) {
+      return `/courses/${courseId}/certificates`;
+    }
+    return '/certificates';
+  }
+
+  private buildQueryString(queryParams: Record<string, string | number | boolean | undefined>): string {
+    const filtered: Record<string, string> = {};
+    for (const [key, value] of Object.entries(queryParams)) {
+      if (value !== undefined) {
+        filtered[key] = String(value);
+      }
+    }
+    const keys = Object.keys(filtered);
+    if (keys.length === 0) return '';
+    return '?' + new URLSearchParams(filtered).toString();
+  }
+
+  private extractCertificatesArray(response: LWCertificatesApiResponse): LWRawCertificate[] {
+    const rawData = response.data;
+    if (Array.isArray(rawData)) {
+      return rawData;
+    }
+    if (rawData && typeof rawData === 'object') {
+      const nested = rawData as LWCertificatesNestedData;
+      if (Array.isArray(nested.data)) {
+        return nested.data;
+      }
+      if (nested.id) {
+        return [rawData as LWRawCertificate];
+      }
+    }
+    return [];
+  }
+
+  private async processCertificates(
+    certificatesArray: LWRawCertificate[],
+    userId: string | undefined,
+    courseId: string | undefined,
+    includeDownloadLinks: boolean,
+    contextUser: UserInfo,
+  ): Promise<FormattedCertificate[]> {
+    // Pre-fetch all user and course info in batch to avoid per-item API calls
+    const userInfoMap = await this.batchResolveUserInfo(certificatesArray, userId, contextUser);
+    const courseInfoMap = await this.batchResolveCourseInfo(certificatesArray, courseId, contextUser);
+
+    return certificatesArray.map((cert) => {
+      const formattedCert = this.buildBaseCertificate(cert, userId, courseId);
+
+      // Attach user info from pre-fetched map
+      const certUserId = cert.user_id || '';
+      formattedCert.user = cert.user ? this.extractInlineUserInfo(cert) : userInfoMap.get(certUserId);
+
+      // Attach course info from pre-fetched map
+      const certCourseId = cert.course_id || '';
+      formattedCert.course = cert.course ? this.extractInlineCourseInfo(cert) : courseInfoMap.get(certCourseId);
+
+      // Attach download links if requested
+      if (includeDownloadLinks) {
+        formattedCert.downloadLinks = {
+          pdf: cert.pdf_url || cert.download_url,
+          image: cert.image_url,
+          publicUrl: cert.public_url || cert.certificate_url,
+        };
+      }
+
+      // Attach verification info
+      formattedCert.verification = {
+        url: cert.verification_url,
+        code: cert.verification_code,
+        qrCode: cert.qr_code_url,
+      };
+
+      return formattedCert;
+    });
+  }
+
+  /**
+   * Extracts inline user info when the cert already includes user data.
+   */
+  private extractInlineUserInfo(cert: LWRawCertificate): { id: string; email: string; name: string } | undefined {
+    if (!cert.user) return undefined;
+    return {
+      id: cert.user.id || cert.user_id || '',
+      email: cert.user.email || '',
+      name: cert.user.name || `${cert.user.first_name || ''} ${cert.user.last_name || ''}`.trim(),
+    };
+  }
+
+  /**
+   * Extracts inline course info when the cert already includes course data.
+   */
+  private extractInlineCourseInfo(cert: LWRawCertificate): { id: string; title: string; duration?: number } | undefined {
+    if (!cert.course) return undefined;
+    return {
+      id: cert.course.id || cert.course_id || '',
+      title: cert.course.title || '',
+      duration: cert.course.duration,
+    };
+  }
+
+  /**
+   * Batch-fetches user info for all certificates that need external lookup.
+   * Returns a map from userId to user info.
+   */
+  private async batchResolveUserInfo(
+    certs: LWRawCertificate[],
+    filterUserId: string | undefined,
+    contextUser: UserInfo,
+  ): Promise<Map<string, { id: string; email: string; name: string }>> {
+    const map = new Map<string, { id: string; email: string; name: string }>();
+
+    // Only need to look up users when cert doesn't include inline user data
+    // and we're not filtering by a single user
+    if (filterUserId) return map;
+
+    const idsToFetch = [...new Set(certs.filter((c) => !c.user && c.user_id).map((c) => c.user_id!))];
+
+    const results = await Promise.all(
+      idsToFetch.map(async (uid) => {
         try {
-            // Extract and validate parameters
-            const userId = this.getParamValue(Params, 'UserID');
-            const courseId = this.getParamValue(Params, 'CourseID');
-            const dateFrom = this.getParamValue(Params, 'DateFrom');
-            const dateTo = this.getParamValue(Params, 'DateTo');
-            const includeDownloadLinks = this.getParamValue(Params, 'IncludeDownloadLinks') !== false;
-            const sortBy = this.getParamValue(Params, 'SortBy') || 'issued_at';
-            const sortOrder = this.getParamValue(Params, 'SortOrder') || 'desc';
-            const maxResults = this.getParamValue(Params, 'MaxResults') || 100;
-            
-            // Require either userId or courseId
-            if (!userId && !courseId) {
-                return {
-                    Success: false,
-                    ResultCode: 'VALIDATION_ERROR',
-                    Message: 'Either UserID or CourseID is required',
-                    Params
-                };
-            }
-
-
-            // Build query parameters
-            const queryParams: any = {
-                limit: Math.min(maxResults, 100),
-                sort: sortBy,
-                order: sortOrder
-            };
-
-            if (dateFrom) {
-                queryParams.issued_after = new Date(dateFrom).toISOString();
-            }
-            if (dateTo) {
-                queryParams.issued_before = new Date(dateTo).toISOString();
-            }
-
-            // Determine endpoint based on parameters
-            let endpoint = '/certificates';
-            if (userId && courseId) {
-                // Get specific certificate for user/course combination
-                endpoint = `/users/${userId}/courses/${courseId}/certificate`;
-            } else if (userId) {
-                // Get all certificates for a user
-                endpoint = `/users/${userId}/certificates`;
-            } else if (courseId) {
-                // Get all certificates issued for a course
-                endpoint = `/courses/${courseId}/certificates`;
-            }
-
-            // Build query string
-            const queryString = Object.keys(queryParams).length > 0 
-                ? '?' + new URLSearchParams(queryParams).toString()
-                : '';
-
-            // Get certificates
-            const certificatesResponse = await this.makeLearnWorldsRequest(
-                endpoint + queryString,
-                'GET',
-                null,
-                ContextUser
-            );
-
-            if (!certificatesResponse.success) {
-                return {
-                    Success: false,
-                    ResultCode: 'API_ERROR',
-                    Message: certificatesResponse.message || 'Failed to retrieve certificates',
-                    Params
-                };
-            }
-
-            // Handle single certificate vs array
-            const rawData = certificatesResponse.data;
-            const certificatesArray = Array.isArray(rawData) 
-                ? rawData 
-                : (rawData?.data || (rawData?.id ? [rawData] : []));
-
-            const formattedCertificates: any[] = [];
-
-            // Process each certificate
-            for (const cert of certificatesArray) {
-                const formattedCert: any = {
-                    id: cert.id || cert.certificate_id,
-                    userId: cert.user_id || userId,
-                    courseId: cert.course_id || courseId,
-                    certificateNumber: cert.certificate_number || cert.number,
-                    issuedAt: cert.issued_at || cert.created_at,
-                    expiresAt: cert.expires_at,
-                    status: cert.status || 'active',
-                    grade: cert.grade,
-                    score: cert.score,
-                    completionPercentage: cert.completion_percentage || 100
-                };
-
-                // Add user info if available
-                if (cert.user) {
-                    formattedCert.user = {
-                        id: cert.user.id || cert.user_id,
-                        email: cert.user.email,
-                        name: cert.user.name || `${cert.user.first_name || ''} ${cert.user.last_name || ''}`.trim()
-                    };
-                } else if (!userId && cert.user_id) {
-                    // Try to get user info
-                    const userResponse = await this.makeLearnWorldsRequest(
-                        `/users/${cert.user_id}`,
-                        'GET',
-                        null,
-                        ContextUser
-                    );
-                    
-                    if (userResponse.success && userResponse.data) {
-                        const user = userResponse.data;
-                        formattedCert.user = {
-                            id: user.id,
-                            email: user.email,
-                            name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
-                        };
-                    }
-                }
-
-                // Add course info if available
-                if (cert.course) {
-                    formattedCert.course = {
-                        id: cert.course.id || cert.course_id,
-                        title: cert.course.title,
-                        duration: cert.course.duration
-                    };
-                } else if (!courseId && cert.course_id) {
-                    // Try to get course info
-                    const courseResponse = await this.makeLearnWorldsRequest(
-                        `/courses/${cert.course_id}`,
-                        'GET',
-                        null,
-                        ContextUser
-                    );
-                    
-                    if (courseResponse.success && courseResponse.data) {
-                        const course = courseResponse.data;
-                        formattedCert.course = {
-                            id: course.id,
-                            title: course.title,
-                            duration: course.duration
-                        };
-                    }
-                }
-
-                // Add download links if requested
-                if (includeDownloadLinks) {
-                    formattedCert.downloadLinks = {
-                        pdf: cert.pdf_url || cert.download_url,
-                        image: cert.image_url,
-                        publicUrl: cert.public_url || cert.certificate_url
-                    };
-                }
-
-                // Add verification info
-                formattedCert.verification = {
-                    url: cert.verification_url,
-                    code: cert.verification_code,
-                    qrCode: cert.qr_code_url
-                };
-
-                formattedCertificates.push(formattedCert);
-            }
-
-            // Calculate summary statistics
-            const totalCertificates = formattedCertificates.length;
-            const activeCertificates = formattedCertificates.filter(c => 
-                c.status === 'active' && (!c.expiresAt || new Date(c.expiresAt) > new Date())
-            ).length;
-            const expiredCertificates = formattedCertificates.filter(c => 
-                c.expiresAt && new Date(c.expiresAt) <= new Date()
-            ).length;
-
-            // Group by course if getting user certificates
-            const certificatesByCourse: any = {};
-            if (userId && !courseId) {
-                formattedCertificates.forEach(cert => {
-                    const courseTitle = cert.course?.title || 'Unknown Course';
-                    if (!certificatesByCourse[courseTitle]) {
-                        certificatesByCourse[courseTitle] = [];
-                    }
-                    certificatesByCourse[courseTitle].push(cert);
-                });
-            }
-
-            // Group by user if getting course certificates
-            const certificatesByUser: any = {};
-            if (courseId && !userId) {
-                formattedCertificates.forEach(cert => {
-                    const userName = cert.user?.name || cert.user?.email || 'Unknown User';
-                    if (!certificatesByUser[userName]) {
-                        certificatesByUser[userName] = [];
-                    }
-                    certificatesByUser[userName].push(cert);
-                });
-            }
-
-            // Create summary
-            const summary = {
-                totalCertificates: totalCertificates,
-                activeCertificates: activeCertificates,
-                expiredCertificates: expiredCertificates,
-                dateRange: {
-                    from: dateFrom || 'all-time',
-                    to: dateTo || 'current'
-                },
-                filterType: userId && courseId ? 'user-course' : (userId ? 'user' : 'course'),
-                groupedData: userId && !courseId ? certificatesByCourse : (courseId && !userId ? certificatesByUser : null)
-            };
-
-            // Update output parameters
-            const outputParams = [...Params];
-            const certificatesParam = outputParams.find(p => p.Name === 'Certificates');
-            if (certificatesParam) {
-                certificatesParam.Value = formattedCertificates;
-            }
-            const totalCountParam = outputParams.find(p => p.Name === 'TotalCount');
-            if (totalCountParam) {
-                totalCountParam.Value = totalCertificates;
-            }
-            const summaryParam = outputParams.find(p => p.Name === 'Summary');
-            if (summaryParam) {
-                summaryParam.Value = summary;
-            }
-
+          const resp = await this.makeLearnWorldsRequest<LWUserLookup>(`/users/${uid}`, 'GET', null, contextUser);
+          if (resp.success !== false && resp.data) {
             return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: `Retrieved ${totalCertificates} certificate(s)`,
-                Params: outputParams
+              id: uid,
+              info: {
+                id: resp.data.id || '',
+                email: resp.data.email || '',
+                name: `${resp.data.first_name || ''} ${resp.data.last_name || ''}`.trim() || resp.data.username || '',
+              },
             };
-
+          }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            return {
-                Success: false,
-                ResultCode: 'EXECUTION_ERROR',
-                Message: `Error retrieving certificates: ${errorMessage}`,
-                Params
-            };
+          console.warn(`Failed to fetch user info for ${uid}:`, error instanceof Error ? error.message : error);
         }
+        return null;
+      }),
+    );
+
+    for (const result of results) {
+      if (result) map.set(result.id, result.info);
+    }
+    return map;
+  }
+
+  /**
+   * Batch-fetches course info for all certificates that need external lookup.
+   * Returns a map from courseId to course info.
+   */
+  private async batchResolveCourseInfo(
+    certs: LWRawCertificate[],
+    filterCourseId: string | undefined,
+    contextUser: UserInfo,
+  ): Promise<Map<string, { id: string; title: string; duration?: number }>> {
+    const map = new Map<string, { id: string; title: string; duration?: number }>();
+
+    // Only need to look up courses when cert doesn't include inline course data
+    // and we're not filtering by a single course
+    if (filterCourseId) return map;
+
+    const idsToFetch = [...new Set(certs.filter((c) => !c.course && c.course_id).map((c) => c.course_id!))];
+
+    const results = await Promise.all(
+      idsToFetch.map(async (cid) => {
+        try {
+          const resp = await this.makeLearnWorldsRequest<LWCourseLookup>(`/courses/${cid}`, 'GET', null, contextUser);
+          if (resp.success !== false && resp.data) {
+            return {
+              id: cid,
+              info: {
+                id: resp.data.id || '',
+                title: resp.data.title || '',
+                duration: resp.data.duration,
+              },
+            };
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch course info for ${cid}:`, error instanceof Error ? error.message : error);
+        }
+        return null;
+      }),
+    );
+
+    for (const result of results) {
+      if (result) map.set(result.id, result.info);
+    }
+    return map;
+  }
+
+  private buildBaseCertificate(cert: LWRawCertificate, userId: string | undefined, courseId: string | undefined): FormattedCertificate {
+    return {
+      id: cert.id || cert.certificate_id || '',
+      userId: cert.user_id || userId || '',
+      courseId: cert.course_id || courseId || '',
+      certificateNumber: cert.certificate_number || cert.number,
+      issuedAt: cert.issued_at || cert.created_at,
+      expiresAt: cert.expires_at,
+      status: cert.status || 'active',
+      grade: cert.grade,
+      score: cert.score,
+      completionPercentage: cert.completion_percentage || 100,
+      verification: { url: undefined, code: undefined, qrCode: undefined },
+    };
+  }
+
+  private buildCertificatesSummary(
+    certificates: FormattedCertificate[],
+    userId: string | undefined,
+    courseId: string | undefined,
+    dateFrom: string | undefined,
+    dateTo: string | undefined,
+  ): CertificatesSummary {
+    const totalCertificates = certificates.length;
+    const now = new Date();
+
+    const activeCertificates = certificates.filter((c) => c.status === 'active' && (!c.expiresAt || new Date(c.expiresAt) > now)).length;
+
+    const expiredCertificates = certificates.filter((c) => c.expiresAt && new Date(c.expiresAt) <= now).length;
+
+    // Group by course or user depending on the filter
+    let groupedData: Record<string, FormattedCertificate[]> | null = null;
+
+    if (userId && !courseId) {
+      groupedData = this.groupCertificatesByCourse(certificates);
+    } else if (courseId && !userId) {
+      groupedData = this.groupCertificatesByUser(certificates);
     }
 
-    /**
-     * Define the parameters this action expects
-     */
-    public get Params(): ActionParam[] {
-        const baseParams = this.getCommonLMSParams();
-        const specificParams: ActionParam[] = [
-            {
-                Name: 'UserID',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'CourseID',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'DateFrom',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'DateTo',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'IncludeDownloadLinks',
-                Type: 'Input',
-                Value: true
-            },
-            {
-                Name: 'SortBy',
-                Type: 'Input',
-                Value: 'issued_at'
-            },
-            {
-                Name: 'SortOrder',
-                Type: 'Input',
-                Value: 'desc'
-            },
-            {
-                Name: 'MaxResults',
-                Type: 'Input',
-                Value: 100
-            },
-            {
-                Name: 'Certificates',
-                Type: 'Output',
-                Value: null
-            },
-            {
-                Name: 'TotalCount',
-                Type: 'Output',
-                Value: null
-            },
-            {
-                Name: 'Summary',
-                Type: 'Output',
-                Value: null
-            }
-        ];
-        return [...baseParams, ...specificParams];
-    }
+    const filterType = userId && courseId ? 'user-course' : userId ? 'user' : 'course';
 
-    /**
-     * Metadata about this action
-     */
-    public get Description(): string {
-        return 'Retrieves certificates earned by users in LearnWorlds courses with download links and verification info';
+    return {
+      totalCertificates,
+      activeCertificates,
+      expiredCertificates,
+      dateRange: {
+        from: dateFrom || 'all-time',
+        to: dateTo || 'current',
+      },
+      filterType,
+      groupedData,
+    };
+  }
+
+  private groupCertificatesByCourse(certificates: FormattedCertificate[]): Record<string, FormattedCertificate[]> {
+    const grouped: Record<string, FormattedCertificate[]> = {};
+    for (const cert of certificates) {
+      const courseTitle = cert.course?.title || 'Unknown Course';
+      if (!grouped[courseTitle]) {
+        grouped[courseTitle] = [];
+      }
+      grouped[courseTitle].push(cert);
     }
+    return grouped;
+  }
+
+  private groupCertificatesByUser(certificates: FormattedCertificate[]): Record<string, FormattedCertificate[]> {
+    const grouped: Record<string, FormattedCertificate[]> = {};
+    for (const cert of certificates) {
+      const userName = cert.user?.name || cert.user?.email || 'Unknown User';
+      if (!grouped[userName]) {
+        grouped[userName] = [];
+      }
+      grouped[userName].push(cert);
+    }
+    return grouped;
+  }
+
+  // ----------------------------------------------------------------
+  // Params & Description metadata
+  // ----------------------------------------------------------------
+
+  /**
+   * Define the parameters this action expects
+   */
+  public get Params(): ActionParam[] {
+    const baseParams = this.getCommonLMSParams();
+    const specificParams: ActionParam[] = [
+      { Name: 'UserID', Type: 'Input', Value: null },
+      { Name: 'CourseID', Type: 'Input', Value: null },
+      { Name: 'DateFrom', Type: 'Input', Value: null },
+      { Name: 'DateTo', Type: 'Input', Value: null },
+      { Name: 'IncludeDownloadLinks', Type: 'Input', Value: true },
+      { Name: 'SortBy', Type: 'Input', Value: 'issued_at' },
+      { Name: 'SortOrder', Type: 'Input', Value: 'desc' },
+      { Name: 'MaxResults', Type: 'Input', Value: 100 },
+      { Name: 'Certificates', Type: 'Output', Value: null },
+      { Name: 'TotalCount', Type: 'Output', Value: null },
+      { Name: 'Summary', Type: 'Output', Value: null },
+    ];
+    return [...baseParams, ...specificParams];
+  }
+
+  /**
+   * Metadata about this action
+   */
+  public get Description(): string {
+    return 'Retrieves certificates earned by users in LearnWorlds courses with download links and verification info';
+  }
 }

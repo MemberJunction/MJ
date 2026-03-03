@@ -19,11 +19,11 @@ export class MJAuthorizationFormComponent extends BaseFormComponent {
             { sectionKey: 'authorizationHierarchy', sectionName: 'Authorization Hierarchy', isExpanded: true },
             { sectionKey: 'authorizationCore', sectionName: 'Authorization Core', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'actionAuthorizations', sectionName: 'Action Authorizations', isExpanded: false },
-            { sectionKey: 'auditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },
-            { sectionKey: 'auditLogs', sectionName: 'Audit Logs', isExpanded: false },
-            { sectionKey: 'mJAuthorizationRoles', sectionName: 'MJ: Authorization Roles', isExpanded: false },
-            { sectionKey: 'authorizations', sectionName: 'Authorizations', isExpanded: false }
+            { sectionKey: 'mJActionAuthorizations', sectionName: 'Action Authorizations', isExpanded: false },
+            { sectionKey: 'mJAuditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },
+            { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
+            { sectionKey: 'mJAuthorizationRoles', sectionName: 'Authorization Roles', isExpanded: false },
+            { sectionKey: 'mJAuthorizations', sectionName: 'Authorizations', isExpanded: false }
         ]);
     }
 }

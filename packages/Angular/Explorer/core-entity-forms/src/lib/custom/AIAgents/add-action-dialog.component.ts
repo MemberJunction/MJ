@@ -4,6 +4,7 @@ import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface CategoryTreeNode {
   id: string;
@@ -238,7 +239,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   }
 
   private getCategoryNameById(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || '';
   }
 
@@ -272,7 +273,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     const actions = this.allActions$.value;
     
     // Find the action and toggle its selection
-    const actionToUpdate = actions.find(a => a.ID === action.ID);
+    const actionToUpdate = actions.find(a => UUIDsEqual(a.ID, action.ID));
     if (actionToUpdate) {
       actionToUpdate.selected = !actionToUpdate.selected;
       
@@ -287,7 +288,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered actions to reflect selection state
       const filtered = this.filteredActions$.value;
-      const filteredAction = filtered.find(a => a.ID === action.ID);
+      const filteredAction = filtered.find(a => UUIDsEqual(a.ID, action.ID));
       if (filteredAction) {
         filteredAction.selected = actionToUpdate.selected;
         this.filteredActions$.next(filtered);
@@ -332,7 +333,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     
     // Get the selected action display items (excluding existing ones)
     const selectedDisplayItems = allActions
-      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.includes(action.ID));
+      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.some(id => UUIDsEqual(id, action.ID)));
     
     // Convert ActionDisplayItem to MJActionEntity by casting (they have the same structure)
     const selectedActions: MJActionEntity[] = selectedDisplayItems.map(item => item as MJActionEntity);

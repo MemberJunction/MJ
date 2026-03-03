@@ -1,4 +1,5 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AgentRunner } from "@memberjunction/ai-agents";
@@ -90,7 +91,7 @@ export class AgentOperations {
             let agent: MJAIAgentEntityExtended | null = null;
             
             if (parameters.agentId) {
-                agent = aiEngine.Agents.find(a => a.ID === parameters.agentId) || null;
+                agent = aiEngine.Agents.find(a => UUIDsEqual(a.ID, parameters.agentId)) || null;
                 if (!agent) {
                     throw new Error(`Agent not found with ID: ${parameters.agentId}`);
                 }

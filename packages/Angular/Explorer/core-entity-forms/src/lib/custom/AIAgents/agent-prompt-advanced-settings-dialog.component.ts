@@ -5,6 +5,7 @@ import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface AgentPromptAdvancedSettingsFormData {
   executionOrder: number;
@@ -128,7 +129,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
     // Check for conflicts with other prompts (excluding current one)
     const conflictingPrompt = this.allAgentPrompts.find(p => 
-      p.ID !== this.agentPrompt.ID && 
+      !UUIDsEqual(p.ID, this.agentPrompt.ID) && 
       p.ExecutionOrder === order
     );
 

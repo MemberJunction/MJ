@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { MJCommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
@@ -51,7 +52,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    protected override async AdditionalLoading(contextUser?: UserInfo) {
       // a little post-processing done within the context of the base classes loading architecture...
       this._Metadata.Providers.forEach((provider) => {
-         provider.MessageTypes = this._Metadata.ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
+         provider.MessageTypes = this._Metadata.ProviderMessageTypes.filter((pmt) => UUIDsEqual(pmt.CommunicationProviderID, provider.ID));
       });
    }
 

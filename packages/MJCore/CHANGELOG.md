@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/core
 
+## 5.5.0
+
+### Minor Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

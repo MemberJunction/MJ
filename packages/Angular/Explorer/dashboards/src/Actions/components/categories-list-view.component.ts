@@ -3,6 +3,7 @@ import { RunView, LogError } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface CategoryWithStats extends MJActionCategoryEntity {
   actionCount?: number;
@@ -362,7 +363,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
 
       // Calculate stats for each category
       this.categories = categories.map(category => {
-        const categoryActions = actions.filter(a => a.CategoryID === category.ID);
+        const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
         return {
           ...category,
           actionCount: categoryActions.length,

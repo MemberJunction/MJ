@@ -19,11 +19,11 @@ export class MJArtifactTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'artifactTypeDefinition', sectionName: 'Artifact Type Definition', isExpanded: true },
             { sectionKey: 'hierarchyInheritance', sectionName: 'Hierarchy & Inheritance', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'MJ: AI Agent Artifact Types', isExpanded: false },
-            { sectionKey: 'mJConversationArtifacts', sectionName: 'MJ: Conversation Artifacts', isExpanded: false },
-            { sectionKey: 'mJArtifactTypes', sectionName: 'MJ: Artifact Types', isExpanded: false },
-            { sectionKey: 'mJArtifacts', sectionName: 'MJ: Artifacts', isExpanded: false },
-            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
+            { sectionKey: 'mJConversationArtifacts', sectionName: 'Conversation Artifacts', isExpanded: false },
+            { sectionKey: 'mJArtifactTypes', sectionName: 'Artifact Types', isExpanded: false },
+            { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

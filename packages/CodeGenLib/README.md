@@ -570,12 +570,73 @@ Analyzes database schema changes and updates MJ metadata tables.
 
 ### SQLCodeGenBase
 
-Generates database objects: views, stored procedures, indexes, and permissions.
+Generates database objects: views, stored procedures, indexes, and permissions. Delegates platform-specific SQL generation to `CodeGenDatabaseProvider` implementations (see below).
 
 | Method | Description |
 |--------|-------------|
 | `manageSQLScriptsAndExecution(pool, entities, dir, user)` | Generate and execute all SQL objects for the given entities. |
 | `runCustomSQLScripts(pool, when)` | Execute custom SQL scripts configured for the specified timing. |
+
+### CodeGenDatabaseProvider (Database Abstraction Layer)
+
+The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all database-specific SQL generation** for CodeGen. It has **55 abstract methods** organized into categories that each platform provider must implement:
+
+| Category | Methods | Purpose |
+|----------|---------|---------|
+| DROP Guards | `generateDropGuard` | Conditional drop statements (IF EXISTS, IF OBJECT_ID) |
+| Base Views | `generateBaseView` | Entity views with joins and soft-delete filtering |
+| CRUD Routines | `generateCRUDCreate`, `generateCRUDUpdate`, `generateCRUDDelete` | Create/Update/Delete stored procedures or functions |
+| Triggers | `generateTimestampTrigger` | Timestamp auto-update triggers |
+| Indexes | `generateForeignKeyIndexes` | Foreign key index generation |
+| Full-Text Search | `generateFullTextSearch` | Platform-specific FTS infrastructure |
+| Root ID Functions | `generateRootIDFunction`, `generateRootFieldSelect`, `generateRootFieldJoin` | Recursive hierarchy root ID calculation |
+| Permissions | `generateViewPermissions`, `generateCRUDPermissions`, `generateFullTextSearchPermissions` | GRANT statements per entity role |
+| Cascade Deletes | `generateSingleCascadeOperation` | Cascade delete/update-to-NULL operations |
+| Timestamp Columns | `generateTimestampColumns` | Adding __mj_CreatedAt/__mj_UpdatedAt columns |
+| Parameter Helpers | `generateCRUDParamString`, `generateInsertFieldString`, `generateUpdateFieldString` | SQL generation utilities for routines |
+| DDL Operations | `addColumnSQL`, `alterColumnTypeAndNullabilitySQL`, `dropObjectSQL`, etc. | Schema modification statements |
+| Introspection | `getViewDefinitionSQL`, `getPrimaryKeyIndexNameSQL`, `getViewColumnsSQL` | Catalog queries for schema discovery |
+| Type System | `compareDataTypes`, `get TimestampType` | Data type comparison and platform constants |
+| Platform Config | `getSystemSchemasToExclude`, `get NeedsViewRefresh`, `get PlatformKey` | Platform-specific behavior flags |
+| SQL Execution | `executeSQLFileViaShell` | Shell-based SQL file execution (sqlcmd, psql) |
+| Default Parsing | `parseColumnDefaultValue` | Extracting defaults from catalog metadata |
+
+#### Built-in Implementations
+
+| Provider | Package | Platform |
+|----------|---------|----------|
+| `SQLServerCodeGenProvider` | `@memberjunction/codegen-lib` | SQL Server (T-SQL stored procedures, OBJECT_ID checks, sqlcmd) |
+| `PostgreSQLCodeGenProvider` | `@memberjunction/postgresql-dataprovider` | PostgreSQL (PL/pgSQL functions, DROP IF EXISTS, psql) |
+
+Providers are registered via `@RegisterClass(CodeGenDatabaseProvider, 'ProviderName')` and selected at runtime based on the configured database platform.
+
+#### Adding a New Database Backend
+
+To add support for a new database (e.g., MySQL, Oracle):
+
+1. **Create a provider class** extending `CodeGenDatabaseProvider`
+2. **Implement all 55 abstract methods** with platform-native SQL
+3. **Create a `SQLDialect` subclass** in `@memberjunction/sql-dialect` for identifier quoting, type mapping, etc.
+4. **Register with `@RegisterClass`** so CodeGen discovers it at runtime
+5. **Create a data provider** implementing `DatabaseProviderBase` from `@memberjunction/core`
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { CodeGenDatabaseProvider } from '@memberjunction/codegen-lib';
+
+@RegisterClass(CodeGenDatabaseProvider, 'MySQLCodeGenProvider')
+export class MySQLCodeGenProvider extends CodeGenDatabaseProvider {
+    get PlatformKey(): string { return 'mysql'; }
+    get Dialect(): SQLDialect { return new MySQLDialect(); }
+
+    generateDropGuard(objectType, schema, name): string {
+        return `DROP ${objectType} IF EXISTS ${schema}.\`${name}\`;`;
+    }
+    // ... implement remaining 53 abstract methods
+}
+```
+
+The PostgreSQL provider in `@memberjunction/postgresql-dataprovider` serves as the reference implementation for adding new backends.
 
 ### EntitySubClassGeneratorBase
 
@@ -630,6 +691,7 @@ This package depends on:
 - [@memberjunction/core](../MJCore) - Entity framework, metadata system, and type utilities
 - [@memberjunction/core-entities](../MJCoreEntities) - Generated entity classes for MJ system entities
 - [@memberjunction/global](../MJGlobal) - `@RegisterClass` decorator and `MJGlobal.ClassFactory`
+- [@memberjunction/sql-dialect](../SQLDialect) - Abstract SQL dialect layer for multi-database support
 - [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider) - SQL Server data provider and connection management
 - [@memberjunction/ai](../AI) - AI provider abstraction layer
 - [@memberjunction/ai-prompts](../AI/Prompts) - AI prompt execution for advanced generation features
@@ -649,6 +711,7 @@ This package depends on:
 
 ## Documentation
 
+- [Multi-Database Workflow](MULTI_DATABASE_WORKFLOW.md) - How migrations and CodeGen work together to support SQL Server, PostgreSQL, and future database backends
 - [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) - Comprehensive guide to the manifest system for preventing tree-shaking of `@RegisterClass` classes
 - [EXAMPLE_MANIFEST_MJAPI.md](EXAMPLE_MANIFEST_MJAPI.md) - Example server-side manifest (54 packages, 715 classes)
 - [EXAMPLE_MANIFEST_MJEXPLORER.md](EXAMPLE_MANIFEST_MJEXPLORER.md) - Example client-side manifest (17 packages, 721 classes)
@@ -1038,7 +1101,7 @@ See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for developme
 When contributing to CodeGenLib:
 
 1. All generator base classes use the class factory pattern -- always subclass and register rather than modifying base classes directly
-2. Generated SQL must be compatible with SQL Server and produce valid Flyway migration output
+2. Generated SQL must be valid for the target database platform and produce valid Flyway migration output
 3. Generated TypeScript must compile without errors and follow MJ naming conventions (PascalCase public members)
 4. AI-powered features must enforce stability guarantees (existing categories and icons are never changed)
 
