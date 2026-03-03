@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectCreations",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Data&Parent=System",
+      "Description": "Detects new records created in an external system by comparing base view rows to existing MJ record changes.",
+      "SQL": "@file:SQL/external-change-detection/detect-creations.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-creations.pg.sql"
+          }
+        }
+      ]
+    },
+    "primaryKey": {}
+  },
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectUpdates",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Data&Parent=System",
+      "Description": "Detects updated records in an external system by comparing UpdatedAt timestamps.",
+      "SQL": "@file:SQL/external-change-detection/detect-updates.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-updates.pg.sql"
+          }
+        }
+      ]
+    },
+    "primaryKey": {}
+  },
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectDeletions",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Data&Parent=System",
+      "Description": "Detects deleted records in an external system by identifying MJ record changes with no matching rows in the base view.",
+      "SQL": "@file:SQL/external-change-detection/detect-deletions.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-deletions.pg.sql"
+          }
+        }
+      ]
+    },
+    "primaryKey": {}
+  }
+]

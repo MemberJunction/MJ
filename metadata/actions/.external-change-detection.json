@@ -1,0 +1,105 @@
+[
+  {
+    "fields": {
+      "Name": "Run External Change Detection",
+      "Description": "Executes the External Change Detection process to identify changes in data that bypassed MemberJunction.",
+      "DriverClass": "__RunExternalChangeDetection",
+      "Type": "Custom",
+      "Status": "Active",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityList",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A comma separated list of entity names to detect changes for. If not provided, all eligible entities will be processed",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "06449BC6-23A7-40E5-B4F5-87D744975A32"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReplayBatchSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "DefaultValue": "20",
+            "Description": "Number of concurrent record replays to process at once.",
+            "IsRequired": false
+          },
+          "primaryKey": {}
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DetectionBatchSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "DefaultValue": "10",
+            "Description": "Number of entities to process in parallel during detection.",
+            "IsRequired": false
+          },
+          "primaryKey": {}
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AutoReplay",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "DefaultValue": "true",
+            "Description": "If true, detected changes will be automatically replayed through the entity system.",
+            "IsRequired": false
+          },
+          "primaryKey": {}
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StaleTimeoutHours",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "DefaultValue": "24",
+            "Description": "Number of hours a run can be in progress before it is considered stale.",
+            "IsRequired": false
+          },
+          "primaryKey": {}
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Changes detected and replayed successfully"
+          },
+          "primaryKey": {
+            "ID": "98443794-73C3-4D51-9E91-0DAAF987B472"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to detect changes or failed to replay changes"
+          },
+          "primaryKey": {
+            "ID": "A950D6AF-4906-4163-BF62-D07C69DA6B9A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E9ED9885-8A46-4EA2-8EAD-69087B9F1E20"
+    }
+  }
+]
