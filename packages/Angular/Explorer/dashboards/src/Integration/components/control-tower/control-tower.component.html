@@ -1,0 +1,56 @@
+<div class="control-tower">
+  <div class="tower-header">
+    <h2><i class="fa-solid fa-tower-broadcast"></i> Integration Control Tower</h2>
+    <button kendoButton [look]="'flat'" [themeColor]="'primary'" (click)="Refresh()">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </button>
+  </div>
+
+  @if (IsLoading) {
+    <mj-loading text="Loading integrations..." size="medium"></mj-loading>
+  } @else if (Summaries.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-plug-circle-xmark"></i>
+      <h3>No Integrations Configured</h3>
+      <p>Set up your first integration using the Connection Studio.</p>
+    </div>
+  } @else {
+    <div class="summary-bar">
+      <div class="summary-stat">
+        <span class="summary-value">{{ TotalCount }}</span>
+        <span class="summary-label">Total</span>
+      </div>
+      <div class="summary-stat healthy">
+        <span class="summary-value">{{ HealthyCount }}</span>
+        <span class="summary-label">Healthy</span>
+      </div>
+      <div class="summary-stat warning">
+        <span class="summary-value">{{ WarningCount }}</span>
+        <span class="summary-label">Warning</span>
+      </div>
+      <div class="summary-stat failed">
+        <span class="summary-value">{{ FailedCount }}</span>
+        <span class="summary-label">Failed</span>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      @for (summary of Summaries; track summary.Integration.ID) {
+        <div class="card-wrapper">
+          <app-integration-card
+            [Summary]="summary"
+            [Expanded]="ExpandedID === summary.Integration.ID"
+            (RunNowClick)="OnRunNow($event)"
+            (ExpandToggle)="OnExpandToggle($event)">
+          </app-integration-card>
+
+          @if (ExpandedID === summary.Integration.ID) {
+            <app-run-history-panel
+              [CompanyIntegrationID]="summary.Integration.ID">
+            </app-run-history-panel>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

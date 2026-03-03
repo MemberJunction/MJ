@@ -121,5 +121,19 @@ export {
   VersionHistoryGraphResourceComponent
 } from './VersionHistory';
 
+// Integration Dashboard
+export {
+  ControlTowerComponent,
+  LoadIntegrationDashboard,
+  ConnectionStudioComponent,
+  LoadConnectionStudio,
+  MappingWorkspaceComponent,
+  LoadMappingWorkspace,
+  IntegrationCardComponent,
+  RunHistoryPanelComponent,
+  IntegrationDataService,
+  IntegrationModule
+} from './Integration';
+
 // Module
 export * from './module';

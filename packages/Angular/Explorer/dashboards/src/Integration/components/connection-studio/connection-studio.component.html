@@ -1,0 +1,188 @@
+<div class="connection-studio">
+  <div class="studio-header">
+    <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Connection Studio</h2>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="step-indicator">
+    @for (step of Steps; track step.Index; let i = $index) {
+      <div class="step" [class.active]="CurrentStep === step.Index"
+           [class.completed]="CurrentStep > step.Index">
+        <div class="step-circle">
+          @if (CurrentStep > step.Index) {
+            <i class="fa-solid fa-check"></i>
+          } @else {
+            {{ step.Index + 1 }}
+          }
+        </div>
+        <span class="step-label">{{ step.Label }}</span>
+      </div>
+      @if (i < Steps.length - 1) {
+        <div class="step-connector" [class.completed]="CurrentStep > step.Index"></div>
+      }
+    }
+  </div>
+
+  <!-- Step 1: Source Type Selection -->
+  @if (CurrentStep === 0) {
+    <div class="step-content">
+      <h3>Select Source Type</h3>
+      <p class="step-description">Choose the type of external system you want to connect.</p>
+
+      @if (IsLoadingSourceTypes) {
+        <mj-loading text="Loading source types..." size="medium"></mj-loading>
+      } @else {
+        <div class="source-type-grid">
+          @for (st of SourceTypes; track st.ID) {
+            <div class="source-type-card" [class.selected]="SelectedSourceTypeID === st.ID"
+                 (click)="SelectSourceType(st)">
+              <i [class]="st.IconClass ?? 'fa-solid fa-plug'"></i>
+              <span class="st-name">{{ st.Name }}</span>
+              @if (st.Description) {
+                <span class="st-desc">{{ st.Description }}</span>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="step-actions">
+          <button kendoButton [themeColor]="'primary'" [disabled]="!SelectedSourceTypeID"
+                  (click)="NextStep()">
+            Next <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Step 2: Configuration Form -->
+  @if (CurrentStep === 1) {
+    <div class="step-content">
+      <h3>Configure Connection</h3>
+      <p class="step-description">Enter the connection details for {{ SelectedSourceTypeName }}.</p>
+
+      <div class="config-form">
+        <div class="form-field">
+          <label>Integration Name</label>
+          <input kendoTextBox [(ngModel)]="FormData.Name" placeholder="e.g., Production HubSpot" />
+        </div>
+        <div class="form-field">
+          <label>Description</label>
+          <textarea kendoTextArea [(ngModel)]="FormData.Description" rows="2"
+                    placeholder="Optional description..."></textarea>
+        </div>
+
+        @if (ConfigMode === 'api') {
+          <div class="form-field">
+            <label>API Base URL</label>
+            <input kendoTextBox [(ngModel)]="FormData.APIBaseURL" placeholder="https://api.example.com" />
+          </div>
+          <div class="form-field">
+            <label>API Key</label>
+            <input kendoTextBox [(ngModel)]="FormData.APIKey" type="password" placeholder="Enter API key" />
+          </div>
+        }
+
+        @if (ConfigMode === 'database') {
+          <div class="form-field">
+            <label>Server</label>
+            <input kendoTextBox [(ngModel)]="FormData.Server" placeholder="localhost" />
+          </div>
+          <div class="form-field">
+            <label>Database Name</label>
+            <input kendoTextBox [(ngModel)]="FormData.DatabaseName" placeholder="my_database" />
+          </div>
+          <div class="form-field">
+            <label>Username</label>
+            <input kendoTextBox [(ngModel)]="FormData.Username" placeholder="db_user" />
+          </div>
+          <div class="form-field">
+            <label>Password</label>
+            <input kendoTextBox [(ngModel)]="FormData.Password" type="password" placeholder="Enter password" />
+          </div>
+        }
+
+        @if (ConfigMode === 'file') {
+          <div class="form-field">
+            <label>Storage Path</label>
+            <input kendoTextBox [(ngModel)]="FormData.StoragePath" placeholder="/data/imports/" />
+          </div>
+          <div class="form-field">
+            <label>File Type</label>
+            <kendo-dropdownlist
+              [data]="FileTypeOptions"
+              [(ngModel)]="FormData.FileType"
+              [textField]="'text'"
+              [valueField]="'value'"
+              [valuePrimitive]="true">
+            </kendo-dropdownlist>
+          </div>
+        }
+      </div>
+
+      <div class="step-actions">
+        <button kendoButton (click)="PrevStep()">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button kendoButton [themeColor]="'primary'" [disabled]="!IsFormValid"
+                (click)="NextStep()">
+          Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Step 3: Test & Save -->
+  @if (CurrentStep === 2) {
+    <div class="step-content">
+      <h3>Test & Save</h3>
+      <p class="step-description">Test the connection and save your integration.</p>
+
+      <div class="test-section">
+        <div class="test-summary">
+          <div class="summary-row">
+            <span class="label">Name:</span>
+            <span>{{ FormData.Name }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Source Type:</span>
+            <span>{{ SelectedSourceTypeName }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Mode:</span>
+            <span>{{ ConfigMode | titlecase }}</span>
+          </div>
+        </div>
+
+        @if (TestStatus === 'idle') {
+          <p class="test-hint">Click "Test Connection" to verify the configuration.</p>
+        }
+        @if (TestStatus === 'testing') {
+          <mj-loading text="Testing connection..." size="small"></mj-loading>
+        }
+        @if (TestStatus === 'success') {
+          <div class="test-result success">
+            <i class="fa-solid fa-circle-check"></i> Connection successful!
+          </div>
+        }
+        @if (TestStatus === 'failed') {
+          <div class="test-result failed">
+            <i class="fa-solid fa-circle-xmark"></i> Connection failed. Please check your settings.
+          </div>
+        }
+      </div>
+
+      <div class="step-actions">
+        <button kendoButton (click)="PrevStep()">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button kendoButton [look]="'outline'" (click)="TestConnection()">
+          <i class="fa-solid fa-vial"></i> Test Connection
+        </button>
+        <button kendoButton [themeColor]="'primary'" (click)="SaveIntegration()">
+          <i class="fa-solid fa-floppy-disk"></i> Save
+        </button>
+      </div>
+    </div>
+  }
+</div>
