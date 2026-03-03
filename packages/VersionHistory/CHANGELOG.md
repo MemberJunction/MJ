@@ -1,5 +1,15 @@
 # @memberjunction/version-history
 
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @memberjunction/ai-cohere
 
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.6.0
+- @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes
