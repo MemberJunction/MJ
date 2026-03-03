@@ -824,7 +824,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
         // Remove string literals to avoid false positives
-        const stringLiteralPattern = /(['"]) (?:(?=(\\?))\2[\s\S])*?\1/g;
+        const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
         const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
         const lowerClause = clauseWithoutStrings.toLowerCase();
 
