@@ -255,6 +255,19 @@ export class SkipSDK {
             if (responses && responses.length > 0) {
                 const finalResponse = responses[responses.length - 1].value as SkipAPIResponse;
 
+                // Check if Skip itself reported an error (success: false in the response body)
+                if (finalResponse.success === false) {
+                    const skipError = finalResponse.error || 'Skip API returned an error response';
+                    LogError(`[SkipSDK] Skip API error: ${skipError}`);
+                    return {
+                        success: false,
+                        response: finalResponse,
+                        responsePhase: finalResponse.responsePhase,
+                        error: skipError,
+                        allResponses: responses
+                    };
+                }
+
                 return {
                     success: true,
                     response: finalResponse,
