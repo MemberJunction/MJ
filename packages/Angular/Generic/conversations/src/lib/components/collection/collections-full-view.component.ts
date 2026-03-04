@@ -1864,6 +1864,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
             await joinRecord.Delete();
           }
           await this.loadArtifacts();
+          this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
         }
