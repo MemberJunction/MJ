@@ -8,7 +8,7 @@ import sql from 'mssql';
 import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload, TokenExpiredError } from './auth/index.js';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
-import { DataSourceInfo, UserPayload } from './types.js';
+import { DataSourceInfo, ProviderInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
@@ -310,14 +310,36 @@ export const contextFunction =
       }
     }
 
-    const providers = [{
+    let ap: DatabaseProviderBase | null = null;
+    if (!isPostgres) {
+      try {
+        const adminDataSource = dataSources.find((ds) => ds.type === 'Admin');
+        if (adminDataSource) {
+          const adminProvider = new SQLServerDataProvider();
+          const aConfig = new SQLServerProviderConfigData(adminDataSource.dataSource, mj_core_schema, 0, undefined, undefined, false);
+          await adminProvider.Config(aConfig);
+          ap = adminProvider as unknown as DatabaseProviderBase;
+        }
+      }
+      catch (_err) {
+        // no admin data source available, so ap will remain null, this is OK!
+      }
+    }
+
+    const providers: Array<ProviderInfo> = [{
       provider: p,
-      type: 'Read-Write' as 'Read-Write' | 'Read-Only'
+      type: 'Read-Write'
     }];
     if (rp) {
       providers.push({
         provider: rp,
-        type: 'Read-Only' as 'Read-Write' | 'Read-Only'
+        type: 'Read-Only'
+      });
+    }
+    if (ap) {
+      providers.push({
+        provider: ap,
+        type: 'Admin'
       });
     }
 

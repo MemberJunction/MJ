@@ -210,9 +210,32 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   }
 
   /**
+   * Returns the Admin provider if it exists, otherwise falls back to the Read-Write provider.
+   * The Admin provider uses CodeGen credentials (db_owner) for DDL operations like CREATE SCHEMA, CREATE TABLE, etc.
+   * @param providers
+   * @param options Set allowFallbackToReadWrite to false to return null when no Admin provider exists
+   * @returns
+   */
+  export function GetAdminProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase | null {
+    if (!providers || providers.length === 0)
+      return null;
+
+    const adminProvider = providers.find((p) => p.type === 'Admin');
+    if (adminProvider) {
+      return adminProvider.provider;
+    }
+    else if (!options || options.allowFallbackToReadWrite) {
+      return GetReadWriteProvider(providers);
+    }
+    else {
+      return null;
+    }
+  }
+
+  /**
    * Returns the read-write data source if it exists, otherwise throws an error.
-   * @param dataSources 
-   * @returns 
+   * @param dataSources
+   * @returns
    */
   export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
