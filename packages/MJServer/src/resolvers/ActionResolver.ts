@@ -7,7 +7,7 @@ import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
-import { GetReadOnlyProvider, GetAdminProvider } from "../util.js";
+import { GetReadOnlyProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
@@ -204,7 +204,7 @@ export class ActionResolver extends ResolverBase {
       const params = this.parseActionParameters(input.Params);
 
       // Run the action
-      const result = await this.executeAction(action, user, params, ctx.providers, input.SkipActionLog);
+      const result = await this.executeAction(action, user, params, input.SkipActionLog);
 
       // Return the result
       return this.createActionResult(result);
@@ -271,24 +271,17 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private async executeAction(
-    action: any,
-    user: UserInfo,
-    params: ActionParam[],
-    providers: Array<ProviderInfo>,
+    action: any, 
+    user: UserInfo, 
+    params: ActionParam[], 
     skipActionLog?: boolean
   ): Promise<ActionResult> {
-    // Build a context object with the Admin provider (if available) so actions
-    // that need elevated DB permissions (e.g., CREATE SCHEMA/TABLE) can use it.
-    const adminProvider = GetAdminProvider(providers, { allowFallbackToReadWrite: false });
-    const context = adminProvider ? { AdminProvider: adminProvider } : undefined;
-
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
       Params: params,
       SkipActionLog: skipActionLog,
-      Filters: [],
-      Context: context,
+      Filters: []
     });
   }
 

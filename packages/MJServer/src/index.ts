@@ -275,25 +275,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       console.log('Read-only Connection Pool has been initialized.');
     }
 
-    // Establish an admin connection pool using CodeGen credentials for DDL operations (CREATE SCHEMA, CREATE TABLE, etc.)
-    if (configInfo.dbAdminUsername && configInfo.dbAdminPassword) {
-      const adminConfig = {
-        ...createMSSQLConfig(),
-        user: configInfo.dbAdminUsername,
-        password: configInfo.dbAdminPassword,
-      };
-      const adminPool = new sql.ConnectionPool(adminConfig);
-
-      adminPool.on('error', (err) => {
-        console.error('[ConnectionPool] Admin pool connection error (stale connection evicted):', err.message);
-      });
-
-      await adminPool.connect();
-
-      dataSources.push(new DataSourceInfo({dataSource: adminPool, type: 'Admin', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbAdminUsername}));
-      console.log('Admin Connection Pool has been initialized (using CodeGen credentials).');
-    }
-
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
     const md = new Metadata();

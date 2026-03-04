@@ -23,8 +23,6 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
-  dbAdminUsername: z.string().optional(),
-  dbAdminPassword: z.string().optional(),
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),
@@ -180,8 +178,6 @@ const configInfoSchema = z.object({
   dbPassword: z.string(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
-  dbAdminUsername: z.string().optional(),
-  dbAdminPassword: z.string().optional(),
   dbTrustServerCertificate: z.coerce
     .boolean()
     .default(false)
@@ -237,8 +233,6 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   dbPassword: process.env.DB_PASSWORD,
   dbReadOnlyUsername: process.env.DB_READ_ONLY_USERNAME,
   dbReadOnlyPassword: process.env.DB_READ_ONLY_PASSWORD,
-  dbAdminUsername: process.env.CODEGEN_DB_USERNAME,
-  dbAdminPassword: process.env.CODEGEN_DB_PASSWORD,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
@@ -394,8 +388,6 @@ export const {
   dbReadOnlyUsername,
   dbReadOnlyPassword,
   restApiOptions: RESTApiOptions,
-  dbAdminUsername,
-  dbAdminPassword,
 } = configInfo;
 
 export function loadConfig() {

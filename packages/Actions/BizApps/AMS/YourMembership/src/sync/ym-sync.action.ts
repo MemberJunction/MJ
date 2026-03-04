@@ -47,10 +47,7 @@ export class YMSyncAction extends BaseYMAction {
                 ? endpointsParam.split(',').map(e => e.trim()) as YMEndpointName[]
                 : [];
 
-            // Prefer the Admin provider (CodeGen credentials with db_owner) for DDL operations,
-            // fall back to the standard Metadata provider for environments without Admin configured.
-            const adminContext = params.Context as { AdminProvider?: DatabaseProviderBase } | undefined;
-            const dbProvider = adminContext?.AdminProvider ?? Metadata.Provider as DatabaseProviderBase;
+            const dbProvider = Metadata.Provider as DatabaseProviderBase;
             if (!dbProvider) {
                 return this.BuildErrorResult('No database provider configured', 'NO_DB_PROVIDER');
             }
