@@ -659,3 +659,218 @@ describe.skipIf(!HAS_SERVER || !HAS_AUTH)(
     });
   }
 );
+
+// ─── Tier 6: Multi-Tenancy Middleware Pipeline (Phase 1) ─────────────────
+// These tests verify the multi-tenancy middleware integrates correctly with
+// the auth pipeline when MT is enabled in mj.config.cjs. They validate
+// that the tenant middleware doesn't break auth, runs in the correct order,
+// and handles edge cases at the HTTP level.
+
+describe.skipIf(!HAS_SERVER || !HAS_AUTH)(
+  'Tier 6: Multi-Tenancy Middleware Pipeline',
+  () => {
+    describe('Tenant header does not interfere with auth', () => {
+      it('should authenticate with system key + tenant header on scoped entity', async () => {
+        if (!HAS_SYSTEM_KEY) return;
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-mj-api-key': SYSTEM_API_KEY,
+            [TENANT_HEADER]: 'test-tenant-for-employees',
+          },
+          body: makeRunViewQuery('Employees', 3),
+        });
+
+        // Auth must succeed (200). RunView may fail at resolver level (pre-existing).
+        assertRunViewResult(status, body, 'Employees (scoped, with tenant header)');
+      });
+
+      it('should authenticate with system key + tenant header on non-scoped entity', async () => {
+        if (!HAS_SYSTEM_KEY) return;
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-mj-api-key': SYSTEM_API_KEY,
+            [TENANT_HEADER]: 'test-tenant-for-roles',
+          },
+          body: makeRunViewQuery('Roles', 3),
+        });
+
+        // Non-scoped entity: tenant header should have no filtering effect
+        assertRunViewResult(status, body, 'Roles (non-scoped, with tenant header)');
+      });
+
+      it('should authenticate without tenant header on scoped entity', async () => {
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: makeRunViewQuery('Employees', 3),
+        });
+
+        // No tenant header → no TenantContext → no filtering
+        assertRunViewResult(status, body, 'Employees (scoped, no tenant header)');
+      });
+    });
+
+    describe('Tenant header edge cases at HTTP level', () => {
+      it('should handle empty tenant header value gracefully', async () => {
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            [TENANT_HEADER]: '',
+          },
+          body: INTROSPECTION_QUERY,
+        });
+
+        // Empty header → falsy → no TenantContext set → request proceeds normally
+        expect(status).toBe(200);
+        expect(body.data).toBeDefined();
+      });
+
+      it('should handle SQL injection attempt in tenant header', async () => {
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            [TENANT_HEADER]: "' OR 1=1 --",
+          },
+          body: INTROSPECTION_QUERY,
+        });
+
+        // The tenant header is processed but introspection queries don't trigger
+        // RunView hooks, so this should just succeed at the auth level.
+        expect(status).toBe(200);
+        expect(body.data).toBeDefined();
+      });
+
+      it('should handle UUID tenant header value', async () => {
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            [TENANT_HEADER]: '550e8400-e29b-41d4-a716-446655440000',
+          },
+          body: INTROSPECTION_QUERY,
+        });
+
+        expect(status).toBe(200);
+        expect(body.data).toBeDefined();
+      });
+
+      it('should handle very long tenant header value', async () => {
+        const { status, body } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            [TENANT_HEADER]: 'a'.repeat(500),
+          },
+          body: INTROSPECTION_QUERY,
+        });
+
+        // Should not crash the server — just process normally
+        expect(status).toBe(200);
+        expect(body.data).toBeDefined();
+      });
+    });
+
+    describe('Core entity exclusion (autoExcludeCoreEntities)', () => {
+      it('should not filter core __mj entity (Entities) even with tenant header', async () => {
+        // When autoExcludeCoreEntities is true, __mj entities are never filtered.
+        // Querying Entities with a tenant header should return the same as without.
+        const headers = getAuthHeaders();
+
+        const [withTenant, withoutTenant] = await Promise.all([
+          fetchJson(GRAPHQL_URL, {
+            method: 'POST',
+            headers: { ...headers, [TENANT_HEADER]: 'any-tenant-id' },
+            body: makeRunViewQuery('Entities', 5),
+          }),
+          fetchJson(GRAPHQL_URL, {
+            method: 'POST',
+            headers,
+            body: makeRunViewQuery('Entities', 5),
+          }),
+        ]);
+
+        expect(withTenant.status).toBe(200);
+        expect(withoutTenant.status).toBe(200);
+
+        const withData = withTenant.body.data as Record<string, Record<string, unknown>> | null | undefined;
+        const withoutData = withoutTenant.body.data as Record<string, Record<string, unknown>> | null | undefined;
+
+        // If RunView works, row counts should match (core entity not filtered)
+        if (withData?.RunDynamicView && withoutData?.RunDynamicView) {
+          expect(withData.RunDynamicView.RowCount).toBe(withoutData.RunDynamicView.RowCount);
+        }
+      });
+    });
+
+    describe('CORS with tenant header', () => {
+      it('should include CORS headers on response with tenant header', async () => {
+        const { status, headers } = await fetchJson(GRAPHQL_URL, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            Origin: 'http://localhost:4200',
+            [TENANT_HEADER]: 'cors-test-tenant',
+          },
+          body: INTROSPECTION_QUERY,
+        });
+
+        expect(status).toBe(200);
+        expect(headers.get('access-control-allow-origin')).toBeTruthy();
+      });
+
+      it('should expose tenant header in CORS preflight', async () => {
+        const response = await fetch(GRAPHQL_URL, {
+          method: 'OPTIONS',
+          headers: {
+            Origin: 'http://localhost:4200',
+            'Access-Control-Request-Method': 'POST',
+            'Access-Control-Request-Headers': `content-type,authorization,${TENANT_HEADER}`,
+          },
+        });
+
+        // Tenant header should be allowed in CORS preflight
+        const allowHeaders = response.headers.get('access-control-allow-headers') ?? '';
+        expect(response.status).toBeGreaterThanOrEqual(200);
+        expect(response.status).toBeLessThan(300);
+        // CORS should allow the tenant header (either explicitly or via wildcard)
+        const headerAllowed =
+          allowHeaders === '*' ||
+          allowHeaders.toLowerCase().includes(TENANT_HEADER.toLowerCase());
+        expect(headerAllowed).toBe(true);
+      });
+    });
+
+    describe('Concurrent requests with different tenant contexts', () => {
+      it('should handle multiple concurrent requests with different tenant IDs', async () => {
+        const headers = getAuthHeaders();
+        const tenantIds = ['tenant-a', 'tenant-b', 'tenant-c', 'no-tenant'];
+
+        const requests = tenantIds.map(tenantId => {
+          const reqHeaders = tenantId === 'no-tenant'
+            ? headers
+            : { ...headers, [TENANT_HEADER]: tenantId };
+
+          return fetchJson(GRAPHQL_URL, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: INTROSPECTION_QUERY,
+          });
+        });
+
+        const results = await Promise.all(requests);
+
+        // All requests should authenticate successfully (200)
+        for (const result of results) {
+          expect(result.status).toBe(200);
+          expect(result.body.data).toBeDefined();
+        }
+      });
+    });
+  }
+);
