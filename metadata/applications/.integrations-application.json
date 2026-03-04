@@ -1,0 +1,40 @@
+{
+  "fields": {
+    "Name": "Integrations",
+    "Description": "Manage external system integrations, data sync pipelines, field mappings, and sync activity monitoring",
+    "Icon": "fa-solid fa-plug-circle-bolt",
+    "DefaultForNewUser": false,
+    "Color": "#0ea5e9",
+    "DefaultSequence": 1006,
+    "DefaultNavItems": [
+      {
+        "Label": "Control Tower",
+        "Icon": "fa-solid fa-tower-broadcast",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationControlTower",
+        "isDefault": true
+      },
+      {
+        "Label": "Connections",
+        "Icon": "fa-solid fa-network-wired",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationConnectionStudio"
+      },
+      {
+        "Label": "Entity Mapping",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationMappingWorkspace"
+      },
+      {
+        "Label": "Sync Activity",
+        "Icon": "fa-solid fa-clock-rotate-left",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationSyncActivity"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  }
+}
