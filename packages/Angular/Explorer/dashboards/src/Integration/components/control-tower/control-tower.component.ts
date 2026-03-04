@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -41,6 +41,7 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
   ExpandedID: string | null = null;
 
   private dataService = inject(IntegrationDataService);
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
     await this.LoadData();
@@ -48,6 +49,7 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
 
   async LoadData(): Promise<void> {
     this.IsLoading = true;
+    this.cdr.detectChanges();
     try {
       const provider = this.RunViewToUse;
       const [summaries, activityFeed, dailyCounts] = await Promise.all([
@@ -63,6 +65,7 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
       console.error('[IntegrationControlTower] Failed to load data:', err);
     } finally {
       this.IsLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
