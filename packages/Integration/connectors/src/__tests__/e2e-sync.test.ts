@@ -150,7 +150,7 @@ describe('E2E: HubSpot Connector', () => {
             if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'deals');
             const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(30);
+            expect(batch.Records.length).toBeGreaterThanOrEqual(30); // seed has 30, E2E may add more
             expect(batch.HasMore).toBe(false);
         });
 
@@ -255,7 +255,7 @@ describe('E2E: Salesforce Connector', () => {
             if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Account');
             const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(20);
+            expect(batch.Records.length).toBeGreaterThanOrEqual(20); // seed has 20, E2E may add more
             expect(batch.HasMore).toBe(false);
         });
 
@@ -263,7 +263,7 @@ describe('E2E: Salesforce Connector', () => {
             if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Opportunity');
             const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(30);
+            expect(batch.Records.length).toBeGreaterThanOrEqual(30); // seed has 30, E2E may add more
             expect(batch.HasMore).toBe(false);
         });
 
@@ -374,7 +374,7 @@ describe('E2E: YourMembership Connector', () => {
             if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'events');
             const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(10);
+            expect(batch.Records.length).toBeGreaterThanOrEqual(10); // seed has 10, E2E may add more
             expect(batch.HasMore).toBe(false);
         });
 

@@ -182,7 +182,7 @@ describe('SalesforceConnector (integration)', () => {
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(20);
+            expect(result.Records.length).toBeGreaterThanOrEqual(20); // seed has 20, E2E may add more
             expect(result.Records[0].ObjectType).toBe('Account');
         });
 
@@ -196,7 +196,7 @@ describe('SalesforceConnector (integration)', () => {
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(30);
+            expect(result.Records.length).toBeGreaterThanOrEqual(30); // seed has 30, E2E may add more
             expect(result.Records[0].ObjectType).toBe('Opportunity');
         });
     });
