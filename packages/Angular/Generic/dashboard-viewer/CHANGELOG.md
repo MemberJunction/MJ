@@ -1,5 +1,20 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-artifacts@5.6.0
+  - @memberjunction/ng-entity-viewer@5.6.0
+  - @memberjunction/ng-query-viewer@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-trees@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes

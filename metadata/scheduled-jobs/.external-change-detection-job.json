@@ -4,30 +4,36 @@
       "Name": "Daily External Change Detection",
       "Description": "Detects and reconciles external database changes once per day.",
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
-      "CronExpression": "0 0 2 * * *", 
+      "CronExpression": "0 0 2 * * *",
       "Timezone": "UTC",
       "Status": "Active",
       "Configuration": {
         "ActionID": "@lookup:MJ: Actions.DriverClass=__RunExternalChangeDetection",
         "Params": [
           {
-            "ActionParamID": "@lookup:MJ: Action Params.Name=ReplayBatchSize&Action.DriverClass=__RunExternalChangeDetection",
+            "ActionParamID": "@lookup:MJ: Action Params.Name=ReplayBatchSize&Action=Run External Change Detection",
             "ValueType": "Static",
             "Value": "20"
           },
           {
-            "ActionParamID": "@lookup:MJ: Action Params.Name=DetectionBatchSize&Action.DriverClass=__RunExternalChangeDetection",
+            "ActionParamID": "@lookup:MJ: Action Params.Name=DetectionBatchSize&Action=Run External Change Detection",
             "ValueType": "Static",
             "Value": "10"
           },
           {
-            "ActionParamID": "@lookup:MJ: Action Params.Name=AutoReplay&Action.DriverClass=__RunExternalChangeDetection",
+            "ActionParamID": "@lookup:MJ: Action Params.Name=AutoReplay&Action=Run External Change Detection",
             "ValueType": "Static",
             "Value": "true"
           }
         ]
       }
     },
-    "primaryKey": {}
+    "primaryKey": {
+      "ID": "817C4B87-9B9B-4445-93FE-8FC9DC13E5AF"
+    },
+    "sync": {
+      "lastModified": "2026-03-03T18:50:54.279Z",
+      "checksum": "6df79a6b16e4d7a917d0a44ccd13bba103f717c467a9e40228d0f81f5f3c97d8"
+    }
   }
 ]

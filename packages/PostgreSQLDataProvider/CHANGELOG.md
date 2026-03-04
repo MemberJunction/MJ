@@ -1,5 +1,17 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/generic-database-provider@5.6.0
+  - @memberjunction/query-processor@5.6.0
+  - @memberjunction/global@5.6.0
+  - @memberjunction/sql-dialect@5.6.0
+
 ## 5.5.0
 
 ### Minor Changes

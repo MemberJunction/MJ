@@ -38,10 +38,10 @@ vi.mock('@memberjunction/core', () => {
     static DefaultFieldDelimiter = '||';
   }
   const EntityFieldTSType = {
-    Boolean: 'Boolean',
+    Boolean: 'boolean',
     Date: 'Date',
-    Number: 'Number',
-    String: 'String',
+    Number: 'number',
+    String: 'string',
   };
   return {
     BaseEngine: class {
@@ -134,7 +134,15 @@ import {
   ChangeDetectionResult,
   ExternalChangeDetectorEngine,
 } from '../ChangeDetector';
-import { EntityFieldTSType } from '@memberjunction/core';
+
+// Real EntityFieldTSType values used directly to avoid mock interception issues.
+// These must match the values in @memberjunction/core entityInfo.ts.
+const TSType = {
+  Boolean: 'boolean',
+  Date: 'Date',
+  Number: 'number',
+  String: 'string',
+} as const;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -180,69 +188,69 @@ describe('ExternalChangeDetectorEngine - DoValuesDiffer', () => {
     engine = new ExternalChangeDetectorEngine();
   });
 
-  // Access protected method via bracket notation for testing
+  // Access protected method via bracket notation for testing.
+  // DoValuesDiffer(tsType, value1, value2) takes the TSType string directly.
   const callDoValuesDiffer = (
     eng: ExternalChangeDetectorEngine,
     tsType: string,
     v1: unknown,
     v2: unknown
   ) => {
-    const field = {
-      EntityFieldInfo: { TSType: tsType },
-    };
-    return (eng as Record<string, Function>)['DoValuesDiffer'](field, v1, v2);
+    return (eng as unknown as Record<string, Function>)['DoValuesDiffer'](tsType, v1, v2);
   };
 
   it('should detect boolean differences', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Boolean, true, false);
+    const result = callDoValuesDiffer(engine, TSType.Boolean, true, false);
     expect(result.differ).toBe(true);
     expect(result.castValue1).toBe(true);
     expect(result.castValue2).toBe(false);
   });
 
   it('should convert string booleans', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Boolean, 'true', 'false');
+    // CastToBoolean properly parses string representations:
+    // 'true' → true, 'false' → false (not treated as truthy string)
+    const result = callDoValuesDiffer(engine, TSType.Boolean, 'true', 'false');
     expect(result.differ).toBe(true);
     expect(result.castValue1).toBe(true);
     expect(result.castValue2).toBe(false);
   });
 
   it('should detect equal booleans', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Boolean, true, true);
+    const result = callDoValuesDiffer(engine, TSType.Boolean, true, true);
     expect(result.differ).toBe(false);
   });
 
   it('should detect number differences', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Number, 10, 20);
+    const result = callDoValuesDiffer(engine, TSType.Number, 10, 20);
     expect(result.differ).toBe(true);
   });
 
   it('should convert string numbers', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Number, '10', 10);
+    const result = callDoValuesDiffer(engine, TSType.Number, '10', 10);
     expect(result.differ).toBe(false);
   });
 
   it('should detect string differences', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.String, 'hello', 'world');
+    const result = callDoValuesDiffer(engine, TSType.String, 'hello', 'world');
     expect(result.differ).toBe(true);
   });
 
   it('should detect equal strings', () => {
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.String, 'same', 'same');
+    const result = callDoValuesDiffer(engine, TSType.String, 'same', 'same');
     expect(result.differ).toBe(false);
   });
 
   it('should detect date differences', () => {
     const d1 = new Date('2024-01-01');
     const d2 = new Date('2024-06-01');
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Date, d1, d2);
+    const result = callDoValuesDiffer(engine, TSType.Date, d1, d2);
     expect(result.differ).toBe(true);
   });
 
   it('should detect equal dates', () => {
     const d1 = new Date('2024-01-01T00:00:00Z');
     const d2 = new Date('2024-01-01T00:00:00Z');
-    const result = callDoValuesDiffer(engine, EntityFieldTSType.Date, d1, d2);
+    const result = callDoValuesDiffer(engine, TSType.Date, d1, d2);
     expect(result.differ).toBe(false);
   });
 });
