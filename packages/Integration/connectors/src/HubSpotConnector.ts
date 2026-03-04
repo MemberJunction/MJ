@@ -15,6 +15,8 @@ const HS_COMPANIES_ID = 'companyId';
 const HS_DEALS_ID = 'dealId';
 /** Modification timestamp column used across all HubSpot mock tables */
 const HS_MODIFIED_FIELD = 'lastmodifieddate';
+/** Soft-delete flag column on hs.contacts (added by incremental changes migration) */
+const HS_CONTACTS_DELETED_FIELD = 'is_deleted';
 
 /**
  * Connector for HubSpot CRM data, backed by the mock_data database (hs schema).
@@ -31,7 +33,8 @@ export class HubSpotConnector extends RelationalDBConnector {
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const idField = this.getIdField(ctx.ObjectName);
-        return this.FetchChangesFromTable(ctx, idField, HS_MODIFIED_FIELD);
+        const deletedField = this.getDeletedField(ctx.ObjectName);
+        return this.FetchChangesFromTable(ctx, idField, HS_MODIFIED_FIELD, deletedField);
     }
 
     /**
@@ -65,6 +68,19 @@ export class HubSpotConnector extends RelationalDBConnector {
             case 'companies': return HS_COMPANIES_ID;
             case 'deals': return HS_DEALS_ID;
             default: return HS_CONTACTS_ID;
+        }
+    }
+
+    /**
+     * Gets the soft-delete flag column for a HubSpot table, if one exists.
+     * Currently only the contacts table has an is_deleted column.
+     * @param objectName - Table name
+     * @returns Column name for the deleted flag, or undefined if not applicable
+     */
+    private getDeletedField(objectName: string): string | undefined {
+        switch (objectName) {
+            case 'contacts': return HS_CONTACTS_DELETED_FIELD;
+            default: return undefined;
         }
     }
 

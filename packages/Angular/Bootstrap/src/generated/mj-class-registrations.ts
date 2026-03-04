@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (289 classes)
+// @memberjunction/core-entities (293 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -130,10 +130,13 @@ import {
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
@@ -219,6 +222,7 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -374,7 +378,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (52 classes)
+// @memberjunction/ng-dashboards (55 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
@@ -388,6 +392,8 @@ import {
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     ComponentStudioDashboardComponent,
+    ConnectionStudioComponent,
+    ControlTowerComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsDashboardComponent,
@@ -407,6 +413,7 @@ import {
     ListsMyListsResource,
     ListsOperationsResource,
     MCPDashboardComponent,
+    MappingWorkspaceComponent,
     ModelManagementComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
@@ -564,10 +571,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
@@ -653,6 +663,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -798,6 +809,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     ComponentStudioDashboardComponent,
+    ConnectionStudioComponent,
+    ControlTowerComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsDashboardComponent,
@@ -817,6 +830,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ListsMyListsResource,
     ListsOperationsResource,
     MCPDashboardComponent,
+    MappingWorkspaceComponent,
     ModelManagementComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
@@ -859,7 +873,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 390;
+export const CLASS_REGISTRATIONS_COUNT = 397;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

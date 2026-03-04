@@ -11,6 +11,8 @@ import { RelationalDBConnector } from './RelationalDBConnector.js';
 const SF_ID_FIELD = 'Id';
 /** Modification timestamp column used across Salesforce mock tables */
 const SF_MODIFIED_FIELD = 'LastModifiedDate';
+/** Soft-delete flag column used across all Salesforce mock tables */
+const SF_DELETED_FIELD = 'IsDeleted';
 
 /**
  * Connector for Salesforce CRM data, backed by the mock_data database (sf schema).
@@ -26,7 +28,7 @@ export class SalesforceConnector extends RelationalDBConnector {
      * @returns Batch of Salesforce records with pagination info
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        return this.FetchChangesFromTable(ctx, SF_ID_FIELD, SF_MODIFIED_FIELD);
+        return this.FetchChangesFromTable(ctx, SF_ID_FIELD, SF_MODIFIED_FIELD, SF_DELETED_FIELD);
     }
 
     /**

@@ -41,6 +41,10 @@ import {
     .panel-section { margin-bottom: 20px; }
     .empty-hint { color: #999; font-size: 13px; font-style: italic; }
 
+    .search-box {
+      margin-bottom: 12px;
+    }
+
     .entity-map-list { display: flex; flex-direction: column; gap: 4px; }
     .entity-map-item {
       padding: 8px 10px; border-radius: 6px;
@@ -108,6 +112,12 @@ import {
   `]
 })
 export class MappingWorkspaceComponent extends BaseResourceComponent implements OnInit {
+  /**
+   * The Provider @Input is inherited from BaseAngularComponent.
+   * Use this.RunViewToUse to get the appropriate IRunViewProvider
+   * for multi-MJ-instance support.
+   */
+
   Integrations: IntegrationRow[] = [];
   EntityMaps: EntityMapRow[] = [];
   FieldMaps: FieldMapRow[] = [];
@@ -116,6 +126,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   SelectedIntegrationID: string = '';
   SelectedEntityMapID: string | null = null;
+  EntityMapSearchText: string = '';
 
   IsLoadingIntegrations = false;
   IsLoadingEntityMaps = false;
@@ -128,10 +139,19 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     await this.LoadIntegrations();
   }
 
+  get FilteredEntityMaps(): EntityMapRow[] {
+    if (!this.EntityMapSearchText.trim()) return this.EntityMaps;
+    const search = this.EntityMapSearchText.toLowerCase();
+    return this.EntityMaps.filter(
+      em => em.ExternalObjectName.toLowerCase().includes(search)
+        || em.Entity.toLowerCase().includes(search)
+    );
+  }
+
   async LoadIntegrations(): Promise<void> {
     this.IsLoadingIntegrations = true;
     try {
-      const summaries = await this.dataService.LoadIntegrationSummaries();
+      const summaries = await this.dataService.LoadIntegrationSummaries(this.RunViewToUse);
       this.Integrations = summaries.map(s => s.Integration);
     } finally {
       this.IsLoadingIntegrations = false;
@@ -144,6 +164,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.FieldMaps = [];
     this.RunEntityDetails = [];
     this.LatestRun = null;
+    this.EntityMapSearchText = '';
 
     if (!integrationID) return;
     await Promise.all([
@@ -155,7 +176,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   async LoadEntityMapsForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingEntityMaps = true;
     try {
-      this.EntityMaps = await this.dataService.LoadEntityMaps(integrationID);
+      this.EntityMaps = await this.dataService.LoadEntityMaps(integrationID, this.RunViewToUse);
     } finally {
       this.IsLoadingEntityMaps = false;
     }
@@ -164,10 +185,10 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   async LoadLatestRunForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingRunDetails = true;
     try {
-      const runs = await this.dataService.LoadRunHistory(integrationID, 1);
+      const runs = await this.dataService.LoadRunHistory(integrationID, 1, this.RunViewToUse);
       this.LatestRun = runs.length > 0 ? runs[0] : null;
       if (this.LatestRun) {
-        this.RunEntityDetails = await this.dataService.LoadRunDetails(this.LatestRun.ID);
+        this.RunEntityDetails = await this.dataService.LoadRunDetails(this.LatestRun.ID, this.RunViewToUse);
       }
     } finally {
       this.IsLoadingRunDetails = false;
@@ -178,7 +199,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.SelectedEntityMapID = em.ID;
     this.IsLoadingFieldMaps = true;
     try {
-      this.FieldMaps = await this.dataService.LoadFieldMaps(em.ID);
+      this.FieldMaps = await this.dataService.LoadFieldMaps(em.ID, this.RunViewToUse);
     } finally {
       this.IsLoadingFieldMaps = false;
     }
@@ -200,7 +221,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   }
 
   FormatDate(dateStr: string | null): string {
-    if (!dateStr) return '—';
+    if (!dateStr) return '--';
     return new Date(dateStr).toLocaleString(undefined, {
       month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'

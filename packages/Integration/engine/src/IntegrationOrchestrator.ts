@@ -11,11 +11,13 @@ import type {
 } from '@memberjunction/core-entities';
 import type {
     SyncResult,
-    SyncRecordError,
     MappedRecord,
-    IntegrationRunStatus,
     SyncTriggerType,
+    SyncProgress,
+    OnProgressCallback,
+    WatermarkType,
 } from './types.js';
+import { ClassifyError } from './types.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
@@ -34,25 +36,59 @@ export class IntegrationOrchestrator {
     private readonly matchEngine = new MatchEngine();
     private readonly watermarkService = new WatermarkService();
 
+    /** In-process lock map to prevent concurrent syncs for the same CompanyIntegration */
+    private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
+
+    /** Configurable maximum batch size. Connector batches exceeding this are truncated. */
+    public MaxBatchSize: number = DEFAULT_BATCH_SIZE;
+
     /**
      * Executes a full sync run for a company integration.
-     * Creates a run record, processes each entity map, and records results.
+     * If a sync is already running for the same integration, waits for it to finish
+     * and returns the existing result (concurrency lock).
      *
      * @param companyIntegrationID - ID of the CompanyIntegration to sync
      * @param contextUser - User context for all data operations
      * @param triggerType - What triggered this sync (defaults to 'Manual')
+     * @param onProgress - Optional callback invoked with progress updates during sync
      * @returns Aggregate sync result with record counts and errors
      */
     public async RunSync(
         companyIntegrationID: string,
         contextUser: UserInfo,
-        triggerType: SyncTriggerType = 'Manual'
+        triggerType: SyncTriggerType = 'Manual',
+        onProgress?: OnProgressCallback
+    ): Promise<SyncResult> {
+        const lockKey = companyIntegrationID.toLowerCase();
+        const existing = IntegrationOrchestrator.activeSyncs.get(lockKey);
+        if (existing) {
+            console.warn(`[IntegrationOrchestrator] Sync already running for ${lockKey}, waiting...`);
+            return existing;
+        }
+
+        const syncPromise = this.executeSyncInternal(companyIntegrationID, contextUser, triggerType, onProgress);
+        IntegrationOrchestrator.activeSyncs.set(lockKey, syncPromise);
+        try {
+            return await syncPromise;
+        } finally {
+            IntegrationOrchestrator.activeSyncs.delete(lockKey);
+        }
+    }
+
+    /**
+     * Internal sync execution method. Contains the full orchestration logic.
+     */
+    private async executeSyncInternal(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType,
+        onProgress?: OnProgressCallback
     ): Promise<SyncResult> {
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
         const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser);
 
         try {
-            const result = await this.ExecuteEntityMaps(config, run, contextUser);
+            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress);
             await this.FinalizeRun(run, result, contextUser);
             return result;
         } catch (err) {
@@ -148,12 +184,13 @@ export class IntegrationOrchestrator {
     }
 
     /**
-     * Processes all entity maps, aggregating results.
+     * Processes all entity maps, aggregating results with progress tracking.
      */
     private async ExecuteEntityMaps(
         config: RunConfiguration,
         run: MJCompanyIntegrationRunEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        onProgress?: OnProgressCallback
     ): Promise<SyncResult> {
         const aggregate: SyncResult = {
             Success: true,
@@ -166,9 +203,12 @@ export class IntegrationOrchestrator {
             Errors: [],
         };
 
-        for (const entityMap of config.entityMaps) {
+        const totalMaps = config.entityMaps.length;
+
+        for (let i = 0; i < totalMaps; i++) {
+            const entityMap = config.entityMaps[i];
             const mapResult = await this.ProcessSingleEntityMap(
-                config, entityMap, run, contextUser
+                config, entityMap, run, contextUser, i, totalMaps, onProgress
             );
             this.MergeResult(aggregate, mapResult);
         }
@@ -177,16 +217,31 @@ export class IntegrationOrchestrator {
     }
 
     /**
-     * Processes a single entity map: fetch → map → match → apply.
+     * Processes a single entity map: fetch → map → match → validate → apply.
      */
     private async ProcessSingleEntityMap(
         config: RunConfiguration,
         entityMap: MJCompanyIntegrationEntityMapEntity,
         run: MJCompanyIntegrationRunEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        onProgress?: OnProgressCallback
     ): Promise<SyncResult> {
         const fieldMaps = await this.LoadFieldMaps(entityMap.Get('ID'), contextUser);
         const watermark = await this.watermarkService.Load(entityMap.Get('ID'), contextUser);
+
+        // A6: Validate watermark before using it
+        let initialWatermark = watermark?.WatermarkValue ?? null;
+        if (initialWatermark && watermark) {
+            const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
+            if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
+                console.warn(
+                    `[IntegrationOrchestrator] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.Get('ID')}, resetting to full fetch`
+                );
+                initialWatermark = null;
+            }
+        }
 
         const result: SyncResult = {
             Success: true,
@@ -200,26 +255,44 @@ export class IntegrationOrchestrator {
         };
 
         let hasMore = true;
-        let currentWatermark = watermark?.WatermarkValue ?? null;
+        let currentWatermark = initialWatermark;
+        let recordsInMap = 0;
 
         while (hasMore) {
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
                 WatermarkValue: currentWatermark,
-                BatchSize: DEFAULT_BATCH_SIZE,
+                BatchSize: this.MaxBatchSize,
                 ContextUser: contextUser,
             };
 
             const batch = await config.connector.FetchChanges(ctx);
+
+            // A7: Batch size enforcement — truncate if connector returns more than MaxBatchSize
+            let batchRecords = batch.Records;
+            if (batchRecords.length > this.MaxBatchSize) {
+                console.warn(
+                    `[IntegrationOrchestrator] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
+                );
+                batchRecords = batchRecords.slice(0, this.MaxBatchSize);
+            }
+
             const mapped = this.fieldMappingEngine.Apply(
-                batch.Records, fieldMaps, entityMap.Entity
+                batchRecords, fieldMaps, entityMap.Entity
             );
             const resolved = await this.matchEngine.Resolve(
                 mapped, entityMap, fieldMaps, contextUser
             );
 
             await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+
+            recordsInMap += batchRecords.length;
+
+            // A8: Progress tracking
+            if (onProgress) {
+                this.emitProgress(onProgress, entityMapIndex, totalEntityMaps, recordsInMap, recordsInMap);
+            }
 
             if (batch.NewWatermarkValue) {
                 currentWatermark = batch.NewWatermarkValue;
@@ -234,6 +307,30 @@ export class IntegrationOrchestrator {
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
         return result;
+    }
+
+    /**
+     * Emits a progress update via the callback.
+     */
+    private emitProgress(
+        onProgress: OnProgressCallback,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        processedInMap: number,
+        totalInMap: number
+    ): void {
+        const mapProgress = totalEntityMaps > 0 ? entityMapIndex / totalEntityMaps : 0;
+        const inMapProgress = totalInMap > 0 ? processedInMap / totalInMap : 0;
+        const overallPercent = Math.round((mapProgress + inMapProgress / totalEntityMaps) * 100);
+
+        const progress: SyncProgress = {
+            EntityMapIndex: entityMapIndex,
+            TotalEntityMaps: totalEntityMaps,
+            RecordsProcessedInCurrentMap: processedInMap,
+            TotalRecordsInCurrentMap: totalInMap,
+            PercentComplete: Math.min(overallPercent, 100),
+        };
+        onProgress(progress);
     }
 
     /**
@@ -269,11 +366,14 @@ export class IntegrationOrchestrator {
             try {
                 await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
             } catch (err) {
+                const classified = ClassifyError(err);
                 result.RecordsErrored++;
                 result.Errors.push({
                     ExternalID: record.ExternalRecord.ExternalID,
                     ChangeType: record.ChangeType,
                     ErrorMessage: err instanceof Error ? err.message : String(err),
+                    ErrorCode: classified.Code,
+                    Severity: classified.Severity,
                     ExternalRecord: record.ExternalRecord,
                 });
             }
@@ -310,7 +410,7 @@ export class IntegrationOrchestrator {
     }
 
     /**
-     * Creates a new MJ record and saves a record map entry.
+     * Creates a new MJ record with pre-write validation and saves a record map entry.
      */
     private async CreateRecord(
         record: MappedRecord,
@@ -322,6 +422,9 @@ export class IntegrationOrchestrator {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         entity.NewRecord();
         this.SetEntityFields(entity, record.MappedFields);
+
+        // A5: Pre-write validation
+        this.validateEntity(entity, record.MJEntityName);
 
         const saved = await entity.Save();
         if (!saved) {
@@ -338,7 +441,7 @@ export class IntegrationOrchestrator {
     }
 
     /**
-     * Updates an existing MJ record.
+     * Updates an existing MJ record with pre-write validation.
      */
     private async UpdateRecord(
         record: MappedRecord,
@@ -356,9 +459,30 @@ export class IntegrationOrchestrator {
         }
 
         this.SetEntityFields(entity, record.MappedFields);
+
+        // A5: Pre-write validation
+        this.validateEntity(entity, record.MJEntityName);
+
         const saved = await entity.Save();
         if (!saved) {
             throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+    }
+
+    /**
+     * Runs Validate() on an entity if the method exists.
+     * Throws a validation error with details if validation fails.
+     */
+    private validateEntity(
+        entity: { Validate?: () => ValidationResult | null },
+        entityName: string
+    ): void {
+        if (typeof entity.Validate !== 'function') return;
+
+        const validationResult = entity.Validate();
+        if (validationResult && !validationResult.Success) {
+            const messages = validationResult.Errors?.map(e => e.Message).join('; ') ?? 'Validation failed';
+            throw new Error(`Validation failed for ${entityName}: ${messages}`);
         }
     }
 
@@ -516,4 +640,15 @@ interface RunConfiguration {
     entityMaps: MJCompanyIntegrationEntityMapEntity[];
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
+}
+
+/** Shape of a validation result from BaseEntity.Validate() */
+interface ValidationResult {
+    Success: boolean;
+    Errors?: ValidationError[];
+}
+
+/** Shape of a single validation error */
+interface ValidationError {
+    Message: string;
 }

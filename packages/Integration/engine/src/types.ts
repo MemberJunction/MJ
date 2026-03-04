@@ -21,6 +21,70 @@ export type RecordChangeType = 'Create' | 'Update' | 'Delete' | 'Skip';
 /** Status of a running integration sync */
 export type IntegrationRunStatus = 'Pending' | 'In Progress' | 'Success' | 'Failed';
 
+/** Classification of sync errors for retry/alert decisions */
+export type SyncErrorCode =
+    | 'VALIDATION_ERROR'
+    | 'FK_CONSTRAINT_VIOLATION'
+    | 'DUPLICATE_KEY'
+    | 'NETWORK_TIMEOUT'
+    | 'RATE_LIMIT_EXCEEDED'
+    | 'CONNECTOR_ERROR'
+    | 'TRANSFORM_ERROR'
+    | 'MATCH_RESOLUTION_ERROR'
+    | 'DATABASE_ERROR'
+    | 'WATERMARK_INVALID'
+    | 'CONFIGURATION_ERROR'
+    | 'UNKNOWN_ERROR';
+
+/** Severity level of a sync error */
+export type ErrorSeverity = 'Critical' | 'Warning' | 'Info';
+
+/** Whether an error with the given code is retryable */
+export function IsRetryableError(code: SyncErrorCode): boolean {
+    return code === 'NETWORK_TIMEOUT' || code === 'RATE_LIMIT_EXCEEDED' || code === 'DATABASE_ERROR';
+}
+
+/** Classify an error from its message/type into a structured code and severity */
+export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: ErrorSeverity } {
+    const message = error instanceof Error ? error.message : String(error);
+    const lower = message.toLowerCase();
+
+    if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnreset')) {
+        return { Code: 'NETWORK_TIMEOUT', Severity: 'Warning' };
+    }
+    if (lower.includes('rate limit') || lower.includes('throttl') || lower.includes('429')) {
+        return { Code: 'RATE_LIMIT_EXCEEDED', Severity: 'Warning' };
+    }
+    if (lower.includes('foreign key') || lower.includes('fk_') || lower.includes('reference constraint')) {
+        return { Code: 'FK_CONSTRAINT_VIOLATION', Severity: 'Critical' };
+    }
+    if (lower.includes('duplicate') || lower.includes('unique constraint') || lower.includes('primary key')) {
+        return { Code: 'DUPLICATE_KEY', Severity: 'Warning' };
+    }
+    if (lower.includes('validation') || lower.includes('validate')) {
+        return { Code: 'VALIDATION_ERROR', Severity: 'Warning' };
+    }
+    if (lower.includes('transform') || lower.includes('mapping')) {
+        return { Code: 'TRANSFORM_ERROR', Severity: 'Warning' };
+    }
+    if (lower.includes('match') || lower.includes('resolve')) {
+        return { Code: 'MATCH_RESOLUTION_ERROR', Severity: 'Warning' };
+    }
+    if (lower.includes('watermark') || lower.includes('invalid watermark')) {
+        return { Code: 'WATERMARK_INVALID', Severity: 'Warning' };
+    }
+    if (lower.includes('configuration') || lower.includes('config')) {
+        return { Code: 'CONFIGURATION_ERROR', Severity: 'Critical' };
+    }
+    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('sql')) {
+        return { Code: 'DATABASE_ERROR', Severity: 'Critical' };
+    }
+    if (lower.includes('connector')) {
+        return { Code: 'CONNECTOR_ERROR', Severity: 'Critical' };
+    }
+    return { Code: 'UNKNOWN_ERROR', Severity: 'Critical' };
+}
+
 /** A record fetched from an external system */
 export interface ExternalRecord {
     /** Unique identifier in the external system */
@@ -79,9 +143,30 @@ export interface SyncRecordError {
     ChangeType: RecordChangeType;
     /** Human-readable error description */
     ErrorMessage: string;
+    /** Structured error code for programmatic handling */
+    ErrorCode: SyncErrorCode;
+    /** Severity of this error */
+    Severity: ErrorSeverity;
     /** The external record that caused the error, if available */
     ExternalRecord?: ExternalRecord;
 }
+
+/** Progress tracking for a running sync operation */
+export interface SyncProgress {
+    /** Index of the current entity map being processed (0-based) */
+    EntityMapIndex: number;
+    /** Total number of entity maps to process */
+    TotalEntityMaps: number;
+    /** Number of records processed in the current entity map */
+    RecordsProcessedInCurrentMap: number;
+    /** Total records fetched for the current entity map */
+    TotalRecordsInCurrentMap: number;
+    /** Overall percent complete (0-100) */
+    PercentComplete: number;
+}
+
+/** Callback for progress tracking during sync */
+export type OnProgressCallback = (progress: SyncProgress) => void;
 
 /** A default field mapping returned by a connector's discovery */
 export interface DefaultFieldMapping {

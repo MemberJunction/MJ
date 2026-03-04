@@ -1,5 +1,6 @@
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationSyncWatermarkEntity } from '@memberjunction/core-entities';
+import type { WatermarkType } from './types.js';
 
 /**
  * Service for loading and updating sync watermarks used for incremental data fetching.
@@ -48,6 +49,31 @@ export class WatermarkService {
             await this.UpdateExistingWatermark(existing, newValue);
         } else {
             await this.CreateNewWatermark(entityMapID, newValue, contextUser);
+        }
+    }
+
+    /**
+     * Validates a watermark value against its expected type.
+     *
+     * @param watermarkValue - The watermark value to validate
+     * @param watermarkType - The expected type of watermark
+     * @returns true if the watermark is valid for its type, false otherwise
+     */
+    public ValidateWatermark(watermarkValue: string, watermarkType: WatermarkType): boolean {
+        if (!watermarkValue || watermarkValue.trim().length === 0) {
+            return false;
+        }
+
+        switch (watermarkType) {
+            case 'Timestamp':
+                return !isNaN(Date.parse(watermarkValue));
+            case 'Version':
+                return /^\d+$/.test(watermarkValue);
+            case 'Cursor':
+            case 'ChangeToken':
+                return watermarkValue.length > 0;
+            default:
+                return watermarkValue.length > 0;
         }
     }
 

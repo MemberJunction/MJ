@@ -28,17 +28,26 @@
           } @else if (SelectedIntegrationID) {
             <div class="panel-section">
               <h4 class="panel-label">Entity Maps</h4>
+              @if (EntityMaps.length > 0) {
+                <div class="search-box">
+                  <input kendoTextBox
+                         [(ngModel)]="EntityMapSearchText"
+                         placeholder="Search entity maps..." />
+                </div>
+              }
               @if (EntityMaps.length === 0) {
                 <p class="empty-hint">No entity maps configured.</p>
+              } @else if (FilteredEntityMaps.length === 0) {
+                <p class="empty-hint">No matches for "{{ EntityMapSearchText }}".</p>
               } @else {
                 <div class="entity-map-list">
-                  @for (em of EntityMaps; track em.ID) {
+                  @for (em of FilteredEntityMaps; track em.ID) {
                     <div class="entity-map-item"
                          [class.selected]="IsSelectedEntityMap(em.ID)"
                          (click)="OnEntityMapSelect(em)">
                       <div class="em-info">
                         <span class="em-name">{{ em.ExternalObjectName }}</span>
-                        <span class="em-arrow">→</span>
+                        <span class="em-arrow">-></span>
                         <span class="em-entity">{{ em.Entity }}</span>
                       </div>
                       <div class="em-controls">

@@ -118,6 +118,12 @@ type TestStatusType = 'idle' | 'testing' | 'success' | 'failed';
   `]
 })
 export class ConnectionStudioComponent extends BaseResourceComponent implements OnInit {
+  /**
+   * The Provider @Input is inherited from BaseAngularComponent.
+   * Use this.RunViewToUse to get the appropriate IRunViewProvider
+   * for multi-MJ-instance support.
+   */
+
   Steps: StepDef[] = [
     { Index: 0, Label: 'Source Type' },
     { Index: 1, Label: 'Configure' },
@@ -170,7 +176,7 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   async LoadSourceTypes(): Promise<void> {
     this.IsLoadingSourceTypes = true;
     try {
-      this.SourceTypes = await this.dataService.LoadSourceTypes();
+      this.SourceTypes = await this.dataService.LoadSourceTypes(this.RunViewToUse);
     } finally {
       this.IsLoadingSourceTypes = false;
     }
@@ -196,7 +202,7 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   TestConnection(): void {
     this.TestStatus = 'testing';
     console.log('[ConnectionStudio] Testing connection with config:', this.FormData);
-    // Placeholder — simulate async test
+    // Placeholder -- simulate async test
     setTimeout(() => {
       this.TestStatus = 'success';
     }, 1500);

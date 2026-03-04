@@ -12,7 +12,14 @@ export type {
     SyncResult,
     SyncRecordError,
     DefaultFieldMapping,
+    SyncErrorCode,
+    ErrorSeverity,
+    SyncProgress,
+    OnProgressCallback,
 } from './types.js';
+
+// Error classification helpers
+export { IsRetryableError, ClassifyError } from './types.js';
 
 // Transforms
 export type {
@@ -34,6 +41,8 @@ export type {
 // Connector
 export {
     BaseIntegrationConnector,
+    WithTimeout,
+    DEFAULT_OPERATION_TIMEOUTS,
 } from './BaseIntegrationConnector.js';
 export type {
     ConnectionTestResult,
@@ -41,6 +50,7 @@ export type {
     ExternalFieldSchema,
     FetchContext,
     FetchBatchResult,
+    OperationTimeouts,
 } from './BaseIntegrationConnector.js';
 
 // Factory
@@ -52,6 +62,10 @@ export { MatchEngine } from './MatchEngine.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';
+
+// Retry
+export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
+export type { RetryConfig } from './RetryRunner.js';
 
 // Orchestrator
 export { IntegrationOrchestrator } from './IntegrationOrchestrator.js';

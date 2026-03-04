@@ -2,7 +2,15 @@ import { Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { IntegrationDataService, IntegrationSummary } from '../../services/integration-data.service';
+import {
+  IntegrationDataService,
+  IntegrationSummary,
+  IntegrationKPIs,
+  ActivityFeedItem,
+  DailyRecordCount
+} from '../../services/integration-data.service';
+
+type StatusColorType = 'green' | 'amber' | 'red' | 'gray';
 
 @RegisterClass(BaseResourceComponent, 'IntegrationControlTower')
 @Component({
@@ -12,7 +20,23 @@ import { IntegrationDataService, IntegrationSummary } from '../../services/integ
   styleUrls: ['./control-tower.component.scss']
 })
 export class ControlTowerComponent extends BaseResourceComponent implements OnInit {
+  /**
+   * The Provider @Input is inherited from BaseAngularComponent.
+   * Use this.RunViewToUse to get the appropriate IRunViewProvider
+   * for multi-MJ-instance support.
+   */
+
   Summaries: IntegrationSummary[] = [];
+  KPIs: IntegrationKPIs = {
+    TotalIntegrations: 0,
+    ActiveSyncs: 0,
+    RecordsSyncedToday: 0,
+    ErrorRate: 0,
+    AverageSyncDurationMs: null
+  };
+  ActivityFeed: ActivityFeedItem[] = [];
+  DailyCounts: DailyRecordCount[] = [];
+
   IsLoading = false;
   ExpandedID: string | null = null;
 
@@ -25,7 +49,16 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
   async LoadData(): Promise<void> {
     this.IsLoading = true;
     try {
-      this.Summaries = await this.dataService.LoadIntegrationSummaries();
+      const provider = this.RunViewToUse;
+      const [summaries, activityFeed, dailyCounts] = await Promise.all([
+        this.dataService.LoadIntegrationSummaries(provider),
+        this.dataService.LoadRecentRuns(20, provider),
+        this.dataService.LoadDailyRecordCounts(7, provider)
+      ]);
+      this.Summaries = summaries;
+      this.KPIs = this.dataService.ComputeKPIs(summaries);
+      this.ActivityFeed = activityFeed;
+      this.DailyCounts = dailyCounts;
     } finally {
       this.IsLoading = false;
     }
@@ -47,20 +80,48 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
     return UUIDsEqual(this.ExpandedID, integrationID);
   }
 
-  get TotalCount(): number {
-    return this.Summaries.length;
+  get MaxDailyRecords(): number {
+    if (this.DailyCounts.length === 0) return 1;
+    const maxVal = Math.max(...this.DailyCounts.map(d => d.Records));
+    return maxVal > 0 ? maxVal : 1;
   }
 
-  get HealthyCount(): number {
-    return this.Summaries.filter(s => s.StatusColor === 'green').length;
+  BarHeight(records: number): number {
+    return Math.max((records / this.MaxDailyRecords) * 100, 2);
   }
 
-  get WarningCount(): number {
-    return this.Summaries.filter(s => s.StatusColor === 'amber').length;
+  FormatDuration(ms: number | null): string {
+    return this.dataService.FormatDuration(ms);
   }
 
-  get FailedCount(): number {
-    return this.Summaries.filter(s => s.StatusColor === 'red').length;
+  FormatErrorRate(rate: number): string {
+    return rate > 0 ? `${rate}%` : '0%';
+  }
+
+  StatusChipClass(color: StatusColorType): string {
+    return `status-chip status-${color}`;
+  }
+
+  SourceIconClass(summary: IntegrationSummary): string {
+    return summary.SourceType?.IconClass ?? 'fa-solid fa-plug';
+  }
+
+  StatusLabel(color: StatusColorType): string {
+    if (color === 'green') return 'Healthy';
+    if (color === 'amber') return 'Warning';
+    if (color === 'red') return 'Failed';
+    return 'Inactive';
+  }
+
+  FormatRelativeTime(dateStr: string | null): string {
+    return this.dataService.ComputeRelativeTime(dateStr);
+  }
+
+  ActivityStatusIcon(status: string): string {
+    if (status === 'Success') return 'fa-solid fa-circle-check';
+    if (status === 'Failed') return 'fa-solid fa-circle-xmark';
+    if (status === 'In Progress') return 'fa-solid fa-spinner fa-spin';
+    return 'fa-solid fa-clock';
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {

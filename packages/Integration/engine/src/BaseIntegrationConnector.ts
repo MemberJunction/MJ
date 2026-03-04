@@ -64,6 +64,59 @@ export interface FetchBatchResult {
     NewWatermarkValue?: string;
 }
 
+/** Configurable timeout values for connector operations */
+export interface OperationTimeouts {
+    /** Timeout for TestConnection in milliseconds. Default: 5000 */
+    TestConnectionMs: number;
+    /** Timeout for DiscoverObjects in milliseconds. Default: 10000 */
+    DiscoverObjectsMs: number;
+    /** Timeout for DiscoverFields in milliseconds. Default: 10000 */
+    DiscoverFieldsMs: number;
+    /** Timeout for FetchChanges in milliseconds. Default: 30000 */
+    FetchChangesMs: number;
+}
+
+/** Default timeout values for connector operations */
+export const DEFAULT_OPERATION_TIMEOUTS: OperationTimeouts = {
+    TestConnectionMs: 5000,
+    DiscoverObjectsMs: 10000,
+    DiscoverFieldsMs: 10000,
+    FetchChangesMs: 30000,
+};
+
+/**
+ * Wraps a promise with a timeout. Rejects with a timeout error if the
+ * promise does not resolve within the specified duration.
+ *
+ * @param promise - The promise to wrap
+ * @param timeoutMs - Timeout in milliseconds
+ * @param operationName - Name of the operation for error messaging
+ * @returns The result of the promise
+ * @throws Error if the operation times out
+ */
+export async function WithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    operationName: string
+): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeoutHandle = setTimeout(() => {
+            reject(new Error(`Operation '${operationName}' timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+
+    try {
+        const result = await Promise.race([promise, timeoutPromise]);
+        return result;
+    } finally {
+        if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+        }
+    }
+}
+
 /**
  * Abstract base class for integration connectors.
  * Each external system (HubSpot, Salesforce, etc.) implements this class

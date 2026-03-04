@@ -121,4 +121,92 @@ describe('WatermarkService', () => {
                 .rejects.toThrow('Failed to update watermark');
         });
     });
+
+    describe('ValidateWatermark', () => {
+        describe('Timestamp type', () => {
+            it('should return true for a valid ISO timestamp', () => {
+                expect(service.ValidateWatermark('2024-06-15T12:00:00.000Z', 'Timestamp')).toBe(true);
+            });
+
+            it('should return true for a date-only string', () => {
+                expect(service.ValidateWatermark('2024-01-01', 'Timestamp')).toBe(true);
+            });
+
+            it('should return false for an invalid timestamp', () => {
+                expect(service.ValidateWatermark('not-a-date', 'Timestamp')).toBe(false);
+            });
+
+            it('should return false for a nonsensical string that Date.parse rejects', () => {
+                expect(service.ValidateWatermark('xyz123', 'Timestamp')).toBe(false);
+            });
+        });
+
+        describe('Version type', () => {
+            it('should return true for digits-only string', () => {
+                expect(service.ValidateWatermark('123', 'Version')).toBe(true);
+            });
+
+            it('should return true for a single digit', () => {
+                expect(service.ValidateWatermark('0', 'Version')).toBe(true);
+            });
+
+            it('should return true for a large version number', () => {
+                expect(service.ValidateWatermark('99999999', 'Version')).toBe(true);
+            });
+
+            it('should return false for a string with letters', () => {
+                expect(service.ValidateWatermark('v1.2.3', 'Version')).toBe(false);
+            });
+
+            it('should return false for a decimal number', () => {
+                expect(service.ValidateWatermark('1.5', 'Version')).toBe(false);
+            });
+
+            it('should return false for a negative number', () => {
+                expect(service.ValidateWatermark('-1', 'Version')).toBe(false);
+            });
+        });
+
+        describe('Cursor type', () => {
+            it('should return true for a non-empty cursor value', () => {
+                expect(service.ValidateWatermark('cursor_abc123', 'Cursor')).toBe(true);
+            });
+
+            it('should return true for a numeric cursor', () => {
+                expect(service.ValidateWatermark('42', 'Cursor')).toBe(true);
+            });
+
+            it('should return true for a UUID cursor', () => {
+                expect(service.ValidateWatermark('550e8400-e29b-41d4-a716-446655440000', 'Cursor')).toBe(true);
+            });
+        });
+
+        describe('ChangeToken type', () => {
+            it('should return true for a non-empty change token', () => {
+                expect(service.ValidateWatermark('token_xyz789', 'ChangeToken')).toBe(true);
+            });
+        });
+
+        describe('empty and whitespace values', () => {
+            it('should return false for an empty string', () => {
+                expect(service.ValidateWatermark('', 'Timestamp')).toBe(false);
+            });
+
+            it('should return false for whitespace-only string', () => {
+                expect(service.ValidateWatermark('   ', 'Timestamp')).toBe(false);
+            });
+
+            it('should return false for empty string with Version type', () => {
+                expect(service.ValidateWatermark('', 'Version')).toBe(false);
+            });
+
+            it('should return false for empty string with Cursor type', () => {
+                expect(service.ValidateWatermark('', 'Cursor')).toBe(false);
+            });
+
+            it('should return false for whitespace with Cursor type', () => {
+                expect(service.ValidateWatermark('   ', 'Cursor')).toBe(false);
+            });
+        });
+    });
 });

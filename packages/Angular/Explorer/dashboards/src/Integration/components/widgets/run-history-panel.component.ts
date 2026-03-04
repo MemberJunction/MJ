@@ -1,6 +1,9 @@
 import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { IRunViewProvider } from '@memberjunction/core';
 import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../services/integration-data.service';
+
+type RunStatusColorType = 'amber' | 'green' | 'red';
 
 @Component({
   standalone: false,
@@ -22,6 +25,7 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
             <tr>
               <th>Started</th>
               <th>Status</th>
+              <th>Duration</th>
               <th>Records</th>
               <th>Run By</th>
               <th></th>
@@ -33,10 +37,12 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
                   (click)="OnRunClick(run)">
                 <td>{{ FormatDate(run.StartedAt) }}</td>
                 <td>
-                  <span class="run-status" [class]="'status-' + StatusColor(run)">
+                  <span class="run-status-chip" [class]="'chip-' + StatusColor(run)">
+                    <i [class]="StatusIcon(run)"></i>
                     {{ run.Status }}
                   </span>
                 </td>
+                <td class="duration-cell">{{ FormatDuration(run) }}</td>
                 <td>{{ run.TotalRecords | number }}</td>
                 <td>{{ run.RunByUser }}</td>
                 <td>
@@ -44,9 +50,16 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
                      [class.rotated]="IsSelectedRun(run.ID)"></i>
                 </td>
               </tr>
-              @if (IsSelectedRun(run.ID) && RunDetails.length > 0) {
+              @if (IsSelectedRun(run.ID) && IsLoadingDetails) {
                 <tr class="detail-row">
-                  <td colspan="5">
+                  <td colspan="6">
+                    <mj-loading text="Loading details..." size="small"></mj-loading>
+                  </td>
+                </tr>
+              }
+              @if (IsSelectedRun(run.ID) && !IsLoadingDetails && RunDetails.length > 0) {
+                <tr class="detail-row">
+                  <td colspan="6">
                     <div class="detail-panel">
                       <h4>Entity Breakdown</h4>
                       <table class="detail-table">
@@ -73,14 +86,22 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
                           }
                         </tbody>
                       </table>
+
+                      <!-- Error details expandable -->
+                      @if (run.ErrorLog) {
+                        <div class="error-details-section">
+                          <button class="error-toggle" (click)="ToggleErrorLog($event)">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            Error Details
+                            <i class="fa-solid fa-chevron-down toggle-icon"
+                               [class.rotated]="ShowErrorLog"></i>
+                          </button>
+                          @if (ShowErrorLog) {
+                            <pre class="error-log">{{ run.ErrorLog }}</pre>
+                          }
+                        </div>
+                      }
                     </div>
-                  </td>
-                </tr>
-              }
-              @if (IsSelectedRun(run.ID) && IsLoadingDetails) {
-                <tr class="detail-row">
-                  <td colspan="5">
-                    <mj-loading text="Loading details..." size="small"></mj-loading>
                   </td>
                 </tr>
               }
@@ -110,13 +131,20 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
     .run-row.selected { background: #f0f4ff; }
     .run-row td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
 
-    .run-status {
-      font-size: 11px; font-weight: 600; padding: 2px 6px;
-      border-radius: 8px;
+    /* Status Chips with icon */
+    .run-status-chip {
+      font-size: 11px; font-weight: 600; padding: 3px 8px;
+      border-radius: 10px; display: inline-flex; align-items: center; gap: 4px;
+      white-space: nowrap;
     }
-    .status-green { background: #e6f9ed; color: #1b7a3d; }
-    .status-amber { background: #fff7e0; color: #b5850a; }
-    .status-red   { background: #fde8e8; color: #c62828; }
+    .chip-green { background: #e6f9ed; color: #1b7a3d; }
+    .chip-amber { background: #fff7e0; color: #b5850a; }
+    .chip-red   { background: #fde8e8; color: #c62828; }
+
+    .duration-cell {
+      font-variant-numeric: tabular-nums;
+      color: #555;
+    }
 
     .detail-arrow { transition: transform 0.2s; font-size: 11px; color: #999; }
     .detail-arrow.rotated { transform: rotate(90deg); }
@@ -136,16 +164,44 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
     }
     .detail-table td { padding: 4px 6px; }
     .error-count { color: #c62828; font-weight: 600; }
+
+    /* Error Details */
+    .error-details-section {
+      margin-top: 12px;
+      border-top: 1px solid #eee;
+      padding-top: 8px;
+    }
+    .error-toggle {
+      background: none; border: none; cursor: pointer;
+      font-size: 12px; font-weight: 600; color: #c62828;
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 0;
+    }
+    .error-toggle:hover { text-decoration: underline; }
+    .toggle-icon {
+      transition: transform 0.2s; font-size: 10px;
+    }
+    .toggle-icon.rotated { transform: rotate(180deg); }
+    .error-log {
+      margin: 8px 0 0 0; padding: 10px;
+      background: #fff0f0; border: 1px solid #fdd;
+      border-radius: 4px; font-size: 11px;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 200px; overflow-y: auto;
+      color: #7a1111;
+    }
   `]
 })
 export class RunHistoryPanelComponent implements OnChanges {
   @Input() CompanyIntegrationID: string | null = null;
+  @Input() ViewProvider: IRunViewProvider | null = null;
 
   Runs: IntegrationRunRow[] = [];
   RunDetails: RunDetailRow[] = [];
   SelectedRunID: string | null = null;
   IsLoading = false;
   IsLoadingDetails = false;
+  ShowErrorLog = false;
 
   private dataService = inject(IntegrationDataService);
 
@@ -160,8 +216,11 @@ export class RunHistoryPanelComponent implements OnChanges {
     this.IsLoading = true;
     this.SelectedRunID = null;
     this.RunDetails = [];
+    this.ShowErrorLog = false;
     try {
-      this.Runs = await this.dataService.LoadRunHistory(this.CompanyIntegrationID);
+      this.Runs = await this.dataService.LoadRunHistory(
+        this.CompanyIntegrationID, 10, this.ViewProvider
+      );
     } finally {
       this.IsLoading = false;
     }
@@ -171,13 +230,15 @@ export class RunHistoryPanelComponent implements OnChanges {
     if (UUIDsEqual(this.SelectedRunID, run.ID)) {
       this.SelectedRunID = null;
       this.RunDetails = [];
+      this.ShowErrorLog = false;
       return;
     }
     this.SelectedRunID = run.ID;
     this.IsLoadingDetails = true;
     this.RunDetails = [];
+    this.ShowErrorLog = false;
     try {
-      this.RunDetails = await this.dataService.LoadRunDetails(run.ID);
+      this.RunDetails = await this.dataService.LoadRunDetails(run.ID, this.ViewProvider);
     } finally {
       this.IsLoadingDetails = false;
     }
@@ -187,18 +248,36 @@ export class RunHistoryPanelComponent implements OnChanges {
     return UUIDsEqual(this.SelectedRunID, id);
   }
 
-  StatusColor(run: IntegrationRunRow): string {
+  StatusColor(run: IntegrationRunRow): RunStatusColorType {
     if (run.Status === 'Success') return 'green';
     if (run.Status === 'Failed') return 'red';
     return 'amber';
   }
 
+  StatusIcon(run: IntegrationRunRow): string {
+    if (run.Status === 'Success') return 'fa-solid fa-circle-check';
+    if (run.Status === 'Failed') return 'fa-solid fa-circle-xmark';
+    if (run.Status === 'In Progress') return 'fa-solid fa-spinner fa-spin';
+    return 'fa-solid fa-clock';
+  }
+
   FormatDate(dateStr: string | null): string {
-    if (!dateStr) return '—';
+    if (!dateStr) return '--';
     const d = new Date(dateStr);
     return d.toLocaleString(undefined, {
       month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
+  }
+
+  FormatDuration(run: IntegrationRunRow): string {
+    if (!run.StartedAt || !run.EndedAt) return '--';
+    const ms = new Date(run.EndedAt).getTime() - new Date(run.StartedAt).getTime();
+    return this.dataService.FormatDuration(ms);
+  }
+
+  ToggleErrorLog(event: Event): void {
+    event.stopPropagation();
+    this.ShowErrorLog = !this.ShowErrorLog;
   }
 }
