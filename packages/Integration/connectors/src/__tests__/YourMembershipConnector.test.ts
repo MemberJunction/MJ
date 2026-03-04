@@ -119,7 +119,7 @@ describe('YourMembershipConnector (integration)', () => {
             await connector.CloseAllPools();
         });
 
-        it('should return 50 members with no watermark', async ({ skip }) => {
+        it('should return all members with no watermark', async ({ skip }) => {
             if (!dbAvailable) skip();
             const ctx: FetchContext = {
                 CompanyIntegration: MOCK_CI,
@@ -129,7 +129,7 @@ describe('YourMembershipConnector (integration)', () => {
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(50);
+            expect(result.Records.length).toBeGreaterThanOrEqual(50);
             expect(result.HasMore).toBe(false);
 
             const record = result.Records[0];

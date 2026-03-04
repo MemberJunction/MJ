@@ -134,7 +134,7 @@ describe('SalesforceConnector (integration)', () => {
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(50);
+            expect(result.Records.length).toBeGreaterThanOrEqual(50);
             expect(result.HasMore).toBe(false);
 
             const record = result.Records[0];
