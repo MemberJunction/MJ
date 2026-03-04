@@ -320,4 +320,139 @@ describe('FieldMappingEngine', () => {
             expect(result[0].ChangeType).toBe('Delete');
         });
     });
+
+    describe('multi-step transform pipelines', () => {
+        it('should chain regex then format then coerce', () => {
+            const records = [createExternalRecord({ Raw: '$1,234.56' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'regex', Config: { Pattern: '[^0-9.]', Replacement: '', Flags: 'g' } },
+                { Type: 'coerce', Config: { TargetType: 'number' } },
+            ];
+            const fieldMaps = [createFieldMap('Raw', 'Amount', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Amount']).toBe(1234.56);
+        });
+
+        it('should chain split then coerce to number', () => {
+            const records = [createExternalRecord({ Data: 'score:95' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'split', Config: { Delimiter: ':', Index: 1 } },
+                { Type: 'coerce', Config: { TargetType: 'number' } },
+            ];
+            const fieldMaps = [createFieldMap('Data', 'Score', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Score']).toBe(95);
+        });
+
+        it('should chain combine then regex', () => {
+            const records = [createExternalRecord({ First: 'john', Last: 'doe' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'combine', Config: { SourceFields: ['First', 'Last'], Separator: ' ' } },
+                { Type: 'custom', Config: { Expression: 'value.split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ")' } },
+            ];
+            const fieldMaps = [createFieldMap('First', 'FullName', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['FullName']).toBe('John Doe');
+        });
+    });
+
+    describe('empty transform pipeline', () => {
+        it('should pass through value when pipeline is empty JSON array', () => {
+            const records = [createExternalRecord({ Name: 'Alice' })];
+            const fieldMaps = [createFieldMap('Name', 'Name', [])];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Name']).toBe('Alice');
+        });
+
+        it('should pass through value when pipeline is null', () => {
+            const records = [createExternalRecord({ Name: 'Bob' })];
+            const fieldMaps = [createFieldMap('Name', 'Name', null)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Name']).toBe('Bob');
+        });
+    });
+
+    describe('missing source field handling', () => {
+        it('should set undefined for missing source field with no pipeline', () => {
+            const records = [createExternalRecord({ A: 'val' })];
+            const fieldMaps = [createFieldMap('NonExistent', 'Out')];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            // undefined field value → Apply does not set MappedFields entry
+            expect(result[0].MappedFields['Out']).toBeUndefined();
+        });
+
+        it('should handle missing source with direct default', () => {
+            const records = [createExternalRecord({ A: 'val' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'direct', Config: { DefaultValue: 'fallback' } },
+            ];
+            const fieldMaps = [createFieldMap('Missing', 'Out', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Out']).toBe('fallback');
+        });
+    });
+
+    describe('multiple records batch', () => {
+        it('should map all records in a batch correctly', () => {
+            const records = [
+                createExternalRecord({ Name: 'Alice' }, 'ext-1'),
+                createExternalRecord({ Name: 'Bob' }, 'ext-2'),
+                createExternalRecord({ Name: 'Charlie' }, 'ext-3'),
+            ];
+            const fieldMaps = [createFieldMap('Name', 'Name')];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result.length).toBe(3);
+            expect(result[0].MappedFields['Name']).toBe('Alice');
+            expect(result[1].MappedFields['Name']).toBe('Bob');
+            expect(result[2].MappedFields['Name']).toBe('Charlie');
+        });
+
+        it('should set ExternalRecord on each mapped record', () => {
+            const records = [
+                createExternalRecord({ A: '1' }, 'ext-1'),
+                createExternalRecord({ A: '2' }, 'ext-2'),
+            ];
+            const fieldMaps = [createFieldMap('A', 'A')];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].ExternalRecord.ExternalID).toBe('ext-1');
+            expect(result[1].ExternalRecord.ExternalID).toBe('ext-2');
+        });
+    });
+
+    describe('OnError mid-pipeline', () => {
+        it('should skip field when error occurs mid-pipeline with Skip', () => {
+            const records = [createExternalRecord({ Val: 'abc' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'regex', Config: { Pattern: 'a', Replacement: 'X', Flags: 'g' } },
+                { Type: 'coerce', Config: { TargetType: 'number' }, OnError: 'Skip' },
+                { Type: 'custom', Config: { Expression: 'value * 2' } },
+            ];
+            const fieldMaps = [createFieldMap('Val', 'Out', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].MappedFields['Out']).toBeUndefined();
+        });
+
+        it('should set null and continue pipeline when error occurs with Null', () => {
+            const records = [createExternalRecord({ Val: 'abc' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'coerce', Config: { TargetType: 'number' }, OnError: 'Null' },
+                { Type: 'coerce', Config: { TargetType: 'string' } },
+            ];
+            const fieldMaps = [createFieldMap('Val', 'Out', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            // null coerced to string = ''
+            expect(result[0].MappedFields['Out']).toBe('');
+        });
+    });
 });

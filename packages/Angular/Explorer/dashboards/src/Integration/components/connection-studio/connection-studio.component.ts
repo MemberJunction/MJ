@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { IntegrationDataService, SourceTypeRow } from '../../services/integration-data.service';
@@ -149,7 +149,7 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   }
 
   get SelectedSourceTypeName(): string {
-    return this.SourceTypes.find(st => st.ID === this.SelectedSourceTypeID)?.Name ?? '';
+    return this.SourceTypes.find(st => UUIDsEqual(st.ID, this.SelectedSourceTypeID))?.Name ?? '';
   }
 
   get ConfigMode(): ConfigModeType {
@@ -207,6 +207,10 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
       sourceTypeID: this.SelectedSourceTypeID,
       formData: this.FormData
     });
+  }
+
+  IsSelectedSourceType(id: string): boolean {
+    return UUIDsEqual(this.SelectedSourceTypeID, id);
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {

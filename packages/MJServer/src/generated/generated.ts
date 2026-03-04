@@ -24195,13 +24195,6 @@ export class MJCompanyIntegration_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    SourceTypeID?: string;
-        
-    @Field({nullable: true}) 
-    Configuration?: string;
-        
     @Field() 
     @MaxLength(100)
     Company: string;
@@ -24229,10 +24222,6 @@ export class MJCompanyIntegration_ {
     @Field({nullable: true}) 
     @MaxLength(10)
     LastRunEndedAt?: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(400)
-    SourceType?: string;
         
     @Field(() => [MJList_])
     MJLists_CompanyIntegrationIDArray: MJList_[]; // Link to MJLists
@@ -24297,12 +24286,6 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     Name?: string;
-
-    @Field({ nullable: true })
-    SourceTypeID: string | null;
-
-    @Field({ nullable: true })
-    Configuration: string | null;
 }
     
 
@@ -24352,12 +24335,6 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     Name?: string;
-
-    @Field({ nullable: true })
-    SourceTypeID?: string | null;
-
-    @Field({ nullable: true })
-    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43161,9 +43138,6 @@ export class MJIntegrationSourceType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJCompanyIntegration_])
-    MJCompanyIntegrations_SourceTypeIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
-    
 }
 
 //****************************************************************************
@@ -43276,17 +43250,6 @@ export class MJIntegrationSourceTypeResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJCompanyIntegration_])
-    async MJCompanyIntegrations_SourceTypeIDArray(@Root() mjintegrationsourcetype_: MJIntegrationSourceType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [SourceTypeID]='${mjintegrationsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJIntegrationSourceType_)
     async CreateMJIntegrationSourceType(
         @Arg('input', () => CreateMJIntegrationSourceTypeInput) input: CreateMJIntegrationSourceTypeInput,
@@ -64940,11 +64903,11 @@ export class MJUser_ {
     @Field(() => [MJOAuthAuthorizationState_])
     MJOAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
-    @Field(() => [MJOpenApp_])
-    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
-    
     @Field(() => [MJOpenAppInstallHistory_])
     MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
+    
+    @Field(() => [MJOpenApp_])
+    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -65818,17 +65781,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOpenApp_])
-    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [InstalledByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJOpenAppInstallHistory_])
     async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
@@ -65837,6 +65789,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenAppInstallHistories] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenApp_])
+    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOpenApps] WHERE [InstalledByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

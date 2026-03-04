@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import {
@@ -182,6 +182,10 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     } finally {
       this.IsLoadingFieldMaps = false;
     }
+  }
+
+  IsSelectedEntityMap(id: string): boolean {
+    return UUIDsEqual(this.SelectedEntityMapID, id);
   }
 
   OnToggleEntityMap(em: EntityMapRow): void {

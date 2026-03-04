@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../services/integration-data.service';
 
 @Component({
@@ -28,7 +29,7 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
           </thead>
           <tbody>
             @for (run of Runs; track run.ID) {
-              <tr class="run-row" [class.selected]="SelectedRunID === run.ID"
+              <tr class="run-row" [class.selected]="IsSelectedRun(run.ID)"
                   (click)="OnRunClick(run)">
                 <td>{{ FormatDate(run.StartedAt) }}</td>
                 <td>
@@ -40,10 +41,10 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
                 <td>{{ run.RunByUser }}</td>
                 <td>
                   <i class="fa-solid fa-chevron-right detail-arrow"
-                     [class.rotated]="SelectedRunID === run.ID"></i>
+                     [class.rotated]="IsSelectedRun(run.ID)"></i>
                 </td>
               </tr>
-              @if (SelectedRunID === run.ID && RunDetails.length > 0) {
+              @if (IsSelectedRun(run.ID) && RunDetails.length > 0) {
                 <tr class="detail-row">
                   <td colspan="5">
                     <div class="detail-panel">
@@ -76,7 +77,7 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
                   </td>
                 </tr>
               }
-              @if (SelectedRunID === run.ID && IsLoadingDetails) {
+              @if (IsSelectedRun(run.ID) && IsLoadingDetails) {
                 <tr class="detail-row">
                   <td colspan="5">
                     <mj-loading text="Loading details..." size="small"></mj-loading>
@@ -167,7 +168,7 @@ export class RunHistoryPanelComponent implements OnChanges {
   }
 
   async OnRunClick(run: IntegrationRunRow): Promise<void> {
-    if (this.SelectedRunID === run.ID) {
+    if (UUIDsEqual(this.SelectedRunID, run.ID)) {
       this.SelectedRunID = null;
       this.RunDetails = [];
       return;
@@ -180,6 +181,10 @@ export class RunHistoryPanelComponent implements OnChanges {
     } finally {
       this.IsLoadingDetails = false;
     }
+  }
+
+  IsSelectedRun(id: string): boolean {
+    return UUIDsEqual(this.SelectedRunID, id);
   }
 
   StatusColor(run: IntegrationRunRow): string {

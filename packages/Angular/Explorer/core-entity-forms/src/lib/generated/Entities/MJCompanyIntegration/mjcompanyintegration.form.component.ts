@@ -19,7 +19,6 @@ export class MJCompanyIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'linkingCoreInfo', sectionName: 'Linking & Core Info', isExpanded: true },
             { sectionKey: 'credentialsTokens', sectionName: 'Credentials & Tokens', isExpanded: true },
             { sectionKey: 'externalSystemMapping', sectionName: 'External System Mapping', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'runHistoryMonitoring', sectionName: 'Run History & Monitoring', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'companyIntegrationRecordMaps', sectionName: 'Company Integration Record Maps', isExpanded: false },

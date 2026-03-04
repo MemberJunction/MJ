@@ -8525,15 +8525,6 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: User-friendly name for the company integration instance, typically in the format "Company: Integration".`),
-    SourceTypeID: z.string().nullable().describe(`
-        * * Field Name: SourceTypeID
-        * * Display Name: Source Type ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Integration Source Types (vwIntegrationSourceTypes.ID)`),
-    Configuration: z.string().nullable().describe(`
-        * * Field Name: Configuration
-        * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)`),
     Company: z.string().describe(`
         * * Field Name: Company
         * * Display Name: Company
@@ -8562,10 +8553,6 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Field Name: LastRunEndedAt
         * * Display Name: Last Run Ended At
         * * SQL Data Type: datetimeoffset`),
-    SourceType: z.string().nullable().describe(`
-        * * Field Name: SourceType
-        * * Display Name: Source Type
-        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJCompanyIntegrationEntityType = z.infer<typeof MJCompanyIntegrationSchema>;
@@ -27025,7 +27012,7 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     		result.Errors.push(new ValidationErrorInfo(
     			"RoleID/UserID",
     			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
+    			`RoleID: $$\{this.RoleID}, UserID: $$\{this.UserID}`,
     			ValidationErrorType.Failure
     		));
     	}
@@ -44954,31 +44941,6 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
-    * * Field Name: SourceTypeID
-    * * Display Name: Source Type ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Integration Source Types (vwIntegrationSourceTypes.ID)
-    */
-    get SourceTypeID(): string | null {
-        return this.Get('SourceTypeID');
-    }
-    set SourceTypeID(value: string | null) {
-        this.Set('SourceTypeID', value);
-    }
-
-    /**
-    * * Field Name: Configuration
-    * * Display Name: Configuration
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Configuration(): string | null {
-        return this.Get('Configuration');
-    }
-    set Configuration(value: string | null) {
-        this.Set('Configuration', value);
-    }
-
-    /**
     * * Field Name: Company
     * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
@@ -45039,15 +45001,6 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     */
     get LastRunEndedAt(): Date | null {
         return this.Get('LastRunEndedAt');
-    }
-
-    /**
-    * * Field Name: SourceType
-    * * Display Name: Source Type
-    * * SQL Data Type: nvarchar(200)
-    */
-    get SourceType(): string | null {
-        return this.Get('SourceType');
     }
 }
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Simple row types for read-only data loaded via ResultType: 'simple'
@@ -210,8 +211,8 @@ export class IntegrationDataService {
     allRuns: IntegrationRunRow[],
     sourceTypes: SourceTypeRow[]
   ): IntegrationSummary {
-    const latestRun = allRuns.find(r => r.CompanyIntegrationID === integration.ID) ?? null;
-    const sourceType = sourceTypes.find(st => st.ID === integration.SourceTypeID) ?? null;
+    const latestRun = allRuns.find(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID)) ?? null;
+    const sourceType = sourceTypes.find(st => UUIDsEqual(st.ID, integration.SourceTypeID)) ?? null;
     const statusColor = this.computeStatusColor(latestRun, integration.IsActive);
     const relativeTime = this.computeRelativeTime(latestRun?.StartedAt ?? null);
 

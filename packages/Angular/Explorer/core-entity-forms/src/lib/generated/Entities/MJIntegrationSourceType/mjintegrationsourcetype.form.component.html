@@ -73,34 +73,5 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- MJ: Company Integrations Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrations"
-        SectionName="MJ: Company Integrations"
-        Icon="fa fa-plug"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrations')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','SourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrations', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 </mj-record-form-container>
         

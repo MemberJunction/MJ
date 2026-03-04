@@ -22,7 +22,6 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'aPISearchSettings', sectionName: 'API & Search Settings', isExpanded: false },
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: false },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'applicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'auditLogs', sectionName: 'Audit Logs', isExpanded: false },

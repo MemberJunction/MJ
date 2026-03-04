@@ -150,4 +150,139 @@ describe('MatchEngine', () => {
         expect(results[0].ChangeType).toBe('Skip');
         expect(results[0].MatchedMJRecordID).toBe('mj-record-3');
     });
+
+    describe('multiple key fields', () => {
+        it('should match on multiple key fields combined with AND', async () => {
+            mockRunViewFn.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: 'mj-multi-key' }],
+            });
+
+            const records = [createMappedRecord({
+                MappedFields: { Email: 'test@example.com', CompanyName: 'Acme' },
+            })];
+            const entityMap = createEntityMap();
+            const fieldMaps = [
+                createKeyFieldMap('Email', 'Email'),
+                createKeyFieldMap('Company', 'CompanyName'),
+            ];
+
+            const results = await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Update');
+            expect(results[0].MatchedMJRecordID).toBe('mj-multi-key');
+
+            const callArgs = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+            expect(callArgs.ExtraFilter).toContain('[Email]');
+            expect(callArgs.ExtraFilter).toContain('[CompanyName]');
+            expect(callArgs.ExtraFilter).toContain('AND');
+        });
+    });
+
+    describe('partial key match', () => {
+        it('should skip null key field values in filter', async () => {
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const records = [createMappedRecord({
+                MappedFields: { Email: null as unknown as string },
+            })];
+            const entityMap = createEntityMap();
+            const fieldMaps = [createKeyFieldMap('Email', 'Email')];
+
+            const results = await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Create');
+        });
+    });
+
+    describe('record map fallback', () => {
+        it('should fall back to record map when key field match fails', async () => {
+            mockRunViewFn
+                .mockResolvedValueOnce({ Success: true, Results: [] })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ EntityRecordID: 'mj-from-map' }],
+                });
+
+            const records = [createMappedRecord()];
+            const entityMap = createEntityMap();
+            const fieldMaps = [createKeyFieldMap('Email', 'Email')];
+
+            const results = await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Update');
+            expect(results[0].MatchedMJRecordID).toBe('mj-from-map');
+        });
+    });
+
+    describe('no key fields', () => {
+        it('should use only record map when no key fields are defined', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ EntityRecordID: 'mj-record-map-only' }],
+            });
+
+            const records = [createMappedRecord()];
+            const entityMap = createEntityMap();
+            const noKeyFieldMaps: MJCompanyIntegrationFieldMapEntity[] = [];
+
+            const results = await engine.Resolve(records, entityMap, noKeyFieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Update');
+            expect(results[0].MatchedMJRecordID).toBe('mj-record-map-only');
+        });
+    });
+
+    describe('multiple records', () => {
+        it('should process multiple records independently', async () => {
+            mockRunViewFn
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'mj-1' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [] })
+                .mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const records = [
+                createMappedRecord({ MappedFields: { Email: 'a@test.com' } }, { ExternalID: 'ext-a' }),
+                createMappedRecord({ MappedFields: { Email: 'b@test.com' } }, { ExternalID: 'ext-b' }),
+            ];
+            const entityMap = createEntityMap();
+            const fieldMaps = [createKeyFieldMap('Email', 'Email')];
+
+            const results = await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Update');
+            expect(results[0].MatchedMJRecordID).toBe('mj-1');
+            expect(results[1].ChangeType).toBe('Create');
+        });
+    });
+
+    describe('RunView failure handling', () => {
+        it('should treat failed RunView as no match (Create)', async () => {
+            mockRunViewFn.mockResolvedValue({ Success: false, Results: [], ErrorMessage: 'DB Error' });
+
+            const records = [createMappedRecord()];
+            const entityMap = createEntityMap();
+            const fieldMaps = [createKeyFieldMap('Email', 'Email')];
+
+            const results = await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Create');
+        });
+    });
+
+    describe('SQL injection prevention', () => {
+        it('should escape single quotes in key field values', async () => {
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const records = [createMappedRecord({
+                MappedFields: { Email: "o'reilly@test.com" },
+            })];
+            const entityMap = createEntityMap();
+            const fieldMaps = [createKeyFieldMap('Email', 'Email')];
+
+            await engine.Resolve(records, entityMap, fieldMaps, mockContextUser);
+
+            const callArgs = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+            expect(callArgs.ExtraFilter).toContain("o''reilly@test.com");
+        });
+    });
 });

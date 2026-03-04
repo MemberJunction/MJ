@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { IntegrationDataService, IntegrationSummary } from '../../services/integration-data.service';
@@ -40,7 +40,11 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
   }
 
   OnExpandToggle(integrationID: string): void {
-    this.ExpandedID = this.ExpandedID === integrationID ? null : integrationID;
+    this.ExpandedID = UUIDsEqual(this.ExpandedID, integrationID) ? null : integrationID;
+  }
+
+  IsExpanded(integrationID: string): boolean {
+    return UUIDsEqual(this.ExpandedID, integrationID);
   }
 
   get TotalCount(): number {

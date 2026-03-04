@@ -39,12 +39,12 @@
         <div class="card-wrapper">
           <app-integration-card
             [Summary]="summary"
-            [Expanded]="ExpandedID === summary.Integration.ID"
+            [Expanded]="IsExpanded(summary.Integration.ID)"
             (RunNowClick)="OnRunNow($event)"
             (ExpandToggle)="OnExpandToggle($event)">
           </app-integration-card>
 
-          @if (ExpandedID === summary.Integration.ID) {
+          @if (IsExpanded(summary.Integration.ID)) {
             <app-run-history-panel
               [CompanyIntegrationID]="summary.Integration.ID">
             </app-run-history-panel>

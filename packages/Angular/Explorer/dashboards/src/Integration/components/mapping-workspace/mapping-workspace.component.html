@@ -34,7 +34,7 @@
                 <div class="entity-map-list">
                   @for (em of EntityMaps; track em.ID) {
                     <div class="entity-map-item"
-                         [class.selected]="SelectedEntityMapID === em.ID"
+                         [class.selected]="IsSelectedEntityMap(em.ID)"
                          (click)="OnEntityMapSelect(em)">
                       <div class="em-info">
                         <span class="em-name">{{ em.ExternalObjectName }}</span>

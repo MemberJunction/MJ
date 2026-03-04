@@ -34,7 +34,7 @@
       } @else {
         <div class="source-type-grid">
           @for (st of SourceTypes; track st.ID) {
-            <div class="source-type-card" [class.selected]="SelectedSourceTypeID === st.ID"
+            <div class="source-type-card" [class.selected]="IsSelectedSourceType(st.ID)"
                  (click)="SelectSourceType(st)">
               <i [class]="st.IconClass ?? 'fa-solid fa-plug'"></i>
               <span class="st-name">{{ st.Name }}</span>
