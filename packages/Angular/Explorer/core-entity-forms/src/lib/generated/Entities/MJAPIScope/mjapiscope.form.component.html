@@ -90,19 +90,9 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -141,10 +131,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: API Application Scopes Section -->
+    <!-- API Application Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAPIApplicationScopes"
-        SectionName="MJ: API Application Scopes"
+        SectionName="API Application Scopes"
         Icon="fa fa-lock"
         Variant="related-entity"
         [Form]="this"
@@ -166,10 +156,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: API Key Scopes Section -->
+    <!-- API Key Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAPIKeyScopes"
-        SectionName="MJ: API Key Scopes"
+        SectionName="API Key Scopes"
         Icon="fa fa-key"
         Variant="related-entity"
         [Form]="this"
@@ -191,10 +181,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: API Scopes Section -->
+    <!-- API Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAPIScopes"
-        SectionName="MJ: API Scopes"
+        SectionName="API Scopes"
         Icon="fa fa-key"
         Variant="related-entity"
         [Form]="this"

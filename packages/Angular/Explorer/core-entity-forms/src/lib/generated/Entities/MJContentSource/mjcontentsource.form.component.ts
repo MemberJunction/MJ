@@ -19,9 +19,9 @@ export class MJContentSourceFormComponent extends BaseFormComponent {
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'contentClassification', sectionName: 'Content Classification', isExpanded: true },
             { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: false },
-            { sectionKey: 'contentItems', sectionName: 'Content Items', isExpanded: false },
-            { sectionKey: 'contentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
-            { sectionKey: 'contentSourceParams', sectionName: 'Content Source Params', isExpanded: false }
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
+            { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
+            { sectionKey: 'mJContentSourceParams', sectionName: 'Content Source Params', isExpanded: false }
         ]);
     }
 }

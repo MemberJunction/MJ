@@ -18,7 +18,7 @@ export class MJAIModelPriceTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'pricingMetricDetails', sectionName: 'Pricing Metric Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIModelCosts', sectionName: 'MJ: AI Model Costs', isExpanded: false }
+            { sectionKey: 'mJAIModelCosts', sectionName: 'AI Model Costs', isExpanded: false }
         ]);
     }
 }

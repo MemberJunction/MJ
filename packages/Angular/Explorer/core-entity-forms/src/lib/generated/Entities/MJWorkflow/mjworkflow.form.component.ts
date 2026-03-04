@@ -19,8 +19,8 @@ export class MJWorkflowFormComponent extends BaseFormComponent {
             { sectionKey: 'coreWorkflowDetails', sectionName: 'Core Workflow Details', isExpanded: true },
             { sectionKey: 'schedulingSettings', sectionName: 'Scheduling Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
-            { sectionKey: 'workflowRuns', sectionName: 'Workflow Runs', isExpanded: false }
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'mJWorkflowRuns', sectionName: 'Workflow Runs', isExpanded: false }
         ]);
     }
 }

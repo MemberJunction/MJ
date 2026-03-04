@@ -20,8 +20,8 @@ export class MJRecordMergeLogFormComponent extends BaseFormComponent {
             { sectionKey: 'userActionsApprovals', sectionName: 'User Actions & Approvals', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'duplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
-            { sectionKey: 'recordMergeDeletionLogs', sectionName: 'Record Merge Deletion Logs', isExpanded: false }
+            { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
+            { sectionKey: 'mJRecordMergeDeletionLogs', sectionName: 'Record Merge Deletion Logs', isExpanded: false }
         ]);
     }
 }

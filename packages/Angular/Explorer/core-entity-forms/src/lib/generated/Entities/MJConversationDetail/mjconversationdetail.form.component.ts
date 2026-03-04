@@ -22,15 +22,15 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'interactiveElements', sectionName: 'Interactive Elements', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
-            { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false },
-            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'MJ: Conversation Detail Attachments', isExpanded: false },
-            { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
-            { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
-            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
-            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false },
-            { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'MJ: Tasks', isExpanded: false }
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
+            { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },
+            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
+            { sectionKey: 'mJConversationDetailRatings', sectionName: 'Conversation Detail Ratings', isExpanded: false },
+            { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }

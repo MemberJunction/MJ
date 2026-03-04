@@ -20,7 +20,7 @@ export class MJComponentLibraryFormComponent extends BaseFormComponent {
             { sectionKey: 'distributionAssets', sectionName: 'Distribution & Assets', isExpanded: true },
             { sectionKey: 'governanceDependencies', sectionName: 'Governance & Dependencies', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJComponentLibraryLinks', sectionName: 'MJ: Component Library Links', isExpanded: false }
+            { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false }
         ]);
     }
 }

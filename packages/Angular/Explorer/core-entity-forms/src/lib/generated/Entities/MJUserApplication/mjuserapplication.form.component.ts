@@ -19,7 +19,7 @@ export class MJUserApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
             { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entities', sectionName: 'Entities', isExpanded: false }
+            { sectionKey: 'mJUserApplicationEntities', sectionName: 'Entities', isExpanded: false }
         ]);
     }
 }

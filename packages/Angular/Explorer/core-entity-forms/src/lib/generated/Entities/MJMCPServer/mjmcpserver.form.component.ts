@@ -22,9 +22,9 @@ export class MJMCPServerFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceLimits', sectionName: 'Performance & Limits', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'MJ: O Auth Client Registrations', isExpanded: false },
-            { sectionKey: 'mJMCPServerConnections', sectionName: 'MJ: MCP Server Connections', isExpanded: false },
-            { sectionKey: 'mJMCPServerTools', sectionName: 'MJ: MCP Server Tools', isExpanded: false }
+            { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'O Auth Client Registrations', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
+            { sectionKey: 'mJMCPServerTools', sectionName: 'MCP Server Tools', isExpanded: false }
         ]);
     }
 }

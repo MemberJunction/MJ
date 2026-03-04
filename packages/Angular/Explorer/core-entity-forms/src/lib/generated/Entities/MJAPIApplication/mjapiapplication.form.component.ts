@@ -19,9 +19,9 @@ export class MJAPIApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'applicationDetails', sectionName: 'Application Details', isExpanded: true },
             { sectionKey: 'operationalStatus', sectionName: 'Operational Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAPIApplicationScopes', sectionName: 'MJ: API Application Scopes', isExpanded: false },
-            { sectionKey: 'mJAPIKeyUsageLogs', sectionName: 'MJ: API Key Usage Logs', isExpanded: false },
-            { sectionKey: 'mJAPIKeyApplications', sectionName: 'MJ: API Key Applications', isExpanded: false }
+            { sectionKey: 'mJAPIApplicationScopes', sectionName: 'API Application Scopes', isExpanded: false },
+            { sectionKey: 'mJAPIKeyUsageLogs', sectionName: 'API Key Usage Logs', isExpanded: false },
+            { sectionKey: 'mJAPIKeyApplications', sectionName: 'API Key Applications', isExpanded: false }
         ]);
     }
 }

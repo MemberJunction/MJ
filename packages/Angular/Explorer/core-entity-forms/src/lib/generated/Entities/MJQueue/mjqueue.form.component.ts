@@ -20,7 +20,7 @@ export class MJQueueFormComponent extends BaseFormComponent {
             { sectionKey: 'operationalStatus', sectionName: 'Operational Status', isExpanded: true },
             { sectionKey: 'processEnvironment', sectionName: 'Process Environment', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'queueTasks', sectionName: 'Queue Tasks', isExpanded: false }
+            { sectionKey: 'mJQueueTasks', sectionName: 'Queue Tasks', isExpanded: false }
         ]);
     }
 }

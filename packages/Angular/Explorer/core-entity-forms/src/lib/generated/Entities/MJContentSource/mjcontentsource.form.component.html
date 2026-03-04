@@ -103,23 +103,23 @@
 
     <!-- Content Items Section -->
     <mj-collapsible-panel
-        SectionKey="contentItems"
+        SectionKey="mJContentItems"
         SectionName="Content Items"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('contentItems')"
+        [BadgeCount]="GetSectionRowCount('mJContentItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ContentSourceID')"
                 [NewRecordValues]="NewRecordValues('MJ: Content Items')"
-                [AllowLoad]="IsSectionExpanded('contentItems')"
+                [AllowLoad]="IsSectionExpanded('mJContentItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('contentItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -128,23 +128,23 @@
 
     <!-- Content Process Runs Section -->
     <mj-collapsible-panel
-        SectionKey="contentProcessRuns"
+        SectionKey="mJContentProcessRuns"
         SectionName="Content Process Runs"
         Icon="fa fa-cogs"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('contentProcessRuns')"
+        [BadgeCount]="GetSectionRowCount('mJContentProcessRuns')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Runs','SourceID')"
                 [NewRecordValues]="NewRecordValues('MJ: Content Process Runs')"
-                [AllowLoad]="IsSectionExpanded('contentProcessRuns')"
+                [AllowLoad]="IsSectionExpanded('mJContentProcessRuns')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('contentProcessRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentProcessRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -153,23 +153,23 @@
 
     <!-- Content Source Params Section -->
     <mj-collapsible-panel
-        SectionKey="contentSourceParams"
+        SectionKey="mJContentSourceParams"
         SectionName="Content Source Params"
         Icon="fa fa-cogs"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('contentSourceParams')"
+        [BadgeCount]="GetSectionRowCount('mJContentSourceParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Source Params','ContentSourceID')"
                 [NewRecordValues]="NewRecordValues('MJ: Content Source Params')"
-                [AllowLoad]="IsSectionExpanded('contentSourceParams')"
+                [AllowLoad]="IsSectionExpanded('mJContentSourceParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('contentSourceParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentSourceParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

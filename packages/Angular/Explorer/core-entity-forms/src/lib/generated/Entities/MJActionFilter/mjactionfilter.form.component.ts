@@ -18,7 +18,7 @@ export class MJActionFilterFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'filterDetails', sectionName: 'Filter Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityActionFilters', sectionName: 'Entity Action Filters', isExpanded: false }
+            { sectionKey: 'mJEntityActionFilters', sectionName: 'Entity Action Filters', isExpanded: false }
         ]);
     }
 }

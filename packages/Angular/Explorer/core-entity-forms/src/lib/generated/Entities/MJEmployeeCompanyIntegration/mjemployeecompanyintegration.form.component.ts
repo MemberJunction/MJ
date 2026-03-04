@@ -17,7 +17,6 @@ export class MJEmployeeCompanyIntegrationFormComponent extends BaseFormComponent
         this.initSections([
             { sectionKey: 'integrationMapping', sectionName: 'Integration Mapping', isExpanded: true },
             { sectionKey: 'externalIdentifier', sectionName: 'External Identifier', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

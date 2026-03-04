@@ -100,23 +100,23 @@
 
     <!-- Actions Section -->
     <mj-collapsible-panel
-        SectionKey="actions"
+        SectionKey="mJActionLibraries"
         SectionName="Actions"
         Icon="fa-solid fa-bolt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('actions')"
+        [BadgeCount]="GetSectionRowCount('mJActionLibraries')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Libraries','LibraryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Action Libraries')"
-                [AllowLoad]="IsSectionExpanded('actions')"
+                [AllowLoad]="IsSectionExpanded('mJActionLibraries')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('actions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionLibraries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -125,23 +125,23 @@
 
     <!-- Items Section -->
     <mj-collapsible-panel
-        SectionKey="items"
+        SectionKey="mJLibraryItems"
         SectionName="Items"
         Icon="fa fa-book"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('items')"
+        [BadgeCount]="GetSectionRowCount('mJLibraryItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Library Items','LibraryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Library Items')"
-                [AllowLoad]="IsSectionExpanded('items')"
+                [AllowLoad]="IsSectionExpanded('mJLibraryItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('items', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJLibraryItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

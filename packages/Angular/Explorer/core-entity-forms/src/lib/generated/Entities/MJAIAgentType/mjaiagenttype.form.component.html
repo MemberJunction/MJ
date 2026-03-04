@@ -151,23 +151,23 @@
 
     <!-- AI Agents Section -->
     <mj-collapsible-panel
-        SectionKey="aIAgents"
+        SectionKey="mJAIAgents"
         SectionName="AI Agents"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('aIAgents')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
-                [AllowLoad]="IsSectionExpanded('aIAgents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

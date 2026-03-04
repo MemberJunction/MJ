@@ -20,12 +20,12 @@ export class MJMCPServerConnectionFormComponent extends BaseFormComponent {
             { sectionKey: 'automationControls', sectionName: 'Automation Controls', isExpanded: true },
             { sectionKey: 'loggingDiagnostics', sectionName: 'Logging & Diagnostics', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MJ: MCP Server Connection Tools', isExpanded: false },
-            { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MJ: MCP Tool Execution Logs', isExpanded: false },
-            { sectionKey: 'mJOAuthAuthorizationStates', sectionName: 'MJ: O Auth Authorization States', isExpanded: false },
-            { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'MJ: O Auth Client Registrations', isExpanded: false },
-            { sectionKey: 'mJOAuthTokens', sectionName: 'MJ: O Auth Tokens', isExpanded: false },
-            { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MJ: MCP Server Connection Permissions', isExpanded: false }
+            { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MCP Server Connection Tools', isExpanded: false },
+            { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MCP Tool Execution Logs', isExpanded: false },
+            { sectionKey: 'mJOAuthAuthorizationStates', sectionName: 'O Auth Authorization States', isExpanded: false },
+            { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'O Auth Client Registrations', isExpanded: false },
+            { sectionKey: 'mJOAuthTokens', sectionName: 'O Auth Tokens', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MCP Server Connection Permissions', isExpanded: false }
         ]);
     }
 }

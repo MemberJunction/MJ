@@ -19,9 +19,9 @@ export class MJEntityActionFormComponent extends BaseFormComponent {
             { sectionKey: 'relationshipKeys', sectionName: 'Relationship Keys', isExpanded: true },
             { sectionKey: 'actionConfiguration', sectionName: 'Action Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'entityActionFilters', sectionName: 'Entity Action Filters', isExpanded: false },
-            { sectionKey: 'entityActionInvocations', sectionName: 'Entity Action Invocations', isExpanded: false },
-            { sectionKey: 'entityActionParams', sectionName: 'Entity Action Params', isExpanded: false }
+            { sectionKey: 'mJEntityActionFilters', sectionName: 'Entity Action Filters', isExpanded: false },
+            { sectionKey: 'mJEntityActionInvocations', sectionName: 'Entity Action Invocations', isExpanded: false },
+            { sectionKey: 'mJEntityActionParams', sectionName: 'Entity Action Params', isExpanded: false }
         ]);
     }
 }

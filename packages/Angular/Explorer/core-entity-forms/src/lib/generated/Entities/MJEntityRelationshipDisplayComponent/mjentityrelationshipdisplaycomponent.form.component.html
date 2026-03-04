@@ -74,23 +74,23 @@
 
     <!-- Entity Relationships Section -->
     <mj-collapsible-panel
-        SectionKey="entityRelationships"
+        SectionKey="mJEntityRelationships"
         SectionName="Entity Relationships"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityRelationships')"
+        [BadgeCount]="GetSectionRowCount('mJEntityRelationships')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Relationships','DisplayComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Relationships')"
-                [AllowLoad]="IsSectionExpanded('entityRelationships')"
+                [AllowLoad]="IsSectionExpanded('mJEntityRelationships')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityRelationships', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityRelationships', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

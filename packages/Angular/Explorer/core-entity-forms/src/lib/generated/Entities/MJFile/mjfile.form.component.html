@@ -128,33 +128,33 @@
 
     <!-- File Entity Record Links Section -->
     <mj-collapsible-panel
-        SectionKey="fileEntityRecordLinks"
+        SectionKey="mJFileEntityRecordLinks"
         SectionName="File Entity Record Links"
         Icon="fa fa-link"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('fileEntityRecordLinks')"
+        [BadgeCount]="GetSectionRowCount('mJFileEntityRecordLinks')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Entity Record Links','FileID')"
                 [NewRecordValues]="NewRecordValues('MJ: File Entity Record Links')"
-                [AllowLoad]="IsSectionExpanded('fileEntityRecordLinks')"
+                [AllowLoad]="IsSectionExpanded('mJFileEntityRecordLinks')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileEntityRecordLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Prompt Run Medias Section -->
+    <!-- AI Prompt Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunMedias"
-        SectionName="MJ: AI Prompt Run Medias"
+        SectionName="AI Prompt Run Medias"
         Icon="fa fa-image"
         Variant="related-entity"
         [Form]="this"
@@ -176,10 +176,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Conversation Detail Attachments Section -->
+    <!-- Conversation Detail Attachments Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailAttachments"
-        SectionName="MJ: Conversation Detail Attachments"
+        SectionName="Conversation Detail Attachments"
         Icon="fa fa-paperclip"
         Variant="related-entity"
         [Form]="this"
@@ -201,10 +201,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: AI Agent Run Medias Section -->
+    <!-- AI Agent Run Medias Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunMedias"
-        SectionName="MJ: AI Agent Run Medias"
+        SectionName="AI Agent Run Medias"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
