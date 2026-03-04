@@ -991,17 +991,42 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Toggle the agent details panel expansion
+   * Toggle the agent details panel expansion.
+   * Always fetches the latest agent run from the database when expanding
+   * so that status, steps, tokens, and cost are always up to date.
    */
   public async toggleAgentDetails(): Promise<void> {
     this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
 
-    // Load tasks when expanding if not already loaded
-    if (this.isAgentDetailsExpanded && !this.tasksLoaded) {
-      await this.loadTasks();
+    if (this.isAgentDetailsExpanded) {
+      await this.refreshAgentRun();
+
+      if (!this.tasksLoaded) {
+        await this.loadTasks();
+      }
     }
 
     this.cdRef.detectChanges();
+  }
+
+  /**
+   * Fetch the latest agent run from the database for this message.
+   */
+  private async refreshAgentRun(): Promise<void> {
+    if (!this.message?.ID) return;
+
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentRunEntityExtended>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: 1,
+      ResultType: 'entity_object'
+    }, this.currentUser);
+
+    if (result.Success && result.Results && result.Results.length > 0) {
+      this.agentRun = result.Results[0];
+    }
   }
 
   /**

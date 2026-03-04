@@ -235,8 +235,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
             instance.artifactVersion = undefined;
           }
 
-          // Update agent run from map
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
+          // Update agent run from map, but don't overwrite with null if the child
+          // already has data (e.g., fetched on-demand via gear click during streaming)
+          const mapAgentRun = this.agentRunMap.get(message.ID) || null;
+          if (mapAgentRun || !instance.agentRun) {
+            instance.agentRun = mapAgentRun;
+          }
 
           // Update ratings from map
           instance.ratings = this.ratingsMap.get(message.ID);
