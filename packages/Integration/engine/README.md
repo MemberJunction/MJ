@@ -103,9 +103,35 @@ Each transform step can specify `OnError`:
 
 ## API Reference
 
+### Notifications
+
+After a sync completes or fails, an optional `onNotification` callback receives a `SyncNotification` with pre-formatted subject and body text suitable for email delivery:
+
+```typescript
+const result = await orchestrator.RunSync(
+    companyIntegrationID, contextUser, 'Scheduled',
+    undefined,  // onProgress
+    (notification) => {
+        if (notification.Severity !== 'Info') {
+            emailService.send({
+                to: 'ops@example.com',
+                subject: notification.Subject,
+                text: notification.Body,
+            });
+        }
+    }
+);
+```
+
+**SyncNotification** properties:
+- `Event`: `'SyncCompleted'` | `'SyncCompletedWithErrors'` | `'SyncFailed'`
+- `Severity`: `'Info'` | `'Warning'` | `'Error'`
+- `Subject` / `Body`: human-readable text ready for email
+- `Result`: the full `SyncResult` for programmatic access
+
 ### IntegrationOrchestrator
 
-- `RunSync(companyIntegrationID, contextUser, triggerType?)` — Executes a full sync run
+- `RunSync(companyIntegrationID, contextUser, triggerType?, onProgress?, onNotification?)` — Executes a full sync run
 
 ### FieldMappingEngine
 
