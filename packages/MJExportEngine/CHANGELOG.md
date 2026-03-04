@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 5.6.0
+
 ## 5.5.0
 
 ### Patch Changes

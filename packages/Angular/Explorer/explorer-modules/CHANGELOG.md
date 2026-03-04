@@ -1,5 +1,19 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [d24a7ff]
+  - @memberjunction/ng-explorer-core@5.6.0
+  - @memberjunction/ng-core-entity-forms@5.6.0
+  - @memberjunction/ng-explorer-settings@5.6.0
+  - @memberjunction/ng-link-directives@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-workspace-initializer@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-kendo-modules@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes

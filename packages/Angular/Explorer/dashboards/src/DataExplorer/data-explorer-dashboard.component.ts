@@ -139,7 +139,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Currently selected view entity (for view data loading)
   public selectedViewEntity: MJUserViewEntityExtended | null = null;
 
-  // Debounced filter text (synced with mj-entity-viewer)
+  // Live filter text (what the user sees in the input, updates immediately)
+  public liveFilterText: string = '';
+  // Debounced filter text (synced with mj-entity-viewer, updates after delay)
   public debouncedFilterText: string = '';
   private filterInput$ = new Subject<string>();
 
@@ -581,6 +583,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.state = this.stateService.CurrentState;
 
     // User search text starts empty - it's separate from smart filter
+    this.liveFilterText = '';
     this.debouncedFilterText = '';
 
     // Load available entities (async to support applicationId filter)
@@ -606,6 +609,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         // When entity changes, clear user search text
         if (entityChanged) {
+          this.liveFilterText = '';
           this.debouncedFilterText = '';
         }
 
@@ -627,10 +631,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
-    // Setup debounced filter
+    // Setup debounced filter - 500ms delay allows comfortable typing before triggering search
+    // IMPORTANT: Do NOT call setSmartFilterPrompt here. Updating the state service triggers
+    // URL updates via the shell's workspace sync, which fires NavigationEnd, which triggers
+    // applyUrlState, which clears the filter text. The debouncedFilterText flows directly
+    // to the entity-viewer via [filterText] binding — no state service involvement needed.
     this.filterInput$
       .pipe(
-        debounceTime(250),
+        debounceTime(500),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
@@ -969,11 +977,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.stateService.setSmartFilterPrompt('');
       }
       // Always clear user search text when switching views - smart filter is separate
+      this.liveFilterText = '';
       this.debouncedFilterText = '';
     } else {
       // Switching to default view - load user's saved defaults from UserInfoEngine
       this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
+      this.liveFilterText = '';
       this.debouncedFilterText = '';
     }
 
@@ -1759,11 +1769,34 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle direct keyboard input in the filter text box.
+   * Only updates the live display text and pushes to the debounce subject.
+   * Does NOT trigger state changes or URL updates — those happen after the debounce.
+   */
+  public onFilterInputChanged(filterText: string): void {
+    this.liveFilterText = filterText;
+    this.filterInput$.next(filterText);
+  }
+
+  /**
+   * Clear the record filter (called by the X button).
+   */
+  public clearRecordFilter(): void {
+    this.liveFilterText = '';
+    this.debouncedFilterText = '';
+    this.stateService.setSmartFilterPrompt('');
+    this.filterInput$.next('');
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Handle filter text change from mj-entity-viewer (two-way binding)
    */
   public onFilterTextChanged(filterText: string): void {
+    this.liveFilterText = filterText;
+    this.debouncedFilterText = filterText;
     this.stateService.setSmartFilterPrompt(filterText);
-    this.filterInput$.next(filterText);
+    this.cdr.detectChanges();
   }
 
   // ========================================
@@ -2461,6 +2494,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.setSmartFilterPrompt('');
         }
         // User search text is always cleared when applying URL state
+        this.liveFilterText = '';
         this.debouncedFilterText = '';
 
         // Handle record selection

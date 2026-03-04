@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-chat
 
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-markdown@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes
