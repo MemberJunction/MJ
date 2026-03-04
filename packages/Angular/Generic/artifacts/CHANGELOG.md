@@ -1,5 +1,25 @@
 # @memberjunction/ng-artifacts
 
+## 5.7.0
+
+### Patch Changes
+
+- f52e156: Fix agent infinite retry loop and OOM crash when API credentials are missing by adding NoCredentials error classification, max consecutive failure safety net, and descriptive error propagation to the UI. Fix artifact collection removal UI update, artifact pane width reset on conversation switch, and component spec caching to survive render errors.
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-base-types@5.7.0
+  - @memberjunction/ng-code-editor@5.7.0
+  - @memberjunction/ng-notifications@5.7.0
+  - @memberjunction/ng-query-viewer@5.7.0
+  - @memberjunction/ng-react@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/ng-trees@5.7.0
+  - @memberjunction/interactive-component-types@5.7.0
+  - @memberjunction/ng-export-service@5.7.0
+  - @memberjunction/ng-markdown@5.7.0
+  - @memberjunction/global@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @memberjunction/ng-base-forms
 
+## 5.7.0
+
+### Patch Changes
+
+- 7641cd2: Fix form field autocomplete to fall back to ID field
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-base-types@5.7.0
+  - @memberjunction/ng-entity-viewer@5.7.0
+  - @memberjunction/ng-list-management@5.7.0
+  - @memberjunction/ng-record-changes@5.7.0
+  - @memberjunction/global@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes
