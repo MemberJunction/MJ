@@ -242,7 +242,7 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const request = pool.request();
         let whereClause = '';
         if (ctx.WatermarkValue) {
-            whereClause = `WHERE [${modifiedAtField}] > CAST(@watermark AS datetime2(7))`;
+            whereClause = `WHERE [${modifiedAtField}] > CAST(@watermark AS datetimeoffset(7))`;
             request.input('watermark', sql.NVarChar, ctx.WatermarkValue);
         }
 
@@ -250,7 +250,7 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const fetchCount = ctx.BatchSize + 1;
         request.input('fetchCount', sql.Int, fetchCount);
 
-        // Include full-precision timestamp (datetime2 has 7 decimal places, JS Date only has 3)
+        // Include full-precision timestamp (datetimeoffset has 7 decimal places, JS Date only has 3)
         // to avoid sub-millisecond precision loss in watermark comparisons
         const rawTsCol = `CONVERT(varchar(50), [${modifiedAtField}], 126) AS [__mj_raw_ts]`;
         const query = `SELECT TOP (@fetchCount) *, ${rawTsCol} FROM [${config.Schema}].[${ctx.ObjectName}] ${whereClause} ORDER BY [${modifiedAtField}], [${idField}]`;
@@ -275,10 +275,10 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
 
     /**
      * Extracts the full-precision watermark string from the last row's __mj_raw_ts column.
-     * Uses CONVERT(varchar, ..., 126) output which preserves datetime2(7) precision,
+     * Uses CONVERT(varchar, ..., 126) output which preserves datetimeoffset(7) precision,
      * avoiding the sub-millisecond truncation that JavaScript Date introduces.
      * @param rows - Array of database rows containing __mj_raw_ts
-     * @returns Full-precision datetime2 string, or undefined
+     * @returns Full-precision datetimeoffset string, or undefined
      */
     private extractRawWatermark(rows: Record<string, unknown>[]): string | undefined {
         if (rows.length === 0) return undefined;

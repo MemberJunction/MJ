@@ -42,8 +42,8 @@ CREATE TABLE hs.contacts (
     jobtitle NVARCHAR(200),
     lifecyclestage NVARCHAR(50) DEFAULT 'lead',
     hs_lead_status NVARCHAR(50),
-    createdate DATETIME2 DEFAULT GETUTCDATE(),
-    lastmodifieddate DATETIME2 DEFAULT GETUTCDATE(),
+    createdate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    lastmodifieddate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     hs_object_id BIGINT
 );
 GO
@@ -59,8 +59,8 @@ CREATE TABLE hs.companies (
     state NVARCHAR(50),
     country NVARCHAR(100),
     phone NVARCHAR(50),
-    createdate DATETIME2 DEFAULT GETUTCDATE(),
-    lastmodifieddate DATETIME2 DEFAULT GETUTCDATE(),
+    createdate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    lastmodifieddate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     hs_object_id BIGINT
 );
 GO
@@ -71,11 +71,11 @@ CREATE TABLE hs.deals (
     amount DECIMAL(18,2),
     dealstage NVARCHAR(50),
     pipeline NVARCHAR(100) DEFAULT 'default',
-    closedate DATETIME2,
+    closedate DATETIMEOFFSET,
     associatedCompanyId BIGINT,
     associatedContactId BIGINT,
-    createdate DATETIME2 DEFAULT GETUTCDATE(),
-    lastmodifieddate DATETIME2 DEFAULT GETUTCDATE(),
+    createdate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    lastmodifieddate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     hs_object_id BIGINT,
     FOREIGN KEY (associatedCompanyId) REFERENCES hs.companies(companyId),
     FOREIGN KEY (associatedContactId) REFERENCES hs.contacts(vid)
@@ -102,9 +102,9 @@ CREATE TABLE sf.Account (
     Website NVARCHAR(255),
     NumberOfEmployees INT,
     AnnualRevenue DECIMAL(18,2),
-    CreatedDate DATETIME2 DEFAULT GETUTCDATE(),
-    LastModifiedDate DATETIME2 DEFAULT GETUTCDATE(),
-    SystemModstamp DATETIME2 DEFAULT GETUTCDATE()
+    CreatedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    LastModifiedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    SystemModstamp DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
 );
 GO
 
@@ -122,9 +122,9 @@ CREATE TABLE sf.Contact (
     MailingPostalCode NVARCHAR(20),
     MailingCountry NVARCHAR(100),
     LeadSource NVARCHAR(100),
-    CreatedDate DATETIME2 DEFAULT GETUTCDATE(),
-    LastModifiedDate DATETIME2 DEFAULT GETUTCDATE(),
-    SystemModstamp DATETIME2 DEFAULT GETUTCDATE(),
+    CreatedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    LastModifiedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    SystemModstamp DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     CONSTRAINT FK_Contact_Account FOREIGN KEY (AccountId) REFERENCES sf.Account(Id)
 );
 GO
@@ -139,9 +139,9 @@ CREATE TABLE sf.Opportunity (
     Probability INT,
     LeadSource NVARCHAR(100),
     Type NVARCHAR(50),
-    CreatedDate DATETIME2 DEFAULT GETUTCDATE(),
-    LastModifiedDate DATETIME2 DEFAULT GETUTCDATE(),
-    SystemModstamp DATETIME2 DEFAULT GETUTCDATE(),
+    CreatedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    LastModifiedDate DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    SystemModstamp DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     FOREIGN KEY (AccountId) REFERENCES sf.Account(Id)
 );
 GO
@@ -157,8 +157,8 @@ CREATE TABLE ym.membership_types (
     name NVARCHAR(100) NOT NULL,
     description NVARCHAR(500),
     annual_dues DECIMAL(10,2),
-    created_at DATETIME2 DEFAULT GETUTCDATE(),
-    updated_at DATETIME2 DEFAULT GETUTCDATE()
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
 );
 GO
 
@@ -178,8 +178,8 @@ CREATE TABLE ym.members (
     join_date DATE,
     expiration_date DATE,
     status NVARCHAR(20) DEFAULT 'Active',
-    created_at DATETIME2 DEFAULT GETUTCDATE(),
-    updated_at DATETIME2 DEFAULT GETUTCDATE(),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     CONSTRAINT FK_Members_MembershipType FOREIGN KEY (membership_type_id) REFERENCES ym.membership_types(type_id)
 );
 GO
@@ -188,14 +188,14 @@ CREATE TABLE ym.events (
     event_id INT IDENTITY(1,1) PRIMARY KEY,
     title NVARCHAR(200) NOT NULL,
     description NVARCHAR(2000),
-    start_date DATETIME2,
-    end_date DATETIME2,
+    start_date DATETIMEOFFSET,
+    end_date DATETIMEOFFSET,
     location NVARCHAR(200),
     max_attendees INT,
     registration_fee DECIMAL(10,2) DEFAULT 0,
     status NVARCHAR(20) DEFAULT 'Open',
-    created_at DATETIME2 DEFAULT GETUTCDATE(),
-    updated_at DATETIME2 DEFAULT GETUTCDATE()
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
 );
 GO
 
@@ -203,10 +203,10 @@ CREATE TABLE ym.event_registrations (
     registration_id INT IDENTITY(1,1) PRIMARY KEY,
     event_id INT NOT NULL,
     member_id INT NOT NULL,
-    registration_date DATETIME2 DEFAULT GETUTCDATE(),
+    registration_date DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     status NVARCHAR(20) DEFAULT 'Registered',
     amount_paid DECIMAL(10,2) DEFAULT 0,
-    updated_at DATETIME2 DEFAULT GETUTCDATE(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
     FOREIGN KEY (event_id) REFERENCES ym.events(event_id),
     FOREIGN KEY (member_id) REFERENCES ym.members(member_id)
 );
