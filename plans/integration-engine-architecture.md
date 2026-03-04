@@ -1,8 +1,8 @@
 # MemberJunction Integration Engine — Architecture Plan
 
-> **Status**: Implementation Phase 2-3 Complete — E2E Tested
+> **Status**: All Phases Complete (except DDL + Real API Providers)
 > **Author**: Claude Code
-> **Date**: 2026-02-26 (plan) · 2026-03-04 (status update)
+> **Date**: 2026-02-26 (plan) · 2026-03-04 (final status update)
 > **Branch**: `claude/integration-engine-build` (PR #2056)
 
 ---
@@ -14,9 +14,9 @@
 | **Phase 1: Foundation** | Entities + Types + DataSyncUtils | **Partial** | DB schema done, types in engine pkg. DataSyncUtils not extracted — utilities live inside engine. ECDEngine not refactored. |
 | **Phase 2: Engine Core** | Orchestrator + Mapping + Matching | **COMPLETE** | 217 unit tests passing. IntegrationOrchestrator, FieldMappingEngine (9 transforms), MatchEngine (exact+fuzzy), WatermarkService, RetryRunner, ConnectorFactory. |
 | **Phase 3: Connectors** | HubSpot provider via BizApps Actions | **COMPLETE (modified)** | Implemented as SQL-based connectors to mock_data DB (HubSpot, Salesforce, YourMembership, FileFeed, RelationalDB). Real API providers deferred to post-DDL phase. |
-| **Phase 4: Angular Dashboards** | 4-tab Integration app | **Partial** | Control Tower, Connection Studio, Mapping Workspace scaffolded. Not fully wired to live engine. |
-| **Phase 5: ECD Enhancement** | External Changes tab | **Not started** | |
-| **Phase 6: Scheduling + Polish** | Cron, notifications, locking | **Not started** | |
+| **Phase 4: Angular Dashboards** | 4-tab Integration app | **COMPLETE** | Control Tower, Connection Studio, Mapping Workspace wired to live entity data. Sync Activity tab added with run history, error drill-down, watermark status. Application metadata JSON created. |
+| **Phase 5: ECD Enhancement** | External Changes tab | **Deferred** | To be done after DDL schema management is complete. |
+| **Phase 6: Scheduling + Polish** | Cron, notifications, locking | **COMPLETE** | `RunSyncAction` (16 tests), notification support with email-ready templates, concurrency locking, retry with exponential backoff, README docs for all packages. |
 
 ### E2E Test Results (against Docker mock_data DB)
 
