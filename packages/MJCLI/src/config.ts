@@ -22,6 +22,7 @@ const DEFAULT_CLI_CONFIG = {
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  dbRequestTimeout: process.env.MJ_MIGRATION_REQUEST_TIMEOUT ? parseInt(process.env.MJ_MIGRATION_REQUEST_TIMEOUT) : undefined,
   coreSchema: '__mj',
   cleanDisabled: true,
   baselineOnMigrate: true,
@@ -90,6 +91,7 @@ const mjConfigSchema = z.object({
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
+  dbRequestTimeout: z.number({ coerce: true }).optional(),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
@@ -113,6 +115,7 @@ const mjConfigSchemaOptional = z.object({
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
+  dbRequestTimeout: z.number({ coerce: true }).optional(),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
@@ -243,6 +246,7 @@ export const getSkywayConfig = async (
       Options: {
         Encrypt: mjConfig.dbEncrypt,
         TrustServerCertificate: mjConfig.dbTrustServerCertificate,
+        ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
       },
     },
     Migrations: {
