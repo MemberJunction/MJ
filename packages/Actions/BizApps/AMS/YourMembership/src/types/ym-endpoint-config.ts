@@ -4,8 +4,13 @@
 export interface YMEndpointConfig {
     /** API path segment (e.g. 'MemberList', 'Events') */
     Path: string;
-    /** Target SQL table name (e.g. 'YM_Members') */
+    /** Target SQL table name (e.g. 'YM_Member') */
     TargetTable: string;
+    /**
+     * MJ entity name assigned by CodeGen for this table.
+     * Must match the entity name in the Entity metadata after CodeGen runs.
+     */
+    EntityName: string;
     /** Primary key field(s) from the YM response */
     PKFields: string[];
     /** Whether the endpoint supports PageSize/PageNumber pagination */
@@ -49,7 +54,8 @@ export type YMEndpointName =
 export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     Members: {
         Path: 'MemberList',
-        TargetTable: 'YM_Members',
+        TargetTable: 'YM_Member',
+        EntityName: 'YM_ Members',
         PKFields: ['ProfileID'],
         SupportsPagination: true,
         DefaultPageSize: 200,
@@ -57,7 +63,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     Events: {
         Path: 'EventIDs',
-        TargetTable: 'YM_Events',
+        TargetTable: 'YM_Event',
+        EntityName: 'YM_ Events',
         PKFields: ['ID'],
         SupportsPagination: true,
         DefaultPageSize: 200,
@@ -65,7 +72,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     Orders: {
         Path: 'StoreOrderDetails',
-        TargetTable: 'YM_Orders',
+        TargetTable: 'YM_Order',
+        EntityName: 'YM_ Orders',
         PKFields: ['OrderID', 'ProductCode'],
         SupportsPagination: true,
         DefaultPageSize: 100,
@@ -76,7 +84,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     Products: {
         Path: 'Products',
-        TargetTable: 'YM_Products',
+        TargetTable: 'YM_Product',
+        EntityName: 'YM_ Products',
         PKFields: ['id'],
         SupportsPagination: false,
         DefaultPageSize: 200,
@@ -84,7 +93,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     Groups: {
         Path: 'Groups',
-        TargetTable: 'YM_Groups',
+        TargetTable: 'YM_Group',
+        EntityName: 'YM_ Groups',
         PKFields: ['GroupID'],
         SupportsPagination: false,
         DefaultPageSize: 200,
@@ -92,7 +102,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     MemberTypes: {
         Path: 'MemberTypes',
-        TargetTable: 'YM_MemberTypes',
+        TargetTable: 'YM_MemberType',
+        EntityName: 'YM_ Member Types',
         PKFields: ['TypeCode'],
         SupportsPagination: false,
         DefaultPageSize: 200,
@@ -100,7 +111,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
     },
     Memberships: {
         Path: 'Membership',
-        TargetTable: 'YM_Memberships',
+        TargetTable: 'YM_Membership',
+        EntityName: 'YM_ Memberships',
         PKFields: ['Id'],
         SupportsPagination: false,
         DefaultPageSize: 200,

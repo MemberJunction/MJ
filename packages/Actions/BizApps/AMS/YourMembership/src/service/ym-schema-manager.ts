@@ -1,23 +1,31 @@
 import fs from 'node:fs';
-import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import {
+    BaseEntity,
+    CompositeKey,
+    LogError,
+    LogStatus,
+    Metadata,
+    RunView,
+    TransactionGroupBase,
+    UserInfo,
+} from '@memberjunction/core';
+
+/** Batch size for TransactionGroup submits */
+const TG_BATCH_SIZE = 200;
 
 /**
- * Manages SQL schema and table operations for YM data sync.
+ * Manages entity-based upserts for YM data sync.
  *
- * Dynamically creates/alters tables based on the shape of incoming data,
- * and performs upserts using MERGE statements.
+ * Tables and entities are expected to already exist (created by migration + CodeGen).
+ * This class is fully provider-agnostic — works on SQL Server and PostgreSQL.
  */
 export class YMSchemaManager {
-    private schemaName: string;
     private contextUser: UserInfo;
-    private dbProvider: DatabaseProviderBase;
-    /** Optional log file path set by the sync engine for detailed SQL logging */
+    /** Optional log file path set by the sync engine for detailed logging */
     public LogFilePath: string | null = null;
 
-    constructor(schemaName: string, contextUser: UserInfo, dbProvider: DatabaseProviderBase) {
-        this.schemaName = schemaName;
+    constructor(contextUser: UserInfo) {
         this.contextUser = contextUser;
-        this.dbProvider = dbProvider;
     }
 
     private writeLog(message: string): void {
@@ -31,62 +39,52 @@ export class YMSchemaManager {
     }
 
     /**
-     * Ensures the target schema exists.
+     * Validates that the MJ entity exists and is accessible.
+     * Throws if missing — means CodeGen hasn't run after the migration.
      */
-    public async EnsureSchemaExists(): Promise<void> {
-        const sql = `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${this.schemaName}')
-            EXEC('CREATE SCHEMA [${this.schemaName}]')`;
-        await this.executeSql(sql);
-    }
-
-    /**
-     * Ensures a table exists with columns inferred from a sample record.
-     * Creates the table if missing; adds new columns if the schema has grown.
-     */
-    public async EnsureTableExists(
-        tableName: string,
-        sampleRecord: Record<string, unknown>
-    ): Promise<void> {
-        const fullTableName = `[${this.schemaName}].[${tableName}]`;
-        const tableExists = await this.checkTableExists(tableName);
-        // Sanitize the sample so column names don't collide with reserved columns
-        const sanitized = this.sanitizeRecord(sampleRecord);
-
-        if (!tableExists) {
-            await this.createTable(fullTableName, sanitized);
-        } else {
-            await this.addMissingColumns(fullTableName, tableName, sanitized);
+    public ValidateEntityExists(entityName: string): void {
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        if (!entityInfo) {
+            throw new Error(
+                `Entity "${entityName}" not found in MJ metadata. ` +
+                `Run CodeGen after applying the YourMembership migration.`
+            );
         }
     }
 
     /**
-     * Upserts records into the table using MERGE, keyed on YM_SourceID.
-     * Processes in batches of 500.
+     * Upserts records into the entity, keyed on SourceRecordID.
+     * Uses MJ entity objects + TransactionGroup for provider-agnostic batch saves.
      */
     public async UpsertRecords(
-        tableName: string,
+        entityName: string,
         records: Record<string, unknown>[],
         pkFields: string[]
     ): Promise<{ Inserted: number; Updated: number }> {
-        const fullTableName = `[${this.schemaName}].[${tableName}]`;
         let totalInserted = 0;
         let totalUpdated = 0;
-        const batchSize = 500;
 
         // Deduplicate by composite source ID — the API can return overlapping pages
         const deduped = this.deduplicateBySourceId(records, pkFields);
         if (deduped.length < records.length) {
-            this.writeLog(`Deduplicated ${records.length} → ${deduped.length} records (removed ${records.length - deduped.length} duplicates)`);
+            this.writeLog(`Deduplicated ${records.length} → ${deduped.length} records`);
         }
 
-        const totalBatches = Math.ceil(deduped.length / batchSize);
-        this.writeLog(`Upserting ${deduped.length} records into ${fullTableName} (${totalBatches} batches, PK: ${pkFields.join('|')})`);
+        // Load all existing SourceRecordIDs for this entity to determine insert vs update
+        const existingMap = await this.loadExistingSourceIds(entityName);
+        this.writeLog(`Found ${existingMap.size} existing records in ${entityName}`);
 
-        for (let i = 0; i < deduped.length; i += batchSize) {
-            const batchNum = Math.floor(i / batchSize) + 1;
-            const batch = deduped.slice(i, i + batchSize);
+        // Process in batches
+        const totalBatches = Math.ceil(deduped.length / TG_BATCH_SIZE);
+        this.writeLog(`Upserting ${deduped.length} records into ${entityName} (${totalBatches} batches)`);
+
+        for (let i = 0; i < deduped.length; i += TG_BATCH_SIZE) {
+            const batchNum = Math.floor(i / TG_BATCH_SIZE) + 1;
+            const batch = deduped.slice(i, i + TG_BATCH_SIZE);
             this.writeLog(`  Batch ${batchNum}/${totalBatches}: ${batch.length} records`);
-            const result = await this.mergeBatch(fullTableName, batch, pkFields);
+
+            const result = await this.upsertBatch(entityName, batch, pkFields, existingMap);
             totalInserted += result.Inserted;
             totalUpdated += result.Updated;
             this.writeLog(`  Batch ${batchNum} result: ${result.Inserted} inserted, ${result.Updated} updated`);
@@ -96,14 +94,194 @@ export class YMSchemaManager {
     }
 
     /**
-     * Truncates a table for full refresh.
+     * Deletes all records from the entity for full refresh.
+     * Uses RunView to load all records, then deletes via TransactionGroup.
      */
-    public async TruncateTable(tableName: string): Promise<void> {
-        const fullTableName = `[${this.schemaName}].[${tableName}]`;
-        await this.executeSql(`TRUNCATE TABLE ${fullTableName}`);
+    public async TruncateEntity(entityName: string): Promise<void> {
+        const rv = new RunView();
+        const result = await rv.RunView<BaseEntity>({
+            EntityName: entityName,
+            ExtraFilter: '',
+            Fields: ['ID'],
+            ResultType: 'entity_object',
+        }, this.contextUser);
+
+        if (!result.Success) {
+            throw new Error(`Failed to load ${entityName} for truncation: ${result.ErrorMessage}`);
+        }
+
+        if (result.Results.length === 0) return;
+
+        this.writeLog(`Truncating ${entityName}: deleting ${result.Results.length} records`);
+
+        // Delete in batches via TransactionGroup
+        for (let i = 0; i < result.Results.length; i += TG_BATCH_SIZE) {
+            const batch = result.Results.slice(i, i + TG_BATCH_SIZE);
+            const tg = await Metadata.Provider.CreateTransactionGroup();
+
+            for (const entity of batch) {
+                entity.TransactionGroup = tg;
+                await entity.Delete();
+            }
+
+            const success = await tg.Submit();
+            if (!success) {
+                throw new Error(`Failed to delete batch during truncation of ${entityName}`);
+            }
+        }
     }
 
     // ─── Private helpers ─────────────────────────────────────────
+
+    /**
+     * Loads all existing SourceRecordID → entity ID mappings for the entity.
+     * Uses 'simple' ResultType for performance (no need for full entity objects here).
+     */
+    private async loadExistingSourceIds(
+        entityName: string
+    ): Promise<Map<string, string>> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; SourceRecordID: string }>({
+            EntityName: entityName,
+            ExtraFilter: '',
+            Fields: ['ID', 'SourceRecordID'],
+            ResultType: 'simple',
+        }, this.contextUser);
+
+        if (!result.Success) {
+            throw new Error(`Failed to load existing records for ${entityName}: ${result.ErrorMessage}`);
+        }
+
+        const map = new Map<string, string>();
+        for (const row of result.Results) {
+            if (row.SourceRecordID) {
+                map.set(row.SourceRecordID, row.ID);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Processes a single batch of records: loads existing entities for updates,
+     * creates new entities for inserts, then submits via TransactionGroup.
+     */
+    private async upsertBatch(
+        entityName: string,
+        records: Record<string, unknown>[],
+        pkFields: string[],
+        existingMap: Map<string, string>
+    ): Promise<{ Inserted: number; Updated: number }> {
+        const tg = await Metadata.Provider.CreateTransactionGroup();
+        let inserted = 0;
+        let updated = 0;
+
+        // Separate records into inserts and updates
+        const toInsert: { record: Record<string, unknown>; sourceId: string }[] = [];
+        const toUpdate: { record: Record<string, unknown>; sourceId: string; existingId: string }[] = [];
+
+        for (const record of records) {
+            const sourceId = this.buildSourceId(record, pkFields);
+            const existingId = existingMap.get(sourceId);
+            if (existingId) {
+                toUpdate.push({ record, sourceId, existingId });
+            } else {
+                toInsert.push({ record, sourceId });
+            }
+        }
+
+        // Load existing entities for updates in a single RunView call
+        const existingEntities = await this.loadEntitiesByIds(
+            entityName,
+            toUpdate.map(u => u.existingId)
+        );
+
+        // Process updates
+        for (const { record, sourceId, existingId } of toUpdate) {
+            const entity = existingEntities.get(existingId);
+            if (!entity) {
+                LogError(`YM Sync: Could not load entity ${entityName} ID=${existingId} for update`);
+                continue;
+            }
+            this.setEntityFieldsFromRecord(entity, record, pkFields, sourceId);
+            entity.TransactionGroup = tg;
+            await entity.Save();
+            updated++;
+        }
+
+        // Process inserts
+        for (const { record, sourceId } of toInsert) {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+            entity.NewRecord();
+            entity.Set('SourceRecordID', sourceId);
+            this.setEntityFieldsFromRecord(entity, record, pkFields, sourceId);
+            entity.TransactionGroup = tg;
+            await entity.Save();
+            inserted++;
+
+            // Add to existingMap so subsequent batches know this sourceId exists
+            const newId = String(entity.Get('ID'));
+            existingMap.set(sourceId, newId);
+        }
+
+        // Submit the transaction group
+        const success = await tg.Submit();
+        if (!success) {
+            throw new Error(`TransactionGroup submit failed for ${entityName} batch`);
+        }
+
+        return { Inserted: inserted, Updated: updated };
+    }
+
+    /**
+     * Loads entity objects by their IDs in a single RunView call.
+     */
+    private async loadEntitiesByIds(
+        entityName: string,
+        ids: string[]
+    ): Promise<Map<string, BaseEntity>> {
+        const map = new Map<string, BaseEntity>();
+        if (ids.length === 0) return map;
+
+        const rv = new RunView();
+        // Build IN clause — IDs are UUIDs, safe to embed directly
+        const idList = ids.map(id => `'${id}'`).join(',');
+        const result = await rv.RunView<BaseEntity>({
+            EntityName: entityName,
+            ExtraFilter: `ID IN (${idList})`,
+            ResultType: 'entity_object',
+        }, this.contextUser);
+
+        if (!result.Success) {
+            throw new Error(`Failed to load entities by ID for ${entityName}: ${result.ErrorMessage}`);
+        }
+
+        for (const entity of result.Results) {
+            map.set(String(entity.Get('ID')), entity);
+        }
+        return map;
+    }
+
+    /**
+     * Sets entity fields from a YM API record.
+     * Maps YM field names to entity field names (sanitized) and sets standard integration columns.
+     */
+    private setEntityFieldsFromRecord(
+        entity: BaseEntity,
+        record: Record<string, unknown>,
+        pkFields: string[],
+        sourceId: string
+    ): void {
+        const sanitized = this.sanitizeRecord(record);
+
+        // Use SetMany with ignoreNonExistentFields=true since the YM API may return
+        // fields that don't have corresponding columns in the migration
+        entity.SetMany(sanitized, true);
+
+        // Standard integration columns
+        entity.Set('LastSyncedAt', new Date());
+        entity.Set('SourceJSON', JSON.stringify(record));
+    }
 
     /**
      * Removes duplicate records based on composite source ID.
@@ -122,7 +300,7 @@ export class YMSchemaManager {
     }
 
     /** Column names reserved by the sync framework that cannot come from YM data */
-    private static readonly RESERVED_COLUMNS = new Set(['id', 'ym_sourceid', 'ym_lastsyncedat']);
+    private static readonly RESERVED_COLUMNS = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat']);
 
     /**
      * Sanitizes a YM field name to avoid collision with reserved columns.
@@ -146,161 +324,12 @@ export class YMSchemaManager {
         return sanitized;
     }
 
-    private async checkTableExists(tableName: string): Promise<boolean> {
-        const sql = `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = '${this.schemaName}' AND TABLE_NAME = '${tableName}'`;
-        const result = await this.executeSql(sql);
-        return result && result.length > 0 && Number(result[0].cnt) > 0;
-    }
-
-    private async createTable(
-        fullTableName: string,
-        sampleRecord: Record<string, unknown>
-    ): Promise<void> {
-        const columns = this.buildColumnDefinitions(sampleRecord);
-        const sql = `CREATE TABLE ${fullTableName} (
-            [ID] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
-            [YM_SourceID] NVARCHAR(500) NOT NULL,
-            ${columns},
-            [YM_LastSyncedAt] DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
-        );
-        CREATE UNIQUE INDEX [UX_${fullTableName.replace(/[\[\].]/g, '')}_SourceID]
-            ON ${fullTableName} ([YM_SourceID]);`;
-
-        LogStatus(`YM Schema: Creating table ${fullTableName}`);
-        await this.executeSql(sql);
-    }
-
-    private async addMissingColumns(
-        fullTableName: string,
-        tableName: string,
-        sampleRecord: Record<string, unknown>
-    ): Promise<void> {
-        const existingColumns = await this.getExistingColumns(tableName);
-        const existingSet = new Set(existingColumns.map(c => c.toLowerCase()));
-
-        for (const [key, value] of Object.entries(sampleRecord)) {
-            if (!existingSet.has(key.toLowerCase())) {
-                const sqlType = this.inferSqlType(value);
-                const sql = `ALTER TABLE ${fullTableName} ADD [${key}] ${sqlType} NULL`;
-                LogStatus(`YM Schema: Adding column [${key}] to ${fullTableName}`);
-                await this.executeSql(sql);
-            }
-        }
-    }
-
-    private async getExistingColumns(tableName: string): Promise<string[]> {
-        const sql = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = '${this.schemaName}' AND TABLE_NAME = '${tableName}'`;
-        const result = await this.executeSql(sql);
-        return result ? result.map((r: Record<string, unknown>) => String(r.COLUMN_NAME)) : [];
-    }
-
-    private buildColumnDefinitions(record: Record<string, unknown>): string {
-        return Object.entries(record)
-            .map(([key, value]) => `[${key}] ${this.inferSqlType(value)} NULL`)
-            .join(',\n            ');
-    }
-
-    private inferSqlType(value: unknown): string {
-        if (value == null) return 'NVARCHAR(MAX)';
-        if (typeof value === 'boolean') return 'BIT';
-        if (typeof value === 'number') {
-            return Number.isInteger(value) ? 'INT' : 'DECIMAL(18,4)';
-        }
-        if (typeof value === 'string') {
-            return value.length > 500 ? 'NVARCHAR(MAX)' : 'NVARCHAR(500)';
-        }
-        if (typeof value === 'object') return 'NVARCHAR(MAX)';
-        return 'NVARCHAR(MAX)';
-    }
-
     /**
-     * Builds a composite YM_SourceID from one or more PK field values.
+     * Builds a composite SourceRecordID from one or more PK field values.
      * Single field: just the value. Multiple fields: joined with '|'.
      */
     private buildSourceId(record: Record<string, unknown>, pkFields: string[]): string {
         const parts = pkFields.map(f => String(record[f] ?? ''));
         return parts.join('|');
-    }
-
-    private async mergeBatch(
-        fullTableName: string,
-        records: Record<string, unknown>[],
-        pkFields: string[]
-    ): Promise<{ Inserted: number; Updated: number }> {
-        if (records.length === 0) return { Inserted: 0, Updated: 0 };
-
-        // Sanitize all records so column names match the SQL table
-        const sanitizedRecords = records.map(r => this.sanitizeRecord(r));
-
-        const columns = Object.keys(sanitizedRecords[0]);
-        const columnList = columns.map(c => `[${c}]`).join(', ');
-        const updateSet = columns
-            .map(c => `T.[${c}] = S.[${c}]`)
-            .join(', ');
-
-        const valueRows = sanitizedRecords.map((record, idx) => {
-            // Build composite source ID from original (unsanitized) record PK fields
-            const sourceId = this.escapeValue(this.buildSourceId(records[idx], pkFields));
-            const vals = columns.map(c => this.escapeValue(record[c]));
-            return `(${sourceId}, ${vals.join(', ')}, GETUTCDATE())`;
-        });
-
-        const sql = `
-            DECLARE @mergeOutput TABLE (MergeAction NVARCHAR(10));
-            MERGE INTO ${fullTableName} AS T
-            USING (VALUES ${valueRows.join(',\n')})
-                AS S ([YM_SourceID], ${columnList}, [YM_LastSyncedAt])
-            ON T.[YM_SourceID] = S.[YM_SourceID]
-            WHEN MATCHED THEN
-                UPDATE SET ${updateSet}, T.[YM_LastSyncedAt] = GETUTCDATE()
-            WHEN NOT MATCHED THEN
-                INSERT ([YM_SourceID], ${columnList}, [YM_LastSyncedAt])
-                VALUES (S.[YM_SourceID], ${columns.map(c => `S.[${c}]`).join(', ')}, GETUTCDATE())
-            OUTPUT $action INTO @mergeOutput;
-            SELECT
-                SUM(CASE WHEN MergeAction = 'INSERT' THEN 1 ELSE 0 END) AS Inserted,
-                SUM(CASE WHEN MergeAction = 'UPDATE' THEN 1 ELSE 0 END) AS Updated
-            FROM @mergeOutput;`;
-
-        const result = await this.executeSql(sql);
-        if (result && result.length > 0) {
-            return {
-                Inserted: Number(result[0].Inserted) || 0,
-                Updated: Number(result[0].Updated) || 0,
-            };
-        }
-        return { Inserted: 0, Updated: 0 };
-    }
-
-    private escapeValue(value: unknown): string {
-        if (value == null) return 'NULL';
-        if (typeof value === 'boolean') return value ? '1' : '0';
-        if (typeof value === 'number') return String(value);
-        if (typeof value === 'object') {
-            const json = JSON.stringify(value).replace(/'/g, "''");
-            return `N'${json}'`;
-        }
-        const str = String(value).replace(/'/g, "''");
-        return `N'${str}'`;
-    }
-
-    private async executeSql(sql: string): Promise<Record<string, unknown>[]> {
-        try {
-            return await this.dbProvider.ExecuteSQL(sql, undefined, undefined, this.contextUser);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            const stack = error instanceof Error ? error.stack : '';
-            LogError(`YM SchemaManager SQL error: ${message}`);
-            this.writeLog(`SQL ERROR: ${message}`);
-            if (stack) {
-                this.writeLog(`Stack: ${stack}`);
-            }
-            // Log the SQL that failed (truncate if very long)
-            const sqlPreview = sql.length > 2000 ? sql.substring(0, 2000) + '...(truncated)' : sql;
-            this.writeLog(`Failed SQL: ${sqlPreview}`);
-            throw error;
-        }
     }
 }

@@ -1,7 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { DatabaseProviderBase, Metadata } from '@memberjunction/core';
 import { BaseYMAction } from '../base/base-ym-action';
 import { YMSyncEngine } from '../service/ym-sync-engine';
 import type { YMEndpointName } from '../types/ym-endpoint-config';
@@ -9,21 +8,23 @@ import type { YMEndpointName } from '../types/ym-endpoint-config';
 /**
  * Full YourMembership data sync action.
  *
- * Takes a schema name, YM client ID, and API credentials, then dumps data from
- * all (or selected) YM endpoints into SQL tables in the specified schema.
+ * Takes a YM client ID and API credentials, then syncs data from
+ * all (or selected) YM endpoints into the YourMembership entity tables.
+ *
+ * Tables and entities must already exist (created by migration + CodeGen).
+ * This action only does DML via MJ entity objects — fully provider-agnostic.
  *
  * Parameters:
  *   ClientID    (required) — YM client/site identifier
  *   APIKey      (required) — YM API key (or set BIZAPPS_YM_{ClientID}_API_KEY env var)
  *   APIPassword (required) — YM API password (or set BIZAPPS_YM_{ClientID}_API_PASSWORD env var)
- *   SchemaName  (required) — SQL schema to create tables in
  *   Endpoints   (optional) — Comma-separated list of endpoints to sync (empty = all)
  *   FullRefresh (optional) — "true" to truncate tables before syncing
  */
 @RegisterClass(BaseAction, 'YMSyncAction')
 export class YMSyncAction extends BaseYMAction {
     public get Description(): string {
-        return 'Syncs YourMembership data into MJ database tables in the specified schema';
+        return 'Syncs YourMembership data into the YourMembership entity tables';
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -31,13 +32,8 @@ export class YMSyncAction extends BaseYMAction {
             const clientId = this.GetClientID(params.Params);
             const apiKey = this.GetAPIKey(params.Params, clientId);
             const apiPassword = this.GetAPIPassword(params.Params, clientId);
-            const schemaName = this.GetParamValue(params.Params, 'SchemaName');
             const endpointsParam = this.GetParamValue(params.Params, 'Endpoints');
             const fullRefresh = this.GetBooleanParam(params.Params, 'FullRefresh', false);
-
-            if (!schemaName) {
-                return this.BuildErrorResult('SchemaName parameter is required', 'MISSING_PARAM');
-            }
 
             if (!params.ContextUser) {
                 return this.BuildErrorResult('ContextUser is required for database operations', 'MISSING_CONTEXT');
@@ -47,18 +43,11 @@ export class YMSyncAction extends BaseYMAction {
                 ? endpointsParam.split(',').map(e => e.trim()) as YMEndpointName[]
                 : [];
 
-            const dbProvider = Metadata.Provider as DatabaseProviderBase;
-            if (!dbProvider) {
-                return this.BuildErrorResult('No database provider configured', 'NO_DB_PROVIDER');
-            }
-
             const engine = new YMSyncEngine(
                 clientId,
                 apiKey,
                 apiPassword,
-                schemaName,
-                params.ContextUser,
-                dbProvider
+                params.ContextUser
             );
 
             const result = await engine.RunSync({

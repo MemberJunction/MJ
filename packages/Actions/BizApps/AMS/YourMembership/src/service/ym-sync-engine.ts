@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { YM_ENDPOINT_REGISTRY, type YMEndpointConfig, type YMEndpointName } from '../types/ym-endpoint-config';
 import type { YMSyncOptions, YMSyncResult, YMEndpointSyncResult } from '../types/ym-sync-types';
 import { YMSchemaManager } from './ym-schema-manager';
@@ -14,9 +14,12 @@ const YM_API_BASE = 'https://ws.yourmembership.com';
  * For each endpoint it:
  * 1. Authenticates via session (POST /Ams/Authenticate)
  * 2. Fetches all data via the YM API (paginated)
- * 3. Ensures the target SQL table exists (creates/alters as needed)
- * 4. Upserts records into the table
+ * 3. Validates the MJ entity exists (created by migration + CodeGen)
+ * 4. Upserts records via MJ entity objects + TransactionGroup
+ *
+ * Fully provider-agnostic — works on SQL Server and PostgreSQL.
  */
+
 /** Directory where YM sync logs are written */
 const YM_LOG_DIR = path.join(process.cwd(), 'ym-sync-logs');
 
@@ -33,14 +36,12 @@ export class YMSyncEngine {
         clientId: string,
         apiKey: string,
         apiPassword: string,
-        schemaName: string,
-        contextUser: UserInfo,
-        dbProvider: DatabaseProviderBase
+        contextUser: UserInfo
     ) {
         this.clientId = clientId;
         this.apiKey = apiKey;
         this.apiPassword = apiPassword;
-        this.schemaManager = new YMSchemaManager(schemaName, contextUser, dbProvider);
+        this.schemaManager = new YMSchemaManager(contextUser);
         this.logFilePath = this.initLogFile();
         this.schemaManager.LogFilePath = this.logFilePath;
     }
@@ -79,8 +80,6 @@ export class YMSyncEngine {
         // Authenticate before starting
         this.writeLog('Authenticating...');
         await this.ensureSession();
-        this.writeLog('Ensuring schema exists...');
-        await this.schemaManager.EnsureSchemaExists();
 
         const endpointNames = options.Endpoints.length > 0
             ? options.Endpoints
@@ -187,7 +186,7 @@ export class YMSyncEngine {
 
         try {
             LogStatus(`YM Sync: Fetching ${endpointName}...`);
-            this.writeLog(`--- Starting endpoint: ${endpointName} (table: ${config.TargetTable}) ---`);
+            this.writeLog(`--- Starting endpoint: ${endpointName} (entity: ${config.EntityName}) ---`);
 
             const records = await this.fetchAllPages(config, options.MaxRecordsPerEndpoint);
             recordsFetched = records.length;
@@ -198,17 +197,15 @@ export class YMSyncEngine {
                 return this.buildEndpointResult(endpointName, config, 0, 0, 0, [], endpointStart);
             }
 
+            // Validate entity exists (created by migration + CodeGen)
+            this.schemaManager.ValidateEntityExists(config.EntityName);
+
             if (options.FullRefresh) {
-                await this.schemaManager.TruncateTable(config.TargetTable);
+                await this.schemaManager.TruncateEntity(config.EntityName);
             }
 
-            await this.schemaManager.EnsureTableExists(
-                config.TargetTable,
-                records[0]
-            );
-
             const upsertResult = await this.schemaManager.UpsertRecords(
-                config.TargetTable,
+                config.EntityName,
                 records,
                 config.PKFields
             );
