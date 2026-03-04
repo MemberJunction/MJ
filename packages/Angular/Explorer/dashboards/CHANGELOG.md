@@ -1,5 +1,50 @@
 # @memberjunction/ng-dashboards
 
+## 5.6.0
+
+### Patch Changes
+
+- d24a7ff: Implement Search and improve View Filter
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/graphql-dataprovider@5.6.0
+  - @memberjunction/ai-engine-base@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/api-keys-base@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/ng-base-application@5.6.0
+  - @memberjunction/ng-core-entity-forms@5.6.0
+  - @memberjunction/ng-explorer-settings@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-testing@5.6.0
+  - @memberjunction/ng-action-gallery@5.6.0
+  - @memberjunction/ng-actions@5.6.0
+  - @memberjunction/ng-agents@5.6.0
+  - @memberjunction/ng-ai-test-harness@5.6.0
+  - @memberjunction/ng-code-editor@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-credentials@5.6.0
+  - @memberjunction/ng-dashboard-viewer@5.6.0
+  - @memberjunction/ng-entity-relationship-diagram@5.6.0
+  - @memberjunction/ng-entity-viewer@5.6.0
+  - @memberjunction/ng-filter-builder@5.6.0
+  - @memberjunction/ng-list-management@5.6.0
+  - @memberjunction/ng-notifications@5.6.0
+  - @memberjunction/ng-query-viewer@5.6.0
+  - @memberjunction/ng-react@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-versions@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/skip-types@5.6.0
+  - @memberjunction/templates-base-types@5.6.0
+  - @memberjunction/testing-engine-base@5.6.0
+  - @memberjunction/ng-export-service@5.6.0
+  - @memberjunction/ng-markdown@5.6.0
+  - @memberjunction/export-engine@5.6.0
+  - @memberjunction/global@5.6.0
+
 ## 5.5.0
 
 ### Patch Changes
