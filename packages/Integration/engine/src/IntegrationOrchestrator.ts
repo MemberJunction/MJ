@@ -17,6 +17,8 @@ import type {
     SyncTriggerType,
     SyncProgress,
     OnProgressCallback,
+    OnNotificationCallback,
+    SyncNotification,
     WatermarkType,
 } from './types.js';
 import { ClassifyError } from './types.js';
@@ -53,13 +55,15 @@ export class IntegrationOrchestrator {
      * @param contextUser - User context for all data operations
      * @param triggerType - What triggered this sync (defaults to 'Manual')
      * @param onProgress - Optional callback invoked with progress updates during sync
+     * @param onNotification - Optional callback invoked with a notification when the sync completes or fails
      * @returns Aggregate sync result with record counts and errors
      */
     public async RunSync(
         companyIntegrationID: string,
         contextUser: UserInfo,
         triggerType: SyncTriggerType = 'Manual',
-        onProgress?: OnProgressCallback
+        onProgress?: OnProgressCallback,
+        onNotification?: OnNotificationCallback
     ): Promise<SyncResult> {
         const lockKey = companyIntegrationID.toLowerCase();
         const existing = IntegrationOrchestrator.activeSyncs.get(lockKey);
@@ -68,7 +72,9 @@ export class IntegrationOrchestrator {
             return existing;
         }
 
-        const syncPromise = this.executeSyncInternal(companyIntegrationID, contextUser, triggerType, onProgress);
+        const syncPromise = this.executeSyncInternal(
+            companyIntegrationID, contextUser, triggerType, onProgress, onNotification
+        );
         IntegrationOrchestrator.activeSyncs.set(lockKey, syncPromise);
         try {
             return await syncPromise;
@@ -84,17 +90,18 @@ export class IntegrationOrchestrator {
         companyIntegrationID: string,
         contextUser: UserInfo,
         triggerType: SyncTriggerType,
-        onProgress?: OnProgressCallback
+        onProgress?: OnProgressCallback,
+        onNotification?: OnNotificationCallback
     ): Promise<SyncResult> {
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
         const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser);
 
         try {
             const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress);
-            await this.FinalizeRun(run, result, contextUser);
+            await this.FinalizeRun(run, result, contextUser, onNotification);
             return result;
         } catch (err) {
-            await this.FailRun(run, err, contextUser);
+            await this.FailRun(run, err, contextUser, onNotification);
             throw err;
         }
     }
@@ -606,12 +613,13 @@ export class IntegrationOrchestrator {
     }
 
     /**
-     * Finalizes a successful run with aggregate totals.
+     * Finalizes a successful run with aggregate totals and emits a completion notification.
      */
     private async FinalizeRun(
         run: MJCompanyIntegrationRunEntity,
         result: SyncResult,
-        _contextUser: UserInfo
+        _contextUser: UserInfo,
+        onNotification?: OnNotificationCallback
     ): Promise<void> {
         run.EndedAt = new Date();
         run.TotalRecords = result.RecordsProcessed;
@@ -620,20 +628,139 @@ export class IntegrationOrchestrator {
             run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
         }
         await run.Save();
+
+        if (onNotification) {
+            const notification = this.buildCompletionNotification(run, result);
+            this.safeNotify(onNotification, notification);
+        }
     }
 
     /**
-     * Marks a run as failed after an unrecoverable error.
+     * Marks a run as failed after an unrecoverable error and emits a failure notification.
      */
     private async FailRun(
         run: MJCompanyIntegrationRunEntity,
         err: unknown,
-        _contextUser: UserInfo
+        _contextUser: UserInfo,
+        onNotification?: OnNotificationCallback
     ): Promise<void> {
         run.EndedAt = new Date();
         run.Status = 'Failed';
         run.ErrorLog = err instanceof Error ? err.message : String(err);
         await run.Save();
+
+        if (onNotification) {
+            const failResult: SyncResult = {
+                Success: false,
+                RecordsProcessed: 0,
+                RecordsCreated: 0,
+                RecordsUpdated: 0,
+                RecordsDeleted: 0,
+                RecordsErrored: 0,
+                RecordsSkipped: 0,
+                Errors: [],
+            };
+            const notification = this.buildFailureNotification(run, err, failResult);
+            this.safeNotify(onNotification, notification);
+        }
+    }
+
+    /**
+     * Builds a SyncNotification for a completed run (success or completed-with-errors).
+     */
+    private buildCompletionNotification(
+        run: MJCompanyIntegrationRunEntity,
+        result: SyncResult
+    ): SyncNotification {
+        const hasErrors = result.RecordsErrored > 0;
+        const event = hasErrors ? 'SyncCompletedWithErrors' : 'SyncCompleted';
+        const severity = hasErrors ? 'Warning' : 'Info';
+        const integrationName = run.Get('Integration') ?? 'Unknown Integration';
+        const subject = hasErrors
+            ? `Integration Sync Completed with Errors: ${integrationName}`
+            : `Integration Sync Completed: ${integrationName}`;
+
+        const body = this.buildSyncResultBody(integrationName, result);
+
+        return {
+            Event: event,
+            Severity: severity,
+            CompanyIntegrationID: run.CompanyIntegrationID,
+            RunID: run.Get('ID') as string,
+            Subject: subject,
+            Body: body,
+            Result: result,
+            OccurredAt: new Date(),
+        };
+    }
+
+    /**
+     * Builds a SyncNotification for a catastrophically failed run.
+     */
+    private buildFailureNotification(
+        run: MJCompanyIntegrationRunEntity,
+        err: unknown,
+        result: SyncResult
+    ): SyncNotification {
+        const integrationName = run.Get('Integration') ?? 'Unknown Integration';
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const subject = `Integration Sync Failed: ${integrationName}`;
+        const body = [
+            `Integration: ${integrationName}`,
+            `Status: Failed`,
+            `Error: ${errorMessage}`,
+            `Time: ${new Date().toISOString()}`,
+        ].join('\n');
+
+        return {
+            Event: 'SyncFailed',
+            Severity: 'Error',
+            CompanyIntegrationID: run.CompanyIntegrationID,
+            RunID: run.Get('ID') as string,
+            Subject: subject,
+            Body: body,
+            Result: result,
+            OccurredAt: new Date(),
+        };
+    }
+
+    /**
+     * Formats a human-readable sync result body for notification messages.
+     */
+    private buildSyncResultBody(integrationName: string, result: SyncResult): string {
+        const lines = [
+            `Integration: ${integrationName}`,
+            `Status: ${result.RecordsErrored > 0 ? 'Completed with errors' : 'Success'}`,
+            '',
+            'Record Counts:',
+            `  Processed:  ${result.RecordsProcessed}`,
+            `  Created:    ${result.RecordsCreated}`,
+            `  Updated:    ${result.RecordsUpdated}`,
+            `  Deleted:    ${result.RecordsDeleted}`,
+            `  Skipped:    ${result.RecordsSkipped}`,
+        ];
+        if (result.RecordsErrored > 0) {
+            lines.push(`  Errors:     ${result.RecordsErrored}`);
+            if (result.Errors.length > 0) {
+                lines.push('', 'Error Summary (first 5):');
+                for (const e of result.Errors.slice(0, 5)) {
+                    lines.push(`  [${e.ErrorCode}] ${e.ExternalID}: ${e.ErrorMessage}`);
+                }
+            }
+        }
+        lines.push('', `Completed at: ${new Date().toISOString()}`);
+        return lines.join('\n');
+    }
+
+    /**
+     * Invokes the notification callback without propagating exceptions.
+     */
+    private safeNotify(callback: OnNotificationCallback, notification: SyncNotification): void {
+        try {
+            callback(notification);
+        } catch (notifyErr) {
+            console.warn('[IntegrationOrchestrator] Notification callback threw:', notifyErr);
+        }
     }
 }
 

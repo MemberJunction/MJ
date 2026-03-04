@@ -24,6 +24,10 @@ export type {
     ErrorSeverity,
     SyncProgress,
     OnProgressCallback,
+    SyncNotificationEvent,
+    SyncNotificationSeverity,
+    SyncNotification,
+    OnNotificationCallback,
 } from './types.js';
 
 // Error classification helpers

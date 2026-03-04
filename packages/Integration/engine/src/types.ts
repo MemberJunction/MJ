@@ -168,6 +168,35 @@ export interface SyncProgress {
 /** Callback for progress tracking during sync */
 export type OnProgressCallback = (progress: SyncProgress) => void;
 
+/** Notification event type — what triggered the notification */
+export type SyncNotificationEvent = 'SyncCompleted' | 'SyncFailed' | 'SyncCompletedWithErrors';
+
+/** Severity level for a sync notification */
+export type SyncNotificationSeverity = 'Info' | 'Warning' | 'Error';
+
+/** Notification emitted after a sync run completes or fails */
+export interface SyncNotification {
+    /** What happened to trigger this notification */
+    Event: SyncNotificationEvent;
+    /** Overall severity */
+    Severity: SyncNotificationSeverity;
+    /** ID of the CompanyIntegration that was synced */
+    CompanyIntegrationID: string;
+    /** ID of the run record created for this sync */
+    RunID: string;
+    /** Human-readable summary suitable for email subject lines */
+    Subject: string;
+    /** Full text body — formatted for human consumption */
+    Body: string;
+    /** The aggregate sync result for programmatic access */
+    Result: SyncResult;
+    /** When the notification was emitted */
+    OccurredAt: Date;
+}
+
+/** Callback invoked after a sync run completes (success or failure) */
+export type OnNotificationCallback = (notification: SyncNotification) => void;
+
 /** A default field mapping returned by a connector's discovery */
 export interface DefaultFieldMapping {
     /** Field name in the external system */
