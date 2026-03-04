@@ -1,5 +1,5 @@
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationSyncWatermarkEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationSyncWatermark } from './entity-types.js';
 import type { WatermarkType } from './types.js';
 
 /**
@@ -17,9 +17,9 @@ export class WatermarkService {
     public async Load(
         entityMapID: string,
         contextUser: UserInfo
-    ): Promise<MJCompanyIntegrationSyncWatermarkEntity | null> {
+    ): Promise<ICompanyIntegrationSyncWatermark | null> {
         const rv = new RunView();
-        const result = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
+        const result = await rv.RunView<ICompanyIntegrationSyncWatermark>({
             EntityName: 'MJ: Company Integration Sync Watermarks',
             ExtraFilter: `EntityMapID='${entityMapID}'`,
             MaxRows: 1,
@@ -81,7 +81,7 @@ export class WatermarkService {
      * Updates an existing watermark record with a new value and timestamp.
      */
     private async UpdateExistingWatermark(
-        watermark: MJCompanyIntegrationSyncWatermarkEntity,
+        watermark: ICompanyIntegrationSyncWatermark,
         newValue: string
     ): Promise<void> {
         watermark.WatermarkValue = newValue;
@@ -101,11 +101,11 @@ export class WatermarkService {
         contextUser: UserInfo
     ): Promise<void> {
         const md = new Metadata();
-        const watermark = await md.GetEntityObject<MJCompanyIntegrationSyncWatermarkEntity>(
+        const watermark = await md.GetEntityObject(
             'MJ: Company Integration Sync Watermarks',
             contextUser
-        );
-        watermark.NewRecord();
+        ) as unknown as ICompanyIntegrationSyncWatermark;
+        watermark.NewRecord!();
         watermark.EntityMapID = entityMapID;
         watermark.WatermarkValue = newValue;
         watermark.Direction = 'Pull';
@@ -113,7 +113,7 @@ export class WatermarkService {
         watermark.LastSyncAt = new Date();
         watermark.RecordsSynced = 0;
 
-        const saved = await watermark.Save();
+        const saved = await watermark.Save!();
         if (!saved) {
             throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}`);
         }

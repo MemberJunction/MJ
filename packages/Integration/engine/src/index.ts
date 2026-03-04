@@ -1,3 +1,11 @@
+// Entity type interfaces (local replacements for not-yet-generated core-entities types)
+export type {
+    IIntegrationSourceType,
+    ICompanyIntegrationEntityMap,
+    ICompanyIntegrationFieldMap,
+    ICompanyIntegrationSyncWatermark,
+} from './entity-types.js';
+
 // Types
 export type {
     SyncDirection,

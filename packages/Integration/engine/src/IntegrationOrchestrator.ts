@@ -1,14 +1,16 @@
 import { CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type {
     MJCompanyIntegrationEntity,
-    MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJIntegrationEntity,
-    MJIntegrationSourceTypeEntity,
 } from '@memberjunction/core-entities';
+import type {
+    ICompanyIntegrationEntityMap,
+    ICompanyIntegrationFieldMap,
+    IIntegrationSourceType,
+} from './entity-types.js';
 import type {
     SyncResult,
     MappedRecord,
@@ -144,12 +146,12 @@ export class IntegrationOrchestrator {
 
         const connector = ConnectorFactory.Resolve(
             integration,
-            sourceTypesResult.Results as MJIntegrationSourceTypeEntity[]
+            sourceTypesResult.Results as IIntegrationSourceType[]
         );
 
         return {
             companyIntegration,
-            entityMaps: entityMapsResult.Results as MJCompanyIntegrationEntityMapEntity[],
+            entityMaps: entityMapsResult.Results as ICompanyIntegrationEntityMap[],
             integration,
             connector,
         };
@@ -221,15 +223,16 @@ export class IntegrationOrchestrator {
      */
     private async ProcessSingleEntityMap(
         config: RunConfiguration,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         run: MJCompanyIntegrationRunEntity,
         contextUser: UserInfo,
         entityMapIndex: number,
         totalEntityMaps: number,
         onProgress?: OnProgressCallback
     ): Promise<SyncResult> {
-        const fieldMaps = await this.LoadFieldMaps(entityMap.Get('ID'), contextUser);
-        const watermark = await this.watermarkService.Load(entityMap.Get('ID'), contextUser);
+        const entityMapID = entityMap.Get('ID') as string;
+        const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        const watermark = await this.watermarkService.Load(entityMapID, contextUser);
 
         // A6: Validate watermark before using it
         let initialWatermark = watermark?.WatermarkValue ?? null;
@@ -301,7 +304,7 @@ export class IntegrationOrchestrator {
         }
 
         if (currentWatermark) {
-            await this.watermarkService.Update(entityMap.Get('ID'), currentWatermark, contextUser);
+            await this.watermarkService.Update(entityMapID, currentWatermark, contextUser);
             result.WatermarkAfter = currentWatermark;
         }
 
@@ -339,9 +342,9 @@ export class IntegrationOrchestrator {
     private async LoadFieldMaps(
         entityMapID: string,
         contextUser: UserInfo
-    ): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+    ): Promise<ICompanyIntegrationFieldMap[]> {
         const rv = new RunView();
-        const result = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+        const result = await rv.RunView<ICompanyIntegrationFieldMap>({
             EntityName: 'MJ: Company Integration Field Maps',
             ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
             OrderBy: 'Priority ASC',
@@ -357,7 +360,7 @@ export class IntegrationOrchestrator {
     private async ApplyRecords(
         records: MappedRecord[],
         companyIntegration: MJCompanyIntegrationEntity,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
@@ -386,7 +389,7 @@ export class IntegrationOrchestrator {
     private async ApplySingleRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
@@ -415,7 +418,7 @@ export class IntegrationOrchestrator {
     private async CreateRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
     ): Promise<void> {
         const md = new Metadata();
@@ -491,7 +494,7 @@ export class IntegrationOrchestrator {
      */
     private async DeleteRecord(
         record: MappedRecord,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
@@ -566,7 +569,7 @@ export class IntegrationOrchestrator {
      */
     private async CreateRunDetail(
         run: MJCompanyIntegrationRunEntity,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
@@ -637,7 +640,7 @@ export class IntegrationOrchestrator {
 /** Internal configuration bundle for a sync run */
 interface RunConfiguration {
     companyIntegration: MJCompanyIntegrationEntity;
-    entityMaps: MJCompanyIntegrationEntityMapEntity[];
+    entityMaps: ICompanyIntegrationEntityMap[];
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
 }

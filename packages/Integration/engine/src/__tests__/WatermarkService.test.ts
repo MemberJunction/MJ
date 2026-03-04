@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationSyncWatermarkEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationSyncWatermark } from '../entity-types.js';
 import { WatermarkService } from '../WatermarkService.js';
 
 // Track mock implementations per test
@@ -26,7 +26,7 @@ vi.mock('@memberjunction/core', async () => {
 
 const mockContextUser = { ID: 'user-1' } as UserInfo;
 
-function createMockWatermark(entityMapID: string, watermarkValue: string | null): MJCompanyIntegrationSyncWatermarkEntity {
+function createMockWatermark(entityMapID: string, watermarkValue: string | null): ICompanyIntegrationSyncWatermark {
     return {
         EntityMapID: entityMapID,
         WatermarkValue: watermarkValue,
@@ -41,7 +41,7 @@ function createMockWatermark(entityMapID: string, watermarkValue: string | null)
             if (field === 'WatermarkValue') return watermarkValue;
             return null;
         }),
-    } as unknown as MJCompanyIntegrationSyncWatermarkEntity;
+    } as unknown as ICompanyIntegrationSyncWatermark;
 }
 
 describe('WatermarkService', () => {

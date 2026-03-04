@@ -1,4 +1,4 @@
-import type { MJCompanyIntegrationFieldMapEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type {
     TransformStep,
@@ -30,7 +30,7 @@ export class FieldMappingEngine {
      */
     public Apply(
         records: ExternalRecord[],
-        fieldMaps: MJCompanyIntegrationFieldMapEntity[],
+        fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string
     ): MappedRecord[] {
         const activeMaps = fieldMaps.filter(fm => fm.Status === 'Active');
@@ -42,7 +42,7 @@ export class FieldMappingEngine {
      */
     private MapSingleRecord(
         record: ExternalRecord,
-        fieldMaps: MJCompanyIntegrationFieldMapEntity[],
+        fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string
     ): MappedRecord {
         const mappedFields: Record<string, unknown> = {};
@@ -68,7 +68,7 @@ export class FieldMappingEngine {
      */
     private ApplyFieldMapping(
         record: ExternalRecord,
-        fieldMap: MJCompanyIntegrationFieldMapEntity
+        fieldMap: ICompanyIntegrationFieldMap
     ): unknown {
         let value: unknown = record.Fields[fieldMap.SourceFieldName];
         const pipeline = this.ParseTransformPipeline(fieldMap.TransformPipeline);

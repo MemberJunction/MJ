@@ -3,11 +3,8 @@ import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { BaseIntegrationConnector } from '../BaseIntegrationConnector.js';
 import { ConnectorFactory } from '../ConnectorFactory.js';
 import type { UserInfo } from '@memberjunction/core';
-import type {
-    MJCompanyIntegrationEntity,
-    MJIntegrationEntity,
-    MJIntegrationSourceTypeEntity,
-} from '@memberjunction/core-entities';
+import type { MJIntegrationEntity } from '@memberjunction/core-entities';
+import type { IIntegrationSourceType } from '../entity-types.js';
 import type {
     ConnectionTestResult,
     ExternalObjectSchema,
@@ -46,12 +43,12 @@ function createMockIntegration(className: string | null): MJIntegrationEntity {
     } as unknown as MJIntegrationEntity;
 }
 
-function createMockSourceTypes(driverClasses: string[]): MJIntegrationSourceTypeEntity[] {
+function createMockSourceTypes(driverClasses: string[]): IIntegrationSourceType[] {
     return driverClasses.map(dc => ({
         DriverClass: dc,
         Name: dc,
         Status: 'Active' as const,
-    } as unknown as MJIntegrationSourceTypeEntity));
+    } as unknown as IIntegrationSourceType));
 }
 
 describe('ConnectorFactory', () => {

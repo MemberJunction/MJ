@@ -1,5 +1,5 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationEntityMapEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 
 /**
@@ -19,8 +19,8 @@ export class MatchEngine {
      */
     public async Resolve(
         records: MappedRecord[],
-        entityMap: MJCompanyIntegrationEntityMapEntity,
-        fieldMaps: MJCompanyIntegrationFieldMapEntity[],
+        entityMap: ICompanyIntegrationEntityMap,
+        fieldMaps: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<MappedRecord[]> {
         const keyFields = fieldMaps.filter(fm => fm.IsKeyField && fm.Status === 'Active');
@@ -45,8 +45,8 @@ export class MatchEngine {
      */
     private async ResolveSingleRecord(
         record: MappedRecord,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
-        keyFields: MJCompanyIntegrationFieldMapEntity[],
+        entityMap: ICompanyIntegrationEntityMap,
+        keyFields: ICompanyIntegrationFieldMap[],
         conflictResolution: ConflictResolution,
         contextUser: UserInfo
     ): Promise<MappedRecord> {
@@ -70,7 +70,7 @@ export class MatchEngine {
      */
     private async ResolveDeletedRecord(
         record: MappedRecord,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
+        entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
     ): Promise<MappedRecord> {
         const existingID = await this.FindRecordMapEntry(
@@ -107,8 +107,8 @@ export class MatchEngine {
      */
     private async FindExistingRecord(
         record: MappedRecord,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
-        keyFields: MJCompanyIntegrationFieldMapEntity[],
+        entityMap: ICompanyIntegrationEntityMap,
+        keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
         if (keyFields.length > 0) {
@@ -129,7 +129,7 @@ export class MatchEngine {
      */
     private async FindByKeyFields(
         record: MappedRecord,
-        keyFields: MJCompanyIntegrationFieldMapEntity[],
+        keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
         const filterClauses = this.BuildKeyFieldFilter(record, keyFields);
@@ -153,7 +153,7 @@ export class MatchEngine {
      */
     private BuildKeyFieldFilter(
         record: MappedRecord,
-        keyFields: MJCompanyIntegrationFieldMapEntity[]
+        keyFields: ICompanyIntegrationFieldMap[]
     ): string[] {
         const clauses: string[] = [];
         for (const kf of keyFields) {

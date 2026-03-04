@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
 import type { ExternalRecord } from '../types.js';
-import type { MJCompanyIntegrationFieldMapEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
 import type { TransformStep } from '../transforms.js';
 
 /**
@@ -13,7 +13,7 @@ function fieldMap(
     sourceField: string,
     destField: string,
     pipeline: TransformStep[] | null = null
-): MJCompanyIntegrationFieldMapEntity {
+): ICompanyIntegrationFieldMap {
     return {
         SourceFieldName: sourceField,
         DestinationFieldName: destField,
@@ -21,7 +21,7 @@ function fieldMap(
         IsKeyField: false,
         Status: 'Active',
         Priority: 0,
-    } as unknown as MJCompanyIntegrationFieldMapEntity;
+    } as unknown as ICompanyIntegrationFieldMap;
 }
 
 function record(fields: Record<string, unknown>, isDeleted = false): ExternalRecord {

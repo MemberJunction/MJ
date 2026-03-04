@@ -5,11 +5,13 @@ import type {
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRecordMapEntity,
-    MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
     MJIntegrationEntity,
-    MJIntegrationSourceTypeEntity,
 } from '@memberjunction/core-entities';
+import type {
+    ICompanyIntegrationEntityMap,
+    ICompanyIntegrationFieldMap,
+    IIntegrationSourceType,
+} from '../entity-types.js';
 import type {
     BaseIntegrationConnector,
     FetchContext,
@@ -174,14 +176,14 @@ describe('IntegrationOrchestrator', () => {
                     ExternalObjectName: 'contacts',
                     SyncEnabled: true,
                     Status: 'Active',
-                } as unknown as MJCompanyIntegrationEntityMapEntity],
+                } as unknown as ICompanyIntegrationEntityMap],
             },
             { Success: true, Results: [integration] },
             {
                 Success: true,
                 Results: [{
                     DriverClass: 'TestConnector',
-                } as unknown as MJIntegrationSourceTypeEntity],
+                } as unknown as IIntegrationSourceType],
             },
         ]);
 
@@ -198,7 +200,7 @@ describe('IntegrationOrchestrator', () => {
                         IsKeyField: true,
                         Status: 'Active',
                         Priority: 0,
-                    } as unknown as MJCompanyIntegrationFieldMapEntity],
+                    } as unknown as ICompanyIntegrationFieldMap],
                 };
             }
             if (entityName === 'MJ: Company Integration Sync Watermarks') {

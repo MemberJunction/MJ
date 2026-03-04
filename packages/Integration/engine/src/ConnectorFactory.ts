@@ -1,5 +1,6 @@
 import { MJGlobal } from '@memberjunction/global';
-import type { MJIntegrationEntity, MJIntegrationSourceTypeEntity } from '@memberjunction/core-entities';
+import type { MJIntegrationEntity } from '@memberjunction/core-entities';
+import type { IIntegrationSourceType } from './entity-types.js';
 import { BaseIntegrationConnector } from './BaseIntegrationConnector.js';
 
 /**
@@ -19,7 +20,7 @@ export class ConnectorFactory {
      */
     public static Resolve(
         integration: MJIntegrationEntity,
-        sourceTypes: MJIntegrationSourceTypeEntity[]
+        sourceTypes: IIntegrationSourceType[]
     ): BaseIntegrationConnector {
         const driverClass = ConnectorFactory.FindDriverClass(integration, sourceTypes);
         return ConnectorFactory.CreateConnectorInstance(driverClass);
@@ -30,7 +31,7 @@ export class ConnectorFactory {
      */
     private static FindDriverClass(
         integration: MJIntegrationEntity,
-        sourceTypes: MJIntegrationSourceTypeEntity[]
+        sourceTypes: IIntegrationSourceType[]
     ): string {
         const className = integration.ClassName;
         if (!className) {

@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
-import type {
-    MJCompanyIntegrationFieldMapEntity,
-    MJCompanyIntegrationEntityMapEntity,
-} from '@memberjunction/core-entities';
+import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from '../entity-types.js';
 import { MatchEngine } from '../MatchEngine.js';
 import type { MappedRecord, ExternalRecord } from '../types.js';
 
@@ -41,7 +38,7 @@ function createMappedRecord(
     };
 }
 
-function createEntityMap(overrides: Partial<Record<string, unknown>> = {}): MJCompanyIntegrationEntityMapEntity {
+function createEntityMap(overrides: Partial<Record<string, unknown>> = {}): ICompanyIntegrationEntityMap {
     return {
         CompanyIntegrationID: 'ci-1',
         EntityID: 'entity-1',
@@ -53,16 +50,16 @@ function createEntityMap(overrides: Partial<Record<string, unknown>> = {}): MJCo
             return (overrides as Record<string, unknown>)[field] ?? null;
         }),
         ...overrides,
-    } as unknown as MJCompanyIntegrationEntityMapEntity;
+    } as unknown as ICompanyIntegrationEntityMap;
 }
 
-function createKeyFieldMap(sourceField: string, destField: string): MJCompanyIntegrationFieldMapEntity {
+function createKeyFieldMap(sourceField: string, destField: string): ICompanyIntegrationFieldMap {
     return {
         SourceFieldName: sourceField,
         DestinationFieldName: destField,
         IsKeyField: true,
         Status: 'Active' as const,
-    } as unknown as MJCompanyIntegrationFieldMapEntity;
+    } as unknown as ICompanyIntegrationFieldMap;
 }
 
 const mockContextUser = { ID: 'user-1' } as UserInfo;
@@ -224,7 +221,7 @@ describe('MatchEngine', () => {
 
             const records = [createMappedRecord()];
             const entityMap = createEntityMap();
-            const noKeyFieldMaps: MJCompanyIntegrationFieldMapEntity[] = [];
+            const noKeyFieldMaps: ICompanyIntegrationFieldMap[] = [];
 
             const results = await engine.Resolve(records, entityMap, noKeyFieldMaps, mockContextUser);
 

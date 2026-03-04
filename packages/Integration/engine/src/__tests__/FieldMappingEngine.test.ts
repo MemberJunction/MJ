@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
 import type { ExternalRecord } from '../types.js';
-import type { MJCompanyIntegrationFieldMapEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
 import type { TransformStep } from '../transforms.js';
 
 // Helper to create a field map entity mock
@@ -11,7 +11,7 @@ function createFieldMap(
     pipeline: TransformStep[] | null = null,
     isKeyField = false,
     status: 'Active' | 'Inactive' = 'Active'
-): MJCompanyIntegrationFieldMapEntity {
+): ICompanyIntegrationFieldMap {
     return {
         SourceFieldName: sourceField,
         DestinationFieldName: destField,
@@ -19,7 +19,7 @@ function createFieldMap(
         IsKeyField: isKeyField,
         Status: status,
         Priority: 0,
-    } as unknown as MJCompanyIntegrationFieldMapEntity;
+    } as unknown as ICompanyIntegrationFieldMap;
 }
 
 function createExternalRecord(
