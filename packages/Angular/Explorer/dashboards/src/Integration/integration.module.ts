@@ -11,6 +11,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ControlTowerComponent } from './components/control-tower/control-tower.component';
 import { ConnectionStudioComponent } from './components/connection-studio/connection-studio.component';
 import { MappingWorkspaceComponent } from './components/mapping-workspace/mapping-workspace.component';
+import { SyncActivityComponent } from './components/sync-activity/sync-activity.component';
 import { IntegrationCardComponent } from './components/widgets/integration-card.component';
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { IntegrationDataService } from './services/integration-data.service';
@@ -20,6 +21,7 @@ import { IntegrationDataService } from './services/integration-data.service';
     ControlTowerComponent,
     ConnectionStudioComponent,
     MappingWorkspaceComponent,
+    SyncActivityComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent
   ],
@@ -40,6 +42,7 @@ import { IntegrationDataService } from './services/integration-data.service';
     ControlTowerComponent,
     ConnectionStudioComponent,
     MappingWorkspaceComponent,
+    SyncActivityComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent
   ]
