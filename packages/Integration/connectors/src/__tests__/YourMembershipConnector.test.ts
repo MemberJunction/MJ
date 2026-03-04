@@ -4,16 +4,22 @@ import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import type { FetchContext } from '@memberjunction/integration-engine';
 
-const MOCK_CONFIG = JSON.stringify({
+/**
+ * Creates a minimal mock MJCompanyIntegrationEntity with a .Get() method
+ * matching the interface used by RelationalDBConnector.ParseConnectionConfig().
+ */
+function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
+    const configJson = JSON.stringify(config);
+    return { Get: (field: string) => field === 'Configuration' ? configJson : null } as unknown as MJCompanyIntegrationEntity;
+}
+
+const MOCK_CI = createMockCompanyIntegration({
     server: 'sql-claude',
-    database: 'MockYourMembership',
+    database: 'mock_data',
+    schema: 'ym',
     user: 'sa',
     password: 'Claude2Sql99',
 });
-
-function makeCI(config: string): MJCompanyIntegrationEntity {
-    return { Configuration: config } as unknown as MJCompanyIntegrationEntity;
-}
 
 const contextUser = {} as UserInfo;
 
@@ -25,31 +31,30 @@ describe('YourMembershipConnector', () => {
     });
 
     describe('TestConnection', () => {
-        it('should connect successfully to MockYourMembership', async () => {
-            const result = await connector.TestConnection(makeCI(MOCK_CONFIG), contextUser);
+        it('should connect successfully to mock_data', async () => {
+            const result = await connector.TestConnection(MOCK_CI, contextUser);
             expect(result.Success).toBe(true);
-            expect(result.Message).toContain('MockYourMembership');
+            expect(result.Message).toContain('mock_data');
         });
     });
 
     describe('DiscoverObjects', () => {
-        it('should return all YourMembership tables', async () => {
-            const objects = await connector.DiscoverObjects(makeCI(MOCK_CONFIG), contextUser);
+        it('should return all YourMembership tables in ym schema', async () => {
+            const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
             const names = objects.map((o) => o.Name);
-            expect(names).toContain('ym_Members');
-            expect(names).toContain('ym_Events');
-            expect(names).toContain('ym_EventRegistrations');
-            expect(names).toContain('ym_Chapters');
-            expect(names).toContain('ym_MembershipLevels');
-            expect(objects.length).toBe(5);
+            expect(names).toContain('members');
+            expect(names).toContain('membership_types');
+            expect(names).toContain('events');
+            expect(names).toContain('event_registrations');
+            expect(objects.length).toBe(4);
         });
     });
 
     describe('DiscoverFields', () => {
-        it('should return columns for ym_Members', async () => {
+        it('should return columns for members', async () => {
             const fields = await connector.DiscoverFields(
-                makeCI(MOCK_CONFIG),
-                'ym_Members',
+                MOCK_CI,
+                'members',
                 contextUser
             );
             const names = fields.map((f) => f.Name);
@@ -63,28 +68,27 @@ describe('YourMembershipConnector', () => {
     });
 
     describe('FetchChanges', () => {
-        it('should return ~300 members with no watermark', async () => {
+        it('should return 50 members with no watermark', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'ym_Members',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'members',
                 WatermarkValue: null,
                 BatchSize: 500,
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThanOrEqual(200);
-            expect(result.Records.length).toBeLessThanOrEqual(500);
+            expect(result.Records.length).toBe(50);
             expect(result.HasMore).toBe(false);
 
             const record = result.Records[0];
             expect(record.ExternalID).toBeDefined();
-            expect(record.ObjectType).toBe('ym_Members');
+            expect(record.ObjectType).toBe('members');
         });
 
         it('should return 0 members with far-future watermark', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'ym_Members',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'members',
                 WatermarkValue: '2099-01-01T00:00:00.000Z',
                 BatchSize: 500,
                 ContextUser: contextUser,
@@ -95,8 +99,8 @@ describe('YourMembershipConnector', () => {
 
         it('should respect BatchSize and indicate HasMore', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'ym_Members',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'members',
                 WatermarkValue: null,
                 BatchSize: 10,
                 ContextUser: contextUser,
@@ -106,23 +110,49 @@ describe('YourMembershipConnector', () => {
             expect(result.HasMore).toBe(true);
         });
 
-        it('should fetch ym_Events using created_at', async () => {
+        it('should fetch events using updated_at', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'ym_Events',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'events',
                 WatermarkValue: null,
                 BatchSize: 100,
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.Records[0].ObjectType).toBe('ym_Events');
+            expect(result.Records.length).toBe(10);
+            expect(result.Records[0].ObjectType).toBe('events');
+        });
+
+        it('should fetch membership_types using updated_at', async () => {
+            const ctx: FetchContext = {
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'membership_types',
+                WatermarkValue: null,
+                BatchSize: 100,
+                ContextUser: contextUser,
+            };
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(5);
+            expect(result.Records[0].ObjectType).toBe('membership_types');
+        });
+
+        it('should fetch event_registrations using updated_at', async () => {
+            const ctx: FetchContext = {
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'event_registrations',
+                WatermarkValue: null,
+                BatchSize: 100,
+                ContextUser: contextUser,
+            };
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(40);
+            expect(result.Records[0].ObjectType).toBe('event_registrations');
         });
     });
 
     describe('GetDefaultFieldMappings', () => {
-        it('should return mappings for ym_Members', () => {
-            const mappings = connector.GetDefaultFieldMappings('ym_Members', 'Contacts');
+        it('should return mappings for members', () => {
+            const mappings = connector.GetDefaultFieldMappings('members', 'Contacts');
             expect(mappings.length).toBe(5);
 
             const emailMapping = mappings.find((m) => m.SourceFieldName === 'email');
@@ -135,7 +165,7 @@ describe('YourMembershipConnector', () => {
         });
 
         it('should return empty array for unknown objects', () => {
-            const mappings = connector.GetDefaultFieldMappings('ym_Events', 'Events');
+            const mappings = connector.GetDefaultFieldMappings('events', 'Events');
             expect(mappings).toEqual([]);
         });
     });

@@ -128,7 +128,7 @@ export class FileFeedConnector extends BaseIntegrationConnector {
      * @returns Parsed file feed configuration
      */
     private parseConfig(companyIntegration: MJCompanyIntegrationEntity): FileFeedConfig {
-        const configJson = companyIntegration.Configuration;
+        const configJson = companyIntegration.Get('Configuration') as string | null;
         if (!configJson) {
             throw new Error('CompanyIntegration.Configuration is null or empty');
         }

@@ -10,14 +10,19 @@ const CSV_PATH = path.resolve(
     '../../test-fixtures/sample-contacts.csv'
 );
 
-const MOCK_CONFIG = JSON.stringify({
+/**
+ * Creates a minimal mock MJCompanyIntegrationEntity with a .Get() method
+ * matching the interface used by FileFeedConnector.parseConfig().
+ */
+function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
+    const configJson = JSON.stringify(config);
+    return { Get: (field: string) => field === 'Configuration' ? configJson : null } as unknown as MJCompanyIntegrationEntity;
+}
+
+const MOCK_CI = createMockCompanyIntegration({
     storagePath: CSV_PATH,
     fileType: 'csv',
 });
-
-function makeCI(config: string): MJCompanyIntegrationEntity {
-    return { Configuration: config } as unknown as MJCompanyIntegrationEntity;
-}
 
 const contextUser = {} as UserInfo;
 
@@ -26,17 +31,17 @@ describe('FileFeedConnector', () => {
 
     describe('TestConnection', () => {
         it('should succeed when file exists', async () => {
-            const result = await connector.TestConnection(makeCI(MOCK_CONFIG), contextUser);
+            const result = await connector.TestConnection(MOCK_CI, contextUser);
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('File exists');
         });
 
         it('should fail when file does not exist', async () => {
-            const badConfig = JSON.stringify({
+            const badCI = createMockCompanyIntegration({
                 storagePath: '/nonexistent/file.csv',
                 fileType: 'csv',
             });
-            const result = await connector.TestConnection(makeCI(badConfig), contextUser);
+            const result = await connector.TestConnection(badCI, contextUser);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('File not found');
         });
@@ -44,7 +49,7 @@ describe('FileFeedConnector', () => {
 
     describe('DiscoverObjects', () => {
         it('should return the file name as the single object', async () => {
-            const objects = await connector.DiscoverObjects(makeCI(MOCK_CONFIG), contextUser);
+            const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
             expect(objects.length).toBe(1);
             expect(objects[0].Name).toBe('sample-contacts.csv');
             expect(objects[0].SupportsIncrementalSync).toBe(false);
@@ -54,7 +59,7 @@ describe('FileFeedConnector', () => {
     describe('DiscoverFields', () => {
         it('should return correct CSV headers', async () => {
             const fields = await connector.DiscoverFields(
-                makeCI(MOCK_CONFIG),
+                MOCK_CI,
                 'sample-contacts.csv',
                 contextUser
             );
@@ -71,7 +76,7 @@ describe('FileFeedConnector', () => {
     describe('FetchChanges', () => {
         it('should return 100 records from the sample CSV', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
+                CompanyIntegration: MOCK_CI,
                 ObjectName: 'sample-contacts.csv',
                 WatermarkValue: null,
                 BatchSize: 200,
@@ -92,7 +97,7 @@ describe('FileFeedConnector', () => {
 
         it('should ignore watermark value (always full load)', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
+                CompanyIntegration: MOCK_CI,
                 ObjectName: 'sample-contacts.csv',
                 WatermarkValue: '2099-01-01',
                 BatchSize: 200,

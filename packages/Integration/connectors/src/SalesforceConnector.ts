@@ -9,39 +9,29 @@ import { RelationalDBConnector } from './RelationalDBConnector.js';
 
 /** Primary key column used across all Salesforce mock tables */
 const SF_ID_FIELD = 'Id';
-/** Modification timestamp column used across most Salesforce mock tables */
+/** Modification timestamp column used across Salesforce mock tables */
 const SF_MODIFIED_FIELD = 'LastModifiedDate';
-/** Soft-delete flag column used across most Salesforce mock tables */
-const SF_DELETED_FIELD = 'IsDeleted';
 
 /**
- * Connector for Salesforce CRM data, backed by the MockSalesforce SQL Server database.
- * Reads from sf_Contact, sf_Account, sf_Opportunity, and sf_User tables.
- * Provides default field mappings for Contacts to MJ entities.
+ * Connector for Salesforce CRM data, backed by the mock_data database (sf schema).
+ * Reads from sf.Contact, sf.Account, and sf.Opportunity tables.
+ * Provides default field mappings for Contacts and Accounts to MJ entities.
  */
 @RegisterClass(BaseIntegrationConnector, 'SalesforceConnector')
 export class SalesforceConnector extends RelationalDBConnector {
     /**
      * Fetches a batch of changed records from the specified Salesforce object table.
      * Uses LastModifiedDate for watermark-based incremental sync.
-     * sf_User has no LastModifiedDate, so uses CreatedDate instead.
      * @param ctx - Fetch context with integration, object, watermark, and batch details
      * @returns Batch of Salesforce records with pagination info
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const objectName = ctx.ObjectName;
-
-        // sf_User has no LastModifiedDate or IsDeleted columns
-        if (objectName === 'sf_User') {
-            return this.FetchChangesFromTable(ctx, SF_ID_FIELD, 'CreatedDate');
-        }
-
-        return this.FetchChangesFromTable(ctx, SF_ID_FIELD, SF_MODIFIED_FIELD, SF_DELETED_FIELD);
+        return this.FetchChangesFromTable(ctx, SF_ID_FIELD, SF_MODIFIED_FIELD);
     }
 
     /**
      * Returns suggested default field mappings for known Salesforce objects to MJ entities.
-     * @param objectName - Salesforce object name (e.g., "sf_Contact")
+     * @param objectName - Salesforce object name (e.g., "Contact")
      * @param _entityName - Target MJ entity name (e.g., "Contacts")
      * @returns Array of default field mappings
      */
@@ -50,9 +40,9 @@ export class SalesforceConnector extends RelationalDBConnector {
         _entityName: string
     ): DefaultFieldMapping[] {
         switch (objectName) {
-            case 'sf_Contact':
+            case 'Contact':
                 return this.getContactMappings();
-            case 'sf_Account':
+            case 'Account':
                 return this.getAccountMappings();
             default:
                 return [];

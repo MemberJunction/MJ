@@ -4,16 +4,22 @@ import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import type { FetchContext } from '@memberjunction/integration-engine';
 
-const MOCK_CONFIG = JSON.stringify({
+/**
+ * Creates a minimal mock MJCompanyIntegrationEntity with a .Get() method
+ * matching the interface used by RelationalDBConnector.ParseConnectionConfig().
+ */
+function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
+    const configJson = JSON.stringify(config);
+    return { Get: (field: string) => field === 'Configuration' ? configJson : null } as unknown as MJCompanyIntegrationEntity;
+}
+
+const MOCK_CI = createMockCompanyIntegration({
     server: 'sql-claude',
-    database: 'MockSalesforce',
+    database: 'mock_data',
+    schema: 'sf',
     user: 'sa',
     password: 'Claude2Sql99',
 });
-
-function makeCI(config: string): MJCompanyIntegrationEntity {
-    return { Configuration: config } as unknown as MJCompanyIntegrationEntity;
-}
 
 const contextUser = {} as UserInfo;
 
@@ -25,30 +31,29 @@ describe('SalesforceConnector', () => {
     });
 
     describe('TestConnection', () => {
-        it('should connect successfully to MockSalesforce', async () => {
-            const result = await connector.TestConnection(makeCI(MOCK_CONFIG), contextUser);
+        it('should connect successfully to mock_data', async () => {
+            const result = await connector.TestConnection(MOCK_CI, contextUser);
             expect(result.Success).toBe(true);
-            expect(result.Message).toContain('MockSalesforce');
+            expect(result.Message).toContain('mock_data');
         });
     });
 
     describe('DiscoverObjects', () => {
-        it('should return all Salesforce tables', async () => {
-            const objects = await connector.DiscoverObjects(makeCI(MOCK_CONFIG), contextUser);
+        it('should return all Salesforce tables in sf schema', async () => {
+            const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
             const names = objects.map((o) => o.Name);
-            expect(names).toContain('sf_Contact');
-            expect(names).toContain('sf_Account');
-            expect(names).toContain('sf_Opportunity');
-            expect(names).toContain('sf_User');
-            expect(objects.length).toBe(4);
+            expect(names).toContain('Contact');
+            expect(names).toContain('Account');
+            expect(names).toContain('Opportunity');
+            expect(objects.length).toBe(3);
         });
     });
 
     describe('DiscoverFields', () => {
-        it('should return columns for sf_Contact', async () => {
+        it('should return columns for Contact', async () => {
             const fields = await connector.DiscoverFields(
-                makeCI(MOCK_CONFIG),
-                'sf_Contact',
+                MOCK_CI,
+                'Contact',
                 contextUser
             );
             const names = fields.map((f) => f.Name);
@@ -62,29 +67,28 @@ describe('SalesforceConnector', () => {
     });
 
     describe('FetchChanges', () => {
-        it('should return ~300 contacts with no watermark', async () => {
+        it('should return 50 contacts with no watermark', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'sf_Contact',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Contact',
                 WatermarkValue: null,
                 BatchSize: 500,
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThanOrEqual(200);
-            expect(result.Records.length).toBeLessThanOrEqual(500);
+            expect(result.Records.length).toBe(50);
             expect(result.HasMore).toBe(false);
 
             const record = result.Records[0];
             expect(record.ExternalID).toBeDefined();
-            expect(record.ObjectType).toBe('sf_Contact');
+            expect(record.ObjectType).toBe('Contact');
             expect(record.Fields).toBeDefined();
         });
 
         it('should return 0 contacts with far-future watermark', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'sf_Contact',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Contact',
                 WatermarkValue: '2099-01-01T00:00:00.000Z',
                 BatchSize: 500,
                 ContextUser: contextUser,
@@ -96,8 +100,8 @@ describe('SalesforceConnector', () => {
 
         it('should respect BatchSize and indicate HasMore', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'sf_Contact',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Contact',
                 WatermarkValue: null,
                 BatchSize: 10,
                 ContextUser: contextUser,
@@ -108,23 +112,36 @@ describe('SalesforceConnector', () => {
             expect(result.NewWatermarkValue).toBeDefined();
         });
 
-        it('should fetch sf_User using CreatedDate', async () => {
+        it('should fetch Account records', async () => {
             const ctx: FetchContext = {
-                CompanyIntegration: makeCI(MOCK_CONFIG),
-                ObjectName: 'sf_User',
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Account',
                 WatermarkValue: null,
                 BatchSize: 100,
                 ContextUser: contextUser,
             };
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.Records[0].ObjectType).toBe('sf_User');
+            expect(result.Records.length).toBe(20);
+            expect(result.Records[0].ObjectType).toBe('Account');
+        });
+
+        it('should fetch Opportunity records', async () => {
+            const ctx: FetchContext = {
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Opportunity',
+                WatermarkValue: null,
+                BatchSize: 100,
+                ContextUser: contextUser,
+            };
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(30);
+            expect(result.Records[0].ObjectType).toBe('Opportunity');
         });
     });
 
     describe('GetDefaultFieldMappings', () => {
-        it('should return mappings for sf_Contact', () => {
-            const mappings = connector.GetDefaultFieldMappings('sf_Contact', 'Contacts');
+        it('should return mappings for Contact', () => {
+            const mappings = connector.GetDefaultFieldMappings('Contact', 'Contacts');
             expect(mappings.length).toBe(6);
 
             const emailMapping = mappings.find((m) => m.SourceFieldName === 'Email');
@@ -133,8 +150,8 @@ describe('SalesforceConnector', () => {
             expect(emailMapping!.IsKeyField).toBe(true);
         });
 
-        it('should return mappings for sf_Account', () => {
-            const mappings = connector.GetDefaultFieldMappings('sf_Account', 'Companies');
+        it('should return mappings for Account', () => {
+            const mappings = connector.GetDefaultFieldMappings('Account', 'Companies');
             expect(mappings.length).toBe(5);
 
             const nameMapping = mappings.find((m) => m.SourceFieldName === 'Name');
@@ -143,7 +160,7 @@ describe('SalesforceConnector', () => {
         });
 
         it('should return empty array for unknown objects', () => {
-            const mappings = connector.GetDefaultFieldMappings('sf_Opportunity', 'Opportunities');
+            const mappings = connector.GetDefaultFieldMappings('Opportunity', 'Opportunities');
             expect(mappings).toEqual([]);
         });
     });

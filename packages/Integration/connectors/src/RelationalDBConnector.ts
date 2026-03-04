@@ -21,6 +21,8 @@ export interface ConnectionConfig {
     User: string;
     /** Database password */
     Password: string;
+    /** Database schema (e.g., 'hs', 'sf', 'ym'). Defaults to 'dbo'. */
+    Schema: string;
 }
 
 /**
@@ -39,7 +41,7 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
      * @throws Error if Configuration is missing or malformed
      */
     protected ParseConnectionConfig(companyIntegration: MJCompanyIntegrationEntity): ConnectionConfig {
-        const configJson = companyIntegration.Configuration;
+        const configJson = companyIntegration.Get('Configuration') as string | null;
         if (!configJson) {
             throw new Error('CompanyIntegration.Configuration is null or empty');
         }
@@ -49,6 +51,7 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const database = parsed['database'];
         const user = parsed['user'];
         const password = parsed['password'];
+        const schema = parsed['schema'] ?? 'dbo';
 
         if (!server || !database || !user || !password) {
             throw new Error(
@@ -56,7 +59,7 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
             );
         }
 
-        return { Server: server, Database: database, User: user, Password: password };
+        return { Server: server, Database: database, User: user, Password: password, Schema: schema };
     }
 
     /**
@@ -130,9 +133,11 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const config = this.ParseConnectionConfig(companyIntegration);
         const pool = await this.GetPool(config);
 
-        const result = await pool.request().query<{ TABLE_NAME: string }>(
-            `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`
-        );
+        const result = await pool.request()
+            .input('schemaName', sql.NVarChar, config.Schema)
+            .query<{ TABLE_NAME: string }>(
+                `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = @schemaName ORDER BY TABLE_NAME`
+            );
 
         return result.recordset.map((row) => ({
             Name: row.TABLE_NAME,
@@ -160,10 +165,11 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const result = await pool
             .request()
             .input('tableName', sql.NVarChar, objectName)
+            .input('schemaName', sql.NVarChar, config.Schema)
             .query<ColumnSchemaRow>(
                 `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') AS IS_IDENTITY
                  FROM INFORMATION_SCHEMA.COLUMNS
-                 WHERE TABLE_NAME = @tableName
+                 WHERE TABLE_NAME = @tableName AND TABLE_SCHEMA = @schemaName
                  ORDER BY ORDINAL_POSITION`
             );
 
@@ -236,45 +242,48 @@ export abstract class RelationalDBConnector extends BaseIntegrationConnector {
         const request = pool.request();
         let whereClause = '';
         if (ctx.WatermarkValue) {
-            whereClause = `WHERE [${modifiedAtField}] > @watermark`;
-            request.input('watermark', sql.DateTimeOffset, ctx.WatermarkValue);
+            whereClause = `WHERE [${modifiedAtField}] > CAST(@watermark AS datetime2(7))`;
+            request.input('watermark', sql.NVarChar, ctx.WatermarkValue);
         }
 
         // Fetch one extra to detect HasMore
         const fetchCount = ctx.BatchSize + 1;
         request.input('fetchCount', sql.Int, fetchCount);
 
-        const query = `SELECT TOP (@fetchCount) * FROM [dbo].[${ctx.ObjectName}] ${whereClause} ORDER BY [${modifiedAtField}], [${idField}]`;
+        // Include full-precision timestamp (datetime2 has 7 decimal places, JS Date only has 3)
+        // to avoid sub-millisecond precision loss in watermark comparisons
+        const rawTsCol = `CONVERT(varchar(50), [${modifiedAtField}], 126) AS [__mj_raw_ts]`;
+        const query = `SELECT TOP (@fetchCount) *, ${rawTsCol} FROM [${config.Schema}].[${ctx.ObjectName}] ${whereClause} ORDER BY [${modifiedAtField}], [${idField}]`;
         const result = await request.query<Record<string, unknown>>(query);
 
         const hasMore = result.recordset.length > ctx.BatchSize;
         const rows = hasMore ? result.recordset.slice(0, ctx.BatchSize) : result.recordset;
 
+        const newWatermark = this.extractRawWatermark(rows);
+
+        // Remove internal column before building records
+        for (const row of rows) {
+            delete row['__mj_raw_ts'];
+        }
+
         const records = rows.map((row) =>
             this.BuildExternalRecord(row, idField, ctx.ObjectName, modifiedAtField, deletedField)
         );
 
-        const newWatermark = this.extractNewWatermark(rows, modifiedAtField);
         return { Records: records, HasMore: hasMore, NewWatermarkValue: newWatermark };
     }
 
     /**
-     * Extracts the new watermark value from the last row in a batch.
-     * @param rows - Array of database rows
-     * @param modifiedAtField - Column name for the modification timestamp
-     * @returns ISO string of the latest modification timestamp, or undefined
+     * Extracts the full-precision watermark string from the last row's __mj_raw_ts column.
+     * Uses CONVERT(varchar, ..., 126) output which preserves datetime2(7) precision,
+     * avoiding the sub-millisecond truncation that JavaScript Date introduces.
+     * @param rows - Array of database rows containing __mj_raw_ts
+     * @returns Full-precision datetime2 string, or undefined
      */
-    private extractNewWatermark(
-        rows: Record<string, unknown>[],
-        modifiedAtField: string
-    ): string | undefined {
+    private extractRawWatermark(rows: Record<string, unknown>[]): string | undefined {
         if (rows.length === 0) return undefined;
-        const lastRow = rows[rows.length - 1];
-        const lastModified = lastRow[modifiedAtField];
-        if (lastModified instanceof Date) {
-            return lastModified.toISOString();
-        }
-        return lastModified != null ? String(lastModified) : undefined;
+        const rawTs = rows[rows.length - 1]['__mj_raw_ts'];
+        return rawTs != null ? String(rawTs) : undefined;
     }
 
     /**

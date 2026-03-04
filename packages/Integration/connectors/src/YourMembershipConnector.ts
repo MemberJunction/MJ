@@ -8,9 +8,9 @@ import {
 import { RelationalDBConnector } from './RelationalDBConnector.js';
 
 /**
- * Connector for YourMembership AMS data, backed by the MockYourMembership SQL Server database.
- * Reads from ym_Members, ym_Events, ym_EventRegistrations, ym_Chapters, and ym_MembershipLevels.
- * Provides default field mappings for Members to MJ Contacts entity.
+ * Connector for YourMembership AMS data, backed by the mock_data database (ym schema).
+ * Reads from ym.members, ym.membership_types, ym.events, and ym.event_registrations.
+ * Provides default field mappings for members to MJ Contacts entity.
  */
 @RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')
 export class YourMembershipConnector extends RelationalDBConnector {
@@ -27,7 +27,7 @@ export class YourMembershipConnector extends RelationalDBConnector {
 
     /**
      * Returns suggested default field mappings for known YourMembership objects to MJ entities.
-     * @param objectName - YourMembership object name (e.g., "ym_Members")
+     * @param objectName - YourMembership object name (e.g., "members")
      * @param _entityName - Target MJ entity name (e.g., "Contacts")
      * @returns Array of default field mappings
      */
@@ -35,7 +35,7 @@ export class YourMembershipConnector extends RelationalDBConnector {
         objectName: string,
         _entityName: string
     ): DefaultFieldMapping[] {
-        if (objectName === 'ym_Members') {
+        if (objectName === 'members') {
             return this.getMemberMappings();
         }
         return [];
@@ -48,16 +48,14 @@ export class YourMembershipConnector extends RelationalDBConnector {
      */
     private getTableConfig(objectName: string): YMTableConfig {
         switch (objectName) {
-            case 'ym_Members':
+            case 'members':
                 return { IdField: 'member_id', ModifiedAtField: 'updated_at' };
-            case 'ym_Events':
-                return { IdField: 'event_id', ModifiedAtField: 'created_at' };
-            case 'ym_EventRegistrations':
-                return { IdField: 'registration_id', ModifiedAtField: 'created_at' };
-            case 'ym_Chapters':
-                return { IdField: 'chapter_id', ModifiedAtField: 'created_at' };
-            case 'ym_MembershipLevels':
-                return { IdField: 'level_id', ModifiedAtField: 'level_id' };
+            case 'membership_types':
+                return { IdField: 'type_id', ModifiedAtField: 'updated_at' };
+            case 'events':
+                return { IdField: 'event_id', ModifiedAtField: 'updated_at' };
+            case 'event_registrations':
+                return { IdField: 'registration_id', ModifiedAtField: 'updated_at' };
             default:
                 throw new Error(`Unknown YourMembership table: ${objectName}`);
         }

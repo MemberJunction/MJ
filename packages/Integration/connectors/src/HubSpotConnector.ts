@@ -7,17 +7,19 @@ import {
 } from '@memberjunction/integration-engine';
 import { RelationalDBConnector } from './RelationalDBConnector.js';
 
-/** Primary key column used across all HubSpot mock tables */
-const HS_ID_FIELD = 'hs_object_id';
+/** Primary key column used for contacts table */
+const HS_CONTACTS_ID = 'vid';
+/** Primary key column used for companies table */
+const HS_COMPANIES_ID = 'companyId';
+/** Primary key column used for deals table */
+const HS_DEALS_ID = 'dealId';
 /** Modification timestamp column used across all HubSpot mock tables */
 const HS_MODIFIED_FIELD = 'lastmodifieddate';
-/** Soft-delete flag column used across all HubSpot mock tables */
-const HS_DELETED_FIELD = 'hs_is_deleted';
 
 /**
- * Connector for HubSpot CRM data, backed by the MockHubSpot SQL Server database.
- * Reads from hs_Contacts, hs_Companies, hs_Deals, and hs_Owners tables.
- * Provides default field mappings for Contacts and Companies to MJ entities.
+ * Connector for HubSpot CRM data, backed by the mock_data database (hs schema).
+ * Reads from hs.contacts, hs.companies, and hs.deals tables.
+ * Provides default field mappings for contacts and companies to MJ entities.
  */
 @RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
 export class HubSpotConnector extends RelationalDBConnector {
@@ -28,19 +30,13 @@ export class HubSpotConnector extends RelationalDBConnector {
      * @returns Batch of HubSpot records with pagination info
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const objectName = ctx.ObjectName;
-
-        // hs_Owners uses different column names
-        if (objectName === 'hs_Owners') {
-            return this.FetchChangesFromTable(ctx, 'owner_id', 'updatedat');
-        }
-
-        return this.FetchChangesFromTable(ctx, HS_ID_FIELD, HS_MODIFIED_FIELD, HS_DELETED_FIELD);
+        const idField = this.getIdField(ctx.ObjectName);
+        return this.FetchChangesFromTable(ctx, idField, HS_MODIFIED_FIELD);
     }
 
     /**
      * Returns suggested default field mappings for known HubSpot objects to MJ entities.
-     * @param objectName - HubSpot object name (e.g., "hs_Contacts")
+     * @param objectName - HubSpot object name (e.g., "contacts")
      * @param entityName - Target MJ entity name (e.g., "Contacts")
      * @returns Array of default field mappings
      */
@@ -49,12 +45,26 @@ export class HubSpotConnector extends RelationalDBConnector {
         _entityName: string
     ): DefaultFieldMapping[] {
         switch (objectName) {
-            case 'hs_Contacts':
+            case 'contacts':
                 return this.getContactMappings();
-            case 'hs_Companies':
+            case 'companies':
                 return this.getCompanyMappings();
             default:
                 return [];
+        }
+    }
+
+    /**
+     * Gets the primary key column for a HubSpot table.
+     * @param objectName - Table name
+     * @returns Column name for the primary key
+     */
+    private getIdField(objectName: string): string {
+        switch (objectName) {
+            case 'contacts': return HS_CONTACTS_ID;
+            case 'companies': return HS_COMPANIES_ID;
+            case 'deals': return HS_DEALS_ID;
+            default: return HS_CONTACTS_ID;
         }
     }
 
