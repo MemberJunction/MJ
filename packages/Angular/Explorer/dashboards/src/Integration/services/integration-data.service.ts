@@ -9,15 +9,12 @@ export interface IntegrationRow {
   ID: string;
   Name: string;
   IsActive: boolean | null;
-  SourceTypeID: string | null;
-  SourceType: string | null;
   LastRunID: string | null;
   LastRunStartedAt: string | null;
   LastRunEndedAt: string | null;
   Company: string;
   Integration: string;
   DriverClassName: string | null;
-  Configuration: string | null;
 }
 
 export interface IntegrationRunRow {
@@ -135,14 +132,14 @@ export class IntegrationDataService {
 
   async LoadIntegrationSummaries(provider?: IRunViewProvider | null): Promise<IntegrationSummary[]> {
     const rv = this.createRunView(provider);
-    const [integrationsResult, runsResult, sourceTypesResult] = await rv.RunViews([
+    const [integrationsResult, runsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Company Integrations',
         ExtraFilter: '',
         OrderBy: 'Name',
-        Fields: ['ID', 'Name', 'IsActive', 'SourceTypeID', 'SourceType', 'LastRunID',
+        Fields: ['ID', 'Name', 'IsActive', 'LastRunID',
                  'LastRunStartedAt', 'LastRunEndedAt', 'Company', 'Integration',
-                 'DriverClassName', 'Configuration'],
+                 'DriverClassName'],
         ResultType: 'simple'
       },
       {
@@ -152,21 +149,13 @@ export class IntegrationDataService {
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: Integration Source Types',
-        ExtraFilter: 'Status=\'Active\'',
-        OrderBy: 'Name',
-        Fields: ['ID', 'Name', 'Description', 'DriverClass', 'IconClass', 'Status'],
-        ResultType: 'simple'
       }
     ]);
 
     const integrations = integrationsResult.Results as IntegrationRow[];
     const runs = runsResult.Results as IntegrationRunRow[];
-    const sourceTypes = sourceTypesResult.Results as SourceTypeRow[];
 
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes));
+    return integrations.map(integration => this.buildSummary(integration, runs));
   }
 
   async LoadEntityMaps(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<EntityMapRow[]> {
@@ -319,13 +308,11 @@ export class IntegrationDataService {
 
   private buildSummary(
     integration: IntegrationRow,
-    allRuns: IntegrationRunRow[],
-    sourceTypes: SourceTypeRow[]
+    allRuns: IntegrationRunRow[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
     const recentRuns = integrationRuns.slice(0, 5);
-    const sourceType = sourceTypes.find(st => UUIDsEqual(st.ID, integration.SourceTypeID)) ?? null;
     const statusColor = this.computeStatusColor(latestRun, integration.IsActive);
     const relativeTime = this.computeRelativeTime(latestRun?.StartedAt ?? null);
     const totalRecordsSyncedToday = this.computeRecordsSyncedToday(integrationRuns);
@@ -334,7 +321,7 @@ export class IntegrationDataService {
 
     return {
       Integration: integration,
-      SourceType: sourceType,
+      SourceType: null,
       LatestRun: latestRun,
       RecentRuns: recentRuns,
       StatusColor: statusColor,

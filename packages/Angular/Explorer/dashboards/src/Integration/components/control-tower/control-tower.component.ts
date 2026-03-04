@@ -59,6 +59,8 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
       this.KPIs = this.dataService.ComputeKPIs(summaries);
       this.ActivityFeed = activityFeed;
       this.DailyCounts = dailyCounts;
+    } catch (err) {
+      console.error('[IntegrationControlTower] Failed to load data:', err);
     } finally {
       this.IsLoading = false;
     }
