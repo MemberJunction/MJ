@@ -277,6 +277,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
           await joinRecord.Delete();
         }
         await this.loadArtifacts();
+        this.cdr.detectChanges();
         MJNotificationService.Instance.CreateSimpleNotification(
           `Removed ${versionLabel} from collection`,
           'success',

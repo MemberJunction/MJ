@@ -1,5 +1,14 @@
 # @memberjunction/ai-zhipu
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/ai-openai@5.7.0
+  - @memberjunction/global@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

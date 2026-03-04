@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/ai-prompts@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/core-entities-server@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/postgresql-dataprovider@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/global@5.7.0
+  - @memberjunction/sql-dialect@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

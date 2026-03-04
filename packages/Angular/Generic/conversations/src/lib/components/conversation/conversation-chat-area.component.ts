@@ -23,6 +23,9 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
+/** Default width (percentage) for the artifact viewer pane */
+const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+
 @Component({
   standalone: false,
   selector: 'mj-conversation-chat-area',
@@ -135,9 +138,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
-  public artifactPaneWidth: number = 40; // Default 40% width
+  public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public isArtifactPaneMaximized: boolean = false; // Track maximize state
-  private artifactPaneWidthBeforeMaximize: number = 40; // Store width before maximizing
+  private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
@@ -436,6 +439,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+    // Reset maximize state so it doesn't carry over to the next conversation
+    this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH; // restore default width
 
     // Reset poll-based completion tracking whenever we switch conversations,
     // so the first empty poll on the new conversation doesn't trigger a spurious reload.
@@ -1702,8 +1708,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Clear permissions
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
-    // Reset maximize state when closing
+    // Reset maximize state and width when closing so the next artifact opens at default size
     this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   toggleMaximizeArtifactPane(): void {

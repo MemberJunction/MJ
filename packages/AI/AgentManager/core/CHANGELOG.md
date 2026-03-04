@@ -1,5 +1,20 @@
 # @memberjunction/ai-agent-manager
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai-agents@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/templates@5.7.0
+  - @memberjunction/global@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes
