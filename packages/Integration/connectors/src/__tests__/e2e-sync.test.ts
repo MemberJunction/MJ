@@ -7,6 +7,9 @@
  * Prerequisites:
  *   - mock_data database exists on sql-claude with hs/sf/ym schemas
  *   - Execute create_mock_data.sql to set up the database
+ *
+ * These tests are automatically skipped when sql-claude is not available
+ * (e.g., in GitHub Actions CI).
  */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
@@ -18,6 +21,7 @@ import { YourMembershipConnector } from '../YourMembershipConnector.js';
 import { FileFeedConnector } from '../FileFeedConnector.js';
 import * as path from 'node:path';
 import sql from 'mssql';
+import { canConnectToMockDB } from './db-availability.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +73,14 @@ async function getDirectPool(): Promise<sql.ConnectionPool> {
     return directPool;
 }
 
+// ── DB availability check ───────────────────────────────────────────────────
+
+let dbAvailable = false;
+
+beforeAll(async () => {
+    dbAvailable = await canConnectToMockDB();
+});
+
 // =============================================================================
 // E2E: HubSpot Connector
 // =============================================================================
@@ -77,11 +89,12 @@ describe('E2E: HubSpot Connector', () => {
     const ci = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'hs' });
 
     afterAll(async () => {
-        await connector.CloseAllPools();
+        if (dbAvailable) await connector.CloseAllPools();
     });
 
     describe('Connection', () => {
-        it('should connect to mock_data and return server version', async () => {
+        it('should connect to mock_data and return server version', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const result = await connector.TestConnection(ci, mockUser);
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('mock_data');
@@ -90,13 +103,15 @@ describe('E2E: HubSpot Connector', () => {
     });
 
     describe('Discovery', () => {
-        it('should discover hs schema objects (contacts, companies, deals)', async () => {
+        it('should discover hs schema objects (contacts, companies, deals)', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const objects = await connector.DiscoverObjects(ci, mockUser);
             const names = objects.map((o) => o.Name).sort();
             expect(names).toEqual(['companies', 'contacts', 'deals']);
         });
 
-        it('should discover fields on contacts table', async () => {
+        it('should discover fields on contacts table', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const fields = await connector.DiscoverFields(ci, 'contacts', mockUser);
             const names = fields.map((f) => f.Name);
             expect(names).toContain('vid');
@@ -108,7 +123,8 @@ describe('E2E: HubSpot Connector', () => {
     });
 
     describe('Full Sync', () => {
-        it('should fetch all 50 contacts from hs.contacts', async () => {
+        it('should fetch all 50 contacts from hs.contacts', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'contacts');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -122,21 +138,24 @@ describe('E2E: HubSpot Connector', () => {
             expect(first.Fields).toHaveProperty('lastname');
         });
 
-        it('should fetch all 20 companies from hs.companies', async () => {
+        it('should fetch all 20 companies from hs.companies', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'companies');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(20);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should fetch all 30 deals from hs.deals', async () => {
+        it('should fetch all 30 deals from hs.deals', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'deals');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(30);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should return a watermark value after full fetch', async () => {
+        it('should return a watermark value after full fetch', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'contacts');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.NewWatermarkValue).toBeDefined();
@@ -145,14 +164,16 @@ describe('E2E: HubSpot Connector', () => {
     });
 
     describe('Incremental Sync', () => {
-        it('should return 0 contacts with far-future watermark', async () => {
+        it('should return 0 contacts with far-future watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'contacts', '2099-01-01T00:00:00.000Z');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(0);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should respect batch size and indicate HasMore', async () => {
+        it('should respect batch size and indicate HasMore', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'contacts', null, 10);
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(10);
@@ -183,11 +204,12 @@ describe('E2E: Salesforce Connector', () => {
     const ci = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'sf' });
 
     afterAll(async () => {
-        await connector.CloseAllPools();
+        if (dbAvailable) await connector.CloseAllPools();
     });
 
     describe('Connection', () => {
-        it('should connect to mock_data and return server version', async () => {
+        it('should connect to mock_data and return server version', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const result = await connector.TestConnection(ci, mockUser);
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('mock_data');
@@ -195,13 +217,15 @@ describe('E2E: Salesforce Connector', () => {
     });
 
     describe('Discovery', () => {
-        it('should discover sf schema objects (Account, Contact, Opportunity)', async () => {
+        it('should discover sf schema objects (Account, Contact, Opportunity)', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const objects = await connector.DiscoverObjects(ci, mockUser);
             const names = objects.map((o) => o.Name).sort();
             expect(names).toEqual(['Account', 'Contact', 'Opportunity']);
         });
 
-        it('should discover fields on Contact table', async () => {
+        it('should discover fields on Contact table', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const fields = await connector.DiscoverFields(ci, 'Contact', mockUser);
             const names = fields.map((f) => f.Name);
             expect(names).toContain('Id');
@@ -213,7 +237,8 @@ describe('E2E: Salesforce Connector', () => {
     });
 
     describe('Full Sync', () => {
-        it('should fetch all 50 contacts from sf.Contact', async () => {
+        it('should fetch all 50 contacts from sf.Contact', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Contact');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -226,21 +251,24 @@ describe('E2E: Salesforce Connector', () => {
             expect(first.Fields).toHaveProperty('FirstName');
         });
 
-        it('should fetch all 20 accounts from sf.Account', async () => {
+        it('should fetch all 20 accounts from sf.Account', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Account');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(20);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should fetch all 30 opportunities from sf.Opportunity', async () => {
+        it('should fetch all 30 opportunities from sf.Opportunity', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Opportunity');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(30);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should return a watermark value after full fetch', async () => {
+        it('should return a watermark value after full fetch', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Contact');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.NewWatermarkValue).toBeDefined();
@@ -248,13 +276,15 @@ describe('E2E: Salesforce Connector', () => {
     });
 
     describe('Incremental Sync', () => {
-        it('should return 0 contacts with far-future watermark', async () => {
+        it('should return 0 contacts with far-future watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Contact', '2099-01-01T00:00:00.000Z');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(0);
         });
 
-        it('should respect batch size and indicate HasMore', async () => {
+        it('should respect batch size and indicate HasMore', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'Contact', null, 10);
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(10);
@@ -285,11 +315,12 @@ describe('E2E: YourMembership Connector', () => {
     const ci = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'ym' });
 
     afterAll(async () => {
-        await connector.CloseAllPools();
+        if (dbAvailable) await connector.CloseAllPools();
     });
 
     describe('Connection', () => {
-        it('should connect to mock_data and return server version', async () => {
+        it('should connect to mock_data and return server version', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const result = await connector.TestConnection(ci, mockUser);
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('mock_data');
@@ -297,13 +328,15 @@ describe('E2E: YourMembership Connector', () => {
     });
 
     describe('Discovery', () => {
-        it('should discover ym schema objects', async () => {
+        it('should discover ym schema objects', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const objects = await connector.DiscoverObjects(ci, mockUser);
             const names = objects.map((o) => o.Name).sort();
             expect(names).toEqual(['event_registrations', 'events', 'members', 'membership_types']);
         });
 
-        it('should discover fields on members table', async () => {
+        it('should discover fields on members table', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const fields = await connector.DiscoverFields(ci, 'members', mockUser);
             const names = fields.map((f) => f.Name);
             expect(names).toContain('member_id');
@@ -315,7 +348,8 @@ describe('E2E: YourMembership Connector', () => {
     });
 
     describe('Full Sync', () => {
-        it('should fetch all 50 members from ym.members', async () => {
+        it('should fetch all 50 members from ym.members', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'members');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -328,28 +362,32 @@ describe('E2E: YourMembership Connector', () => {
             expect(first.Fields).toHaveProperty('first_name');
         });
 
-        it('should fetch all 5 membership_types', async () => {
+        it('should fetch all 5 membership_types', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'membership_types');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(5);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should fetch all 10 events', async () => {
+        it('should fetch all 10 events', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'events');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(10);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should fetch all 40 event_registrations', async () => {
+        it('should fetch all 40 event_registrations', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'event_registrations');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(40);
             expect(batch.HasMore).toBe(false);
         });
 
-        it('should return a watermark value after full fetch', async () => {
+        it('should return a watermark value after full fetch', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'members');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.NewWatermarkValue).toBeDefined();
@@ -357,13 +395,15 @@ describe('E2E: YourMembership Connector', () => {
     });
 
     describe('Incremental Sync', () => {
-        it('should return 0 members with far-future watermark', async () => {
+        it('should return 0 members with far-future watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'members', '2099-01-01T00:00:00.000Z');
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(0);
         });
 
-        it('should respect batch size and indicate HasMore', async () => {
+        it('should respect batch size and indicate HasMore', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ci, 'members', null, 10);
             const batch = await connector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(10);
@@ -459,6 +499,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
     let ymWatermark: string | undefined;
 
     beforeAll(async () => {
+        if (!dbAvailable) return;
+
         // Reset to clean baseline: remove any leftover incremental data from prior runs
         // and normalize all timestamps so the full sync captures a uniform watermark.
         const pool = await getDirectPool();
@@ -475,6 +517,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
     });
 
     afterAll(async () => {
+        if (!dbAvailable) return;
+
         // Cleanup: remove incremental data and close pools
         const pool = await getDirectPool();
         await pool.request().query(`
@@ -492,7 +536,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
 
     // Phase 1: Capture watermarks from full sync
     describe('Phase 1: Full sync to capture watermarks', () => {
-        it('should capture HubSpot watermark', async () => {
+        it('should capture HubSpot watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(hsCI, 'contacts');
             const batch = await hsConnector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -500,7 +545,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(hsWatermark).toBeDefined();
         });
 
-        it('should capture Salesforce watermark', async () => {
+        it('should capture Salesforce watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(sfCI, 'Contact');
             const batch = await sfConnector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -508,7 +554,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(sfWatermark).toBeDefined();
         });
 
-        it('should capture YM watermark', async () => {
+        it('should capture YM watermark', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ymCI, 'members');
             const batch = await ymConnector.FetchChanges(ctx);
             expect(batch.Records.length).toBe(50);
@@ -519,7 +566,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
 
     // Phase 2: Insert new data and update existing data
     describe('Phase 2: Add incremental data', () => {
-        it('should insert new HubSpot contacts and update existing ones', async () => {
+        it('should insert new HubSpot contacts and update existing ones', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const pool = await getDirectPool();
 
             // Insert 5 new contacts
@@ -547,7 +595,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(countResult.recordset[0].cnt).toBe(55);
         });
 
-        it('should insert new Salesforce contacts and update existing ones', async () => {
+        it('should insert new Salesforce contacts and update existing ones', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const pool = await getDirectPool();
 
             await pool.request().query(`
@@ -568,7 +617,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(countResult.recordset[0].cnt).toBe(53);
         });
 
-        it('should insert new YM members and update existing ones', async () => {
+        it('should insert new YM members and update existing ones', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const pool = await getDirectPool();
 
             await pool.request().query(`
@@ -593,7 +643,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
 
     // Phase 3: Incremental fetch should only return new/updated records
     describe('Phase 3: Incremental fetch returns only changes', () => {
-        it('should fetch only new/updated HubSpot contacts (not all 55)', async () => {
+        it('should fetch only new/updated HubSpot contacts (not all 55)', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(hsCI, 'contacts', hsWatermark!);
             const batch = await hsConnector.FetchChanges(ctx);
             // 5 new + 3 updated = 8 records
@@ -610,7 +661,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(updatedRecords.length).toBe(3);
         });
 
-        it('should fetch only new/updated SF contacts (not all 53)', async () => {
+        it('should fetch only new/updated SF contacts (not all 53)', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(sfCI, 'Contact', sfWatermark!);
             const batch = await sfConnector.FetchChanges(ctx);
             // 3 new + 2 updated = 5 records
@@ -621,7 +673,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(emails).toContain('newsf1@example.com');
         });
 
-        it('should fetch only new/updated YM members (not all 54)', async () => {
+        it('should fetch only new/updated YM members (not all 54)', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(ymCI, 'members', ymWatermark!);
             const batch = await ymConnector.FetchChanges(ctx);
             // 4 new + 2 updated = 6 records
@@ -632,7 +685,8 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(memberNumbers).toContain('MEM-NEW-001');
         });
 
-        it('should provide updated watermarks after incremental fetch', async () => {
+        it('should provide updated watermarks after incremental fetch', async ({ skip }) => {
+            if (!dbAvailable) skip();
             const ctx = makeFetchContext(hsCI, 'contacts', hsWatermark!);
             const batch = await hsConnector.FetchChanges(ctx);
             expect(batch.NewWatermarkValue).toBeDefined();
