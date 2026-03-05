@@ -21,10 +21,10 @@ export class MJAIModalityFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentModalities', sectionName: 'AI Agent Modalities', isExpanded: false },
             { sectionKey: 'mJAIModelModalities', sectionName: 'AI Model Modalities', isExpanded: false },
-            { sectionKey: 'mJAIModelTypesDefaultInputModalityID', sectionName: 'AI Model Types', isExpanded: false },
+            { sectionKey: 'mJAIModelTypesDefaultOutputModalityID', sectionName: 'AI Model Types', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
-            { sectionKey: 'mJAIModelTypesDefaultOutputModalityID', sectionName: 'AI Model Types', isExpanded: false },
+            { sectionKey: 'mJAIModelTypesDefaultInputModalityID', sectionName: 'AI Model Types', isExpanded: false },
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false }
         ]);
     }

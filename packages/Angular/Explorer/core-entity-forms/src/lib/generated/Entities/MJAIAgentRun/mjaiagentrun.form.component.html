@@ -499,25 +499,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Runs Section -->
+    <!-- AI Agent Runs (Parent Run ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentRuns"
-        SectionName="AI Agent Runs"
+        SectionKey="mJAIAgentRunsParentRunID"
+        SectionName="AI Agent Runs (Parent Run ID)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRuns')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunsParentRunID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','LastRunID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','ParentRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunsParentRunID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunsParentRunID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -618,6 +618,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Runs (Last Run ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRunsLastRunID"
+        SectionName="AI Agent Runs (Last Run ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunsLastRunID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','LastRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunsLastRunID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunsLastRunID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
