@@ -574,8 +574,12 @@ export class SQLCodeGenBase {
             const result = await pool.query(viewDefSQL);
             const dbDefinition = result.recordset?.[0]?.ViewDefinition;
             if (!dbDefinition) {
-                // View doesn't exist in DB yet — it's new, will be handled by existing new entity logic
-                return false;
+                // View doesn't exist in the database. This happens when:
+                // 1. The entity is brand new (handled by newEntityList — early return above)
+                // 2. A previous CodeGen run dropped the view but CREATE VIEW failed
+                // In case 2, we must return true to force-log the view (and its TVFs)
+                // so they get recreated. Case 1 never reaches here due to the early return.
+                return true;
             }
 
             // Extract the SELECT body from both: everything after "AS\n" up to the trailing GO/permissions
@@ -731,23 +735,23 @@ export class SQLCodeGenBase {
                 options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
 
-                // ROOT ID FUNCTIONS (TVFs)
-                // Generate inline Table Value Functions for recursive foreign keys
-                // These must be created BEFORE the view that references them
+                // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
+                // TVFs must be created BEFORE the view that references them.
+                // We defer TVF logging until after baseViewChanged is computed so that
+                // TVFs are force-logged to the TempBatchFile whenever the view changes.
+                // This prevents "Invalid object name" errors when the view references
+                // TVFs that haven't been executed yet (e.g., when soft FKs are newly added).
                 const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
+                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string}> = [];
                 if (recursiveFKs.length > 0) {
                     for (const field of recursiveFKs) {
                         const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
-                        const s = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
+                        const tvfSQL = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
                                   this.generateRootIDFunction(options.entity, field);
-                        const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
-                        if (options.writeFiles) {
-                            this.writeFileIfChanged(filePath, s);
-                            this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                            files.push(filePath);
-                        }
+                        const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
+                        tvfEntries.push({sql: tvfSQL, filePath: tvfFilePath, fieldName: field.Name});
                         // Add function SQL to output BEFORE the view
-                        sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        sRet += tvfSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
                     }
                 }
 
@@ -758,6 +762,16 @@ export class SQLCodeGenBase {
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
                 // so logging stays centralized in logSQLForNewOrModifiedEntity.
                 baseViewChanged = await this.checkBaseViewChangedInDB(options.pool, options.entity, s);
+
+                // Now log TVFs with baseViewChanged as forceLog, ensuring they're included
+                // in TempBatchFile whenever the view that depends on them is also included
+                if (options.writeFiles) {
+                    for (const tvf of tvfEntries) {
+                        this.writeFileIfChanged(tvf.filePath, tvf.sql);
+                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, `Root ID Function SQL for ${options.entity.Name}.${tvf.fieldName}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        files.push(tvf.filePath);
+                    }
+                }
 
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
