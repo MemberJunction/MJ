@@ -635,23 +635,23 @@
 
     <!-- Record Merge Logs Section -->
     <mj-collapsible-panel
-        SectionKey="mJRecordMergeLogsInitiatedByUserID"
+        SectionKey="mJRecordMergeLogsApprovedByUserID"
         SectionName="Record Merge Logs"
         Icon="fa fa-clone"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRecordMergeLogsInitiatedByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJRecordMergeLogsApprovedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Logs','InitiatedByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Logs','ApprovedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Merge Logs')"
-                [AllowLoad]="IsSectionExpanded('mJRecordMergeLogsInitiatedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJRecordMergeLogsApprovedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRecordMergeLogsInitiatedByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordMergeLogsApprovedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1060,23 +1060,23 @@
 
     <!-- AI Agent Requests Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentRequestsResponseByUserID"
+        SectionKey="mJAIAgentRequestsRequestForUserID"
         SectionName="AI Agent Requests"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsResponseByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsRequestForUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','ResponseByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','RequestForUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsResponseByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsRequestForUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsResponseByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsRequestForUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1258,50 +1258,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scheduled Jobs (Notify User ID) Section -->
+    <!-- Scheduled Jobs (Owner User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJScheduledJobsNotifyUserID"
-        SectionName="Scheduled Jobs (Notify User ID)"
+        SectionKey="mJScheduledJobsOwnerUserID"
+        SectionName="Scheduled Jobs (Owner User ID)"
         Icon="fa fa-calendar"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScheduledJobsNotifyUserID')"
+        [BadgeCount]="GetSectionRowCount('mJScheduledJobsOwnerUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','NotifyUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','OwnerUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                [AllowLoad]="IsSectionExpanded('mJScheduledJobsNotifyUserID')"
+                [AllowLoad]="IsSectionExpanded('mJScheduledJobsOwnerUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScheduledJobsNotifyUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJScheduledJobsOwnerUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Permissions (User ID) Section -->
+    <!-- Artifact Permissions (Shared By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJArtifactPermissionsUserID"
-        SectionName="Artifact Permissions (User ID)"
+        SectionKey="mJArtifactPermissionsSharedByUserID"
+        SectionName="Artifact Permissions (Shared By User ID)"
         Icon="fa fa-key"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactPermissionsUserID')"
+        [BadgeCount]="GetSectionRowCount('mJArtifactPermissionsSharedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Permissions','UserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Permissions','SharedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactPermissionsUserID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactPermissionsSharedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactPermissionsUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactPermissionsSharedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1483,50 +1483,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Dashboard Permissions (Shared By User ID) Section -->
+    <!-- Dashboard Category Permissions (Shared By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJDashboardPermissionsSharedByUserID"
-        SectionName="Dashboard Permissions (Shared By User ID)"
-        Icon="fa fa-tachometer-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDashboardPermissionsSharedByUserID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','SharedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJDashboardPermissionsSharedByUserID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissionsSharedByUserID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Dashboard Category Permissions (User ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJDashboardCategoryPermissionsUserID"
-        SectionName="Dashboard Category Permissions (User ID)"
+        SectionKey="mJDashboardCategoryPermissionsSharedByUserID"
+        SectionName="Dashboard Category Permissions (Shared By User ID)"
         Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDashboardCategoryPermissionsUserID')"
+        [BadgeCount]="GetSectionRowCount('mJDashboardCategoryPermissionsSharedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','UserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','SharedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissionsUserID')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissionsSharedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissionsUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissionsSharedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1558,25 +1533,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- API Keys (User) Section -->
+    <!-- Dashboard Permissions (User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAPIKeysUserID"
-        SectionName="API Keys (User)"
-        Icon="fa fa-key"
+        SectionKey="mJDashboardPermissionsUserID"
+        SectionName="Dashboard Permissions (User ID)"
+        Icon="fa fa-tachometer-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAPIKeysUserID')"
+        [BadgeCount]="GetSectionRowCount('mJDashboardPermissionsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Keys','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Keys')"
-                [AllowLoad]="IsSectionExpanded('mJAPIKeysUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardPermissionsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIKeysUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissionsUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Keys (Created By User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIKeysCreatedByUserID"
+        SectionName="API Keys (Created By User)"
+        Icon="fa fa-key"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIKeysCreatedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Keys','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Keys')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeysCreatedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeysCreatedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1760,23 +1760,23 @@
 
     <!-- AI Agent Requests Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentRequestsRequestForUserID"
+        SectionKey="mJAIAgentRequestsResponseByUserID"
         SectionName="AI Agent Requests"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsRequestForUserID')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsResponseByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','RequestForUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','ResponseByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsRequestForUserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsResponseByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsRequestForUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsResponseByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1858,75 +1858,75 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scheduled Jobs (Owner User ID) Section -->
+    <!-- Scheduled Jobs (Notify User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJScheduledJobsOwnerUserID"
-        SectionName="Scheduled Jobs (Owner User ID)"
+        SectionKey="mJScheduledJobsNotifyUserID"
+        SectionName="Scheduled Jobs (Notify User ID)"
         Icon="fa fa-calendar"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScheduledJobsOwnerUserID')"
+        [BadgeCount]="GetSectionRowCount('mJScheduledJobsNotifyUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','OwnerUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','NotifyUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                [AllowLoad]="IsSectionExpanded('mJScheduledJobsOwnerUserID')"
+                [AllowLoad]="IsSectionExpanded('mJScheduledJobsNotifyUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScheduledJobsOwnerUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJScheduledJobsNotifyUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Collection Permissions (Shared By User ID) Section -->
+    <!-- Collection Permissions (User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJCollectionPermissionsSharedByUserID"
-        SectionName="Collection Permissions (Shared By User ID)"
+        SectionKey="mJCollectionPermissionsUserID"
+        SectionName="Collection Permissions (User ID)"
         Icon="fa fa-folder"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCollectionPermissionsSharedByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJCollectionPermissionsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','SharedByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJCollectionPermissionsSharedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCollectionPermissionsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCollectionPermissionsSharedByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCollectionPermissionsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Permissions (Shared By User ID) Section -->
+    <!-- Artifact Permissions (User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJArtifactPermissionsSharedByUserID"
-        SectionName="Artifact Permissions (Shared By User ID)"
+        SectionKey="mJArtifactPermissionsUserID"
+        SectionName="Artifact Permissions (User ID)"
         Icon="fa fa-key"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactPermissionsSharedByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJArtifactPermissionsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Permissions','SharedByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Permissions','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactPermissionsSharedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactPermissionsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactPermissionsSharedByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactPermissionsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1958,75 +1958,75 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Dashboard Category Permissions (Shared By User ID) Section -->
+    <!-- Dashboard Permissions (Shared By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJDashboardCategoryPermissionsSharedByUserID"
-        SectionName="Dashboard Category Permissions (Shared By User ID)"
-        Icon="fa fa-folder-open"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDashboardCategoryPermissionsSharedByUserID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','SharedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissionsSharedByUserID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissionsSharedByUserID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Dashboard Permissions (User ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJDashboardPermissionsUserID"
-        SectionName="Dashboard Permissions (User ID)"
+        SectionKey="mJDashboardPermissionsSharedByUserID"
+        SectionName="Dashboard Permissions (Shared By User ID)"
         Icon="fa fa-tachometer-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDashboardPermissionsUserID')"
+        [BadgeCount]="GetSectionRowCount('mJDashboardPermissionsSharedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','UserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','SharedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJDashboardPermissionsUserID')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardPermissionsSharedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissionsUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissionsSharedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- API Keys (Created By User) Section -->
+    <!-- Dashboard Category Permissions (User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAPIKeysCreatedByUserID"
-        SectionName="API Keys (Created By User)"
-        Icon="fa fa-key"
+        SectionKey="mJDashboardCategoryPermissionsUserID"
+        SectionName="Dashboard Category Permissions (User ID)"
+        Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAPIKeysCreatedByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJDashboardCategoryPermissionsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Keys','CreatedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Keys')"
-                [AllowLoad]="IsSectionExpanded('mJAPIKeysCreatedByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissionsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIKeysCreatedByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissionsUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Keys (User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIKeysUserID"
+        SectionName="API Keys (User)"
+        Icon="fa fa-key"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIKeysUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Keys','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Keys')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeysUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeysUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2183,50 +2183,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Collection Permissions (User ID) Section -->
+    <!-- Collection Permissions (Shared By User ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJCollectionPermissionsUserID"
-        SectionName="Collection Permissions (User ID)"
+        SectionKey="mJCollectionPermissionsSharedByUserID"
+        SectionName="Collection Permissions (Shared By User ID)"
         Icon="fa fa-folder"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCollectionPermissionsUserID')"
+        [BadgeCount]="GetSectionRowCount('mJCollectionPermissionsSharedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','UserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','SharedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJCollectionPermissionsUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCollectionPermissionsSharedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCollectionPermissionsUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCollectionPermissionsSharedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Record Merge Logs (Approved By User) Section -->
+    <!-- Record Merge Logs (Initiated By User) Section -->
     <mj-collapsible-panel
-        SectionKey="mJRecordMergeLogsApprovedByUserID"
-        SectionName="Record Merge Logs (Approved By User)"
+        SectionKey="mJRecordMergeLogsInitiatedByUserID"
+        SectionName="Record Merge Logs (Initiated By User)"
         Icon="fa fa-clone"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRecordMergeLogsApprovedByUserID')"
+        [BadgeCount]="GetSectionRowCount('mJRecordMergeLogsInitiatedByUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Logs','ApprovedByUserID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Logs','InitiatedByUserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Merge Logs')"
-                [AllowLoad]="IsSectionExpanded('mJRecordMergeLogsApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJRecordMergeLogsInitiatedByUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRecordMergeLogsApprovedByUserID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordMergeLogsInitiatedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -8415,7 +8415,7 @@ export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityMapID: z.string().describe(`
         * * Field Name: EntityMapID
-        * * Display Name: Entity Map ID
+        * * Display Name: Entity Map
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)`),
     Direction: z.union([z.literal('Pull'), z.literal('Push')]).describe(`
@@ -8468,7 +8468,7 @@ export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityMap: z.string().describe(`
         * * Field Name: EntityMap
-        * * Display Name: Entity Map
+        * * Display Name: Entity Map Name
         * * SQL Data Type: nvarchar(500)`),
 });
 
@@ -44929,7 +44929,7 @@ export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompan
 
     /**
     * * Field Name: EntityMapID
-    * * Display Name: Entity Map ID
+    * * Display Name: Entity Map
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)
     */
@@ -45040,7 +45040,7 @@ export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompan
 
     /**
     * * Field Name: EntityMap
-    * * Display Name: Entity Map
+    * * Display Name: Entity Map Name
     * * SQL Data Type: nvarchar(500)
     */
     get EntityMap(): string {

@@ -312,31 +312,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Component Dependencies (Dependency Component ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJComponentDependenciesDependencyComponentID"
-        SectionName="Component Dependencies (Dependency Component ID)"
-        Icon="fa fa-sitemap"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJComponentDependenciesDependencyComponentID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJComponentDependenciesDependencyComponentID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJComponentDependenciesDependencyComponentID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Component Dependencies (Component ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJComponentDependenciesComponentID"
@@ -356,6 +331,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentDependenciesComponentID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Component Dependencies (Dependency Component ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJComponentDependenciesDependencyComponentID"
+        SectionName="Component Dependencies (Dependency Component ID)"
+        Icon="fa fa-sitemap"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJComponentDependenciesDependencyComponentID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJComponentDependenciesDependencyComponentID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJComponentDependenciesDependencyComponentID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
