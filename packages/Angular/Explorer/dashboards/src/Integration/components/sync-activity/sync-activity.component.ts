@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { IRunViewProvider, RunView } from '@memberjunction/core';
@@ -129,7 +129,7 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
   }
 
   async OnRunClick(run: IntegrationRunRow): Promise<void> {
-    if (this.SelectedRunID === run.ID) {
+    if (UUIDsEqual(this.SelectedRunID, run.ID)) {
       this.SelectedRunID = null;
       this.RunDetails = [];
       this.Watermarks = [];
@@ -211,11 +211,11 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
   }
 
   IsSelectedRun(id: string): boolean {
-    return this.SelectedRunID === id;
+    return UUIDsEqual(this.SelectedRunID, id);
   }
 
   GetSelectedRun(): IntegrationRunRow | null {
-    return this.FilteredRuns.find(r => r.ID === this.SelectedRunID) ?? null;
+    return this.FilteredRuns.find(r => UUIDsEqual(r.ID, this.SelectedRunID)) ?? null;
   }
 
   StatusChipClass(status: string): string {
