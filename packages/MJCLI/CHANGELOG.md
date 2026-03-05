@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/cli
 
+## 5.7.0
+
+### Patch Changes
+
+- 178e891: Add configurable migration request timeout via `dbRequestTimeout` in mj.config.cjs and `MJ_MIGRATION_REQUEST_TIMEOUT` environment variable. Passes `RequestTimeout` through to Skyway-Core's database connection options, allowing long-running migrations (e.g., large index builds) to complete without hitting the default 5-minute timeout.
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-cli@5.7.0
+  - @memberjunction/codegen-lib@5.7.0
+  - @memberjunction/db-auto-doc@5.7.0
+  - @memberjunction/query-gen@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/metadata-sync@5.7.0
+  - @memberjunction/testing-cli@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/installer@5.7.0
+  - @memberjunction/sql-converter@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

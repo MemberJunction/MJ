@@ -1,5 +1,15 @@
 # @memberjunction/ng-tasks
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/core-entities@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes
