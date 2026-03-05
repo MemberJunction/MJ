@@ -337,16 +337,20 @@ ${fields}
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
     const validators = unsortedValidators.sort((a, b) => {
-      // sort by field name, then by function name
+      // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
-        return a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+        const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+        if (cmp !== 0) return cmp;
       } else if (a.fieldName) {
         return -1; // a comes first
       } else if (b.fieldName) {
         return 1; // b comes first
       } else {
-        return a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+        const cmp = a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+        if (cmp !== 0) return cmp;
       }
+      // last-resort tiebreaker for absolute determinism
+      return a.generatedCodeId.localeCompare(b.generatedCodeId);
     });
 
     if (validators.length === 0) {

@@ -1,8 +1,37 @@
 # MemberJunction Integration Engine — Architecture Plan
 
-> **Status**: Approved Draft
-> **Date**: March 3, 2026
-> **Branch**: `claude/study-integration-architecture-qW5p1`
+> **Status**: All Phases Complete (except DDL + Real API Providers)
+> **Author**: Claude Code
+> **Date**: 2026-02-26 (plan) · 2026-03-04 (final status update)
+> **Branch**: `claude/integration-engine-build` (PR #2056)
+
+---
+
+## Implementation Status Summary
+
+| Phase | Planned | Actual Status | Notes |
+|-------|---------|---------------|-------|
+| **Phase 1: Foundation** | Entities + Types + DataSyncUtils | **Partial** | DB schema done, types in engine pkg. DataSyncUtils not extracted — utilities live inside engine. ECDEngine not refactored. |
+| **Phase 2: Engine Core** | Orchestrator + Mapping + Matching | **COMPLETE** | 217 unit tests passing. IntegrationOrchestrator, FieldMappingEngine (9 transforms), MatchEngine (exact+fuzzy), WatermarkService, RetryRunner, ConnectorFactory. |
+| **Phase 3: Connectors** | HubSpot provider via BizApps Actions | **COMPLETE (modified)** | Implemented as SQL-based connectors to mock_data DB (HubSpot, Salesforce, YourMembership, FileFeed, RelationalDB). Real API providers deferred to post-DDL phase. |
+| **Phase 4: Angular Dashboards** | 4-tab Integration app | **COMPLETE** | Control Tower, Connection Studio, Mapping Workspace wired to live entity data. Sync Activity tab added with run history, error drill-down, watermark status. Application metadata JSON created. |
+| **Phase 5: ECD Enhancement** | External Changes tab | **Deferred** | To be done after DDL schema management is complete. |
+| **Phase 6: Scheduling + Polish** | Cron, notifications, locking | **COMPLETE** | `RunSyncAction` (16 tests), notification support with email-ready templates, concurrency locking, retry with exponential backoff, README docs for all packages. |
+
+### E2E Test Results (against Docker mock_data DB)
+
+| Test | Created | Updated | Deleted | Errors | Status |
+|------|---------|---------|---------|--------|--------|
+| Full Sync (initial + incremental) | 272 | 79 | 3 | 0 | **PASS** |
+| Iterative Stress (4 rounds × 3 integrations) | 60 | 228 | 8 | 0 | **PASS** |
+
+### Architectural Deviations from Plan
+
+1. **No separate `base-types` / `base-engine` packages** — All consolidated into `@memberjunction/integration-engine`. Simpler dependency graph, same functionality.
+2. **No `DataSyncUtils` shared package** — `DoValuesDiffer`, batch loading, etc. are internal to the engine package. ECDEngine refactoring deferred.
+3. **"Connectors" not "Providers via BizApps Actions"** — The plan envisioned thin providers that delegate to BizApps Actions for HTTP. The implementation uses direct SQL connectors to a `mock_data` database (HubSpot/SF/YM schemas). Converting to real API providers is a separate task.
+4. **No `integration-actions` MJ Action** — Engine is invoked directly, not through the MJ Actions system yet.
+5. **`integration-ui-types` added** — Angular-safe type definitions not in original plan.
 
 ---
 
@@ -10,315 +39,598 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Design Principles](#2-design-principles)
-3. [Non-Negotiables](#3-non-negotiables)
-4. [Existing Entities We Preserve](#4-existing-entities-we-preserve)
-5. [Unified Source Model](#5-unified-source-model)
-6. [Additive Metadata Entities](#6-additive-metadata-entities)
-7. [Core Abstractions](#7-core-abstractions)
-8. [Field Mapping & Transform Engine](#8-field-mapping--transform-engine)
-9. [Runtime Architecture](#9-runtime-architecture)
-10. [DB Connector Strategy](#10-db-connector-strategy)
-11. [SaaS API Connector Strategy](#11-saas-api-connector-strategy)
-12. [File Connector Strategy](#12-file-connector-strategy)
-13. [End-to-End Sync Flow](#13-end-to-end-sync-flow)
-14. [Package Structure](#14-package-structure)
-15. [UI Plan](#15-ui-plan)
-16. [Implementation Phases](#16-implementation-phases)
-17. [Success Criteria](#17-success-criteria)
+3. [System Architecture Overview](#3-system-architecture-overview)
+4. [Entity Model](#4-entity-model)
+5. [Package Structure](#5-package-structure)
+6. [Core Abstractions](#6-core-abstractions)
+7. [Field Mapping & Transform Engine](#7-field-mapping--transform-engine)
+8. [Schema Discovery](#8-schema-discovery)
+9. [Sync Flow — End to End](#9-sync-flow--end-to-end)
+10. [Provider Plugin System](#10-provider-plugin-system)
+11. [Data Sync Utils — Shared Extraction](#11-data-sync-utils--shared-extraction)
+12. [Scheduling Integration](#12-scheduling-integration)
+13. [External Change Detection Enhancement](#13-external-change-detection-enhancement)
+14. [Angular Dashboard — Integration Management](#14-angular-dashboard--integration-management)
+15. [Angular Dashboard — External Change Detection Tab](#15-angular-dashboard--external-change-detection-tab)
+16. [Phase Plan](#16-phase-plan)
+17. [Open Questions](#17-open-questions)
 
 ---
 
 ## 1. Executive Summary
 
-The **Integration Engine** is a metadata-driven orchestration layer that synchronises data between MemberJunction and external systems. It introduces a **unified connector model** so the same orchestration engine handles:
+The **Integration Engine** is a metadata-driven orchestration layer that synchronises data between MemberJunction and external systems (HubSpot, Salesforce, QuickBooks, etc.). It does **not** talk to APIs directly — it delegates all external communication to the existing **BizApps Action** layer, which already handles auth, pagination, retries, and rate limiting.
 
-1. **SaaS APIs** — HubSpot, Salesforce, QuickBooks, YourMembership, etc.
-2. **Relational Databases** — SQL Server, PostgreSQL, MySQL.
-3. **Files & Spreadsheets** — CSV, Excel, cloud file feeds (via MJ Storage).
-
-The key architectural insight is that we stop treating integrations as API-only "action calls" and treat them as **sources with a common contract** implemented through driver classes registered in the MJ class factory.
-
-### Engine Responsibility Map
+The engine's responsibilities are:
 
 | Concern | Owner |
 |---------|-------|
-| External communication (auth, HTTP, queries) | Connector (per source type) |
-| Which entities to sync, field mappings, transforms | Integration Engine |
-| When to sync (cron, manual, webhook) | Existing Scheduling Engine |
-| Record-level audit trail | Automatic via BaseEntity writes → Record Changes |
-| Run history and error logs | Existing `MJ: Company Integration Runs` + `MJ: Error Logs` |
+| External API communication (auth, HTTP, pagination) | BizApps Actions |
+| Which entities to sync, field mappings, transforms | **Integration Engine** |
+| When to sync (cron, manual trigger) | Scheduling Engine (existing) |
+| Detect changes inside MJ database | External Change Detection Engine (existing, enhanced) |
+| Detect changes in external systems | **Integration Engine** (via delta queries through Actions) |
+| Record-level audit trail | Record Changes (existing MJ framework feature) |
 
-### Key Decisions
+### Key Architecture Decisions
 
-1. **Source types are table-driven** — `MJ: Integration Source Types` with `DriverClass`, same pattern as Agent Types. Adding a new source type is a package drop-in, not a core engine change.
-2. **Connectors are pluggable** — any class extending `BaseIntegrationConnector` and registered via `@RegisterClass` is a valid connector.
-3. **SaaS connectors CAN use Actions but do not have to** — Actions are the encouraged pattern for reusability in agents and scheduling, but direct subclass implementations are fully supported.
-4. **File connectors must use MJ Storage** — no direct filesystem access; all file operations go through `@memberjunction/storage`.
-5. **Existing entities are never replaced** — all new capabilities are additive.
-6. **v1 is pull-only** but the entity model and interfaces are fully bidirectional by design.
+1. **Actions are the connectors** — the Integration Engine never makes HTTP calls.
+2. **Field mappings are metadata** — stored as JSON in the database, editable through UI.
+3. **v1 is pull-only** (external → MJ) but the entity model and interfaces are fully bidirectional.
+4. **CompanyIntegration** supports multi-instance — multiple HubSpot accounts for different subsidiaries unifying into one MJ instance.
+5. **Providers are plugins** — each provider is a `@RegisterClass`-decorated subclass of `BaseIntegrationProvider`.
+6. **Schema discovery is required** — providers must be able to interrogate external systems for available objects and fields, including custom objects/fields.
 
 ---
 
 ## 2. Design Principles
 
-1. **Metadata-driven** — Everything configurable through entities, not hard-coded logic.
-2. **Source-agnostic** — The engine works identically regardless of whether it talks to a REST API, SQL database, or a CSV file.
-3. **Driver class extensibility** — New source types and connectors are registered plugins; the engine never needs modification.
-4. **Thin connectors** — Connectors fetch data and return `ExternalRecord[]`. All mapping, matching, and writing lives in the engine.
-5. **Composable transforms** — Field mappings support a pipeline of ordered transform steps.
-6. **Incremental sync** — Watermark-based delta detection avoids full-table scans.
-7. **Observable** — Every sync run produces a detailed audit trail against existing run/detail entities.
-8. **Fail-safe** — Individual record failures do not abort the run; they're logged and the sync continues.
-9. **Multi-tenant aware** — `CompanyIntegration` isolates credentials and mappings per subsidiary/environment.
+1. **Metadata-driven** — Everything configurable through entities, not code.
+2. **Provider-agnostic** — The engine works the same regardless of whether it talks to HubSpot, Salesforce, or a flat file.
+3. **Thin providers** — Providers call Actions; they don't contain business logic beyond mapping conventions.
+4. **Composable transforms** — Field mappings support a pipeline of transform steps (regex, split, combine, lookup, format, custom).
+5. **Incremental sync** — Watermark-based delta detection avoids full-table scans.
+6. **Observable** — Every sync run produces a detailed audit trail (Integration Run → Run Details).
+7. **Multi-tenant aware** — CompanyIntegration isolates credentials and mappings per subsidiary.
+8. **Fail-safe** — Individual record failures don't abort the run; they're logged and the sync continues.
 
 ---
 
-## 3. Non-Negotiables
+## 3. System Architecture Overview
 
-1. Do not replace or rename existing integration entities.
-2. Do not break current run history, record map, or credential behavior.
-3. All new capabilities are additive only.
-4. One orchestration flow for SaaS API, DB, and file sources.
-5. Keep v1 implementation scope controlled and shippable.
+### 3.1 High-Level Component Map
+
+```mermaid
+graph TB
+    subgraph "External Systems"
+        HS[HubSpot]
+        SF[Salesforce]
+        QB[QuickBooks]
+    end
+
+    subgraph "BizApps Actions Layer"
+        BA_HS["HubSpot Actions<br/>(Auth, CRUD, Search, Schema)"]
+        BA_SF["Salesforce Actions<br/>(future)"]
+        BA_QB["QuickBooks Actions<br/>(future)"]
+    end
+
+    subgraph "Integration Engine"
+        IE["IntegrationEngine<br/>(Orchestrator)"]
+        FME["FieldMappingEngine<br/>(Transforms)"]
+        RM["RecordMatcher<br/>(Dedup/Match)"]
+        PRV["Provider Plugins<br/>(HubSpot, SF, QB)"]
+    end
+
+    subgraph "Shared Utilities"
+        DSU["DataSyncUtils<br/>(DoValuesDiffer, BatchLoader,<br/>SyncLoopBase, Progress)"]
+    end
+
+    subgraph "MJ Core"
+        MD[(MJ Database)]
+        ECD["ExternalChangeDetection<br/>(Enhanced)"]
+        SCH["Scheduling Engine<br/>(Cron Triggers)"]
+        RC["Record Changes<br/>(Audit Trail)"]
+    end
+
+    subgraph "Angular UI"
+        INT_DASH["Integration Dashboard<br/>(4 tabs)"]
+        VH_TAB["Version History<br/>'External Changes' tab"]
+    end
+
+    HS <--> BA_HS
+    SF <--> BA_SF
+    QB <--> BA_QB
+
+    BA_HS --> PRV
+    BA_SF --> PRV
+    BA_QB --> PRV
+
+    PRV --> IE
+    IE --> FME
+    IE --> RM
+    IE --> DSU
+
+    IE --> MD
+    ECD --> DSU
+    ECD --> MD
+    SCH -->|"Triggers"| IE
+    MD --> RC
+
+    INT_DASH --> IE
+    VH_TAB --> ECD
+```
+
+### 3.2 Data Flow — Pull Sync
+
+```mermaid
+sequenceDiagram
+    participant SCH as Scheduling Engine
+    participant IE as Integration Engine
+    participant PRV as HubSpot Provider
+    participant ACT as BizApps Actions
+    participant HS as HubSpot API
+    participant FME as Field Mapping Engine
+    participant RM as Record Matcher
+    participant DB as MJ Database
+
+    SCH->>IE: Trigger sync (CompanyIntegrationID)
+    IE->>DB: Create IntegrationRun (Status=Running)
+    IE->>DB: Load EntityMaps + FieldMaps + Watermarks
+
+    loop For each Entity Map
+        IE->>PRV: FetchChangedRecords(context, batchSize)
+        PRV->>ACT: RunAction("Search HubSpot Contacts", params)
+        ACT->>HS: GET /crm/v3/objects/contacts?...
+        HS-->>ACT: JSON response
+        ACT-->>PRV: Action result
+        PRV-->>IE: ExternalRecord[]
+
+        IE->>FME: ApplyMappings(records, fieldMaps)
+        FME-->>IE: MappedRecord[]
+
+        IE->>RM: FindExistingRecords(mappedRecords)
+        RM->>DB: RunView with key field filters
+        DB-->>RM: Existing MJ records
+        RM-->>IE: Matched records (Create/Update/Skip)
+
+        loop For each record
+            IE->>DB: entity.Save() — Create or Update
+            DB-->>IE: Save result
+        end
+
+        IE->>DB: Update watermark
+        IE->>DB: Update IntegrationRunDetail
+    end
+
+    IE->>DB: Finalize IntegrationRun (Status=Completed)
+```
+
+### 3.3 Layered Architecture
+
+```mermaid
+graph LR
+    subgraph "Layer 1: UI"
+        A["Angular Dashboard<br/>Integration Management"]
+    end
+
+    subgraph "Layer 2: Actions"
+        B["Integration Actions<br/>(Run Sync, Query, Manage)"]
+    end
+
+    subgraph "Layer 3: Engine"
+        C["Integration Engine<br/>(Orchestration)"]
+        D["Field Mapping Engine<br/>(Transforms)"]
+    end
+
+    subgraph "Layer 4: Providers"
+        E["BaseIntegrationProvider"]
+        F["HubSpotProvider"]
+        G["SalesforceProvider"]
+    end
+
+    subgraph "Layer 5: Connectors"
+        H["BizApps Actions<br/>(HTTP, Auth, Pagination)"]
+    end
+
+    subgraph "Layer 6: External"
+        I["External APIs"]
+    end
+
+    A --> B
+    B --> C
+    C --> D
+    C --> E
+    E --> F
+    E --> G
+    F --> H
+    G --> H
+    H --> I
+```
 
 ---
 
-## 4. Existing Entities We Preserve
+## 4. Entity Model
 
-The following entities already exist and remain first-class:
+### 4.1 Entity Relationship Diagram
 
-| Entity | Notes |
-|--------|-------|
-| `MJ: Integrations` | Integration definition (renamed in MJ to `Integration`) |
-| `MJ: Company Integrations` | Per-company integration instance |
-| `MJ: Company Integration Runs` | One record per sync execution |
-| `MJ: Company Integration Run Details` | Per-entity results within a run |
-| `MJ: Company Integration Run API Logs` | API request/response traces |
-| `MJ: Company Integration Record Maps` | External ID ↔ MJ record ID mapping |
-| `MJ: Employee Company Integrations` | Employee-level integration assignments |
-| `MJ: Integration URL Formats` | URL pattern definitions |
-| `MJ: Record Changes` | Automatic via BaseEntity — no integration-specific attribution needed |
-| `MJ: Error Logs` | Already has `CompanyIntegrationRunID` and `CompanyIntegrationRunDetailID` links |
+```mermaid
+erDiagram
+    INTEGRATION_PROVIDERS ||--o{ COMPANY_INTEGRATIONS : "has many"
+    COMPANY_INTEGRATIONS ||--o{ INTEGRATION_ENTITY_MAPS : "has many"
+    INTEGRATION_ENTITY_MAPS ||--o{ INTEGRATION_FIELD_MAPS : "has many"
+    INTEGRATION_ENTITY_MAPS ||--o{ INTEGRATION_SYNC_WATERMARKS : "has many"
+    COMPANY_INTEGRATIONS ||--o{ INTEGRATION_RUNS : "has many"
+    INTEGRATION_RUNS ||--o{ INTEGRATION_RUN_DETAILS : "has many"
+    INTEGRATION_RUN_DETAILS }o--|| INTEGRATION_ENTITY_MAPS : "references"
 
-These entities are already wired into generated GraphQL, Angular forms, and existing action base classes. Replacing them creates avoidable migration and regression risk.
+    INTEGRATION_PROVIDERS {
+        uuid ID PK
+        string Name
+        string Description
+        string IconClass
+        string DriverClass
+        boolean SupportsSchemaDiscovery
+        string SupportedSyncDirections
+        string Status
+    }
 
----
+    COMPANY_INTEGRATIONS {
+        uuid ID PK
+        uuid CompanyID FK
+        uuid IntegrationProviderID FK
+        string Name
+        string Description
+        string ExternalSystemURL
+        json Configuration
+        json AuthConfiguration
+        string Status
+        string SyncDirection
+        datetime LastSyncAt
+        datetime NextSyncAt
+    }
 
-## 5. Unified Source Model
+    INTEGRATION_ENTITY_MAPS {
+        uuid ID PK
+        uuid CompanyIntegrationID FK
+        string ExternalObjectName
+        string ExternalObjectLabel
+        uuid EntityID FK
+        string SyncDirection
+        boolean SyncEnabled
+        json MatchStrategy
+        string ConflictResolution
+        int Priority
+        string DeleteBehavior
+        string Status
+        json Configuration
+    }
 
-### 5.1 Core Concept
+    INTEGRATION_FIELD_MAPS {
+        uuid ID PK
+        uuid EntityMapID FK
+        string SourceFieldName
+        string SourceFieldLabel
+        string DestinationFieldName
+        string DestinationFieldLabel
+        string Direction
+        json TransformPipeline
+        boolean IsKeyField
+        boolean IsRequired
+        string DefaultValue
+        int Priority
+        string Status
+    }
 
-Every configured `CompanyIntegration` is a **Source Instance**. Each source instance is backed by a connector implementation resolved from the integration's source type. All connectors implement the same base contract regardless of where the data lives.
+    INTEGRATION_SYNC_WATERMARKS {
+        uuid ID PK
+        uuid EntityMapID FK
+        string Direction
+        string WatermarkType
+        string WatermarkValue
+        datetime LastSyncAt
+        int RecordsSynced
+    }
 
-### 5.2 Source Types as a Metadata Table
+    INTEGRATION_RUNS {
+        uuid ID PK
+        uuid CompanyIntegrationID FK
+        string Direction
+        string Status
+        datetime StartedAt
+        datetime CompletedAt
+        string TriggerType
+        int TotalRecordsProcessed
+        int TotalRecordsCreated
+        int TotalRecordsUpdated
+        int TotalRecordsDeleted
+        int TotalRecordsErrored
+        int TotalRecordsSkipped
+        string ErrorMessage
+        json Configuration
+        uuid ExecutedByUserID FK
+        uuid ScheduledJobRunID FK
+    }
 
-Source types are **not** a code enum. They are rows in `MJ: Integration Source Types` with a `DriverClass` column — exactly how `MJ: AI Agent Types` works in the agent framework.
+    INTEGRATION_RUN_DETAILS {
+        uuid ID PK
+        uuid IntegrationRunID FK
+        uuid EntityMapID FK
+        string Status
+        int RecordsProcessed
+        int RecordsCreated
+        int RecordsUpdated
+        int RecordsDeleted
+        int RecordsErrored
+        int RecordsSkipped
+        datetime StartedAt
+        datetime CompletedAt
+        string ErrorMessage
+        json Details
+        string WatermarkBefore
+        string WatermarkAfter
+    }
+```
 
-#### `MJ: Integration Source Types` entity
+### 4.2 Entity Detail
+
+#### MJ: Integration Providers
+Represents an external system type (e.g., "HubSpot", "Salesforce").
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `ID` | UUID PK | |
-| `Name` | nvarchar(200) | e.g., `"SaaS API"`, `"Relational Database"`, `"File Feed"` |
+| `Name` | nvarchar(200) | "HubSpot", "Salesforce", etc. |
 | `Description` | nvarchar(max) | |
-| `DriverClass` | nvarchar(500) | `@RegisterClass` name, e.g. `"SaaSAPIConnector"` |
-| `IconClass` | nvarchar(200) | Font Awesome class |
+| `IconClass` | nvarchar(200) | Font Awesome class, e.g. `fa-brands fa-hubspot` |
+| `DriverClass` | nvarchar(500) | `@RegisterClass` name, e.g. `HubSpotIntegrationProvider` |
+| `SupportsSchemaDiscovery` | bit | Can interrogate source for objects/fields |
+| `SupportedSyncDirections` | nvarchar(50) | `'Pull'` \| `'Push'` \| `'Bidirectional'` |
 | `Status` | nvarchar(50) | `'Active'` \| `'Inactive'` |
 
-**Seeded source types** (v1):
-
-| Name | DriverClass |
-|------|-------------|
-| `SaaS API` | `SaaSAPIConnector` |
-| `Relational Database` | `RelationalDBConnector` |
-| `File Feed` | `FileFeedConnector` |
-
-Adding a `NoSQL Database` or `Event Stream` source type in the future requires only a new package + row insertion. No changes to the engine.
-
-### 5.3 Unified Connector Contract
-
-```typescript
-// packages/Integration/engine/src/BaseIntegrationConnector.ts
-
-export interface ConnectionTestResult {
-    Success: boolean;
-    Message: string;
-    Details?: Record<string, string | number | boolean>;
-}
-
-export interface ExternalObjectSchema {
-    Name: string;
-    Label: string;
-    Description?: string;
-    SupportsIncremental: boolean;
-}
-
-export interface ExternalFieldSchema {
-    Name: string;
-    Label: string;
-    DataType: string;
-    IsNullable: boolean;
-    IsCustomField: boolean;
-}
-
-export interface FetchContext {
-    CompanyIntegration: CompanyIntegrationEntity;
-    EntityMap: CompanyIntegrationEntityMapEntity;
-    FieldMaps: CompanyIntegrationFieldMapEntity[];
-    Watermark?: CompanyIntegrationSyncWatermarkEntity;
-    BatchSize: number;
-    ContextUser: UserInfo;
-}
-
-export interface FetchBatchResult {
-    Records: ExternalRecord[];
-    HasMore: boolean;
-    NextWatermark?: string;
-    TotalAvailable?: number;
-}
-
-export abstract class BaseIntegrationConnector {
-
-    /**
-     * Validate credentials and reachability.
-     */
-    abstract TestConnection(
-        companyIntegration: CompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<ConnectionTestResult>;
-
-    /**
-     * Return available objects/tables/sheets in the source.
-     * Used by the UI when setting up entity maps.
-     */
-    abstract DiscoverObjects(
-        companyIntegration: CompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]>;
-
-    /**
-     * Return fields for a specific source object.
-     * Includes custom/dynamic fields where supported.
-     */
-    abstract DiscoverFields(
-        companyIntegration: CompanyIntegrationEntity,
-        objectName: string,
-        contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]>;
-
-    /**
-     * Fetch records changed since the watermark value (incremental),
-     * or all records if no watermark is set (initial load).
-     */
-    abstract FetchChanges(ctx: FetchContext): Promise<FetchBatchResult>;
-
-    /**
-     * Provider-specific default field mappings for well-known objects.
-     * Returns suggested mappings the user can accept or customize.
-     */
-    GetDefaultFieldMappings(
-        objectName: string,
-        entityName: string
-    ): DefaultFieldMapping[] {
-        return [];  // Default: no suggestions — connectors override as needed
-    }
-}
-```
-
-Connectors are registered via `@RegisterClass`:
-
-```typescript
-@RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
-export class HubSpotConnector extends BaseIntegrationConnector {
-    // ...
-}
-```
-
-The `ConnectorFactory` resolves the correct class by looking up the `Integration.SourceTypeID → IntegrationSourceType.DriverClass` chain.
-
----
-
-## 6. Additive Metadata Entities
-
-We add exactly the metadata needed to support generalized sync. Nothing here touches existing entities.
-
-### 6.1 New Entities
-
-| Entity | Purpose |
-|--------|---------|
-| `MJ: Integration Source Types` | Driver class registry for source types |
-| `MJ: Company Integration Entity Maps` | Maps a source object to an MJ entity |
-| `MJ: Company Integration Field Maps` | Field-level mapping with transform pipeline |
-| `MJ: Company Integration Sync Watermarks` | Incremental sync cursor/position per entity map |
-
-### 6.2 `MJ: Company Integration Entity Maps`
-
-Maps a source object (API endpoint, table, sheet) to an MJ entity within a specific `CompanyIntegration`.
+#### MJ: Company Integrations
+A specific instance of a provider for a company. Supports multi-instance (e.g., Acme Corp HubSpot, Beta Inc HubSpot).
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `ID` | UUID PK | |
-| `CompanyIntegrationID` | UUID FK | Parent company integration |
-| `ExternalObjectName` | nvarchar(500) | Source name: `"contacts"`, `"public.customers"`, `"Sheet1"` |
-| `ExternalObjectLabel` | nvarchar(500) | Display label for UI |
-| `EntityID` | UUID FK | Target MJ entity |
+| `CompanyID` | UUID FK | FK to Companies |
+| `IntegrationProviderID` | UUID FK | FK to Integration Providers |
+| `Name` | nvarchar(200) | "Acme Corp HubSpot" |
+| `Description` | nvarchar(max) | |
+| `ExternalSystemURL` | nvarchar(1000) | e.g. `https://app.hubspot.com/...` |
+| `Configuration` | nvarchar(max) | JSON: provider-specific settings |
+| `AuthConfiguration` | nvarchar(max) | JSON: encrypted credentials reference |
+| `Status` | nvarchar(50) | `'Active'` \| `'Inactive'` \| `'Error'` |
 | `SyncDirection` | nvarchar(50) | `'Pull'` \| `'Push'` \| `'Bidirectional'` |
+| `LastSyncAt` | datetimeoffset | |
+| `NextSyncAt` | datetimeoffset | |
+
+#### MJ: Integration Entity Maps
+Maps an external object type to an MJ entity within a specific company integration.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | UUID PK | |
+| `CompanyIntegrationID` | UUID FK | |
+| `ExternalObjectName` | nvarchar(500) | API name: `"contacts"`, `"p_custom_123"` |
+| `ExternalObjectLabel` | nvarchar(500) | Display: `"Contacts"`, `"Custom Widget"` |
+| `EntityID` | UUID FK | FK to MJ Entities |
+| `SyncDirection` | nvarchar(50) | Override per entity |
 | `SyncEnabled` | bit | |
-| `MatchStrategy` | nvarchar(max) | JSON: key fields and match mode |
+| `MatchStrategy` | nvarchar(max) | JSON: how to match records |
 | `ConflictResolution` | nvarchar(50) | `'SourceWins'` \| `'DestWins'` \| `'MostRecent'` \| `'Manual'` |
 | `Priority` | int | Processing order |
 | `DeleteBehavior` | nvarchar(50) | `'SoftDelete'` \| `'DoNothing'` \| `'HardDelete'` |
 | `Status` | nvarchar(50) | `'Active'` \| `'Inactive'` |
-| `Configuration` | nvarchar(max) | JSON: connector-specific overrides |
+| `Configuration` | nvarchar(max) | JSON: entity-level overrides |
 
-### 6.3 `MJ: Company Integration Field Maps`
-
-Field-level mapping with an optional transform pipeline.
+#### MJ: Integration Field Maps
+Field-level mapping with transform pipeline.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `ID` | UUID PK | |
-| `EntityMapID` | UUID FK | Parent entity map |
-| `SourceFieldName` | nvarchar(500) | e.g., `"firstname"` |
-| `SourceFieldLabel` | nvarchar(500) | e.g., `"First Name"` |
-| `DestinationFieldName` | nvarchar(500) | e.g., `"FirstName"` |
-| `DestinationFieldLabel` | nvarchar(500) | e.g., `"First Name"` |
+| `EntityMapID` | UUID FK | |
+| `SourceFieldName` | nvarchar(500) | `"firstname"` |
+| `SourceFieldLabel` | nvarchar(500) | `"First Name"` |
+| `DestinationFieldName` | nvarchar(500) | `"FirstName"` |
+| `DestinationFieldLabel` | nvarchar(500) | `"First Name"` |
 | `Direction` | nvarchar(50) | `'SourceToDest'` \| `'DestToSource'` \| `'Both'` |
 | `TransformPipeline` | nvarchar(max) | JSON: array of transform steps |
 | `IsKeyField` | bit | Used for record matching |
 | `IsRequired` | bit | |
-| `DefaultValue` | nvarchar(max) | Applied when source value is null |
+| `DefaultValue` | nvarchar(max) | When source is null |
 | `Priority` | int | Processing order |
 | `Status` | nvarchar(50) | `'Active'` \| `'Inactive'` |
 
-### 6.4 `MJ: Company Integration Sync Watermarks`
-
-Tracks incremental sync position per entity map per direction.
+#### MJ: Integration Sync Watermarks
+Tracks last-sync position per entity map per direction.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `ID` | UUID PK | |
-| `EntityMapID` | UUID FK | Parent entity map |
+| `EntityMapID` | UUID FK | |
 | `Direction` | nvarchar(50) | `'Pull'` \| `'Push'` |
 | `WatermarkType` | nvarchar(50) | `'Timestamp'` \| `'Cursor'` \| `'ChangeToken'` \| `'Version'` |
-| `WatermarkValue` | nvarchar(max) | Serialized position value |
+| `WatermarkValue` | nvarchar(max) | Stringified position |
 | `LastSyncAt` | datetimeoffset | |
 | `RecordsSynced` | int | Count from last sync |
 
-### 6.5 Why These Are Additive-Safe
+#### MJ: Integration Runs
+One record per sync execution.
 
-1. They do not duplicate run, record map, or company integration entities.
-2. They fill current gaps: object mapping, field-level mapping, incremental cursor state.
-3. They let us support SQL tables, views, and file sheets the same way we support SaaS objects.
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | UUID PK | |
+| `CompanyIntegrationID` | UUID FK | |
+| `Direction` | nvarchar(50) | |
+| `Status` | nvarchar(50) | `'Running'` \| `'Completed'` \| `'Failed'` \| `'Cancelled'` |
+| `StartedAt` | datetimeoffset | |
+| `CompletedAt` | datetimeoffset | |
+| `TriggerType` | nvarchar(50) | `'Scheduled'` \| `'Manual'` \| `'Webhook'` |
+| `TotalRecordsProcessed` | int | |
+| `TotalRecordsCreated` | int | |
+| `TotalRecordsUpdated` | int | |
+| `TotalRecordsDeleted` | int | |
+| `TotalRecordsErrored` | int | |
+| `TotalRecordsSkipped` | int | |
+| `ErrorMessage` | nvarchar(max) | |
+| `Configuration` | nvarchar(max) | JSON: snapshot at run time |
+| `ExecutedByUserID` | UUID FK | |
+| `ScheduledJobRunID` | UUID FK | nullable — links to scheduling |
+
+#### MJ: Integration Run Details
+Per-entity results within a run.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | UUID PK | |
+| `IntegrationRunID` | UUID FK | |
+| `EntityMapID` | UUID FK | |
+| `Status` | nvarchar(50) | `'Completed'` \| `'Failed'` \| `'Partial'` |
+| `RecordsProcessed` | int | |
+| `RecordsCreated` | int | |
+| `RecordsUpdated` | int | |
+| `RecordsDeleted` | int | |
+| `RecordsErrored` | int | |
+| `RecordsSkipped` | int | |
+| `StartedAt` | datetimeoffset | |
+| `CompletedAt` | datetimeoffset | |
+| `ErrorMessage` | nvarchar(max) | |
+| `Details` | nvarchar(max) | JSON: per-record error log |
+| `WatermarkBefore` | nvarchar(max) | Position at start |
+| `WatermarkAfter` | nvarchar(max) | Position at end |
+
+### 4.3 Entity Naming
+
+Following MJ convention, all new entities use the **"MJ: "** prefix:
+
+| Entity Name | Table Name |
+|-------------|-----------|
+| `MJ: Integration Providers` | `__mj.IntegrationProvider` |
+| `MJ: Company Integrations` | `__mj.CompanyIntegration` |
+| `MJ: Integration Entity Maps` | `__mj.IntegrationEntityMap` |
+| `MJ: Integration Field Maps` | `__mj.IntegrationFieldMap` |
+| `MJ: Integration Sync Watermarks` | `__mj.IntegrationSyncWatermark` |
+| `MJ: Integration Runs` | `__mj.IntegrationRun` |
+| `MJ: Integration Run Details` | `__mj.IntegrationRunDetail` |
 
 ---
 
-## 7. Core Abstractions
+## 5. Package Structure (Original Plan)
 
-### 7.1 Type Definitions
+> **Implementation Note**: The actual build consolidated this into 3 packages (`engine`, `connectors`, `ui-types`) instead of the 5 planned below. See [Section 18](#18-actual-package-structure-as-built) for the as-built structure.
+
+Following the Scheduling package's proven multi-package pattern:
+
+```mermaid
+graph TB
+    subgraph "packages/Integration/"
+        BT["base-types/<br/>@memberjunction/integration-base-types<br/><i>Interfaces, enums, type defs</i>"]
+        BE["base-engine/<br/>@memberjunction/integration-base-engine<br/><i>Metadata caching, FieldMappingEngine</i>"]
+        EN["engine/<br/>@memberjunction/integration-engine<br/><i>Main orchestrator (server-side)</i>"]
+        AC["actions/<br/>@memberjunction/integration-actions<br/><i>MJ Actions for programmatic access</i>"]
+    end
+
+    subgraph "packages/Integration/providers/"
+        PH["hubspot/<br/>@memberjunction/integration-provider-hubspot<br/><i>HubSpot provider plugin</i>"]
+        PS["salesforce/<br/><i>(future)</i>"]
+        PQ["quickbooks/<br/><i>(future)</i>"]
+    end
+
+    subgraph "packages/DataSyncUtils/"
+        DSU["@memberjunction/data-sync-utils<br/><i>Shared: DoValuesDiffer, BatchLoader,<br/>SyncLoopBase, ProgressReporter</i>"]
+    end
+
+    subgraph "Existing Packages (Modified)"
+        ECD["ExternalChangeDetection/<br/><i>Refactored to use DataSyncUtils</i>"]
+        DASH["Angular/Explorer/dashboards/<br/><i>New Integration + ECD tabs</i>"]
+        CRM["Actions/BizApps/CRM/<br/><i>New schema discovery actions</i>"]
+    end
+
+    BT --> BE
+    BT --> EN
+    BE --> EN
+    EN --> AC
+    BT --> PH
+    EN --> PH
+    DSU --> EN
+    DSU --> ECD
+    PH --> CRM
+```
+
+### Directory Layout
+
+```
+packages/Integration/
+├── README.md
+│
+├── base-types/              ← @memberjunction/integration-base-types
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts
+│       ├── types.ts         ← Core interfaces, enums, type definitions
+│       ├── field-mapping.ts ← FieldMap, TransformPipeline interfaces
+│       └── schema.ts        ← SchemaDiscovery interfaces
+│
+├── base-engine/             ← @memberjunction/integration-base-engine
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts
+│       ├── IntegrationEngineBase.ts  ← Metadata caching, config loading
+│       └── FieldMappingEngine.ts     ← Transform pipeline execution
+│
+├── engine/                  ← @memberjunction/integration-engine
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts
+│       ├── IntegrationEngine.ts      ← Main orchestration (server-side)
+│       ├── BaseIntegrationProvider.ts ← Abstract provider base class
+│       ├── SyncOrchestrator.ts       ← Per-entity sync loop
+│       └── RecordMatcher.ts          ← Match external → MJ records
+│
+├── actions/                 ← @memberjunction/integration-actions
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts
+│       ├── BaseIntegrationAction.ts
+│       ├── RunSyncAction.ts
+│       ├── QueryIntegrationsAction.ts
+│       └── ManageEntityMapsAction.ts
+│
+└── providers/
+    └── hubspot/             ← @memberjunction/integration-provider-hubspot
+        ├── package.json
+        └── src/
+            ├── index.ts
+            ├── HubSpotProvider.ts
+            ├── HubSpotSchemaDiscovery.ts
+            └── HubSpotFieldDefaults.ts
+
+packages/DataSyncUtils/      ← @memberjunction/data-sync-utils  (NEW)
+├── package.json
+├── tsconfig.json
+└── src/
+    ├── index.ts
+    ├── ValueComparison.ts   ← Extracted DoValuesDiffer + type coercion
+    ├── BatchRecordLoader.ts ← Extracted batch PK loading pattern
+    ├── RunLifecycle.ts      ← Generic run/detail record management
+    ├── ProgressReporter.ts  ← Console + event progress reporting
+    └── SyncLoopBase.ts      ← Abstract "iterate changed/new/deleted" base
+```
+
+---
+
+## 6. Core Abstractions
+
+### 6.1 Integration Provider Interface
 
 ```typescript
-// packages/Integration/engine/src/types.ts
+// packages/Integration/base-types/src/types.ts
 
 export type SyncDirection = 'Pull' | 'Push' | 'Bidirectional';
 export type SyncTriggerType = 'Scheduled' | 'Manual' | 'Webhook';
@@ -331,7 +643,7 @@ export type IntegrationRunStatus = 'Running' | 'Completed' | 'Failed' | 'Cancell
 export interface ExternalRecord {
     ExternalID: string;
     ObjectType: string;
-    Fields: Record<string, unknown>;
+    Fields: Record<string, unknown>;  // Raw field values from source
     ModifiedAt?: Date;
     IsDeleted?: boolean;
 }
@@ -339,9 +651,9 @@ export interface ExternalRecord {
 export interface MappedRecord {
     ExternalRecord: ExternalRecord;
     MJEntityName: string;
-    MappedFields: Record<string, unknown>;
+    MappedFields: Record<string, unknown>;  // After transform pipeline
     ChangeType: RecordChangeType;
-    MatchedMJRecordID?: string;
+    MatchedMJRecordID?: string;  // If matched to existing record
 }
 
 export interface SyncResult {
@@ -363,142 +675,137 @@ export interface SyncRecordError {
     ExternalRecord?: ExternalRecord;
 }
 
-export interface DefaultFieldMapping {
-    SourceFieldName: string;
-    DestinationFieldName: string;
-    TransformPipeline?: TransformStep[];
-    IsKeyField?: boolean;
+export interface SyncContext {
+    CompanyIntegration: CompanyIntegrationEntity;
+    EntityMap: IntegrationEntityMapEntity;
+    FieldMaps: IntegrationFieldMapEntity[];
+    Direction: SyncDirection;
+    Watermark?: IntegrationSyncWatermarkEntity;
+    ContextUser: UserInfo;
+    RunID: string;
 }
 ```
 
-> **Naming convention:** All public class/interface members use **PascalCase**. Private and protected members use **camelCase**. This applies throughout all integration packages.
-
-### 7.2 Connector Factory
+### 6.2 Base Integration Provider
 
 ```typescript
-// packages/Integration/engine/src/ConnectorFactory.ts
+// packages/Integration/engine/src/BaseIntegrationProvider.ts
 
-export class ConnectorFactory {
+export abstract class BaseIntegrationProvider {
 
-    static Resolve(
-        integration: CompanyIntegrationEntity,
-        sourceTypes: IntegrationSourceTypeEntity[]
-    ): BaseIntegrationConnector {
-        const sourceType = sourceTypes.find(
-            st => st.ID === integration.SourceTypeID
-        );
-        if (!sourceType) {
-            throw new Error(`Unknown source type for integration: ${integration.Name}`);
-        }
-
-        const connectorClass = MJGlobal.Instance.ClassFactory.CreateInstance<BaseIntegrationConnector>(
-            BaseIntegrationConnector,
-            sourceType.DriverClass
-        );
-        if (!connectorClass) {
-            throw new Error(`No connector registered for driver class: ${sourceType.DriverClass}`);
-        }
-        return connectorClass;
-    }
-}
-```
-
-### 7.3 Integration Orchestrator
-
-```typescript
-// packages/Integration/engine/src/IntegrationOrchestrator.ts
-
-export class IntegrationOrchestrator {
-
-    async RunSync(
-        companyIntegrationID: string,
-        contextUser: UserInfo,
-        triggerType: SyncTriggerType = 'Manual'
-    ): Promise<SyncResult> {
-        const run = await this.createRun(companyIntegrationID, triggerType, contextUser);
-        try {
-            const entityMaps = await this.loadEntityMaps(companyIntegrationID, contextUser);
-            for (const entityMap of entityMaps) {
-                await this.syncEntityMap(run, entityMap, contextUser);
-            }
-            return await this.finalizeRun(run, contextUser);
-        } catch (error) {
-            return await this.failRun(run, error, contextUser);
-        }
-    }
-
-    private async syncEntityMap(
-        run: CompanyIntegrationRunEntity,
-        entityMap: CompanyIntegrationEntityMapEntity,
+    /**
+     * Returns external object types available in the source system.
+     * Used by the UI for entity mapping setup.
+     * Calls schema discovery BizApps Actions under the hood.
+     */
+    abstract DiscoverObjects(
+        companyIntegration: CompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<void> {
-        const detail = await this.createRunDetail(run, entityMap, contextUser);
-        const watermark = await this.watermarkService.Load(entityMap.ID, contextUser);
-        const connector = ConnectorFactory.Resolve(run.CompanyIntegration, this.sourceTypes);
+    ): Promise<ExternalObjectSchema[]>;
 
-        const fetchCtx: FetchContext = {
-            CompanyIntegration: run.CompanyIntegration,
-            EntityMap: entityMap,
-            FieldMaps: await this.loadFieldMaps(entityMap.ID, contextUser),
-            Watermark: watermark ?? undefined,
-            BatchSize: this.config.DefaultBatchSize,
-            ContextUser: contextUser,
-        };
+    /**
+     * Returns fields/properties for a specific external object.
+     * Includes custom fields. Used by the field mapping UI.
+     */
+    abstract DiscoverObjectFields(
+        companyIntegration: CompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]>;
 
-        const batch = await connector.FetchChanges(fetchCtx);
-        const mapped = this.fieldMappingEngine.Apply(batch.Records, fetchCtx.FieldMaps);
-        const matched = await this.matchEngine.Resolve(mapped, entityMap, contextUser);
-        const result = await this.applyRecords(matched, entityMap, contextUser);
+    /**
+     * Fetch records from the external system changed since watermark.
+     * Returns raw ExternalRecords — the engine handles mapping.
+     */
+    abstract FetchChangedRecords(
+        context: SyncContext,
+        batchSize: number
+    ): Promise<FetchResult>;
 
-        await this.watermarkService.Update(entityMap.ID, batch.NextWatermark, contextUser);
-        await this.finalizeRunDetail(detail, result, contextUser);
+    /**
+     * (Future v2) Push MJ record changes to the external system.
+     */
+    async PushRecords(
+        context: SyncContext,
+        records: MappedRecord[]
+    ): Promise<SyncResult> {
+        throw new Error('Push sync not implemented for this provider');
     }
+
+    /**
+     * Validate credentials and connectivity.
+     */
+    abstract TestConnection(
+        companyIntegration: CompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ConnectionTestResult>;
+
+    /**
+     * Provider-specific default field mappings for well-known objects.
+     * Returns suggested mappings that the user can customize.
+     */
+    abstract GetDefaultFieldMappings(
+        objectName: string,
+        entityName: string
+    ): DefaultFieldMapping[];
+}
+
+export interface FetchResult {
+    Records: ExternalRecord[];
+    HasMore: boolean;
+    NextWatermark?: string;      // Cursor/token for next batch
+    TotalAvailable?: number;     // If known
+}
+
+export interface ConnectionTestResult {
+    Success: boolean;
+    Message: string;
+    Details?: Record<string, unknown>;
 }
 ```
 
 ---
 
-## 8. Field Mapping & Transform Engine
+## 7. Field Mapping & Transform Engine
 
-### 8.1 Transform Pipeline Concept
+### 7.1 Transform Pipeline Architecture
 
-Each field map can carry an ordered array of transform steps. Steps are applied sequentially — the output of each step is the input to the next.
+```mermaid
+graph LR
+    SRC["Source Field Value<br/><i>'+1 (555) 123-4567'</i>"]
+    T1["Step 1: regex<br/><i>Extract digits</i>"]
+    T2["Step 2: substring<br/><i>Get area code</i>"]
+    T3["Step 3: coerce<br/><i>String → Number</i>"]
+    DST["Destination Field<br/><i>AreaCode = 555</i>"]
 
-```
-Source Field Value → [Step 1] → [Step 2] → ... → Destination Field Value
-```
-
-Stored as a JSON array in `TransformPipeline`:
-
-```json
-[
-    { "Type": "regex",  "Config": { "Pattern": "^\\+1\\s?", "Replacement": "" }, "OnError": "Null" },
-    { "Type": "format", "Config": { "FormatType": "phone", "OutputFormat": "E164" }, "OnError": "Skip" }
-]
+    SRC --> T1 --> T2 --> T3 --> DST
 ```
 
-### 8.2 Transform Types
+Each field mapping can have a **pipeline** of transform steps applied in order. This is stored as a JSON array in the `TransformPipeline` column.
+
+### 7.2 Transform Types
 
 ```typescript
-// packages/Integration/engine/src/transforms.ts
+// packages/Integration/base-types/src/field-mapping.ts
 
 export type TransformType =
-    | 'direct'      // Pass through unchanged
-    | 'regex'       // Regex replace with capture groups
-    | 'split'       // Split one field into multiple by delimiter
-    | 'combine'     // Combine multiple source fields into one
-    | 'lookup'      // Map discrete values via a lookup table
-    | 'format'      // Date, number, phone, currency formatting
-    | 'substring'   // Extract substring by offset/length
+    | 'direct'      // Pass through (no transform)
+    | 'regex'       // Apply regex with capture groups
+    | 'split'       // Split one field into multiple
+    | 'combine'     // Combine multiple fields into one
+    | 'lookup'      // Map values via a lookup table
+    | 'format'      // Format string (date, number, etc.)
+    | 'substring'   // Extract substring
     | 'coerce'      // Type coercion (string→number, etc.)
-    | 'custom';     // Sandboxed JS expression
+    | 'custom';     // Custom JS expression (sandboxed)
 
 export interface TransformStep {
     Type: TransformType;
     Config: TransformConfig;
-    OnError: 'Skip' | 'Null' | 'Fail';
+    OnError: 'Skip' | 'Null' | 'Fail';  // What to do if transform fails
 }
 
+// Union type for all transform configs
 export type TransformConfig =
     | DirectConfig
     | RegexConfig
@@ -509,26 +816,34 @@ export type TransformConfig =
     | SubstringConfig
     | CoerceConfig
     | CustomConfig;
+```
 
+### 7.3 Transform Config Interfaces
+
+```typescript
 export interface RegexConfig {
-    Pattern: string;
-    Replacement: string;
-    Flags?: string;
+    Pattern: string;          // Regex with capture groups
+    Replacement: string;      // Using $1, $2, etc.
+    Flags?: string;           // 'g', 'i', 'gi', etc.
 }
 
 export interface SplitConfig {
     Delimiter: string;
-    Index: number;
+    Index: number;            // Which part (0-based)
     TrimWhitespace?: boolean;
 }
 
 export interface CombineConfig {
-    /** Field references use {{FieldName}} syntax */
+    /**
+     * Field references use {{FieldName}} syntax.
+     * e.g., ["{{FirstName}}", " ", "{{LastName}}"]
+     */
     Parts: string[];
     Separator?: string;
 }
 
 export interface LookupConfig {
+    /** e.g., { "subscriber": "Active", "unsubscribed": "Inactive" } */
     Map: Record<string, string>;
     DefaultValue?: string;
     CaseSensitive?: boolean;
@@ -536,35 +851,47 @@ export interface LookupConfig {
 
 export interface FormatConfig {
     FormatType: 'date' | 'number' | 'phone' | 'currency';
-    InputFormat?: string;
-    OutputFormat: string;
+    InputFormat?: string;      // e.g., 'MM/DD/YYYY'
+    OutputFormat: string;      // e.g., 'YYYY-MM-DD'
     Locale?: string;
 }
 
 export interface CoerceConfig {
     TargetType: 'string' | 'number' | 'boolean' | 'date';
-    TrueValues?: string[];
+    TrueValues?: string[];     // For boolean: ['yes', '1', 'true']
     FalseValues?: string[];
-}
-
-export interface SubstringConfig {
-    Start: number;
-    Length?: number;
 }
 
 export interface CustomConfig {
     /**
-     * Sandboxed JS expression. Available variables:
-     * - `value` — current field value
-     * - `record` — full ExternalRecord.Fields map
+     * JS expression in sandboxed context.
+     * `value` = current field value, `record` = full external record.
+     * e.g., "value.trim().toLowerCase()"
      */
     Expression: string;
 }
 ```
 
-### 8.3 Transform Examples
+### 7.4 Transform Examples
 
-#### Status value lookup (HubSpot lifecycle stage → MJ status)
+#### Phone Number Split (1 HubSpot field → 3 MJ fields)
+
+```mermaid
+graph LR
+    SRC["HubSpot 'phone'<br/><i>+1 (555) 123-4567</i>"]
+
+    SRC --> R1["regex: extract country<br/><i>Pattern: ^\\+?(\\d{1,3})</i>"]
+    R1 --> CC["MJ CountryCode<br/><i>1</i>"]
+
+    SRC --> R2["regex: extract area<br/><i>Pattern: \\(?(\\d{3})\\)?</i>"]
+    R2 --> AC["MJ AreaCode<br/><i>555</i>"]
+
+    SRC --> R3["regex: extract local<br/><i>Pattern: (\\d{3}[\\s.-]?\\d{4})$</i>"]
+    R3 --> R4["regex: strip separators"]
+    R4 --> PH["MJ Phone<br/><i>1234567</i>"]
+```
+
+#### Status Lookup (HubSpot lifecycle → MJ status)
 
 ```json
 {
@@ -575,12 +902,13 @@ export interface CustomConfig {
             "Type": "lookup",
             "Config": {
                 "Map": {
-                    "subscriber":             "Lead",
-                    "lead":                   "Lead",
+                    "subscriber": "Lead",
+                    "lead": "Lead",
                     "marketingqualifiedlead": "MQL",
-                    "salesqualifiedlead":     "SQL",
-                    "opportunity":            "Opportunity",
-                    "customer":               "Customer"
+                    "salesqualifiedlead": "SQL",
+                    "opportunity": "Opportunity",
+                    "customer": "Customer",
+                    "evangelist": "Advocate"
                 },
                 "DefaultValue": "Unknown",
                 "CaseSensitive": false
@@ -591,795 +919,954 @@ export interface CustomConfig {
 }
 ```
 
-#### Date format normalization
+#### Name Combine (2 MJ fields → 1 HubSpot field, future Push)
 
 ```json
 {
-    "Type": "format",
-    "Config": {
-        "FormatType": "date",
-        "InputFormat": "MM/DD/YYYY",
-        "OutputFormat": "YYYY-MM-DD"
-    },
-    "OnError": "Null"
+    "SourceFieldName": "FullName",
+    "DestinationFieldName": "FullName",
+    "Direction": "DestToSource",
+    "TransformPipeline": [
+        {
+            "Type": "combine",
+            "Config": {
+                "Parts": ["{{FirstName}}", " ", "{{LastName}}"]
+            },
+            "OnError": "Skip"
+        }
+    ]
 }
 ```
 
----
-
-## 9. Runtime Architecture
-
-### 9.1 Existing Assets — Keep As-Is
-
-- Existing action framework and class registration model
-- Existing `CompanyIntegration` credential patterns
-- Existing run/detail/audit and record map entities
-- Existing scheduling engine and action-based job triggers
-
-### 9.2 New Runtime Components
-
-| Component | Responsibility |
-|-----------|---------------|
-| `IntegrationOrchestrator` | Run lifecycle — creates run, iterates entity maps, finalizes |
-| `ConnectorFactory` | Resolves `BaseIntegrationConnector` subclass from source type driver class |
-| `FieldMappingEngine` | Applies the transform pipeline for each field map |
-| `MatchEngine` | Resolves record identity using key fields + `CompanyIntegrationRecordMap` |
-| `WatermarkService` | Reads/writes `Company Integration Sync Watermarks` |
-
-### 9.3 Data Flow — Pull Sync
-
-```
-Scheduler / Manual trigger
-        │
-        ▼
-IntegrationOrchestrator
-  ├─ Create CompanyIntegrationRun
-  └─ For each active EntityMap:
-       ├─ Create CompanyIntegrationRunDetail
-       ├─ WatermarkService.Load()
-       ├─ ConnectorFactory.Resolve() → BaseIntegrationConnector
-       ├─ connector.FetchChanges(ctx) → ExternalRecord[]
-       ├─ FieldMappingEngine.Apply() → MappedRecord[]
-       ├─ MatchEngine.Resolve() → (Create | Update | Skip) per record
-       ├─ entity.Save() per record  ← Record Changes created automatically
-       ├─ WatermarkService.Update()
-       └─ Finalize RunDetail counters/errors
-  └─ Finalize CompanyIntegrationRun aggregate status
-```
-
-### 9.4 Record Changes
-
-Writes go through `BaseEntity.Save()` which automatically creates `Record Changes` entries. No integration-specific attribution logic is needed — the framework handles this.
-
----
-
-## 10. DB Connector Strategy
-
-### 10.1 Source Representation
-
-Each external database source is represented by:
-
-1. An `Integration` row for the DB type (`SQL Server`, `PostgreSQL`, `MySQL`).
-2. A `CompanyIntegration` row for the concrete instance (host, db, credentials).
-3. Credentials stored via standard `CompanyIntegration` auth configuration.
-
-### 10.2 Extraction Modes
-
-Per entity map, support three source object modes:
-
-| Mode | Description |
-|------|-------------|
-| `TableMode` | Source object is a table — SELECT with watermark WHERE clause |
-| `ViewMode` | Source object is a view — same as TableMode |
-| `QueryMode` | Source object is a managed SQL query stored in `Configuration` |
-
-### 10.3 Incremental Sync Strategies
-
-| Strategy | When to Use |
-|----------|-------------|
-| Timestamp watermark | Source has an `UpdatedAt`-style column |
-| Numeric high-water mark | Source uses identity, version, or sequence column |
-| Cursor token | Connector-managed opaque cursor |
-| Bounded full scan | No incremental signal — full scan with checkpoint batching |
-
-### 10.4 Safety Controls
-
-- Read-only DB credentials enforced by convention and documented in setup.
-- Schema allow-list per `CompanyIntegration` — only allowed schemas can be queried.
-- Max rows per batch and per run enforced in orchestrator.
-- Watermark/key columns should be indexed — orchestrator warns if not.
-- All SQL queries are parameterized — no dynamic SQL construction from untrusted input.
-
----
-
-## 11. SaaS API Connector Strategy
-
-### 11.1 Action-Backed Pattern (Recommended)
-
-The recommended approach for SaaS connectors is to delegate external calls to BizApps Actions. Actions are independently useful in agents, scheduled jobs, and low-code workflows — so the investment is shared.
+### 7.5 Field Mapping Engine
 
 ```typescript
-@RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
-export class HubSpotConnector extends BaseIntegrationConnector {
+// packages/Integration/base-engine/src/FieldMappingEngine.ts
 
-    async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const actionRunner = new ActionEngine();
-        const result = await actionRunner.RunAction('Search HubSpot Contacts', {
-            After: ctx.Watermark?.WatermarkValue,
-            Limit: ctx.BatchSize,
-        }, ctx.ContextUser);
+export class FieldMappingEngine {
 
-        return this.parseActionResult(result);
+    /**
+     * Apply all field maps to an external record, producing mapped MJ field values.
+     * Processes maps in Priority order. Handles multi-source-field transforms (combine).
+     */
+    ApplyMappings(
+        externalRecord: ExternalRecord,
+        fieldMaps: IntegrationFieldMapEntity[],
+        direction: SyncDirection
+    ): MappingResult {
+        const result: MappingResult = {
+            MappedFields: {},
+            Errors: [],
+            SkippedFields: []
+        };
+
+        const activeMaps = fieldMaps
+            .filter(m => m.Status === 'Active' && this.matchesDirection(m, direction))
+            .sort((a, b) => a.Priority - b.Priority);
+
+        for (const map of activeMaps) {
+            try {
+                const sourceValue = externalRecord.Fields[map.SourceFieldName];
+                const transformed = this.ExecuteTransformPipeline(
+                    sourceValue,
+                    map.TransformPipeline,
+                    externalRecord
+                );
+                result.MappedFields[map.DestinationFieldName] = transformed;
+            } catch (error) {
+                result.Errors.push({
+                    FieldMap: map,
+                    Error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Each step's output becomes the next step's input.
+     */
+    ExecuteTransformPipeline(
+        value: unknown,
+        pipeline: TransformStep[] | null,
+        fullRecord: ExternalRecord
+    ): unknown {
+        if (!pipeline || pipeline.length === 0) return value;
+
+        let current = value;
+        for (const step of pipeline) {
+            current = this.executeStep(step, current, fullRecord);
+        }
+        return current;
     }
 }
 ```
 
-### 11.2 Direct Implementation Pattern (Also Valid)
+---
 
-A connector can implement the external calls directly. This is appropriate when:
+## 8. Schema Discovery
 
-- A dedicated BizApps Action does not exist for the source.
-- The integration logic is complex enough that a direct implementation is cleaner.
-- The source API is proprietary or unusual.
+### 8.1 The Problem
 
-```typescript
-@RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')
-export class YourMembershipConnector extends BaseIntegrationConnector {
+External systems like HubSpot and Salesforce allow users to create **custom objects** and **custom fields**. We cannot hardcode schemas. The integration engine must be able to:
 
-    async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const credentials = this.loadCredentials(ctx.CompanyIntegration);
-        const response = await fetch(`${credentials.BaseUrl}/api/members`, {
-            headers: { Authorization: `Bearer ${credentials.Token}` },
-        });
-        // ...
-    }
-}
+1. **List available objects** — including custom objects
+2. **List fields per object** — including custom fields with their types and constraints
+3. **Suggest default mappings** — for well-known standard objects
+
+### 8.2 Schema Discovery Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as Angular Mapping UI
+    participant IE as Integration Engine
+    participant PRV as HubSpot Provider
+    participant ACT as BizApps Action
+    participant HS as HubSpot API
+
+    UI->>IE: DiscoverObjects(companyIntegrationID)
+    IE->>PRV: DiscoverObjects(companyIntegration, user)
+    PRV->>ACT: RunAction("Get HubSpot Object Types")
+    ACT->>HS: GET /crm/v3/schemas
+    HS-->>ACT: Object schemas
+    ACT-->>PRV: Action result
+    PRV-->>IE: ExternalObjectSchema[]
+    IE-->>UI: Available objects list
+
+    UI->>IE: DiscoverObjectFields(companyIntegrationID, "contacts")
+    IE->>PRV: DiscoverObjectFields(companyIntegration, "contacts", user)
+    PRV->>ACT: RunAction("Get HubSpot Object Fields")
+    ACT->>HS: GET /crm/v3/properties/contacts
+    HS-->>ACT: Property definitions
+    ACT-->>PRV: Action result
+    PRV-->>IE: ExternalFieldSchema[]
+    IE-->>UI: Available fields for mapping
+
+    Note over UI: User creates field mappings<br/>with transforms in visual editor
 ```
 
-Both patterns are valid and produce the same `FetchBatchResult` output. The engine does not know or care which pattern a connector uses.
+### 8.3 Schema Discovery Interfaces
 
-### 11.3 SaaS Connector Requirements
+```typescript
+// packages/Integration/base-types/src/schema.ts
 
-- API request/response traces flow into `MJ: Company Integration Run API Logs`.
-- Schema discovery should surface custom objects and fields where the API supports it.
-- Pagination and rate-limit logic stays inside the connector.
+export interface ExternalObjectSchema {
+    Name: string;                  // API name: "contacts", "p_custom_123"
+    Label: string;                 // Display: "Contacts", "Custom Widget"
+    Description?: string;
+    IsCustomObject: boolean;
+    SupportsSearch: boolean;
+    SupportsCRUD: {
+        Create: boolean;
+        Read: boolean;
+        Update: boolean;
+        Delete: boolean;
+    };
+    EstimatedRecordCount?: number;
+}
+
+export interface ExternalFieldSchema {
+    Name: string;                  // API name: "firstname", "hs_custom_123"
+    Label: string;                 // Display: "First Name"
+    Description?: string;
+    FieldType: ExternalFieldType;
+    IsCustomField: boolean;
+    IsRequired: boolean;
+    IsReadOnly: boolean;
+    IsUnique: boolean;
+    MaxLength?: number;
+    Options?: FieldOption[];       // For enum/select fields
+    DefaultValue?: unknown;
+    GroupName?: string;            // Field group in source system
+}
+
+export type ExternalFieldType =
+    | 'string' | 'number' | 'boolean' | 'date' | 'datetime'
+    | 'email' | 'phone' | 'url' | 'currency' | 'percent'
+    | 'enum' | 'multi_enum' | 'json' | 'reference' | 'file' | 'unknown';
+```
+
+### 8.4 New BizApps Actions Required
+
+The HubSpot BizApps package needs new schema discovery actions:
+
+| Action | HubSpot API Endpoint | Purpose |
+|--------|---------------------|---------|
+| `GetObjectTypesAction` | `GET /crm/v3/schemas` | List all object types (standard + custom) |
+| `GetObjectFieldsAction` | `GET /crm/v3/properties/{objectType}` | List all properties for an object |
+| `GetAssociationTypesAction` | `GET /crm/v3/associations/{from}/{to}/types` | List relationship types |
+
+These follow the existing BizApps action pattern (extend `HubSpotBaseAction`, use `makeHubSpotRequest`).
 
 ---
 
-## 12. File Connector Strategy
+## 9. Sync Flow — End to End
 
-### 12.1 MJ Storage Dependency
+### 9.1 Pull Sync (External → MJ)
 
-**All file access must go through `@memberjunction/storage`.** No direct filesystem access or raw `fs` calls. This ensures files work consistently regardless of whether they live locally, in Azure Blob Storage, S3, SharePoint, or any other storage provider.
+```mermaid
+flowchart TB
+    START([Trigger: Schedule / Manual / Webhook]) --> INIT
+
+    subgraph INIT ["1. Initialize"]
+        A1[Create IntegrationRun record<br/>Status = Running]
+        A2[Load CompanyIntegration]
+        A3[Load EntityMaps + FieldMaps]
+        A4[Instantiate Provider via ClassFactory]
+        A1 --> A2 --> A3 --> A4
+    end
+
+    INIT --> LOOP
+
+    subgraph LOOP ["2. For Each Entity Map (by Priority)"]
+        B1[Create IntegrationRunDetail]
+        B2[Load watermark for this entity]
+
+        subgraph FETCH ["2a. Fetch"]
+            C1["Provider.FetchChangedRecords(context)"]
+            C2["Provider calls BizApps Search Action"]
+            C3["Returns ExternalRecord[] with raw values"]
+            C1 --> C2 --> C3
+        end
+
+        subgraph MAP ["2b. Map"]
+            D1["FieldMappingEngine.ApplyMappings()"]
+            D2["Execute transform pipeline per field"]
+            D3["Produce MappedRecord[] with MJ values"]
+            D1 --> D2 --> D3
+        end
+
+        subgraph MATCH ["2c. Match"]
+            E1["RecordMatcher.FindExistingRecords()"]
+            E2["Query MJ by key fields"]
+            E3["Classify: Create / Update / Skip"]
+            E1 --> E2 --> E3
+        end
+
+        subgraph DIFF ["2d. Diff"]
+            F1["DataSyncUtils.DoValuesDiffer()"]
+            F2["Skip if no actual changes"]
+            F1 --> F2
+        end
+
+        subgraph APPLY ["2e. Apply"]
+            G1["GetEntityObject → set fields → Save()"]
+            G2["Log errors per record, continue on failure"]
+            G3["MJ Record Changes auto-tracks audit trail"]
+            G1 --> G2 --> G3
+        end
+
+        subgraph WATERMARK ["2f. Watermark"]
+            H1["Update sync watermark"]
+            H2["Update IntegrationRunDetail with counts"]
+            H1 --> H2
+        end
+
+        B1 --> B2 --> FETCH --> MAP --> MATCH --> DIFF --> APPLY --> WATERMARK
+    end
+
+    LOOP --> FINAL
+
+    subgraph FINAL ["3. Finalize"]
+        I1["Aggregate counts across entity details"]
+        I2["Update IntegrationRun<br/>Status = Completed/Failed"]
+        I3["Send notifications if configured"]
+        I1 --> I2 --> I3
+    end
+
+    FINAL --> DONE([Done])
+```
+
+### 9.2 Record Matching Strategy
+
+The `MatchStrategy` JSON on `Integration Entity Maps` defines how to match external records to MJ records:
+
+```json
+{
+    "Strategy": "KeyFields",
+    "KeyFields": ["Email"],
+    "FallbackStrategy": "CreateNew",
+    "DuplicateHandling": "UseFirst"
+}
+```
+
+**Strategies:**
+- **KeyFields** — Match on one or more mapped fields marked `IsKeyField=true`
+- **ExternalID** — Store external system ID in a dedicated MJ field
+- **Composite** — Multiple field match (e.g., FirstName + LastName + Company)
+
+### 9.3 Batch Processing Model
+
+```mermaid
+flowchart LR
+    subgraph "Pagination Loop"
+        F["FetchChangedRecords<br/>(batchSize=100)"]
+        P["Process Batch<br/>(Map → Match → Diff → Apply)"]
+        W["Update Watermark<br/>(cursor/timestamp)"]
+        C{"HasMore?"}
+
+        F --> P --> W --> C
+        C -->|Yes| F
+        C -->|No| DONE([Complete])
+    end
+```
+
+---
+
+## 10. Provider Plugin System
+
+### 10.1 Provider Registration
+
+```mermaid
+graph TB
+    subgraph "Class Hierarchy"
+        BIP["BaseIntegrationProvider<br/><i>(abstract)</i>"]
+        HSP["HubSpotProvider<br/>@RegisterClass(BaseIntegrationProvider,<br/>'HubSpotIntegrationProvider')"]
+        SFP["SalesforceProvider<br/><i>(future)</i>"]
+        QBP["QuickBooksProvider<br/><i>(future)</i>"]
+
+        BIP --> HSP
+        BIP --> SFP
+        BIP --> QBP
+    end
+
+    subgraph "BizApps Actions (used by providers)"
+        HS_ACT["HubSpot Actions<br/>(22 existing + 3 new schema actions)"]
+        SF_ACT["Salesforce Actions<br/><i>(future)</i>"]
+    end
+
+    HSP --> HS_ACT
+    SFP --> SF_ACT
+```
+
+### 10.2 HubSpot Provider Implementation
 
 ```typescript
-@RegisterClass(BaseIntegrationConnector, 'FileFeedConnector')
-export class FileFeedConnector extends BaseIntegrationConnector {
+import { RegisterClass } from '@memberjunction/global';
 
-    async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const storageProvider = MJStorageProviderFactory.GetProvider();
-        const fileData = await storageProvider.GetFile(
-            ctx.CompanyIntegration.Configuration.StoragePath
+@RegisterClass(BaseIntegrationProvider, 'HubSpotIntegrationProvider')
+export class HubSpotIntegrationProvider extends BaseIntegrationProvider {
+
+    async DiscoverObjects(
+        companyIntegration: CompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        // Calls the new GetObjectTypes BizApps Action
+        const result = await ActionEngineServer.Instance.RunAction(
+            'Get HubSpot Object Types',
+            { CompanyID: companyIntegration.CompanyID },
+            contextUser
         );
-        return this.parseFile(fileData, ctx.EntityMap.Configuration);
+        return this.mapObjectSchemas(result);
+    }
+
+    async FetchChangedRecords(
+        context: SyncContext,
+        batchSize: number
+    ): Promise<FetchResult> {
+        const objectName = context.EntityMap.ExternalObjectName;
+        const watermark = context.Watermark?.WatermarkValue;
+
+        // Uses existing Search BizApps Actions with date filter
+        const result = await ActionEngineServer.Instance.RunAction(
+            `Search HubSpot ${this.capitalize(objectName)}`,
+            {
+                CompanyID: context.CompanyIntegration.CompanyID,
+                ...(watermark ? { CreatedAfter: watermark } : {}),
+                Limit: batchSize,
+                IncludeProperties: context.FieldMaps.map(m => m.SourceFieldName)
+            },
+            context.ContextUser
+        );
+
+        return {
+            Records: this.mapToExternalRecords(result, objectName),
+            HasMore: result.PagingInfo?.hasMore ?? false,
+            NextWatermark: result.PagingInfo?.after
+        };
     }
 }
 ```
 
-### 12.2 Supported Formats
+### 10.3 Provider Registration in Metadata
 
-- CSV — schema inferred from header row, types normalized.
-- Excel (.xlsx) — sheet selection via `EntityMap.ExternalObjectName` (e.g., `"Sheet1"`).
+Each provider gets a row in `MJ: Integration Providers`:
 
-### 12.3 Recurrent File Feeds
-
-Files can be re-ingested on schedule. Watermarking for file feeds tracks last modified timestamp or file content hash to skip unchanged files.
-
-### 12.4 One File → Many Entities
-
-A single file with multiple sheets can have one `EntityMap` per sheet, each mapping to a different MJ entity.
+| Name | DriverClass | SupportsSchemaDiscovery | SupportedSyncDirections |
+|------|------------|------------------------|------------------------|
+| HubSpot | `HubSpotIntegrationProvider` | true | `Bidirectional` |
+| Salesforce | `SalesforceIntegrationProvider` | true | `Bidirectional` |
+| QuickBooks | `QuickBooksIntegrationProvider` | true | `Pull` |
 
 ---
 
-## 13. End-to-End Sync Flow
+## 11. Data Sync Utils — Shared Extraction
 
-1. Trigger run (manual, scheduled, or webhook).
-2. Create `MJ: Company Integration Run` with `Status = 'Running'`.
-3. Load all active entity maps + their field maps for the integration.
-4. For each entity map (in priority order):
-   1. Create `MJ: Company Integration Run Detail`.
-   2. Load watermark from `MJ: Company Integration Sync Watermarks`.
-   3. Resolve connector via `ConnectorFactory`.
-   4. Call `connector.FetchChanges(ctx)` → `ExternalRecord[]`.
-   5. Apply transform pipeline via `FieldMappingEngine` → `MappedRecord[]`.
-   6. Resolve existing MJ records via `MatchEngine` (uses `CompanyIntegrationRecordMap`).
-   7. For each record: call `entity.Save()` (creates/updates MJ record + automatic Record Changes entry).
-   8. Update `MJ: Company Integration Record Maps` for new records.
-   9. Advance watermark in `MJ: Company Integration Sync Watermarks`.
-   10. Finalize run detail with counters and any per-record errors.
-5. Finalize run aggregate status (`Completed`, `Failed`, or `Partial`).
+### 11.1 What Gets Extracted from ECDEngine
+
+| Utility | Source in ECDEngine | Why It's Shared |
+|---------|-------------------|-----------------|
+| `DoValuesDiffer()` | `ChangeDetector.ts:261-291` | Both ECD and Integration need type-aware field comparison |
+| `BatchRecordLoader` | `ChangeDetector.ts:330-386` | Efficient PK-based bulk loading pattern |
+| `SyncLoopBase` | New abstraction | "Iterate changed/new/deleted, call abstract per-record handler" |
+| `ProgressReporter` | `ChangeDetector.ts:481-544` | Console + event-based progress for any sync operation |
+| `RunLifecycleManager` | `ChangeDetector.ts:594-621` | Create run → update progress → finalize pattern |
+| `getPrimaryKeyString()` | `ChangeDetector.ts:389-391` | SQL PK string builder for composite keys |
+
+### 11.2 SyncLoopBase — Abstract Change Iterator
+
+This is the core abstraction: a base class that iterates over source changes and calls abstract methods for each change type.
+
+```mermaid
+classDiagram
+    class SyncLoopBase~TSourceRecord, TContext~ {
+        <<abstract>>
+        +ProcessChanges(context: TContext) SyncLoopResult
+        #FetchSourceRecords(context: TContext)* TSourceRecord[]
+        #DetermineChangeType(record, context)* RecordChangeType
+        #HandleCreate(record, context)* void
+        #HandleUpdate(record, context)* void
+        #HandleDelete(record, context)* void
+        #OnProgress(result, total) void
+        #ContinueOnError: boolean
+    }
+
+    class IntegrationSyncLoop {
+        #FetchSourceRecords() calls Provider.FetchChangedRecords
+        #DetermineChangeType() uses RecordMatcher
+        #HandleCreate() creates MJ entity
+        #HandleUpdate() updates MJ entity
+        #HandleDelete() applies DeleteBehavior
+    }
+
+    class ECDReplayLoop {
+        #FetchSourceRecords() reads from RecordChanges
+        #HandleCreate() replays creation
+        #HandleUpdate() replays field changes
+        #HandleDelete() replays deletion
+    }
+
+    SyncLoopBase <|-- IntegrationSyncLoop
+    SyncLoopBase <|-- ECDReplayLoop
+```
+
+```typescript
+// packages/DataSyncUtils/src/SyncLoopBase.ts
+
+export abstract class SyncLoopBase<TSourceRecord, TContext> {
+
+    async ProcessChanges(context: TContext): Promise<SyncLoopResult> {
+        const result = new SyncLoopResult();
+        const sourceRecords = await this.FetchSourceRecords(context);
+
+        for (const record of sourceRecords) {
+            const changeType = await this.DetermineChangeType(record, context);
+
+            try {
+                switch (changeType) {
+                    case 'Create':
+                        await this.HandleCreate(record, context);
+                        result.Created++;
+                        break;
+                    case 'Update':
+                        await this.HandleUpdate(record, context);
+                        result.Updated++;
+                        break;
+                    case 'Delete':
+                        await this.HandleDelete(record, context);
+                        result.Deleted++;
+                        break;
+                    case 'Skip':
+                        result.Skipped++;
+                        break;
+                }
+                result.Processed++;
+                this.OnProgress(result, sourceRecords.length);
+            } catch (error) {
+                result.Errored++;
+                result.Errors.push({ Record: record, Error: error });
+                if (!this.ContinueOnError) throw error;
+            }
+        }
+        return result;
+    }
+
+    // --- Abstract methods subclasses implement ---
+    abstract FetchSourceRecords(context: TContext): Promise<TSourceRecord[]>;
+    abstract DetermineChangeType(record: TSourceRecord, context: TContext): Promise<RecordChangeType>;
+    abstract HandleCreate(record: TSourceRecord, context: TContext): Promise<void>;
+    abstract HandleUpdate(record: TSourceRecord, context: TContext): Promise<void>;
+    abstract HandleDelete(record: TSourceRecord, context: TContext): Promise<void>;
+
+    protected ContinueOnError: boolean = true;
+    protected OnProgress(result: SyncLoopResult, total: number): void { /* noop */ }
+}
+```
+
+### 11.3 Migration Path for ECDEngine
+
+Non-breaking refactoring — the ECDEngine's public API stays identical:
+
+```typescript
+// After refactoring
+import { DoValuesDiffer, BatchRecordLoader, ProgressReporter } from '@memberjunction/data-sync-utils';
+
+export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetectorEngine> {
+    // Replace inline DoValuesDiffer with shared import
+    // Replace inline batch loading with BatchRecordLoader
+    // Replace inline progress with ProgressReporter
+}
+```
 
 ---
 
-## 14. Package Structure
+## 12. Scheduling Integration
 
-Phase 1 uses a lean three-package layout to avoid over-fragmentation. Further splits only if scale demands it.
+### 12.1 How It Connects
+
+The existing Scheduling Engine already has `ActionScheduledJobDriver` which can trigger any MJ Action. The Integration Engine exposes a **"Run Integration Sync"** action:
+
+```mermaid
+flowchart LR
+    CRON["Cron Trigger<br/><i>(Scheduling Engine)</i>"]
+    ACT["'Run Integration Sync'<br/><i>(MJ Action)</i>"]
+    IE["Integration Engine<br/><i>(Orchestration)</i>"]
+    PRV["Provider<br/><i>(HubSpot, etc.)</i>"]
+    BA["BizApps Actions<br/><i>(HTTP layer)</i>"]
+    EXT["External API"]
+
+    CRON -->|"Triggers"| ACT
+    ACT -->|"Invokes"| IE
+    IE -->|"Delegates to"| PRV
+    PRV -->|"Calls"| BA
+    BA -->|"HTTP"| EXT
+```
+
+### 12.2 Action Parameters
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `CompanyIntegrationID` | string (UUID) | Which integration to sync |
+| `Direction` | string | `'Pull'` or `'Push'` (default: `'Pull'`) |
+| `EntityMapIDs` | string[] (optional) | Specific entity maps (default: all enabled) |
+| `FullSync` | boolean | Ignore watermarks, sync everything (default: false) |
+
+Users can schedule syncs using the existing **Scheduling dashboard** — no new scheduling infrastructure needed.
+
+### 12.3 Future Enhancement: Dependency-Aware Scheduling
+
+For complex orchestration needs (e.g., "sync HubSpot contacts first, then sync deals that reference those contacts"), a dedicated `IntegrationScheduledJobDriver` could understand entity dependencies and process entity maps in topological order.
+
+---
+
+## 13. External Change Detection Enhancement
+
+### 13.1 Current State
+
+The ECDEngine detects changes within the MJ database by comparing `__mj_UpdatedAt` timestamps against `vwRecordChanges` records. It finds Creates, Updates, and Deletes that happened outside of MJ's normal Save/Delete pipeline.
+
+### 13.2 Enhancement: Integration Attribution
+
+```mermaid
+flowchart TB
+    subgraph "Change Sources"
+        INT["Integration Sync<br/><i>(via Integration Engine)</i>"]
+        SQL["Direct SQL<br/><i>(SSMS, scripts, etc.)</i>"]
+        API["Other API Calls<br/><i>(external tools)</i>"]
+        MJ["MJ Application<br/><i>(Explorer UI, etc.)</i>"]
+    end
+
+    subgraph "Detection"
+        ECD["ExternalChangeDetector"]
+        RC["Record Changes<br/><i>(vwRecordChanges)</i>"]
+    end
+
+    subgraph "Attribution"
+        ATTR["Change Attribution Logic"]
+        INT_LABEL["'Via Integration: HubSpot'"]
+        SQL_LABEL["'Direct SQL Modification'"]
+        UNK_LABEL["'Unknown External Source'"]
+    end
+
+    INT -->|"entity.Save() with<br/>IntegrationRunID"| RC
+    SQL -->|"No MJ audit trail"| ECD
+    API -->|"No MJ audit trail"| ECD
+    MJ -->|"entity.Save()"| RC
+
+    ECD --> ATTR
+    RC --> ATTR
+    ATTR --> INT_LABEL
+    ATTR --> SQL_LABEL
+    ATTR --> UNK_LABEL
+```
+
+When integrations are active, the ECDEngine can:
+
+1. **Attribute changes to integrations** — Records saved with an IntegrationRunID can be traced
+2. **Detect external modifications** — Records changed by direct SQL or other systems
+3. **Surface integration-related changes** in the Version History UI
+
+---
+
+## 14. Angular Dashboard — Integration Management
+
+### 14.1 Application Definition
+
+New application: **"Integrations"** in MJ Explorer.
+
+```mermaid
+graph TB
+    subgraph "Integrations App"
+        TAB1["Dashboard<br/>fa-gauge-high<br/><i>KPIs, live syncs, alerts</i>"]
+        TAB2["Connections<br/>fa-link<br/><i>Manage company integrations</i>"]
+        TAB3["Entity Mapping<br/>fa-arrows-left-right<br/><i>Visual field mapper</i>"]
+        TAB4["Sync Activity<br/>fa-clock-rotate-left<br/><i>Run history, error drill-down</i>"]
+    end
+
+    TAB1 ---|default| TAB2
+    TAB2 --- TAB3
+    TAB3 --- TAB4
+```
+
+### 14.2 Tab Details
+
+#### Dashboard Tab
+- **KPIs**: Active integrations, entities synced, records synced (24h), error rate
+- **Live syncs**: Currently running integration syncs with progress bars
+- **Recent activity**: Last 10 sync runs with status indicators
+- **Alerts**: Failed syncs, stale watermarks, connection errors
+- **Quick actions**: "Run Sync Now" buttons per integration
+
+#### Connections Tab
+- **List view**: All Company Integrations with status indicators
+- **Create connection wizard**:
+  1. Select provider (HubSpot, Salesforce, etc.)
+  2. Enter credentials / authenticate via OAuth
+  3. Test connection
+  4. Name the integration and assign to company
+- **Connection detail panel**: Status, last sync, credential health, configuration
+- **Multi-instance support**: Multiple connections of same provider type
+
+#### Entity Mapping Tab (The Gorgeous Part)
+
+```mermaid
+graph LR
+    subgraph "External System (HubSpot)"
+        EO1["contacts"]
+        EO2["companies"]
+        EO3["deals"]
+        EO4["p_custom_widget"]
+    end
+
+    subgraph "Visual Mapper"
+        M1["━━━▶"]
+        M2["━━━▶"]
+        M3["━━━▶"]
+        M4["━━━▶"]
+    end
+
+    subgraph "MJ Entities"
+        ME1["Contacts"]
+        ME2["Companies"]
+        ME3["Deals"]
+        ME4["Custom Widgets"]
+    end
+
+    EO1 --- M1 --- ME1
+    EO2 --- M2 --- ME2
+    EO3 --- M3 --- ME3
+    EO4 --- M4 --- ME4
+```
+
+**Features:**
+- **Split-panel layout**: External objects (left) ↔ MJ entities (right) with visual lines
+- **Field mapping editor** (per entity pair):
+  - Side-by-side field lists with drag-and-drop mapping
+  - Transform pipeline builder (visual, not raw JSON)
+  - Auto-suggest mappings based on field name similarity
+  - Preview transform results with sample data
+  - Key field designation for record matching
+  - Direction indicators per field
+- **Schema refresh**: Re-discover external schema for new custom fields/objects
+- **Mapping templates**: Save/load mapping configurations
+
+#### Sync Activity Tab
+- **Run history**: Filterable list of all integration runs
+- **Per-run detail**: Expand to see per-entity breakdown
+- **Error drill-down**: View failed records with error messages
+- **Watermark status**: Current sync position per entity map
+- **Performance metrics**: Records/second, average run duration, trend charts
+
+---
+
+## 15. Angular Dashboard — External Change Detection Tab
+
+### 15.1 New Tab in Version History App
+
+Added as the **5th navigation item** in the existing Version History application:
+
+```mermaid
+graph TB
+    subgraph "Version History App (Updated)"
+        T1["Labels<br/>fa-tags<br/><i>(existing)</i>"]
+        T2["Diff Viewer<br/>fa-code-compare<br/><i>(existing)</i>"]
+        T3["Restore History<br/>fa-clock-rotate-left<br/><i>(existing)</i>"]
+        T4["Dependency Graph<br/>fa-diagram-project<br/><i>(existing)</i>"]
+        T5["External Changes<br/>fa-satellite-dish<br/><b>NEW</b>"]
+    end
+```
+
+### 15.2 Component Design
+
+#### Summary View
+- **KPI cards**: Total external changes detected, by type (Create/Update/Delete), by source
+- **Trend chart**: External changes over time (daily/weekly)
+- **Attribution breakdown**: Pie chart of changes by source (Integration sync, Direct SQL, Unknown)
+
+#### Detail View
+- **Filterable table**: Entity, Record, Change Type, Detected At, Source, Fields Changed
+- **Entity grouping**: Collapsible groups by entity with change counts
+- **Field-level diff**: Expand a record change to see before/after values per field
+- **Actions**: Link to record in Explorer, link to integration run (if attributed)
+
+#### Manual Scan
+- **"Run Detection Now"** button — triggers ECDEngine scan
+- **Entity selection**: Choose which entities to scan
+- **Progress indicator**: Real-time progress during scan
+
+---
+
+## 16. Phase Plan
+
+### Phase Overview
+
+```mermaid
+gantt
+    title Integration Engine Implementation Phases
+    dateFormat X
+    axisFormat %s
+
+    section Phase 1: Foundation
+    Database migrations           :p1a, 0, 1
+    integration-base-types        :p1b, 0, 1
+    data-sync-utils              :p1c, 0, 1
+    ECDEngine refactor           :p1d, after p1c, 1
+    CodeGen run                  :p1e, after p1a, 1
+    Unit tests                   :p1f, after p1c, 1
+
+    section Phase 2: Engine Core
+    integration-base-engine       :p2a, after p1b, 1
+    FieldMappingEngine           :p2b, after p2a, 1
+    BaseIntegrationProvider      :p2c, after p2a, 1
+    IntegrationEngine            :p2d, after p2b, 1
+    RecordMatcher                :p2e, after p2d, 1
+    Integration Actions          :p2f, after p2d, 1
+    Engine unit tests            :p2g, after p2e, 1
+
+    section Phase 3: HubSpot Provider
+    Schema discovery actions      :p3a, after p2c, 1
+    HubSpotProvider              :p3b, after p3a, 1
+    Default field mappings       :p3c, after p3b, 1
+    Integration tests            :p3d, after p3b, 1
+
+    section Phase 4: Angular Dashboards
+    Integration Dashboard tab     :p4a, after p2f, 1
+    Connections tab              :p4b, after p4a, 1
+    Entity Mapping tab           :p4c, after p4b, 1
+    Sync Activity tab            :p4d, after p4a, 1
+    Instrumentation service      :p4e, after p4a, 1
+
+    section Phase 5: ECD Enhancement
+    External Changes tab          :p5a, after p4a, 1
+    Attribution logic            :p5b, after p5a, 1
+    Manual scan trigger          :p5c, after p5b, 1
+
+    section Phase 6: Scheduling + Polish
+    Wire to scheduling           :p6a, after p3b, 1
+    Notifications                :p6b, after p6a, 1
+    Distributed locking          :p6c, after p6a, 1
+    Documentation                :p6d, after p6c, 1
+```
+
+### Phase 1: Foundation (Entities + Types + DataSyncUtils)
+
+**Goal**: Database schema, core TypeScript interfaces, shared utilities extracted from ECDEngine.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 1.1 | migrations | Create database tables for all 7 new entities | ✅ Done — `CompanyIntegration`, `CompanyIntegrationEntityMap`, `CompanyIntegrationFieldMap`, `CompanyIntegrationSyncWatermark`, `CompanyIntegrationRun`, `CompanyIntegrationRunDetail`, `CompanyIntegrationRecordMap` created in `__mj` schema |
+| 1.2 | `integration-base-types` | Define all interfaces, types, enums | ✅ Done (inside `engine` pkg, not separate) |
+| 1.3 | `data-sync-utils` | Extract `DoValuesDiffer`, `BatchRecordLoader`, `SyncLoopBase`, `ProgressReporter` | ⏭ Deferred — utilities inline in engine |
+| 1.4 | `ExternalChangeDetection` | Refactor ECDEngine to use `data-sync-utils` (non-breaking) | ⏭ Deferred |
+| 1.5 | Run CodeGen | Generate entity classes, stored procedures, views | ⚠️ Partial — entity types used as local interfaces (generated entities not yet available in workbench DB) |
+| 1.6 | Unit tests | Tests for transform pipeline, value comparison, sync loop | ✅ Done — 217 tests across 9 files |
+
+### Phase 2: Integration Engine Core
+
+**Goal**: Working orchestration engine that can pull data from a mock provider.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 2.1 | `integration-engine` | `IntegrationEngineBase` with metadata caching | ✅ Done (in `IntegrationOrchestrator`) |
+| 2.2 | `integration-engine` | `FieldMappingEngine` with full transform pipeline | ✅ Done — 9 transform types, 34 tests |
+| 2.3 | `integration-engine` | `BaseIntegrationConnector` abstract class | ✅ Done (renamed from `Provider` to `Connector`) |
+| 2.4 | `integration-engine` | `IntegrationOrchestrator` main orchestrator | ✅ Done — 17 tests |
+| 2.5 | `integration-engine` | `MatchEngine` for matching external → MJ records | ✅ Done — exact + fuzzy matching, 12 tests |
+| 2.6 | `integration-engine` | Sync loop with watermarks | ✅ Done via `WatermarkService` — 24 tests |
+| 2.7 | `integration-actions` | "Run Integration Sync" MJ Action | ⏭ Deferred |
+| 2.8 | Unit tests | Engine tests with mock provider | ✅ Done — 217/217 passing in 409ms |
+
+### Phase 3: Connectors (Mock SQL-Based — Replaces Planned "HubSpot Provider")
+
+**Goal**: End-to-end sync working for HubSpot, Salesforce, YourMembership via mock SQL databases.
+
+> **Note**: The plan originally called for a `HubSpotProvider` that delegates to BizApps Actions for real HTTP API calls. The actual implementation uses **SQL-based connectors** that read from a `mock_data` database with schemas (`hs`, `sf`, `ym`) simulating each external system. This allowed E2E testing of the full orchestration/mapping/matching pipeline without API dependencies. Converting to real API-backed providers is a future task.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 3.1 | `mock-data` | Mock databases for HubSpot (hs), Salesforce (sf), YourMembership (ym) | ✅ Done — 1000+ records per system |
+| 3.2 | `integration-connectors` | `HubSpotConnector` (contacts, companies, deals) | ✅ Done |
+| 3.3 | `integration-connectors` | `SalesforceConnector` (Contact, Account, Opportunity) | ✅ Done |
+| 3.4 | `integration-connectors` | `YourMembershipConnector` (members, events, membership_types) | ✅ Done |
+| 3.5 | `integration-connectors` | `FileFeedConnector` (CSV) and `RelationalDBConnector` (base) | ✅ Done |
+| 3.6 | metadata | Seed data: 3 integrations, 9 entity maps, field maps, watermarks | ✅ Done via `fix-metadata.sql` |
+| 3.7 | E2E tests | Full sync + 4-round iterative stress test | ✅ Done — 0 errors across all rounds |
+| — | `BizApps/CRM` | Schema discovery actions (GetObjectTypes, GetObjectFields) | ⏭ Deferred — will be needed for real API providers |
+
+### Phase 4: Angular Dashboards — Integrations App
+
+**Goal**: Full management UI for integration configuration and monitoring.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 4.1 | `dashboards` | Control Tower (Dashboard KPIs, live syncs) | ⚠️ Scaffolded — component exists but not fully wired to live engine |
+| 4.2 | `dashboards` | Connection Studio (list, create, test) | ⚠️ Scaffolded |
+| 4.3 | `dashboards` | Mapping Workspace (visual mapper, field editor) | ⚠️ Scaffolded |
+| 4.4 | `dashboards` | Sync Activity tab (run history, error drill-down) | ⏭ Not started |
+| 4.5 | metadata | Application definition JSON | ⏭ Not started |
+| 4.6 | `dashboards` | Instrumentation service for real-time observables | ⏭ Not started |
+
+### Phase 5: External Change Detection Enhancement
+
+**Goal**: New tab in Version History app for external change monitoring.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 5.1 | `dashboards` | External Changes tab component | ⏭ Not started |
+| 5.2 | `dashboards` | Attribution logic (integration vs direct SQL vs unknown) | ⏭ Not started |
+| 5.3 | `dashboards` | Manual scan trigger with progress | ⏭ Not started |
+| 5.4 | metadata | Update Version History app nav items | ⏭ Not started |
+| 5.5 | `ExternalChangeDetection` | Add integration attribution to change records | ⏭ Not started |
+
+### Phase 6: Scheduling + Polish
+
+**Goal**: Automated sync via cron, notifications, production hardening.
+
+| Task | Package | Description | Status |
+|------|---------|-------------|--------|
+| 6.1 | `integration-actions` | Wire "Run Integration Sync" action to scheduling | ⏭ Not started |
+| 6.2 | `integration-engine` | Notification support (success/failure) | ⏭ Not started |
+| 6.3 | `integration-engine` | Distributed locking for multi-server | ✅ Done — concurrency lock in orchestrator |
+| 6.4 | `integration-engine` | Error retry and dead-letter handling | ✅ Done — RetryRunner with exponential backoff, 13 tests |
+| 6.5 | All | Documentation, README files | ⏭ Not started |
+
+---
+
+## 17. Open Questions
+
+1. **Blue Cypress CompanyIntegration code** — How much of the existing BC code can we pull in? Need to evaluate the separate repo. The entity model above is designed to be compatible.
+   > **Status**: Still open. The existing `CompanyIntegration`/`CompanyIntegrationEntityMap` tables were reused from the existing MJ schema rather than creating new tables.
+
+2. **OAuth flow** — Should the "Create Connection" wizard handle OAuth redirects natively, or rely on pre-configured credentials in environment variables (as current BizApps actions do)?
+   > **Status**: Deferred. Current implementation uses direct SQL connections, not API auth. Will need to revisit when converting to real API-backed providers.
+
+3. **Conflict resolution UI** — For `ConflictResolution: 'Manual'`, do we need a review queue where users can approve/reject individual changes? Or is that a future enhancement?
+   > **Status**: Deferred to Phase 4+. Engine supports the `ConflictResolution` field but the UI isn't built yet.
+
+4. **Custom object creation** — If a HubSpot custom object has no MJ entity equivalent, should the integration engine auto-create MJ entities? Or must they pre-exist?
+   > **Status**: Still open. Current implementation requires pre-existing MJ entities.
+
+5. **Webhook support** — HubSpot and Salesforce support webhooks for real-time change notification. Should the architecture include a webhook receiver endpoint in MJAPI, or is polling-based sync sufficient for v1?
+   > **Status**: Deferred. Polling/watermark-based sync is working well for v1.
+
+6. **Rate limiting coordination** — When multiple entity maps sync against the same HubSpot instance, how do we coordinate API rate limits? The BizApps actions handle per-request limits, but should the engine manage overall concurrency?
+   > **Status**: Partially addressed. `RetryRunner` handles per-request retry with exponential backoff. Global rate limiting coordination is still open.
+
+7. **Large dataset initial sync** — For initial full syncs of millions of records, do we need a streaming/chunked approach different from the incremental batch model?
+   > **Status**: Still open. E2E tests validated 1000+ records per source system. Larger scale testing not yet done.
+
+8. **DDL Schema Management** — How should MJ entities be created/updated when external system schemas evolve? Separate plan being developed by user in `plans/integration-ddl-schema-management.md`.
+   > **Status**: In progress — user working on this separately.
+
+9. **Real API Providers vs SQL Connectors** — The current implementation uses SQL-based connectors against a mock database. Converting to real BizApps Action-backed providers is a separate body of work.
+   > **Status**: Open — requires BizApps Actions for schema discovery + CRUD per provider.
+
+---
+
+## 18. Actual Package Structure (As Built)
+
+The implementation consolidated the planned 5-package structure into 3 packages:
 
 ```
 packages/Integration/
-├── engine/          ← @memberjunction/integration-engine
-│   ├── package.json
-│   └── src/
-│       ├── BaseIntegrationConnector.ts   ← Abstract base + FetchContext types
-│       ├── IntegrationOrchestrator.ts    ← Run lifecycle orchestration
-│       ├── ConnectorFactory.ts           ← Resolves connector from DriverClass
-│       ├── FieldMappingEngine.ts         ← Transform pipeline executor
-│       ├── MatchEngine.ts                ← Record identity resolution
-│       ├── WatermarkService.ts           ← Watermark read/write
-│       ├── transforms.ts                 ← TransformStep, TransformConfig types
-│       └── types.ts                      ← ExternalRecord, SyncResult, etc.
+├── engine/                  ← @memberjunction/integration-engine (v5.6.0)
+│   ├── src/
+│   │   ├── index.ts
+│   │   ├── IntegrationOrchestrator.ts     ← Main orchestration (was SyncOrchestrator)
+│   │   ├── BaseIntegrationConnector.ts    ← Abstract base (was BaseIntegrationProvider)
+│   │   ├── ConnectorFactory.ts            ← Plugin discovery via @RegisterClass
+│   │   ├── FieldMappingEngine.ts          ← Transform pipeline (9 types)
+│   │   ├── MatchEngine.ts                 ← Record matching (exact + fuzzy)
+│   │   ├── WatermarkService.ts            ← Incremental sync tracking
+│   │   ├── RetryRunner.ts                 ← Exponential backoff retry
+│   │   ├── ErrorClassification.ts         ← 12 error codes
+│   │   ├── transforms/                    ← 9 transform type implementations
+│   │   ├── types.ts                       ← All interfaces & types
+│   │   └── __tests__/                     ← 217 tests across 9 files
+│   └── package.json
 │
-├── connectors/      ← @memberjunction/integration-connectors
-│   ├── package.json
-│   └── src/
-│       ├── SaaSAPIConnector.ts           ← Base for action-backed SaaS connectors
-│       ├── RelationalDBConnector.ts      ← Base for SQL database connectors
-│       ├── FileFeedConnector.ts          ← CSV/Excel via MJ Storage
-│       ├── HubSpotConnector.ts           ← HubSpot implementation
-│       ├── SqlServerConnector.ts         ← SQL Server implementation
-│       ├── PostgreSQLConnector.ts        ← PostgreSQL implementation
-│       ├── MySQLConnector.ts             ← MySQL implementation
-│       └── YourMembershipConnector.ts    ← YourMembership implementation
+├── connectors/              ← @memberjunction/integration-connectors (v5.6.0)
+│   ├── src/
+│   │   ├── index.ts
+│   │   ├── HubSpotConnector.ts
+│   │   ├── SalesforceConnector.ts
+│   │   ├── YourMembershipConnector.ts
+│   │   ├── FileFeedConnector.ts
+│   │   ├── RelationalDBConnector.ts
+│   │   └── __tests__/                     ← Connector-specific tests
+│   └── package.json
 │
-└── ui-types/        ← @memberjunction/integration-ui-types
-    ├── package.json
-    └── src/
-        └── types.ts                      ← Shared UI-safe types (no server deps)
+├── ui-types/                ← @memberjunction/integration-ui-types (v5.6.0)
+│   ├── src/
+│   │   └── index.ts                       ← Angular-safe type definitions
+│   └── package.json
+│
+├── mock-data/               ← Mock source databases
+│   ├── MockHubSpot.sql      ← hs.contacts, hs.companies, hs.deals
+│   ├── MockSalesforce.sql   ← sf.Contact, sf.Account, sf.Opportunity
+│   └── MockYourMembership.sql ← ym.members, ym.events, ym.membership_types
+│
+├── e2e/                     ← End-to-end test scripts
+│   ├── full-sync-test.mjs           ← Phase 1 initial + Phase 2 incremental sync
+│   ├── iterative-sync-stress-test.mjs ← 4-round mutation stress test
+│   └── fix-metadata.sql              ← Metadata corrections for test environment
+│
+└── e2e-screenshots/         ← UI proof-of-concept screenshots
 ```
 
-The `engine` package is server-side only. The `ui-types` package is safe to import in Angular.
+### Key Naming Changes from Plan
+
+| Plan Name | Actual Name | Reason |
+|-----------|-------------|--------|
+| `BaseIntegrationProvider` | `BaseIntegrationConnector` | "Connector" better describes SQL-based implementations |
+| `IntegrationEngine` | `IntegrationOrchestrator` | Avoids confusion with the package name |
+| `RecordMatcher` | `MatchEngine` | Consistent with "Engine" naming pattern |
+| `SyncOrchestrator` | (merged into `IntegrationOrchestrator`) | Single orchestrator handles both sync loop and coordination |
+| `integration-base-types` | (merged into `engine/types.ts`) | No need for separate package at current scale |
+| `integration-base-engine` | (merged into `engine/`) | Consolidation reduces package count |
+| `integration-actions` | (not yet built) | Will be needed for scheduling integration |
 
 ---
 
-## 15. UI Plan
-
-### 15.1 Primary Screens
-
-Three focused screens cover all operator and developer needs:
-
-| Screen | Purpose |
-|--------|---------|
-| **Integration Control Tower** | Health overview — run status, failures, stale watermarks, per-integration health indicators |
-| **Connection Studio** | Create and edit source instances — wizard for SaaS/API, DB, and file sources; credential testing; source type selection |
-| **Mapping & Activity Workspace** | Entity mapping, field transforms, run drill-down, error inspection, watermark management |
-
-### 15.2 Screen Responsibilities
-
-**Integration Control Tower**
-- Summary cards per active integration (last run, status, records synced, errors).
-- Stale watermark warnings (integration hasn't synced in N days).
-- Quick actions: trigger manual run, pause, resume.
-- Link to run history for each integration.
-
-**Connection Studio**
-- Select source type (drives form fields based on `MJ: Integration Source Types`).
-- Source-specific configuration (API keys, DB connection string, storage path).
-- Test connection button — calls `connector.TestConnection()`.
-- Save as `CompanyIntegration` + credential reference.
-
-**Mapping & Activity Workspace**
-- Left panel: entity map list for selected integration.
-- Center panel: field mapping editor for selected entity map.
-  - Schema discovery populates source field dropdown.
-  - MJ entity field picker for destination.
-  - Transform pipeline editor per field map.
-- Right panel: run detail drill-down (per-record errors, watermark before/after).
-
----
-
-## 16. Build Execution Plan
-
-### 16.1 Execution Model
-
-All implementation is driven by a **supervisor/worker split**:
-
-| Role | Who | Responsibilities |
-|------|-----|-----------------|
-| **Supervisor** | This Claude Code VSCode session | Writes task prompts, delivers them to Docker CC, reviews results, decides next task, pushes commits to remote |
-| **Docker CC** | `claude-dev` container | Executes one atomic task at a time, reports PASS/FAIL with details |
-
-**Prompt delivery pattern** (supervisor runs these from the host):
-```bash
-# Write task prompt to container
-docker exec claude-dev bash -c 'cat > /tmp/task.txt' << 'TASKEOF'
-<task text>
-TASKEOF
-
-# Launch Docker CC non-interactively
-docker exec -d claude-dev bash -c \
-  'cd /workspace/MJ && cat /tmp/task.txt | claude --dangerously-skip-permissions -p > /tmp/result.txt 2>&1'
-
-# Monitor / read result when complete
-docker exec claude-dev tail -f /tmp/result.txt
-```
-
-**Branch & commit pattern:**
-- Docker CC works on branch `claude/integration-engine-build` (same branch, its own local clone)
-- Docker CC commits locally at each milestone
-- Supervisor pushes to remote: `docker exec claude-dev bash -c 'cd /workspace/MJ && git push'`
-
-**Quality standard — non-negotiable for every task:**
-- Every new file has TSDoc/JSDoc on all public members
-- Every new package has a `README.md` explaining purpose, API, and usage examples
-- Zero `any` types; all public members PascalCase, private/protected camelCase
-- `npm run build` stays green after every task — Docker CC fixes any breaks before marking PASS
-
----
-
-### 16.2 Phase 0 — Environment Bootstrap
-
-> Supervisor + user perform this once. Docker CC not involved until T0.5.
-
-**T0.1** — Start the Docker workbench:
-```bash
-cd docker/workbench && ./start.sh
-```
-Wait for "Claude Dev Workbench Ready".
-
-**T0.2** — User enters container and authenticates (interactive — must be done by user in a terminal):
-```bash
-docker exec -it claude-dev zsh
-# Inside container:
-gh auth login          # GitHub auth — persists in named volume
-auth-setup             # Enter Auth0 credentials
-```
-Auth0 test user for Playwright: `da-robot-tester@bluecypress.io` / `!!SoDamnSecureItHurt$`
-
-**T0.3** — Bootstrap MJ database (user, inside container):
-```bash
-db-bootstrap           # Creates MJ_Workbench + all Flyway migrations
-```
-Acceptance: `sqldbs` shows `MJ_Workbench`; `sqlq "SELECT COUNT(*) FROM __mj.Entity"` > 0.
-
-**T0.4** — Verify MJ stack comes up healthy (user, inside container):
-```bash
-mjapi &
-mjui &
-```
-Acceptance: MJAPI logs "Listening on port 4000"; Explorer compiles and serves.
-
-**T0.5** — Supervisor delivers first Docker CC task: cut the working branch:
-```
-cd /workspace/MJ
-git checkout next && git pull origin next
-git checkout -b claude/integration-engine-build
-git push -u origin claude/integration-engine-build
-```
-Acceptance: `git branch -vv` shows `[origin/claude/integration-engine-build]`.
-
----
-
-### 16.3 Phase 1 — Mock Source Databases
-
-> These three SQL Server databases replace real SaaS API calls during the entire build. Connectors read from them instead of hitting real HubSpot/Salesforce/YourMembership endpoints. Each lives on the same `sql-claude` SQL Server instance as `MJ_Workbench`.
-
-**T1.1** — Create `MockHubSpot` database and seed data.
-
-Schema mirrors HubSpot CRM API v3 object structure:
-
-| Table | Rows | Key columns |
-|-------|------|-------------|
-| `hs_Contacts` | 300 | `hs_object_id`, `firstname`, `lastname`, `email`, `phone`, `company`, `lifecyclestage`, `hs_lead_status`, `createdate`, `lastmodifieddate`, `hs_email_optout`, `city`, `state`, `zip`, `country`, `hs_is_deleted` |
-| `hs_Companies` | 100 | `hs_object_id`, `name`, `domain`, `industry`, `city`, `state`, `numberofemployees`, `annualrevenue`, `lifecyclestage`, `createdate`, `lastmodifieddate`, `hs_is_deleted` |
-| `hs_Deals` | 150 | `hs_object_id`, `dealname`, `amount`, `dealstage`, `closedate`, `pipeline`, `hubspot_owner_id`, `associated_company_id`, `associated_contact_id`, `createdate`, `lastmodifieddate`, `hs_is_deleted` |
-| `hs_Owners` | 20 | `owner_id`, `email`, `firstname`, `lastname`, `userid`, `createdat`, `updatedat`, `archived` |
-
-Data quality: realistic names/emails, dollar amounts $500–$250k, dates spread over 3 years. Acceptance: stored proc `EXEC MockHubSpot.dbo.sp_MockDataSummary` returns correct row counts.
-
-**T1.2** — Create `MockSalesforce` database and seed data.
-
-| Table | Rows | Key columns |
-|-------|------|-------------|
-| `sf_Contact` | 300 | `Id`, `FirstName`, `LastName`, `Email`, `Phone`, `AccountId`, `Title`, `Department`, `MailingCity`, `MailingState`, `MailingCountry`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
-| `sf_Account` | 100 | `Id`, `Name`, `Industry`, `Type`, `BillingCity`, `BillingState`, `NumberOfEmployees`, `AnnualRevenue`, `Phone`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
-| `sf_Opportunity` | 150 | `Id`, `Name`, `Amount`, `StageName`, `CloseDate`, `AccountId`, `OwnerId`, `Probability`, `Type`, `ForecastCategory`, `CreatedDate`, `LastModifiedDate`, `IsDeleted` |
-| `sf_User` | 20 | `Id`, `FirstName`, `LastName`, `Email`, `Username`, `IsActive`, `Title`, `Department`, `CreatedDate` |
-
-Referential integrity: every `sf_Contact.AccountId` and `sf_Opportunity.AccountId` must resolve to a `sf_Account.Id`. Acceptance: `EXEC MockSalesforce.dbo.sp_MockDataSummary` correct + FK check query returns 0 orphans.
-
-**T1.3** — Create `MockYourMembership` database and seed data.
-
-| Table | Rows | Key columns |
-|-------|------|-------------|
-| `ym_Members` | 300 | `member_id`, `email`, `first_name`, `last_name`, `membership_level_id`, `join_date`, `expiration_date`, `status` (Active/Expired/Pending), `phone`, `chapter_id`, `created_at`, `updated_at` |
-| `ym_MembershipLevels` | 10 | `level_id`, `name`, `description`, `annual_fee`, `duration_months`, `is_active` |
-| `ym_Events` | 50 | `event_id`, `title`, `description`, `start_date`, `end_date`, `location`, `max_capacity`, `current_capacity`, `status`, `chapter_id`, `created_at` |
-| `ym_EventRegistrations` | 200 | `registration_id`, `event_id`, `member_id`, `registration_date`, `status`, `amount_paid`, `created_at` |
-| `ym_Chapters` | 15 | `chapter_id`, `name`, `description`, `state`, `is_active`, `created_at` |
-
-Acceptance: `EXEC MockYourMembership.dbo.sp_MockDataSummary` correct + zero orphan registrations.
-
----
-
-### 16.4 Phase 2 — Database Schema (Migrations)
-
-**T2.1** — Migration for `MJ: Integration Source Types`.
-- File: `migrations/v2/V[timestamp]__v2.x_Integration_Source_Types.sql`
-- Creates `__mj.IntegrationSourceType` per Section 6.2 field spec
-- Seeds 3 rows: `SaaS API` / `SaaSAPIConnector`, `Relational Database` / `RelationalDBConnector`, `File Feed` / `FileFeedConnector`
-- Run `mj migrate`, then CodeGen
-- Acceptance: `sqlq "SELECT Name, DriverClass FROM __mj.IntegrationSourceType"` returns 3 rows; `CompanyIntegrationSourceTypeEntity` exists in generated entity subclasses and compiles
-
-**T2.2** — Migration for `MJ: Company Integration Entity Maps`.
-- Creates `__mj.CompanyIntegrationEntityMap` per Section 6.2
-- FK to `__mj.CompanyIntegration(ID)` and `__mj.Entity(ID)`
-- Run migrate + CodeGen
-- Acceptance: Table exists; `CompanyIntegrationEntityMapEntity` in entity_subclasses compiles
-
-**T2.3** — Migration for `MJ: Company Integration Field Maps`.
-- Creates `__mj.CompanyIntegrationFieldMap` per Section 6.3
-- FK to `__mj.CompanyIntegrationEntityMap(ID)`
-- Run migrate + CodeGen
-- Acceptance: Table + `CompanyIntegrationFieldMapEntity` compiles
-
-**T2.4** — Migration for `MJ: Company Integration Sync Watermarks`.
-- Creates `__mj.CompanyIntegrationSyncWatermark` per Section 6.4
-- FK to `__mj.CompanyIntegrationEntityMap(ID)`
-- Run migrate + CodeGen
-- Acceptance: Table + `CompanyIntegrationSyncWatermarkEntity` compiles
-
-**T2.5** — Migration: add `SourceTypeID` FK to `CompanyIntegration`.
-- `ALTER TABLE __mj.CompanyIntegration ADD SourceTypeID UNIQUEIDENTIFIER NULL`
-- FK constraint to `__mj.IntegrationSourceType(ID)`
-- Run migrate + CodeGen
-- Acceptance: Column on `CompanyIntegrationEntity`, nullable, existing rows unaffected
-
-**T2.6** — Verify full build after all migrations.
-- `npm run build` on `packages/MJCoreEntities`
-- Fix any CodeGen output issues
-- Commit: `feat(integration): add integration engine database schema migrations`
-- Acceptance: Zero TypeScript errors; supervisor pushes commit to remote
-
----
-
-### 16.5 Phase 3 — TypeScript Package Scaffold
-
-**T3.1** — Create `packages/Integration/engine` package (`@memberjunction/integration-engine`).
-- `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/index.ts`
-- `README.md`: purpose, package API summary, example usage
-- Implement `src/types.ts`: all union types + `ExternalRecord`, `MappedRecord`, `SyncResult`, `SyncRecordError`, `DefaultFieldMapping` per Section 7.1
-- `npm run build` green
-- Acceptance: Package builds; types exported from index
-
-**T3.2** — Implement `BaseIntegrationConnector` abstract class.
-- Per Section 5.3: `TestConnection`, `DiscoverObjects`, `DiscoverFields`, `FetchChanges` abstract
-- `GetDefaultFieldMappings` default returns `[]`
-- Full TSDoc on every method (parameters, return value, purpose)
-- Acceptance: `npm run build` green; abstract class exported
-
-**T3.3** — Implement `ConnectorFactory`.
-- Per Section 7.2
-- Unit test (Vitest): register a mock connector class, `ConnectorFactory.Resolve` returns it correctly; throws on unknown driver class
-- Acceptance: `npm run test` green
-
-**T3.4** — Implement `FieldMappingEngine` + all transform types.
-- `transforms.ts` interfaces per Section 8.2
-- `FieldMappingEngine.Apply(records, fieldMaps)` executes pipeline per field map
-- Each transform: `direct`, `regex`, `split`, `combine`, `lookup`, `format`, `substring`, `coerce`, `custom` (sandboxed via `vm.runInNewContext`)
-- Unit tests: one test per transform type with real input/output assertion
-- Acceptance: All transform unit tests pass
-
-**T3.5** — Implement `MatchEngine`.
-- Resolves each `MappedRecord` via `RunView` with key field filters + `CompanyIntegrationRecordMap` lookup
-- Returns Create/Update/Skip decision per record
-- Unit tests with mocked `RunView`: verify correct decisions for new, existing, and deleted records
-- Acceptance: All unit tests pass
-
-**T3.6** — Implement `WatermarkService`.
-- `Load` and `Update` methods per Section 9.4
-- Unit tests mock entity save; verify `Save()` called with correct watermark value
-- Acceptance: All unit tests pass
-
-**T3.7** — Implement `IntegrationOrchestrator`.
-- Full run lifecycle per Section 7.3
-- Per-record error isolation: catch, log to `RunDetail.Details` JSON, continue
-- Integration test using a mock connector returning 5 fake `ExternalRecord`s:
-  - Writes records to `MJ_Workbench` Contacts entity
-  - Creates `CompanyIntegrationRun` with `Status=Completed`
-  - Updates watermark
-- Acceptance: Integration test passes; `CompanyIntegrationRun.Status = 'Completed'`
-
-**T3.8** — Create `packages/Integration/ui-types` package (`@memberjunction/integration-ui-types`).
-- `IntegrationSummary`, `RunStatusSummary`, `ConnectorHealth` view model types
-- No Node/SQL dependencies (Angular-safe)
-- `README.md` explaining which types to use where
-- Acceptance: `npm run build` green
-
-**T3.9** — Commit Phase 3.
-- `feat(integration): implement engine package with orchestrator, field mapping, and match engine`
-- Acceptance: Supervisor pushes commit; `npm run test` in `integration-engine` all green
-
----
-
-### 16.6 Phase 4 — HubSpot Mock Connector
-
-**T4.1** — Create `packages/Integration/connectors` package (`@memberjunction/integration-connectors`).
-- Depends on `@memberjunction/integration-engine`
-- `README.md`: lists all connectors, explains mock DB pattern, documents how to swap for real APIs
-- Acceptance: Empty package builds clean
-
-**T4.2** — Seed `CompanyIntegration` records for HubSpot mock.
-- `Integration` row: Name=`HubSpot`, SourceTypeID pointing to `SaaS API` source type row
-- `CompanyIntegration` row: Name=`HubSpot (Mock)`, Configuration=`{"server":"sql-claude","database":"MockHubSpot"}`
-- Acceptance: Rows in `MJ_Workbench`; visible in MJ Explorer
-
-**T4.3** — Implement `HubSpotConnector`.
-- `@RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')`
-- `TestConnection`: `SELECT 1` against `MockHubSpot`
-- `DiscoverObjects`: returns the 3 `hs_*` table names with labels
-- `DiscoverFields(objectName)`: reads `INFORMATION_SCHEMA.COLUMNS` from `MockHubSpot`
-- `FetchChanges(ctx)`: `SELECT * FROM MockHubSpot.dbo.[objectName] WHERE lastmodifieddate > @watermark ORDER BY lastmodifieddate` with batch limit; maps rows to `ExternalRecord[]`
-- `GetDefaultFieldMappings('hs_Contacts', 'Contacts')`: returns suggestions mapping `email→Email`, `firstname→FirstName`, `lastname→LastName`, `phone→Phone`, `company→CompanyName`, `lifecyclestage→Status`
-- Full TSDoc on all methods
-- Unit tests: first fetch (no watermark) returns 300 contacts; second fetch (watermark = now) returns 0
-- Acceptance: Unit tests pass
-
-**T4.4** — Create entity maps + field maps for HubSpot mock.
-- `hs_Contacts` → MJ `Contacts` entity (or closest available), field maps from `GetDefaultFieldMappings`
-- `hs_Companies` → MJ `Companies` entity, field maps
-- Acceptance: Rows in entity map + field map tables
-
-**T4.5** — Run first HubSpot mock sync end-to-end.
-- Call `IntegrationOrchestrator.RunSync` for HubSpot mock `CompanyIntegration`
-- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; RunDetails show `RecordsCreated > 0`; `CompanyIntegrationRecordMap` has entries; watermark updated
-
-**T4.6** — Commit Phase 4.
-- `feat(integration): add HubSpot mock connector with end-to-end sync`
-
----
-
-### 16.7 Phase 5 — Salesforce Mock Connector
-
-**T5.1** — Implement `SalesforceConnector`.
-- `@RegisterClass(BaseIntegrationConnector, 'SalesforceConnector')`
-- Reads from `MockSalesforce`: `sf_Contact`, `sf_Account`, `sf_Opportunity`
-- Incremental: `WHERE LastModifiedDate > @watermark`
-- `GetDefaultFieldMappings('sf_Contact', 'Contacts')`: `Email→Email`, `FirstName→FirstName`, `LastName→LastName`, `Phone→Phone`, `Title→Title`, `Department→Department`
-- Unit tests: 300 contacts on first fetch; watermark advance reduces count
-- Acceptance: Unit tests pass
-
-**T5.2** — Seed `CompanyIntegration` records + entity maps for Salesforce mock.
-- Acceptance: Rows present; MJ Explorer shows Salesforce integration
-
-**T5.3** — Run first Salesforce mock sync end-to-end.
-- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; records created; watermark updated
-
-**T5.4** — Commit Phase 5.
-- `feat(integration): add Salesforce mock connector with end-to-end sync`
-
----
-
-### 16.8 Phase 6 — YourMembership Mock Connector
-
-**T6.1** — Implement `YourMembershipConnector`.
-- `@RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')`
-- Reads from `MockYourMembership`: `ym_Members`, `ym_Events`, `ym_EventRegistrations`
-- Incremental on `updated_at` / `created_at`
-- `GetDefaultFieldMappings('ym_Members', 'Contacts')`: `email→Email`, `first_name→FirstName`, `last_name→LastName`, `phone→Phone`, `status→Status`, `join_date→JoinDate`
-- Unit tests: 300 members on first fetch
-- Acceptance: Unit tests pass
-
-**T6.2** — Seed `CompanyIntegration` + entity maps.
-- Acceptance: Rows present
-
-**T6.3** — Run first YourMembership mock sync end-to-end.
-- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; records created
-
-**T6.4** — Commit Phase 6.
-- `feat(integration): add YourMembership mock connector with end-to-end sync`
-
----
-
-### 16.9 Phase 7 — File Feed Connector
-
-**T7.1** — Implement `FileFeedConnector`.
-- `@RegisterClass(BaseIntegrationConnector, 'FileFeedConnector')`
-- Uses `@memberjunction/storage` to read file from `CompanyIntegration.Configuration.StoragePath`
-- `DiscoverObjects`: returns file/sheet names
-- `FetchChanges`: parses CSV (header row → field names) or Excel (sheet selector from `EntityMap.ExternalObjectName`); returns `ExternalRecord[]`
-- Watermark on file last-modified timestamp or content hash
-- Unit test: 100-row CSV returns correct ExternalRecord array
-- Acceptance: Unit tests pass
-
-**T7.2** — Create sample 100-row CSV mock file and `CompanyIntegration` record.
-- CSV: `first_name,last_name,email,phone,company`
-- Store in `/workspace/MJ/packages/Integration/connectors/test-fixtures/sample-contacts.csv`
-- `CompanyIntegration`: Name=`CSV Import (Sample)`, SourceTypeID=`File Feed`
-- Run sync end-to-end
-- Acceptance: `CompanyIntegrationRun.Status = 'Completed'`; 100 records created
-
-**T7.3** — Commit Phase 7.
-- `feat(integration): add File Feed connector (CSV/Excel) via MJ Storage`
-
----
-
-### 16.10 Phase 8 — Angular UI: Control Tower
-
-**T8.1** — Create Integration Dashboard module scaffold.
-- New Angular module in `packages/Angular/Explorer/dashboards/src/lib/integration/`
-- `IntegrationControlTowerComponent` registered with `@RegisterClass(BaseResourceComponent, 'IntegrationControlTower')`
-- `LoadIntegrationDashboard()` tree-shaking prevention function exported from `public-api.ts`
-- Module added to dashboards barrel and `app.module.ts` bootstrap
-- `README.md` in the module folder
-- Acceptance: Component navigable in MJ Explorer (blank page is fine at this step)
-
-**T8.2** — Implement integration health cards.
-- Batch-load all `CompanyIntegration` + most recent `CompanyIntegrationRun` per integration with one `RunViews` call
-- Card per integration: name, source type icon (Font Awesome), last run time (relative), status chip (green=Completed, amber=stale >24h, red=Failed), records synced count
-- Use `<mj-loading>` during data fetch
-- Acceptance: Playwright screenshot shows 4 cards (HubSpot, Salesforce, YourMembership, CSV Import)
-
-**T8.3** — Implement "Run Now" button with live status polling.
-- "Run Now" per card → calls `RunIntegrationSync` action
-- Polls `CompanyIntegrationRun.Status` every 3 seconds until terminal state
-- Card status chip animates during Running; updates to Completed/Failed on finish
-- Acceptance: Playwright test: click Run Now → card shows Running → then Completed
-
-**T8.4** — Implement run history expandable rows.
-- Click card → expand run history (last 10 runs, paginated)
-- Click a run row → drill down showing per-entity-map record counts and any errors
-- Acceptance: Playwright: expand HubSpot card → run history visible with at least 1 row; click row → run detail shows entity maps
-
----
-
-### 16.11 Phase 9 — Angular UI: Connection Studio
-
-**T9.1** — Create `IntegrationConnectionStudioComponent` wizard.
-- Step 1: Source type selection (loads `MJ: Integration Source Types` as icon cards)
-- Step 2: Configuration form — fields differ by selected source type:
-  - SaaS API: Name, Description, API Base URL, API Key hint
-  - Relational Database: Name, Server, Database Name, Username, Password
-  - File Feed: Name, Storage Path, File Type (CSV/Excel)
-- Step 3: Test connection → Save
-- `README.md` for the wizard
-- Acceptance: Playwright screenshot shows 3 source type cards in step 1
-
-**T9.2** — Implement Test Connection flow.
-- Calls `connector.TestConnection()` via a new `TestIntegrationConnection` action
-- Shows success (green check, message) or failure (red, error detail)
-- "Save" button only enabled after successful test
-- On Save: creates `CompanyIntegration` + `SourceTypeID` record
-- Acceptance: Playwright: select Relational Database → fill MockSalesforce connection details → Test → sees "Connection successful"
-
----
-
-### 16.12 Phase 10 — Angular UI: Mapping & Activity Workspace
-
-**T10.1** — Create `IntegrationMappingWorkspaceComponent` layout.
-- Left panel (25%): integration selector + entity map list
-- Center panel (50%): field mapping editor for selected entity map
-- Right panel (25%): run detail drill-down
-- `README.md` for the workspace
-- Acceptance: Layout renders without errors; Playwright screenshot shows 3-column layout
-
-**T10.2** — Implement entity map list panel.
-- Loads `CompanyIntegrationEntityMap` for selected integration
-- Enable/disable toggle per entity map (updates `SyncEnabled`)
-- "Add Entity Map" button → dialog: source object picker (calls `DiscoverObjects`), MJ entity picker, conflict resolution selector
-- Acceptance: Playwright: select HubSpot Mock → see Contacts and Companies entity maps with toggles
-
-**T10.3** — Implement field mapping grid.
-- Select entity map → load field maps in a Kendo Grid
-- Source field dropdown from `DiscoverFields`; destination dropdown from MJ entity fields
-- Transform type selector (dropdown) per row; transform config panel slides in on select
-- "Apply Suggestions" button runs `GetDefaultFieldMappings` and populates empty rows
-- Inline save per row
-- Acceptance: Playwright: click Contacts entity map → grid loads ≥5 pre-mapped rows; transform dropdown works
-
-**T10.4** — Implement run detail panel.
-- Shows last `CompanyIntegrationRunDetail` for selected entity map
-- Records created/updated/errored counters
-- Watermark before/after
-- Per-record error table (ExternalID, error message) if any errors
-- Acceptance: After a completed sync, Playwright: select entity map → right panel shows record counts and watermark values
-
-**T10.5** — Commit Phase 8–10.
-- `feat(integration): add Angular UI (Control Tower, Connection Studio, Mapping Workspace)`
-- Acceptance: `npm run build` for MJExplorer zero errors; supervisor pushes commit
-
----
-
-### 16.13 Phase 11 — End-to-End Playwright Tests
-
-> All tests run headless inside the Docker workbench. Auth0 login uses `da-robot-tester@bluecypress.io` / `!!SoDamnSecureItHurt$`. Screenshots saved to `/workspace/e2e-screenshots/integration/`.
-
-**T11.1** — Auth0 login test.
-- Open `http://localhost:4200`
-- Snapshot → find Login button → click
-- Auth0 redirect → fill email + password → submit
-- Wait for app shell to load
-- Verify nav bar present, zero console errors
-- Screenshot: `integration-01-login.png`
-- Acceptance: PASS
-
-**T11.2** — Control Tower navigation test.
-- Navigate to Integration section (Control Tower)
-- Verify 4 integration cards present (HubSpot, Salesforce, YourMembership, CSV)
-- Each card shows a last-run timestamp and status chip
-- Screenshot: `integration-02-control-tower.png`
-- Acceptance: PASS; zero JS console errors
-
-**T11.3** — Manual sync trigger test.
-- Click "Run Now" on HubSpot Mock card
-- Wait for status to change Running → Completed (max 60 seconds)
-- Verify `RecordsProcessed > 0` shown on card
-- Screenshot: `integration-03-sync-complete.png`
-- Acceptance: PASS; run history row added under HubSpot card
-
-**T11.4** — Run history drill-down test.
-- Expand HubSpot Mock card → see run history
-- Click most recent run → see per-entity-map counters
-- Verify RecordsCreated shown for at least one entity map
-- Screenshot: `integration-04-run-detail.png`
-- Acceptance: PASS
-
-**T11.5** — Connection Studio smoke test.
-- Navigate to Connection Studio
-- Verify 3 source type cards visible
-- Select "Relational Database" → fill MockSalesforce connection (server=sql-claude, db=MockSalesforce, user=sa, password=Claude2Sql99)
-- Click Test Connection → see "Connection successful"
-- Screenshot: `integration-05-connection-test.png`
-- Acceptance: PASS
-
-**T11.6** — Mapping Workspace test.
-- Navigate to Mapping Workspace
-- Select HubSpot Mock integration
-- Select Contacts entity map
-- Verify field mapping grid shows ≥5 rows
-- Change one transform type via dropdown
-- Save inline
-- Screenshot: `integration-06-field-maps.png`
-- Acceptance: PASS; row saved without error
-
-**T11.7** — Full three-source regression run.
-- Trigger RunSync for HubSpot, Salesforce, and YourMembership in sequence
-- For each: verify `CompanyIntegrationRun.Status = 'Completed'`, watermark not null
-- Check MJ entity record counts match expected (Contacts should have ≥300 records after 3 sources)
-- Screenshot: `integration-07-regression-complete.png`
-- Acceptance: All 3 PASS; zero Failed runs; zero JS console errors throughout
-
-**T11.8** — Commit Phase 11 + PR.
-- `test(integration): add end-to-end Playwright tests for integration engine UI`
-- Open PR targeting `next`:
-  - Title: `feat: Integration Engine with mock SaaS, DB, and file connectors`
-  - Body summarizes all phases completed, links to E2E screenshots
-- Acceptance: PR open; all CI checks green; supervisor verifies final state
-
----
-
-### 16.14 Completion Gate
-
-The build is **done** when ALL of the following are true:
-
-1. `MockHubSpot`, `MockSalesforce`, `MockYourMembership` databases exist with correct row counts verified by summary procs.
-2. All 5 migrations applied cleanly; CodeGen produces compiling entity classes for all 4 new entities.
-3. `npm run build` passes for `integration-engine` and `integration-connectors` packages.
-4. All unit tests (Vitest) pass with zero failures across both packages.
-5. All 3 mock connectors produce correct `ExternalRecord[]` output verified by unit tests.
-6. All 4 end-to-end sync runs (HubSpot, Salesforce, YourMembership, CSV) complete with `Status=Completed`.
-7. Angular UI compiles with zero TypeScript errors; no `any` types introduced.
-8. All 7 Playwright tests PASS with screenshots saved.
-9. Every new package and component has a `README.md` and full TSDoc coverage.
-10. PR `claude/integration-engine-build → next` is open and passing CI.
-
----
-
-## 17. Success Criteria
-
-1. Existing integrations continue to run unchanged after all migrations.
-2. New source types can be added as packages with zero engine changes.
-3. One orchestration model handles SaaS API, relational DB, and file sources.
-4. Run history, record maps, and audit lineage remain intact.
-5. File operations work against any MJ Storage provider (not just local disk).
-6. Initial production rollout can be phased safely without migration shock.
-7. Mock connectors are clearly documented and trivially swappable for real API implementations.
+*End of Architecture Document*

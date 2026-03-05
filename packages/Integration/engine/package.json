@@ -1,0 +1,28 @@
+{
+  "name": "@memberjunction/integration-engine",
+  "type": "module",
+  "version": "5.6.0",
+  "description": "MemberJunction Integration Engine - orchestration, field mapping, and connector framework",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/core": "5.6.0",
+    "@memberjunction/core-entities": "5.6.0",
+    "@memberjunction/global": "5.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC"
+}

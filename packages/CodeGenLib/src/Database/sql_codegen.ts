@@ -159,7 +159,7 @@ export class SQLCodeGenBase {
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
-            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName)));
+            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName))).sort();
             TempBatchFile.initialize(directory, schemas);
 
             // STEP 1.5 - Check for cascade delete dependencies that require regeneration
@@ -476,7 +476,7 @@ export class SQLCodeGenBase {
     public deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
         try {
             // for the schemas associated with the specified entities, clean out all the generated files
-            const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
+            const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index).sort();
             for (const s of schemaNames) {
                 const fullPath = path.join(directory, s);
                 // now, within each schema directory, clean out all the generated files
@@ -505,7 +505,7 @@ export class SQLCodeGenBase {
     public createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]): string[] {
         // first, get a disinct list of schemanames from the entities
         const files: string[] = [];
-        const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
+        const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index).sort();
         for (const s of schemaNames) {
             // generate the all-entities.sql file and all-entities.permissions.sql file in each schema folder
             const fullPath = path.join(directory, s);

@@ -131,31 +131,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Artifact Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentArtifactTypes"
-        SectionName="AI Agent Artifact Types"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Conversation Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationArtifacts"
@@ -181,25 +156,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Types Section -->
+    <!-- AI Agent Artifact Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJArtifactTypes"
-        SectionName="Artifact Types"
-        Icon="fa fa-puzzle-piece"
+        SectionKey="mJAIAgentArtifactTypes"
+        SectionName="AI Agent Artifact Types"
+        Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactTypes')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactTypes')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactTypes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -225,6 +200,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Artifact Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifactTypes"
+        SectionName="Artifact Types"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifactTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

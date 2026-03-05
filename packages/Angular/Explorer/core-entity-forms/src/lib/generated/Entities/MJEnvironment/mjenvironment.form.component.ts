@@ -21,10 +21,10 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
             { sectionKey: 'environmentSettings', sectionName: 'Environment Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
-            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
-            { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);

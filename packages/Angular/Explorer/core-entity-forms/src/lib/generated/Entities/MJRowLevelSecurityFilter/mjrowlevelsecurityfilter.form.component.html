@@ -84,23 +84,98 @@
 
     <!-- Entity Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="mJEntityPermissions"
+        SectionKey="mJEntityPermissionsDeleteRLSFilterID"
         SectionName="Entity Permissions"
         Icon="fa fa-shield-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityPermissions')"
+        [BadgeCount]="GetSectionRowCount('mJEntityPermissionsDeleteRLSFilterID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','DeleteRLSFilterID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityPermissionsDeleteRLSFilterID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsDeleteRLSFilterID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Permissions (Read RLSFilter ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityPermissionsReadRLSFilterID"
+        SectionName="Entity Permissions (Read RLSFilter ID)"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityPermissionsReadRLSFilterID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','ReadRLSFilterID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityPermissionsReadRLSFilterID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsReadRLSFilterID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Permissions (Create RLSFilter ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityPermissionsCreateRLSFilterID"
+        SectionName="Entity Permissions (Create RLSFilter ID)"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityPermissionsCreateRLSFilterID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','CreateRLSFilterID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityPermissionsCreateRLSFilterID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsCreateRLSFilterID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Permissions (Update RLSFilter ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityPermissionsUpdateRLSFilterID"
+        SectionName="Entity Permissions (Update RLSFilter ID)"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityPermissionsUpdateRLSFilterID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','UpdateRLSFilterID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJEntityPermissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityPermissionsUpdateRLSFilterID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsUpdateRLSFilterID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
