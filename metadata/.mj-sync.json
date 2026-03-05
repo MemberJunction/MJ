@@ -39,7 +39,8 @@
     "test-types",
     "tests",
     "test-suites",
-    "entities"
+    "entities",
+    "entity-settings"
   ],
   "sqlLogging": {
     "enabled": true,

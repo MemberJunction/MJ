@@ -28,6 +28,10 @@ export type {
     SyncNotificationSeverity,
     SyncNotification,
     OnNotificationCallback,
+    SourceSchemaInfo,
+    SourceObjectInfo,
+    SourceFieldInfo,
+    SourceRelationshipInfo,
 } from './types.js';
 
 // Error classification helpers

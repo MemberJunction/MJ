@@ -197,6 +197,67 @@ export interface SyncNotification {
 /** Callback invoked after a sync run completes (success or failure) */
 export type OnNotificationCallback = (notification: SyncNotification) => void;
 
+// ─── Source Schema Introspection Types ──────────────────────────────
+// These types define the schema introspection contract for connectors.
+// Used by the Schema Builder (packages/Integration/schema-builder) to
+// generate DDL, soft FKs, and metadata files.
+
+/** Top-level container returned by a connector's IntrospectSchema(). */
+export interface SourceSchemaInfo {
+    /** All objects (tables, API entities) discovered in the source system. */
+    Objects: SourceObjectInfo[];
+}
+
+/** One source object (table, API entity) discovered during introspection. */
+export interface SourceObjectInfo {
+    /** Name in the source system (e.g., "deals", "MemberList"). */
+    ExternalName: string;
+    /** Human-readable label (e.g., "Deals", "Members"). */
+    ExternalLabel: string;
+    /** Fields/columns in the source object. */
+    Fields: SourceFieldInfo[];
+    /** Primary key field name(s). */
+    PrimaryKeyFields: string[];
+    /** Foreign key relationships to other source objects. */
+    Relationships: SourceRelationshipInfo[];
+}
+
+/** One field/column in a source object discovered during introspection. */
+export interface SourceFieldInfo {
+    /** Field name in the source system. */
+    Name: string;
+    /** Human-readable label. */
+    Label: string;
+    /** Generic source type (e.g., "string", "integer", "datetime", "boolean"). */
+    SourceType: string;
+    /** Whether the field is required/non-nullable. */
+    IsRequired: boolean;
+    /** Maximum length for string types (null if not applicable). */
+    MaxLength: number | null;
+    /** Precision for numeric types (null if not applicable). */
+    Precision: number | null;
+    /** Scale for numeric types (null if not applicable). */
+    Scale: number | null;
+    /** Default value expression (null if none). */
+    DefaultValue: string | null;
+    /** Whether this field is part of the primary key. */
+    IsPrimaryKey: boolean;
+    /** Whether this field is a foreign key. */
+    IsForeignKey: boolean;
+    /** If FK, which source object it references (null if not a FK). */
+    ForeignKeyTarget: string | null;
+}
+
+/** One foreign key relationship in a source object. */
+export interface SourceRelationshipInfo {
+    /** Field in this object that references another object. */
+    FieldName: string;
+    /** Target source object name. */
+    TargetObject: string;
+    /** Target field name (usually the PK). */
+    TargetField: string;
+}
+
 /** A default field mapping returned by a connector's discovery */
 export interface DefaultFieldMapping {
     /** Field name in the external system */

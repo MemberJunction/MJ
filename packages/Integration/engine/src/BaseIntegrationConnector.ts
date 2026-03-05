@@ -1,6 +1,6 @@
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
-import type { ExternalRecord, DefaultFieldMapping } from './types.js';
+import type { ExternalRecord, DefaultFieldMapping, SourceSchemaInfo } from './types.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -175,5 +175,50 @@ export abstract class BaseIntegrationConnector {
      */
     public GetDefaultFieldMappings(_objectName: string, _entityName: string): DefaultFieldMapping[] {
         return [];
+    }
+
+    /**
+     * Introspects the source system's schema — returns metadata about available
+     * objects, their fields, primary keys, and foreign key relationships.
+     * Used by the Schema Builder to generate local DDL.
+     *
+     * Default implementation builds SourceSchemaInfo from DiscoverObjects + DiscoverFields.
+     * Override in subclasses for richer metadata (e.g., FK relationships, type details).
+     *
+     * @param companyIntegration - The company integration entity with connection credentials
+     * @param contextUser - User context for authorization
+     * @returns Full schema info for all source objects
+     */
+    public async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<SourceSchemaInfo> {
+        const objects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const result: SourceSchemaInfo = { Objects: [] };
+
+        for (const obj of objects) {
+            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            result.Objects.push({
+                ExternalName: obj.Name,
+                ExternalLabel: obj.Label,
+                Fields: fields.map(f => ({
+                    Name: f.Name,
+                    Label: f.Label,
+                    SourceType: f.DataType,
+                    IsRequired: f.IsRequired,
+                    MaxLength: null,
+                    Precision: null,
+                    Scale: null,
+                    DefaultValue: null,
+                    IsPrimaryKey: f.IsUniqueKey,
+                    IsForeignKey: false,
+                    ForeignKeyTarget: null,
+                })),
+                PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
+                Relationships: [],
+            });
+        }
+
+        return result;
     }
 }
