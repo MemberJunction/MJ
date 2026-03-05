@@ -142,31 +142,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Collection Artifacts Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCollectionArtifacts"
-        SectionName="Collection Artifacts"
-        Icon="fa fa-folder-open"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCollectionArtifacts')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','ArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
-                [AllowLoad]="IsSectionExpanded('mJCollectionArtifacts')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCollectionArtifacts', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Artifact Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJArtifactPermissions"

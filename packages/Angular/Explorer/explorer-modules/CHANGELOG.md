@@ -1,5 +1,49 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@5.7.0
+- @memberjunction/ng-explorer-core@5.7.0
+- @memberjunction/ng-explorer-settings@5.7.0
+- @memberjunction/ng-link-directives@5.7.0
+- @memberjunction/ng-shared@5.7.0
+- @memberjunction/ng-workspace-initializer@5.7.0
+- @memberjunction/ng-container-directives@5.7.0
+- @memberjunction/ng-kendo-modules@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [d24a7ff]
+  - @memberjunction/ng-explorer-core@5.6.0
+  - @memberjunction/ng-core-entity-forms@5.6.0
+  - @memberjunction/ng-explorer-settings@5.6.0
+  - @memberjunction/ng-link-directives@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-workspace-initializer@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-kendo-modules@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [7ca2459]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/ng-core-entity-forms@5.5.0
+  - @memberjunction/ng-explorer-core@5.5.0
+  - @memberjunction/ng-explorer-settings@5.5.0
+  - @memberjunction/ng-kendo-modules@5.5.0
+  - @memberjunction/ng-link-directives@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-workspace-initializer@5.5.0
+  - @memberjunction/ng-container-directives@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

@@ -169,7 +169,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflow Runs','WorkflowName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workflow Runs','WorkflowID')"
                 [NewRecordValues]="NewRecordValues('MJ: Workflow Runs')"
                 [AllowLoad]="IsSectionExpanded('mJWorkflowRuns')"
                 [ShowToolbar]="false"

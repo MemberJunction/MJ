@@ -1,5 +1,136 @@
 # @memberjunction/server-bootstrap
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai-agents@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/ai-reranker@5.7.0
+  - @memberjunction/core-actions@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/communication-ms-graph@5.7.0
+  - @memberjunction/content-autotagging@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/core-entities-server@5.7.0
+  - @memberjunction/queue@5.7.0
+  - @memberjunction/server@5.7.0
+  - @memberjunction/templates@5.7.0
+  - @memberjunction/testing-engine@5.7.0
+  - @memberjunction/ai-agent-manager@5.7.0
+  - @memberjunction/scheduling-engine@5.7.0
+  - @memberjunction/actions-apollo@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/actions-bizapps-accounting@5.7.0
+  - @memberjunction/actions-bizapps-crm@5.7.0
+  - @memberjunction/actions-bizapps-formbuilders@5.7.0
+  - @memberjunction/actions-bizapps-lms@5.7.0
+  - @memberjunction/actions-bizapps-social@5.7.0
+  - @memberjunction/communication-types@5.7.0
+  - @memberjunction/entity-communications-base@5.7.0
+  - @memberjunction/communication-sendgrid@5.7.0
+  - @memberjunction/doc-utils@5.7.0
+  - @memberjunction/encryption@5.7.0
+  - @memberjunction/data-context-server@5.7.0
+  - @memberjunction/storage@5.7.0
+  - @memberjunction/scheduling-actions@5.7.0
+  - @memberjunction/scheduling-engine-base@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [cf9ac82]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/core-actions@5.6.0
+  - @memberjunction/ai-agent-manager@5.6.0
+  - @memberjunction/ai-agents@5.6.0
+  - @memberjunction/ai-engine-base@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/ai-reranker@5.6.0
+  - @memberjunction/actions-apollo@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/actions-bizapps-accounting@5.6.0
+  - @memberjunction/actions-bizapps-crm@5.6.0
+  - @memberjunction/actions-bizapps-formbuilders@5.6.0
+  - @memberjunction/actions-bizapps-lms@5.6.0
+  - @memberjunction/actions-bizapps-social@5.6.0
+  - @memberjunction/actions@5.6.0
+  - @memberjunction/communication-types@5.6.0
+  - @memberjunction/entity-communications-base@5.6.0
+  - @memberjunction/communication-ms-graph@5.6.0
+  - @memberjunction/communication-sendgrid@5.6.0
+  - @memberjunction/content-autotagging@5.6.0
+  - @memberjunction/doc-utils@5.6.0
+  - @memberjunction/encryption@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/core-entities-server@5.6.0
+  - @memberjunction/data-context-server@5.6.0
+  - @memberjunction/queue@5.6.0
+  - @memberjunction/server@5.6.0
+  - @memberjunction/storage@5.6.0
+  - @memberjunction/scheduling-actions@5.6.0
+  - @memberjunction/scheduling-engine-base@5.6.0
+  - @memberjunction/scheduling-engine@5.6.0
+  - @memberjunction/templates@5.6.0
+  - @memberjunction/testing-engine@5.6.0
+  - @memberjunction/ai-provider-bundle@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [0bbefcd]
+- Updated dependencies [2973c64]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/ai-agents@5.5.0
+  - @memberjunction/server@5.5.0
+  - @memberjunction/ai-agent-manager@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/core-entities-server@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/ai-reranker@5.5.0
+  - @memberjunction/actions-apollo@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions-bizapps-accounting@5.5.0
+  - @memberjunction/actions-bizapps-crm@5.5.0
+  - @memberjunction/actions-bizapps-formbuilders@5.5.0
+  - @memberjunction/actions-bizapps-lms@5.5.0
+  - @memberjunction/actions-bizapps-social@5.5.0
+  - @memberjunction/core-actions@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/communication-types@5.5.0
+  - @memberjunction/entity-communications-base@5.5.0
+  - @memberjunction/communication-ms-graph@5.5.0
+  - @memberjunction/communication-sendgrid@5.5.0
+  - @memberjunction/content-autotagging@5.5.0
+  - @memberjunction/doc-utils@5.5.0
+  - @memberjunction/encryption@5.5.0
+  - @memberjunction/data-context-server@5.5.0
+  - @memberjunction/queue@5.5.0
+  - @memberjunction/storage@5.5.0
+  - @memberjunction/scheduling-actions@5.5.0
+  - @memberjunction/scheduling-engine-base@5.5.0
+  - @memberjunction/scheduling-engine@5.5.0
+  - @memberjunction/templates@5.5.0
+  - @memberjunction/testing-engine@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

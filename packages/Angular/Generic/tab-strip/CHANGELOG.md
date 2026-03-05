@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [df2457c]
+  - @memberjunction/ng-container-directives@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

@@ -128,7 +128,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','IntegrationName')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','IntegrationID')"
                 [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
                 [ShowToolbar]="false"

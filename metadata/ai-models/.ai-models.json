@@ -630,7 +630,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "VertexLLM",
             "APIName": "gemini-3-pro-preview",
             "SupportedResponseFormats": "Any, JSON",
@@ -642,8 +642,8 @@
             "ID": "DF5D1273-CFB5-424A-A499-19CAEFD1EC8C"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.567Z",
-            "checksum": "263a2a64a9b281af2d889a3b65f73247f1779249716f05a9dc40ec16720e0ff4"
+            "lastModified": "2026-03-02T23:01:04.109Z",
+            "checksum": "fe7319e737d285a2f35cf76c47bec183ecb600a0f81e83fed63b1d0e5b9a3909"
           }
         },
         {
@@ -670,7 +670,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiLLM",
             "APIName": "gemini-3-pro-preview",
             "MaxInputTokens": 1000000,
@@ -684,8 +684,8 @@
             "ID": "F261666C-7272-476A-847B-E2BF01316E22"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.624Z",
-            "checksum": "04c01cbd3a455b350b64130f2c2dcff44cc49a824f12866d14cfc43a6ee0ce2d"
+            "lastModified": "2026-03-02T23:01:04.123Z",
+            "checksum": "0ec3e1dd7d32d29bb4cdfcfe93a47c4a993f52b4dd9359fa948ab653c4e08486"
           }
         }
       ],
@@ -781,7 +781,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "qwen-3-235b-a22b-thinking-2507",
             "MaxInputTokens": 128000,
@@ -794,8 +794,8 @@
             "ID": "4CB2443E-F36B-1410-8DB7-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.404Z",
-            "checksum": "ecdef6fd55ad8a808ce9cf1eea0af393e408be20e9651b2b167bb27fcb53b25a"
+            "lastModified": "2026-03-02T23:01:04.135Z",
+            "checksum": "aa3bad88c2f8d7f266d219c145b23e23881ec7ce2824fcac8b4bed6a12c14d72"
           }
         },
         {
@@ -890,7 +890,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GroqLLM",
             "APIName": "llama2-70b-4096",
             "MaxInputTokens": 4096,
@@ -903,8 +903,8 @@
             "ID": "44BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.436Z",
-            "checksum": "972ff5ac0335b701152b1fa968eb3aafc9ec3cfb5ae8f12ec777fef0217ff15b"
+            "lastModified": "2026-03-02T23:01:04.291Z",
+            "checksum": "d5428b595cc2b1eff6a1890dd47c500979106293b7126130167c0c6f48168469"
           }
         }
       ]
@@ -2559,7 +2559,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 4,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GroqLLM",
             "APIName": "llama3-70b-8192",
             "MaxInputTokens": 8192,
@@ -2572,8 +2572,8 @@
             "ID": "45BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.398Z",
-            "checksum": "605d58ba2a769794d6d8ea9679b64cf43ec6fa76d6e92906a46375aab81df547"
+            "lastModified": "2026-03-02T23:01:05.040Z",
+            "checksum": "9e8874016ccfe915fc908b6fde4e62cbd8c7e733e5f0e65432ea407fde9d0924"
           }
         }
       ],
@@ -2626,7 +2626,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 5,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GroqLLM",
             "APIName": "llama-3.1-405b-reasoning",
             "MaxInputTokens": 128000,
@@ -2639,8 +2639,8 @@
             "ID": "46BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.440Z",
-            "checksum": "309bc9a63fff225f54955d7fbc73707af668b7e5d5e6cf5d9ee375375a8f05c3"
+            "lastModified": "2026-03-02T23:01:05.055Z",
+            "checksum": "e97f5db7f0c76b32a46c76d9f615d221ca534d4eec8df8ef01309f0137f48363"
           }
         }
       ],
@@ -3812,7 +3812,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 9,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-3-7-sonnet-latest",
             "SupportedResponseFormats": "Any",
@@ -3824,8 +3824,8 @@
             "ID": "37BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.424Z",
-            "checksum": "3469651d538a4a07e5393809a4e947de1147c920a1d049dbc19899e42c738db3"
+            "lastModified": "2026-03-02T23:01:05.676Z",
+            "checksum": "ea1793eb958d415feb7c18062cd79cd5606e5956ebc00232df8a73eb5596b8b8"
           }
         },
         {
@@ -3983,7 +3983,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 8,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenAILLM",
             "APIName": "o1-mini",
             "MaxInputTokens": 200000,
@@ -3996,8 +3996,8 @@
             "ID": "32BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.421Z",
-            "checksum": "f1fbc77317feadd9702a78efa67fedb8365be2d57ed149fd2c04448d3e0a0be6"
+            "lastModified": "2026-03-02T23:01:05.691Z",
+            "checksum": "3696ad899f4126cc3a424e6c0883a2f54f7071f46dcb373f162687e1c6949c52"
           }
         },
         {
@@ -4069,7 +4069,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 5,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-3-opus-20240229",
             "MaxInputTokens": 200000,
@@ -4082,8 +4082,8 @@
             "ID": "3BBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.427Z",
-            "checksum": "8480b24df88288c91e4f786ab0a48c951068e4b91882fa09e1fa5e668e4a5772"
+            "lastModified": "2026-03-02T23:01:05.844Z",
+            "checksum": "cd23c1b63a0f6b31533a8a28632e949bfc967933e4f458e03625e73848393511"
           }
         },
         {
@@ -4155,7 +4155,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 5,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-3-5-sonnet-latest",
             "MaxInputTokens": 200000,
@@ -4168,8 +4168,8 @@
             "ID": "3CBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.428Z",
-            "checksum": "9efe127f7ce925129c2e8358fe5c01662406b1075fbbf0e43e3f417faa6efe59"
+            "lastModified": "2026-03-02T23:01:05.858Z",
+            "checksum": "80d5330e31723cc8989d8df099f92edd8005fd90c3957a45bfc6415b4d4dc998"
           }
         },
         {
@@ -4860,7 +4860,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "Priority": 2,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "MistralLLM",
             "APIName": "open-mistral-8x7b",
             "MaxInputTokens": 32000,
@@ -4873,8 +4873,8 @@
             "ID": "3EBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.436Z",
-            "checksum": "6a233154fa6611e67f436b548bba57f8775e7c102c1e1926a6da9c04be053542"
+            "lastModified": "2026-03-02T23:01:06.159Z",
+            "checksum": "cd546275611463164ca51a9383385299c1f6dc807840886f95b3b4eda19c1056"
           }
         },
         {
@@ -5082,7 +5082,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "deepseek-r1-distill-llama-70b",
             "MaxInputTokens": 128000,
@@ -5095,8 +5095,8 @@
             "ID": "64DA433E-F36B-1410-8DB6-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.437Z",
-            "checksum": "144ca2a634db518ea534659c049d641792f13fa93b97e0ac8ca4ba6bb62debd0"
+            "lastModified": "2026-03-02T23:01:06.312Z",
+            "checksum": "b2be067614723bd230d290fb5d7008e480dd8581f759c136b91213d68768af9a"
           }
         },
         {
@@ -5104,7 +5104,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 9,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GroqLLM",
             "APIName": "deepseek-r1-distill-llama-70b",
             "SupportedResponseFormats": "Any",
@@ -5116,8 +5116,8 @@
             "ID": "41BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.589Z",
-            "checksum": "6f9d272c2f8eb93070400e46cd73c78740777db7f54ee5ccb9f64ae5c540f657"
+            "lastModified": "2026-03-02T23:01:06.322Z",
+            "checksum": "01332eaac74b4a0f3c0333fddc099211dc77f43924b72497a2bfe4d398a47296"
           }
         }
       ],
@@ -5170,7 +5170,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "llama-3.3-70b",
             "MaxInputTokens": 128000,
@@ -5183,8 +5183,8 @@
             "ID": "55DA433E-F36B-1410-8DB6-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.442Z",
-            "checksum": "75ecd78785871a58cde7bc59e1485433c90d608b00c40efba1c6d89ad85923f9"
+            "lastModified": "2026-03-02T23:01:06.485Z",
+            "checksum": "6613d84765bfba4d8eccf6ea765416e490f9bd38e7786f5b7417ba63dda04b1c"
           }
         },
         {
@@ -5882,7 +5882,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 8,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GroqLLM",
             "APIName": "meta-llama/llama-4-maverick-17b-128e-instruct",
             "SupportedResponseFormats": "Any",
@@ -5894,8 +5894,8 @@
             "ID": "43BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.439Z",
-            "checksum": "67e1ff828ba4e1e75d43dda00474e79787822cc70f7b3b69e3800d25d2cf509d"
+            "lastModified": "2026-03-02T23:01:06.791Z",
+            "checksum": "93dac7c1809b6e7df9c3bf09f664c27a0702f3272eec3b3d211e2f428b7ff26e"
           }
         }
       ],
@@ -5994,7 +5994,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "qwen-3-32b",
             "MaxInputTokens": 128000,
@@ -6007,8 +6007,8 @@
             "ID": "69DA433E-F36B-1410-8DB6-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.442Z",
-            "checksum": "8b44fd8d62a83963a202d17a4f3284677227be20525d294f27bba44029713520"
+            "lastModified": "2026-03-02T23:01:06.811Z",
+            "checksum": "7a79152031d93040dd6e9c40aa1e96f179a0cf06938da22dfe39564f588ee915"
           }
         },
         {
@@ -6105,7 +6105,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "qwen-3-coder-480b",
             "MaxInputTokens": 128000,
@@ -6119,8 +6119,8 @@
             "ID": "6AECC6CF-0287-4DC6-B6B1-C99074071CEB"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.465Z",
-            "checksum": "fd0540f57e4e3e0f4088079b00154eb433fe612ed7e871afcb4665f355e0ce34"
+            "lastModified": "2026-03-02T23:01:06.981Z",
+            "checksum": "8bee9a69111433008f9c90d0073ef4f47b98c1c77cf5848d9dc0c10bc0743604"
           }
         },
         {
@@ -6526,7 +6526,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "llama-4-scout-17b-16e-instruct",
             "MaxInputTokens": 128000,
@@ -6539,8 +6539,8 @@
             "ID": "5FDA433E-F36B-1410-8DB6-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.438Z",
-            "checksum": "00acee022a5a702a50bf68f778b5f862fb40e9bf4f8c76fdf54e20bdd11d8e68"
+            "lastModified": "2026-03-02T23:01:07.127Z",
+            "checksum": "3d46c00e501effa539e4ddc88d3ef57d81f851946d851a071d7c2cc46d6f6928"
           }
         },
         {
@@ -6963,7 +6963,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 8,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiLLM",
             "APIName": "gemini-1.5-flash",
             "MaxInputTokens": 1048576,
@@ -6976,8 +6976,8 @@
             "ID": "51BC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.447Z",
-            "checksum": "3c87637ffaabf95287222e27d505afc752b266b9dc4a1772a662d4ce9f96a43a"
+            "lastModified": "2026-03-02T23:01:07.433Z",
+            "checksum": "e3cf02c0b42f42a32dd40a2b2a2390a81e67c1b235ea2dbf62b7040d35880b85"
           }
         },
         {
@@ -7217,7 +7217,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 7,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiLLM",
             "APIName": "gemini-2.5-pro-preview-05-06",
             "SupportedResponseFormats": "Any",
@@ -7229,8 +7229,8 @@
             "ID": "4BBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.448Z",
-            "checksum": "52e831568aa353b3f51b841e817ece4fef38e16906095d57bac89ec68468216d"
+            "lastModified": "2026-03-02T23:01:07.591Z",
+            "checksum": "3b19864c23757efefb20f8b504e5f9fd65cee833db767975dd4c39bfcd3ce29a"
           }
         },
         {
@@ -7238,7 +7238,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 5,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "VertexLLM",
             "APIName": "gemini-2.5-pro-preview-05-06",
             "SupportedResponseFormats": "Any, JSON",
@@ -7250,8 +7250,8 @@
             "ID": "6CACCDA6-8F28-49A2-B2C9-028742685913"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.595Z",
-            "checksum": "40befe9dbe3890abd460ee223d968d50df3c4a4752b3c47fe75d1c899638fb71"
+            "lastModified": "2026-03-02T23:01:07.602Z",
+            "checksum": "9ddf944feafc8ac445879e5bb0dc08cb087d32c781b4003bfcc618c4cc9421df"
           }
         },
         {
@@ -7344,7 +7344,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 7,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiLLM",
             "APIName": "gemini-2.5-flash-preview-04-17",
             "SupportedResponseFormats": "Any",
@@ -7356,8 +7356,8 @@
             "ID": "4CBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.449Z",
-            "checksum": "deae752e34b9b9567e8e85056092aa61048e6f77cce74a244bb1ab70e1b6a00f"
+            "lastModified": "2026-03-02T23:01:07.751Z",
+            "checksum": "a9c0c1efb3859dccd3d95f2e2b1a00cbd0e34af9d1c0bf324467b099d1134211"
           }
         },
         {
@@ -7384,7 +7384,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 5,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "VertexLLM",
             "APIName": "gemini-2.5-flash-preview-04-17",
             "SupportedResponseFormats": "Any, JSON",
@@ -7396,8 +7396,8 @@
             "ID": "F9162DA3-D5EE-403E-A4B4-87229808424A"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.764Z",
-            "checksum": "5282e1b3e32b75ace4e00afe0a1a2a7dafb04bc4da2e10380c50a7d1d346a26d"
+            "lastModified": "2026-03-02T23:01:07.761Z",
+            "checksum": "49ab6bf9a83e59cb114b2837129813955fbf0e2c69848dc2da6503df2c7841db"
           }
         },
         {
@@ -7595,7 +7595,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 4,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiLLM",
             "APIName": "gemini-1.5-pro-latest",
             "MaxInputTokens": 2097152,
@@ -7608,8 +7608,8 @@
             "ID": "4DBC433E-F36B-1410-867F-007B559E242F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.450Z",
-            "checksum": "c0a3aea91b5322631dfea351c97aa45ca7f5a75ddf96f5ae05beedea569348a8"
+            "lastModified": "2026-03-02T23:01:07.922Z",
+            "checksum": "894bf904d95f0797019e75cec0fba6b59c538ad8cd862178a814da469165a0e6"
           }
         },
         {
@@ -7765,7 +7765,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 100,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "zai-glm-4.6",
             "MaxInputTokens": 202752,
@@ -7779,8 +7779,8 @@
             "ID": "67852107-4827-4A32-806C-B12091AF56F2"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.738Z",
-            "checksum": "e3d64d23dbf84c3942d4856bb06e58b35f0793e1ff82913b65bce3f1b333dc6d"
+            "lastModified": "2026-03-02T23:01:07.937Z",
+            "checksum": "a2917612f6a774f5340045b83b7abae09151ff40e5c378aa632e8382547ddd18"
           }
         },
         {
@@ -10056,6 +10056,95 @@
     "sync": {
       "lastModified": "2026-02-27T20:01:06.160Z",
       "checksum": "b1e90e85cc58bf29bdb72a46335b22ea91ac46c457d68e9910c317f1ca130001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.5 Plus",
+      "PowerRank": 16,
+      "Description": "Alibaba Cloud's frontier multimodal hybrid reasoning model from the Qwen 3.5 series (397B total parameters, 17B active via sparse MoE). Features a 1M token context window and 65K output capacity. Supports text, image, and video input with built-in thinking mode for extended reasoning. Knowledge cutoff of February 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "8D952982-87C5-4861-A31A-9E29A0679485"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.161Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.5-plus-02-15",
+            "MaxInputTokens": 983616,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "80A0DEEF-DA41-4257-89E7-1DEBA2E3C584"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.176Z",
+            "checksum": "55004829a23700619a058b9ad16ff0d96e5893cf11bd27441c9c939e02e49b45"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-02-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.4,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.5 Plus pricing via OpenRouter/Alibaba Cloud as of February 2026. Standard tier (<=256K context): $0.40/$2.40 per 1M tokens. Extended context (>256K): $0.50/$3.00 per 1M tokens. Base tier pricing shown."
+          },
+          "primaryKey": {
+            "ID": "6CD0EB92-385B-41CB-BDAD-0C073FC049E1"
+          },
+          "sync": {
+            "lastModified": "2026-03-02T00:20:18.217Z",
+            "checksum": "912566e5f23932b1766d45da013ba8f640cec3364a9948685140708e1a2bfade"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F78652ED-908B-4BE8-AD22-CE26751397C5"
+    },
+    "sync": {
+      "lastModified": "2026-03-02T00:20:15.042Z",
+      "checksum": "fd880f4ad75b59058f7da992a8370f19351ec7befac58c792ef36eef87547eb0"
     }
   }
 ]

@@ -129,8 +129,8 @@ describe('EnrollUserAction', () => {
       expect(result.Summary.userName).toBe('student@example.com');
       expect(result.Summary.notificationSent).toBe(true);
 
-      // Verify first call used the per-course endpoint
-      expect(requestSpy.mock.calls[0][0]).toBe('courses/course-1/enrollments');
+      // Verify first call used the unified enrollment endpoint
+      expect(requestSpy.mock.calls[0][0]).toBe('users/lw-user-1/enrollment');
       expect(requestSpy.mock.calls[0][1]).toBe('POST');
     });
 
@@ -153,11 +153,11 @@ describe('EnrollUserAction', () => {
 
       expect(result.EnrollmentDetails.id).toBe('enrollment-abc');
 
-      // Verify the bundle endpoint was used
-      expect(requestSpy.mock.calls[0][0]).toBe('enrollments');
+      // Verify the unified enrollment endpoint was used
+      expect(requestSpy.mock.calls[0][0]).toBe('users/lw-user-1/enrollment');
       const body = requestSpy.mock.calls[0][2] as Record<string, unknown>;
-      expect(body.product_type).toBe('bundle');
-      expect(body.product_id).toBe('bundle-1');
+      expect(body.productType).toBe('bundle');
+      expect(body.productId).toBe('bundle-1');
       expect(body.price).toBe(49.99);
     });
 
@@ -211,7 +211,7 @@ describe('EnrollUserAction', () => {
       const body = requestSpy.mock.calls[0][2] as Record<string, unknown>;
       expect(body.price).toBe(0);
       expect(body.justification).toBe('API Enrollment');
-      expect(body.notify_user).toBe(true);
+      expect(body.send_enrollment_email).toBe(true);
     });
 
     it('should fall back to defaults when course/user lookups fail', async () => {

@@ -20,7 +20,6 @@ export class MJArtifactFormComponent extends BaseFormComponent {
             { sectionKey: 'artifactCore', sectionName: 'Artifact Core', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false },
-            { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
             { sectionKey: 'mJArtifactPermissions', sectionName: 'Artifact Permissions', isExpanded: false }
         ]);
     }
