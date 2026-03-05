@@ -1,5 +1,38 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai-agents@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/ai-reranker@5.7.0
+  - @memberjunction/core-actions@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/core-entities-server@5.7.0
+  - @memberjunction/templates@5.7.0
+  - @memberjunction/testing-engine@5.7.0
+  - @memberjunction/ai-agent-manager@5.7.0
+  - @memberjunction/scheduling-engine@5.7.0
+  - @memberjunction/actions-apollo@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/actions-bizapps-accounting@5.7.0
+  - @memberjunction/actions-bizapps-crm@5.7.0
+  - @memberjunction/actions-bizapps-formbuilders@5.7.0
+  - @memberjunction/actions-bizapps-lms@5.7.0
+  - @memberjunction/actions-bizapps-social@5.7.0
+  - @memberjunction/doc-utils@5.7.0
+  - @memberjunction/encryption@5.7.0
+  - @memberjunction/data-context-server@5.7.0
+  - @memberjunction/scheduling-actions@5.7.0
+  - @memberjunction/scheduling-engine-base@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

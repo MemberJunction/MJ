@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-recommendations-rex
 
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-recommendations@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/global@5.7.0
+
 ## 5.6.0
 
 ### Patch Changes

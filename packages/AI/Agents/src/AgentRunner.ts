@@ -357,7 +357,9 @@ export class AgentRunner {
                 await agentResponseDetail.Load(agentResponseDetailId);
 
                 agentResponseDetail.Message = agentResult.agentRun?.Message ||
-                                             (agentResult.success ? '✅ Completed' : '❌ Failed');
+                                             (agentResult.success
+                                                 ? '✅ Completed'
+                                                 : agentResult.agentRun?.ErrorMessage || '❌ Failed');
                 agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
 
                 // Set response form and command fields

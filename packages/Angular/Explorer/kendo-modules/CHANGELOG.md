@@ -1,5 +1,7 @@
 # @memberjunction/ng-kendo-modules
 
+## 5.7.0
+
 ## 5.6.0
 
 ## 5.5.0
