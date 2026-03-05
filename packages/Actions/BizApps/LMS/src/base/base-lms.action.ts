@@ -75,7 +75,7 @@ export abstract class BaseLMSAction extends BaseAction {
     const result = await rv.RunView<MJCompanyIntegrationEntity>(
       {
         EntityName: 'MJ: Company Integrations',
-        ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${safeIntegrationName}'`,
+        ExtraFilter: `CompanyID = '${companyId}' AND Integration = '${safeIntegrationName}'`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -99,8 +99,14 @@ export abstract class BaseLMSAction extends BaseAction {
    * Example: BIZAPPS_LEARNWORLDS_12345_API_KEY
    */
   protected getCredentialFromEnv(companyId: string, credentialType: string): string | undefined {
-    const envKey = `BIZAPPS_${this.lmsProvider.toUpperCase().replace(/\s+/g, '_')}_${companyId}_${credentialType.toUpperCase()}`;
-    return process.env[envKey];
+    const provider = this.lmsProvider.toUpperCase().replace(/\s+/g, '_');
+    const credential = credentialType.toUpperCase();
+    const envKey = `BIZAPPS_${provider}_${companyId}_${credential}`;
+    const value = process.env[envKey];
+    if (value !== undefined) return value;
+    // Fallback: try lowercase companyId (SQL Server returns uppercase UUIDs)
+    const lowerKey = `BIZAPPS_${provider}_${companyId.toLowerCase()}_${credential}`;
+    return process.env[lowerKey];
   }
 
   /**
