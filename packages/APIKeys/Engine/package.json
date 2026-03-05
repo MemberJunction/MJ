@@ -26,7 +26,8 @@
     "@memberjunction/api-keys-base": "5.7.0",
     "@memberjunction/global": "5.7.0",
     "@memberjunction/core": "5.7.0",
-    "@memberjunction/core-entities": "5.7.0"
+    "@memberjunction/core-entities": "5.7.0",
+    "cosmiconfig": "9.0.0"
   },
   "repository": {
     "type": "git",
