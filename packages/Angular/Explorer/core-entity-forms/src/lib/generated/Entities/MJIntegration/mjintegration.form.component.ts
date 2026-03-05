@@ -18,6 +18,7 @@ export class MJIntegrationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'integrationOverview', sectionName: 'Integration Overview', isExpanded: true },
             { sectionKey: 'technicalSettings', sectionName: 'Technical Settings', isExpanded: true },
+            { sectionKey: 'authenticationSecurity', sectionName: 'Authentication & Security', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJIntegrationURLFormats', sectionName: 'URL Formats', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },

@@ -23740,6 +23740,10 @@ export class MJCompanyIntegration_ {
     @Field({nullable: true, description: `JSON configuration for the integration connection (server, database, credentials reference, etc.).`}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: `Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).`}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
     @Field() 
     @MaxLength(50)
     Company: string;
@@ -23835,6 +23839,9 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
 }
     
 
@@ -23890,6 +23897,9 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29482,6 +29492,9 @@ export class MJCredentialType_ {
     @Field(() => [MJMCPServer_])
     MJMCPServers_CredentialTypeIDArray: MJMCPServer_[]; // Link to MJMCPServers
     
+    @Field(() => [MJIntegration_])
+    MJIntegrations_CredentialTypeIDArray: MJIntegration_[]; // Link to MJIntegrations
+    
     @Field(() => [MJAIVendor_])
     MJAIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJAIVendors
     
@@ -29622,6 +29635,16 @@ export class MJCredentialTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJIntegration_])
+    async MJIntegrations_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Integrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrations')} WHERE ${provider.QuoteIdentifier('CredentialTypeID')}='${mjcredentialtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Integrations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIVendor_])
     async MJAIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
@@ -29732,6 +29755,9 @@ export class MJCredential_ {
     
     @Field(() => [MJAICredentialBinding_])
     MJAICredentialBindings_CredentialIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
+    
+    @Field(() => [MJCompanyIntegration_])
+    MJCompanyIntegrations_CredentialIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
     
 }
 
@@ -29917,6 +29943,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAICredentialBindings')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCompanyIntegration_])
+    async MJCompanyIntegrations_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrations')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -42710,6 +42746,14 @@ export class MJIntegration_ {
     @MaxLength(36)
     ID: string;
         
+    @Field({nullable: true, description: `Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.`}) 
+    @MaxLength(36)
+    CredentialTypeID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CredentialType?: string;
+        
     @Field(() => [MJIntegrationURLFormat_])
     MJIntegrationURLFormats_IntegrationIDArray: MJIntegrationURLFormat_[]; // Link to MJIntegrationURLFormats
     
@@ -42749,6 +42793,9 @@ export class CreateMJIntegrationInput {
 
     @Field({ nullable: true })
     ID?: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID: string | null;
 }
     
 
@@ -42780,6 +42827,9 @@ export class UpdateMJIntegrationInput {
 
     @Field()
     ID: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

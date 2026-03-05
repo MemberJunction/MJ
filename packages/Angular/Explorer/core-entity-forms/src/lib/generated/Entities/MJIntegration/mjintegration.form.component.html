@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="integrationOverview"
         SectionName="Integration Overview"
-        Icon="fa fa-plug"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -54,7 +54,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ClassName"
-            Type="textbox"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -85,11 +85,30 @@
 
     </mj-collapsible-panel>
 
+    <!-- Authentication & Security Section -->
+    <mj-collapsible-panel
+        SectionKey="authenticationSecurity"
+        SectionName="Authentication & Security"
+        Icon="fa fa-shield-alt"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="CredentialTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

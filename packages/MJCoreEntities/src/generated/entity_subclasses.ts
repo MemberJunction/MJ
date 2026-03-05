@@ -8570,6 +8570,12 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for the integration connection (server, database, credentials reference, etc.).`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).`),
     Company: z.string().describe(`
         * * Field Name: Company
         * * Display Name: Company Name
@@ -8588,7 +8594,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -14707,9 +14713,11 @@ export type MJIntegrationURLFormatEntityType = z.infer<typeof MJIntegrationURLFo
 export const MJIntegrationSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(255)`),
     NavigationBaseURL: z.string().nullable().describe(`
         * * Field Name: NavigationBaseURL
@@ -14750,8 +14758,19 @@ export const MJIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
+    CredentialTypeID: z.string().nullable().describe(`
+        * * Field Name: CredentialTypeID
+        * * Display Name: Credential Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+        * * Description: Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.`),
+    CredentialType: z.string().nullable().describe(`
+        * * Field Name: CredentialType
+        * * Display Name: Credential Type Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJIntegrationEntityType = z.infer<typeof MJIntegrationSchema>;
@@ -45310,6 +45329,20 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
     * * Field Name: Company
     * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
@@ -45347,7 +45380,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -61059,6 +61092,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -61070,6 +61104,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(255)
     */
     get Description(): string | null {
@@ -61168,6 +61203,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -61176,6 +61212,29 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
     }
     set ID(value: string) {
         this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CredentialTypeID
+    * * Display Name: Credential Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    * * Description: Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.
+    */
+    get CredentialTypeID(): string | null {
+        return this.Get('CredentialTypeID');
+    }
+    set CredentialTypeID(value: string | null) {
+        this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: CredentialType
+    * * Display Name: Credential Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CredentialType(): string | null {
+        return this.Get('CredentialType');
     }
 }
 
