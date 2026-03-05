@@ -32,7 +32,7 @@ export class AttachTagsAction extends LearnWorldsBaseAction {
 
     this.validatePathSegment(params.UserID, 'UserID');
 
-    const response = await this.makeLearnWorldsRequest<LWApiTagResponse>(`users/${params.UserID}/tags`, 'POST', { tags: params.Tags }, contextUser);
+    const response = await this.makeLearnWorldsRequest<LWApiTagResponse>(`users/${params.UserID}/tags`, 'PUT', { tags: params.Tags, action: 'attach' }, contextUser);
 
     return {
       Success: true,
