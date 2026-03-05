@@ -36,5 +36,12 @@
   },
   "relatedEntities": {
     "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "1AE7EDAE-A057-497A-87CD-5DF72D0877CC"
+  },
+  "sync": {
+    "lastModified": "2026-03-05T15:33:44.304Z",
+    "checksum": "697c7e70cfa1c3ceba97de4f0187ac5b8582075fed42a7290f1b35da78cbd59d"
   }
 }
