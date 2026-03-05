@@ -462,7 +462,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (289 classes)
+// @memberjunction/core-entities (293 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -551,10 +551,13 @@ import {
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
@@ -640,6 +643,7 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1218,10 +1222,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
@@ -1307,6 +1314,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1461,7 +1469,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 623;
+export const CLASS_REGISTRATIONS_COUNT = 627;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

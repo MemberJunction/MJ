@@ -7917,6 +7917,224 @@ export const MJCompanySchema = z.object({
 export type MJCompanyEntityType = z.infer<typeof MJCompanySchema>;
 
 /**
+ * zod schema definition for the entity MJ: Company Integration Entity Maps
+ */
+export const MJCompanyIntegrationEntityMapSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CompanyIntegrationID: z.string().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
+    ExternalObjectName: z.string().describe(`
+        * * Field Name: ExternalObjectName
+        * * Display Name: External Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The name of the object in the external system (e.g. table name, API resource name).`),
+    ExternalObjectLabel: z.string().nullable().describe(`
+        * * Field Name: ExternalObjectLabel
+        * * Display Name: External Object Label
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional human-friendly label for the external object.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    SyncDirection: z.union([z.literal('Bidirectional'), z.literal('Pull'), z.literal('Push')]).describe(`
+        * * Field Name: SyncDirection
+        * * Display Name: Sync Direction
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pull
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bidirectional
+    *   * Pull
+    *   * Push
+        * * Description: Whether data flows from external to MJ (Pull), MJ to external (Push), or both.`),
+    SyncEnabled: z.boolean().describe(`
+        * * Field Name: SyncEnabled
+        * * Display Name: Sync Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, this entity map is included in sync runs.`),
+    MatchStrategy: z.string().nullable().describe(`
+        * * Field Name: MatchStrategy
+        * * Display Name: Match Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the match engine describing how to identify existing records (key fields, fuzzy thresholds, etc.).`),
+    ConflictResolution: z.union([z.literal('DestWins'), z.literal('Manual'), z.literal('MostRecent'), z.literal('SourceWins')]).describe(`
+        * * Field Name: ConflictResolution
+        * * Display Name: Conflict Resolution
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SourceWins
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DestWins
+    *   * Manual
+    *   * MostRecent
+    *   * SourceWins
+        * * Description: How to handle conflicts when both source and destination have been modified. SourceWins, DestWins, MostRecent, or Manual.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Processing order when multiple entity maps exist. Lower numbers are processed first.`),
+    DeleteBehavior: z.union([z.literal('DoNothing'), z.literal('HardDelete'), z.literal('SoftDelete')]).describe(`
+        * * Field Name: DeleteBehavior
+        * * Display Name: Delete Behavior
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SoftDelete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DoNothing
+    *   * HardDelete
+    *   * SoftDelete
+        * * Description: How to handle records that no longer exist in the source. SoftDelete, DoNothing, or HardDelete.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Whether this entity map is Active or Inactive.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration specific to this entity mapping.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CompanyIntegration: z.string().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCompanyIntegrationEntityMapEntityType = z.infer<typeof MJCompanyIntegrationEntityMapSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Company Integration Field Maps
+ */
+export const MJCompanyIntegrationFieldMapSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityMapID: z.string().describe(`
+        * * Field Name: EntityMapID
+        * * Display Name: Entity Map ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)`),
+    SourceFieldName: z.string().describe(`
+        * * Field Name: SourceFieldName
+        * * Display Name: Source Field Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The field/column name in the external source system.`),
+    SourceFieldLabel: z.string().nullable().describe(`
+        * * Field Name: SourceFieldLabel
+        * * Display Name: Source Field Label
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional human-friendly label for the source field.`),
+    DestinationFieldName: z.string().describe(`
+        * * Field Name: DestinationFieldName
+        * * Display Name: Destination Field Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The MJ entity field name this source field maps to.`),
+    DestinationFieldLabel: z.string().nullable().describe(`
+        * * Field Name: DestinationFieldLabel
+        * * Display Name: Destination Field Label
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional human-friendly label for the destination field.`),
+    Direction: z.union([z.literal('Both'), z.literal('DestToSource'), z.literal('SourceToDest')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: SourceToDest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * DestToSource
+    *   * SourceToDest
+        * * Description: Direction of field mapping: SourceToDest, DestToSource, or Both.`),
+    TransformPipeline: z.string().nullable().describe(`
+        * * Field Name: TransformPipeline
+        * * Display Name: Transform Pipeline
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of transform names to apply in order (e.g. ["trim", "uppercase"]). See FieldMappingEngine for available transforms.`),
+    IsKeyField: z.boolean().describe(`
+        * * Field Name: IsKeyField
+        * * Display Name: Is Key Field
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field is used by the MatchEngine to find existing records during sync.`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, a sync record is rejected if this field has no value.`),
+    DefaultValue: z.string().nullable().describe(`
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default value to use when the source field is null or missing.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Processing order for this field mapping within the entity map.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Whether this field mapping is Active or Inactive.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityMap: z.string().describe(`
+        * * Field Name: EntityMap
+        * * Display Name: Entity Map
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJCompanyIntegrationFieldMapEntityType = z.infer<typeof MJCompanyIntegrationFieldMapSchema>;
+
+/**
  * zod schema definition for the entity MJ: Company Integration Record Maps
  */
 export const MJCompanyIntegrationRecordMapSchema = z.object({
@@ -8187,6 +8405,76 @@ export const MJCompanyIntegrationRunSchema = z.object({
 export type MJCompanyIntegrationRunEntityType = z.infer<typeof MJCompanyIntegrationRunSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Company Integration Sync Watermarks
+ */
+export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityMapID: z.string().describe(`
+        * * Field Name: EntityMapID
+        * * Display Name: Entity Map
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)`),
+    Direction: z.union([z.literal('Pull'), z.literal('Push')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pull
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pull
+    *   * Push
+        * * Description: Sync direction this watermark tracks: Pull or Push.`),
+    WatermarkType: z.union([z.literal('ChangeToken'), z.literal('Cursor'), z.literal('Timestamp'), z.literal('Version')]).describe(`
+        * * Field Name: WatermarkType
+        * * Display Name: Watermark Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Timestamp
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ChangeToken
+    *   * Cursor
+    *   * Timestamp
+    *   * Version
+        * * Description: The type of watermark: Timestamp, Cursor, ChangeToken, or Version.`),
+    WatermarkValue: z.string().nullable().describe(`
+        * * Field Name: WatermarkValue
+        * * Display Name: Watermark Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The serialized watermark value used to resume incremental sync.`),
+    LastSyncAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncAt
+        * * Display Name: Last Sync At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful sync for this watermark.`),
+    RecordsSynced: z.number().describe(`
+        * * Field Name: RecordsSynced
+        * * Display Name: Records Synced
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Cumulative count of records synced through this watermark.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityMap: z.string().describe(`
+        * * Field Name: EntityMap
+        * * Display Name: Entity Map Name
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJCompanyIntegrationSyncWatermarkEntityType = z.infer<typeof MJCompanyIntegrationSyncWatermarkSchema>;
+
+/**
  * zod schema definition for the entity MJ: Company Integrations
  */
 export const MJCompanyIntegrationSchema = z.object({
@@ -8271,13 +8559,30 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: User-friendly name for the company integration instance, typically in the format "Company: Integration".`),
+    SourceTypeID: z.string().nullable().describe(`
+        * * Field Name: SourceTypeID
+        * * Display Name: Source Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Source Types (vwIntegrationSourceTypes.ID)
+        * * Description: Links this integration to its source type (SaaS API, Database, File Feed, etc.).`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the integration connection (server, database, credentials reference, etc.).`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8289,7 +8594,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -14297,6 +14602,59 @@ export const MJGeneratedCodeSchema = z.object({
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Integration Source Types
+ */
+export const MJIntegrationSourceTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name for this source type (e.g. SaaS API, Relational Database, File Feed).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of this source type.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Fully-qualified class name registered via @RegisterClass that implements BaseIntegrationConnector for this source type.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Font Awesome icon class for UI display.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Whether this source type is available for use. Active or Inactive.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJIntegrationSourceTypeEntityType = z.infer<typeof MJIntegrationSourceTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Integration URL Formats
  */
 export const MJIntegrationURLFormatSchema = z.object({
@@ -14355,9 +14713,11 @@ export type MJIntegrationURLFormatEntityType = z.infer<typeof MJIntegrationURLFo
 export const MJIntegrationSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(255)`),
     NavigationBaseURL: z.string().nullable().describe(`
         * * Field Name: NavigationBaseURL
@@ -14398,8 +14758,19 @@ export const MJIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
+    CredentialTypeID: z.string().nullable().describe(`
+        * * Field Name: CredentialTypeID
+        * * Display Name: Credential Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+        * * Description: Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.`),
+    CredentialType: z.string().nullable().describe(`
+        * * Field Name: CredentialType
+        * * Display Name: Credential Type Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJIntegrationEntityType = z.infer<typeof MJIntegrationSchema>;
@@ -43341,6 +43712,515 @@ export class MJCompanyEntity extends BaseEntity<MJCompanyEntityType> {
 
 
 /**
+ * MJ: Company Integration Entity Maps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CompanyIntegrationEntityMap
+ * * Base View: vwCompanyIntegrationEntityMaps
+ * * @description Maps an external object from a company integration to a MemberJunction entity, controlling sync direction, matching, and conflict resolution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Company Integration Entity Maps')
+export class MJCompanyIntegrationEntityMapEntity extends BaseEntity<MJCompanyIntegrationEntityMapEntityType> {
+    /**
+    * Loads the MJ: Company Integration Entity Maps record from the database
+    * @param ID: string - primary key value to load the MJ: Company Integration Entity Maps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCompanyIntegrationEntityMapEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
+    */
+    get CompanyIntegrationID(): string {
+        return this.Get('CompanyIntegrationID');
+    }
+    set CompanyIntegrationID(value: string) {
+        this.Set('CompanyIntegrationID', value);
+    }
+
+    /**
+    * * Field Name: ExternalObjectName
+    * * Display Name: External Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The name of the object in the external system (e.g. table name, API resource name).
+    */
+    get ExternalObjectName(): string {
+        return this.Get('ExternalObjectName');
+    }
+    set ExternalObjectName(value: string) {
+        this.Set('ExternalObjectName', value);
+    }
+
+    /**
+    * * Field Name: ExternalObjectLabel
+    * * Display Name: External Object Label
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional human-friendly label for the external object.
+    */
+    get ExternalObjectLabel(): string | null {
+        return this.Get('ExternalObjectLabel');
+    }
+    set ExternalObjectLabel(value: string | null) {
+        this.Set('ExternalObjectLabel', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: SyncDirection
+    * * Display Name: Sync Direction
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pull
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bidirectional
+    *   * Pull
+    *   * Push
+    * * Description: Whether data flows from external to MJ (Pull), MJ to external (Push), or both.
+    */
+    get SyncDirection(): 'Bidirectional' | 'Pull' | 'Push' {
+        return this.Get('SyncDirection');
+    }
+    set SyncDirection(value: 'Bidirectional' | 'Pull' | 'Push') {
+        this.Set('SyncDirection', value);
+    }
+
+    /**
+    * * Field Name: SyncEnabled
+    * * Display Name: Sync Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, this entity map is included in sync runs.
+    */
+    get SyncEnabled(): boolean {
+        return this.Get('SyncEnabled');
+    }
+    set SyncEnabled(value: boolean) {
+        this.Set('SyncEnabled', value);
+    }
+
+    /**
+    * * Field Name: MatchStrategy
+    * * Display Name: Match Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the match engine describing how to identify existing records (key fields, fuzzy thresholds, etc.).
+    */
+    get MatchStrategy(): string | null {
+        return this.Get('MatchStrategy');
+    }
+    set MatchStrategy(value: string | null) {
+        this.Set('MatchStrategy', value);
+    }
+
+    /**
+    * * Field Name: ConflictResolution
+    * * Display Name: Conflict Resolution
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SourceWins
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DestWins
+    *   * Manual
+    *   * MostRecent
+    *   * SourceWins
+    * * Description: How to handle conflicts when both source and destination have been modified. SourceWins, DestWins, MostRecent, or Manual.
+    */
+    get ConflictResolution(): 'DestWins' | 'Manual' | 'MostRecent' | 'SourceWins' {
+        return this.Get('ConflictResolution');
+    }
+    set ConflictResolution(value: 'DestWins' | 'Manual' | 'MostRecent' | 'SourceWins') {
+        this.Set('ConflictResolution', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Processing order when multiple entity maps exist. Lower numbers are processed first.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: DeleteBehavior
+    * * Display Name: Delete Behavior
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SoftDelete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DoNothing
+    *   * HardDelete
+    *   * SoftDelete
+    * * Description: How to handle records that no longer exist in the source. SoftDelete, DoNothing, or HardDelete.
+    */
+    get DeleteBehavior(): 'DoNothing' | 'HardDelete' | 'SoftDelete' {
+        return this.Get('DeleteBehavior');
+    }
+    set DeleteBehavior(value: 'DoNothing' | 'HardDelete' | 'SoftDelete') {
+        this.Set('DeleteBehavior', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Whether this entity map is Active or Inactive.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration specific to this entity mapping.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string {
+        return this.Get('CompanyIntegration');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Company Integration Field Maps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CompanyIntegrationFieldMap
+ * * Base View: vwCompanyIntegrationFieldMaps
+ * * @description Maps individual fields between an external source object and a MemberJunction entity, with optional transform pipeline.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Company Integration Field Maps')
+export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyIntegrationFieldMapEntityType> {
+    /**
+    * Loads the MJ: Company Integration Field Maps record from the database
+    * @param ID: string - primary key value to load the MJ: Company Integration Field Maps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCompanyIntegrationFieldMapEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityMapID
+    * * Display Name: Entity Map ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)
+    */
+    get EntityMapID(): string {
+        return this.Get('EntityMapID');
+    }
+    set EntityMapID(value: string) {
+        this.Set('EntityMapID', value);
+    }
+
+    /**
+    * * Field Name: SourceFieldName
+    * * Display Name: Source Field Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The field/column name in the external source system.
+    */
+    get SourceFieldName(): string {
+        return this.Get('SourceFieldName');
+    }
+    set SourceFieldName(value: string) {
+        this.Set('SourceFieldName', value);
+    }
+
+    /**
+    * * Field Name: SourceFieldLabel
+    * * Display Name: Source Field Label
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional human-friendly label for the source field.
+    */
+    get SourceFieldLabel(): string | null {
+        return this.Get('SourceFieldLabel');
+    }
+    set SourceFieldLabel(value: string | null) {
+        this.Set('SourceFieldLabel', value);
+    }
+
+    /**
+    * * Field Name: DestinationFieldName
+    * * Display Name: Destination Field Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The MJ entity field name this source field maps to.
+    */
+    get DestinationFieldName(): string {
+        return this.Get('DestinationFieldName');
+    }
+    set DestinationFieldName(value: string) {
+        this.Set('DestinationFieldName', value);
+    }
+
+    /**
+    * * Field Name: DestinationFieldLabel
+    * * Display Name: Destination Field Label
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional human-friendly label for the destination field.
+    */
+    get DestinationFieldLabel(): string | null {
+        return this.Get('DestinationFieldLabel');
+    }
+    set DestinationFieldLabel(value: string | null) {
+        this.Set('DestinationFieldLabel', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: SourceToDest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * DestToSource
+    *   * SourceToDest
+    * * Description: Direction of field mapping: SourceToDest, DestToSource, or Both.
+    */
+    get Direction(): 'Both' | 'DestToSource' | 'SourceToDest' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Both' | 'DestToSource' | 'SourceToDest') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: TransformPipeline
+    * * Display Name: Transform Pipeline
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of transform names to apply in order (e.g. ["trim", "uppercase"]). See FieldMappingEngine for available transforms.
+    */
+    get TransformPipeline(): string | null {
+        return this.Get('TransformPipeline');
+    }
+    set TransformPipeline(value: string | null) {
+        this.Set('TransformPipeline', value);
+    }
+
+    /**
+    * * Field Name: IsKeyField
+    * * Display Name: Is Key Field
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field is used by the MatchEngine to find existing records during sync.
+    */
+    get IsKeyField(): boolean {
+        return this.Get('IsKeyField');
+    }
+    set IsKeyField(value: boolean) {
+        this.Set('IsKeyField', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, a sync record is rejected if this field has no value.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Default value to use when the source field is null or missing.
+    */
+    get DefaultValue(): string | null {
+        return this.Get('DefaultValue');
+    }
+    set DefaultValue(value: string | null) {
+        this.Set('DefaultValue', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Processing order for this field mapping within the entity map.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Whether this field mapping is Active or Inactive.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityMap
+    * * Display Name: Entity Map
+    * * SQL Data Type: nvarchar(500)
+    */
+    get EntityMap(): string {
+        return this.Get('EntityMap');
+    }
+}
+
+
+/**
  * MJ: Company Integration Record Maps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CompanyIntegrationRecordMap
@@ -44024,6 +44904,171 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
 
 /**
+ * MJ: Company Integration Sync Watermarks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CompanyIntegrationSyncWatermark
+ * * Base View: vwCompanyIntegrationSyncWatermarks
+ * * @description Tracks incremental sync progress per entity map and direction using watermarks (timestamp, cursor, change token, or version).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Company Integration Sync Watermarks')
+export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompanyIntegrationSyncWatermarkEntityType> {
+    /**
+    * Loads the MJ: Company Integration Sync Watermarks record from the database
+    * @param ID: string - primary key value to load the MJ: Company Integration Sync Watermarks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCompanyIntegrationSyncWatermarkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityMapID
+    * * Display Name: Entity Map
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)
+    */
+    get EntityMapID(): string {
+        return this.Get('EntityMapID');
+    }
+    set EntityMapID(value: string) {
+        this.Set('EntityMapID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pull
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pull
+    *   * Push
+    * * Description: Sync direction this watermark tracks: Pull or Push.
+    */
+    get Direction(): 'Pull' | 'Push' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Pull' | 'Push') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: WatermarkType
+    * * Display Name: Watermark Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Timestamp
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ChangeToken
+    *   * Cursor
+    *   * Timestamp
+    *   * Version
+    * * Description: The type of watermark: Timestamp, Cursor, ChangeToken, or Version.
+    */
+    get WatermarkType(): 'ChangeToken' | 'Cursor' | 'Timestamp' | 'Version' {
+        return this.Get('WatermarkType');
+    }
+    set WatermarkType(value: 'ChangeToken' | 'Cursor' | 'Timestamp' | 'Version') {
+        this.Set('WatermarkType', value);
+    }
+
+    /**
+    * * Field Name: WatermarkValue
+    * * Display Name: Watermark Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The serialized watermark value used to resume incremental sync.
+    */
+    get WatermarkValue(): string | null {
+        return this.Get('WatermarkValue');
+    }
+    set WatermarkValue(value: string | null) {
+        this.Set('WatermarkValue', value);
+    }
+
+    /**
+    * * Field Name: LastSyncAt
+    * * Display Name: Last Sync At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful sync for this watermark.
+    */
+    get LastSyncAt(): Date | null {
+        return this.Get('LastSyncAt');
+    }
+    set LastSyncAt(value: Date | null) {
+        this.Set('LastSyncAt', value);
+    }
+
+    /**
+    * * Field Name: RecordsSynced
+    * * Display Name: Records Synced
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Cumulative count of records synced through this watermark.
+    */
+    get RecordsSynced(): number {
+        return this.Get('RecordsSynced');
+    }
+    set RecordsSynced(value: number) {
+        this.Set('RecordsSynced', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityMap
+    * * Display Name: Entity Map Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get EntityMap(): string {
+        return this.Get('EntityMap');
+    }
+}
+
+
+/**
  * MJ: Company Integrations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CompanyIntegration
@@ -44257,8 +45302,49 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: SourceTypeID
+    * * Display Name: Source Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Source Types (vwIntegrationSourceTypes.ID)
+    * * Description: Links this integration to its source type (SaaS API, Database, File Feed, etc.).
+    */
+    get SourceTypeID(): string | null {
+        return this.Get('SourceTypeID');
+    }
+    set SourceTypeID(value: string | null) {
+        this.Set('SourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the integration connection (server, database, credentials reference, etc.).
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -44267,7 +45353,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -44294,7 +45380,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -59698,6 +60784,141 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
 
 
 /**
+ * MJ: Integration Source Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IntegrationSourceType
+ * * Base View: vwIntegrationSourceTypes
+ * * @description Defines categories of integration sources such as SaaS API, Relational Database, or File Feed.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Integration Source Types')
+export class MJIntegrationSourceTypeEntity extends BaseEntity<MJIntegrationSourceTypeEntityType> {
+    /**
+    * Loads the MJ: Integration Source Types record from the database
+    * @param ID: string - primary key value to load the MJ: Integration Source Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIntegrationSourceTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name for this source type (e.g. SaaS API, Relational Database, File Feed).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of this source type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Fully-qualified class name registered via @RegisterClass that implements BaseIntegrationConnector for this source type.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Font Awesome icon class for UI display.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Whether this source type is available for use. Active or Inactive.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Integration URL Formats - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: IntegrationURLFormat
@@ -59871,6 +61092,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -59882,6 +61104,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(255)
     */
     get Description(): string | null {
@@ -59980,6 +61203,7 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -59988,6 +61212,29 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
     }
     set ID(value: string) {
         this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CredentialTypeID
+    * * Display Name: Credential Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    * * Description: Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.
+    */
+    get CredentialTypeID(): string | null {
+        return this.Get('CredentialTypeID');
+    }
+    set CredentialTypeID(value: string | null) {
+        this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: CredentialType
+    * * Display Name: Credential Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CredentialType(): string | null {
+        return this.Get('CredentialType');
     }
 }
 

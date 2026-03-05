@@ -1666,31 +1666,40 @@ export class ManageMetadataBase {
          const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
+         // Group FK fields by entity pair (ParentEntityID -> ChildEntityID) so we can
+         // match N FK fields to N relationship records correctly. Processing fields
+         // individually caused a ping-pong bug where multi-FK pairs swapped JoinFields
+         // on every CodeGen run.
+         const entityPairGroups = this.groupFieldsByEntityPair(entityFields);
 
-         // Function to process a batch of entity fields
-         const processBatch = async (batch: any[]) => {
-            let batchSQL = '';
-            batch.forEach((f) => {
-               // for each field determine if an existing relationship exists, if not, create it
-               const relationships = allRelationships.filter((r: { EntityID: string; RelatedEntityID: string; }) => UUIDsEqual(r.EntityID, f.RelatedEntityID) && UUIDsEqual(r.RelatedEntityID, f.EntityID));
-               if (relationships && relationships.length === 0) {
-                  // no relationship exists, so create it
+         let batchSQL = '';
+         let batchCount = 0;
+         for (const [_pairKey, fkFields] of entityPairGroups) {
+            const firstField = fkFields[0];
+            const relationships = allRelationships.filter(
+               (r: { EntityID: string; RelatedEntityID: string }) =>
+                  UUIDsEqual(r.EntityID, firstField.RelatedEntityID as string) &&
+                  UUIDsEqual(r.RelatedEntityID, firstField.EntityID as string)
+            );
+
+            if (relationships.length === 0) {
+               // No relationships exist for this pair — create one per FK field
+               for (const f of fkFields) {
                   batchSQL += this.buildInsertRelationshipSQL(f, md, relationshipCountMap);
-               } else {
-                  // relationship(s) exist - check if any need their join field updated
-                  batchSQL += this.buildUpdateRelationshipJoinFieldSQL(relationships, f);
                }
-            });
-
-            if (batchSQL.length > 0){
-               await this.LogSQLAndExecute(pool, batchSQL);
+            } else {
+               // Match FK fields to existing relationships as a group
+               batchSQL += this.buildEntityPairRelationshipSQL(relationships, fkFields, md, relationshipCountMap);
             }
-         };
 
-         // Split entityFields into batches and process each batch
-         for (let i = 0; i < entityFields.length; i += batchItems) {
-               const batch = entityFields.slice(i, i + batchItems);
-               await processBatch(batch);
+            batchCount++;
+            if (batchCount % batchItems === 0 && batchSQL.length > 0) {
+               await this.LogSQLAndExecute(pool, batchSQL);
+               batchSQL = '';
+            }
+         }
+         if (batchSQL.length > 0) {
+            await this.LogSQLAndExecute(pool, batchSQL);
          }
 
          // NOTE: Stale relationship cleanup is intentionally NOT done here because this
@@ -1729,23 +1738,84 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Builds SQL to UPDATE an existing EntityRelationship's RelatedEntityJoinField if it no longer
-    * matches the current FK field name. Only updates relationships where AutoUpdateFromSchema = true.
+    * Groups FK fields by their entity pair key (ParentEntityID|ChildEntityID).
+    * This ensures all FK fields for the same entity pair are processed together,
+    * preventing the ping-pong bug where multi-FK pairs swap JoinFields on each run.
     */
-   protected buildUpdateRelationshipJoinFieldSQL(relationships: Record<string, unknown>[], f: Record<string, unknown>): string {
+   protected groupFieldsByEntityPair(entityFields: Record<string, unknown>[]): Map<string, Record<string, unknown>[]> {
+      const groups = new Map<string, Record<string, unknown>[]>();
+      for (const f of entityFields) {
+         // Entity pair key: ParentEntityID (the "one" side) | ChildEntityID (the "many" side)
+         // In EntityRelationship terms: EntityID = RelatedEntityID of the FK field, RelatedEntityID = EntityID of the FK field
+         const pairKey = `${f.RelatedEntityID}|${f.EntityID}`;
+         const existing = groups.get(pairKey);
+         if (existing) {
+            existing.push(f);
+         } else {
+            groups.set(pairKey, [f]);
+         }
+      }
+      return groups;
+   }
+
+   /**
+    * Handles relationship management for an entire entity pair at once.
+    * Matches N FK fields to N existing relationship records using a 1:1 mapping:
+    *   1. Exact matches (relationship.JoinField === fk.Name) — already correct, skip
+    *   2. Unmatched FK fields assigned to unmatched relationships (update JoinField)
+    *   3. Remaining FK fields with no available relationship — create new records
+    */
+   protected buildEntityPairRelationshipSQL(
+      relationships: Record<string, unknown>[],
+      fkFields: Record<string, unknown>[],
+      md: Metadata,
+      relationshipCountMap: Map<number, number>
+   ): string {
       let sql = '';
+
+      // Build sets for matching
+      const fkFieldNames = new Set(fkFields.map(f => String(f.Name).trim()));
+      const matchedRelationshipIDs = new Set<string>();
+      const matchedFieldNames = new Set<string>();
+
+      // Pass 1: exact matches — relationship already has the correct JoinField
       for (const r of relationships) {
-         if (r.AutoUpdateFromSchema && String(r.RelatedEntityJoinField).trim() !== String(f.Name).trim()) {
-            logStatus(`      > Updating EntityRelationship join field: ${r.RelatedEntityJoinField} -> ${f.Name} (ID: ${r.ID})`);
+         const joinField = String(r.RelatedEntityJoinField).trim();
+         if (fkFieldNames.has(joinField) && !matchedFieldNames.has(joinField)) {
+            matchedRelationshipIDs.add(String(r.ID));
+            matchedFieldNames.add(joinField);
+         }
+      }
+
+      // Pass 2: assign unmatched FK fields to unmatched auto-update relationships
+      const unmatchedFields = fkFields.filter(f => !matchedFieldNames.has(String(f.Name).trim()));
+      const unmatchedRelationships = relationships.filter(
+         r => !matchedRelationshipIDs.has(String(r.ID)) && r.AutoUpdateFromSchema
+      );
+
+      for (let i = 0; i < Math.min(unmatchedFields.length, unmatchedRelationships.length); i++) {
+         const r = unmatchedRelationships[i];
+         const f = unmatchedFields[i];
+         const oldJoinField = String(r.RelatedEntityJoinField).trim();
+         const newJoinField = String(f.Name).trim();
+         if (oldJoinField !== newJoinField) {
+            logStatus(`      > Updating EntityRelationship join field: ${oldJoinField} -> ${newJoinField} (ID: ${r.ID})`);
             sql += `
-/* Update EntityRelationship join field from '${r.RelatedEntityJoinField}' to '${f.Name}' */
+/* Update EntityRelationship join field from '${oldJoinField}' to '${newJoinField}' */
    UPDATE ${this.qs(mj_core_schema(), 'EntityRelationship')}
-      SET ${this.qi('RelatedEntityJoinField')} = '${f.Name}',
+      SET ${this.qi('RelatedEntityJoinField')} = '${newJoinField}',
           ${this.qi('__mj_UpdatedAt')} = ${this.utcNow()}
       WHERE ${this.qi('ID')} = '${r.ID}';
 `;
          }
       }
+
+      // Pass 3: create new relationships for any remaining unmatched FK fields
+      const remainingFields = unmatchedFields.slice(unmatchedRelationships.length);
+      for (const f of remainingFields) {
+         sql += this.buildInsertRelationshipSQL(f, md, relationshipCountMap);
+      }
+
       return sql;
    }
 
