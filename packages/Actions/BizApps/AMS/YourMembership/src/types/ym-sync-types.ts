@@ -21,6 +21,7 @@ export interface YMEndpointSyncResult {
     RecordsFetched: number;
     RecordsInserted: number;
     RecordsUpdated: number;
+    RecordsSkipped: number;
     Errors: string[];
     DurationMs: number;
 }
@@ -32,6 +33,7 @@ export interface YMSyncResult {
     Success: boolean;
     EndpointResults: YMEndpointSyncResult[];
     TotalRecordsSynced: number;
+    TotalRecordsSkipped: number;
     TotalErrors: number;
     DurationMs: number;
 }

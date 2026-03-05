@@ -28,6 +28,16 @@ export interface YMEndpointConfig {
      * Useful for endpoints that require filters (e.g., date ranges).
      */
     DefaultQueryParams?: Record<string, string>;
+    /**
+     * Whether this endpoint supports date-based filtering for incremental sync.
+     * When true, the sync engine passes the last-sync timestamp via DateFilterParam.
+     */
+    SupportsDateFilter?: boolean;
+    /**
+     * The query parameter name used for date filtering (e.g., 'DateFrom').
+     * Only relevant when SupportsDateFilter is true.
+     */
+    DateFilterParam?: string;
 }
 
 /**
@@ -78,9 +88,8 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
         SupportsPagination: true,
         DefaultPageSize: 100,
         ResponseDataKey: 'StoreOrderDetailsList',
-        DefaultQueryParams: {
-            DateFrom: '2000-01-01',
-        },
+        SupportsDateFilter: true,
+        DateFilterParam: 'DateFrom',
     },
     Products: {
         Path: 'Products',

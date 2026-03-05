@@ -62,7 +62,7 @@ export class YMSyncAction extends BaseYMAction {
 
             if (result.Success) {
                 return this.BuildSuccessResult(
-                    `Sync completed: ${result.TotalRecordsSynced} records across ${result.EndpointResults.length} endpoints in ${result.DurationMs}ms`
+                    `Sync completed: ${result.TotalRecordsSynced} fetched, ${result.TotalRecordsSkipped} unchanged (skipped) across ${result.EndpointResults.length} endpoints in ${result.DurationMs}ms`
                 );
             } else {
                 return this.BuildErrorResult(
