@@ -17,7 +17,7 @@ type StatusColorType = 'green' | 'amber' | 'red' | 'gray';
   standalone: false,
   selector: 'app-control-tower',
   templateUrl: './control-tower.component.html',
-  styleUrls: ['./control-tower.component.scss']
+  styleUrls: ['./control-tower.component.css']
 })
 export class ControlTowerComponent extends BaseResourceComponent implements OnInit {
   /**

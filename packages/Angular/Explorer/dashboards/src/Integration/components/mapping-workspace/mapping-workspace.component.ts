@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -134,6 +134,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   IsLoadingRunDetails = false;
 
   private dataService = inject(IntegrationDataService);
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
     await this.LoadIntegrations();
@@ -150,11 +151,13 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   async LoadIntegrations(): Promise<void> {
     this.IsLoadingIntegrations = true;
+    this.cdr.detectChanges();
     try {
       const summaries = await this.dataService.LoadIntegrationSummaries(this.RunViewToUse);
       this.Integrations = summaries.map(s => s.Integration);
     } finally {
       this.IsLoadingIntegrations = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -175,15 +178,18 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   async LoadEntityMapsForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingEntityMaps = true;
+    this.cdr.detectChanges();
     try {
       this.EntityMaps = await this.dataService.LoadEntityMaps(integrationID, this.RunViewToUse);
     } finally {
       this.IsLoadingEntityMaps = false;
+      this.cdr.detectChanges();
     }
   }
 
   async LoadLatestRunForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingRunDetails = true;
+    this.cdr.detectChanges();
     try {
       const runs = await this.dataService.LoadRunHistory(integrationID, 1, this.RunViewToUse);
       this.LatestRun = runs.length > 0 ? runs[0] : null;
@@ -192,16 +198,19 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       }
     } finally {
       this.IsLoadingRunDetails = false;
+      this.cdr.detectChanges();
     }
   }
 
   async OnEntityMapSelect(em: EntityMapRow): Promise<void> {
     this.SelectedEntityMapID = em.ID;
     this.IsLoadingFieldMaps = true;
+    this.cdr.detectChanges();
     try {
       this.FieldMaps = await this.dataService.LoadFieldMaps(em.ID, this.RunViewToUse);
     } finally {
       this.IsLoadingFieldMaps = false;
+      this.cdr.detectChanges();
     }
   }
 

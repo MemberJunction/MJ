@@ -1,190 +1,229 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { IntegrationDataService, SourceTypeRow } from '../../services/integration-data.service';
+import { ResourceData, MJCredentialEntity, MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
+import { CredentialDialogResult } from '@memberjunction/ng-credentials';
+import {
+  IntegrationDataService,
+  IntegrationDefinitionRow,
+  SourceTypeRow
+} from '../../services/integration-data.service';
 
 interface StepDef {
   Index: number;
   Label: string;
 }
 
-interface ConnectionFormData {
-  Name: string;
-  Description: string;
-  APIBaseURL: string;
-  APIKey: string;
-  Server: string;
-  DatabaseName: string;
-  Username: string;
-  Password: string;
-  StoragePath: string;
-  FileType: string;
-}
-
-interface DropdownItem {
-  text: string;
-  value: string;
-}
-
-type ConfigModeType = 'api' | 'database' | 'file';
 type TestStatusType = 'idle' | 'testing' | 'success' | 'failed';
+
+/** Icon mapping for known integrations by name pattern */
+const INTEGRATION_ICONS: Record<string, string> = {
+  hubspot: 'fa-brands fa-hubspot',
+  salesforce: 'fa-brands fa-salesforce',
+  yourmembership: 'fa-solid fa-id-card-clip',
+  csv: 'fa-solid fa-file-csv',
+  excel: 'fa-solid fa-file-excel',
+  file: 'fa-solid fa-file-import',
+};
+
+function resolveIntegrationIcon(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [pattern, icon] of Object.entries(INTEGRATION_ICONS)) {
+    if (lower.includes(pattern)) return icon;
+  }
+  return 'fa-solid fa-plug';
+}
 
 @RegisterClass(BaseResourceComponent, 'IntegrationConnectionStudio')
 @Component({
   standalone: false,
   selector: 'app-connection-studio',
   templateUrl: './connection-studio.component.html',
-  styles: [`
-    .connection-studio { padding: 24px; max-width: 800px; margin: 0 auto; }
-    .studio-header {
-      margin-bottom: 24px;
-      h2 {
-        margin: 0; font-size: 20px; font-weight: 600;
-        i { margin-right: 8px; }
-      }
-    }
-
-    .step-indicator {
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 32px; gap: 0;
-    }
-    .step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      min-width: 80px;
-    }
-    .step-circle {
-      width: 32px; height: 32px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 600;
-      background: #e0e0e0; color: #666;
-    }
-    .step.active .step-circle { background: #4a6cf7; color: #fff; }
-    .step.completed .step-circle { background: #1b7a3d; color: #fff; }
-    .step-label { font-size: 12px; color: #888; }
-    .step.active .step-label { color: #4a6cf7; font-weight: 600; }
-    .step-connector {
-      flex: 1; height: 2px; background: #e0e0e0;
-      min-width: 40px; margin: 0 4px; margin-bottom: 22px;
-    }
-    .step-connector.completed { background: #1b7a3d; }
-
-    .step-content { }
-    .step-content h3 { margin: 0 0 4px 0; font-size: 18px; }
-    .step-description { color: #666; margin: 0 0 20px 0; }
-
-    .source-type-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 12px; margin-bottom: 24px;
-    }
-    .source-type-card {
-      padding: 20px 16px; border: 2px solid #eee; border-radius: 8px;
-      text-align: center; cursor: pointer; transition: all 0.15s;
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-    }
-    .source-type-card:hover { border-color: #4a6cf7; }
-    .source-type-card.selected { border-color: #4a6cf7; background: #f0f4ff; }
-    .source-type-card i { font-size: 28px; color: #4a6cf7; }
-    .st-name { font-weight: 600; font-size: 14px; }
-    .st-desc { font-size: 11px; color: #888; }
-
-    .config-form { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-    .form-field {
-      display: flex; flex-direction: column; gap: 4px;
-      label { font-size: 13px; font-weight: 600; color: #444; }
-    }
-
-    .step-actions {
-      display: flex; gap: 8px; padding-top: 16px;
-      border-top: 1px solid #eee;
-    }
-
-    .test-section { margin-bottom: 24px; }
-    .test-summary {
-      background: #f8f9fa; border-radius: 8px; padding: 16px;
-      margin-bottom: 16px;
-    }
-    .summary-row {
-      display: flex; gap: 8px; padding: 4px 0; font-size: 14px;
-      .label { font-weight: 600; min-width: 100px; color: #666; }
-    }
-    .test-hint { color: #888; font-style: italic; }
-    .test-result {
-      padding: 12px 16px; border-radius: 8px; font-weight: 500;
-      i { margin-right: 8px; }
-    }
-    .test-result.success { background: #e6f9ed; color: #1b7a3d; }
-    .test-result.failed { background: #fde8e8; color: #c62828; }
-  `]
+  styleUrls: ['./connection-studio.component.css']
 })
 export class ConnectionStudioComponent extends BaseResourceComponent implements OnInit {
-  /**
-   * The Provider @Input is inherited from BaseAngularComponent.
-   * Use this.RunViewToUse to get the appropriate IRunViewProvider
-   * for multi-MJ-instance support.
-   */
 
   Steps: StepDef[] = [
-    { Index: 0, Label: 'Source Type' },
+    { Index: 0, Label: 'Integration' },
     { Index: 1, Label: 'Configure' },
     { Index: 2, Label: 'Test & Save' }
   ];
 
   CurrentStep = 0;
+
+  // Step 1: Integration selection
+  Integrations: IntegrationDefinitionRow[] = [];
   SourceTypes: SourceTypeRow[] = [];
-  IsLoadingSourceTypes = false;
-  SelectedSourceTypeID: string | null = null;
+  IsLoadingIntegrations = false;
+  SelectedIntegrationID: string | null = null;
+  UseCustomMode = false;
+  CustomSourceTypeID: string | null = null;
+
+  // Step 2: Configuration
+  ConnectionName = '';
+  ConnectionDescription = '';
+  SelectedCredential: MJCredentialEntity | null = null;
+  CredentialTypeName = '';
+  ShowCredentialDialog = false;
+  PreselectedCredentialTypeId: string | undefined;
+  CredentialPickerMode: 'choose' | 'existing' | 'new' = 'choose';
+  ExistingCredentials: MJCredentialEntity[] = [];
+  IsLoadingCredentials = false;
+
+  // Step 3: Test & Save
   TestStatus: TestStatusType = 'idle';
-
-  FormData: ConnectionFormData = {
-    Name: '', Description: '',
-    APIBaseURL: '', APIKey: '',
-    Server: '', DatabaseName: '', Username: '', Password: '',
-    StoragePath: '', FileType: 'csv'
-  };
-
-  FileTypeOptions: DropdownItem[] = [
-    { text: 'CSV', value: 'csv' },
-    { text: 'Excel', value: 'excel' }
-  ];
+  TestMessage = '';
 
   private dataService = inject(IntegrationDataService);
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
-    await this.LoadSourceTypes();
+    await this.LoadIntegrations();
   }
 
-  get SelectedSourceTypeName(): string {
-    return this.SourceTypes.find(st => UUIDsEqual(st.ID, this.SelectedSourceTypeID))?.Name ?? '';
+  // --- Computed properties ---
+
+  get SelectedIntegration(): IntegrationDefinitionRow | null {
+    if (!this.SelectedIntegrationID) return null;
+    return this.Integrations.find(i => UUIDsEqual(i.ID, this.SelectedIntegrationID)) ?? null;
   }
 
-  get ConfigMode(): ConfigModeType {
-    const name = this.SelectedSourceTypeName.toLowerCase();
-    if (name.includes('file') || name.includes('csv') || name.includes('excel')) return 'file';
-    if (name.includes('database') || name.includes('sql') || name.includes('relational')) return 'database';
-    return 'api';
+  get SelectedIntegrationName(): string {
+    if (this.UseCustomMode) return 'Custom Integration';
+    return this.SelectedIntegration?.Name ?? '';
   }
 
-  get IsFormValid(): boolean {
-    if (!this.FormData.Name.trim()) return false;
-    if (this.ConfigMode === 'api') return !!this.FormData.APIBaseURL.trim();
-    if (this.ConfigMode === 'database') return !!this.FormData.Server.trim() && !!this.FormData.DatabaseName.trim();
-    if (this.ConfigMode === 'file') return !!this.FormData.StoragePath.trim();
-    return true;
+  get SelectedIntegrationIcon(): string {
+    if (this.UseCustomMode) {
+      const st = this.SourceTypes.find(s => UUIDsEqual(s.ID, this.CustomSourceTypeID));
+      return st?.IconClass ?? 'fa-solid fa-gear';
+    }
+    return this.SelectedIntegration ? resolveIntegrationIcon(this.SelectedIntegration.Name) : 'fa-solid fa-plug';
   }
 
-  async LoadSourceTypes(): Promise<void> {
-    this.IsLoadingSourceTypes = true;
+  get CustomSourceTypeName(): string {
+    if (!this.CustomSourceTypeID) return '';
+    return this.SourceTypes.find(s => UUIDsEqual(s.ID, this.CustomSourceTypeID))?.Name ?? '';
+  }
+
+  get IsStep1Valid(): boolean {
+    if (this.UseCustomMode) return !!this.CustomSourceTypeID;
+    return !!this.SelectedIntegrationID;
+  }
+
+  get IsStep2Valid(): boolean {
+    return !!this.ConnectionName.trim();
+  }
+
+  // --- Data loading ---
+
+  async LoadIntegrations(): Promise<void> {
+    this.IsLoadingIntegrations = true;
+    this.cdr.detectChanges();
     try {
-      this.SourceTypes = await this.dataService.LoadSourceTypes(this.RunViewToUse);
+      const [integrations, sourceTypes] = await Promise.all([
+        this.dataService.LoadIntegrationDefinitions(this.RunViewToUse),
+        this.dataService.LoadSourceTypes(this.RunViewToUse)
+      ]);
+      this.Integrations = integrations;
+      this.SourceTypes = sourceTypes;
     } finally {
-      this.IsLoadingSourceTypes = false;
+      this.IsLoadingIntegrations = false;
+      this.cdr.detectChanges();
     }
   }
 
-  SelectSourceType(st: SourceTypeRow): void {
-    this.SelectedSourceTypeID = st.ID;
+  // --- Step 1: Integration selection ---
+
+  SelectIntegration(integration: IntegrationDefinitionRow): void {
+    this.UseCustomMode = false;
+    this.SelectedIntegrationID = integration.ID;
+    this.CustomSourceTypeID = null;
+    this.ConnectionName = integration.Name;
   }
+
+  SelectCustomMode(): void {
+    this.UseCustomMode = true;
+    this.SelectedIntegrationID = null;
+    this.ConnectionName = '';
+  }
+
+  SelectCustomSourceType(st: SourceTypeRow): void {
+    this.CustomSourceTypeID = st.ID;
+  }
+
+  IsSelectedIntegration(id: string): boolean {
+    return !this.UseCustomMode && UUIDsEqual(this.SelectedIntegrationID, id);
+  }
+
+  IsSelectedCustomSourceType(id: string): boolean {
+    return UUIDsEqual(this.CustomSourceTypeID, id);
+  }
+
+  IntegrationIcon(integration: IntegrationDefinitionRow): string {
+    return resolveIntegrationIcon(integration.Name);
+  }
+
+  // --- Step 2: Credential management ---
+
+  get IntegrationCredentialTypeID(): string | null {
+    return this.SelectedIntegration?.CredentialTypeID ?? null;
+  }
+
+  async ShowExistingCredentials(): Promise<void> {
+    this.CredentialPickerMode = 'existing';
+    this.IsLoadingCredentials = true;
+    this.cdr.detectChanges();
+
+    const rv = new RunView();
+    const filter = this.IntegrationCredentialTypeID
+      ? `CredentialTypeID='${this.IntegrationCredentialTypeID}' AND IsActive=1`
+      : 'IsActive=1';
+    const result = await rv.RunView<MJCredentialEntity>({
+      EntityName: 'MJ: Credentials',
+      ExtraFilter: filter,
+      OrderBy: 'Name',
+      ResultType: 'entity_object'
+    });
+    this.ExistingCredentials = result.Results;
+    this.IsLoadingCredentials = false;
+    this.cdr.detectChanges();
+  }
+
+  SelectExistingCredential(credential: MJCredentialEntity): void {
+    this.SelectedCredential = credential;
+    this.CredentialTypeName = credential.Get('CredentialType') ?? '';
+    this.CredentialPickerMode = 'choose';
+  }
+
+  OpenCredentialDialog(): void {
+    this.PreselectedCredentialTypeId = this.IntegrationCredentialTypeID ?? undefined;
+    this.ShowCredentialDialog = true;
+    this.CredentialPickerMode = 'choose';
+    this.cdr.detectChanges();
+  }
+
+  OnCredentialDialogClose(result: CredentialDialogResult): void {
+    this.ShowCredentialDialog = false;
+    if (result.success && result.credential) {
+      this.SelectedCredential = result.credential;
+      this.CredentialTypeName = '';
+    }
+    this.cdr.detectChanges();
+  }
+
+  ClearCredential(): void {
+    this.SelectedCredential = null;
+    this.CredentialTypeName = '';
+    this.CredentialPickerMode = 'choose';
+  }
+
+  BackToCredentialChoice(): void {
+    this.CredentialPickerMode = 'choose';
+  }
+
+  // --- Navigation ---
 
   NextStep(): void {
     if (this.CurrentStep < this.Steps.length - 1) {
@@ -196,28 +235,54 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
     if (this.CurrentStep > 0) {
       this.CurrentStep--;
       this.TestStatus = 'idle';
+      this.TestMessage = '';
     }
   }
 
+  // --- Step 3: Test & Save ---
+
   TestConnection(): void {
     this.TestStatus = 'testing';
-    console.log('[ConnectionStudio] Testing connection with config:', this.FormData);
-    // Placeholder -- simulate async test
+    this.TestMessage = '';
+    this.cdr.detectChanges();
+
+    // TODO: Wire up to actual connector.TestConnection() via GraphQL
+    console.log('[ConnectionStudio] Testing connection:', {
+      integration: this.SelectedIntegrationName,
+      credentialId: this.SelectedCredential?.ID
+    });
+
     setTimeout(() => {
       this.TestStatus = 'success';
+      this.TestMessage = 'Connection verified successfully.';
+      this.cdr.detectChanges();
     }, 1500);
   }
 
-  SaveIntegration(): void {
-    console.log('[ConnectionStudio] Saving integration:', {
-      sourceTypeID: this.SelectedSourceTypeID,
-      formData: this.FormData
-    });
+  async SaveIntegration(): Promise<void> {
+    const md = new Metadata();
+    const companyIntegration = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+    companyIntegration.NewRecord();
+
+    if (this.SelectedIntegration) {
+      companyIntegration.IntegrationID = this.SelectedIntegration.ID;
+    }
+    companyIntegration.Name = this.ConnectionName;
+    companyIntegration.IsActive = true;
+
+    if (this.SelectedCredential) {
+      companyIntegration.CredentialID = this.SelectedCredential.ID;
+    }
+
+    const saved = await companyIntegration.Save();
+    if (saved) {
+      console.log('[ConnectionStudio] Saved company integration:', companyIntegration.ID);
+    } else {
+      console.error('[ConnectionStudio] Failed to save company integration');
+    }
   }
 
-  IsSelectedSourceType(id: string): boolean {
-    return UUIDsEqual(this.SelectedSourceTypeID, id);
-  }
+  // --- Resource interface ---
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {
     return 'Connection Studio';

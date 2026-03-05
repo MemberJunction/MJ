@@ -7,6 +7,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CredentialsModule } from '@memberjunction/ng-credentials';
 
 import { ControlTowerComponent } from './components/control-tower/control-tower.component';
 import { ConnectionStudioComponent } from './components/connection-studio/connection-studio.component';
@@ -33,7 +34,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     InputsModule,
     GridModule,
     LayoutModule,
-    SharedGenericModule
+    SharedGenericModule,
+    CredentialsModule
   ],
   providers: [
     IntegrationDataService

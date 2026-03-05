@@ -27,7 +27,7 @@ interface WatermarkRow {
   standalone: false,
   selector: 'app-sync-activity',
   templateUrl: './sync-activity.component.html',
-  styleUrls: ['./sync-activity.component.scss']
+  styleUrls: ['./sync-activity.component.css']
 })
 export class SyncActivityComponent extends BaseResourceComponent implements OnInit {
 

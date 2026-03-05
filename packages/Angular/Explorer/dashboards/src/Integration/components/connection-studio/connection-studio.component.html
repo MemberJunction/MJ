@@ -23,30 +23,57 @@
     }
   </div>
 
-  <!-- Step 1: Source Type Selection -->
+  <!-- Step 1: Choose Integration -->
   @if (CurrentStep === 0) {
     <div class="step-content">
-      <h3>Select Source Type</h3>
-      <p class="step-description">Choose the type of external system you want to connect.</p>
+      <h3>Choose Integration</h3>
+      <p class="step-description">Select the system you want to connect to, or set up a custom connection.</p>
 
-      @if (IsLoadingSourceTypes) {
-        <mj-loading text="Loading source types..." size="medium"></mj-loading>
+      @if (IsLoadingIntegrations) {
+        <mj-loading text="Loading integrations..." size="medium"></mj-loading>
       } @else {
-        <div class="source-type-grid">
-          @for (st of SourceTypes; track st.ID) {
-            <div class="source-type-card" [class.selected]="IsSelectedSourceType(st.ID)"
-                 (click)="SelectSourceType(st)">
-              <i [class]="st.IconClass ?? 'fa-solid fa-plug'"></i>
-              <span class="st-name">{{ st.Name }}</span>
-              @if (st.Description) {
-                <span class="st-desc">{{ st.Description }}</span>
+        <div class="integration-grid">
+          @for (integration of Integrations; track integration.ID) {
+            <div class="integration-card"
+                 [class.selected]="IsSelectedIntegration(integration.ID)"
+                 (click)="SelectIntegration(integration)">
+              <i class="card-icon" [class]="IntegrationIcon(integration)"></i>
+              <span class="card-name">{{ integration.Name }}</span>
+              @if (integration.Description) {
+                <span class="card-desc">{{ integration.Description }}</span>
               }
             </div>
           }
+
+          <!-- Custom integration option -->
+          <div class="integration-card custom-card"
+               [class.selected]="UseCustomMode"
+               (click)="SelectCustomMode()">
+            <i class="card-icon fa-solid fa-gear"></i>
+            <span class="card-name">Custom</span>
+            <span class="card-desc">Manual configuration with any source type</span>
+          </div>
         </div>
 
+        <!-- Custom mode: pick a source type -->
+        @if (UseCustomMode) {
+          <div class="custom-source-section">
+            <div class="custom-source-label">Select a connection type:</div>
+            <div class="source-type-chips">
+              @for (st of SourceTypes; track st.ID) {
+                <div class="source-chip"
+                     [class.selected]="IsSelectedCustomSourceType(st.ID)"
+                     (click)="SelectCustomSourceType(st)">
+                  <i [class]="st.IconClass ?? 'fa-solid fa-plug'"></i>
+                  {{ st.Name }}
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <div class="step-actions">
-          <button kendoButton [themeColor]="'primary'" [disabled]="!SelectedSourceTypeID"
+          <button kendoButton [themeColor]="'primary'" [disabled]="!IsStep1Valid"
                   (click)="NextStep()">
             Next <i class="fa-solid fa-arrow-right"></i>
           </button>
@@ -55,67 +82,102 @@
     </div>
   }
 
-  <!-- Step 2: Configuration Form -->
+  <!-- Step 2: Configure -->
   @if (CurrentStep === 1) {
     <div class="step-content">
       <h3>Configure Connection</h3>
-      <p class="step-description">Enter the connection details for {{ SelectedSourceTypeName }}.</p>
+      <p class="step-description">
+        Name your connection and attach credentials for
+        <strong>{{ SelectedIntegrationName }}</strong>.
+      </p>
 
       <div class="config-form">
         <div class="form-field">
-          <label>Integration Name</label>
-          <input kendoTextBox [(ngModel)]="FormData.Name" placeholder="e.g., Production HubSpot" />
+          <label>Connection Name</label>
+          <input kendoTextBox [(ngModel)]="ConnectionName"
+                 placeholder="e.g., Production HubSpot" />
         </div>
         <div class="form-field">
           <label>Description</label>
-          <textarea kendoTextArea [(ngModel)]="FormData.Description" rows="2"
+          <textarea kendoTextArea [(ngModel)]="ConnectionDescription" rows="2"
                     placeholder="Optional description..."></textarea>
         </div>
+      </div>
 
-        @if (ConfigMode === 'api') {
-          <div class="form-field">
-            <label>API Base URL</label>
-            <input kendoTextBox [(ngModel)]="FormData.APIBaseURL" placeholder="https://api.example.com" />
-          </div>
-          <div class="form-field">
-            <label>API Key</label>
-            <input kendoTextBox [(ngModel)]="FormData.APIKey" type="password" placeholder="Enter API key" />
-          </div>
-        }
+      <!-- Credential picker -->
+      <div class="credential-section">
+        <div class="section-label">Credentials</div>
 
-        @if (ConfigMode === 'database') {
-          <div class="form-field">
-            <label>Server</label>
-            <input kendoTextBox [(ngModel)]="FormData.Server" placeholder="localhost" />
+        @if (SelectedCredential) {
+          <!-- A credential is already selected -->
+          <div class="credential-selected">
+            <div class="credential-info">
+              <i class="credential-icon fa-solid fa-shield-halved"></i>
+              <div class="credential-details">
+                <div class="credential-name">{{ SelectedCredential.Name }}</div>
+                @if (CredentialTypeName) {
+                  <div class="credential-type">{{ CredentialTypeName }}</div>
+                }
+              </div>
+            </div>
+            <div class="credential-actions">
+              <button kendoButton [look]="'flat'" (click)="ClearCredential()"
+                      title="Change credential">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button kendoButton [look]="'flat'" (click)="ClearCredential()"
+                      title="Remove credential">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
           </div>
-          <div class="form-field">
-            <label>Database Name</label>
-            <input kendoTextBox [(ngModel)]="FormData.DatabaseName" placeholder="my_database" />
+        } @else if (CredentialPickerMode === 'choose') {
+          <!-- Choose between existing or new -->
+          <div class="credential-choice">
+            <button kendoButton [look]="'outline'" (click)="ShowExistingCredentials()">
+              <i class="fa-solid fa-list"></i> Use Existing Credential
+            </button>
+            <span class="credential-or">or</span>
+            <button kendoButton [look]="'outline'" (click)="OpenCredentialDialog()">
+              <i class="fa-solid fa-plus"></i> Create New Credential
+            </button>
           </div>
-          <div class="form-field">
-            <label>Username</label>
-            <input kendoTextBox [(ngModel)]="FormData.Username" placeholder="db_user" />
-          </div>
-          <div class="form-field">
-            <label>Password</label>
-            <input kendoTextBox [(ngModel)]="FormData.Password" type="password" placeholder="Enter password" />
-          </div>
-        }
+        } @else if (CredentialPickerMode === 'existing') {
+          <!-- Existing credential list -->
+          <div class="credential-list-section">
+            <div class="credential-list-header">
+              <button kendoButton [look]="'flat'" (click)="BackToCredentialChoice()">
+                <i class="fa-solid fa-arrow-left"></i> Back
+              </button>
+              <span class="credential-list-title">Select a Credential</span>
+            </div>
 
-        @if (ConfigMode === 'file') {
-          <div class="form-field">
-            <label>Storage Path</label>
-            <input kendoTextBox [(ngModel)]="FormData.StoragePath" placeholder="/data/imports/" />
-          </div>
-          <div class="form-field">
-            <label>File Type</label>
-            <kendo-dropdownlist
-              [data]="FileTypeOptions"
-              [(ngModel)]="FormData.FileType"
-              [textField]="'text'"
-              [valueField]="'value'"
-              [valuePrimitive]="true">
-            </kendo-dropdownlist>
+            @if (IsLoadingCredentials) {
+              <mj-loading text="Loading credentials..." size="small"></mj-loading>
+            } @else if (ExistingCredentials.length === 0) {
+              <div class="credential-empty-list">
+                <i class="fa-solid fa-inbox"></i>
+                <span>No matching credentials found.</span>
+                <button kendoButton [look]="'outline'" (click)="OpenCredentialDialog()">
+                  <i class="fa-solid fa-plus"></i> Create One
+                </button>
+              </div>
+            } @else {
+              <div class="credential-list">
+                @for (cred of ExistingCredentials; track cred.ID) {
+                  <div class="credential-list-item" (click)="SelectExistingCredential(cred)">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div class="credential-list-item-info">
+                      <div class="credential-list-item-name">{{ cred.Name }}</div>
+                      @if (cred.Description) {
+                        <div class="credential-list-item-desc">{{ cred.Description }}</div>
+                      }
+                    </div>
+                    <i class="fa-solid fa-chevron-right credential-list-item-arrow"></i>
+                  </div>
+                }
+              </div>
+            }
           </div>
         }
       </div>
@@ -124,7 +186,7 @@
         <button kendoButton (click)="PrevStep()">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button kendoButton [themeColor]="'primary'" [disabled]="!IsFormValid"
+        <button kendoButton [themeColor]="'primary'" [disabled]="!IsStep2Valid"
                 (click)="NextStep()">
           Next <i class="fa-solid fa-arrow-right"></i>
         </button>
@@ -136,21 +198,37 @@
   @if (CurrentStep === 2) {
     <div class="step-content">
       <h3>Test & Save</h3>
-      <p class="step-description">Test the connection and save your integration.</p>
+      <p class="step-description">Review your configuration, test the connection, and save.</p>
 
       <div class="test-section">
         <div class="test-summary">
           <div class="summary-row">
-            <span class="label">Name:</span>
-            <span>{{ FormData.Name }}</span>
+            <span class="label">Integration:</span>
+            <span class="value">
+              <i [class]="SelectedIntegrationIcon"></i>
+              {{ SelectedIntegrationName }}
+            </span>
+          </div>
+          @if (UseCustomMode && CustomSourceTypeName) {
+            <div class="summary-row">
+              <span class="label">Source Type:</span>
+              <span class="value">{{ CustomSourceTypeName }}</span>
+            </div>
+          }
+          <div class="summary-row">
+            <span class="label">Connection Name:</span>
+            <span class="value">{{ ConnectionName }}</span>
           </div>
           <div class="summary-row">
-            <span class="label">Source Type:</span>
-            <span>{{ SelectedSourceTypeName }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Mode:</span>
-            <span>{{ ConfigMode | titlecase }}</span>
+            <span class="label">Credential:</span>
+            <span class="value">
+              @if (SelectedCredential) {
+                <i class="fa-solid fa-shield-halved"></i>
+                {{ SelectedCredential.Name }}
+              } @else {
+                <span style="color: #888;">None attached</span>
+              }
+            </span>
           </div>
         </div>
 
@@ -162,12 +240,12 @@
         }
         @if (TestStatus === 'success') {
           <div class="test-result success">
-            <i class="fa-solid fa-circle-check"></i> Connection successful!
+            <i class="fa-solid fa-circle-check"></i> {{ TestMessage }}
           </div>
         }
         @if (TestStatus === 'failed') {
           <div class="test-result failed">
-            <i class="fa-solid fa-circle-xmark"></i> Connection failed. Please check your settings.
+            <i class="fa-solid fa-circle-xmark"></i> {{ TestMessage }}
           </div>
         }
       </div>
@@ -186,3 +264,13 @@
     </div>
   }
 </div>
+
+<!-- Credential Dialog -->
+@if (ShowCredentialDialog) {
+  <mj-credential-dialog
+    #credentialDialog
+    [Visible]="ShowCredentialDialog"
+    [PreselectedTypeId]="PreselectedCredentialTypeId"
+    (close)="OnCredentialDialogClose($event)">
+  </mj-credential-dialog>
+}

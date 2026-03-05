@@ -84,6 +84,19 @@ export interface RunDetailRow {
   Entity: string;
 }
 
+/** Master integration definition (e.g., "HubSpot", "Salesforce") */
+export interface IntegrationDefinitionRow {
+  ID: string;
+  Name: string;
+  Description: string | null;
+  ClassName: string | null;
+  ImportPath: string | null;
+  NavigationBaseURL: string | null;
+  BatchMaxRequestCount: number;
+  BatchRequestWaitTime: number;
+  CredentialTypeID: string | null;
+}
+
 /** Aggregated summary for a single integration, used by the Control Tower UI */
 export interface IntegrationSummary {
   Integration: IntegrationRow;
@@ -210,6 +223,20 @@ export class IntegrationDataService {
       Fields: ['ID', 'CompanyIntegrationRunID', 'EntityID', 'RecordsProcessed',
                'RecordsCreated', 'RecordsUpdated', 'RecordsDeleted',
                'RecordsErrored', 'RecordsSkipped', 'Entity'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  async LoadIntegrationDefinitions(provider?: IRunViewProvider | null): Promise<IntegrationDefinitionRow[]> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<IntegrationDefinitionRow>({
+      EntityName: 'MJ: Integrations',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
+               'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
+               'CredentialTypeID'],
       ResultType: 'simple'
     });
     return result.Results;
