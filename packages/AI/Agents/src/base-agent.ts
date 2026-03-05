@@ -4047,6 +4047,7 @@ The context is now within limits. Please retry your request with the recovered c
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
+                apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 data: {
                         ...params.data,
                         ...subAgentRequest.templateParameters,
