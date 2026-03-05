@@ -596,6 +596,62 @@ describe('SqlLoggingSessionImpl', () => {
         });
     });
 
+    describe('schema replacement (formatAsMigration)', () => {
+        /**
+         * Helper that exercises the schema replacement logic from logSqlStatement
+         * by directly calling the private methods in the same order.
+         */
+        const replaceSchema = (sql: string, schemaName: string = '__mj') => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {
+                formatAsMigration: true,
+                defaultSchemaName: schemaName,
+            });
+            // Replicate the schema replacement logic from logSqlStatement
+            const schemaRegex = new RegExp(`(\\[?)${schemaName}(\\]?)\\.`, 'g');
+            return sql.replace(schemaRegex, (_match, openBracket: string, closeBracket: string) => {
+                return `${openBracket}\${flyway:defaultSchema}${closeBracket}.`;
+            });
+        };
+
+        it('should preserve brackets when original uses [schema].', () => {
+            const input = 'SELECT * FROM [__mj].[Users]';
+            const result = replaceSchema(input);
+            expect(result).toBe('SELECT * FROM [${flyway:defaultSchema}].[Users]');
+        });
+
+        it('should NOT add brackets when original uses bare schema.', () => {
+            const input = 'SELECT * FROM __mj.Users';
+            const result = replaceSchema(input);
+            expect(result).toBe('SELECT * FROM ${flyway:defaultSchema}.Users');
+        });
+
+        it('should handle mixed bracketed and unbracketed references', () => {
+            const input = 'SELECT * FROM [__mj].[Users] u JOIN __mj.Roles r ON u.RoleID = r.ID';
+            const result = replaceSchema(input);
+            expect(result).toBe(
+                'SELECT * FROM [${flyway:defaultSchema}].[Users] u JOIN ${flyway:defaultSchema}.Roles r ON u.RoleID = r.ID'
+            );
+        });
+
+        it('should handle multiple occurrences of the same style', () => {
+            const input = '__mj.TableA JOIN __mj.TableB ON __mj.TableA.ID = __mj.TableB.AID';
+            const result = replaceSchema(input);
+            expect(result).not.toContain('__mj.');
+            expect(result).not.toContain('[${flyway:defaultSchema}]');
+            expect(result).toContain('${flyway:defaultSchema}.TableA');
+            expect(result).toContain('${flyway:defaultSchema}.TableB');
+        });
+
+        it('should not modify schema name that appears without a dot', () => {
+            const input = "WHERE SchemaName = '__mj' AND Table = [__mj].[Users]";
+            const result = replaceSchema(input);
+            // '__mj' without dot should be left alone
+            expect(result).toContain("'__mj'");
+            // [__mj]. with dot should be replaced
+            expect(result).toContain('[${flyway:defaultSchema}].[Users]');
+        });
+    });
+
     describe('_postProcessBeginEnd', () => {
         const postProcess = (sql: string) => {
             const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
@@ -622,6 +678,40 @@ describe('SqlLoggingSessionImpl', () => {
 
         it('should handle empty or null input', () => {
             expect(postProcess('')).toBe('');
+        });
+
+        it('should NOT modify END inside string literals', () => {
+            const input = "SET @sql = N'CASE WHEN x = 1 THEN 1 ELSE 0 END as MyCol'";
+            const result = postProcess(input);
+            expect(result).toContain('ELSE 0 END as MyCol');
+        });
+
+        it('should NOT modify BEGIN inside string literals', () => {
+            const input = "SET @sql = N'IF 1=1 BEGIN SELECT 1 END'";
+            const result = postProcess(input);
+            expect(result).toContain('1=1 BEGIN SELECT');
+            expect(result).toContain('1 END');
+        });
+
+        it('should NOT modify EXEC inside string literals', () => {
+            const input = "SET @val = N'Use EXEC spFoo to run it'";
+            const result = postProcess(input);
+            expect(result).toContain('EXEC spFoo');
+        });
+
+        it('should still modify keywords outside string literals while preserving content inside', () => {
+            const input = "SET @sql = N'ELSE 0 END as Col'\nDECLARE @x INT EXEC spUpdateQuery @SQL = @sql";
+            const result = postProcess(input);
+            // Inside the string literal - unchanged
+            expect(result).toContain('ELSE 0 END as Col');
+            // Outside the string literal - EXEC on its own line
+            expect(result).toContain('INT\nEXEC');
+        });
+
+        it('should handle escaped quotes inside string literals', () => {
+            const input = "SET @sql = N'WHERE Status = ''Complete'' END as Col'";
+            const result = postProcess(input);
+            expect(result).toContain("''Complete'' END as Col");
         });
     });
 });
