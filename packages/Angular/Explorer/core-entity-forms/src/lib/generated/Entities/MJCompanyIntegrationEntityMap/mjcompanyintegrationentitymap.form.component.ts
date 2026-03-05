@@ -16,9 +16,12 @@ export class MJCompanyIntegrationEntityMapFormComponent extends BaseFormComponen
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'MJ: Company Integration Field Maps', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'MJ: Company Integration Sync Watermarks', isExpanded: false }
+            { sectionKey: 'objectMapping', sectionName: 'Object Mapping', isExpanded: true },
+            { sectionKey: 'syncControl', sectionName: 'Sync Control', isExpanded: true },
+            { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }
         ]);
     }
 }

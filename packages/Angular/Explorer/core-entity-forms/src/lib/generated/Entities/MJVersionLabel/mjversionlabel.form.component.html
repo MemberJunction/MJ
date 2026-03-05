@@ -167,25 +167,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Version Label Restores (Pre-Restore Label ID) Section -->
+    <!-- Version Label Restores (Version Label ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJVersionLabelRestoresPreRestoreLabelID"
-        SectionName="Version Label Restores (Pre-Restore Label ID)"
+        SectionKey="mJVersionLabelRestoresVersionLabelID"
+        SectionName="Version Label Restores (Version Label ID)"
         Icon="fa fa-undo"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID')"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestoresVersionLabelID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','PreRestoreLabelID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','VersionLabelID')"
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresPreRestoreLabelID')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresVersionLabelID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresVersionLabelID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -217,25 +217,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Version Label Restores (Version Label ID) Section -->
+    <!-- Version Label Restores (Pre-Restore Label ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJVersionLabelRestoresVersionLabelID"
-        SectionName="Version Label Restores (Version Label ID)"
+        SectionKey="mJVersionLabelRestoresPreRestoreLabelID"
+        SectionName="Version Label Restores (Pre-Restore Label ID)"
         Icon="fa fa-undo"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestoresVersionLabelID')"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','VersionLabelID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','PreRestoreLabelID')"
                 [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresVersionLabelID')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresPreRestoreLabelID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresVersionLabelID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

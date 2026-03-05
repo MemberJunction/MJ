@@ -62,11 +62,12 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJRecordLinksSourceEntityID', sectionName: 'Record Links (Source Entity ID)', isExpanded: false },
+            { sectionKey: 'mJRecordLinksTargetEntityID', sectionName: 'Record Links (Target Entity ID)', isExpanded: false },
             { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false },
             { sectionKey: 'mJVersionLabels', sectionName: 'Version Labels', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false },
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
-            { sectionKey: 'mJRecordLinksTargetEntityID', sectionName: 'Record Links (Target Entity ID)', isExpanded: false },
+            { sectionKey: 'mJRecordLinksSourceEntityID', sectionName: 'Record Links (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false }
         ]);

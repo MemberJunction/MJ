@@ -812,7 +812,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ParentID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','RerunFromPromptRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
                 [ShowToolbar]="false"

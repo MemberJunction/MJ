@@ -535,25 +535,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Configurations (Default Prompt For Context Compression) Section -->
+    <!-- AI Configurations (Default Prompt For Context Summarization) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIConfigurationsDefaultPromptForContextCompressionID"
-        SectionName="AI Configurations (Default Prompt For Context Compression)"
+        SectionKey="mJAIConfigurationsDefaultPromptForContextSummarizationID"
+        SectionName="AI Configurations (Default Prompt For Context Summarization)"
         Icon="fa fa-brain"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIConfigurationsDefaultPromptForContextCompressionID')"
+        [BadgeCount]="GetSectionRowCount('mJAIConfigurationsDefaultPromptForContextSummarizationID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextCompressionID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextSummarizationID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
-                [AllowLoad]="IsSectionExpanded('mJAIConfigurationsDefaultPromptForContextCompressionID')"
+                [AllowLoad]="IsSectionExpanded('mJAIConfigurationsDefaultPromptForContextSummarizationID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIConfigurationsDefaultPromptForContextCompressionID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIConfigurationsDefaultPromptForContextSummarizationID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -585,25 +585,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Configurations (Default Prompt For Context Summarization) Section -->
+    <!-- AI Configurations (Default Prompt For Context Compression) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIConfigurationsDefaultPromptForContextSummarizationID"
-        SectionName="AI Configurations (Default Prompt For Context Summarization)"
+        SectionKey="mJAIConfigurationsDefaultPromptForContextCompressionID"
+        SectionName="AI Configurations (Default Prompt For Context Compression)"
         Icon="fa fa-brain"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIConfigurationsDefaultPromptForContextSummarizationID')"
+        [BadgeCount]="GetSectionRowCount('mJAIConfigurationsDefaultPromptForContextCompressionID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextSummarizationID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextCompressionID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
-                [AllowLoad]="IsSectionExpanded('mJAIConfigurationsDefaultPromptForContextSummarizationID')"
+                [AllowLoad]="IsSectionExpanded('mJAIConfigurationsDefaultPromptForContextCompressionID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIConfigurationsDefaultPromptForContextSummarizationID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIConfigurationsDefaultPromptForContextCompressionID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -723,7 +723,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','PromptID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','JudgeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
                 [ShowToolbar]="false"

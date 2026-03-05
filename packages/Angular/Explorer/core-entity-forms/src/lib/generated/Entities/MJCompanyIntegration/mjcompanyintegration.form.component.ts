@@ -24,7 +24,8 @@ export class MJCompanyIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCompanyIntegrationRecordMaps', sectionName: 'Company Integration Record Maps', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
             { sectionKey: 'mJEmployeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
-            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false }
+            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false }
         ]);
     }
 }

@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Object Mapping Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="objectMapping"
+        SectionName="Object Mapping"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -49,6 +49,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Sync Control Section -->
+    <mj-collapsible-panel
+        SectionKey="syncControl"
+        SectionName="Sync Control"
+        Icon="fa fa-sync"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -62,22 +72,6 @@
             [ShowLabel]="true"
             FieldName="SyncEnabled"
             Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MatchStrategy"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ConflictResolution"
-            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -105,14 +99,50 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Engine Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="engineConfiguration"
+        SectionName="Engine Configuration"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MatchStrategy"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ConflictResolution"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -136,11 +166,11 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: Company Integration Field Maps Section -->
+    <!-- Company Integration Field Maps Section -->
     <mj-collapsible-panel
         SectionKey="mJCompanyIntegrationFieldMaps"
-        SectionName="MJ: Company Integration Field Maps"
-        Icon="fa fa-table"
+        SectionName="Company Integration Field Maps"
+        Icon="fa fa-exchange-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -161,11 +191,11 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Company Integration Sync Watermarks Section -->
+    <!-- Company Integration Sync Watermarks Section -->
     <mj-collapsible-panel
         SectionKey="mJCompanyIntegrationSyncWatermarks"
-        SectionName="MJ: Company Integration Sync Watermarks"
-        Icon="fa fa-table"
+        SectionName="Company Integration Sync Watermarks"
+        Icon="fa fa-sync-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

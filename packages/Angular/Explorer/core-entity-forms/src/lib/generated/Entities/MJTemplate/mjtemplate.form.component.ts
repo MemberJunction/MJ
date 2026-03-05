@@ -22,9 +22,9 @@ export class MJTemplateFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTemplateContents', sectionName: 'Template Contents', isExpanded: false },
             { sectionKey: 'mJTemplateParams', sectionName: 'Template Params', isExpanded: false },
-            { sectionKey: 'mJUserNotificationTypesSMSTemplateID', sectionName: 'User Notification Types (SMS Template)', isExpanded: false },
-            { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
             { sectionKey: 'mJUserNotificationTypesEmailTemplateID', sectionName: 'User Notification Types (Email Template)', isExpanded: false },
+            { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
+            { sectionKey: 'mJUserNotificationTypesSMSTemplateID', sectionName: 'User Notification Types (SMS Template)', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }

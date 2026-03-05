@@ -175,31 +175,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Open App Dependencies (Open App ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOpenAppDependenciesOpenAppID"
-        SectionName="Open App Dependencies (Open App ID)"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenAppDependenciesOpenAppID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesOpenAppID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesOpenAppID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Open App Dependencies (Depends On App ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJOpenAppDependenciesDependsOnAppID"
@@ -219,6 +194,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesDependsOnAppID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Open App Dependencies (Open App ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJOpenAppDependenciesOpenAppID"
+        SectionName="Open App Dependencies (Open App ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJOpenAppDependenciesOpenAppID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesOpenAppID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesOpenAppID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
