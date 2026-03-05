@@ -72,6 +72,38 @@ export class YMSyncEngine {
   public async RunSync(options: YMSyncOptions): Promise<YMSyncResult> {
     const startTime = Date.now();
 
+    // MJ's TransactionGroup uses rxjs internally. When a SQL error occurs,
+    // the error propagates both as a rejected promise (which we catch) AND
+    // as an unsubscribed Observable error, which rxjs fires asynchronously
+    // via reportUnhandledError — crashing the Node.js process.
+    // Install a scoped handler to absorb those leaked errors during sync.
+    const capturedErrors: string[] = [];
+    const rejectHandler = (reason: unknown) => {
+      const msg = reason instanceof Error ? reason.message : String(reason);
+      if (msg.includes('Transaction rolled back')) {
+        capturedErrors.push(msg);
+        this.writeLog(`Caught leaked TransactionGroup rejection: ${msg}`);
+      }
+    };
+    process.on('unhandledRejection', rejectHandler);
+
+    try {
+      return await this.runSyncInner(options, startTime);
+    } finally {
+      // Allow the microtask queue to drain so any pending rxjs errors fire
+      // before we remove the handler.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      process.removeListener('unhandledRejection', rejectHandler);
+      if (capturedErrors.length > 0) {
+        this.writeLog(`Absorbed ${capturedErrors.length} leaked TransactionGroup rejection(s)`);
+      }
+    }
+  }
+
+  /**
+   * Inner sync logic, separated so RunSync can wrap it with error handlers.
+   */
+  private async runSyncInner(options: YMSyncOptions, startTime: number): Promise<YMSyncResult> {
     // Authenticate before starting
     this.writeLog('Authenticating...');
     await this.ensureSession();

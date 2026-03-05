@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, TransactionGroupBase, UserInfo } from '@memberjunction/core';
+import { BaseEntity, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 
 /** Batch size for TransactionGroup submits */
 const TG_BATCH_SIZE = 200;
@@ -267,10 +267,21 @@ export class YMSchemaManager {
       existingMap.set(sourceId, { ID: newId, SourceJSON: JSON.stringify(record) });
     }
 
-    // Submit the transaction group
-    const success = await tg.Submit();
+    // TransactionGroup.Submit() can throw AND leak an async rxjs error.
+    // Catch the synchronous throw here; the async leak is handled by the
+    // scoped unhandledRejection handler in YMSyncEngine.
+    let success: boolean;
+    try {
+      success = await tg.Submit();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.writeLog(`Batch transaction error for ${entityName}: ${msg}`);
+      return { Inserted: 0, Updated: 0, Skipped: skipped + toInsert.length + toUpdate.length };
+    }
+
     if (!success) {
-      throw new Error(`TransactionGroup submit failed for ${entityName} batch`);
+      this.writeLog(`Batch transaction returned false for ${entityName}`);
+      return { Inserted: 0, Updated: 0, Skipped: skipped + toInsert.length + toUpdate.length };
     }
 
     return { Inserted: inserted, Updated: updated, Skipped: skipped };
