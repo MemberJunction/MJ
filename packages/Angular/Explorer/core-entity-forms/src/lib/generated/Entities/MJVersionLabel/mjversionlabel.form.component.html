@@ -192,25 +192,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Version Label Items Section -->
+    <!-- Version Labels Section -->
     <mj-collapsible-panel
-        SectionKey="mJVersionLabelItems"
-        SectionName="Version Label Items"
-        Icon="fa fa-history"
+        SectionKey="mJVersionLabels"
+        SectionName="Version Labels"
+        Icon="fa fa-tag"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJVersionLabelItems')"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabels')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','VersionLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -242,25 +242,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Version Labels Section -->
+    <!-- Version Label Items Section -->
     <mj-collapsible-panel
-        SectionKey="mJVersionLabels"
-        SectionName="Version Labels"
-        Icon="fa fa-tag"
+        SectionKey="mJVersionLabelItems"
+        SectionName="Version Label Items"
+        Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJVersionLabels')"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabelItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','VersionLabelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

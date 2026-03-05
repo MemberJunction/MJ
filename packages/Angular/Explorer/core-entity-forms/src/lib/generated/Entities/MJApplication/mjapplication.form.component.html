@@ -213,31 +213,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Application Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="mJApplicationSettings"
-        SectionName="Application Settings"
-        Icon="fa fa-sliders-h"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJApplicationSettings')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Settings','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Application Settings')"
-                [AllowLoad]="IsSectionExpanded('mJApplicationSettings')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJApplicationSettings', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- User Applications Section -->
     <mj-collapsible-panel
         SectionKey="mJUserApplications"
@@ -257,6 +232,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserApplications', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Application Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJApplicationSettings"
+        SectionName="Application Settings"
+        Icon="fa fa-sliders-h"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJApplicationSettings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Settings','ApplicationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Application Settings')"
+                [AllowLoad]="IsSectionExpanded('mJApplicationSettings')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJApplicationSettings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

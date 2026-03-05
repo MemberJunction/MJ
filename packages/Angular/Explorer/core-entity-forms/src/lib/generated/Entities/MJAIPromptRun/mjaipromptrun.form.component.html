@@ -774,31 +774,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Prompt Run Medias Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIPromptRunMedias"
-        SectionName="AI Prompt Run Medias"
-        Icon="fa fa-image"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','PromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AI Prompt Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRuns"
@@ -818,6 +793,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Prompt Run Medias Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIPromptRunMedias"
+        SectionName="AI Prompt Run Medias"
+        Icon="fa fa-image"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

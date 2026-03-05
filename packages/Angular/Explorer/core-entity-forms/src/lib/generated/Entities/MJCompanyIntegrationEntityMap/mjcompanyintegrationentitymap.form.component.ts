@@ -20,8 +20,8 @@ export class MJCompanyIntegrationEntityMapFormComponent extends BaseFormComponen
             { sectionKey: 'syncControl', sectionName: 'Sync Control', isExpanded: true },
             { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }
+            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false }
         ]);
     }
 }

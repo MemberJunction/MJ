@@ -607,131 +607,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AIAgent Actions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentActions"
-        SectionName="AIAgent Actions"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentActions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Actions','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Actions')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentActions')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentActions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Agent Artifact Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentArtifactTypes"
-        SectionName="AI Agent Artifact Types"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Agent Data Sources Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentDataSources"
-        SectionName="AI Agent Data Sources"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentDataSources')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Data Sources','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Data Sources')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentDataSources')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentDataSources', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AIAgent Learning Cycles Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentLearningCycles"
-        SectionName="AIAgent Learning Cycles"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycles')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycles','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycles')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycles')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycles', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Agent Modalities Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentModalities"
-        SectionName="AI Agent Modalities"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentModalities')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Modalities','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AIAgent Models Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentModels"
@@ -757,50 +632,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Permissions Section -->
+    <!-- AIAgent Actions Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentPermissions"
-        SectionName="AI Agent Permissions"
+        SectionKey="mJAIAgentActions"
+        SectionName="AIAgent Actions"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentActions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Actions','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Actions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentActions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentActions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Relationships (Sub Agent ID) Section -->
+    <!-- AIAgent Learning Cycles Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentRelationshipsSubAgentID"
-        SectionName="AI Agent Relationships (Sub Agent ID)"
+        SectionKey="mJAIAgentLearningCycles"
+        SectionName="AIAgent Learning Cycles"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRelationshipsSubAgentID')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycles')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','SubAgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRelationshipsSubAgentID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycles','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycles')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycles')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationshipsSubAgentID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycles', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -857,50 +732,125 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Configurations Section -->
+    <!-- AI Agent Relationships (Sub Agent ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentConfigurations"
-        SectionName="AI Agent Configurations"
+        SectionKey="mJAIAgentRelationshipsSubAgentID"
+        SectionName="AI Agent Relationships (Sub Agent ID)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentConfigurations')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRelationshipsSubAgentID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Configurations','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Configurations')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentConfigurations')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','SubAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRelationshipsSubAgentID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentConfigurations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationshipsSubAgentID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Examples Section -->
+    <!-- AI Agent Artifact Types Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentExamples"
-        SectionName="AI Agent Examples"
+        SectionKey="mJAIAgentArtifactTypes"
+        SectionName="AI Agent Artifact Types"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentExamples')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentPermissions"
+        SectionName="AI Agent Permissions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Data Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentDataSources"
+        SectionName="AI Agent Data Sources"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentDataSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Data Sources','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Data Sources')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentDataSources')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentDataSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Modalities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentModalities"
+        SectionName="AI Agent Modalities"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentModalities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Modalities','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -957,31 +907,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Relationships (Agent ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentRelationshipsAgentID"
-        SectionName="AI Agent Relationships (Agent ID)"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRelationshipsAgentID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRelationshipsAgentID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationshipsAgentID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AI Agent Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
@@ -1032,6 +957,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Relationships (Agent ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRelationshipsAgentID"
+        SectionName="AI Agent Relationships (Agent ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRelationshipsAgentID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRelationshipsAgentID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationshipsAgentID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Tasks Section -->
     <mj-collapsible-panel
         SectionKey="mJTasks"
@@ -1051,6 +1001,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Examples Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentExamples"
+        SectionName="AI Agent Examples"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentExamples')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Configurations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentConfigurations"
+        SectionName="AI Agent Configurations"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentConfigurations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Configurations','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentConfigurations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentConfigurations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

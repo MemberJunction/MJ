@@ -22408,6 +22408,10 @@ export class MJCompanyIntegrationFieldMap_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(500)
+    EntityMap: string;
+        
 }
 
 //****************************************************************************
@@ -23449,6 +23453,10 @@ export class MJCompanyIntegrationSyncWatermark_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(500)
+    EntityMap: string;
         
 }
 

@@ -100,31 +100,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Dashboard Categories Section -->
-    <mj-collapsible-panel
-        SectionKey="mJDashboardCategories"
-        SectionName="Dashboard Categories"
-        Icon="fa fa-tachometer-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDashboardCategories')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Categories')"
-                [AllowLoad]="IsSectionExpanded('mJDashboardCategories')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategories', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Dashboards Section -->
     <mj-collapsible-panel
         SectionKey="mJDashboards"
@@ -144,6 +119,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Dashboard Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDashboardCategories"
+        SectionName="Dashboard Categories"
+        Icon="fa fa-tachometer-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDashboardCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Categories')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

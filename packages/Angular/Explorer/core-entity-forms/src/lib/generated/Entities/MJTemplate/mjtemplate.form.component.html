@@ -134,31 +134,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Template Contents Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTemplateContents"
-        SectionName="Template Contents"
-        Icon="fa fa-file-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTemplateContents')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
-                [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Template Params Section -->
     <mj-collapsible-panel
         SectionKey="mJTemplateParams"
@@ -178,6 +153,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTemplateParams', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Template Contents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTemplateContents"
+        SectionName="Template Contents"
+        Icon="fa fa-file-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTemplateContents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TemplateID')"
+                [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
+                [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

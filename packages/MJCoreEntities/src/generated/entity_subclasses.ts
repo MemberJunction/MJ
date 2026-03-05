@@ -8044,7 +8044,7 @@ export const MJCompanyIntegrationFieldMapSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityMapID: z.string().describe(`
         * * Field Name: EntityMapID
-        * * Display Name: Entity Map
+        * * Display Name: Entity Map ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)`),
     SourceFieldName: z.string().describe(`
@@ -8085,13 +8085,13 @@ export const MJCompanyIntegrationFieldMapSchema = z.object({
         * * Description: JSON array of transform names to apply in order (e.g. ["trim", "uppercase"]). See FieldMappingEngine for available transforms.`),
     IsKeyField: z.boolean().describe(`
         * * Field Name: IsKeyField
-        * * Display Name: Key Field
+        * * Display Name: Is Key Field
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this field is used by the MatchEngine to find existing records during sync.`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, a sync record is rejected if this field has no value.`),
@@ -8126,6 +8126,10 @@ export const MJCompanyIntegrationFieldMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityMap: z.string().describe(`
+        * * Field Name: EntityMap
+        * * Display Name: Entity Map
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJCompanyIntegrationFieldMapEntityType = z.infer<typeof MJCompanyIntegrationFieldMapSchema>;
@@ -8411,7 +8415,7 @@ export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityMapID: z.string().describe(`
         * * Field Name: EntityMapID
-        * * Display Name: Entity Map
+        * * Display Name: Entity Map ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)`),
     Direction: z.union([z.literal('Pull'), z.literal('Push')]).describe(`
@@ -8462,6 +8466,10 @@ export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityMap: z.string().describe(`
+        * * Field Name: EntityMap
+        * * Display Name: Entity Map
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJCompanyIntegrationSyncWatermarkEntityType = z.infer<typeof MJCompanyIntegrationSyncWatermarkSchema>;
@@ -43994,7 +44002,7 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
 
     /**
     * * Field Name: EntityMapID
-    * * Display Name: Entity Map
+    * * Display Name: Entity Map ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)
     */
@@ -44091,7 +44099,7 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
 
     /**
     * * Field Name: IsKeyField
-    * * Display Name: Key Field
+    * * Display Name: Is Key Field
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, this field is used by the MatchEngine to find existing records during sync.
@@ -44105,7 +44113,7 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, a sync record is rejected if this field has no value.
@@ -44180,6 +44188,15 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityMap
+    * * Display Name: Entity Map
+    * * SQL Data Type: nvarchar(500)
+    */
+    get EntityMap(): string {
+        return this.Get('EntityMap');
     }
 }
 
@@ -44912,7 +44929,7 @@ export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompan
 
     /**
     * * Field Name: EntityMapID
-    * * Display Name: Entity Map
+    * * Display Name: Entity Map ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integration Entity Maps (vwCompanyIntegrationEntityMaps.ID)
     */
@@ -45019,6 +45036,15 @@ export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompan
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityMap
+    * * Display Name: Entity Map
+    * * SQL Data Type: nvarchar(500)
+    */
+    get EntityMap(): string {
+        return this.Get('EntityMap');
     }
 }
 
