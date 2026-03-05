@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJCredentialEntity, MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCredentialEntity, MJCompanyIntegrationEntity, MJCompanyEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
 import {
@@ -60,6 +60,12 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   UseCustomMode = false;
   CustomSourceTypeID: string | null = null;
 
+  // Company selection
+  Companies: Array<{ ID: string; Name: string }> = [];
+  SelectedCompanyID: string | null = null;
+  NewCompanyName = '';
+  IsCreatingCompany = false;
+
   // Step 2: Configuration
   ConnectionName = '';
   ConnectionDescription = '';
@@ -74,6 +80,9 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   // Step 3: Test & Save
   TestStatus: TestStatusType = 'idle';
   TestMessage = '';
+  IsSaving = false;
+  SaveCompleted = false;
+  SaveError = '';
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
@@ -113,7 +122,7 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   }
 
   get IsStep2Valid(): boolean {
-    return !!this.ConnectionName.trim();
+    return !!this.ConnectionName.trim() && !!this.SelectedCompanyID;
   }
 
   // --- Data loading ---
@@ -122,16 +131,66 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
     this.IsLoadingIntegrations = true;
     this.cdr.detectChanges();
     try {
-      const [integrations, sourceTypes] = await Promise.all([
+      const rv = new RunView();
+      const [integrations, sourceTypes, companyResult] = await Promise.all([
         this.dataService.LoadIntegrationDefinitions(this.RunViewToUse),
-        this.dataService.LoadSourceTypes(this.RunViewToUse)
+        this.dataService.LoadSourceTypes(this.RunViewToUse),
+        rv.RunView<{ ID: string; Name: string }>({
+          EntityName: 'MJ: Companies',
+          Fields: ['ID', 'Name'],
+          OrderBy: 'Name',
+          ResultType: 'simple'
+        })
       ]);
       this.Integrations = integrations;
       this.SourceTypes = sourceTypes;
+      this.Companies = companyResult.Success ? companyResult.Results : [];
+      // Auto-select if only one company
+      if (this.Companies.length === 1) {
+        this.SelectedCompanyID = this.Companies[0].ID;
+      }
     } finally {
       this.IsLoadingIntegrations = false;
       this.cdr.detectChanges();
     }
+  }
+
+  get HasCompanies(): boolean {
+    return this.Companies.length > 0;
+  }
+
+  get NeedsCompanyPicker(): boolean {
+    return this.Companies.length > 1;
+  }
+
+  get SelectedCompanyName(): string {
+    if (!this.SelectedCompanyID) return '';
+    return this.Companies.find(c => UUIDsEqual(c.ID, this.SelectedCompanyID))?.Name ?? '';
+  }
+
+  async CreateCompany(): Promise<void> {
+    const name = this.NewCompanyName.trim();
+    if (!name) return;
+    this.IsCreatingCompany = true;
+    this.cdr.detectChanges();
+
+    const md = new Metadata();
+    const company = await md.GetEntityObject<MJCompanyEntity>('MJ: Companies');
+    company.NewRecord();
+    company.Name = name;
+    company.Description = name;
+
+    const saved = await company.Save();
+    if (saved) {
+      this.Companies.push({ ID: company.ID, Name: company.Name });
+      this.SelectedCompanyID = company.ID;
+      this.NewCompanyName = '';
+    } else {
+      const errorMessage = company.LatestResult?.CompleteMessage || company.LatestResult?.Message || 'Unknown error';
+      console.error('[ConnectionStudio] Failed to create company:', errorMessage);
+    }
+    this.IsCreatingCompany = false;
+    this.cdr.detectChanges();
   }
 
   // --- Step 1: Integration selection ---
@@ -260,10 +319,20 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   }
 
   async SaveIntegration(): Promise<void> {
+    if (!this.SelectedCompanyID) {
+      console.error('[ConnectionStudio] No company selected');
+      return;
+    }
+
+    this.IsSaving = true;
+    this.SaveError = '';
+    this.cdr.detectChanges();
+
     const md = new Metadata();
     const companyIntegration = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
     companyIntegration.NewRecord();
 
+    companyIntegration.CompanyID = this.SelectedCompanyID;
     if (this.SelectedIntegration) {
       companyIntegration.IntegrationID = this.SelectedIntegration.ID;
     }
@@ -275,11 +344,32 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
     }
 
     const saved = await companyIntegration.Save();
+    this.IsSaving = false;
+
     if (saved) {
-      console.log('[ConnectionStudio] Saved company integration:', companyIntegration.ID);
+      this.SaveCompleted = true;
     } else {
-      console.error('[ConnectionStudio] Failed to save company integration');
+      this.SaveError = companyIntegration.LatestResult?.CompleteMessage || companyIntegration.LatestResult?.Message || 'Unknown error';
+      console.error('[ConnectionStudio] Failed to save:', this.SaveError);
     }
+    this.cdr.detectChanges();
+  }
+
+  ResetWizard(): void {
+    this.CurrentStep = 0;
+    this.SelectedIntegrationID = null;
+    this.UseCustomMode = false;
+    this.CustomSourceTypeID = null;
+    this.ConnectionName = '';
+    this.ConnectionDescription = '';
+    this.SelectedCredential = null;
+    this.CredentialTypeName = '';
+    this.CredentialPickerMode = 'choose';
+    this.TestStatus = 'idle';
+    this.TestMessage = '';
+    this.IsSaving = false;
+    this.SaveCompleted = false;
+    this.SaveError = '';
   }
 
   // --- Resource interface ---

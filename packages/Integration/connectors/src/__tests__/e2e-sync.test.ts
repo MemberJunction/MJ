@@ -17,7 +17,6 @@ import type { UserInfo } from '@memberjunction/core';
 import type { FetchContext } from '@memberjunction/integration-engine';
 import { HubSpotConnector } from '../HubSpotConnector.js';
 import { SalesforceConnector } from '../SalesforceConnector.js';
-import { YourMembershipConnector } from '../YourMembershipConnector.js';
 import { FileFeedConnector } from '../FileFeedConnector.js';
 import * as path from 'node:path';
 import sql from 'mssql';
@@ -309,117 +308,9 @@ describe('E2E: Salesforce Connector', () => {
 
 // =============================================================================
 // E2E: YourMembership Connector
+// NOTE: YM connector now uses the real YM REST API (not SQL-based mock data).
+// E2E tests for YM live in YourMembershipConnector.test.ts (live API section).
 // =============================================================================
-describe('E2E: YourMembership Connector', () => {
-    const connector = new YourMembershipConnector();
-    const ci = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'ym' });
-
-    afterAll(async () => {
-        if (dbAvailable) await connector.CloseAllPools();
-    });
-
-    describe('Connection', () => {
-        it('should connect to mock_data and return server version', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const result = await connector.TestConnection(ci, mockUser);
-            expect(result.Success).toBe(true);
-            expect(result.Message).toContain('mock_data');
-        });
-    });
-
-    describe('Discovery', () => {
-        it('should discover ym schema objects', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const objects = await connector.DiscoverObjects(ci, mockUser);
-            const names = objects.map((o) => o.Name).sort();
-            expect(names).toEqual(['event_registrations', 'events', 'members', 'membership_types']);
-        });
-
-        it('should discover fields on members table', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const fields = await connector.DiscoverFields(ci, 'members', mockUser);
-            const names = fields.map((f) => f.Name);
-            expect(names).toContain('member_id');
-            expect(names).toContain('email');
-            expect(names).toContain('first_name');
-            expect(names).toContain('last_name');
-            expect(names).toContain('updated_at');
-        });
-    });
-
-    describe('Full Sync', () => {
-        it('should fetch all members from ym.members', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'members');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBeGreaterThanOrEqual(50);
-            expect(batch.HasMore).toBe(false);
-
-            const first = batch.Records[0];
-            expect(first.ExternalID).toBeDefined();
-            expect(first.ObjectType).toBe('members');
-            expect(first.Fields).toHaveProperty('email');
-            expect(first.Fields).toHaveProperty('first_name');
-        });
-
-        it('should fetch all 5 membership_types', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'membership_types');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(5);
-            expect(batch.HasMore).toBe(false);
-        });
-
-        it('should fetch all 10 events', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'events');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBeGreaterThanOrEqual(10); // seed has 10, E2E may add more
-            expect(batch.HasMore).toBe(false);
-        });
-
-        it('should fetch all 40 event_registrations', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'event_registrations');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(40);
-            expect(batch.HasMore).toBe(false);
-        });
-
-        it('should return a watermark value after full fetch', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'members');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.NewWatermarkValue).toBeDefined();
-        });
-    });
-
-    describe('Incremental Sync', () => {
-        it('should return 0 members with far-future watermark', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'members', '2099-01-01T00:00:00.000Z');
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(0);
-        });
-
-        it('should respect batch size and indicate HasMore', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ci, 'members', null, 10);
-            const batch = await connector.FetchChanges(ctx);
-            expect(batch.Records.length).toBe(10);
-            expect(batch.HasMore).toBe(true);
-        });
-    });
-
-    describe('Default Field Mappings', () => {
-        it('should return member mappings for members object', () => {
-            const mappings = connector.GetDefaultFieldMappings('members', 'Contacts');
-            expect(mappings.length).toBe(5);
-            const keyField = mappings.find((m) => m.IsKeyField);
-            expect(keyField?.SourceFieldName).toBe('email');
-        });
-    });
-});
 
 // =============================================================================
 // E2E: FileFeed Connector
@@ -488,15 +379,12 @@ describe('E2E: FileFeed Connector', () => {
 describe('E2E: Incremental Sync with Live Data Changes', () => {
     const hsConnector = new HubSpotConnector();
     const sfConnector = new SalesforceConnector();
-    const ymConnector = new YourMembershipConnector();
 
     const hsCI = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'hs' });
     const sfCI = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'sf' });
-    const ymCI = createMockCI({ ...MOCK_DATA_CONFIG, schema: 'ym' });
 
     let hsWatermark: string | undefined;
     let sfWatermark: string | undefined;
-    let ymWatermark: string | undefined;
 
     beforeAll(async () => {
         if (!dbAvailable) return;
@@ -508,12 +396,10 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
         await pool.request().query(`
             DELETE FROM hs.contacts WHERE email LIKE 'new.person%@example.com' OR email LIKE 'delta.new%@example.com';
             DELETE FROM sf.Contact WHERE Id IN ('003000000000051AA','003000000000052AA','003000000000053AA');
-            DELETE FROM ym.members WHERE member_number LIKE 'MEM-NEW-%' OR member_number LIKE 'MEM-DELTA-%';
 
             -- Normalize all timestamps to MIN so watermark is uniform across all rows
             UPDATE hs.contacts SET lastmodifieddate = (SELECT MIN(lastmodifieddate) FROM hs.contacts);
             UPDATE sf.Contact SET LastModifiedDate = (SELECT MIN(LastModifiedDate) FROM sf.Contact);
-            UPDATE ym.members SET updated_at = (SELECT MIN(updated_at) FROM ym.members);
         `);
     });
 
@@ -525,21 +411,18 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
         await pool.request().query(`
             DELETE FROM hs.contacts WHERE email LIKE 'new.person%@example.com' OR email LIKE 'delta.new%@example.com';
             DELETE FROM sf.Contact WHERE Id IN ('003000000000051AA','003000000000052AA','003000000000053AA');
-            DELETE FROM ym.members WHERE member_number LIKE 'MEM-NEW-%' OR member_number LIKE 'MEM-DELTA-%';
         `);
         await pool.close();
         directPool = null;
 
         await hsConnector.CloseAllPools();
         await sfConnector.CloseAllPools();
-        await ymConnector.CloseAllPools();
     });
 
     // Phase 1: Capture watermarks from full sync
     // Counts are dynamic since apply_incremental_changes.sql may have modified the base data
     let hsBaseCount = 0;
     let sfBaseCount = 0;
-    let ymBaseCount = 0;
 
     describe('Phase 1: Full sync to capture watermarks', () => {
         it('should capture HubSpot watermark', async ({ skip }) => {
@@ -562,15 +445,6 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(sfWatermark).toBeDefined();
         });
 
-        it('should capture YM watermark', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ymCI, 'members');
-            const batch = await ymConnector.FetchChanges(ctx);
-            expect(batch.Records.length).toBeGreaterThanOrEqual(50);
-            ymBaseCount = batch.Records.length;
-            ymWatermark = batch.NewWatermarkValue;
-            expect(ymWatermark).toBeDefined();
-        });
     });
 
     // Phase 2: Insert new data and update existing data
@@ -627,29 +501,6 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
             expect(countResult.recordset[0].cnt).toBe(sfBaseCount + 3);
         });
 
-        it('should insert new YM members and update existing ones', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const pool = await getDirectPool();
-
-            await pool.request().query(`
-                INSERT INTO ym.members (member_number, first_name, last_name, email, status)
-                VALUES
-                ('MEM-NEW-001', 'NewYM', 'Member1', 'newym1@example.com', 'Active'),
-                ('MEM-NEW-002', 'NewYM', 'Member2', 'newym2@example.com', 'Active'),
-                ('MEM-NEW-003', 'NewYM', 'Member3', 'newym3@example.com', 'Active'),
-                ('MEM-NEW-004', 'NewYM', 'Member4', 'newym4@example.com', 'Active');
-            `);
-
-            await pool.request().query(`
-                UPDATE TOP(2) ym.members SET phone = '555-YM-UPD', updated_at = GETUTCDATE()
-                WHERE updated_at < DATEADD(MINUTE, -1, GETUTCDATE())
-                  AND member_number NOT LIKE 'MEM-NEW-%';
-            `);
-
-            // Verify total count: base + 4 new
-            const countResult = await pool.request().query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ym.members');
-            expect(countResult.recordset[0].cnt).toBe(ymBaseCount + 4);
-        });
     });
 
     // Phase 3: Incremental fetch should only return new/updated records
@@ -682,18 +533,6 @@ describe('E2E: Incremental Sync with Live Data Changes', () => {
 
             const emails = batch.Records.map((r) => r.Fields['Email'] as string);
             expect(emails).toContain('newsf1@example.com');
-        });
-
-        it('should fetch only new/updated YM members (not all 54)', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx = makeFetchContext(ymCI, 'members', ymWatermark!);
-            const batch = await ymConnector.FetchChanges(ctx);
-            // 4 new + 2 updated = 6 records
-            expect(batch.Records.length).toBe(6);
-            expect(batch.HasMore).toBe(false);
-
-            const memberNumbers = batch.Records.map((r) => r.Fields['member_number'] as string);
-            expect(memberNumbers).toContain('MEM-NEW-001');
         });
 
         it('should provide updated watermarks after incremental fetch', async ({ skip }) => {

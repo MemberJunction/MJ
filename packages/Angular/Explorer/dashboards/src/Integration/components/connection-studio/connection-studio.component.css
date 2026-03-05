@@ -160,6 +160,51 @@
 .source-chip.selected { border-color: #4a6cf7; background: #f0f4ff; color: #4a6cf7; font-weight: 600; }
 .source-chip i { font-size: 14px; }
 
+/* --- Company setup card --- */
+.company-setup-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.company-setup-icon {
+  font-size: 28px;
+  color: #f9a825;
+  padding-top: 2px;
+}
+
+.company-setup-content {
+  flex: 1;
+}
+
+.company-setup-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.company-setup-desc {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.company-setup-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.company-setup-form input {
+  flex: 1;
+  max-width: 280px;
+}
+
 /* --- Configuration form --- */
 .config-form {
   display: flex;
@@ -376,3 +421,21 @@
 .test-result i { margin-right: 8px; }
 .test-result.success { background: #e6f9ed; color: #1b7a3d; }
 .test-result.failed { background: #fde8e8; color: #c62828; }
+
+/* --- Save success screen --- */
+.save-success {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.save-success .success-icon {
+  font-size: 56px;
+  color: #1b7a3d;
+  margin-bottom: 16px;
+}
+
+.save-success h3 {
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  color: #1b7a3d;
+}

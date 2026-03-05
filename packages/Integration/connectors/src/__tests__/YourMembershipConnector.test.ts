@@ -1,209 +1,298 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { YourMembershipConnector } from '../YourMembershipConnector.js';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import type { FetchContext } from '@memberjunction/integration-engine';
-import { canConnectToMockDB } from './db-availability.js';
+
+// ─── Test helpers ────────────────────────────────────────────────
 
 function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
     const configJson = JSON.stringify(config);
     return { Get: (field: string) => field === 'Configuration' ? configJson : null } as unknown as MJCompanyIntegrationEntity;
 }
 
-const MOCK_CI = createMockCompanyIntegration({
-    server: 'sql-claude',
-    database: 'mock_data',
-    schema: 'ym',
-    user: 'sa',
-    password: 'Claude2Sql99',
-});
+const VALID_CONFIG = {
+    ClientID: '25363',
+    APIKey: 'test-api-key',
+    APIPassword: 'test-api-password',
+};
 
+const MOCK_CI = createMockCompanyIntegration(VALID_CONFIG);
 const contextUser = {} as UserInfo;
 
-// --- Tests that always run (no DB required) ---
+// ─── Unit Tests (no network) ─────────────────────────────────────
+
 describe('YourMembershipConnector (unit)', () => {
     describe('GetDefaultFieldMappings', () => {
         const connector = new YourMembershipConnector();
 
-        it('should return mappings for members', () => {
-            const mappings = connector.GetDefaultFieldMappings('members', 'Contacts');
-            expect(mappings.length).toBe(5);
+        it('should return mappings for Members', () => {
+            const mappings = connector.GetDefaultFieldMappings('Members', 'Contacts');
+            expect(mappings.length).toBe(6);
 
-            const emailMapping = mappings.find((m) => m.SourceFieldName === 'email');
+            const emailMapping = mappings.find(m => m.SourceFieldName === 'EmailAddr');
             expect(emailMapping).toBeDefined();
             expect(emailMapping!.DestinationFieldName).toBe('Email');
             expect(emailMapping!.IsKeyField).toBe(true);
+        });
 
-            const firstNameMapping = mappings.find((m) => m.SourceFieldName === 'first_name');
-            expect(firstNameMapping!.DestinationFieldName).toBe('FirstName');
+        it('should return mappings for Events', () => {
+            const mappings = connector.GetDefaultFieldMappings('Events', 'Events');
+            expect(mappings.length).toBe(4);
+
+            const idMapping = mappings.find(m => m.SourceFieldName === 'EventId');
+            expect(idMapping).toBeDefined();
+            expect(idMapping!.IsKeyField).toBe(true);
         });
 
         it('should return empty array for unknown objects', () => {
-            const mappings = connector.GetDefaultFieldMappings('events', 'Events');
-            expect(mappings).toEqual([]);
-        });
-    });
-});
-
-// --- Tests that require sql-claude (skipped in CI) ---
-describe('YourMembershipConnector (integration)', () => {
-    let dbAvailable = false;
-
-    beforeAll(async () => {
-        dbAvailable = await canConnectToMockDB();
-    });
-
-    describe('TestConnection', () => {
-        it('should connect successfully to mock_data', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const connector = new YourMembershipConnector();
-            try {
-                const result = await connector.TestConnection(MOCK_CI, contextUser);
-                expect(result.Success).toBe(true);
-                expect(result.Message).toContain('mock_data');
-            } finally {
-                await connector.CloseAllPools();
-            }
+            expect(connector.GetDefaultFieldMappings('Unknown', 'Whatever')).toEqual([]);
         });
     });
 
     describe('DiscoverObjects', () => {
-        it('should return all YourMembership tables in ym schema', async ({ skip }) => {
-            if (!dbAvailable) skip();
+        it('should return all known YM objects', async () => {
             const connector = new YourMembershipConnector();
-            try {
-                const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
-                const names = objects.map((o) => o.Name);
-                expect(names).toContain('members');
-                expect(names).toContain('membership_types');
-                expect(names).toContain('events');
-                expect(names).toContain('event_registrations');
-                expect(objects.length).toBe(4);
-            } finally {
-                await connector.CloseAllPools();
+            const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
+            const names = objects.map(o => o.Name);
+
+            expect(names).toContain('Members');
+            expect(names).toContain('Events');
+            expect(names).toContain('MemberTypes');
+            expect(names).toContain('Memberships');
+            expect(names).toContain('Groups');
+            expect(names).toContain('Products');
+            expect(names).toContain('DonationFunds');
+            expect(names).toContain('Certifications');
+            expect(objects.length).toBe(8);
+
+            for (const obj of objects) {
+                expect(obj.SupportsWrite).toBe(false);
+                expect(obj.Label).toBeTruthy();
             }
         });
     });
 
     describe('DiscoverFields', () => {
-        it('should return columns for members', async ({ skip }) => {
-            if (!dbAvailable) skip();
+        const connector = new YourMembershipConnector();
+
+        it('should return fields for Members', async () => {
+            const fields = await connector.DiscoverFields(MOCK_CI, 'Members', contextUser);
+            const names = fields.map(f => f.Name);
+
+            expect(names).toContain('ProfileID');
+            expect(names).toContain('FirstName');
+            expect(names).toContain('LastName');
+            expect(names).toContain('EmailAddr');
+            expect(names).toContain('MemberTypeCode');
+            expect(fields.length).toBeGreaterThan(10);
+
+            const profileId = fields.find(f => f.Name === 'ProfileID');
+            expect(profileId!.IsUniqueKey).toBe(true);
+            expect(profileId!.IsRequired).toBe(true);
+        });
+
+        it('should return fields for Events', async () => {
+            const fields = await connector.DiscoverFields(MOCK_CI, 'Events', contextUser);
+            expect(fields.find(f => f.Name === 'EventId')).toBeDefined();
+            expect(fields.find(f => f.Name === 'Name')).toBeDefined();
+        });
+
+        it('should return fields for Groups', async () => {
+            const fields = await connector.DiscoverFields(MOCK_CI, 'Groups', contextUser);
+            expect(fields.find(f => f.Name === 'Id')).toBeDefined();
+            expect(fields.find(f => f.Name === 'GroupTypeName')).toBeDefined();
+        });
+
+        it('should return empty for unknown object', async () => {
+            const fields = await connector.DiscoverFields(MOCK_CI, 'Unknown', contextUser);
+            expect(fields).toEqual([]);
+        });
+    });
+
+    describe('ParseConfig', () => {
+        it('should return failure on missing Configuration', async () => {
+            const badCi = { Get: () => null } as unknown as MJCompanyIntegrationEntity;
             const connector = new YourMembershipConnector();
-            try {
-                const fields = await connector.DiscoverFields(
-                    MOCK_CI,
-                    'members',
-                    contextUser
-                );
-                const names = fields.map((f) => f.Name);
-                expect(names).toContain('member_id');
-                expect(names).toContain('email');
-                expect(names).toContain('first_name');
-                expect(names).toContain('last_name');
-                expect(names).toContain('phone');
-                expect(names).toContain('updated_at');
-            } finally {
-                await connector.CloseAllPools();
-            }
+            const result = await connector.TestConnection(badCi, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('Configuration is null');
+        });
+
+        it('should return failure on incomplete Configuration', async () => {
+            const badCi = createMockCompanyIntegration({ ClientID: '123' });
+            const connector = new YourMembershipConnector();
+            const result = await connector.TestConnection(badCi, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('must contain');
+        });
+    });
+});
+
+// ─── Integration tests (require live YM API) ────────────────────
+
+describe('YourMembershipConnector (live API)', () => {
+    const apiKey = process.env['MRAA_YM_LICENSE_KEY'];
+    const apiPassword = process.env['MRAA_YM_API_KEY'];
+    const clientId = process.env['MRAA_YM_CLIENT_ID'];
+
+    const hasCredentials = !!(apiKey && apiPassword && clientId);
+
+    const liveCi = hasCredentials
+        ? createMockCompanyIntegration({ ClientID: clientId!, APIKey: apiKey!, APIPassword: apiPassword! })
+        : MOCK_CI;
+
+    describe('TestConnection', () => {
+        it('should authenticate and return site info', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const result = await connector.TestConnection(liveCi, contextUser);
+
+            expect(result.Success).toBe(true);
+            expect(result.Message).toContain('YourMembership');
+            expect(result.ServerVersion).toContain(clientId);
         });
     });
 
     describe('FetchChanges', () => {
-        let connector: YourMembershipConnector;
-
-        beforeAll(() => {
-            connector = new YourMembershipConnector();
-        });
-
-        afterAll(async () => {
-            await connector.CloseAllPools();
-        });
-
-        it('should return all members with no watermark', async ({ skip }) => {
-            if (!dbAvailable) skip();
+        it('should fetch members with pagination', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
             const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'members',
+                CompanyIntegration: liveCi,
+                ObjectName: 'Members',
+                WatermarkValue: null,
+                BatchSize: 5,
+                ContextUser: contextUser,
+            };
+
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBeGreaterThan(0);
+            expect(result.Records.length).toBeLessThanOrEqual(5);
+            expect(result.HasMore).toBe(true);
+
+            const firstMember = result.Records[0];
+            expect(firstMember.ExternalID).toBeTruthy();
+            expect(firstMember.ObjectType).toBe('Members');
+            expect(firstMember.Fields['ProfileID']).toBeDefined();
+            expect(firstMember.Fields['FirstName']).toBeDefined();
+        });
+
+        it('should fetch page 2 using watermark', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const ctx: FetchContext = {
+                CompanyIntegration: liveCi,
+                ObjectName: 'Members',
+                WatermarkValue: '2',
+                BatchSize: 3,
+                ContextUser: contextUser,
+            };
+
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBeGreaterThan(0);
+        });
+
+        it('should fetch MemberTypes (non-paginated)', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const ctx: FetchContext = {
+                CompanyIntegration: liveCi,
+                ObjectName: 'MemberTypes',
+                WatermarkValue: null,
+                BatchSize: 100,
+                ContextUser: contextUser,
+            };
+
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBeGreaterThan(0);
+            expect(result.HasMore).toBe(false);
+            expect(result.Records[0].Fields['TypeCode']).toBeDefined();
+        });
+
+        it('should fetch Memberships', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const ctx: FetchContext = {
+                CompanyIntegration: liveCi,
+                ObjectName: 'Memberships',
+                WatermarkValue: null,
+                BatchSize: 100,
+                ContextUser: contextUser,
+            };
+
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBeGreaterThan(0);
+            expect(result.HasMore).toBe(false);
+            expect(result.Records[0].Fields['Name']).toBeDefined();
+        });
+
+        it('should fetch Events', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const ctx: FetchContext = {
+                CompanyIntegration: liveCi,
+                ObjectName: 'Events',
+                WatermarkValue: null,
+                BatchSize: 5,
+                ContextUser: contextUser,
+            };
+
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBeGreaterThan(0);
+            expect(result.Records[0].Fields['EventId']).toBeDefined();
+            expect(result.Records[0].Fields['Name']).toBeDefined();
+        });
+
+        it('should fetch Groups (nested/flattened)', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
+            const ctx: FetchContext = {
+                CompanyIntegration: liveCi,
+                ObjectName: 'Groups',
                 WatermarkValue: null,
                 BatchSize: 500,
                 ContextUser: contextUser,
             };
+
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThanOrEqual(50);
+            expect(result.Records.length).toBeGreaterThan(0);
             expect(result.HasMore).toBe(false);
 
-            const record = result.Records[0];
-            expect(record.ExternalID).toBeDefined();
-            expect(record.ObjectType).toBe('members');
+            const firstGroup = result.Records[0];
+            expect(firstGroup.Fields['Name']).toBeDefined();
+            expect(firstGroup.Fields['GroupTypeName']).toBeDefined();
         });
 
-        it('should return 0 members with far-future watermark', async ({ skip }) => {
-            if (!dbAvailable) skip();
+        it('should fetch Products (raw array)', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
             const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'members',
-                WatermarkValue: '2099-01-01T00:00:00.000Z',
+                CompanyIntegration: liveCi,
+                ObjectName: 'Products',
+                WatermarkValue: null,
                 BatchSize: 500,
                 ContextUser: contextUser,
             };
+
             const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(0);
+            expect(result.Records.length).toBeGreaterThan(0);
+            expect(result.HasMore).toBe(false);
+            expect(result.Records[0].Fields['description']).toBeDefined();
         });
 
-        it('should respect BatchSize and indicate HasMore', async ({ skip }) => {
-            if (!dbAvailable) skip();
+        it('should throw on unknown object', async ({ skip }) => {
+            if (!hasCredentials) skip();
+            const connector = new YourMembershipConnector();
             const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'members',
+                CompanyIntegration: liveCi,
+                ObjectName: 'NonExistent',
                 WatermarkValue: null,
                 BatchSize: 10,
                 ContextUser: contextUser,
             };
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(10);
-            expect(result.HasMore).toBe(true);
-        });
 
-        it('should fetch events using updated_at', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'events',
-                WatermarkValue: null,
-                BatchSize: 100,
-                ContextUser: contextUser,
-            };
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThanOrEqual(10); // seed has 10, E2E may add more
-            expect(result.Records[0].ObjectType).toBe('events');
-        });
-
-        it('should fetch membership_types using updated_at', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'membership_types',
-                WatermarkValue: null,
-                BatchSize: 100,
-                ContextUser: contextUser,
-            };
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(5);
-            expect(result.Records[0].ObjectType).toBe('membership_types');
-        });
-
-        it('should fetch event_registrations using updated_at', async ({ skip }) => {
-            if (!dbAvailable) skip();
-            const ctx: FetchContext = {
-                CompanyIntegration: MOCK_CI,
-                ObjectName: 'event_registrations',
-                WatermarkValue: null,
-                BatchSize: 100,
-                ContextUser: contextUser,
-            };
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBe(40);
-            expect(result.Records[0].ObjectType).toBe('event_registrations');
+            await expect(connector.FetchChanges(ctx)).rejects.toThrow('Unknown YourMembership object');
         });
     });
 });

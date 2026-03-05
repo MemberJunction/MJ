@@ -91,7 +91,47 @@
         <strong>{{ SelectedIntegrationName }}</strong>.
       </p>
 
+      <!-- Company section -->
+      @if (!HasCompanies) {
+        <div class="company-setup-card">
+          <div class="company-setup-icon"><i class="fa-solid fa-building"></i></div>
+          <div class="company-setup-content">
+            <div class="company-setup-title">Set Up Your Organization</div>
+            <div class="company-setup-desc">
+              Integrations are scoped to a company. Create one to get started.
+            </div>
+            <div class="company-setup-form">
+              <input kendoTextBox [(ngModel)]="NewCompanyName"
+                     placeholder="Company name" />
+              <button kendoButton [themeColor]="'primary'"
+                      [disabled]="!NewCompanyName.trim() || IsCreatingCompany"
+                      (click)="CreateCompany()">
+                @if (IsCreatingCompany) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                } @else {
+                  <i class="fa-solid fa-plus"></i> Create
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       <div class="config-form">
+        @if (NeedsCompanyPicker) {
+          <div class="form-field">
+            <label>Company</label>
+            <kendo-dropdownlist
+              [data]="Companies"
+              [textField]="'Name'"
+              [valueField]="'ID'"
+              [valuePrimitive]="true"
+              [(ngModel)]="SelectedCompanyID"
+              [defaultItem]="{ ID: null, Name: 'Select a company...' }">
+            </kendo-dropdownlist>
+          </div>
+        }
+
         <div class="form-field">
           <label>Connection Name</label>
           <input kendoTextBox [(ngModel)]="ConnectionName"
@@ -197,70 +237,105 @@
   <!-- Step 3: Test & Save -->
   @if (CurrentStep === 2) {
     <div class="step-content">
-      <h3>Test & Save</h3>
-      <p class="step-description">Review your configuration, test the connection, and save.</p>
-
-      <div class="test-section">
-        <div class="test-summary">
-          <div class="summary-row">
-            <span class="label">Integration:</span>
-            <span class="value">
-              <i [class]="SelectedIntegrationIcon"></i>
-              {{ SelectedIntegrationName }}
-            </span>
-          </div>
-          @if (UseCustomMode && CustomSourceTypeName) {
-            <div class="summary-row">
-              <span class="label">Source Type:</span>
-              <span class="value">{{ CustomSourceTypeName }}</span>
-            </div>
-          }
-          <div class="summary-row">
-            <span class="label">Connection Name:</span>
-            <span class="value">{{ ConnectionName }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Credential:</span>
-            <span class="value">
-              @if (SelectedCredential) {
-                <i class="fa-solid fa-shield-halved"></i>
-                {{ SelectedCredential.Name }}
-              } @else {
-                <span style="color: #888;">None attached</span>
-              }
-            </span>
+      @if (SaveCompleted) {
+        <!-- Success screen -->
+        <div class="save-success">
+          <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <h3>Connection Saved</h3>
+          <p class="step-description">
+            <strong>{{ ConnectionName }}</strong> has been created and is ready for use.
+          </p>
+          <div class="step-actions" style="justify-content: center;">
+            <button kendoButton [themeColor]="'primary'" (click)="ResetWizard()">
+              <i class="fa-solid fa-plus"></i> Create Another Connection
+            </button>
           </div>
         </div>
+      } @else {
+        <h3>Test & Save</h3>
+        <p class="step-description">Review your configuration, test the connection, and save.</p>
 
-        @if (TestStatus === 'idle') {
-          <p class="test-hint">Click "Test Connection" to verify the configuration.</p>
-        }
-        @if (TestStatus === 'testing') {
-          <mj-loading text="Testing connection..." size="small"></mj-loading>
-        }
-        @if (TestStatus === 'success') {
-          <div class="test-result success">
-            <i class="fa-solid fa-circle-check"></i> {{ TestMessage }}
+        <div class="test-section">
+          <div class="test-summary">
+            <div class="summary-row">
+              <span class="label">Integration:</span>
+              <span class="value">
+                <i [class]="SelectedIntegrationIcon"></i>
+                {{ SelectedIntegrationName }}
+              </span>
+            </div>
+            @if (UseCustomMode && CustomSourceTypeName) {
+              <div class="summary-row">
+                <span class="label">Source Type:</span>
+                <span class="value">{{ CustomSourceTypeName }}</span>
+              </div>
+            }
+            @if (SelectedCompanyName) {
+              <div class="summary-row">
+                <span class="label">Company:</span>
+                <span class="value">
+                  <i class="fa-solid fa-building"></i>
+                  {{ SelectedCompanyName }}
+                </span>
+              </div>
+            }
+            <div class="summary-row">
+              <span class="label">Connection Name:</span>
+              <span class="value">{{ ConnectionName }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Credential:</span>
+              <span class="value">
+                @if (SelectedCredential) {
+                  <i class="fa-solid fa-shield-halved"></i>
+                  {{ SelectedCredential.Name }}
+                } @else {
+                  <span style="color: #888;">None attached</span>
+                }
+              </span>
+            </div>
+          </div>
+
+          @if (TestStatus === 'idle') {
+            <p class="test-hint">Click "Test Connection" to verify the configuration.</p>
+          }
+          @if (TestStatus === 'testing') {
+            <mj-loading text="Testing connection..." size="small"></mj-loading>
+          }
+          @if (TestStatus === 'success') {
+            <div class="test-result success">
+              <i class="fa-solid fa-circle-check"></i> {{ TestMessage }}
+            </div>
+          }
+          @if (TestStatus === 'failed') {
+            <div class="test-result failed">
+              <i class="fa-solid fa-circle-xmark"></i> {{ TestMessage }}
+            </div>
+          }
+        </div>
+
+        @if (SaveError) {
+          <div class="test-result failed" style="margin-bottom: 16px;">
+            <i class="fa-solid fa-circle-xmark"></i> Save failed: {{ SaveError }}
           </div>
         }
-        @if (TestStatus === 'failed') {
-          <div class="test-result failed">
-            <i class="fa-solid fa-circle-xmark"></i> {{ TestMessage }}
-          </div>
-        }
-      </div>
 
-      <div class="step-actions">
-        <button kendoButton (click)="PrevStep()">
-          <i class="fa-solid fa-arrow-left"></i> Back
-        </button>
-        <button kendoButton [look]="'outline'" (click)="TestConnection()">
-          <i class="fa-solid fa-vial"></i> Test Connection
-        </button>
-        <button kendoButton [themeColor]="'primary'" (click)="SaveIntegration()">
-          <i class="fa-solid fa-floppy-disk"></i> Save
-        </button>
-      </div>
+        <div class="step-actions">
+          <button kendoButton (click)="PrevStep()" [disabled]="IsSaving">
+            <i class="fa-solid fa-arrow-left"></i> Back
+          </button>
+          <button kendoButton [look]="'outline'" (click)="TestConnection()" [disabled]="IsSaving">
+            <i class="fa-solid fa-vial"></i> Test Connection
+          </button>
+          <button kendoButton [themeColor]="'primary'" (click)="SaveIntegration()" [disabled]="IsSaving">
+            @if (IsSaving) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+            } @else {
+              <i class="fa-solid fa-floppy-disk"></i> Save
+            }
+          </button>
+        </div>
+      }
     </div>
   }
 </div>
