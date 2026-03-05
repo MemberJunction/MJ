@@ -692,7 +692,11 @@ export class GraphQLAIClient {
             currentStep: progress.currentStep as string,
             percentage: progress.percentage as number | undefined,
             message: progress.message as string,
-            metadata: progress as Record<string, unknown>,
+            metadata: {
+                ...progress,
+                agentRun: data?.agentRun,
+                agentRunId: data?.agentRunId,
+            } as Record<string, unknown>,
         });
     }
 
