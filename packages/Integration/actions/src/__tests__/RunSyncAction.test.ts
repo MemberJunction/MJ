@@ -5,7 +5,7 @@ import { RunSyncAction } from '../RunSyncAction.js';
 
 // --- Mocks ---
 
-let mockRunSyncFn: ReturnType<typeof vi.fn>;
+let mockRunSyncFn: ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
 vi.mock('@memberjunction/integration-engine', () => {
     function MockOrchestrator(this: { RunSync: (...args: unknown[]) => unknown }) {
