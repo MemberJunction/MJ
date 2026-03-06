@@ -170,9 +170,13 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       // Step 2: Replace schema names with Flyway placeholders
       const schemaName = this.options.defaultSchemaName;
       if (schemaName && schemaName.length > 0) {
-        // Create a regex that matches the schema name with optional brackets
-        const schemaRegex = new RegExp(`\\[?${schemaName}\\]?\\.`, 'g');
-        processedQuery = processedQuery.replace(schemaRegex, '[${flyway:defaultSchema}].');
+        // Create a regex that matches the schema name with optional brackets.
+        // Capture groups preserve whether the original used brackets or not,
+        // so bare `schema.` stays bare and `[schema].` keeps brackets.
+        const schemaRegex = new RegExp(`(\\[?)${schemaName}(\\]?)\\.`, 'g');
+        processedQuery = processedQuery.replace(schemaRegex, (_match, openBracket: string, closeBracket: string) => {
+          return `${openBracket}\${flyway:defaultSchema}${closeBracket}.`;
+        });
       }
       else {
         // no default schema name provided
@@ -323,24 +327,100 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
-   * Post-process SQL to ensure BEGIN, END, and EXEC keywords are on their own lines
+   * Post-process SQL to ensure BEGIN, END, and EXEC keywords are on their own lines.
+   * Only applies transformations outside of SQL string literals to avoid corrupting
+   * embedded SQL content stored in NVARCHAR fields.
    */
   private _postProcessBeginEnd(sql: string): string {
     if (!sql) return sql;
 
-    // Fix BEGIN keyword - ensure it's on its own line
-    sql = sql.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
+    // Split SQL into segments of string literals vs non-literal code.
+    // SQL string literals are delimited by single quotes, with '' as the escape for a literal quote.
+    // We process only the non-literal segments to avoid modifying embedded SQL content.
+    const segments = this._splitAroundStringLiterals(sql);
 
-    // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
-    sql = sql.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i].isLiteral) continue;
 
-    // Fix END keyword - ensure it's on its own line
-    sql = sql.replace(/(\S)\s+(END\b)/g, '$1\n$2');
+      let text = segments[i].text;
 
-    // Fix EXEC keyword - ensure it's on its own line
-    sql = sql.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
+      // Fix BEGIN keyword - ensure it's on its own line
+      text = text.replace(/(\S)\s+(BEGIN\b)/g, '$1\n$2');
 
-    return sql;
+      // Fix BEGIN followed by other keywords - ensure what follows BEGIN is on a new line
+      text = text.replace(/(BEGIN\b)\s+(\S)/g, '$1\n$2');
+
+      // Fix END keyword - ensure it's on its own line
+      text = text.replace(/(\S)\s+(END\b)/g, '$1\n$2');
+
+      // Fix EXEC keyword - ensure it's on its own line
+      text = text.replace(/(\S)\s+(EXEC\b)/g, '$1\n$2');
+
+      segments[i].text = text;
+    }
+
+    return segments.map(s => s.text).join('');
+  }
+
+  /**
+   * Splits SQL into alternating segments of non-literal text and string literals.
+   * Handles SQL escaped quotes ('') within string literals correctly.
+   * Also handles N-prefixed strings (N'...').
+   */
+  private _splitAroundStringLiterals(sql: string): Array<{ text: string; isLiteral: boolean }> {
+    const segments: Array<{ text: string; isLiteral: boolean }> = [];
+    let currentPos = 0;
+
+    while (currentPos < sql.length) {
+      // Find the next string literal start (either ' or N')
+      let quotePos = -1;
+      for (let i = currentPos; i < sql.length; i++) {
+        if (sql[i] === "'") {
+          quotePos = i;
+          break;
+        }
+        if (sql[i] === 'N' && i + 1 < sql.length && sql[i + 1] === "'") {
+          quotePos = i;
+          break;
+        }
+      }
+
+      if (quotePos === -1) {
+        // No more string literals - rest is non-literal
+        segments.push({ text: sql.substring(currentPos), isLiteral: false });
+        break;
+      }
+
+      // Add the non-literal segment before this string literal
+      if (quotePos > currentPos) {
+        segments.push({ text: sql.substring(currentPos, quotePos), isLiteral: false });
+      }
+
+      // Determine where the literal starts (skip the N prefix if present)
+      const literalStart = quotePos;
+      const quoteCharPos = sql[quotePos] === 'N' ? quotePos + 1 : quotePos;
+
+      // Find the end of the string literal, handling escaped quotes ('')
+      let endPos = quoteCharPos + 1;
+      while (endPos < sql.length) {
+        if (sql[endPos] === "'") {
+          // Check if this is an escaped quote ('')
+          if (endPos + 1 < sql.length && sql[endPos + 1] === "'") {
+            endPos += 2; // Skip the escaped quote
+          } else {
+            endPos += 1; // This is the closing quote
+            break;
+          }
+        } else {
+          endPos++;
+        }
+      }
+
+      segments.push({ text: sql.substring(literalStart, endPos), isLiteral: true });
+      currentPos = endPos;
+    }
+
+    return segments;
   }
 
   /**

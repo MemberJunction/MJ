@@ -195,31 +195,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Task Dependencies (Depends On Task ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTaskDependenciesDependsOnTaskID"
-        SectionName="Task Dependencies (Depends On Task ID)"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTaskDependenciesDependsOnTaskID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"
-                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
-                [AllowLoad]="IsSectionExpanded('mJTaskDependenciesDependsOnTaskID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTaskDependenciesDependsOnTaskID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Task Dependencies (Task ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJTaskDependenciesTaskID"
@@ -239,6 +214,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaskDependenciesTaskID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Dependencies (Depends On Task ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTaskDependenciesDependsOnTaskID"
+        SectionName="Task Dependencies (Depends On Task ID)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTaskDependenciesDependsOnTaskID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"
+                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJTaskDependenciesDependsOnTaskID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTaskDependenciesDependsOnTaskID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

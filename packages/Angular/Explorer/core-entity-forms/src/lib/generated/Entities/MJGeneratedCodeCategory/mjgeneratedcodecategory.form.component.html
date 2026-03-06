@@ -91,31 +91,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Generated Code Categories Section -->
-    <mj-collapsible-panel
-        SectionKey="mJGeneratedCodeCategories"
-        SectionName="Generated Code Categories"
-        Icon="fa fa-code"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGeneratedCodeCategories')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Code Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Generated Code Categories')"
-                [AllowLoad]="IsSectionExpanded('mJGeneratedCodeCategories')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodeCategories', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Generated Codes Section -->
     <mj-collapsible-panel
         SectionKey="mJGeneratedCodes"
@@ -135,6 +110,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Generated Code Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJGeneratedCodeCategories"
+        SectionName="Generated Code Categories"
+        Icon="fa fa-code"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJGeneratedCodeCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Code Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Generated Code Categories')"
+                [AllowLoad]="IsSectionExpanded('mJGeneratedCodeCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodeCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

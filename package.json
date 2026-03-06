@@ -26,7 +26,8 @@
     "packages/TestingFramework/*",
     "packages/Credentials/*",
     "packages/APIKeys/*",
-    "packages/OpenApp/*"
+    "packages/OpenApp/*",
+    "packages/Integration/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",

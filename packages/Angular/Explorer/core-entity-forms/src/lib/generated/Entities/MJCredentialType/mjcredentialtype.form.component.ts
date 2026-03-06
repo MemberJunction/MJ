@@ -21,6 +21,7 @@ export class MJCredentialTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCredentials', sectionName: 'Credentials', isExpanded: false },
             { sectionKey: 'mJMCPServers', sectionName: 'MCP Servers', isExpanded: false },
+            { sectionKey: 'mJIntegrations', sectionName: 'Integrations', isExpanded: false },
             { sectionKey: 'mJAIVendors', sectionName: 'AI Vendors', isExpanded: false }
         ]);
     }

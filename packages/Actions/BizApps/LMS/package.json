@@ -9,8 +9,9 @@
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --exclude src/__tests__/integration.test.ts",
+    "test:watch": "vitest --exclude src/__tests__/integration.test.ts",
+    "test:integration": "vitest run src/__tests__/integration.test.ts"
   },
   "keywords": [
     "memberjunction",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "24.10.11",
+    "dotenv": "^16.4.7",
     "rimraf": "^6.1.2",
     "typescript": "~5.9.3"
   },

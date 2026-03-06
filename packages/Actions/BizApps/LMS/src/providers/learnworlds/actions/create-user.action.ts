@@ -60,7 +60,7 @@ export class CreateUserAction extends LearnWorldsBaseAction {
     };
 
     // Add optional fields
-    if (params.Username) userData.username = params.Username;
+    userData.username = params.Username || email;
     if (params.Password) userData.password = params.Password;
     if (params.FirstName) userData.first_name = params.FirstName;
     if (params.LastName) userData.last_name = params.LastName;
@@ -175,12 +175,14 @@ export class CreateUserAction extends LearnWorldsBaseAction {
         this.validatePathSegment(courseId, 'CourseID');
 
         const enrollBody: Record<string, unknown> = {
-          user_id: userId,
+          productId: courseId,
+          productType: 'course',
           justification: 'Enrolled during user creation',
-          notify_user: false,
+          price: 0,
+          send_enrollment_email: false,
         };
 
-        const enrollData = await this.makeLearnWorldsRequest<LWEnrollmentResponse>(`courses/${courseId}/enrollments`, 'POST', enrollBody, contextUser);
+        const enrollData = await this.makeLearnWorldsRequest<LWEnrollmentResponse>(`users/${userId}/enrollment`, 'POST', enrollBody, contextUser);
 
         enrollmentResults.push({
           courseId: courseId,

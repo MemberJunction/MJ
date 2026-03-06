@@ -101,6 +101,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Content Source Params Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentSourceParams"
+        SectionName="Content Source Params"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentSourceParams')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Source Params','ContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Source Params')"
+                [AllowLoad]="IsSectionExpanded('mJContentSourceParams')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentSourceParams', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Content Items Section -->
     <mj-collapsible-panel
         SectionKey="mJContentItems"
@@ -145,31 +170,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Content Source Params Section -->
-    <mj-collapsible-panel
-        SectionKey="mJContentSourceParams"
-        SectionName="Content Source Params"
-        Icon="fa fa-cogs"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentSourceParams')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Source Params','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Source Params')"
-                [AllowLoad]="IsSectionExpanded('mJContentSourceParams')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentSourceParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

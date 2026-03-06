@@ -1,0 +1,175 @@
+<div class="mapping-workspace">
+  <div class="workspace-header">
+    <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+  </div>
+
+  @if (IsLoadingIntegrations) {
+    <mj-loading text="Loading integrations..." size="medium"></mj-loading>
+  } @else {
+    <kendo-splitter [orientation]="'horizontal'" class="workspace-splitter">
+      <!-- Left Panel: Integration selector + Entity maps -->
+      <kendo-splitter-pane [size]="'25%'" [min]="'200px'">
+        <div class="left-panel">
+          <div class="panel-section">
+            <label class="panel-label">Integration</label>
+            <kendo-dropdownlist
+              [data]="Integrations"
+              [textField]="'Name'"
+              [valueField]="'ID'"
+              [valuePrimitive]="true"
+              [(ngModel)]="SelectedIntegrationID"
+              (valueChange)="OnIntegrationChange($event)"
+              [defaultItem]="{ ID: '', Name: '-- Select --' }">
+            </kendo-dropdownlist>
+          </div>
+
+          @if (IsLoadingEntityMaps) {
+            <mj-loading text="Loading entity maps..." size="small"></mj-loading>
+          } @else if (SelectedIntegrationID) {
+            <div class="panel-section">
+              <h4 class="panel-label">Entity Maps</h4>
+              @if (EntityMaps.length > 0) {
+                <div class="search-box">
+                  <input kendoTextBox
+                         [(ngModel)]="EntityMapSearchText"
+                         placeholder="Search entity maps..." />
+                </div>
+              }
+              @if (EntityMaps.length === 0) {
+                <p class="empty-hint">No entity maps configured.</p>
+              } @else if (FilteredEntityMaps.length === 0) {
+                <p class="empty-hint">No matches for "{{ EntityMapSearchText }}".</p>
+              } @else {
+                <div class="entity-map-list">
+                  @for (em of FilteredEntityMaps; track em.ID) {
+                    <div class="entity-map-item"
+                         [class.selected]="IsSelectedEntityMap(em.ID)"
+                         (click)="OnEntityMapSelect(em)">
+                      <div class="em-info">
+                        <span class="em-name">{{ em.ExternalObjectName }}</span>
+                        <span class="em-arrow">-></span>
+                        <span class="em-entity">{{ em.Entity }}</span>
+                      </div>
+                      <div class="em-controls">
+                        <span class="em-direction">{{ em.SyncDirection }}</span>
+                        <kendo-switch
+                          [(ngModel)]="em.SyncEnabled"
+                          [size]="'small'"
+                          (valueChange)="OnToggleEntityMap(em)">
+                        </kendo-switch>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </kendo-splitter-pane>
+
+      <!-- Center Panel: Field mapping grid -->
+      <kendo-splitter-pane [size]="'50%'" [min]="'300px'">
+        <div class="center-panel">
+          @if (!SelectedEntityMapID) {
+            <div class="placeholder-message">
+              <i class="fa-solid fa-hand-pointer"></i>
+              <p>Select an entity map from the left panel to view field mappings.</p>
+            </div>
+          } @else if (IsLoadingFieldMaps) {
+            <mj-loading text="Loading field maps..." size="medium"></mj-loading>
+          } @else {
+            <h3 class="panel-title">
+              Field Mappings
+              <span class="field-count">({{ FieldMaps.length }})</span>
+            </h3>
+            <kendo-grid [data]="FieldMaps" [height]="500" [resizable]="true">
+              <kendo-grid-column field="SourceFieldName" title="Source Field" [width]="160">
+              </kendo-grid-column>
+              <kendo-grid-column field="DestinationFieldName" title="Destination Field" [width]="160">
+              </kendo-grid-column>
+              <kendo-grid-column field="Direction" title="Direction" [width]="120">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                  <span class="direction-badge">{{ dataItem.Direction }}</span>
+                </ng-template>
+              </kendo-grid-column>
+              <kendo-grid-column field="IsKeyField" title="Key" [width]="60">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                  @if (dataItem.IsKeyField) {
+                    <i class="fa-solid fa-key key-icon"></i>
+                  }
+                </ng-template>
+              </kendo-grid-column>
+              <kendo-grid-column field="Status" title="Status" [width]="80">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                  <span class="status-badge" [class]="'status-' + dataItem.Status.toLowerCase()">
+                    {{ dataItem.Status }}
+                  </span>
+                </ng-template>
+              </kendo-grid-column>
+            </kendo-grid>
+          }
+        </div>
+      </kendo-splitter-pane>
+
+      <!-- Right Panel: Run detail view -->
+      <kendo-splitter-pane [min]="'200px'">
+        <div class="right-panel">
+          <h4 class="panel-label">Last Run Details</h4>
+          @if (!SelectedIntegrationID) {
+            <p class="empty-hint">Select an integration to see run details.</p>
+          } @else if (IsLoadingRunDetails) {
+            <mj-loading text="Loading..." size="small"></mj-loading>
+          } @else if (!LatestRun) {
+            <p class="empty-hint">No runs found.</p>
+          } @else {
+            <div class="run-summary-card">
+              <div class="run-summary-row">
+                <span class="label">Status</span>
+                <span class="run-status" [class]="'status-' + RunStatusColor">
+                  {{ LatestRun.Status }}
+                </span>
+              </div>
+              <div class="run-summary-row">
+                <span class="label">Started</span>
+                <span>{{ FormatDate(LatestRun.StartedAt) }}</span>
+              </div>
+              <div class="run-summary-row">
+                <span class="label">Total Records</span>
+                <span>{{ LatestRun.TotalRecords | number }}</span>
+              </div>
+              <div class="run-summary-row">
+                <span class="label">Run By</span>
+                <span>{{ LatestRun.RunByUser }}</span>
+              </div>
+            </div>
+
+            @if (RunEntityDetails.length > 0) {
+              <h4 class="panel-label" style="margin-top: 16px;">Per-Entity Stats</h4>
+              @for (detail of RunEntityDetails; track detail.ID) {
+                <div class="entity-stat-card">
+                  <div class="entity-stat-name">{{ detail.Entity }}</div>
+                  <div class="entity-stat-grid">
+                    <div class="mini-stat">
+                      <span class="mini-val">{{ detail.RecordsCreated }}</span>
+                      <span class="mini-label">Created</span>
+                    </div>
+                    <div class="mini-stat">
+                      <span class="mini-val">{{ detail.RecordsUpdated }}</span>
+                      <span class="mini-label">Updated</span>
+                    </div>
+                    <div class="mini-stat">
+                      <span class="mini-val error" [class.has-errors]="detail.RecordsErrored > 0">
+                        {{ detail.RecordsErrored }}
+                      </span>
+                      <span class="mini-label">Errors</span>
+                    </div>
+                  </div>
+                </div>
+              }
+            }
+          }
+        </div>
+      </kendo-splitter-pane>
+    </kendo-splitter>
+  }
+</div>

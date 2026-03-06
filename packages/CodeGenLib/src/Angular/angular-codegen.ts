@@ -856,15 +856,10 @@ ${indentedFormHTML}
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
-        // Sort related entities by Sequence (user's explicit ordering), then by RelatedEntity name (stable tiebreaker)
-        const sortedRelatedEntities = entity.RelatedEntities
-            .filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
-            .sort((a, b) => {
-                if (a.Sequence !== b.Sequence) {
-                    return a.Sequence - b.Sequence;
-                }
-                return a.RelatedEntity.localeCompare(b.RelatedEntity);
-            });
+        // Sort related entities deterministically using the shared sort with cascading tiebreakers
+        const sortedRelatedEntities = sortBySequenceAndCreatedAt(
+            entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
+        );
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)

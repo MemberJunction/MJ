@@ -15,23 +15,19 @@ import {
 } from '../interfaces';
 
 /**
- * Raw API shape for a course response from LearnWorlds
+ * Raw API shape returned by the LearnWorlds GET /v2/courses/{id} endpoint.
+ * The v2 API returns the course object directly (no wrapper).
  */
-interface LWApiCourseResponse {
-  success?: boolean;
-  data?: LWApiCourseData;
-  message?: string;
-}
-
 interface LWApiCourseData {
   id: string;
   title: string;
   slug?: string;
-  description?: string;
+  description?: string | null;
   short_description?: string;
-  status?: string;
-  price?: number;
+  access?: string;
   original_price?: number;
+  discount_price?: number;
+  final_price?: number;
   currency?: string;
   level?: string;
   language?: string;
@@ -41,21 +37,26 @@ interface LWApiCourseData {
   total_ratings?: number;
   tags?: string[];
   categories?: string[];
+  courseImage?: string | null;
   image_url?: string;
   video_url?: string;
   certificate_enabled?: boolean;
+  created?: number;
+  modified?: number;
   created_at?: string;
   updated_at?: string;
   published_at?: string;
+  label?: string | null;
+  expires?: number | null;
+  expiresType?: string;
+  author?: { name?: string; image?: string | null } | null;
 }
 
 /**
  * Raw API shape for sections/modules response
  */
 interface LWApiSectionsResponse {
-  success?: boolean;
   data?: LWApiModuleData[] | { data: LWApiModuleData[] };
-  message?: string;
 }
 
 interface LWApiModuleData {
@@ -86,9 +87,7 @@ interface LWApiLessonData {
  * Raw API shape for instructors response
  */
 interface LWApiInstructorsResponse {
-  success?: boolean;
   data?: LWApiInstructorData[] | { data: LWApiInstructorData[] };
-  message?: string;
 }
 
 interface LWApiInstructorData {
@@ -154,14 +153,13 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
     }
     this.validatePathSegment(courseId, 'CourseID');
 
-    // Get course details
-    const courseResponse = await this.makeLearnWorldsRequest<LWApiCourseResponse>(`/courses/${courseId}`, 'GET', null, contextUser);
+    // Get course details — LW v2 API returns the course object directly
+    const course = await this.makeLearnWorldsRequest<LWApiCourseData>(`courses/${courseId}`, 'GET', undefined, contextUser);
 
-    if (!courseResponse.success || !courseResponse.data) {
-      throw new Error(courseResponse.message || 'Failed to retrieve course details');
+    if (!course || !course.id) {
+      throw new Error('Failed to retrieve course details');
     }
 
-    const course = courseResponse.data;
     const courseDetails = this.buildCourseDetails(course);
 
     if (includeModules) {
@@ -226,10 +224,10 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
       id: course.id,
       title: course.title,
       slug: course.slug,
-      description: course.description,
+      description: course.description || undefined,
       shortDescription: course.short_description,
-      status: course.status || 'published',
-      price: course.price || 0,
+      status: course.access || 'published',
+      price: course.final_price ?? course.original_price ?? 0,
       originalPrice: course.original_price,
       currency: course.currency || 'USD',
       level: course.level || 'all',
@@ -241,11 +239,11 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
       totalRatings: course.total_ratings || 0,
       tags: course.tags || [],
       categories: course.categories || [],
-      imageUrl: course.image_url,
+      imageUrl: course.courseImage || course.image_url || undefined,
       videoUrl: course.video_url,
       certificateEnabled: course.certificate_enabled || false,
-      createdAt: course.created_at,
-      updatedAt: course.updated_at,
+      createdAt: course.created ? String(course.created) : course.created_at,
+      updatedAt: course.modified ? String(course.modified) : course.updated_at,
       publishedAt: course.published_at,
     };
   }
@@ -254,14 +252,20 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
    * Fetch and attach modules/curriculum to course details
    */
   private async attachModules(courseId: string, courseDetails: CourseDetailsData, contextUser: UserInfo): Promise<void> {
-    const modulesResponse = await this.makeLearnWorldsRequest<LWApiSectionsResponse>(`/courses/${courseId}/sections`, 'GET', null, contextUser);
+    try {
+      const modulesResponse = await this.makeLearnWorldsRequest<LWApiSectionsResponse>(`courses/${courseId}/sections`, 'GET', undefined, contextUser);
 
-    if (modulesResponse.success && modulesResponse.data) {
-      const rawModules = Array.isArray(modulesResponse.data) ? modulesResponse.data : (modulesResponse.data as { data: LWApiModuleData[] }).data || [];
+      const rawModules = modulesResponse.data
+        ? (Array.isArray(modulesResponse.data) ? modulesResponse.data : (modulesResponse.data as { data: LWApiModuleData[] }).data || [])
+        : [];
 
-      courseDetails.modules = this.formatModules(rawModules);
-      courseDetails.totalModules = courseDetails.modules.length;
-      courseDetails.totalLessons = courseDetails.modules.reduce((sum, mod) => sum + (mod.lessons?.length || 0), 0);
+      if (rawModules.length > 0) {
+        courseDetails.modules = this.formatModules(rawModules);
+        courseDetails.totalModules = courseDetails.modules.length;
+        courseDetails.totalLessons = courseDetails.modules.reduce((sum, mod) => sum + (mod.lessons?.length || 0), 0);
+      }
+    } catch {
+      // Sections endpoint might not be available for this course type
     }
   }
 
@@ -269,14 +273,18 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
    * Fetch and attach instructors to course details
    */
   private async attachInstructors(courseId: string, courseDetails: CourseDetailsData, contextUser: UserInfo): Promise<void> {
-    const instructorsResponse = await this.makeLearnWorldsRequest<LWApiInstructorsResponse>(`/courses/${courseId}/instructors`, 'GET', null, contextUser);
+    try {
+      const instructorsResponse = await this.makeLearnWorldsRequest<LWApiInstructorsResponse>(`courses/${courseId}/instructors`, 'GET', undefined, contextUser);
 
-    if (instructorsResponse.success && instructorsResponse.data) {
-      const rawInstructors = Array.isArray(instructorsResponse.data)
-        ? instructorsResponse.data
-        : (instructorsResponse.data as { data: LWApiInstructorData[] }).data || [];
+      const rawInstructors = instructorsResponse.data
+        ? (Array.isArray(instructorsResponse.data) ? instructorsResponse.data : (instructorsResponse.data as { data: LWApiInstructorData[] }).data || [])
+        : [];
 
-      courseDetails.instructors = this.formatInstructors(rawInstructors);
+      if (rawInstructors.length > 0) {
+        courseDetails.instructors = this.formatInstructors(rawInstructors);
+      }
+    } catch {
+      // Instructors endpoint might not be available
     }
   }
 
@@ -284,18 +292,22 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
    * Fetch and attach stats to course details
    */
   private async attachStats(courseId: string, courseDetails: CourseDetailsData, contextUser: UserInfo): Promise<void> {
-    const statsResponse = await this.makeLearnWorldsRequest<LWApiStatsResponse>(`/courses/${courseId}/stats`, 'GET', null, contextUser);
+    try {
+      const statsResponse = await this.makeLearnWorldsRequest<LWApiStatsResponse>(`courses/${courseId}/stats`, 'GET', undefined, contextUser);
 
-    if (statsResponse.success && statsResponse.data) {
-      const statsData = statsResponse.data;
-      courseDetails.stats = {
-        totalEnrollments: statsData.total_enrollments || courseDetails.totalEnrollments,
-        activeStudents: statsData.active_students || 0,
-        completionRate: statsData.completion_rate || 0,
-        averageProgressPercentage: statsData.average_progress || 0,
-        averageTimeToComplete: statsData.average_time_to_complete,
-        totalRevenue: statsData.total_revenue || 0,
-      } satisfies CourseStats;
+      if (statsResponse.data) {
+        const statsData = statsResponse.data;
+        courseDetails.stats = {
+          totalEnrollments: statsData.total_enrollments || courseDetails.totalEnrollments,
+          activeStudents: statsData.active_students || 0,
+          completionRate: statsData.completion_rate || 0,
+          averageProgressPercentage: statsData.average_progress || 0,
+          averageTimeToComplete: statsData.average_time_to_complete,
+          totalRevenue: statsData.total_revenue || 0,
+        } satisfies CourseStats;
+      }
+    } catch {
+      // Stats endpoint might not be available for all plan types
     }
   }
 

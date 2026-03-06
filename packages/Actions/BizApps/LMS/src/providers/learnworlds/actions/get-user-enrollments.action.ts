@@ -82,7 +82,7 @@ export class GetUserEnrollmentsAction extends LearnWorldsBaseAction {
 
     const queryParams = this.buildEnrollmentQueryParams(status, includeExpired, sortBy, sortOrder, maxResults);
 
-    const enrollmentsData = await this.makeLearnWorldsPaginatedRequest<LWApiEnrollmentData>(`users/${userId}/enrollments`, queryParams, contextUser);
+    const enrollmentsData = await this.makeLearnWorldsPaginatedRequest<LWApiEnrollmentData>(`users/${userId}/courses`, queryParams, contextUser, maxResults);
 
     const enrollments = enrollmentsData || [];
     const formattedEnrollments = await this.formatEnrollments(enrollments, includeCourseDetails, contextUser);
