@@ -1,5 +1,6 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
+import { LogError } from "./logging";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -300,11 +301,15 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
             const keys = Object.keys(user)
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
-                const val = user[key]
-                if (val && typeof val == 'string') {
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), val)
+                const val = (user as unknown as Record<string, unknown>)[key]
+                if (val != null && typeof val !== 'object') {
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
                 }
             }
+        }
+        const unresolvedMatch = ret.match(/\{\{User\w+\}\}/);
+        if (unresolvedMatch) {
+            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
         }
         return ret;
     }

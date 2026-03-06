@@ -357,6 +357,8 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 RelatedEntities: [],
+                UserExemptFromRowLevelSecurity: () => true,
+                GetUserRowLevelSecurityWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -391,6 +393,8 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 RelatedEntities: [],
+                UserExemptFromRowLevelSecurity: () => true,
+                GetUserRowLevelSecurityWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -421,6 +425,8 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Name', TSType: EntityFieldTSType.String, Type: 'varchar' },
                 ],
                 RelatedEntities: [],
+                UserExemptFromRowLevelSecurity: () => true,
+                GetUserRowLevelSecurityWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {

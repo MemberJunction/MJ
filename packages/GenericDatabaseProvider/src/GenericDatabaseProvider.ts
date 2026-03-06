@@ -1716,7 +1716,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${where}`;
+        // Append Read RLS filter if user is not exempt
+        let fullWhere = where;
+        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                fullWhere = `${where} AND (${rlsWhereClause})`;
+            }
+        }
+
+        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${fullWhere}`;
         const rawData = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
@@ -1762,6 +1771,87 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return ret;
         }
         return null;
+    }
+
+    /**************************************************************************/
+    // Row-Level Security Checks
+    /**************************************************************************/
+
+    /**
+     * Checks whether an existing record passes the RLS filter for a given permission type.
+     * Executes: SELECT COUNT(*) AS cnt FROM view WHERE PK=value AND (RLS filter)
+     * Returns true if the record matches (cnt > 0), false otherwise.
+     */
+    protected override async CheckRecordRLS(
+        entity: BaseEntity,
+        user: UserInfo,
+        type: EntityPermissionType
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
+            return true;
+        }
+
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const pkWhere = entity.PrimaryKeys.map(pk => {
+            const fieldInfo = entityInfo.Fields.find(f => f.Name === pk.Name);
+            const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
+            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
+        }).join(' AND ');
+
+        const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['cnt']) > 0;
+    }
+
+    /**
+     * Checks whether a new record's field values pass the Create RLS filter.
+     * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     */
+    protected override async CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
+            return true;
+        }
+
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const projections = this.BuildCreateRLSProjections(entity, entityInfo);
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['pass']) === 1;
+    }
+
+    /**
+     * Builds field projections for the Create RLS synthetic row subquery.
+     * Only includes non-virtual fields that have non-null values.
+     */
+    private BuildCreateRLSProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+        const parts: string[] = [];
+        for (const field of entityInfo.Fields) {
+            if (field.IsVirtual) continue;
+            const val = entity.Get(field.Name);
+            if (val == null) continue;
+
+            let sqlVal: string;
+            if (field.NeedsQuotes) {
+                sqlVal = `'${String(val).replace(/'/g, "''")}'`;
+            } else {
+                sqlVal = String(val);
+            }
+            parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
+        }
+        return parts.join(', ');
     }
 
     /**************************************************************************/
