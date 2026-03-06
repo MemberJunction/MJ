@@ -10,7 +10,6 @@ import type {
 import type {
     ICompanyIntegrationEntityMap,
     ICompanyIntegrationFieldMap,
-    IIntegrationSourceType,
 } from '../entity-types.js';
 import type {
     BaseIntegrationConnector,
@@ -179,12 +178,6 @@ describe('IntegrationOrchestrator', () => {
                 } as unknown as ICompanyIntegrationEntityMap],
             },
             { Success: true, Results: [integration] },
-            {
-                Success: true,
-                Results: [{
-                    DriverClass: 'TestConnector',
-                } as unknown as IIntegrationSourceType],
-            },
         ]);
 
         // Mock field maps loading (RunView)

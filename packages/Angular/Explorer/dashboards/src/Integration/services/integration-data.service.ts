@@ -1,6 +1,21 @@
 import { Injectable } from '@angular/core';
-import { RunView, IRunViewProvider } from '@memberjunction/core';
+import { Metadata, RunView, IRunViewProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import {
+  MJCompanyIntegrationEntityMapEntity,
+  MJCompanyIntegrationFieldMapEntity
+} from '@memberjunction/core-entities';
+import {
+  GraphQLDataProvider,
+  GraphQLIntegrationClient,
+  GraphQLActionClient,
+  DiscoveredObjectResult,
+  DiscoveredFieldResult,
+  DiscoveryResult,
+  ConnectionTestGraphQLResult,
+  SchemaPreviewObjectInput,
+  SchemaPreviewResult
+} from '@memberjunction/graphql-dataprovider';
 
 /**
  * Simple row types for read-only data loaded via ResultType: 'simple'
@@ -327,6 +342,248 @@ export class IntegrationDataService {
 
   ComputeRelativeTime(dateStr: string | null): string {
     return this.computeRelativeTime(dateStr);
+  }
+
+  // --- Entity Map CRUD ---
+
+  async CreateEntityMap(params: {
+    CompanyIntegrationID: string;
+    ExternalObjectName: string;
+    ExternalObjectLabel?: string;
+    EntityID: string;
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    ConflictResolution?: 'SourceWins' | 'DestWins' | 'MostRecent' | 'Manual';
+    Priority?: number;
+    DeleteBehavior?: 'SoftDelete' | 'DoNothing' | 'HardDelete';
+  }): Promise<MJCompanyIntegrationEntityMapEntity | null> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    em.NewRecord();
+    em.CompanyIntegrationID = params.CompanyIntegrationID;
+    em.ExternalObjectName = params.ExternalObjectName;
+    if (params.ExternalObjectLabel) em.ExternalObjectLabel = params.ExternalObjectLabel;
+    em.EntityID = params.EntityID;
+    em.SyncDirection = params.SyncDirection ?? 'Pull';
+    em.ConflictResolution = params.ConflictResolution ?? 'SourceWins';
+    em.Priority = params.Priority ?? 0;
+    em.DeleteBehavior = params.DeleteBehavior ?? 'SoftDelete';
+    em.Status = 'Active';
+    em.SyncEnabled = true;
+
+    const saved = await em.Save();
+    if (!saved) {
+      console.error('[IntegrationDataService] Failed to create entity map:', em.LatestResult?.CompleteMessage);
+      return null;
+    }
+    return em;
+  }
+
+  async DeleteEntityMap(entityMapID: string): Promise<boolean> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    await em.Load(entityMapID);
+    return em.Delete();
+  }
+
+  async ToggleEntityMapEnabled(entityMapID: string, enabled: boolean): Promise<boolean> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    await em.Load(entityMapID);
+    em.SyncEnabled = enabled;
+    return em.Save();
+  }
+
+  // --- Field Map CRUD ---
+
+  async CreateFieldMap(params: {
+    EntityMapID: string;
+    SourceFieldName: string;
+    SourceFieldLabel?: string;
+    DestinationFieldName: string;
+    DestinationFieldLabel?: string;
+    IsKeyField?: boolean;
+    IsRequired?: boolean;
+    Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
+  }): Promise<MJCompanyIntegrationFieldMapEntity | null> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    fm.NewRecord();
+    fm.EntityMapID = params.EntityMapID;
+    fm.SourceFieldName = params.SourceFieldName;
+    if (params.SourceFieldLabel) fm.SourceFieldLabel = params.SourceFieldLabel;
+    fm.DestinationFieldName = params.DestinationFieldName;
+    if (params.DestinationFieldLabel) fm.DestinationFieldLabel = params.DestinationFieldLabel;
+    fm.IsKeyField = params.IsKeyField ?? false;
+    fm.IsRequired = params.IsRequired ?? false;
+    fm.Direction = params.Direction ?? 'SourceToDest';
+    fm.Status = 'Active';
+    fm.Priority = 0;
+
+    const saved = await fm.Save();
+    if (!saved) {
+      console.error('[IntegrationDataService] Failed to create field map:', fm.LatestResult?.CompleteMessage);
+      return null;
+    }
+    return fm;
+  }
+
+  async DeleteFieldMap(fieldMapID: string): Promise<boolean> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    await fm.Load(fieldMapID);
+    return fm.Delete();
+  }
+
+  async UpdateFieldMap(fieldMapID: string, updates: {
+    SourceFieldName?: string;
+    DestinationFieldName?: string;
+    IsKeyField?: boolean;
+    IsRequired?: boolean;
+    Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
+    Status?: 'Active' | 'Inactive';
+  }): Promise<boolean> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    await fm.Load(fieldMapID);
+    if (updates.SourceFieldName !== undefined) fm.SourceFieldName = updates.SourceFieldName;
+    if (updates.DestinationFieldName !== undefined) fm.DestinationFieldName = updates.DestinationFieldName;
+    if (updates.IsKeyField !== undefined) fm.IsKeyField = updates.IsKeyField;
+    if (updates.IsRequired !== undefined) fm.IsRequired = updates.IsRequired;
+    if (updates.Direction !== undefined) fm.Direction = updates.Direction;
+    if (updates.Status !== undefined) fm.Status = updates.Status;
+    return fm.Save();
+  }
+
+  /** Load available MJ entities for mapping target selection */
+  async LoadMJEntities(provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string }>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ ID: string; Name: string }>({
+      EntityName: 'MJ: Entities',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      Fields: ['ID', 'Name'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load entity fields for a given entity (for field mapping destination picker) */
+  async LoadEntityFields(entityID: string, provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string; Type: string; IsRequired: boolean }>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ ID: string; Name: string; Type: string; IsRequired: boolean }>({
+      EntityName: 'MJ: Entity Fields',
+      ExtraFilter: `EntityID='${entityID}'`,
+      OrderBy: 'Sequence',
+      Fields: ['ID', 'Name', 'Type', 'IsRequired'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  // --- Discovery (via GraphQL) ---
+
+  /** Discover external objects available for a company integration */
+  async DiscoverObjects(companyIntegrationID: string): Promise<DiscoveryResult<DiscoveredObjectResult[]>> {
+    const client = this.getIntegrationClient();
+    return client.DiscoverObjects(companyIntegrationID);
+  }
+
+  /** Discover fields on a specific external object */
+  async DiscoverFields(companyIntegrationID: string, objectName: string): Promise<DiscoveryResult<DiscoveredFieldResult[]>> {
+    const client = this.getIntegrationClient();
+    return client.DiscoverFields(companyIntegrationID, objectName);
+  }
+
+  /** Generate DDL preview for creating tables from discovered objects */
+  async SchemaPreview(
+    companyIntegrationID: string,
+    objects: SchemaPreviewObjectInput[],
+    platform: string = 'sqlserver'
+  ): Promise<SchemaPreviewResult> {
+    const client = this.getIntegrationClient();
+    return client.SchemaPreview(companyIntegrationID, objects, platform);
+  }
+
+  /** Test connection to the external system */
+  async TestConnection(companyIntegrationID: string): Promise<ConnectionTestGraphQLResult> {
+    const client = this.getIntegrationClient();
+    return client.TestConnection(companyIntegrationID);
+  }
+
+  /** Preview source data from the external system (stub — requires server-side connector support) */
+  async PreviewSourceData(
+    companyIntegrationID: string,
+    objectName: string,
+    limit: number = 5
+  ): Promise<Array<Record<string, string | number | boolean | null>>> {
+    // Source preview requires a server-side resolver that calls the connector's read method.
+    // For now, return an empty array. When the server-side endpoint is available,
+    // this will call the GraphQL integration client.
+    console.warn('[IntegrationDataService] PreviewSourceData not yet implemented server-side');
+    return [];
+  }
+
+  /** Preview destination data by loading a few records from the target entity */
+  async PreviewDestinationData(
+    entityID: string,
+    limit: number = 5,
+    provider?: IRunViewProvider | null
+  ): Promise<Array<Record<string, string | number | boolean | null>>> {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    if (!entityInfo) return [];
+
+    // Load first N fields (skip internal __mj fields) to keep preview compact
+    const fields = entityInfo.Fields
+      .filter(f => !f.Name.startsWith('__mj'))
+      .slice(0, 8)
+      .map(f => f.Name);
+
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<Record<string, string | number | boolean | null>>({
+      EntityName: entityInfo.Name,
+      ExtraFilter: '',
+      OrderBy: `${fields[0]} ASC`,
+      MaxRows: limit,
+      Fields: fields,
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Run an integration sync via the "Run Integration Sync" action */
+  async RunSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string }> {
+    const actionID = await this.lookupActionID('Run Integration Sync');
+    if (!actionID) {
+      return {
+        Success: false,
+        Message: 'Action "Run Integration Sync" not found. Ensure the action is registered.'
+      };
+    }
+
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    const result = await actionClient.RunAction(actionID, [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' }
+    ]);
+    return { Success: result.Success, Message: result.Message ?? '' };
+  }
+
+  private async lookupActionID(actionName: string): Promise<string | null> {
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string }>({
+      EntityName: 'Actions',
+      ExtraFilter: `Name='${actionName}'`,
+      Fields: ['ID'],
+      MaxRows: 1,
+      ResultType: 'simple'
+    });
+    return result.Results.length > 0 ? result.Results[0].ID : null;
+  }
+
+  private getIntegrationClient(): GraphQLIntegrationClient {
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    return new GraphQLIntegrationClient(provider);
   }
 
   private createRunView(provider?: IRunViewProvider | null): RunView {

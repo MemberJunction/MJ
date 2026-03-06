@@ -18,6 +18,26 @@
       </button>
     </div>
   } @else {
+    <!-- Run Result Notification -->
+    @if (RunSuccess) {
+      <div class="run-notification run-success">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ RunSuccess }}</span>
+        <button class="notification-dismiss" (click)="RunSuccess = null">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+    }
+    @if (RunError) {
+      <div class="run-notification run-error">
+        <i class="fa-solid fa-circle-xmark"></i>
+        <span>{{ RunError }}</span>
+        <button class="notification-dismiss" (click)="RunError = null">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+    }
+
     <!-- KPI Strip -->
     <div class="kpi-strip">
       <div class="kpi-card kpi-blue">
@@ -106,11 +126,17 @@
       </kendo-grid-column>
       <kendo-grid-column title="Actions" [width]="100">
         <ng-template kendoGridCellTemplate let-dataItem>
-          <button kendoButton [look]="'flat'" [themeColor]="'primary'" [size]="'small'"
-                  (click)="OnRunNow(dataItem.Integration.ID)"
-                  [disabled]="!dataItem.Integration.IsActive">
-            <i class="fa-solid fa-play"></i> Run
-          </button>
+          @if (IsRunning(dataItem.Integration.ID)) {
+            <button kendoButton [look]="'flat'" [size]="'small'" [disabled]="true">
+              <i class="fa-solid fa-spinner fa-spin"></i> Running
+            </button>
+          } @else {
+            <button kendoButton [look]="'flat'" [themeColor]="'primary'" [size]="'small'"
+                    (click)="OnRunNow(dataItem.Integration.ID)"
+                    [disabled]="!dataItem.Integration.IsActive || RunningIntegrationID !== null">
+              <i class="fa-solid fa-play"></i> Run
+            </button>
+          }
         </ng-template>
       </kendo-grid-column>
     </kendo-grid>

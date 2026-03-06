@@ -48,6 +48,32 @@
   margin-top: 8px;
 }
 
+/* Run Notifications */
+.run-notification {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.run-notification i:first-child { font-size: 16px; }
+.run-notification span { flex: 1; }
+.run-success { background: #e6f9ed; color: #1b7a3d; border: 1px solid #b8e6c8; }
+.run-error   { background: #fde8e8; color: #c62828; border: 1px solid #f5c6c6; }
+.notification-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 14px;
+  padding: 4px;
+}
+.notification-dismiss:hover { opacity: 1; }
+
 /* KPI Strip */
 .kpi-strip {
   display: grid;

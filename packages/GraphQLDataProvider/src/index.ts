@@ -47,3 +47,14 @@ export type {
 export * from './graphQLFileStorageClient';
 
 export * from './storage-providers';
+
+export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
+export type {
+    DiscoveredObjectResult,
+    DiscoveredFieldResult,
+    DiscoveryResult,
+    ConnectionTestGraphQLResult,
+    SchemaPreviewObjectInput,
+    SchemaPreviewFile,
+    SchemaPreviewResult
+} from './graphQLIntegrationClient';

@@ -39,6 +39,9 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
 
   IsLoading = false;
   ExpandedID: string | null = null;
+  RunningIntegrationID: string | null = null;
+  RunError: string | null = null;
+  RunSuccess: string | null = null;
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
@@ -73,8 +76,33 @@ export class ControlTowerComponent extends BaseResourceComponent implements OnIn
     await this.LoadData();
   }
 
-  OnRunNow(integrationID: string): void {
-    console.log('[IntegrationControlTower] Run Now clicked for integration:', integrationID);
+  async OnRunNow(integrationID: string): Promise<void> {
+    if (this.RunningIntegrationID) return; // Already running
+    this.RunningIntegrationID = integrationID;
+    this.RunError = null;
+    this.RunSuccess = null;
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.RunSync(integrationID);
+      if (result.Success) {
+        this.RunSuccess = result.Message ?? 'Sync completed successfully';
+        await this.LoadData(); // Refresh all data
+      } else {
+        this.RunError = result.Message ?? 'Sync failed';
+      }
+    } catch (err) {
+      const error = err as Error;
+      this.RunError = `Unexpected error: ${error.message}`;
+      console.error('[IntegrationControlTower] RunSync error:', err);
+    } finally {
+      this.RunningIntegrationID = null;
+      this.cdr.detectChanges();
+    }
+  }
+
+  IsRunning(integrationID: string): boolean {
+    return UUIDsEqual(this.RunningIntegrationID, integrationID);
   }
 
   OnExpandToggle(integrationID: string): void {

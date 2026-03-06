@@ -9,7 +9,6 @@ import type {
 import type {
     ICompanyIntegrationEntityMap,
     ICompanyIntegrationFieldMap,
-    IIntegrationSourceType,
 } from './entity-types.js';
 import type {
     SyncResult,
@@ -115,7 +114,7 @@ export class IntegrationOrchestrator {
     ): Promise<RunConfiguration> {
         const rv = new RunView();
 
-        const [ciResult, entityMapsResult, integrationsResult, sourceTypesResult] = await rv.RunViews([
+        const [ciResult, entityMapsResult, integrationsResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${companyIntegrationID}'`,
@@ -133,11 +132,6 @@ export class IntegrationOrchestrator {
                 ExtraFilter: '',
                 ResultType: 'entity_object',
             },
-            {
-                EntityName: 'MJ: Integration Source Types',
-                ExtraFilter: `Status='Active'`,
-                ResultType: 'entity_object',
-            },
         ], contextUser);
 
         const companyIntegration = (ciResult.Results as MJCompanyIntegrationEntity[])[0];
@@ -151,10 +145,7 @@ export class IntegrationOrchestrator {
             throw new Error(`Integration not found for CompanyIntegration: ${companyIntegrationID}`);
         }
 
-        const connector = ConnectorFactory.Resolve(
-            integration,
-            sourceTypesResult.Results as IIntegrationSourceType[]
-        );
+        const connector = ConnectorFactory.Resolve(integration);
 
         return {
             companyIntegration,
