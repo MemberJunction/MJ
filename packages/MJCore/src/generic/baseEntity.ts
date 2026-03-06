@@ -2288,6 +2288,16 @@ export abstract class BaseEntity<T = unknown> {
                 this._parentEntity.Hydrate(data);
             }
 
+            // Reset _NeverSet on all fields before SetMany so that ReadOnly/virtual fields
+            // (e.g. view-computed columns like PrimaryAddressLine1, PrimaryEmail) can be
+            // updated on reload. Without this, the EntityField Value setter silently drops
+            // writes to ReadOnly fields after the initial load, meaning InnerLoad called a
+            // second time (e.g. to refresh denormalized data after a related entity changed)
+            // would fail to update those fields even though the provider returned fresh data.
+            for (const f of this.Fields) {
+                f.ResetNeverSetFlag();
+            }
+
             this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
