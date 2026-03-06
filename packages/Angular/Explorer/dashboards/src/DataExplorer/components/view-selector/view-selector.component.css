@@ -1,13 +1,18 @@
-/* View Selector Container */
-.view-selector-container {
+/* ========================================
+   VIEW SELECTOR - All classes prefixed vs-
+   to avoid conflicts (ViewEncapsulation.None)
+   ======================================== */
+
+/* Container */
+.vs-container {
   display: flex;
   align-items: center;
   gap: 4px;
   position: relative;
 }
 
-/* Backdrop for closing dropdown */
-.dropdown-backdrop {
+/* Backdrop for closing panel */
+.vs-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -17,52 +22,53 @@
   background: transparent;
 }
 
-.view-selector-wrapper {
+.vs-wrapper {
   position: relative;
 }
 
 /* Main Button */
-.view-selector-button {
+.vs-button {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   background: var(--background-alt, #f5f5f5);
   border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary, #333);
   transition: all 0.15s ease;
   min-width: 140px;
   max-width: 280px;
 }
 
-.view-selector-button:hover {
-  background: var(--background-hover, #e8e8e8);
-  border-color: var(--border-color-hover, #ccc);
+.vs-button:hover {
+  border-color: #5c6bc0;
+  background: #f3f4fa;
 }
 
-.view-selector-button:disabled {
+.vs-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.view-selector-button.open {
-  background: var(--background-active, #e0e0e0);
-  border-color: var(--primary-color, #007bff);
+.vs-button.open {
+  border-color: #5c6bc0;
+  background: #f3f4fa;
 }
 
-.view-selector-button.modified {
-  border-color: var(--warning-color, #f59e0b);
+.vs-button.modified {
+  border-color: #f57c00;
 }
 
-.view-icon {
-  color: var(--text-secondary, #666);
+.vs-btn-icon {
+  color: #5c6bc0;
   font-size: 12px;
 }
 
-.view-name {
+.vs-btn-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -70,189 +76,413 @@
   text-align: left;
 }
 
-.modified-indicator {
-  color: var(--warning-color, #f59e0b);
+.vs-modified-dot {
+  color: #f57c00;
   font-weight: bold;
   font-size: 18px;
   line-height: 1;
 }
 
-.dropdown-arrow {
-  color: var(--text-secondary, #666);
+.vs-arrow {
+  color: #999;
   font-size: 10px;
   transition: transform 0.2s ease;
 }
 
-.dropdown-arrow.rotated {
+.vs-arrow.rotated {
   transform: rotate(180deg);
 }
 
-/* Dropdown Panel */
-.dropdown-panel {
+/* ========================================
+   RICH VIEW PANEL
+   Styles ported directly from prototype
+   ======================================== */
+
+/* Reset inherited styles inside panel */
+.vs-panel,
+.vs-panel * {
+  box-sizing: border-box;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.vs-panel {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 280px;
-  max-width: 360px;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  z-index: 1000;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #333;
+}
+
+/* Panel Header */
+.vs-panel-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.vs-header-icon {
+  color: #5c6bc0;
+  font-size: 14px;
+}
+
+.vs-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.vs-entity-badge {
+  font-size: 11px;
+  font-weight: 500;
+  background: #e8eaf6;
+  color: #5c6bc0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.vs-close-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 16px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vs-close-btn:hover {
+  color: #333;
+}
+
+/* Panel Search */
+.vs-panel-search {
+  padding: 12px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.vs-search-input {
+  width: 100%;
+  padding: 6px 12px 6px 32px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #f5f5f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23999'%3E%3Cpath d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208z'/%3E%3C/svg%3E") no-repeat 10px center;
+  background-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.vs-search-input:focus {
+  outline: none;
+  border-color: #5c6bc0;
+}
+
+.vs-search-input::placeholder {
+  color: #999;
+}
+
+/* Panel Body */
+.vs-panel-body {
   max-height: 400px;
   overflow-y: auto;
-  background: var(--background-panel, #fff);
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  z-index: 1000;
 }
 
-/* Dropdown Items */
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  transition: background 0.1s ease;
+/* View Section */
+.vs-section {
+  padding: 8px 0;
 }
 
-.dropdown-item:hover {
-  background: var(--background-hover, #f5f5f5);
-}
-
-.dropdown-item.selected {
-  background: var(--primary-light, #e6f0ff);
-}
-
-.dropdown-item.selected:hover {
-  background: var(--primary-light-hover, #d6e4f9);
-}
-
-.default-option {
-  font-weight: 500;
-}
-
-.item-icon {
-  color: var(--text-secondary, #666);
-  font-size: 13px;
-  width: 16px;
-  text-align: center;
-}
-
-.item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
-.shared-indicator,
-.default-indicator,
-.readonly-indicator {
-  color: var(--text-tertiary, #999);
+.vs-section-header {
+  padding: 6px 20px;
   font-size: 11px;
-}
-
-.default-indicator {
-  color: var(--warning-color, #f59e0b);
-}
-
-.selected-check {
-  color: var(--primary-color, #007bff);
-  font-size: 12px;
-}
-
-/* Dropdown Sections */
-.dropdown-section {
-  padding: 4px 0;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-tertiary, #999);
+  font-weight: 700;
+  color: #999;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.section-icon {
+.vs-section-header i {
   font-size: 10px;
 }
 
-.section-title {
+.vs-section-count {
+  background: #e0e0e0;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+/* View Card */
+.vs-card {
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.1s;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vs-card:hover {
+  background: #f3f4fa;
+}
+
+.vs-card.active {
+  background: #e8eaf6;
+  border-left: 3px solid #5c6bc0;
+  padding-left: 17px;
+}
+
+/* View Card Icon */
+.vs-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vs-card-icon.active {
+  background: #5c6bc0;
+  color: white;
+}
+
+.vs-card-icon.shared {
+  background: #f5f5f5;
+  color: #999;
+}
+
+/* View Card Content */
+.vs-card-content {
   flex: 1;
+  min-width: 0;
+  padding-top: 4px;
 }
 
-.section-count {
-  background: var(--background-alt, #f0f0f0);
-  padding: 2px 6px;
-  border-radius: 10px;
+.vs-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vs-card.active .vs-card-name {
+  color: #5c6bc0;
+  font-weight: 600;
+}
+
+.vs-default-badge {
+  font-size: 9px;
+  font-weight: 600;
+  background: #e8f5e9;
+  color: #43a047;
+  padding: 1px 5px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.vs-shared-badge {
+  font-size: 9px;
+  font-weight: 600;
+  background: #e8eaf6;
+  color: #5c6bc0;
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+.vs-shared-badge.editable {
+  background: #e8f5e9;
+  color: #43a047;
+}
+
+.vs-card-desc {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vs-card-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #999;
+}
+
+.vs-card-meta span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vs-card-meta i {
   font-size: 10px;
 }
 
-/* Dropdown Divider */
-.dropdown-divider {
-  height: 1px;
-  background: var(--border-color-light, #eee);
-  margin: 4px 0;
+/* View Card Check */
+.vs-card-check {
+  color: #5c6bc0;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* View Card Actions (hover reveal) */
+.vs-card-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vs-card:hover .vs-card-actions {
+  opacity: 1;
+}
+
+.vs-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vs-action-btn:hover {
+  background: #f5f5f5;
+  color: #333;
 }
 
 /* Empty State */
-.empty-views-message,
-.loading-views {
+.vs-empty-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  color: #999;
+  font-size: 13px;
+}
+
+.vs-empty-message i {
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+.vs-empty-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vs-empty-text strong {
+  color: #666;
+  font-size: 13px;
+}
+
+.vs-empty-text span {
+  font-size: 12px;
+}
+
+/* Loading */
+.vs-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 20px;
-  color: var(--text-tertiary, #999);
+  color: #999;
   font-size: 13px;
+  text-align: center;
 }
 
-/* Actions Section */
-.dropdown-actions {
+/* Panel Footer */
+.vs-panel-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #f0f0f0;
   display: flex;
   gap: 8px;
-  padding: 10px 14px;
 }
 
-.action-button {
+.vs-panel-btn {
   flex: 1;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
-  background: var(--background-alt, #f5f5f5);
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-primary, #333);
-  transition: all 0.15s ease;
+  transition: all 0.15s;
+  font-family: inherit;
+  text-align: center;
 }
 
-.action-button:hover:not(:disabled) {
-  background: var(--background-hover, #e8e8e8);
-  border-color: var(--border-color-hover, #ccc);
+.vs-panel-btn:hover {
+  border-color: #5c6bc0;
+  color: #5c6bc0;
 }
 
-.action-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.vs-panel-btn.primary {
+  background: #5c6bc0;
+  color: white;
+  border-color: #5c6bc0;
 }
 
-.action-button i {
+.vs-panel-btn.primary:hover {
+  background: #4a59b0;
+}
+
+.vs-panel-btn i {
   font-size: 11px;
 }
 
-/* Open in Tab Button */
-.open-in-tab-button,
-.configure-view-button,
-.create-record-button,
-.export-button {
+/* ========================================
+   ICON BUTTONS (outside panel)
+   ======================================== */
+
+.vs-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -266,41 +496,30 @@
   transition: all 0.15s ease;
 }
 
-.open-in-tab-button:hover,
-.configure-view-button:hover,
-.create-record-button:hover,
-.export-button:hover {
+.vs-icon-btn:hover {
   background: var(--background-hover, #e8e8e8);
   border-color: var(--border-color-hover, #ccc);
-  color: var(--primary-color, #007bff);
+  color: #5c6bc0;
 }
 
-.open-in-tab-button i,
-.configure-view-button i,
-.create-record-button i,
-.export-button i {
+.vs-icon-btn i {
   font-size: 12px;
 }
 
-/* Excel export button special color on hover */
-.export-button:hover {
-  color: #217346; /* Excel green */
+.vs-export-btn:hover {
+  color: #217346;
 }
 
-/* Responsive Adjustments */
+/* Responsive */
 @media (max-width: 768px) {
-  .view-selector-button {
+  .vs-button {
     min-width: 100px;
     max-width: 180px;
     padding: 6px 10px;
   }
 
-  .dropdown-panel {
-    min-width: 240px;
-    max-width: calc(100vw - 32px);
-  }
-
-  .dropdown-actions {
-    flex-direction: column;
+  .vs-panel {
+    width: calc(100vw - 32px);
+    max-width: 400px;
   }
 }

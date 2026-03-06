@@ -1,26 +1,28 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface ArtifactSelectionResult {
-  artifact: ArtifactEntity;
+  artifact: MJArtifactEntity;
   action: 'new-version' | 'update-version';
-  versionToUpdate?: ArtifactVersionEntity;
+  versionToUpdate?: MJArtifactVersionEntity;
 }
 
 @Component({
+  standalone: false,
   selector: 'app-artifact-selection-dialog',
   templateUrl: './artifact-selection-dialog.component.html',
   styleUrl: './artifact-selection-dialog.component.css'
 })
 export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   // Data
-  artifacts: ArtifactEntity[] = [];
-  artifactVersions: ArtifactVersionEntity[] = [];
+  artifacts: MJArtifactEntity[] = [];
+  artifactVersions: MJArtifactVersionEntity[] = [];
 
   // Paging State
   currentPage = 0;
@@ -38,8 +40,8 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
 
   // Selection State
-  selectedArtifact: ArtifactEntity | null = null;
-  selectedVersion: ArtifactVersionEntity | null = null;
+  selectedArtifact: MJArtifactEntity | null = null;
+  selectedVersion: MJArtifactVersionEntity | null = null;
   versionAction: 'new' | 'update' = 'new';
   
   // New Artifact Form
@@ -83,7 +85,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       const startRow = this.currentPage * this.pageSize;
 
       // Load artifacts with paging
-      const result = await rv.RunView<ArtifactEntity>({
+      const result = await rv.RunView<MJArtifactEntity>({
         ExtraFilter: this._artifactFilter,
         EntityName: 'MJ: Artifacts',
         OrderBy: '__mj_UpdatedAt DESC',
@@ -128,7 +130,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     // Filter by user email if provided
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`;
       filters.push(userFilter);
     }
@@ -145,7 +147,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     this.selectedVersion = null;
   }
 
-  async selectArtifact(artifact: ArtifactEntity) {
+  async selectArtifact(artifact: MJArtifactEntity) {
     this.selectedArtifact = artifact;
     this.showNewArtifactForm = false;
     this.versionAction = 'new';
@@ -158,7 +160,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   async loadVersions(artifactId: string) {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>({
+      const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
         OrderBy: 'VersionNumber DESC',
@@ -297,9 +299,9 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async createNewArtifact(): Promise<ArtifactEntity | null> {
+  private async createNewArtifact(): Promise<MJArtifactEntity | null> {
     try {
-      const artifact = await this.metadata.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+      const artifact = await this.metadata.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
       artifact.Name = this.newArtifactName;
       artifact.Description = this.newArtifactDescription || null;
 
@@ -348,5 +350,15 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       );
       return null;
     }
+  }
+
+  /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
+  IsArtifactSelected(artifact: MJArtifactEntity): boolean {
+    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+  }
+
+  /** Case-insensitive UUID check whether a version is the currently selected version. */
+  IsVersionSelected(version: MJArtifactVersionEntity): boolean {
+    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
   }
 }

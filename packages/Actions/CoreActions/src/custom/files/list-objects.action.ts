@@ -80,7 +80,3 @@ export class ListObjectsAction extends BaseFileStorageAction {
         }
     }
 }
-
-export function LoadListObjectsAction() {
-    // Stub function to prevent tree shaking
-}

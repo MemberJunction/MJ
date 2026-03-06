@@ -1,22 +1,64 @@
 # @memberjunction/ai-mcp-server
 
-MemberJunction's implementation of the Model Context Protocol (MCP) server, providing a standardized interface for LLMs to interact with MemberJunction data and capabilities.
+MemberJunction's Model Context Protocol (MCP) server implementation. Exposes MemberJunction entities, AI agents, actions, and prompts as MCP tools that can be consumed by any MCP-compatible AI client (Claude Desktop, Cursor, custom integrations). Supports both SSE and StreamableHTTP transports, API key and OAuth 2.1 authentication, configurable tool filtering, and dynamic tool generation from entity metadata.
 
-## Overview
+## Architecture
 
-The MCP (Model Context Protocol) Server enables AI models to interact with MemberJunction entities through a standardized tool interface. It dynamically generates tools based on configuration, allowing AI models to perform CRUD operations, run views, and access metadata across your MemberJunction database.
+```mermaid
+graph TD
+    subgraph "@memberjunction/ai-mcp-server"
+        SRV["MCP Server<br/>Express + MCP SDK"]
+        style SRV fill:#2d8659,stroke:#1a5c3a,color:#fff
 
-## Features
+        CFG["Config System<br/>Entity/Agent/Action/Prompt Tools"]
+        style CFG fill:#b8762f,stroke:#8a5722,color:#fff
 
-- **MCP Implementation**: Full implementation of the Model Context Protocol (MCP) for AI model tool integration
-- **Entity Access**: Expose MemberJunction entities to AI models through a consistent tooling interface
-- **Agent Execution**: Execute MemberJunction AI agents with conversation history and template data support
-- **Configurable Tools**: Generate tools dynamically based on configuration with wildcard support
-- **CRUD Operations**: Support for creating, reading, updating, and deleting entity records
-- **View Execution**: Run entity views with filtering, sorting, and field selection
-- **Metadata Access**: Built-in tool to retrieve all entity metadata including fields and relationships
-- **Type-Safe**: Full TypeScript support with Zod schema validation
-- **SSE Transport**: Server-Sent Events based communication for real-time interactions
+        CLI["CLI Entry Point<br/>yargs"]
+        style CLI fill:#7c5295,stroke:#563a6b,color:#fff
+
+        subgraph "Authentication"
+            AK["API Key Auth"]
+            style AK fill:#2d6a9f,stroke:#1a4971,color:#fff
+            OA["OAuth 2.1 Proxy"]
+            style OA fill:#2d6a9f,stroke:#1a4971,color:#fff
+            AG["AuthGate"]
+            style AG fill:#2d6a9f,stroke:#1a4971,color:#fff
+            TV["TokenValidator"]
+            style TV fill:#2d6a9f,stroke:#1a4971,color:#fff
+            SE["ScopeEvaluator"]
+            style SE fill:#2d6a9f,stroke:#1a4971,color:#fff
+        end
+
+        subgraph "Tool Types"
+            ET["Entity Tools<br/>CRUD + RunView"]
+            style ET fill:#7c5295,stroke:#563a6b,color:#fff
+            AGT["Agent Tools<br/>Execute Agents"]
+            style AGT fill:#7c5295,stroke:#563a6b,color:#fff
+            ACT["Action Tools<br/>Execute Actions"]
+            style ACT fill:#7c5295,stroke:#563a6b,color:#fff
+            PT["Prompt Tools<br/>Execute Prompts"]
+            style PT fill:#7c5295,stroke:#563a6b,color:#fff
+            MT["Metadata Tool<br/>Entity Schema Info"]
+            style MT fill:#7c5295,stroke:#563a6b,color:#fff
+        end
+    end
+
+    CLI --> SRV
+    SRV --> CFG
+    SRV --> AG
+    AG --> AK
+    AG --> OA
+    SRV --> ET
+    SRV --> AGT
+    SRV --> ACT
+    SRV --> PT
+    SRV --> MT
+
+    MCP_CLIENT["MCP Client<br/>(Claude Desktop, Cursor, etc.)"]
+    style MCP_CLIENT fill:#b8762f,stroke:#8a5722,color:#fff
+
+    MCP_CLIENT -->|"SSE / StreamableHTTP"| SRV
+```
 
 ## Installation
 
@@ -24,1312 +66,150 @@ The MCP (Model Context Protocol) Server enables AI models to interact with Membe
 npm install @memberjunction/ai-mcp-server
 ```
 
-## Requirements
-
-- Node.js 16+
-- SQL Server database with MemberJunction schema
-- MemberJunction Core libraries
-- Configuration file
-
-## Configuration
-
-The server reads configuration from a `mj.config.cjs` file using cosmiconfig. Create this file in your project root:
-
-```javascript
-module.exports = {
-  // Database settings
-  dbHost: 'localhost',
-  dbPort: 1433,
-  dbUsername: 'your_db_username',
-  dbPassword: 'your_db_password',
-  dbDatabase: 'your_database',
-  dbInstanceName: '', // Optional
-  dbTrustServerCertificate: true, // Optional
-  mjCoreSchema: '__mj',
-  
-  // Database connection settings
-  databaseSettings: {
-    connectionTimeout: 30000,
-    requestTimeout: 30000
-  },
-  
-  // MCP server settings
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    
-    // Configure entity tools
-    entityTools: [
-      {
-        // Expose all entities
-        entityName: '*',
-        schemaName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true
-      },
-      // Expose specific entity with specific operations
-      {
-        entityName: 'Users',
-        schemaName: '__mj',
-        get: true,
-        runView: true
-      }
-    ],
-    
-    // Configure action tools (not yet implemented)
-    actionTools: [],
-    
-    // Configure agent tools
-    agentTools: [
-      {
-        // Expose all agents
-        agentName: '*',
-        discover: true,
-        execute: true,
-        status: true,
-        cancel: true
-      }
-    ]
-  }
-}
-```
-
-You can also use environment variables with a `.env` file:
-
-```
-DB_HOST=localhost
-DB_PORT=1433
-DB_USERNAME=your_db_username
-DB_PASSWORD=your_db_password
-DB_DATABASE=your_database
-```
-
-## Usage
-
-### Starting the Server
+## Quick Start
 
 ```bash
-# Install globally
-npm install -g @memberjunction/ai-mcp-server
-
-# Run the server
-MemberJunction
-
-# Or via npx
+# Start with all configured tools
 npx @memberjunction/ai-mcp-server
+
+# Start with tool filtering
+npx @memberjunction/ai-mcp-server --include "Get_*,Run_Agent"
+
+# Start excluding certain tools
+npx @memberjunction/ai-mcp-server --include "Get_*" --exclude "Get_AuditLogs_*"
+
+# List available tools without starting
+npx @memberjunction/ai-mcp-server --list-tools
+
+# Load filter config from file
+npx @memberjunction/ai-mcp-server --tools-file ./my-tools.json
 ```
 
-### Import and Start Programmatically
-
-```typescript
-import { initializeServer } from '@memberjunction/ai-mcp-server';
-
-// Start the server
-await initializeServer();
-```
-
-### Binary Execution
-
-When installed globally or locally, the package provides a `MemberJunction` executable that starts the MCP server. The server automatically initializes when the module is loaded.
-
-## Tool Configuration
-
-### Agent Tools
-
-Agent tools allow AI models to discover and execute MemberJunction AI agents.
-
-```javascript
-agentTools: [
-  {
-    // Agent matching (supports wildcards)
-    agentName: 'DataAnalysis*',  // Agent name pattern (use '*' for all agents)
-    
-    // Operations to enable
-    discover: true,   // Enable agent discovery
-    execute: true,    // Enable agent execution
-    status: true,     // Enable run status checking
-    cancel: true      // Enable run cancellation
-  }
-]
-```
-
-#### Agent Tool Naming
-
-The server generates tools with these naming conventions:
-
-- `Discover_Agents`: Lists available agents based on a name pattern
-- `Run_Agent`: General tool to execute any agent by name or ID
-- `Execute_[AgentName]_Agent`: Specific tools for each configured agent
-- `Get_Agent_Run_Status`: Check the status of an agent execution
-- `Cancel_Agent_Run`: Cancel a running agent execution
-
-#### Agent Tool Parameters and Responses
-
-**Discover_Agents**
-- Parameters: `pattern` (optional) - Wildcard pattern to match agent names
-- Returns: Array of agent metadata (ID, name, description, typeID, parentID)
-
-**Run_Agent**
-- Parameters:
-  - `agentNameOrId`: Agent name or ID to execute
-  - `conversationHistory` (optional): Array of chat messages
-  - `templateData` (optional): Data to pass to agent templates
-  - `waitForCompletion` (optional): Whether to wait for completion
-- Returns: `{ success: boolean, runId?: string, status?: string, returnValues?: any, errorMessage?: string }`
-
-**Execute_[AgentName]_Agent**
-- Parameters: Same as Run_Agent minus agentNameOrId
-- Returns: Same as Run_Agent
-
-**Get_Agent_Run_Status**
-- Parameters: `runId` - The ID of the agent run to check
-- Returns: `{ status: string, completedAt?: string, errorMessage?: string }`
-
-**Cancel_Agent_Run**
-- Parameters: `runId` - The ID of the agent run to cancel
-- Returns: `{ success: boolean, errorMessage?: string }`
+## Tool Types
 
 ### Entity Tools
 
-Entity tools allow AI models to interact with MemberJunction entities.
+Dynamically generated from MemberJunction entity metadata. For each configured entity, the server creates:
 
-```javascript
-entityTools: [
-  {
-    // Entity matching (supports wildcards)
-    entityName: 'Users', // Entity name (use '*' for all entities)
-    schemaName: '__mj',  // Schema name (use '*' for all schemas)
-    
-    // Operations to enable
-    get: true,     // Get entity by primary key
-    create: true,  // Create new entity record
-    update: true,  // Update existing entity record
-    delete: true,  // Delete entity record
-    runView: true  // Run entity view with filtering
-  }
-]
-```
+| Tool Pattern | Description |
+|---|---|
+| `Get_<Entity>_Record` | Retrieve a single record by primary key |
+| `Get_<Entity>_Records` | Query records with filtering, sorting, field selection |
+| `Create_<Entity>_Record` | Create a new entity record |
+| `Update_<Entity>_Record` | Update an existing record |
+| `Delete_<Entity>_Record` | Delete a record by primary key |
+| `RunView_<Entity>` | Execute a view with ExtraFilter, OrderBy, Fields, MaxRows |
 
-#### Tool Naming
+### Agent Tools
 
-The server generates tools with naming conventions (using the entity's ClassName property):
-
-- `Get_EntityName_Record`: Retrieve a record by primary key
-- `Create_EntityName_Record`: Create a new record
-- `Update_EntityName_Record`: Update an existing record
-- `Delete_EntityName_Record`: Delete a record
-- `Run_EntityName_View`: Run a view against the entity
-
-#### Tool Parameters and Responses
-
-**Get Tool**
-- Parameters: Primary key field(s) of the entity
-- Returns: JSON object of the record or empty object if not found
-
-**Create Tool**
-- Parameters: All non-readonly fields (primary keys excluded)
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
-
-**Update Tool**
-- Parameters: Primary key field(s) + all non-readonly fields
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
-
-**Delete Tool**
-- Parameters: Primary key field(s)
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
-
-**RunView Tool**
-- Parameters:
-  - `extraFilter` (optional): SQL WHERE clause filter
-  - `orderBy` (optional): SQL ORDER BY clause
-  - `fields` (optional): Array of field names to include
-- Returns: JSON object with view results
-
-### Wildcard Support
-
-You can use wildcards in `entityName` and `schemaName`:
-
-- `*`: Match all entities/schemas
-- `Users*`: Match entities/schemas starting with "Users"
-- `*Users`: Match entities/schemas ending with "Users"
-- `*Users*`: Match entities/schemas containing "Users"
+| Tool | Description |
+|---|---|
+| `Run_Agent` | Execute any configured MemberJunction AI agent with conversation history and template data |
 
 ### Action Tools
 
-Action tools allow AI models to discover and execute MemberJunction Actions.
-
-```javascript
-actionTools: [
-  {
-    // Action matching (supports wildcards)
-    actionName: '*',              // Action name pattern (use '*' for all actions)
-    actionCategory: 'Workflow',   // Optional category filter
-
-    // Operations to enable
-    discover: true,   // Enable action discovery
-    execute: true     // Enable action execution
-  }
-]
-```
-
-#### Action Tool Naming
-
-- `Discover_Actions`: Lists available actions based on name/category pattern
-- `Run_Action`: General tool to execute any action by name or ID
-- `Get_Action_Params`: Get parameter definitions for a specific action
-- `Execute_[ActionName]_Action`: Specific tools for each configured action
-
-#### Action Tool Parameters and Responses
-
-**Discover_Actions**
-- Parameters:
-  - `pattern` (optional): Wildcard pattern to match action names
-  - `category` (optional): Category name to filter actions
-- Returns: Array of action metadata (id, name, description, category, type, status, paramCount)
-
-**Run_Action**
-- Parameters:
-  - `actionName` (optional): Name of the action to execute
-  - `actionId` (optional): ID of the action to execute
-  - `params` (optional): Parameters for the action as key-value pairs
-- Returns: `{ success: boolean, resultCode?: string, message?: string, runId?: string }`
-
-**Get_Action_Params**
-- Parameters:
-  - `actionName` (optional): Name of the action
-  - `actionId` (optional): ID of the action
-- Returns: `{ actionId, actionName, description, params: [{ name, description, type, isRequired, defaultValue }] }`
-
-### Query Tools
-
-Query tools allow AI models to execute SQL queries against the database.
-
-```javascript
-queryTools: {
-  enabled: true,
-  allowedSchemas: ['dbo', 'sales'],  // Optional: restrict to specific schemas
-  blockedSchemas: ['__mj']           // Optional: block specific schemas
-}
-```
-
-#### Query Tool Naming
-
-- `Run_SQL_Query`: Execute a read-only SQL SELECT query
-- `Get_Database_Schema`: Get schema information for available tables
-
-#### Query Tool Parameters and Responses
-
-**Run_SQL_Query**
-- Parameters:
-  - `sql`: The SQL SELECT query to execute (must start with SELECT)
-  - `maxRows` (optional): Maximum number of rows to return (default: 1000)
-- Returns: `{ success: boolean, rowCount: number, results: [], error?: string }`
-
-**Get_Database_Schema**
-- Parameters:
-  - `schemaFilter` (optional): Filter by schema name
-  - `tableFilter` (optional): Filter by table name pattern
-- Returns: Array of table information with columns
+| Tool Pattern | Description |
+|---|---|
+| `Run_<Action>_Action` | Execute a configured MemberJunction action with parameters |
 
 ### Prompt Tools
 
-Prompt tools allow AI models to discover and execute MemberJunction AI Prompts.
+| Tool Pattern | Description |
+|---|---|
+| `Run_<Prompt>_Prompt` | Execute a configured AI prompt with template data |
 
-```javascript
-promptTools: [
-  {
-    promptName: '*',           // Prompt name pattern
-    promptCategory: 'System',  // Optional category filter
-    discover: true,            // Enable prompt discovery
-    execute: true              // Enable prompt execution
-  }
-]
-```
+### Metadata Tool
 
-#### Prompt Tool Naming
+| Tool | Description |
+|---|---|
+| `Get_All_Entity_Metadata` | Retrieve all entity metadata including fields, relationships, and field types |
 
-- `Discover_Prompts`: Lists available AI prompts
-- `Run_Prompt`: Execute any prompt by name or ID
+## Configuration
 
-#### Prompt Tool Parameters and Responses
-
-**Discover_Prompts**
-- Parameters:
-  - `pattern` (optional): Wildcard pattern to match prompt names
-  - `category` (optional): Category name to filter prompts
-- Returns: Array of prompt metadata (id, name, description, category, responseFormat)
-
-**Run_Prompt**
-- Parameters:
-  - `promptName` (optional): Name of the prompt to execute
-  - `promptId` (optional): ID of the prompt to execute
-  - `data` (optional): Data to pass to the prompt template
-  - `modelId` (optional): Specific model ID to use
-- Returns: `{ success: boolean, result: any, rawOutput?: string, tokensUsed?: number, errorMessage?: string }`
-
-### Communication Tools
-
-Communication tools allow AI models to send messages through configured communication channels.
-
-```javascript
-communicationTools: {
-  enabled: true,
-  allowedProviders: ['SendGrid', 'Twilio']  // Optional: restrict to specific providers
-}
-```
-
-#### Communication Tool Naming
-
-- `Send_Email`: Send an email message (requires provider configuration)
-- `Get_Communication_Providers`: List available communication providers
-
-#### Communication Tool Parameters and Responses
-
-**Send_Email**
-- Parameters:
-  - `to`: Recipient email address
-  - `subject`: Email subject
-  - `body`: Email body (can be HTML)
-  - `isHtml` (optional): Whether body is HTML (default: true)
-- Returns: `{ success: boolean, error?: string }`
-
-**Get_Communication_Providers**
-- Parameters: None
-- Returns: Array of provider metadata (id, name, description, status, supportsSending)
-
-## Connecting Models to the Server
-
-The server endpoint is available at:
-
-```
-http://localhost:3100/mcp
-```
-
-You can connect any MCP-compatible client to this endpoint. The MCP protocol allows AI models to discover and use the available tools.
-
-## Built-in Tools
-
-The server includes a built-in tool that's always available:
-
-### Get_All_Entities
-
-- **Description**: Retrieves all Entities including entity fields and relationships from the MemberJunction Metadata
-- **Parameters**: None
-- **Returns**: JSON representation of all entity metadata including fields, relationships, and permissions
-
-Example response structure:
-```json
-[
-  {
-    "ID": "entity-id",
-    "Name": "Users",
-    "SchemaName": "__mj",
-    "ClassName": "UserEntity",
-    "Fields": [...],
-    "PrimaryKeys": [...],
-    "RelatedEntities": [...]
-  }
-]
-```
-
-## API Details
-
-### GET /mcp
-
-The primary endpoint for Server-Sent Events (SSE) based MCP protocol communication. This endpoint handles:
-
-- Tool discovery requests
-- Tool execution requests
-- Server capability negotiations
-- Real-time bidirectional communication with AI models
-
-The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
-
-## Security and Authentication
-
-The MCP Server supports multiple authentication methods: API keys, OAuth 2.1 Bearer tokens, or both (default). This flexibility enables different deployment scenarios - from simple API key authentication for CLI tools to OAuth for browser-based and enterprise integrations.
-
-### Authentication Modes
-
-Configure the authentication mode in `mj.config.cjs`:
+Configuration is loaded from `mj.config.cjs` or environment variables. Key settings:
 
 ```javascript
 module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-
-    // Authentication configuration
-    auth: {
-      // 'apiKey' - API key only
-      // 'oauth' - OAuth Bearer tokens only
-      // 'both' (default) - Accept either (API key takes precedence)
-      // 'none' - No authentication (development only!)
-      mode: 'both',
-
-      // Resource identifier for OAuth audience validation
-      // Required for OAuth modes - must match token's 'aud' claim
-      resourceIdentifier: 'https://mcp.example.com',
-
-      // Auto-generate resourceIdentifier from server URL (default: true)
-      // If true and resourceIdentifier not set, uses http://localhost:{port}
-      autoResourceIdentifier: true,
-    },
-    // ... other settings
-  },
-
-  // OAuth providers (shared with MJExplorer)
-  // Required when auth.mode is 'oauth' or 'both'
-  authProviders: [
-    {
-      name: 'azure-ad',
-      type: 'msal',
-      clientId: 'your-client-id',
-      tenantId: 'your-tenant-id',
-      issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
-      audience: 'api://your-app-id',
-      jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
+    mcpServerSettings: {
+        port: 3100,
+        entities: [
+            { entityName: 'Users', operations: ['get', 'list', 'create', 'update', 'delete', 'runview'] },
+            { entityName: 'Companies', operations: ['get', 'list', 'runview'] }
+        ],
+        agents: [
+            { agentId: 'agent-uuid', name: 'Sales Assistant' }
+        ],
+        actions: [
+            { actionId: 'action-uuid', name: 'Send Email' }
+        ],
+        prompts: [
+            { promptId: 'prompt-uuid', name: 'Summarize Content' }
+        ]
     }
-  ]
-}
+};
 ```
 
-### OAuth Configuration Examples
-
-#### Mode: both (Default)
-
-```javascript
-// No auth config needed - defaults to 'both' mode
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    // auth not specified = mode: 'both' (accepts API keys or OAuth tokens)
-  }
-}
-```
-
-#### Mode: apiKey (API Key Only)
-
-```javascript
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    auth: {
-      mode: 'apiKey'  // Only accept API keys, reject OAuth tokens
-    }
-  }
-}
-```
-
-#### Mode: oauth (OAuth Only)
-
-```javascript
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    auth: {
-      mode: 'oauth',
-      resourceIdentifier: 'https://mcp.example.com'
-    }
-  },
-  authProviders: [
-    {
-      name: 'azure-ad',
-      type: 'msal',
-      clientId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-      tenantId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-      issuer: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/v2.0',
-      audience: 'api://mcp-server',
-      jwksUri: 'https://login.microsoftonline.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/discovery/v2.0/keys'
-    }
-  ]
-}
-```
-
-#### Mode: both (Explicit Configuration)
-
-```javascript
-// Explicitly configure 'both' mode with custom resource identifier
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    auth: {
-      mode: 'both',  // Accept API keys OR OAuth tokens (this is also the default)
-      resourceIdentifier: 'https://mcp.example.com'  // Custom audience for OAuth validation
-    }
-  },
-  authProviders: [/* ... */]
-}
-```
-
-#### Mode: none (Development Only)
-
-```javascript
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    auth: {
-      mode: 'none'  // WARNING: No authentication - development only!
-    }
-  }
-}
-```
-
-### OAuth Protocol Flow
-
-When OAuth is enabled, the MCP Server implements [RFC 9728 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728):
-
-1. **Client connects without credentials** → Server returns `401 Unauthorized` with `WWW-Authenticate` header
-2. **Client fetches metadata** → `GET /.well-known/oauth-protected-resource` returns authorization server URLs
-3. **Client authenticates with IdP** → Completes OAuth flow with configured provider (Azure AD, Auth0, etc.)
-4. **Client retries with Bearer token** → `Authorization: Bearer <access_token>`
-5. **Server validates token** → Checks signature, expiration, audience, and maps to MemberJunction user
-6. **Tool calls execute** → With authenticated user's permissions
-
-### OAuth Endpoints
-
-When OAuth is enabled:
-
-- `GET /.well-known/oauth-protected-resource` - Protected Resource Metadata (RFC 9728)
-
-Example response:
-```json
-{
-  "resource": "https://mcp.example.com",
-  "authorization_servers": ["https://login.microsoftonline.com/tenant-id/v2.0"],
-  "scopes_supported": ["openid", "profile", "email"],
-  "bearer_methods_supported": ["header"],
-  "resource_name": "MemberJunction MCP Server"
-}
-```
-
-### OAuth Error Responses
-
-| Status | When | Response |
-|--------|------|----------|
-| 401 Unauthorized | Missing/invalid token | `WWW-Authenticate: Bearer resource_metadata="..."` |
-| 403 Forbidden | Valid token, user not in MJ | `WWW-Authenticate: Bearer error="insufficient_scope"` |
-| 503 Service Unavailable | OAuth provider unreachable | `Retry-After: 30` |
-
-### HTTPS Requirements
-
-For production OAuth deployments:
-
-- **Required**: HTTPS for the MCP Server endpoint
-- **Required**: Valid TLS certificate (not self-signed)
-- **Required**: `resourceIdentifier` must match the server's public URL
-
-Development mode (`http://localhost`) works for testing but should never be used in production when handling OAuth tokens.
-
-### Supported OAuth Providers
-
-The MCP Server uses MJServer's auth provider infrastructure, supporting:
-
-- **Azure AD (MSAL)** - Microsoft identity platform
-- **Auth0** - Universal authentication
-- **Okta** - Enterprise identity
-- **Cognito** - AWS authentication
-- **Google** - Google OAuth 2.0
-
-Configure providers in the `authProviders` array (shared with MJExplorer).
-
----
-
-### OAuth Proxy (Dynamic Client Registration)
-
-The OAuth Proxy enables MCP clients like Claude Code to authenticate via your identity provider (e.g., Azure AD) **without requiring manual app registration for each client**. It implements [RFC 7591 Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing the MCP Server to act as an OAuth Authorization Server that proxies authentication to your upstream provider.
-
-#### Why Use the OAuth Proxy?
-
-Without the OAuth Proxy, each MCP client would need to:
-1. Be manually registered in your identity provider (Azure AD, Auth0, etc.)
-2. Have its own client ID configured
-3. Handle provider-specific authentication flows
-
-With the OAuth Proxy:
-1. MCP clients dynamically register with the MCP Server
-2. The MCP Server handles all identity provider interaction
-3. Users authenticate via a simple web-based login flow
-4. Users select scopes via a consent screen (optional)
-5. No manual client registration required in your IdP
-
-#### Full OAuth Proxy Configuration
-
-```javascript
-module.exports = {
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    auth: {
-      mode: 'both',  // 'apiKey' | 'oauth' | 'both' | 'none'
-      proxy: {
-        enabled: true,
-
-        // Upstream provider (optional - defaults to first configured provider)
-        upstreamProvider: 'azure',  // Match 'name' field in authProviders
-
-        // Consent Screen - prompts users to select scopes during auth
-        // Scopes are loaded from __mj.APIScope table in the database
-        // When false, all available scopes are granted automatically
-        enableConsentScreen: true,
-
-        // JWT Signing - proxy issues its own JWTs (not upstream provider tokens)
-        // Configure a secret for consistent validation across server restarts
-        jwtSigningSecret: process.env.MCP_JWT_SECRET,  // Required for production
-        jwtExpiresIn: '1h',  // Token expiration (default: 1h)
-
-        // TTL settings
-        clientTtlMs: 24 * 60 * 60 * 1000,  // 24 hours (default)
-        stateTtlMs: 10 * 60 * 1000,  // 10 minutes (default)
-      },
-    },
-  },
-}
-```
-
-#### Consent Screen
-
-When `enableConsentScreen: true`, users are presented with a scope selection screen after authenticating with the upstream provider. This provides:
-
-- **Transparency**: Users see exactly what permissions they're granting
-- **Security**: Principle of least privilege - users select only needed scopes
-- **Flexibility**: Different sessions can have different scope levels
-
-The consent screen shows:
-- A "Grant All" checkbox for convenience
-- Collapsible category groups (from `APIScope.Category`)
-- Individual scope checkboxes with descriptions
-
-**Default behavior**: No scopes are pre-selected. Users must explicitly select scopes or click "Grant All".
-
-#### JWT Signing Configuration
-
-The OAuth Proxy issues its own JWTs rather than passing through upstream provider tokens. This provides:
-
-- **Consistent format**: Same JWT structure regardless of upstream provider
-- **MemberJunction context**: JWTs include `mjUserId`, `email`, and granted `scopes`
-- **Scope enforcement**: Tools receive the JWT and can evaluate scopes
-
-**Important**: Configure `jwtSigningSecret` in production for token persistence across server restarts.
-
-```javascript
-// Environment variable (recommended)
-jwtSigningSecret: process.env.MCP_JWT_SECRET,
-
-// Or generate a secure secret:
-// node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-#### Provider-Specific Redirect URI Setup
-
-When using the OAuth Proxy, you must add a redirect URI to your identity provider. The redirect URI is:
-
-- **Development**: `http://localhost:3100/oauth/callback`
-- **Production**: `https://your-mcp-server.com/oauth/callback`
-
-##### Azure AD / Entra ID
-
-1. Go to **Azure Portal** → **App Registrations** → Your App → **Authentication**
-2. Under **Single-page application** platform (same as MJExplorer), add:
-   - `http://localhost:3100/oauth/callback` (development)
-   - `https://your-mcp-server.com/oauth/callback` (production)
-3. Ensure **Access tokens** and **ID tokens** are checked
-4. No client secret needed - the proxy uses PKCE
-
-##### Auth0
-
-1. Go to **Auth0 Dashboard** → **Applications** → Your App → **Settings**
-2. Under **Allowed Callback URLs**, add:
-   - `http://localhost:3100/oauth/callback` (development)
-   - `https://your-mcp-server.com/oauth/callback` (production)
-3. Under **Allowed Web Origins**, add your MCP server URL
-4. Save changes
-
-##### Okta
-
-1. Go to **Okta Admin Console** → **Applications** → Your App → **General**
-2. Under **Login redirect URIs**, add:
-   - `http://localhost:3100/oauth/callback` (development)
-   - `https://your-mcp-server.com/oauth/callback` (production)
-3. Ensure **Authorization Code** grant type is enabled
-4. Save changes
-
-##### AWS Cognito
-
-1. Go to **AWS Console** → **Cognito** → **User Pools** → Your Pool → **App Integration**
-2. Under **App client settings**, find your app client
-3. Add to **Callback URL(s)**:
-   - `http://localhost:3100/oauth/callback` (development)
-   - `https://your-mcp-server.com/oauth/callback` (production)
-4. Enable **Authorization code grant** under OAuth 2.0
-5. Save changes
-
-##### Google Identity Platform
-
-1. Go to **Google Cloud Console** → **APIs & Services** → **Credentials**
-2. Edit your OAuth 2.0 Client ID
-3. Under **Authorized redirect URIs**, add:
-   - `http://localhost:3100/oauth/callback` (development)
-   - `https://your-mcp-server.com/oauth/callback` (production)
-4. Save changes
-
-#### OAuth Proxy Endpoints
-
-When the OAuth Proxy is enabled, these additional endpoints are available:
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /.well-known/oauth-authorization-server` | Authorization server metadata (RFC 8414) |
-| `POST /oauth/register` | Dynamic client registration (RFC 7591) |
-| `GET /oauth/authorize` | Authorization endpoint (redirects to upstream IdP) |
-| `POST /oauth/token` | Token endpoint (exchanges codes for tokens) |
-| `GET /oauth/callback` | Callback from upstream IdP after user authenticates |
-| `GET /oauth/consent` | Consent screen for scope selection (if enabled) |
-| `POST /oauth/consent` | Submit scope selection |
-| `GET /oauth/scopes` | List available scopes |
-
-#### OAuth Proxy Authentication Flow
-
-```
-1. MCP Client connects to MCP Server
-2. Server returns 401 with WWW-Authenticate header
-3. Client fetches /.well-known/oauth-authorization-server
-4. Client dynamically registers via POST /oauth/register
-5. Client redirects user to GET /oauth/authorize
-6. User authenticates with upstream provider (Azure AD, etc.)
-7. Provider redirects to GET /oauth/callback
-8. [If consent enabled] User selects scopes on consent screen
-9. Server creates authorization code
-10. Client exchanges code for tokens via POST /oauth/token
-11. Server issues proxy JWT with selected scopes
-12. Client uses JWT for subsequent MCP tool calls
-```
-
-#### Troubleshooting OAuth Proxy
-
-**Error: "AADSTS50011: The reply URL specified in the request does not match..."**
-
-This error means the redirect URI isn't configured correctly in Azure AD.
-
-**Fix:** Add `http://localhost:3100/oauth/callback` (or your production URL) as a redirect URI in your existing **Single-page application** platform configuration. This is the same platform MJExplorer uses - just add the additional redirect URI.
-
-**Error: "AADSTS9002325: Proof Key for Code Exchange is required for cross-origin authorization code redemption"**
-
-This error means PKCE is required but not being used properly.
-
-**Fix:** This should not occur with the OAuth Proxy as it automatically generates PKCE code_verifier and code_challenge for upstream flows. If you see this error, ensure you're using the latest version of the MCP Server.
-
-**Error: "OAuth Proxy: No upstream provider configured"**
-
-This error means no auth providers are available for the OAuth Proxy to use.
-
-**Fix:** Ensure you have at least one auth provider configured (either via `authProviders` in config or via environment variables like `AUTH_TYPE`, `WEB_CLIENT_ID`, `TENANT_ID`).
-
-**Error: "OAuth Proxy: Failed to exchange authorization code"**
-
-This error typically means the upstream provider rejected the token exchange.
-
-**Fix:**
-1. Verify the redirect URI matches exactly (including trailing slashes)
-2. Check that your OAuth app registration allows the authorization_code grant type
-3. Ensure the app is configured for public client flows (PKCE) in Azure AD
-
-**Error: "Session Expired" on consent screen**
-
-The authorization state expired before the user completed the flow.
-
-**Fix:** Increase `stateTtlMs` in the proxy configuration, or have users complete the flow more quickly.
-
----
+## Authentication
 
 ### API Key Authentication
 
-The MCP Server also supports API key authentication, which is the default mode.
+The server authenticates requests using MemberJunction API keys. The API key is passed via the `x-api-key` header and maps to a MemberJunction user context.
 
-- **Authentication Method**: API Key via HTTP headers or Bearer token
-- **Supported Headers**:
-  - `x-api-key` - Primary header
-  - `x-mj-api-key` - Alternative header
-  - `Authorization: Bearer <key>` - OAuth-style Bearer token
-- **Query Parameter Fallback**: `?apiKey=<key>` or `?api_key=<key>`
-- **Key Format**: `mj_sk_` prefix followed by 64 hex characters (e.g., `mj_sk_abc123...`)
-- **Storage**: Keys are stored as SHA-256 hashes in the database for security
-- **User Context**: Each API key is associated with a MemberJunction user account - all tool operations execute with that user's permissions
+### OAuth 2.1 (Optional)
 
-### Creating API Keys
+When configured, the server acts as both an OAuth resource server and an OAuth proxy:
 
-API keys are managed through the `EncryptionEngine` class in the `@memberjunction/encryption` package. This provides a clean, type-safe API using MemberJunction's BaseEntity pattern.
+- **RFC 9728**: Protected Resource Metadata at `/.well-known/oauth-protected-resource`
+- **RFC 8414**: Authorization Server Metadata discovery
+- **RFC 7591**: Dynamic Client Registration
+- **PKCE**: Required for all authorization code flows
+- **Scope Evaluation**: Tool-level access control via OAuth scopes
 
-```typescript
-import { EncryptionEngine } from '@memberjunction/encryption';
+The OAuth proxy handles the authorization flow for MCP clients that don't natively support OAuth, proxying between the client and your identity provider.
 
-// Create an API key for a user
-const result = await EncryptionEngine.Instance.CreateAPIKey({
-  userId: 'user-guid-here',
-  label: 'MCP Server Integration',
-  description: 'Used for Claude Desktop MCP connections',
-  expiresAt: new Date('2025-12-31') // Optional - omit for non-expiring keys
-}, contextUser);
+## Tool Filtering
 
-if (result.success) {
-  // IMPORTANT: Save this key immediately - it cannot be recovered!
-  console.log('Your API Key:', result.rawKey);
-  console.log('API Key ID:', result.apiKeyId);
-} else {
-  console.error('Failed to create API key:', result.error);
-}
-```
-
-The `CreateAPIKey` method:
-- Generates a secure key with format `mj_sk_[64 hex characters]`
-- Stores only the SHA-256 hash in the database (never the raw key)
-- Creates the database record using proper BaseEntity patterns
-- Returns the raw key exactly once - it cannot be retrieved later
-
-#### Other API Key Methods
-
-The `EncryptionEngine` also provides these API key management methods:
-
-```typescript
-// Generate a key without storing it (for manual storage scenarios)
-const { raw, hash } = EncryptionEngine.Instance.GenerateAPIKey();
-
-// Hash a key for validation
-const keyHash = EncryptionEngine.Instance.HashAPIKey(rawKey);
-
-// Validate key format
-const isValid = EncryptionEngine.Instance.IsValidAPIKeyFormat(rawKey);
-
-// Validate a key and get the associated user
-const validation = await EncryptionEngine.Instance.ValidateAPIKey(rawKey, contextUser);
-if (validation.isValid) {
-  console.log('User:', validation.user);
-  console.log('API Key ID:', validation.apiKeyId);
-}
-
-// Revoke an API key
-const revoked = await EncryptionEngine.Instance.RevokeAPIKey(apiKeyId, contextUser);
-```
-
-### API Key Schema
-
-The API Key system uses four tables:
-
-**APIKey Table:**
-- `ID`: Unique identifier
-- `Hash`: SHA-256 hash of the raw API key (64 hex characters)
-- `UserID`: Foreign key to User - the account context for this key
-- `Label`: Friendly name (e.g., "Production MCP Client", "CI/CD Pipeline")
-- `Description`: Optional detailed description
-- `Status`: `Active` or `Revoked`
-- `ExpiresAt`: Optional expiration timestamp (NULL = never expires)
-- `LastUsedAt`: Automatically updated on each use
-- `CreatedByUserID`: User who created the key
-
-**APIScope Table:**
-- Defines reusable permission definitions (e.g., `entities:read`, `agents:execute`)
-- Organized by category (Entities, Agents, Admin)
-
-**APIKeyScope Table:**
-- Junction table linking API keys to scopes
-- Enables fine-grained permission control (coming soon)
-
-**APIKeyUsageLog Table:**
-- Tracks API key usage for analytics and debugging
-- Records endpoint, operation, response time, IP address, etc.
-
-### Using API Keys
-
-#### With HTTP Headers
-
-```bash
-# Using x-api-key header (recommended)
-curl -H "x-api-key: mj_sk_YOUR_API_KEY_HERE" \
-  http://localhost:3100/mcp
-
-# Using x-mj-api-key header (alternative)
-curl -H "x-mj-api-key: mj_sk_YOUR_API_KEY_HERE" \
-  http://localhost:3100/mcp
-
-# Using Authorization Bearer token (OAuth-style)
-curl -H "Authorization: Bearer mj_sk_YOUR_API_KEY_HERE" \
-  http://localhost:3100/mcp
-
-# Using query parameter (useful for SSE connections)
-curl "http://localhost:3100/mcp?apiKey=mj_sk_YOUR_API_KEY_HERE"
-```
-
-#### With MCP Clients
-
-Configure your MCP client to include the API key in headers:
-
-```typescript
-// Example MCP client configuration
-const client = new MCPClient({
-  url: 'http://localhost:3100/mcp',
-  headers: {
-    'x-api-key': 'mj_sk_YOUR_API_KEY_HERE'
-  }
-});
-```
-
-#### With Claude Desktop
-
-Add to your Claude Desktop MCP server configuration:
+Filter which tools are exposed using glob-style patterns:
 
 ```json
 {
-  "mcpServers": {
-    "memberjunction": {
-      "command": "npx",
-      "args": ["-y", "@memberjunction/ai-mcp-server"],
-      "env": {
-        "X_API_KEY": "mj_sk_YOUR_API_KEY_HERE"
-      }
-    }
-  }
+    "include": ["Get_*", "Run_Agent", "RunView_Users"],
+    "exclude": ["*_AuditLogs_*", "Delete_*"]
 }
 ```
 
-### System API Key (Development Mode)
+Patterns support:
+- `*` -- Match any characters
+- `prefix*` -- Match tools starting with prefix
+- `*suffix` -- Match tools ending with suffix
+- `*contains*` -- Match tools containing text
 
-For backward compatibility and development, you can configure a system API key in your `mj.config.cjs`:
+## CLI Options
 
-```javascript
-module.exports = {
-  mcpServerSettings: {
-  systemApiKey: true,  // Allows requests without API key header
-    // ... other settings
-  }
-}
-```
-
-**⚠️ Warning**: System API key mode is for development only. Always use proper API key authentication in production.
- 
-### Security Best Practices
-
-1. **Never Commit Keys**: Add API keys to `.gitignore` and use environment variables
-2. **Rotate Keys**: Regularly rotate keys, especially for production systems
-3. **Use Expiration**: Set expiration dates for temporary or test keys
-4. **Monitor Usage**: Review APIKeyUsageLog for suspicious activity
-5. **Label Keys**: Use descriptive labels to track what each key is used for
-6. **Revoke Unused Keys**: Clean up keys that are no longer needed
-7. **Store Securely**: Save raw keys in a secure password manager or secrets vault
-
-### Authentication Flow
-
-1. Client sends request with API key via header, Bearer token, or query parameter
-2. Server extracts API key from (in order of priority):
-   - `x-api-key` header
-   - `x-mj-api-key` header
-   - `Authorization: Bearer <key>` header
-   - `apiKey` or `api_key` query parameter
-3. Server validates key format (must match `mj_sk_[64 hex chars]`)
-4. Server hashes the key (SHA-256) and looks up in CredentialEngine cache
-5. Server checks:
-   - Key exists and hash matches
-   - Status is `Active`
-   - Not expired (ExpiresAt is NULL or in future)
-   - Associated user account is active
-6. Server loads the full user from the database using the key's UserID
-7. Server updates `LastUsedAt` timestamp and logs usage
-8. Session is created with the authenticated user context
-9. All tool executions use this user's permissions
-
-## Scope-Based Authorization
-
-MCP Server implements a comprehensive scope-based authorization system that controls what operations API keys can perform. This provides fine-grained access control beyond simple authentication.
-
-### How Scope Authorization Works
-
-1. **Application Ceiling**: Each API application (MCP Server, A2A Server, GraphQL API) defines a maximum set of allowed scopes
-2. **API Key Scopes**: Each API key has assigned scopes from the API Scopes table
-3. **Two-Level Evaluation**: When a tool is called, the system checks:
-   - Does the application allow this scope? (application ceiling)
-   - Does the API key have this scope assigned? (key-level permission)
-
-### Scope Format
-
-Scopes follow a hierarchical naming convention:
-- `entity:read` - Read entity records
-- `entity:create` - Create new records
-- `entity:update` - Update existing records
-- `entity:delete` - Delete records
-- `view:run` - Execute RunView queries
-- `agent:execute` - Execute AI agents
-- `agent:monitor` - Check agent run status
-- `agent:cancel` - Cancel running agents
-- `action:execute` - Execute MJ Actions
-- `prompt:execute` - Execute AI prompts
-- `query:run` - Execute SQL queries
-- `metadata:entities:read` - Read entity metadata
-- `metadata:agents:read` - Read agent metadata
-- `metadata:actions:read` - Read action metadata
-- `metadata:prompts:read` - Read prompt metadata
-- `communication:send` - Send emails/messages
-- `full_access` - Bypass all scope checks ("god mode")
-
-### Default Behavior
-
-**Important**: API keys with **no scopes assigned** will have **no permissions** and all tool calls will be denied. This is a security-by-default approach.
-
-To grant full access to an API key, assign the `full_access` scope.
-
-### Tool-to-Scope Mapping
-
-Each MCP tool is mapped to a required scope:
-
-| Tool | Required Scope |
-|------|---------------|
-| Get/Create/Update/Delete Entity | `entity:read/create/update/delete` |
-| RunView | `view:run` |
-| Discover_Agents | `metadata:agents:read` |
-| Run_Agent, Execute_*_Agent | `agent:execute` |
-| Get_Agent_Run_Status | `agent:monitor` |
-| Cancel_Agent_Run | `agent:cancel` |
-| Discover_Actions | `metadata:actions:read` |
-| Run_Action, Execute_*_Action | `action:execute` |
-| Discover_Prompts | `metadata:prompts:read` |
-| Run_Prompt | `prompt:execute` |
-| Run_SQL_Query | `query:run` |
-| Get_All_Entities, Get_Database_Schema | `metadata:entities:read` |
-| Send_Email | `communication:send` |
-
-### Wildcard Resource Matching
-
-Scopes support resource-level wildcards for granular control:
-- `*` - Match all resources
-- `Users` - Match exact resource name
-- `User*` - Match resources starting with "User"
-- `*Entity` - Match resources ending with "Entity"
-- `*User*` - Match resources containing "User"
-- `Users,Employees,Departments` - Match multiple specific resources (comma-separated)
-
-### Authorization Error Messages
-
-When authorization fails, the server returns detailed error messages:
-
-```json
-{
-  "error": "Authorization denied for scope 'entity:create' on resource 'Users'. API key is missing required scope 'entity:create' on resource 'Users'. Allowed scopes: entity:read. Allowed resources: *"
-}
-```
-
-This helps developers understand exactly why access was denied and what scopes are needed.
-
-### Troubleshooting Authentication
-
-**"API key required"**
-- Ensure you're including the `x-api-key`, `x-mj-api-key`, or `Authorization: Bearer` header
-- Check that the header value is not empty
-- Try using the query parameter: `?apiKey=mj_sk_...`
-
-**"Invalid API key format"**
-- Key must start with `mj_sk_` prefix
-- Key must be exactly 70 characters total (`mj_sk_` + 64 hex chars)
-
-**"API key not found"**
-- The key hash doesn't match any record in the database
-- Verify you're using the raw key, not the hash
-- Check that the key was inserted into `__mj.APIKey`
-
-**"API key has been revoked"**
-- The key's Status field is set to 'Revoked'
-- Create a new key or update the Status back to 'Active'
-
-**"API key has expired"**
-- The ExpiresAt timestamp is in the past
-- Update the expiration date or create a new key
-
-**"User account is inactive"**
-- The associated user's IsActive field is false
-- Activate the user account or create a key for an active user
-
-## Complete Example
-
-Here's a complete example of setting up and using the MCP server:
-
-### 1. Create Configuration File (mj.config.cjs)
-
-```javascript
-module.exports = {
-  // Database connection
-  dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: parseInt(process.env.DB_PORT || '1433'),
-  dbUsername: process.env.DB_USERNAME,
-  dbPassword: process.env.DB_PASSWORD,
-  dbDatabase: process.env.DB_DATABASE,
-  dbTrustServerCertificate: true,
-  mjCoreSchema: '__mj',
-  
-  databaseSettings: {
-    connectionTimeout: 30000,
-    requestTimeout: 30000
-  },
-  
-  // MCP Server Configuration
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    
-    entityTools: [
-      // Expose all entities with all operations
-      {
-        entityName: '*',
-        schemaName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true
-      },
-      
-      // Override: Users entity with limited operations
-      {
-        entityName: 'Users',
-        schemaName: '__mj',
-        get: true,
-        runView: true,
-        create: false,
-        update: false,
-        delete: false
-      }
-    ]
-  }
-}
-```
-
-### 2. Start the Server
-
-```bash
-# Using the CLI
-MemberJunction
-
-# Or programmatically
-node -e "import('@memberjunction/ai-mcp-server').then(m => m.initializeServer())"
-```
-
-### 3. Connect Your AI Model
-
-Configure your AI model client to connect to:
-```
-http://localhost:3100/mcp
-```
-
-### 4. Available Tools Example
-
-With the above configuration, your AI model will have access to tools like:
-
-**Entity Tools:**
-- `Get_All_Entities` - Get all entity metadata
-- `Get_UserEntity_Record` - Get a user by ID
-- `Run_UserEntity_View` - Query users with filters
-- `Get_CompanyEntity_Record` - Get a company by ID
-- `Create_CompanyEntity_Record` - Create a new company
-- `Update_CompanyEntity_Record` - Update a company
-- `Delete_CompanyEntity_Record` - Delete a company
-- `Run_CompanyEntity_View` - Query companies
-- And many more for all entities in your database
-
-**Agent Tools:**
-- `Discover_Agents` - Find available agents
-- `Run_Agent` - Execute any agent by name or ID
-- `Execute_DataAnalysisAgent_Agent` - Execute the Data Analysis agent
-- `Execute_ReportGeneratorAgent_Agent` - Execute the Report Generator agent
-- `Get_Agent_Run_Status` - Check agent execution status
-- `Cancel_Agent_Run` - Cancel a running agent
-
-## Field Type Support
-
-The server automatically handles different field types with appropriate Zod validation:
-
-- **String Fields**: Basic strings or enums (if entity field values are defined)
-- **Number Fields**: Numeric validation
-- **Boolean Fields**: Boolean validation
-- **Date Fields**: Date validation
-- **Value Lists**: Automatically creates enums for fields with predefined values
-- **Optional Fields**: Non-primary key fields can be optional for updates
+| Option | Alias | Description |
+|---|---|---|
+| `--include` | `-i` | Comma-separated include patterns |
+| `--exclude` | `-e` | Comma-separated exclude patterns |
+| `--tools-file` | `-f` | Path to JSON filter config file |
+| `--list-tools` | `-l` | List tools and exit |
+| `--help` | `-h` | Show help |
+| `--version` | `-v` | Show version |
 
 ## Dependencies
 
-- `@memberjunction/core`: Core MemberJunction library
-- `@memberjunction/core-entities`: MemberJunction entity management
-- `@memberjunction/global`: Global utilities and types
-- `@memberjunction/sqlserver-dataprovider`: SQL Server data provider
-- `@modelcontextprotocol/sdk`: MCP protocol SDK
-- `fastmcp`: Fast implementation of MCP
-- `cosmiconfig`: Configuration management
-- `dotenv`: Environment variable support
-- `typeorm`: ORM for database access
-- `zod`: Schema validation
-
-## Troubleshooting
-
-### Server Won't Start
-
-1. **Check Configuration**: Ensure `enableMCPServer` is set to `true` in your config
-2. **Database Connection**: Verify database credentials and connectivity
-3. **Port Conflicts**: Check if port 3100 (or your configured port) is available
-4. **Missing Dependencies**: Run `npm install` to ensure all dependencies are installed
-
-### Tools Not Appearing
-
-1. **Entity Matching**: Check that your entityName/schemaName patterns match existing entities
-2. **Permissions**: Ensure the database user has appropriate permissions
-3. **Configuration**: Verify the entityTools array is properly configured
-
-### Common Issues
-
-- **"Config file not found"**: Create a `mj.config.cjs` file in your project root
-- **Database timeout**: Increase `connectionTimeout` and `requestTimeout` in config
-- **Authentication errors**: Check database credentials and SQL Server authentication mode
-
-## Development Notes
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/MemberJunction/MJ.git
-cd MJ/packages/AI/MCPServer
-
-# Install dependencies
-npm install
-
-# Build the package
-npm run build
-
-# Start the server
-npm start
-```
-
-### Architecture
-
-The MCP Server is built on:
-- **FastMCP**: Provides the MCP protocol implementation and SSE transport
-- **MemberJunction Core**: Handles entity metadata and database operations
-- **TypeORM**: Manages database connections
-- **Zod**: Validates tool parameters and configuration
-
-**Note**: The server automatically initializes when the module is imported, making it suitable for use as both a library and a CLI tool. The `initializeServer()` function is called at module load time in `Server.ts`.
-
-### Extending the Server
-
-To add custom tools or modify behavior:
-
-1. Fork the repository
-2. Modify `src/Server.ts` to add custom tools
-3. Use the `server.addTool()` method to register new tools
-4. Build and test your changes
-
-## License
-
-ISC
+- `@modelcontextprotocol/sdk` -- Official MCP SDK (server, transports)
+- `@memberjunction/ai-agents` -- AgentRunner for agent execution
+- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
+- `@memberjunction/ai-core-plus` -- Extended entity classes
+- `@memberjunction/aiengine` -- AIEngine for metadata
+- `@memberjunction/actions` / `@memberjunction/actions-base` -- Action execution
+- `@memberjunction/server` -- MJ server authentication
+- `@memberjunction/server-bootstrap-lite` -- Class registration manifest
+- `@memberjunction/sqlserver-dataprovider` -- SQL Server data access
+- `@memberjunction/api-keys` -- API key validation
+- `@memberjunction/credentials` -- Credential management
+- `@memberjunction/config` -- Configuration loading
+- `express` -- HTTP server framework
+- `jsonwebtoken` / `jwks-rsa` -- JWT validation for OAuth
+- `yargs` -- CLI argument parsing
+- `zod` -- Schema validation

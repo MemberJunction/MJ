@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import * as cronParser from 'cron-parser';
+import cronParser from 'cron-parser';
 import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 
 /**

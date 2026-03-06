@@ -4,12 +4,108 @@ Apollo.io data enrichment action classes for MemberJunction that enable automate
 
 ## Overview
 
-This package provides two primary action classes that integrate with Apollo.io's data enrichment services:
+This package provides two server-side action classes that integrate with Apollo.io's data enrichment services to automatically populate account and contact records with company information, social profiles, technology stacks, employment history, and education data. Both actions extend `BaseAction` from `@memberjunction/actions` and are registered via `@RegisterClass` for automatic discovery by the MemberJunction Actions engine.
 
-- **ApolloAccountsEnrichmentAction** - Enriches account/organization records with company information, technologies used, and associated contacts
-- **ApolloContactsEnrichmentAction** - Enriches contact records with verified email addresses, employment history, and education details
+Key capabilities:
 
-These actions are designed to work within the MemberJunction framework and can be configured through action parameters to map Apollo.io data to your custom entity fields.
+- **Account enrichment** -- company address, phone, description, social URLs, technology stacks, and associated contacts discovered via organization domain lookup
+- **Contact enrichment** -- bulk email verification, social profile URLs, employment history, and education history via people matching
+- **Configurable field mappings** -- JSON-based parameter configuration maps Apollo.io fields to your custom entity fields
+- **Rate limit handling** -- automatic retry with intelligent backoff for both per-minute and hourly Apollo.io rate limits
+- **Batch processing** -- concurrent group processing with configurable batch sizes and pagination for large datasets
+
+For general Actions framework architecture and design philosophy, see the [parent Actions README](../README.md) and [Actions CLAUDE.md](../CLAUDE.md).
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Engine["MemberJunction Actions Engine"]
+        AE["ActionEngineServer"]
+    end
+
+    subgraph Apollo["@memberjunction/actions-apollo"]
+        AccAction["ApolloEnrichmentAccountsAction"]
+        ConAction["ApolloEnrichmentContactsAction"]
+        Config["Configuration\n(API key, batch sizes)"]
+        Types["Apollo Type Definitions"]
+    end
+
+    subgraph ApolloAPI["Apollo.io REST API"]
+        OrgEnrich["/organizations/enrich"]
+        BulkMatch["/people/bulk_match"]
+        PeopleSearch["/mixed_people/search"]
+    end
+
+    subgraph MJCore["MemberJunction Core"]
+        Meta["Metadata"]
+        RV["RunView"]
+        BE["BaseEntity"]
+    end
+
+    AE -->|executes| AccAction
+    AE -->|executes| ConAction
+    AccAction --> Config
+    ConAction --> Config
+    AccAction --> Types
+    ConAction --> Types
+    AccAction -->|HTTP via axios| OrgEnrich
+    AccAction -->|HTTP via axios| PeopleSearch
+    ConAction -->|HTTP via axios| BulkMatch
+    ConAction -->|HTTP via axios| PeopleSearch
+    AccAction -->|read/write entities| MJCore
+    ConAction -->|read/write entities| MJCore
+
+    style Engine fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Apollo fill:#7c5295,stroke:#563a6b,color:#fff
+    style ApolloAPI fill:#b8762f,stroke:#8a5722,color:#fff
+    style MJCore fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
+### Account Enrichment Data Flow
+
+```mermaid
+flowchart LR
+    Start["Load accounts\nmatching filter"] --> OrgAPI["Call /organizations/enrich\nper domain"]
+    OrgAPI --> UpdateAcct["Update account\nfields"]
+    OrgAPI --> TechRec["Create/update\ntechnology records"]
+    OrgAPI --> PeopleAPI["Call /mixed_people/search\nfor domain contacts"]
+    PeopleAPI --> CreateContact["Create/update\ncontact records"]
+    CreateContact --> History["Create education\nhistory records"]
+    UpdateAcct --> Next["Next account"]
+    TechRec --> Next
+    History --> Next
+
+    style Start fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style OrgAPI fill:#b8762f,stroke:#8a5722,color:#fff
+    style UpdateAcct fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style TechRec fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style PeopleAPI fill:#b8762f,stroke:#8a5722,color:#fff
+    style CreateContact fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style History fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Next fill:#64748b,stroke:#475569,color:#fff
+```
+
+### Contact Enrichment Data Flow
+
+```mermaid
+flowchart LR
+    Start["Page contacts\nmatching filter"] --> Batch["Batch into groups\nof 10"]
+    Batch --> BulkAPI["Call /people/bulk_match\nper batch"]
+    BulkAPI --> Update["Update contact\nfields from matches"]
+    Update --> EmpHist["Upsert employment\nhistory"]
+    Update --> EduHist["Upsert education\nhistory"]
+    EmpHist --> NextBatch["Next batch"]
+    EduHist --> NextBatch
+
+    style Start fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Batch fill:#64748b,stroke:#475569,color:#fff
+    style BulkAPI fill:#b8762f,stroke:#8a5722,color:#fff
+    style Update fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style EmpHist fill:#7c5295,stroke:#563a6b,color:#fff
+    style EduHist fill:#7c5295,stroke:#563a6b,color:#fff
+    style NextBatch fill:#64748b,stroke:#475569,color:#fff
+```
 
 ## Installation
 
@@ -20,9 +116,9 @@ npm install @memberjunction/actions-apollo
 ## Prerequisites
 
 1. An active Apollo.io account with API access
-2. Apollo.io API key (set as environment variable `APOLLO_API_KEY`)
-3. MemberJunction framework properly configured
-4. Target entities for storing enriched data (Accounts, Contacts, etc.)
+2. Apollo.io API key set as the environment variable `APOLLO_API_KEY`
+3. MemberJunction framework properly configured with server-side action engine
+4. Target entities configured for storing enriched data (accounts, contacts, technologies, etc.)
 
 ## Configuration
 
@@ -34,257 +130,301 @@ APOLLO_API_KEY=your_apollo_api_key_here
 
 ### Configuration Constants
 
-The package uses the following configuration values (defined in `config.ts`):
+The package defines the following defaults in `config.ts`:
 
-- `ApolloAPIEndpoint`: 'https://api.apollo.io/v1' - Apollo.io API base URL
-- `EmailSourceName`: 'Apollo.io' - Source name for enriched emails
-- `GroupSize`: 10 - Maximum records per API batch request
-- `ConcurrentGroups`: 1 - Number of concurrent API request groups
-- `MaxPeopleToEnrichPerOrg`: 500 - Maximum contacts to enrich per organization
-- `ApolloAPIKey`: Read from environment variable `APOLLO_API_KEY`
+| Constant | Default | Description |
+|---|---|---|
+| `ApolloAPIEndpoint` | `https://api.apollo.io/v1` | Apollo.io API base URL |
+| `EmailSourceName` | `Apollo.io` | Source label applied to enriched emails |
+| `GroupSize` | `10` | Records per API batch request (Apollo max is 10) |
+| `ConcurrentGroups` | `1` | Number of concurrent API request groups |
+| `MaxPeopleToEnrichPerOrg` | `500` | Maximum contacts to enrich per organization |
+| `ApolloAPIKey` | `process.env.APOLLO_API_KEY` | Read from environment at startup |
 
 ## Usage
 
-### Apollo Accounts Enrichment Action
-
-This action enriches account/organization records by looking up company information using domain names.
-
-#### Parameters
-
-The action accepts the following parameters as JSON strings:
-
-**Required:**
-- `AccountEntityFieldNameJSON` - Maps account entity fields
-
-**Optional:**
-- `AccountTechnologyEntityFieldNameJSON` - Maps account technology relationship fields
-- `TechnologyCategoryEntityFieldNameJSON` - Maps technology category fields  
-- `ContactEntityFieldNameJSON` - Maps contact entity fields
-- `ContactEducationHistoryEntityFieldNameJSON` - Maps contact education history fields
-
-**AccountEntityFieldNameJSON Structure:**
-```typescript
-{
-  EntityName: string;           // Target entity name (e.g., "Accounts")
-  DomainParamName: string;      // Field containing company domain
-  AccountIDName: string;        // Primary key field name
-  EnrichedAtField: string;      // Timestamp field for tracking enrichment
-  ExtraFilter?: string;         // SQL filter for selecting records to process
-  
-  // Optional mapping fields
-  AddressFieldName?: string;    // Street address field
-  CityFieldNameName?: string;   // City field
-  StateProvinceFieldName?: string; // State/province field
-  PostalCodeFieldName?: string; // Postal code field
-  DescriptionFieldName?: string; // Company description field
-  PhoneNumberFieldName?: string; // Phone number field
-  CountryFieldName?: string;    // Country field
-  LinkedInFieldName?: string;   // LinkedIn URL field
-  LogoURLFieldName?: string;    // Company logo URL field
-  FacebookFieldName?: string;   // Facebook URL field
-  TwitterFieldName?: string;    // Twitter URL field
-}
-```
-
-**AccountTechnologyEntityFieldNameJSON Structure:**
-```typescript
-{
-  EntityName: string;              // Technology relationship entity name
-  AccountIDFieldName: string;      // Foreign key to account
-  TechnologyIDFieldName: string;   // Foreign key to technology
-  MatchFoundFieldName: string;     // Field indicating if match was found
-  EndedUseAtFieldName: string;     // Field for marking end of technology use
-}
-```
-
-#### Example Usage
-
-```typescript
-import { ApolloAccountsEnrichmentAction } from '@memberjunction/actions-apollo';
-import { ActionEngine } from '@memberjunction/actions';
-
-// Register the action with the engine
-const engine = new ActionEngine();
-const action = new ApolloAccountsEnrichmentAction();
-
-// Execute the action
-const result = await engine.RunAction({
-  ActionName: 'Apollo Enrichment - Accounts',
-  Params: [
-    {
-      Name: 'AccountEntityFieldNameJSON',
-      Value: JSON.stringify({
-        EntityName: 'Accounts',
-        DomainParamName: 'Domain',
-        AccountIDName: 'ID',
-        EnrichedAtField: 'LastEnrichedAt',
-        // ... other mappings
-      })
-    }
-  ],
-  ContextUser: currentUser
-});
-```
-
-### Apollo Contacts Enrichment Action
-
-This action enriches contact records by matching on name and email combinations.
-
-#### Parameters
-
-The action accepts the following string parameters:
-
-**Required:**
-- `EntityName` - Target entity name containing contacts
-- `EmailField` - Field name containing email addresses  
-- `FirstNameField` - Field name containing first names
-- `LastNameField` - Field name containing last names
-- `AccountNameField` - Field name containing account/organization names
-- `EnrichedAtField` - Field name for tracking enrichment timestamp
-- `FilterParam` - SQL filter for selecting records to process
-
-**Optional:**
-- `domainParam` - Field name containing company domain
-- `linkedinParam` - Field name for storing LinkedIn URLs
-- `EmploymentHistoryFieldMappings` - JSON string with employment history field mappings
-- `EducationHistoryFieldMappings` - JSON string with education history field mappings
-
-**EmploymentHistoryFieldMappings Structure:**
-```typescript
-{
-  EmploymentHistoryEntityName: string;              // Employment history entity name
-  EmploymentHistoryContactIDFieldName: string;      // Foreign key to contact
-  EmploymentHistoryOrganizationFieldName: string;   // Organization name field
-  EmploymentHistoryTitleFieldName: string;          // Job title field
-}
-```
-
-**EducationHistoryFieldMappings Structure:**
-```typescript
-{
-  EducationHistoryEntityName: string;              // Education history entity name
-  EducationtHistoryContactIDFieldName: string;     // Foreign key to contact  
-  EducationtHistoryInstitutionFieldName: string;   // Institution name field
-  EducationtHistoryDegreeFieldName: string;        // Degree field
-}
-```
-
-#### Example Usage
-
-```typescript
-import { ApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
-
-const result = await engine.RunAction({
-  ActionName: 'Apollo Enrichment - Contacts', 
-  Params: [
-    { Name: 'EntityName', Value: 'Contacts' },
-    { Name: 'EmailField', Value: 'Email' },
-    { Name: 'FirstNameField', Value: 'FirstName' },
-    { Name: 'LastNameField', Value: 'LastName' },
-    { Name: 'AccountNameField', Value: 'AccountName' },
-    { Name: 'EnrichedAtField', Value: 'LastEnrichedAt' },
-    { Name: 'FilterParam', Value: 'Email IS NOT NULL AND LastEnrichedAt IS NULL' },
-    { Name: 'domainParam', Value: 'Domain' },
-    { Name: 'linkedinParam', Value: 'LinkedIn' },
-    { 
-      Name: 'EmploymentHistoryFieldMappings', 
-      Value: JSON.stringify({
-        EmploymentHistoryEntityName: 'ContactEmploymentHistory',
-        EmploymentHistoryContactIDFieldName: 'ContactID',
-        EmploymentHistoryOrganizationFieldName: 'Organization', 
-        EmploymentHistoryTitleFieldName: 'Title'
-      })
-    }
-  ],
-  ContextUser: currentUser
-});
-```
-
-## Features
-
 ### Account Enrichment
-- Company information (address, phone, description, social media URLs)
-- Technology stack detection and tracking
-- Automatic contact discovery and creation
-- Technology category management
-- Historical technology usage tracking
+
+The `ApolloEnrichmentAccountsAction` enriches account/organization records by looking up company information using domain names. It can optionally discover contacts at the organization, track technology stacks, and create education history records.
+
+#### Parameters
+
+| Parameter | Required | Type | Description |
+|---|---|---|---|
+| `AccountEntityFieldMappings` | Yes | JSON string | Maps account entity fields (see `AccountEntityFields` below) |
+| `AccountTechnologyEntityFieldMappings` | No | JSON string | Maps technology relationship fields |
+| `TechnologyCategoryEntityFieldMappings` | No | JSON string | Maps technology category fields |
+| `ContactEntityFieldMappings` | No | JSON string | Maps contact entity fields for discovered contacts |
+| `ContactEducationHistoryEntityFieldMappings` | No | JSON string | Maps education history fields |
+
+#### AccountEntityFields Structure
+
+```typescript
+{
+    EntityName: string;          // Target entity name (e.g., "Accounts")
+    DomainField: string;         // Field containing company domain
+    AccountIDField: string;      // Primary key field name
+    EnrichedAtField: string;     // Timestamp field for tracking enrichment
+    Filter: string;              // SQL filter for selecting records to process
+    AddressField?: string;       // Street address
+    CityField?: string;          // City
+    StateProvinceField?: string; // State/province
+    PostalCodeField?: string;    // Postal code
+    DescriptionField?: string;   // Company description
+    PhoneNumberField?: string;   // Phone number
+    CountryField?: string;       // Country
+    LinkedInField?: string;      // LinkedIn URL
+    LogoURLField?: string;       // Company logo URL
+    FacebookField?: string;      // Facebook URL
+    TwitterField?: string;       // Twitter URL
+}
+```
+
+#### Example
+
+```typescript
+import { ActionEngineServer } from '@memberjunction/actions';
+
+const engine = ActionEngineServer.Instance;
+
+const result = await engine.RunAction({
+    ActionName: 'ApolloEnrichmentAccountsAction',
+    Params: [
+        {
+            Name: 'AccountEntityFieldMappings',
+            Value: JSON.stringify({
+                EntityName: 'Accounts',
+                DomainField: 'Domain',
+                AccountIDField: 'ID',
+                EnrichedAtField: 'LastEnrichedAt',
+                Filter: 'Domain IS NOT NULL AND LastEnrichedAt IS NULL',
+                CityField: 'City',
+                StateProvinceField: 'StateProvince',
+                LinkedInField: 'LinkedInURL',
+                DescriptionField: 'Description'
+            })
+        },
+        {
+            Name: 'AccountTechnologyEntityFieldMappings',
+            Value: JSON.stringify({
+                EntityName: 'Account Technologies',
+                AccountIDField: 'AccountID',
+                TechnologyIDField: 'TechnologyID',
+                TechnologyField: 'Technology',
+                CategoryField: 'Category',
+                EndedUseAtField: 'EndedUseAt'
+            })
+        },
+        {
+            Name: 'ContactEntityFieldMappings',
+            Value: JSON.stringify({
+                EntityName: 'Contacts',
+                EmailField: 'Email',
+                AccountIDField: 'AccountID',
+                EnrichedAtField: 'LastEnrichedAt',
+                FirstNameField: 'FirstName',
+                LastNameField: 'LastName',
+                TitleField: 'Title',
+                EmailSourceField: 'EmailSource',
+                ActivityCountField: 'ActivityCount'
+            })
+        }
+    ],
+    ContextUser: contextUser
+});
+```
 
 ### Contact Enrichment
-- Bulk email verification and discovery (up to 10 contacts per API call)
-- Employment history tracking with date ranges
-- Education history tracking with degree information
-- Social media profile URLs (LinkedIn, Twitter, Facebook)
-- Title exclusion filtering (excludes members, students, volunteers)
-- Pagination support for processing large datasets
-- Duplicate contact detection across accounts
 
-### Error Handling & Rate Limiting
-- Automatic retry with intelligent backoff for rate limits (1 minute for general limits, 1 hour for hourly limits)
-- Handles both per-minute and per-hour rate limits with different wait times
-- Comprehensive error logging using MemberJunction's logging system
-- Batch processing to optimize API usage and respect Apollo.io limits
-- Graceful handling of missing or incomplete data
-- Transaction rollback support for failed operations
+The `ApolloEnrichmentContactsAction` enriches existing contact records by matching on name and email combinations through Apollo's bulk people matching API.
 
-## API Integration
+#### Parameters
 
-The package integrates with the following Apollo.io API endpoints:
+| Parameter | Required | Type | Description |
+|---|---|---|---|
+| `EntityName` | Yes | string | Target entity containing contacts |
+| `EmailField` | Yes | string | Field name for email addresses |
+| `FirstNameField` | Yes | string | Field name for first names |
+| `LastNameField` | Yes | string | Field name for last names |
+| `TitleField` | Yes | string | Field name for job titles |
+| `EnrichedAtField` | Yes | string | Field name for enrichment timestamp |
+| `Filter` | Yes | string | SQL filter to select contacts for enrichment |
+| `ProfilePictureURLField` | No | string | Field for profile picture URLs |
+| `AccountNameField` | No | string | Field for account/company names |
+| `DomainField` | No | string | Field for company domains |
+| `LinkedInField` | No | string | Field for LinkedIn profile URLs |
+| `TwitterField` | No | string | Field for Twitter profile URLs |
+| `FacebookField` | No | string | Field for Facebook profile URLs |
+| `EmploymentHistoryFieldMappings` | No | JSON string | Employment history entity field mappings |
+| `EducationHistoryFieldMappings` | No | JSON string | Education history entity field mappings |
 
-- `/organizations/enrich` - Organization enrichment
-- `/people/bulk_match` - Bulk contact matching
-- `/mixed_people/search` - People search by domain
+#### EmploymentHistoryFieldMappings Structure
+
+```typescript
+{
+    EmploymentHistoryEntityName: string;             // Employment history entity
+    EmploymentHistoryContactIDFieldName: string;     // Foreign key to contact
+    EmploymentHistoryOrganizationFieldName: string;  // Organization name field
+    EmploymentHistoryTitleFieldName: string;          // Job title field
+}
+```
+
+#### EducationHistoryFieldMappings Structure
+
+```typescript
+{
+    EducationHistoryEntityName: string;              // Education history entity
+    EducationHistoryContactIDFieldName: string;      // Foreign key to contact
+    EducationHistoryInstitutionFieldName: string;    // Institution name field
+    EducationHistoryDegreeFieldName: string;         // Degree field
+}
+```
+
+#### Example
+
+```typescript
+import { ActionEngineServer } from '@memberjunction/actions';
+
+const engine = ActionEngineServer.Instance;
+
+const result = await engine.RunAction({
+    ActionName: 'ApolloEnrichmentContactsAction',
+    Params: [
+        { Name: 'EntityName', Value: 'Contacts' },
+        { Name: 'EmailField', Value: 'Email' },
+        { Name: 'FirstNameField', Value: 'FirstName' },
+        { Name: 'LastNameField', Value: 'LastName' },
+        { Name: 'TitleField', Value: 'Title' },
+        { Name: 'EnrichedAtField', Value: 'LastEnrichedAt' },
+        { Name: 'Filter', Value: 'Email IS NOT NULL AND LastEnrichedAt IS NULL' },
+        { Name: 'DomainField', Value: 'Domain' },
+        { Name: 'LinkedInField', Value: 'LinkedInURL' },
+        {
+            Name: 'EmploymentHistoryFieldMappings',
+            Value: JSON.stringify({
+                EmploymentHistoryEntityName: 'Contact Employment Histories',
+                EmploymentHistoryContactIDFieldName: 'ContactID',
+                EmploymentHistoryOrganizationFieldName: 'Organization',
+                EmploymentHistoryTitleFieldName: 'Title'
+            })
+        },
+        {
+            Name: 'EducationHistoryFieldMappings',
+            Value: JSON.stringify({
+                EducationHistoryEntityName: 'Contact Education Histories',
+                EducationHistoryContactIDFieldName: 'ContactID',
+                EducationHistoryInstitutionFieldName: 'Institution',
+                EducationHistoryDegreeFieldName: 'Degree'
+            })
+        }
+    ],
+    ContextUser: contextUser
+});
+```
+
+## API Reference
+
+### Exported Classes
+
+#### `ApolloEnrichmentAccountsAction`
+
+Registered as `"ApolloEnrichmentAccountsAction"` via `@RegisterClass(BaseAction)`. Extends `BaseAction`.
+
+**Processing behavior:**
+- Queries accounts matching the configured filter
+- For each account, calls `/organizations/enrich` with the domain
+- Updates account fields with enriched organization data
+- Optionally creates/updates technology stack records with historical tracking (marks ended technologies)
+- Optionally discovers and creates contact records via `/mixed_people/search`
+- Processes recursively up to 5 times to handle remaining records
+- Supports concurrent domain processing (configurable via `ConcurrentGroups`)
+
+#### `ApolloEnrichmentContactsAction`
+
+Registered as `"ApolloEnrichmentContactsAction"` via `@RegisterClass(BaseAction)`. Extends `BaseAction`.
+
+**Processing behavior:**
+- Pages through contact records matching the configured filter (500 per page)
+- Batches contacts into groups of 10 for Apollo's `/people/bulk_match` endpoint
+- Updates matching contacts with enriched social profiles and company data
+- Optionally creates/updates employment and education history records
+- Supports secondary enrichment via `/mixed_people/search` for organization-level lookups
+
+### Exported Types
+
+All types are exported from `src/generic/apollo.types.ts`:
+
+| Type | Description |
+|---|---|
+| `ProcessPersonRecordGroupParams` | Parameters for batch contact group processing |
+| `ApolloBulkPeopleRequest` | Request payload for `/people/bulk_match` |
+| `ApolloBulkPeopleRequestDetail` | Individual person detail within a bulk request |
+| `ApolloBulkPeopleResponse` | Response from `/people/bulk_match` |
+| `ContactEntityFields` | Field mapping configuration for contact entities |
+| `ContactEducationHistoryEntityFields` | Field mapping for education history entities |
+| `TechnologyCategoryEntityFields` | Field mapping for technology category entities |
+| `AccountTechnologyEntityFields` | Field mapping for account-technology relationship entities |
+| `AccountEntityFields` | Field mapping configuration for account entities |
+| `ProcessSingleDomainParams` | Parameters for processing a single domain enrichment |
+| `OrganizationEnrichmentRequest` | Request for `/organizations/enrich` |
+| `OrganizationEnrichmentResponse` | Response from organization enrichment |
+| `OrganizationEnrichmentOrganization` | Detailed organization data from Apollo |
+| `OrganizationEnrichmentOrganizationAccount` | Account data within organization response |
+| `TechnologyMap` | Technology record with name, category, and UID |
+| `SearchPeopleResponse` | Response from `/mixed_people/search` |
+| `SearchPeopleResponsePerson` | Individual person data from search response |
+| `EmploymentHistory` | Employment/education history entry |
+
+## Rate Limiting and Error Handling
+
+Both action classes include a `WrapApolloCall` method that provides:
+
+- **Automatic retry** on HTTP 429 (Too Many Requests) responses
+- **Per-minute backoff**: 60-second wait on standard rate limit responses
+- **Hourly backoff**: 60-minute wait when Apollo's hourly rate limit is detected (contact action only)
+- **Exception handling**: Catches both Axios response errors and thrown exceptions for 429 status codes
+- **Comprehensive logging** via MemberJunction's `LogError` and `LogStatus` utilities
+
+### Title Filtering
+
+Both actions automatically exclude contacts with the following job titles to maintain data quality:
+- `member`
+- `student member`
+- `student`
+- `volunteer`
+
+## Apollo.io API Endpoints Used
+
+| Endpoint | HTTP Method | Used By | Purpose |
+|---|---|---|---|
+| `/organizations/enrich` | GET | Accounts action | Organization data by domain |
+| `/people/bulk_match` | POST | Contacts action | Bulk contact matching (up to 10 per request) |
+| `/mixed_people/search` | POST | Both actions | People search by organization domain |
 
 ## Dependencies
 
-- `@memberjunction/core` - Core MemberJunction functionality
-- `@memberjunction/core-entities` - Entity definitions
-- `@memberjunction/actions` - Action framework
-- `@memberjunction/global` - Global utilities
-- `axios` - HTTP client for API requests
-
-## Best Practices
-
-1. **Batch Processing**: The actions automatically batch records to optimize API usage and respect rate limits.
-
-2. **Field Mapping**: Carefully map Apollo.io fields to your entity fields to ensure data consistency.
-
-3. **Filtering**: Use the filter parameters to process only records that need enrichment, avoiding unnecessary API calls.
-
-4. **Error Monitoring**: Monitor the action logs for failed enrichments and rate limit issues.
-
-5. **Data Quality**: The actions include validation for email domains and exclude certain titles to maintain data quality.
+| Package | Purpose |
+|---|---|
+| `@memberjunction/actions` | Base action class (`BaseAction`) and action engine |
+| `@memberjunction/actions-base` | Action parameter types (`ActionParam`, `ActionResultSimple`, `RunActionParams`) |
+| `@memberjunction/core` | `Metadata`, `RunView`, `BaseEntity`, logging utilities, `UserInfo`, `CompositeKey` |
+| `@memberjunction/core-entities` | MemberJunction entity definitions |
+| `@memberjunction/global` | `@RegisterClass` decorator for action registration |
+| `axios` | HTTP client for Apollo.io API requests |
 
 ## Limitations
 
-- Maximum 10 records per bulk API request (Apollo.io limitation)
-- Rate limits apply based on your Apollo.io subscription (handled automatically with retries)
+- Maximum 10 records per bulk API request (Apollo.io API limitation)
+- Rate limits apply based on your Apollo.io subscription tier (handled automatically with retries)
 - Personal emails may not be revealed in GDPR-compliant regions
-- Some enrichment data may be incomplete depending on Apollo.io's data coverage
-- Account enrichment processes domains sequentially to avoid overwhelming the system
-- Contact enrichment uses pagination with a maximum of 500 contacts per organization
+- Account enrichment processes domains sequentially within each concurrent group
+- Contact enrichment paginates with a maximum of 500 contacts per organization
+- Account enrichment recurses up to 5 times to prevent infinite loops
 - Excluded job titles (member, student member, student, volunteer) are automatically skipped
 
-## Troubleshooting
+## Related Packages
 
-### Common Issues
-
-1. **Missing API Key**: Ensure `APOLLO_API_KEY` environment variable is set
-2. **Rate Limits**: The action will automatically retry after waiting for rate limit windows
-3. **No Matches Found**: Check that input data (domains, emails) are valid and formatted correctly
-4. **Field Mapping Errors**: Verify that all mapped fields exist in your target entities
-
-### Debug Logging
-
-The actions use MemberJunction's logging system. Monitor logs for:
-- Enrichment progress
-- API response details
-- Error messages
-- Rate limit notifications
-
-## Contributing
-
-This package is part of the MemberJunction open-source project. Contributions are welcome following the project's contribution guidelines.
-
-## License
-
-ISC License - see the MemberJunction project license for details.
+- [@memberjunction/actions-base](../Base) -- Base classes and types used by all action packages
+- [@memberjunction/actions](../Engine) -- Server-side action engine that discovers and executes actions
+- [@memberjunction/core-actions](../CoreActions) -- Collection of 40+ pre-built MemberJunction actions
+- [@memberjunction/actions-content-autotag](../ContentAutotag) -- Content tagging and vectorization actions

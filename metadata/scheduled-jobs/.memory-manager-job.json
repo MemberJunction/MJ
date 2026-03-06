@@ -8,7 +8,7 @@
       "Timezone": "UTC",
       "Status": "Active",
       "Configuration": {
-        "AgentID": "@lookup:AI Agents.Name=Memory Manager",
+        "AgentID": "@lookup:MJ: AI Agents.Name=Memory Manager",
         "InitialMessage": "Analyze recent conversations and extract notes/examples"
       }
     },
@@ -16,8 +16,8 @@
       "ID": "DDFB765D-9266-4C25-B6B1-49BD42185FB2"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.251Z",
-      "checksum": "2d0d73b6ffb3c0c6a4b99900c900a54b979ec03220c3609d3fc1c612fea56645"
+      "lastModified": "2026-02-13T21:09:25.513Z",
+      "checksum": "ff91366d7685f5f139126170352b3083c61fef52603cde645ed392867d09fa1a"
     }
   }
 ]

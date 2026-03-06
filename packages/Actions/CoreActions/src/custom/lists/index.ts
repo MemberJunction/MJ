@@ -20,21 +20,3 @@ export * from './get-list-records.action';
 export * from './get-record-list-membership.action';
 export * from './update-list-item-status.action';
 
-import { LoadAddRecordsToListAction } from './add-records-to-list.action';
-import { LoadRemoveRecordsFromListAction } from './remove-records-from-list.action';
-import { LoadCreateListAction } from './create-list.action';
-import { LoadGetListRecordsAction } from './get-list-records.action';
-import { LoadGetRecordListMembershipAction } from './get-record-list-membership.action';
-import { LoadUpdateListItemStatusAction } from './update-list-item-status.action';
-
-/**
- * Load all list-related actions to prevent tree-shaking
- */
-export function LoadListActions(): void {
-  LoadAddRecordsToListAction();
-  LoadRemoveRecordsFromListAction();
-  LoadCreateListAction();
-  LoadGetListRecordsAction();
-  LoadGetRecordListMembershipAction();
-  LoadUpdateListItemStatusAction();
-}

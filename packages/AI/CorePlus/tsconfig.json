@@ -1,26 +1,9 @@
 {
-    "compilerOptions": {
-      "module": "commonjs",
-      "target": "es2020",
-      "declaration": true,
-      "declarationMap": true,
-      "outDir": "dist",
-      "rootDir": "src",
-      "sourceMap": true,
-      "experimentalDecorators": true,
-      "resolveJsonModule": true,
-      "esModuleInterop": true,
-      "lib": ["es2020", "esnext.asynciterable"],
-      "moduleResolution": "node",
-      "removeComments": true,
-      "noImplicitThis": true,
-      "noImplicitReturns": true,
-      "noFallthroughCasesInSwitch": true,
-      "allowSyntheticDefaultImports": true,
-      "emitDecoratorMetadata": true,
-      "skipLibCheck": true
-    },
-    "exclude": ["node_modules"],
-    "include": ["./src/**/*.ts"]
-  }
-  
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]
+}

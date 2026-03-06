@@ -7,7 +7,7 @@
  */
 
 import { Injectable, ComponentRef, ViewContainerRef, Type } from '@angular/core';
-import { CredentialEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
+import { MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { Subject, Observable, firstValueFrom } from 'rxjs';
 import { CredentialDialogComponent, CredentialDialogOptions, CredentialDialogResult } from '../dialogs/credential-dialog.component';
@@ -36,7 +36,7 @@ import { CredentialDialogComponent, CredentialDialogOptions, CredentialDialogRes
  * }
  *
  * // Edit an existing credential
- * async editCredential(credential: CredentialEntity) {
+ * async editCredential(credential: MJCredentialEntity) {
  *     const result = await this.credentialDialog.openDialog(this.viewContainerRef, {
  *         credential
  *     });
@@ -47,9 +47,9 @@ import { CredentialDialogComponent, CredentialDialogOptions, CredentialDialogRes
     providedIn: 'root'
 })
 export class CredentialDialogService {
-    private _credentialTypes: CredentialTypeEntity[] | null = null;
+    private _credentialTypes: MJCredentialTypeEntity[] | null = null;
     private _credentialTypesLoading = false;
-    private _credentialTypesLoadPromise: Promise<CredentialTypeEntity[]> | null = null;
+    private _credentialTypesLoadPromise: Promise<MJCredentialTypeEntity[]> | null = null;
 
     /**
      * Opens a credential dialog and returns a promise that resolves when the dialog closes.
@@ -117,7 +117,7 @@ export class CredentialDialogService {
      */
     public async editCredential(
         viewContainerRef: ViewContainerRef,
-        credential: CredentialEntity
+        credential: MJCredentialEntity
     ): Promise<CredentialDialogResult> {
         return this.openDialog(viewContainerRef, {
             credential,
@@ -129,7 +129,7 @@ export class CredentialDialogService {
      * Gets cached credential types or loads them if not cached.
      * Types are cached to avoid repeated database calls.
      */
-    public async getCredentialTypes(): Promise<CredentialTypeEntity[]> {
+    public async getCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
         return this.loadCredentialTypes();
     }
 
@@ -142,7 +142,7 @@ export class CredentialDialogService {
         this._credentialTypesLoadPromise = null;
     }
 
-    private async loadCredentialTypes(): Promise<CredentialTypeEntity[]> {
+    private async loadCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
         // Return cached types if available
         if (this._credentialTypes) {
             return this._credentialTypes;
@@ -164,10 +164,10 @@ export class CredentialDialogService {
         }
     }
 
-    private async doLoadCredentialTypes(): Promise<CredentialTypeEntity[]> {
+    private async doLoadCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<CredentialTypeEntity>({
+            const result = await rv.RunView<MJCredentialTypeEntity>({
                 EntityName: 'MJ: Credential Types',
                 OrderBy: 'Category, Name',
                 ResultType: 'entity_object'

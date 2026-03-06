@@ -173,7 +173,7 @@ async function loadQueryFiles(queryPath: string): Promise<Array<{ file: string; 
 /**
  * Convert metadata record to GeneratedQuery format for testing
  *
- * Note: QueryFields and QueryParameters are auto-extracted by QueryEntity.server.ts,
+ * Note: QueryFields and QueryParameters are auto-extracted by MJQueryEntity.server.ts,
  * so we only validate the SQL itself. The validate command focuses on SQL syntax
  * and execution, not on field/parameter metadata which is managed by MJ.
  */
@@ -181,6 +181,6 @@ function convertMetadataToGeneratedQuery(record: QueryMetadataRecord): Generated
   return {
     queryName: record.fields.Name,
     sql: record.fields.SQL,
-    parameters: [],    // Not needed for validation - QueryEntity will extract
+    parameters: [],    // Not needed for validation - MJQueryEntity will extract
   };
 }

@@ -1,11 +1,19 @@
-<kendo-dialog *ngIf="Visible" 
-        [title]="Title" 
-        [width]="Width"
-        [height]="Height"
-        (close)="CloseWindow('Cancel')" >
+@if (Visible) {
+  <kendo-dialog
+    [title]="Title"
+    [width]="Width"
+    [height]="Height"
+    (close)="CloseWindow('Cancel')" >
     <ng-template #dynamicFormContainer></ng-template>
-    <kendo-dialog-actions *ngIf="ShowSaveButton || ShowCancelButton">
-        <button *ngIf="ShowSaveButton" kendoButton (click)="CloseWindow('Save')"  themeColor="primary">Save</button>
-        <button *ngIf="ShowCancelButton" kendoButton (click)="CloseWindow('Cancel')">Cancel</button>
-    </kendo-dialog-actions>
-</kendo-dialog>
+    @if (ShowSaveButton || ShowCancelButton) {
+      <kendo-dialog-actions>
+        @if (ShowSaveButton) {
+          <button kendoButton (click)="CloseWindow('Save')"  themeColor="primary">Save</button>
+        }
+        @if (ShowCancelButton) {
+          <button kendoButton (click)="CloseWindow('Cancel')">Cancel</button>
+        }
+      </kendo-dialog-actions>
+    }
+  </kendo-dialog>
+}

@@ -13,10 +13,7 @@
  *
  * Usage:
  * ```typescript
- * import { LoadCohereReranker } from '@memberjunction/ai-cohere';
- *
- * // Ensure class registration
- * LoadCohereReranker();
+ * import { CohereReranker } from '@memberjunction/ai-cohere';
  *
  * // Create instance via ClassFactory
  * const reranker = ClassFactory.CreateInstance<BaseReranker>(
@@ -39,6 +36,5 @@
 
 export {
     CohereReranker,
-    createCohereReranker,
-    LoadCohereReranker
+    createCohereReranker
 } from './models/CohereReranker';

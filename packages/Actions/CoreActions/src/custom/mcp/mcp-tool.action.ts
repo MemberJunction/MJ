@@ -20,7 +20,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { LogError, LogStatus, RunView } from "@memberjunction/core";
 import { MCPClientManager } from "@memberjunction/ai-mcp-client";
-import { MCPServerToolEntity, MCPServerConnectionEntity } from "@memberjunction/core-entities";
+import { MJMCPServerToolEntity, MJMCPServerConnectionEntity } from "@memberjunction/core-entities";
 
 /**
  * Generic driver class for all auto-generated MCP Tool Actions.
@@ -155,10 +155,10 @@ export class MCPToolAction extends BaseAction {
     private async lookupMCPServerTool(
         actionId: string,
         params: RunActionParams
-    ): Promise<MCPServerToolEntity | null> {
+    ): Promise<MJMCPServerToolEntity | null> {
         const rv = new RunView();
 
-        const result = await rv.RunView<MCPServerToolEntity>({
+        const result = await rv.RunView<MJMCPServerToolEntity>({
             EntityName: 'MJ: MCP Server Tools',
             ExtraFilter: `GeneratedActionID='${actionId}'`,
             ResultType: 'entity_object'
@@ -176,7 +176,7 @@ export class MCPToolAction extends BaseAction {
      * First checks for an explicit ConnectionID parameter, then finds an active connection.
      */
     private async resolveConnectionId(
-        tool: MCPServerToolEntity,
+        tool: MJMCPServerToolEntity,
         params: RunActionParams
     ): Promise<string | null> {
         // Check for explicit ConnectionID parameter
@@ -188,7 +188,7 @@ export class MCPToolAction extends BaseAction {
         // Find an active connection for the tool's server
         const rv = new RunView();
 
-        const result = await rv.RunView<MCPServerConnectionEntity>({
+        const result = await rv.RunView<MJMCPServerConnectionEntity>({
             EntityName: 'MJ: MCP Server Connections',
             ExtraFilter: `MCPServerID='${tool.MCPServerID}' AND Status='Active'`,
             OrderBy: '__mj_CreatedAt ASC',  // Use oldest connection as default
@@ -253,11 +253,4 @@ export class MCPToolAction extends BaseAction {
             Value: value
         });
     }
-}
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadMCPToolAction(): void {
-    // Intentionally empty - ensures decorator executes
 }

@@ -22,9 +22,11 @@
         [(ngModel)]="filters.schemaName"
         (ngModelChange)="onFilterChange()">
         <option [ngValue]="null">All Schemas</option>
-        <option *ngFor="let schema of distinctSchemas" [ngValue]="schema.value">
-          {{ schema.text }}
-        </option>
+        @for (schema of distinctSchemas; track schema) {
+          <option [ngValue]="schema.value">
+            {{ schema.text }}
+          </option>
+        }
       </select>
     </div>
 

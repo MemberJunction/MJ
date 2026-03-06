@@ -24,6 +24,7 @@ import { AggregateValue } from '@memberjunction/core';
  * - Icon support for visual indicators
  */
 @Component({
+  standalone: false,
   selector: 'mj-aggregate-panel',
   templateUrl: './aggregate-panel.component.html',
   styleUrls: ['./aggregate-panel.component.css']

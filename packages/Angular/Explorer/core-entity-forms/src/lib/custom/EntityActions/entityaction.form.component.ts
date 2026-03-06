@@ -1,18 +1,42 @@
-import { Component } from '@angular/core';
-import { EntityActionEntity } from '@memberjunction/core-entities';
+import { Component, inject } from '@angular/core';
+import { MJEntityActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { EntityActionFormComponent } from '../../generated/Entities/EntityAction/entityaction.form.component';
+import { SharedService } from '@memberjunction/ng-shared';
+import { MJEntityActionFormComponent } from '../../generated/Entities/MJEntityAction/mjentityaction.form.component';
+import { TabEvent } from '@memberjunction/ng-tabstrip';
 
-@RegisterClass(BaseFormComponent, 'Entity Actions') // Tell MemberJunction about this class
+@RegisterClass(BaseFormComponent, 'MJ: Entity Actions')
 @Component({
+  standalone: false,
     selector: 'mj-custom-entity-action-extended-form',
     templateUrl: './entityaction.form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class EntityActionExtendedFormComponent extends EntityActionFormComponent {
-    public record!: EntityActionEntity;
-}
+export class MJEntityActionFormComponentExtended extends MJEntityActionFormComponent {
+    public record!: MJEntityActionEntity;
+    private sharedService = inject(SharedService);
+    private currentTab: string | null = null;
 
-export function LoadEntityActionExtendedFormComponent() {
+    /**
+     * Convenience method to resize application container when required
+     */
+    public InvokeManualResize(delay?: number) {
+        this.sharedService.InvokeManualResize(delay);
+    }
+
+    /**
+     * Handle tab selection events
+     */
+    public onTabSelect(e: TabEvent) {
+        this.currentTab = e.tab?.Name || null;
+        this.sharedService.InvokeManualResize();
+    }
+
+    /**
+     * Check if a tab is currently active
+     */
+    public IsCurrentTab(tabName: string): boolean {
+        return this.currentTab === tabName;
+    }
 }

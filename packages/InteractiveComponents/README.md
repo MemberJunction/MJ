@@ -6,14 +6,40 @@ Type definitions and interfaces for MemberJunction's Interactive Components syst
 
 The `@memberjunction/interactive-component-types` package provides the foundational types and interfaces for building interactive components in MemberJunction. These components are designed to be dynamically generated, data-aware, and AI-enhanced, allowing for rich user experiences with minimal configuration.
 
+```mermaid
+graph TD
+    A["InteractiveComponentSpec<br/>(Component Definition)"] --> B["ComponentInitFunction"]
+    B --> C["Props & Events"]
+    B --> D["SimpleDataContext"]
+    B --> E["SimpleMetadata"]
+    B --> F["SimpleRunView / RunQuery"]
+    B --> G["SimpleAITools"]
+
+    G --> H["ExecutePrompt<br/>(LLM Calls)"]
+    G --> I["EmbedText<br/>(Vector Embeddings)"]
+    G --> J["VectorService<br/>(Similarity / KNN)"]
+
+    A --> K["ComponentObject<br/>(Runtime Interface)"]
+    K --> L["Standard Methods<br/>(print, refresh, isDirty)"]
+    K --> M["Custom Methods<br/>(RegisterMethod)"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style G fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+    style H fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style J fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
 ## Key Features
 
-- **Dynamic Component Generation**: Type-safe specifications for runtime component creation
-- **Data Context Management**: Support for both static and dynamic data loading
-- **AI Tool Integration**: Built-in interfaces for AI operations within components
-- **Framework Agnostic**: Core types that work across React, Angular, and other frameworks
-- **Vector Operations**: Support for similarity calculations and vector-based data operations
-- **Metadata Access**: Direct access to MemberJunction's metadata system
+- **Dynamic Component Generation** -- Type-safe specifications for runtime component creation
+- **Data Context Management** -- Support for both static and dynamic data loading
+- **AI Tool Integration** -- Built-in interfaces for AI operations within components
+- **Framework Agnostic** -- Core types that work across React, Angular, and other frameworks
+- **Vector Operations** -- Support for similarity calculations and vector-based data operations
+- **Metadata Access** -- Direct access to MemberJunction's metadata system
 
 ## Installation
 

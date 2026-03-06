@@ -1,0 +1,40 @@
+<!-- Dialog Backdrop -->
+@if (IsOpen) {
+  <div class="dialog-backdrop" (click)="OnCancel()"></div>
+}
+
+<!-- Dialog Panel -->
+<div class="dialog-panel" [class.open]="IsOpen">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-title">
+      <i [class]="Icon"></i>
+      <span>{{ Title }}</span>
+    </div>
+    <button class="close-btn" (click)="OnCancel()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="dialog-content">
+    <p class="message">{{ Message }}</p>
+    @if (DetailMessage) {
+      <p class="detail-message">{{ DetailMessage }}</p>
+    }
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <button
+      class="btn btn-confirm"
+      [class.btn-primary]="ConfirmStyle === 'primary'"
+      [class.btn-danger]="ConfirmStyle === 'danger'"
+      (click)="OnConfirm()">
+      {{ ConfirmText }}
+    </button>
+    <button class="btn btn-cancel" (click)="OnCancel()">
+      {{ CancelText }}
+    </button>
+  </div>
+</div>

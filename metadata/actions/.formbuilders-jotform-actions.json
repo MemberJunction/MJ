@@ -3,14 +3,14 @@
     "fields": {
       "Name": "Get JotForm Submissions",
       "Description": "Retrieves submissions from a JotForm with filtering, pagination, and ordering capabilities. Supports regional endpoints (US, EU, HIPAA) and offset-based pagination through all submissions.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "GetJotFormSubmissionsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-inbox"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -259,7 +259,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -341,22 +341,22 @@
       "ID": "0A327418-2A2C-4D02-A40E-81EE4AC2281F"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.474Z",
-      "checksum": "5aca6f5a628a69c57f5c6dd0676de5f40268afba1456bd64084b1fd96880c177"
+      "lastModified": "2026-02-13T21:09:06.453Z",
+      "checksum": "cf4f34b74879635cb28aab526268205f6f9970ad9591ccdd5479c3cbac250d15"
     }
   },
   {
     "fields": {
       "Name": "Get Single JotForm Submission",
       "Description": "Retrieves details of a specific JotForm submission by its unique submission ID. Includes all answers, metadata, and submission status.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "GetSingleJotFormSubmissionAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-lines"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -515,7 +515,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -597,22 +597,22 @@
       "ID": "9B28C0B2-9B69-4462-A15D-418A521395FC"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.475Z",
-      "checksum": "49b7b7eed9bb6c346a9ab7ce3f57e078bee52f4777759f855d44bfd9f813afe3"
+      "lastModified": "2026-02-13T21:09:06.454Z",
+      "checksum": "752b1412cafe08e9c10033d24f4e0e6eeb7bf306df35ad5b18f4103c42fb99a1"
     }
   },
   {
     "fields": {
       "Name": "Get JotForm Response Statistics",
       "Description": "Calculates comprehensive statistics from JotForm submissions including response counts, trends, popular answers, and time-based analytics. Useful for dashboards and reporting.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "GetJotFormStatisticsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-line"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -842,7 +842,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -909,22 +909,22 @@
       "ID": "4FD280F9-C57B-4F19-B1D5-F8661D5729DF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.476Z",
-      "checksum": "6b39c48bbfe72b99985871d8a39463302e5f0c0524117d342ad5100234e40634"
+      "lastModified": "2026-02-13T21:09:06.455Z",
+      "checksum": "ddcb351a6285304e58e6c5fea8af9da277c5a4d2f6d7597d7327b88254accfa4"
     }
   },
   {
     "fields": {
       "Name": "Export JotForm Submissions to CSV",
       "Description": "Exports JotForm submissions to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters and optional metadata columns.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "ExportJotFormCSVAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-csv"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1137,7 +1137,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1219,22 +1219,22 @@
       "ID": "69A82375-33D2-4654-831D-5D23312955C8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.477Z",
-      "checksum": "ce3fefce11dba74b8277f141122c2cd0a0895c6034fedafc5346fb3fb88198ff"
+      "lastModified": "2026-02-13T21:09:06.456Z",
+      "checksum": "5b2e7b1d93650b5bb77179e4472c6744994df8143657c953c88c8ee76683b9b1"
     }
   },
   {
     "fields": {
       "Name": "Watch for New JotForm Submissions",
       "Description": "Polls JotForm for new submissions since the last check. Returns only new submissions and updates the last checked timestamp. Perfect for triggering workflows, sending notifications, or syncing data to other systems.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "WatchNewJotFormSubmissionsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-eye"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1515,7 +1515,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1597,22 +1597,22 @@
       "ID": "367086ED-FB48-4BB5-B7CA-349E6EAEB808"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.478Z",
-      "checksum": "8bf6e40adf3698f69a7e12bd03851139abd6e2f2e71fe277416b9e9682bcebd9"
+      "lastModified": "2026-02-13T21:09:06.458Z",
+      "checksum": "158a36fbbc7d227036997711ec723d7cee29a092b756e657b7ff2ebc50f4b664"
     }
   },
   {
     "fields": {
       "Name": "Get JotForm Details",
       "Description": "Retrieves complete details of a JotForm including title, questions, properties, and settings. Use this to inspect or backup form configurations.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "GetJotFormAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clipboard-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1804,7 +1804,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1886,22 +1886,22 @@
       "ID": "BE50B5B2-BE11-42AB-A15B-B22A6DC39DEF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.479Z",
-      "checksum": "0fee11c6546619cab16b902ab4f95d191d7a0b6da6fefdba1be739aabe13ddb9"
+      "lastModified": "2026-02-13T21:09:06.459Z",
+      "checksum": "69bc458b2da14bfa455ffc060353ba9680d89fb64666d7fafb9f3a119eec6fe2"
     }
   },
   {
     "fields": {
       "Name": "Create JotForm",
       "Description": "Creates a new JotForm with specified title, questions, and properties. Supports all JotForm field types including text, email, multiple choice, rating, and more. Returns the new form ID and shareable link.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "CreateJotFormAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-plus-circle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2061,7 +2061,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2158,22 +2158,22 @@
       "ID": "26039FCF-CE03-4208-9CA8-5D5382B4C6AB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.480Z",
-      "checksum": "b76cc4c56b0208c4f436a144957065a38ead1f2b78d62f8c85944bcd217d40fc"
+      "lastModified": "2026-02-13T21:09:06.460Z",
+      "checksum": "09ea7b018244fe3c81e8e92adf2bf8a38f1e40b5e8edc7daef9f125a59398d30"
     }
   },
   {
     "fields": {
       "Name": "Update JotForm",
       "Description": "Updates an existing JotForm. Supports merging with existing form data to safely update only specified properties, or full replacement mode. Can update title, questions, and properties.",
-      "CategoryID": "@lookup:Action Categories.Name=JotForm&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=JotForm&Parent=Form Builders",
       "DriverClass": "UpdateJotFormAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-pen-to-square"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2352,7 +2352,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2449,8 +2449,8 @@
       "ID": "1D517521-A83F-4560-BF51-5276CC176A24"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:19.481Z",
-      "checksum": "fcc3301d8c461996c8e0b4d3e78536ee438c3af9efcb5d6fe023c4d3365ed8fd"
+      "lastModified": "2026-02-13T21:09:06.461Z",
+      "checksum": "708b5032ce0faea028a7909b1c8ff8c313a68cc070ba2a5f349bbb44e3bc4b7d"
     }
   }
 ]

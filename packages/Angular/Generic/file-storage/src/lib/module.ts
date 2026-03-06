@@ -15,7 +15,6 @@ import { MenusModule } from '@progress/kendo-angular-menu';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 
 import { FormsModule } from '@angular/forms';
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -48,7 +47,6 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     FormsModule,
     DialogsModule,
     ExcelExportModule,
-    CompareRecordsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     ButtonsModule,

@@ -345,7 +345,3 @@ export class LMStudioLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 }
-
-export function LoadLMStudioLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

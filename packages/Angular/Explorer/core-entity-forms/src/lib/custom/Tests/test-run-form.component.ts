@@ -1,14 +1,13 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, ViewContainerRef, inject } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestRunEntity, TestEntity, TestSuiteRunEntity, AIAgentRunEntity, AIPromptRunEntity, TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunEntity, MJTestEntity, MJTestSuiteRunEntity, MJAIAgentRunEntity, MJAIPromptRunEntity, MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { TestRunFormComponent } from '../../generated/Entities/TestRun/testrun.form.component';
+import { MJTestRunFormComponent } from '../../generated/Entities/MJTestRun/mjtestrun.form.component';
 import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 
@@ -28,13 +27,14 @@ interface CheckResult {
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Runs')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-form',
   templateUrl: './test-run-form.component.html',
   styleUrls: ['./test-run-form.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TestRunFormComponentExtended extends TestRunFormComponent implements OnInit, OnDestroy {
-  public override record!: TestRunEntity;
+export class MJTestRunFormComponentExtended extends MJTestRunFormComponent implements OnInit, OnDestroy {
+  public override record!: MJTestRunEntity;
 
   private destroy$ = new Subject<void>();
 
@@ -50,11 +50,11 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
   autoRefreshEnabled = false;
 
   // Related entities
-  test: TestEntity | null = null;
-  testSuiteRun: TestSuiteRunEntity | null = null;
-  aiAgentRuns: AIAgentRunEntity[] = [];
-  aiPromptRuns: AIPromptRunEntity[] = [];
-  feedbacks: TestRunFeedbackEntity[] = [];
+  test: MJTestEntity | null = null;
+  testSuiteRun: MJTestSuiteRunEntity | null = null;
+  aiAgentRuns: MJAIAgentRunEntity[] = [];
+  aiPromptRuns: MJAIPromptRunEntity[] = [];
+  feedbacks: MJTestRunFeedbackEntity[] = [];
 
   // Parsed JSON data
   parsedData: ParsedData = {};
@@ -75,18 +75,11 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
   savingTags = false;
   private originalTags: string[] = [];
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService,
-    private appManager: ApplicationManager,
-    private viewContainerRef: ViewContainerRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
+  // Service injections
+  private navigationService = inject(NavigationService);
+  private testingDialogService = inject(TestingDialogService);
+  private appManager = inject(ApplicationManager);
+  private viewContainerRef = inject(ViewContainerRef);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -232,7 +225,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
       // Load test
       if (this.record.TestID) {
         const md = new Metadata();
-        const test = await md.GetEntityObject<TestEntity>('MJ: Tests');
+        const test = await md.GetEntityObject<MJTestEntity>('MJ: Tests');
         if (test && await test.Load(this.record.TestID)) {
           this.test = test;
         }
@@ -241,7 +234,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
       // Load test suite run if part of a suite
       if (this.record.TestSuiteRunID) {
         const md = new Metadata();
-        const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>('MJ: Test Suite Runs');
+        const suiteRun = await md.GetEntityObject<MJTestSuiteRunEntity>('MJ: Test Suite Runs');
         if (suiteRun && await suiteRun.Load(this.record.TestSuiteRunID)) {
           this.testSuiteRun = suiteRun;
         }
@@ -311,7 +304,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestRunFeedbackEntity>({
+      const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID='${this.record.ID}'`,
         OrderBy: '__mj_CreatedAt DESC',
@@ -564,9 +557,3 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     return d.toLocaleDateString();
   }
 }
-
-export function LoadTestRunFormComponentExtended() {
-  // Prevents tree-shaking
-}
-
-LoadTestRunFormComponentExtended();

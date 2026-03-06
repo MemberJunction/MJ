@@ -1,16 +1,17 @@
 {
+  "extends": "../../../tsconfig.server.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "sourceMap": true
+    "outDir": "dist",
+    "rootDir": "src"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "vitest.config.ts"
+  ]
 }

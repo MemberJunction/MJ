@@ -1,5 +1,5 @@
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { AIModelEntity } from '@memberjunction/core-entities';
+import { MJAIModelEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
 import { ExecutionResult } from '../lib/output-formatter';
@@ -200,7 +200,7 @@ Log file: ${logger.getLogFilePath()}`);
       const AIEngine = (aiModule as any).AIEngine;
       const models = AIEngine.Instance.Models;
       
-      return models.map((model: AIModelEntity) => ({
+      return models.map((model: MJAIModelEntity) => ({
         name: model.Name,
         vendor: model.Vendor,
         description: model.Description

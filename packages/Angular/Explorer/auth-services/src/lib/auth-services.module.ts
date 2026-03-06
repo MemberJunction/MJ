@@ -10,17 +10,6 @@ import { RedirectComponent } from './redirect.component';
 // Export the generic redirect component for backward compatibility
 export { RedirectComponent };
 
-// Import restored providers and load them to prevent tree-shaking
-import { LoadMJMSALProvider } from './providers/mjexplorer-msal-provider.service';
-import { LoadMJAuth0Provider } from './providers/mjexplorer-auth0-provider.service';
-import { LoadMJOktaProvider } from './providers/mjexplorer-okta-provider.service';
-
-// Load all providers to prevent tree-shaking
-// These functions ensure the classes are included in the bundle
-LoadMJMSALProvider();
-LoadMJAuth0Provider();
-LoadMJOktaProvider();
-
 /**
  * Extensible authentication module that supports N providers
  * Uses MJGlobal ClassFactory pattern for dynamic provider creation
@@ -75,4 +64,3 @@ export class AuthServicesModule {
     };
   }
 }
-

@@ -47,6 +47,7 @@ import {
 } from '../events/tree-events';
 
 @Component({
+  standalone: false,
     selector: 'mj-tree',
     templateUrl: './tree.component.html',
     styleUrls: ['./tree.component.css']

@@ -104,8 +104,3 @@ export class GetRecordAction extends BaseRecordMutationAction {
         }
     }
 }
-
-export function LoadGetRecordAction() {
-    // This function exists to prevent tree shaking from removing the action class
-    // The side effect of loading this file is that the @RegisterClass decorator runs
-}

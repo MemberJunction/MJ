@@ -26,8 +26,3 @@ import { ActionResultCodeDialogComponent } from './action-result-code-dialog/act
     ]
 })
 export class ActionsModule { }
-
-// Tree-shaking prevention loader
-export function LoadActionsModule(): void {
-    // This function ensures the module and its components are included in the bundle
-}

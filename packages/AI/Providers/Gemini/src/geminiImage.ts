@@ -373,9 +373,3 @@ export class GeminiImageGenerator extends BaseImageGenerator {
     }
 }
 
-/**
- * Prevents tree-shaking from removing this class.
- */
-export function LoadGeminiImageGenerator() {
-    // This function intentionally does nothing
-}

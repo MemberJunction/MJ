@@ -262,7 +262,3 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
     }
 }
-
-export function LoadOllamaEmbedding() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
-import { UserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
 /**
@@ -208,28 +208,39 @@ export class ApplicationManager {
           continue;
         }
 
-        const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
-          BaseApplication,
-          appInfo.ClassName,
-          {
-            ID: appInfo.ID,
-            Name: appInfo.Name,
-            Description: appInfo.Description || '',
-            Icon: appInfo.Icon || '',
-            Color: appInfo.Color,
-            DefaultNavItems: appInfo.DefaultNavItems,
-            ClassName: appInfo.ClassName,
-            DefaultSequence: appInfo.DefaultSequence,
-            Status: appInfo.Status,
-            NavigationStyle: appInfo.NavigationStyle,
-            TopNavLocation: appInfo.TopNavLocation,
-            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
-            Path: appInfo.Path || '',
-            AutoUpdatePath: appInfo.AutoUpdatePath
-          }
-        );
+        const args = {
+          ID: appInfo.ID,
+          Name: appInfo.Name,
+          Description: appInfo.Description || '',
+          Icon: appInfo.Icon || '',
+          Color: appInfo.Color,
+          DefaultNavItems: appInfo.DefaultNavItems,
+          ClassName: appInfo.ClassName,
+          DefaultSequence: appInfo.DefaultSequence,
+          Status: appInfo.Status,
+          NavigationStyle: appInfo.NavigationStyle,
+          TopNavLocation: appInfo.TopNavLocation,
+          HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
+          Path: appInfo.Path || '',
+          AutoUpdatePath: appInfo.AutoUpdatePath
+        };
+
+        let app: BaseApplication | null;
+        if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
+          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+            BaseApplication,
+            appInfo.ClassName,
+            args          
+          );
+        }
+        else {
+          // no class provided in app definition.
+          app = new BaseApplication(args)
+        }
 
         if (app) {
+          // should always get here unless failure to load registered sub-class but CreateInstance has
+          // fallback to base class anyway so should always get here 
           allApps.push(app);
         }
       }
@@ -266,7 +277,7 @@ export class ApplicationManager {
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
 
-    let userApps: UserApplicationEntity[] = engine.UserApplications;
+    let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
     if (userApps.length === 0) {
@@ -300,7 +311,7 @@ export class ApplicationManager {
    * Called when a user has no existing UserApplication records (self-healing).
    * Delegates to UserInfoEngine for the actual creation.
    */
-  private async createDefaultUserApplications(): Promise<UserApplicationEntity[]> {
+  private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
   }
@@ -310,13 +321,13 @@ export class ApplicationManager {
    */
   async SetActiveApp(appId: string): Promise<void> {
     const currentApp = this.activeApp$.value;
-    const newApp = this.applications$.value.find(a => a.ID === appId);
+    const newApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
 
     if (!newApp) {
       return;
     }
 
-    if (currentApp?.ID === appId) {
+    if (UUIDsEqual(currentApp?.ID, appId)) {
       return; // Already active
     }
 
@@ -334,7 +345,7 @@ export class ApplicationManager {
    * Get application by ID
    */
   GetAppById(appId: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => a.ID === appId);
+    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
   }
 
   /**
@@ -454,7 +465,7 @@ export class ApplicationManager {
     switch (accessStatus) {
       case 'installed_active': {
         // User has access - find the BaseApplication instance
-        const baseApp = this.applications$.value.find(a => a.ID === appInfo.ID);
+        const baseApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appInfo.ID));
         return {
           status: 'accessible',
           message: 'User has access to this app',
@@ -490,7 +501,7 @@ export class ApplicationManager {
    * Delegates to UserInfoEngine for the actual installation.
    * Returns the newly created UserApplication entity.
    */
-  async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
+  async InstallAppForUser(appId: string): Promise<MJUserApplicationEntity | null> {
     const engine = UserInfoEngine.Instance;
     // The engine will emit DataChange$ after the entity save triggers a refresh,
     // which our subscribeToEngineChanges() handler will pick up and call syncFromEngine()

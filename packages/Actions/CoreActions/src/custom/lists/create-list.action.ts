@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView } from "@memberjunction/core";
-import { ListEntity, ListDetailEntity, EntityEntity } from "@memberjunction/core-entities";
+import { MJListEntity, MJListDetailEntity, MJEntityEntity } from "@memberjunction/core-entities";
 
 /**
  * Action to create a new list and optionally add initial records.
@@ -57,8 +57,8 @@ export class CreateListAction extends BaseAction {
       // Resolve entity ID if name provided
       let resolvedEntityId = entityId;
       if (entityName && !entityId) {
-        const entityResult = await rv.RunView<EntityEntity>({
-          EntityName: 'Entities',
+        const entityResult = await rv.RunView<MJEntityEntity>({
+          EntityName: 'MJ: Entities',
           ExtraFilter: `Name = '${entityName}'`,
           ResultType: 'entity_object'
         }, params.ContextUser);
@@ -75,7 +75,7 @@ export class CreateListAction extends BaseAction {
       }
 
       // Create the list
-      const list = await md.GetEntityObject<ListEntity>('Lists', params.ContextUser);
+      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', params.ContextUser);
       list.NewRecord();
       list.Name = name;
       list.Description = description || '';
@@ -102,7 +102,7 @@ export class CreateListAction extends BaseAction {
       if (addRecordIds && addRecordIds.length > 0) {
         for (const recordId of addRecordIds) {
           try {
-            const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details', params.ContextUser);
+            const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', params.ContextUser);
             listDetail.NewRecord();
             listDetail.ListID = list.ID;
             listDetail.RecordID = recordId;
@@ -183,8 +183,4 @@ export class CreateListAction extends BaseAction {
       Value: value
     });
   }
-}
-
-export function LoadCreateListAction(): void {
-  // Prevents tree-shaking
 }

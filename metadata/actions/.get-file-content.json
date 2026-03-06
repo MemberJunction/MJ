@@ -5,12 +5,12 @@
       "Description": "Smart file content retrieval with automatic extraction based on file type. Returns LLM-ready content: plain text for documents (PDF/Word/Excel extraction), base64 for images, decoded text for text formats. Optimized for AI agent consumption.",
       "DriverClass": "File Storage: Get File Content",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-arrow-down"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -174,7 +174,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -256,8 +256,8 @@
       "ID": "84DEB03C-B730-415B-8828-F301EE282970"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:26.192Z",
-      "checksum": "b2f64cec165fded88158755a51849a1dae2569425460904e9d31c900ab62285d"
+      "lastModified": "2026-02-13T21:09:11.124Z",
+      "checksum": "67ee0d5defc7e3bfef49433391dd6686e96a9c4ae8374bc6c7b9b240555bebdb"
     }
   }
 ]

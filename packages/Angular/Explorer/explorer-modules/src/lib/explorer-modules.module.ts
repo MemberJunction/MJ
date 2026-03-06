@@ -26,7 +26,6 @@ import { NgModule } from '@angular/core';
 import { ExplorerCoreModule, ShellModule } from '@memberjunction/ng-explorer-core';
 import { CoreGeneratedFormsModule } from '@memberjunction/ng-core-entity-forms';
 import { WorkspaceInitializerModule } from '@memberjunction/ng-workspace-initializer';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
@@ -54,7 +53,6 @@ import { MJKendoModule } from '@memberjunction/ng-kendo-modules';
     ExplorerCoreModule,
     CoreGeneratedFormsModule,
     WorkspaceInitializerModule,
-    UserViewGridModule,
     LinkDirectivesModule,
     ContainerDirectivesModule,
     ExplorerSettingsModule,

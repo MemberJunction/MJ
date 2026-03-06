@@ -25,7 +25,8 @@
           #reactComponent
           [component]="component"
           (componentEvent)="onComponentEvent($event)"
-          (openEntityRecord)="onOpenEntityRecord($event)">
+          (openEntityRecord)="onOpenEntityRecord($event)"
+          (initialized)="onReactComponentInitialized()">
         </mj-react-component>
       } @else if (component) {
         <!-- Component spec exists but no code - show informational message -->

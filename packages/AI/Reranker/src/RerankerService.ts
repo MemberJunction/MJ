@@ -9,11 +9,11 @@
  */
 
 import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
-import { AIAgentNoteEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument } from '@memberjunction/ai';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
 // Re-export config types for convenience
@@ -150,7 +150,7 @@ export class RerankerService {
         }
 
         // Load model from AIEngine
-        const model = AIEngine.Instance.Models.find(m => m.ID === modelID);
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelID));
         if (!model) {
             LogError(`RerankerService: Model not found with ID: ${modelID}`);
             return null;
@@ -223,12 +223,12 @@ export class RerankerService {
      * Looks up ModelVendor relationships to find the active vendor.
      */
     private async getModelDriverInfo(
-        model: AIModelEntityExtended,
+        model: MJAIModelEntityExtended,
         contextUser: UserInfo
     ): Promise<{ driverClass: string | null; apiKey: string | null; apiName: string | null }> {
         // Find the active model vendor relationship
         const modelVendors = AIEngine.Instance.ModelVendors.filter(
-            mv => mv.ModelID === model.ID && mv.Status === 'Active'
+            mv => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active'
         );
 
         if (modelVendors.length === 0) {
@@ -301,7 +301,7 @@ export class RerankerService {
         options?: RerankObservabilityOptions
     ): Promise<RerankServiceResult> {
         const startTime = Date.now();
-        let stepEntity: AIAgentRunStepEntity | null = null;
+        let stepEntity: MJAIAgentRunStepEntity | null = null;
 
         // Early return if no notes to rerank
         if (notes.length === 0) {
@@ -364,7 +364,7 @@ export class RerankerService {
             const rerankedNotes: NoteMatchResult[] = response.results
                 .filter(r => r.relevanceScore >= config.minRelevanceThreshold)
                 .map(r => {
-                    const noteEntity = r.document.metadata?.noteEntity as AIAgentNoteEntity;
+                    const noteEntity = r.document.metadata?.noteEntity as MJAIAgentNoteEntity;
                     return {
                         note: noteEntity,
                         similarity: r.relevanceScore
@@ -406,7 +406,7 @@ export class RerankerService {
      * Includes note text and optional context fields.
      */
     private buildDocumentText(
-        note: AIAgentNoteEntity,
+        note: MJAIAgentNoteEntity,
         contextFields?: string[]
     ): string {
         const parts: string[] = [note.Note || ''];
@@ -442,9 +442,9 @@ export class RerankerService {
         contextUser: UserInfo,
         input: { query: string; noteCount: number; config: RerankerConfiguration; notes: NoteMatchResult[] },
         startTime: number
-    ): Promise<AIAgentRunStepEntity> {
+    ): Promise<MJAIAgentRunStepEntity> {
         const md = new Metadata();
-        const stepEntity = await md.GetEntityObject<AIAgentRunStepEntity>(
+        const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntity>(
             'MJ: AI Agent Run Steps',
             contextUser
         );
@@ -485,7 +485,7 @@ export class RerankerService {
      * Finalize an AIAgentRunStep record after reranking completes.
      */
     private async finalizeRerankRunStep(
-        stepEntity: AIAgentRunStepEntity,
+        stepEntity: MJAIAgentRunStepEntity,
         success: boolean,
         output: { rerankedCount: number; durationMs: number; rerankedNotes?: NoteMatchResult[] },
         errorMessage?: string

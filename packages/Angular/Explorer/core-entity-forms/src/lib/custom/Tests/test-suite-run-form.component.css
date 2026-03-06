@@ -48,35 +48,57 @@
 
 /* Breadcrumb */
 .breadcrumb {
+  margin-bottom: 16px;
+}
+
+.breadcrumb ol {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
   font-size: 13px;
-  color: var(--suite-run-text-secondary);
-  margin-bottom: 16px;
+}
+
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .breadcrumb a {
   color: var(--suite-run-primary);
   text-decoration: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: var(--suite-run-transition);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
 }
 
 .breadcrumb a:hover {
-  color: #2563eb;
+  background: rgba(59, 130, 246, 0.1);
+  text-decoration: none;
 }
 
 .breadcrumb .separator {
   font-size: 10px;
-  color: #cbd5e1;
+  color: var(--suite-run-text-secondary);
+  margin: 0 4px;
 }
 
 .breadcrumb .current {
-  color: var(--suite-run-text);
+  color: var(--suite-run-text-secondary);
   font-weight: 500;
+}
+
+.breadcrumb-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Header Content */

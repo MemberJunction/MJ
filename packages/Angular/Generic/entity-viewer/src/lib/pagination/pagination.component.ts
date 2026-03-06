@@ -19,6 +19,7 @@ import { PaginationState } from '../types';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-pagination',
   templateUrl: './pagination.component.html',
   styleUrls: ['./pagination.component.css']

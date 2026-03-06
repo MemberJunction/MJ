@@ -1,202 +1,232 @@
 <div class="list-container">
-    <!-- Header -->
-    <div class="list-header">
-        <div class="header-left">
-            <h3>API Keys</h3>
-            <span class="count-badge">{{FilteredKeys.length}} of {{AllKeys.length}}</span>
-        </div>
-        <div class="header-right">
-            <div class="search-box">
-                <i class="fa-solid fa-search"></i>
-                <input type="text" [(ngModel)]="SearchText"
-                       (ngModelChange)="onSearch()"
-                       placeholder="Search keys..." />
-                <button class="clear-search" *ngIf="SearchText" (click)="clearSearch()">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </div>
-            <button class="create-btn" (click)="requestCreate()">
-                <i class="fa-solid fa-plus"></i>
-                Generate Key
-            </button>
-        </div>
+  <!-- Header -->
+  <div class="list-header">
+    <div class="header-left">
+      <h3>API Keys</h3>
+      <span class="count-badge">{{FilteredKeys.length}} of {{AllKeys.length}}</span>
     </div>
-
-    <!-- Filter Tabs -->
-    <div class="filter-tabs">
-        <button class="filter-tab" [class.active]="Filter === 'all'"
-                (click)="setFilter('all')">
-            All
-            <span class="tab-count">{{Stats.total}}</span>
-        </button>
-        <button class="filter-tab" [class.active]="Filter === 'active'"
-                (click)="setFilter('active')">
-            <i class="fa-solid fa-check-circle status-active"></i>
-            Active
-            <span class="tab-count">{{Stats.active}}</span>
-        </button>
-        <button class="filter-tab" [class.active]="Filter === 'expiring'"
-                [class.has-warning]="Stats.expiring > 0"
-                (click)="setFilter('expiring')">
-            <i class="fa-solid fa-clock status-warning"></i>
-            Expiring Soon
-            <span class="tab-count">{{Stats.expiring}}</span>
-        </button>
-        <button class="filter-tab" [class.active]="Filter === 'expired'"
-                [class.has-danger]="Stats.expired > 0"
-                (click)="setFilter('expired')">
-            <i class="fa-solid fa-circle-exclamation status-danger"></i>
-            Expired
-            <span class="tab-count">{{Stats.expired}}</span>
-        </button>
-        <button class="filter-tab" [class.active]="Filter === 'never-used'"
-                (click)="setFilter('never-used')">
-            <i class="fa-solid fa-question-circle status-info"></i>
-            Never Used
-            <span class="tab-count">{{Stats.neverUsed}}</span>
-        </button>
-        <button class="filter-tab" [class.active]="Filter === 'revoked'"
-                (click)="setFilter('revoked')">
-            <i class="fa-solid fa-ban status-revoked"></i>
-            Revoked
-            <span class="tab-count">{{Stats.revoked}}</span>
-        </button>
+    <div class="header-right">
+      <div class="search-box">
+        <i class="fa-solid fa-search"></i>
+        <input type="text" [(ngModel)]="SearchText"
+          (ngModelChange)="onSearch()"
+          placeholder="Search keys..." />
+        @if (SearchText) {
+          <button class="clear-search" (click)="clearSearch()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        }
+      </div>
+      <button class="create-btn" (click)="requestCreate()">
+        <i class="fa-solid fa-plus"></i>
+        Generate Key
+      </button>
     </div>
+  </div>
 
-    <!-- Loading -->
-    <mj-loading *ngIf="IsLoading" text="Loading API keys..."></mj-loading>
+  <!-- Filter Tabs -->
+  <div class="filter-tabs">
+    <button class="filter-tab" [class.active]="Filter === 'all'"
+      (click)="setFilter('all')">
+      All
+      <span class="tab-count">{{Stats.total}}</span>
+    </button>
+    <button class="filter-tab" [class.active]="Filter === 'active'"
+      (click)="setFilter('active')">
+      <i class="fa-solid fa-check-circle status-active"></i>
+      Active
+      <span class="tab-count">{{Stats.active}}</span>
+    </button>
+    <button class="filter-tab" [class.active]="Filter === 'expiring'"
+      [class.has-warning]="Stats.expiring > 0"
+      (click)="setFilter('expiring')">
+      <i class="fa-solid fa-clock status-warning"></i>
+      Expiring Soon
+      <span class="tab-count">{{Stats.expiring}}</span>
+    </button>
+    <button class="filter-tab" [class.active]="Filter === 'expired'"
+      [class.has-danger]="Stats.expired > 0"
+      (click)="setFilter('expired')">
+      <i class="fa-solid fa-circle-exclamation status-danger"></i>
+      Expired
+      <span class="tab-count">{{Stats.expired}}</span>
+    </button>
+    <button class="filter-tab" [class.active]="Filter === 'never-used'"
+      (click)="setFilter('never-used')">
+      <i class="fa-solid fa-question-circle status-info"></i>
+      Never Used
+      <span class="tab-count">{{Stats.neverUsed}}</span>
+    </button>
+    <button class="filter-tab" [class.active]="Filter === 'revoked'"
+      (click)="setFilter('revoked')">
+      <i class="fa-solid fa-ban status-revoked"></i>
+      Revoked
+      <span class="tab-count">{{Stats.revoked}}</span>
+    </button>
+  </div>
 
-    <!-- Grid -->
-    <div class="key-grid" *ngIf="!IsLoading">
-        <!-- Header Row -->
-        <div class="grid-header">
-            <div class="col-key sortable" (click)="toggleSort('Label')">
-                Key
-                <i [class]="getSortIcon('Label')"></i>
-            </div>
-            <div class="col-owner sortable" (click)="toggleSort('User')">
-                Owner
-                <i [class]="getSortIcon('User')"></i>
-            </div>
-            <div class="col-status sortable" (click)="toggleSort('Status')">
-                Status
-                <i [class]="getSortIcon('Status')"></i>
-            </div>
-            <div class="col-scopes">
-                Scopes
-            </div>
-            <div class="col-expires sortable" (click)="toggleSort('ExpiresAt')">
-                Expires
-                <i [class]="getSortIcon('ExpiresAt')"></i>
-            </div>
-            <div class="col-used sortable" (click)="toggleSort('LastUsedAt')">
-                Last Used
-                <i [class]="getSortIcon('LastUsedAt')"></i>
-            </div>
-            <div class="col-created sortable" (click)="toggleSort('__mj_CreatedAt')">
-                Created
-                <i [class]="getSortIcon('__mj_CreatedAt')"></i>
-            </div>
+  <!-- Loading -->
+  @if (IsLoading) {
+    <mj-loading text="Loading API keys..."></mj-loading>
+  }
+
+  <!-- Grid -->
+  @if (!IsLoading) {
+    <div class="key-grid">
+      <!-- Header Row -->
+      <div class="grid-header">
+        <div class="col-key sortable" (click)="toggleSort('Label')">
+          Key
+          <i [class]="getSortIcon('Label')"></i>
         </div>
-
-        <!-- Key Rows -->
-        <div class="grid-row" *ngFor="let key of getPaginatedKeys()"
-             (click)="selectKey(key)">
-            <div class="col-key">
-                <div class="key-icon" [class.active]="key.Status === 'Active'">
-                    <i class="fa-solid fa-key"></i>
-                </div>
-                <div class="key-details">
-                    <span class="key-label">{{key.Label}}</span>
-                    <code class="key-hash">...{{key.Hash.slice(-12)}}</code>
-                </div>
+        <div class="col-owner sortable" (click)="toggleSort('User')">
+          Owner
+          <i [class]="getSortIcon('User')"></i>
+        </div>
+        <div class="col-status sortable" (click)="toggleSort('Status')">
+          Status
+          <i [class]="getSortIcon('Status')"></i>
+        </div>
+        <div class="col-scopes">
+          Scopes
+        </div>
+        <div class="col-expires sortable" (click)="toggleSort('ExpiresAt')">
+          Expires
+          <i [class]="getSortIcon('ExpiresAt')"></i>
+        </div>
+        <div class="col-used sortable" (click)="toggleSort('LastUsedAt')">
+          Last Used
+          <i [class]="getSortIcon('LastUsedAt')"></i>
+        </div>
+        <div class="col-created sortable" (click)="toggleSort('__mj_CreatedAt')">
+          Created
+          <i [class]="getSortIcon('__mj_CreatedAt')"></i>
+        </div>
+      </div>
+      <!-- Key Rows -->
+      @for (key of getPaginatedKeys(); track key) {
+        <div class="grid-row"
+          (click)="selectKey(key)">
+          <div class="col-key">
+            <div class="key-icon" [class.active]="key.Status === 'Active'">
+              <i class="fa-solid fa-key"></i>
             </div>
-            <div class="col-owner">
-                <span class="owner-name">{{key.User}}</span>
+            <div class="key-details">
+              <span class="key-label">{{key.Label}}</span>
+              <code class="key-hash">...{{key.Hash.slice(-12)}}</code>
             </div>
-            <div class="col-status">
-                <span class="status-badge" [class.active]="key.Status === 'Active'"
-                      [class.revoked]="key.Status === 'Revoked'">
-                    {{key.Status}}
-                </span>
-            </div>
-            <div class="col-scopes">
-                <div class="scopes-display" *ngIf="getScopeInfo(key).count > 0">
-                    <div class="scope-badges">
-                        <ng-container *ngFor="let cat of getScopeInfo(key).categories; let i = index">
-                            <span class="scope-badge" *ngIf="i < 3"
-                                  [style.backgroundColor]="cat.color + '15'"
-                                  [style.color]="cat.color"
-                                  [title]="cat.category + ': ' + cat.count + ' scope(s)'">
-                                <i [class]="cat.icon"></i>
-                                <span class="badge-count">{{cat.count}}</span>
-                            </span>
-                        </ng-container>
-                        <span class="scope-more" *ngIf="getScopeInfo(key).categories.length > 3">
-                            +{{getScopeInfo(key).categories.length - 3}}
-                        </span>
-                    </div>
-                    <span class="scopes-total">
-                        {{getScopeInfo(key).count}} total
+          </div>
+          <div class="col-owner">
+            <span class="owner-name">{{key.User}}</span>
+          </div>
+          <div class="col-status">
+            <span class="status-badge" [class.active]="key.Status === 'Active'"
+              [class.revoked]="key.Status === 'Revoked'">
+              {{key.Status}}
+            </span>
+          </div>
+          <div class="col-scopes">
+            @if (getScopeInfo(key).count > 0) {
+              <div class="scopes-display">
+                <div class="scope-badges">
+                  @for (cat of getScopeInfo(key).categories; track cat; let i = $index) {
+                    @if (i < 3) {
+                      <span class="scope-badge"
+                        [style.backgroundColor]="cat.color + '15'"
+                        [style.color]="cat.color"
+                        [title]="cat.category + ': ' + cat.count + ' scope(s)'">
+                        <i [class]="cat.icon"></i>
+                        <span class="badge-count">{{cat.count}}</span>
+                      </span>
+                    }
+                  }
+                  @if (getScopeInfo(key).categories.length > 3) {
+                    <span class="scope-more">
+                      +{{getScopeInfo(key).categories.length - 3}}
                     </span>
+                  }
                 </div>
-                <span class="no-scopes" *ngIf="getScopeInfo(key).count === 0">
-                    <i class="fa-solid fa-shield-xmark"></i>
-                    None
+                <span class="scopes-total">
+                  {{getScopeInfo(key).count}} total
                 </span>
-            </div>
-            <div class="col-expires">
-                <span class="expires-value" [ngClass]="getExpirationClass(key)">
-                    {{formatExpiration(key.ExpiresAt)}}
-                </span>
-            </div>
-            <div class="col-used">
-                <span class="used-value" [class.never]="!key.LastUsedAt">
-                    {{formatDate(key.LastUsedAt)}}
-                </span>
-            </div>
-            <div class="col-created">
-                <span class="created-value">{{formatDate(key.__mj_CreatedAt)}}</span>
-            </div>
+              </div>
+            }
+            @if (getScopeInfo(key).count === 0) {
+              <span class="no-scopes">
+                <i class="fa-solid fa-shield-xmark"></i>
+                None
+              </span>
+            }
+          </div>
+          <div class="col-expires">
+            <span class="expires-value" [ngClass]="getExpirationClass(key)">
+              {{formatExpiration(key.ExpiresAt)}}
+            </span>
+          </div>
+          <div class="col-used">
+            <span class="used-value" [class.never]="!key.LastUsedAt">
+              {{formatDate(key.LastUsedAt)}}
+            </span>
+          </div>
+          <div class="col-created">
+            <span class="created-value">{{formatDate(key.__mj_CreatedAt)}}</span>
+          </div>
         </div>
-
-        <!-- Empty State -->
-        <div class="empty-state" *ngIf="FilteredKeys.length === 0">
-            <i class="fa-solid fa-key"></i>
-            <span *ngIf="SearchText">No keys matching "{{SearchText}}"</span>
-            <span *ngIf="!SearchText && Filter !== 'all'">No {{Filter}} keys found</span>
-            <span *ngIf="!SearchText && Filter === 'all'">No API keys created yet</span>
-            <button class="create-empty-btn" *ngIf="Filter === 'all' && !SearchText"
-                    (click)="requestCreate()">
-                <i class="fa-solid fa-plus"></i>
-                Generate Your First Key
+      }
+      <!-- Empty State -->
+      @if (FilteredKeys.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-key"></i>
+          @if (SearchText) {
+            <span>No keys matching "{{SearchText}}"</span>
+          }
+          @if (!SearchText && Filter !== 'all') {
+            <span>No {{Filter}} keys found</span>
+          }
+          @if (!SearchText && Filter === 'all') {
+            <span>No API keys created yet</span>
+          }
+          @if (Filter === 'all' && !SearchText) {
+            <button class="create-empty-btn"
+              (click)="requestCreate()">
+              <i class="fa-solid fa-plus"></i>
+              Generate Your First Key
             </button>
+          }
         </div>
+      }
     </div>
+  }
 
-    <!-- Pagination -->
-    <div class="pagination" *ngIf="!IsLoading && FilteredKeys.length > PageSize">
-        <div class="page-info">
-            Showing {{(CurrentPage - 1) * PageSize + 1}} - {{Math.min(CurrentPage * PageSize, FilteredKeys.length)}}
-            of {{FilteredKeys.length}}
-        </div>
-        <div class="page-buttons">
-            <button class="page-btn" [disabled]="CurrentPage === 1"
-                    (click)="goToPage(CurrentPage - 1)">
-                <i class="fa-solid fa-chevron-left"></i>
+  <!-- Pagination -->
+  @if (!IsLoading && FilteredKeys.length > PageSize) {
+    <div class="pagination">
+      <div class="page-info">
+        Showing {{(CurrentPage - 1) * PageSize + 1}} - {{Math.min(CurrentPage * PageSize, FilteredKeys.length)}}
+        of {{FilteredKeys.length}}
+      </div>
+      <div class="page-buttons">
+        <button class="page-btn" [disabled]="CurrentPage === 1"
+          (click)="goToPage(CurrentPage - 1)">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        @for (page of getPageNumbers(); track page) {
+          @if (page > 0) {
+            <button class="page-btn"
+              [class.active]="page === CurrentPage"
+              (click)="goToPage(page)">
+              {{page}}
             </button>
-            <ng-container *ngFor="let page of getPageNumbers()">
-                <button class="page-btn" *ngIf="page > 0"
-                        [class.active]="page === CurrentPage"
-                        (click)="goToPage(page)">
-                    {{page}}
-                </button>
-                <span class="page-ellipsis" *ngIf="page === -1">...</span>
-            </ng-container>
-            <button class="page-btn" [disabled]="CurrentPage === getTotalPages()"
-                    (click)="goToPage(CurrentPage + 1)">
-                <i class="fa-solid fa-chevron-right"></i>
-            </button>
-        </div>
+          }
+          @if (page === -1) {
+            <span class="page-ellipsis">...</span>
+          }
+        }
+        <button class="page-btn" [disabled]="CurrentPage === getTotalPages()"
+          (click)="goToPage(CurrentPage + 1)">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
+  }
 </div>

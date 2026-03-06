@@ -274,10 +274,3 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetTypeformStatisticsAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

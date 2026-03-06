@@ -119,11 +119,3 @@ export function createCohereReranker(apiKey: string, modelName?: string): Cohere
     return new CohereReranker(apiKey, modelName);
 }
 
-/**
- * Ensure the CohereReranker class is loaded for tree-shaking prevention.
- * Import this function in your module's entry point.
- */
-export function LoadCohereReranker(): void {
-    // This function exists to ensure the class registration occurs
-    // when the module is imported, preventing tree-shaking from removing it
-}

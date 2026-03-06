@@ -1,5 +1,186 @@
 # Change Log - @memberjunction/core
 
+## 5.8.0
+
+### Minor Changes
+
+- 0753249: Add metadata migration script for v5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Minor Changes
+
+- 642c4df: Remove migration script V202603021400**v5.6.x**Optimize_RecordChange_Detection_Index because it would significantly increase database size and cause migration timeouts for AIDP upgrades (it adds an index on RecordChange that included FullRecordJSON).
+
+### Patch Changes
+
+- @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Minor Changes
+
+- 4547d05: Grant UI role Create/Update permissions on 9 agent and conversation entities so end users can use agents like Sage
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Minor Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- 06d889c: metadata -> migration
+- 3542cb6: metadata -> migration
+
+### Patch Changes
+
+- @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Minor Changes
+
+- a3e7cb6: migration
+
+### Patch Changes
+
+- Updated dependencies [4aa1b54]
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Minor Changes
+
+- bef7f69: Migration for metadata sync
+
+### Patch Changes
+
+- 61079e9: just a plan
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Minor Changes
+
+- 564e1af: migration
+
+### Patch Changes
+
+- @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Minor Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- 5af036f: Migration for metadata
+
+### Patch Changes
+
+- @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 718b0ee: migration
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- 5c7f6ab: EntityByName
+- Updated dependencies [8366d44]
+- Updated dependencies [718b0ee]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/global@4.0.0
+
+## 3.4.0
+
+### Minor Changes
+
+- a3961d5: feat(codegen): Add soft PK/FK support for messy databases
+
+### Patch Changes
+
+- @memberjunction/global@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

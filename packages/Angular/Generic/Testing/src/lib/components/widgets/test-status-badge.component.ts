@@ -3,6 +3,7 @@ import { Component, Input } from '@angular/core';
 export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Pending' | 'Timeout';
 
 @Component({
+  standalone: false,
   selector: 'app-test-status-badge',
   template: `
     <span
@@ -14,11 +15,13 @@ export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' |
       [class.test-status-badge--running]="status === 'Running'"
       [class.test-status-badge--pending]="status === 'Pending'"
       [class.test-status-badge--timeout]="status === 'Timeout'"
-    >
-      <i [class]="getIcon()" *ngIf="showIcon"></i>
+      >
+      @if (showIcon) {
+        <i [class]="getIcon()"></i>
+      }
       <span class="badge-text">{{ status }}</span>
     </span>
-  `,
+    `,
   styles: [`
     .test-status-badge {
       display: inline-flex;

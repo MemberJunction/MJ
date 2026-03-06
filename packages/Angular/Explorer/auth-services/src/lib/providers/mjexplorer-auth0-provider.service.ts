@@ -12,11 +12,6 @@ import {
   AuthErrorType,
   TokenRefreshResult
 } from '../auth-types';
-
-// Prevent tree-shaking by explicitly referencing the class
-export function LoadMJAuth0Provider() {
-}
-
 /**
  * Auth0 authentication provider implementation - v3.0.0
  *
@@ -37,33 +32,43 @@ export class MJAuth0Provider extends MJAuthBase {
    * Factory function to provide Angular dependencies required by Auth0
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => [
-    AuthService,
-    AuthGuard,
-    {
-      provide: AuthConfigService,
-      useValue: {
-        domain: environment['AUTH0_DOMAIN'],
-        clientId: environment['AUTH0_CLIENTID'],
-        authorizationParams: {
-          redirect_uri: window.location.origin,
-          scope: 'openid profile email offline_access',
-          // No audience parameter - uses ID tokens (matches pre-refactor behavior)
-          // ID tokens have aud=clientId by default and contain user claims
+  static angularProviderFactory = (environment: Record<string, unknown>) => {
+    // Check if we're on the MCP OAuth callback path
+    const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    return [
+      AuthService,
+      AuthGuard,
+      {
+        provide: AuthConfigService,
+        useValue: {
+          domain: environment['AUTH0_DOMAIN'],
+          clientId: environment['AUTH0_CLIENTID'],
+          authorizationParams: {
+            redirect_uri: window.location.origin,
+            scope: 'openid profile email offline_access',
+            // No audience parameter - uses ID tokens (matches pre-refactor behavior)
+            // ID tokens have aud=clientId by default and contain user claims
+          },
+          cacheLocation: 'localstorage',
+          // Enable refresh tokens so we can refresh without relying on Auth0 session cookies
+          useRefreshTokens: true,
+          // Use rotating refresh tokens for better security
+          useRefreshTokensFallback: true,
+          // CRITICAL: Skip Auth0's redirect callback handling for MCP OAuth callbacks
+          // The /oauth/callback path is used by MCP OAuth, not Auth0. If we don't skip,
+          // Auth0 will consume the code parameter and redirect to /, preventing the
+          // OAuthCallbackComponent from processing the MCP OAuth flow.
+          skipRedirectCallback: isMCPOAuthCallback,
         },
-        cacheLocation: 'localstorage',
-        // Enable refresh tokens so we can refresh without relying on Auth0 session cookies
-        useRefreshTokens: true,
-        // Use rotating refresh tokens for better security
-        useRefreshTokensFallback: true,
       },
-    },
-    {
-      provide: Auth0ClientService,
-      useFactory: Auth0ClientFactory.createClient,
-      deps: [AuthClientConfig],
-    }
-  ];
+      {
+        provide: Auth0ClientService,
+        useFactory: Auth0ClientFactory.createClient,
+        deps: [AuthClientConfig],
+      }
+    ];
+  };
 
   constructor(public auth: AuthService) {
     const config: AngularAuthProviderConfig = {

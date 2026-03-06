@@ -38,7 +38,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
         }
         
         const result = await utilities.rv.RunView({
-          EntityName: 'Entities',
+          EntityName: 'MJ: Entities',
           Fields: ['ID', 'Name', 'DisplayName', 'NameSuffix', 'Description', 'SchemaName', 'BaseTable', 'BaseView'],
           OrderBy: `${sortBy} ${sortDirection.toUpperCase()}`,
           ExtraFilter: filterParts.length > 0 ? filterParts.join(' AND ') : undefined
@@ -79,7 +79,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
       try {
         // Load fields
         const fieldsResult = await utilities.rv.RunView({
-          EntityName: 'Entity Fields',
+          EntityName: 'MJ: Entity Fields',
           Fields: ['Name', 'DisplayName', 'Type', 'Length', 'AllowsNull', 'IsPrimaryKey', 'IsUnique', 'Sequence'],
           OrderBy: 'Sequence ASC, Name ASC',
           ExtraFilter: `EntityID = '${selectedEntityId}'`
@@ -93,7 +93,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
         
         // Load relationships
         const relationshipsResult = await utilities.rv.RunView({
-          EntityName: 'Entity Relationships',
+          EntityName: 'MJ: Entity Relationships',
           Fields: ['RelatedEntity', 'Type', 'DisplayName', 'RelatedEntityJoinField', 'Sequence'],
           OrderBy: 'Sequence ASC, RelatedEntity ASC',
           ExtraFilter: `EntityID = '${selectedEntityId}'`
@@ -178,9 +178,9 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
     console.log('Root handleOpenRecord called with entityName:', entityName);
     console.log('Callbacks object:', callbacks);
     if (callbacks?.OpenEntityRecord && entityName) {
-      console.log('Calling OpenEntityRecord callback with:', 'Entities', entityName);
+      console.log('Calling OpenEntityRecord callback with:', 'MJ: Entities', entityName);
       // Open the Entities entity record for the selected entity
-      callbacks.OpenEntityRecord('Entities', [{ FieldName: 'Name', Value: entityName }]);
+      callbacks.OpenEntityRecord('MJ: Entities', [{ FieldName: 'Name', Value: entityName }]);
     } else {
       console.error('OpenEntityRecord callback not available or entityName missing');
     }

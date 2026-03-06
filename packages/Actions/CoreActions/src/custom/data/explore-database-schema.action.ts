@@ -570,10 +570,3 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
         return defaultValue;
     }
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadExploreDatabaseSchemaAction() {
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, "Explore Database Schema");
-}

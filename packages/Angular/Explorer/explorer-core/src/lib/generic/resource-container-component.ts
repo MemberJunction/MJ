@@ -7,6 +7,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
   selector: 'mj-resource',
   template: `<div [style.display]="!isVisible ? 'none' : 'block'" ><ng-template mjContainer ></ng-template></div>`,
 })

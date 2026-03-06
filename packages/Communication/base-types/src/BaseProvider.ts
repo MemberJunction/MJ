@@ -1,6 +1,6 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
 
 /**
@@ -31,7 +31,7 @@ export class Message {
     /**
      * The type of message to send
      */
-    public MessageType: CommunicationProviderMessageTypeEntity;
+    public MessageType: MJCommunicationProviderMessageTypeEntity;
 
     /**
      * The sender of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
@@ -74,7 +74,7 @@ export class Message {
      * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will
      * also be used to render the HTMLBody
      */
-    public BodyTemplate?: TemplateEntityExtended;
+    public BodyTemplate?: MJTemplateEntityExtended;
 
     /**
      * The HTML body of the message
@@ -86,7 +86,7 @@ export class Message {
      * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having
      * an HTML option.
      */
-    public HTMLBodyTemplate?: TemplateEntityExtended;
+    public HTMLBodyTemplate?: MJTemplateEntityExtended;
 
     /**
      * The subject line for the message, used if SubjectTemplate is not provided and only supported by some providers
@@ -95,7 +95,7 @@ export class Message {
     /**
      * Optional, when provided, Subject is ignored and the template is used to render the message
      */
-    public SubjectTemplate?: TemplateEntityExtended;
+    public SubjectTemplate?: MJTemplateEntityExtended;
 
     /**
      * Optional, any context data that is needed to render the message template
@@ -142,7 +142,7 @@ export abstract class ProcessedMessage extends Message {
  * MessageResult class, holds information and functionality specific to a single message result
  */
 export class MessageResult {
-    public Run?: CommunicationRunEntity;
+    public Run?: MJCommunicationRunEntity;
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
@@ -961,13 +961,13 @@ export abstract class BaseCommunicationProvider {
 
 }
 
-@RegisterClass(BaseEntity, 'Communication Providers') // sub-class to extend the properties of the base entity
-export class CommunicationProviderEntityExtended extends CommunicationProviderEntity {
-    private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
-    public get MessageTypes(): CommunicationProviderMessageTypeEntity[] {
+@RegisterClass(BaseEntity, 'MJ: Communication Providers') // sub-class to extend the properties of the base entity
+export class MJCommunicationProviderEntityExtended extends MJCommunicationProviderEntity {
+    private _ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[];
+    public get MessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
         return this._ProviderMessageTypes;
     }
-    public set MessageTypes(value: CommunicationProviderMessageTypeEntity[]) {
+    public set MessageTypes(value: MJCommunicationProviderMessageTypeEntity[]) {
         this._ProviderMessageTypes = value;
     }
 }

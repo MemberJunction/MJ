@@ -1,14 +1,14 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIVendorEntity, AIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJAIVendorEntity, MJAIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface ModelDisplayData extends AIModelEntityExtended {
+interface ModelDisplayData extends MJAIModelEntityExtended {
   VendorName?: string;
   VendorID?: string; // Add this since we're using it for filtering
   ModelTypeName?: string;
@@ -32,18 +32,12 @@ interface ModelManagementUserPreferences {
 }
 
 /**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIModelsResource() {
-  // Force inclusion in production builds
-}
-
-/**
  * AI Models Resource - displays AI model management
  * Extends BaseResourceComponent to work with the resource type system
  */
 @RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
+  standalone: false,
   selector: 'app-model-management',
   templateUrl: './model-management.component.html',
   styleUrls: ['./model-management.component.css']
@@ -61,11 +55,11 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data - Keep as AIModelEntityExtended to preserve getters
-  public models: AIModelEntityExtended[] = [];
-  public filteredModels: AIModelEntityExtended[] = [];
-  public vendors: AIVendorEntity[] = [];
-  public modelTypes: AIModelTypeEntity[] = [];
+  // Data - Keep as MJAIModelEntityExtended to preserve getters
+  public models: MJAIModelEntityExtended[] = [];
+  public filteredModels: MJAIModelEntityExtended[] = [];
+  public vendors: MJAIVendorEntity[] = [];
+  public modelTypes: MJAIModelTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -115,7 +109,8 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   constructor(
     private sharedService: SharedService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
 
@@ -314,6 +309,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         clearInterval(this.loadingMessageInterval);
       }
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
 
@@ -386,12 +382,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       }
 
       // Vendor filter
-      if (this.selectedVendor !== 'all' && model.VendorID !== this.selectedVendor) {
+      if (this.selectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.selectedVendor)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && model.AIModelTypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.selectedType)) {
         return false;
       }
 
@@ -513,13 +509,13 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
-    this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
   }
 
   /**
    * Show the detail panel for a model
    */
-  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -552,7 +548,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
+      const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';
@@ -560,7 +556,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         
         if (await newModel.Save()) {
           const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
-          this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+          this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
 
           // Reload the data
           await this.loadInitialData();

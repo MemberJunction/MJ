@@ -1,0 +1,124 @@
+.appearance-settings {
+  padding: 0;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: var(--mj-text-primary, #1a1a1a);
+}
+
+.section-description {
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary, #666);
+  margin: 0 0 1.5rem 0;
+}
+
+.coming-soon-banner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, var(--mj-primary-light, #dbeafe) 0%, var(--mj-info-bg, #e0f2fe) 100%);
+  border-radius: 16px;
+  margin-bottom: 2rem;
+}
+
+.banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.banner-icon i {
+  font-size: 2rem;
+  color: var(--mj-primary-color, #3b82f6);
+}
+
+.banner-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--mj-text-primary, #1f2937);
+  margin: 0 0 0.5rem 0;
+}
+
+.banner-content p {
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary, #4b5563);
+  margin: 0;
+}
+
+.planned-features {
+  margin-top: 1rem;
+}
+
+.features-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mj-text-secondary, #6b7280);
+  margin: 0 0 1rem 0;
+}
+
+.features-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feature-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--mj-surface-color, #fff);
+  border: 1px solid var(--mj-border-color, #e5e7eb);
+  border-radius: 12px;
+  opacity: 0.7;
+}
+
+.feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--mj-surface-secondary, #f3f4f6);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.feature-icon i {
+  font-size: 1rem;
+  color: var(--mj-text-secondary, #6b7280);
+}
+
+.feature-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.feature-title {
+  font-weight: 500;
+  color: var(--mj-text-primary, #1f2937);
+}
+
+.feature-desc {
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary, #6b7280);
+}
+
+@media (max-width: 480px) {
+  .coming-soon-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+}

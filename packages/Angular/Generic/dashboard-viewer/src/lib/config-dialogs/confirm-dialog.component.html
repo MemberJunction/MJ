@@ -1,23 +1,24 @@
 <!-- Confirm Dialog -->
-<div class="config-dialog-overlay" *ngIf="visible" (click)="cancel()">
+@if (visible) {
+  <div class="config-dialog-overlay" (click)="cancel()">
     <div class="config-dialog confirm-dialog" (click)="$event.stopPropagation()">
-        <!-- Content -->
-        <div class="dialog-content">
-            <div class="confirm-icon" [class.warning]="type === 'warning'" [class.danger]="type === 'danger'">
-                <i [class]="getIcon()"></i>
-            </div>
-            <h3 class="confirm-title">{{ title }}</h3>
-            <p class="confirm-message">{{ message }}</p>
+      <!-- Content -->
+      <div class="dialog-content">
+        <div class="confirm-icon" [class.warning]="type === 'warning'" [class.danger]="type === 'danger'">
+          <i [class]="getIcon()"></i>
         </div>
-
-        <!-- Footer - Action button on left, Cancel on right -->
-        <div class="dialog-footer">
-            <button
-                [class]="type === 'danger' ? 'btn-danger' : 'btn-primary'"
-                (click)="confirm()">
-                {{ confirmText }}
-            </button>
-            <button class="btn-secondary" (click)="cancel()">{{ cancelText }}</button>
-        </div>
+        <h3 class="confirm-title">{{ title }}</h3>
+        <p class="confirm-message">{{ message }}</p>
+      </div>
+      <!-- Footer - Action button on left, Cancel on right -->
+      <div class="dialog-footer">
+        <button
+          [class]="type === 'danger' ? 'btn-danger' : 'btn-primary'"
+          (click)="confirm()">
+          {{ confirmText }}
+        </button>
+        <button class="btn-secondary" (click)="cancel()">{{ cancelText }}</button>
+      </div>
     </div>
-</div>
+  </div>
+}

@@ -3,11 +3,11 @@ import fs from 'fs';
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import { UserInfo, Metadata, RunView } from "@memberjunction/core";
-import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
+import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config()
+dotenv.config({ quiet: true })
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {
@@ -33,8 +33,8 @@ export class AutotagLocalFileSystem extends AutotagBase {
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
+        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+        const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
         await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
@@ -44,8 +44,8 @@ export class AutotagLocalFileSystem extends AutotagBase {
     * @param contentSources - An array of content sources to check for modified or added content source items
     * @returns - An array of content source items that have been modified or added after the most recent process run for that content source
     */
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
 
         for (const contentSource of contentSources) {
             // First check that the directory exists
@@ -75,7 +75,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         return contentItemsToProcess;
     }
 
-    public async setContentSourceParams(contentSource: ContentSourceEntity) { 
+    public async setContentSourceParams(contentSource: MJContentSourceEntity) { 
         // If content source parameters were provided, set them. Otherwise, use the default values.
         const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
         if (contentSourceParamsMap) {
@@ -107,8 +107,8 @@ export class AutotagLocalFileSystem extends AutotagBase {
      * @param contextUser 
      * @returns 
      */
-    public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<ContentItemEntity[]> {
-        const contentItems: ContentItemEntity[] = []
+    public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
+        const contentItems: MJContentItemEntity[] = []
         let contentSourcePath = contentSourceParams.URL
         const filesAndDirs = fs.readdirSync(contentSourcePath)
 
@@ -138,10 +138,10 @@ export class AutotagLocalFileSystem extends AutotagBase {
         return contentItems;
     }
 
-    public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> { 
+    public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> { 
         const md = new Metadata();
         const text = await this.engine.parseFileFromPath(filePath);
-        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         contentItem.NewRecord();
         contentItem.ContentSourceID = contentSourceParams.contentSourceID
         contentItem.Name = contentSourceParams.name
@@ -161,9 +161,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
         }
     }
 
-    public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> {
+    public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
         const md = new Metadata();
-        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
         await contentItem.Load(contentItemID);
         const text = await this.engine.parseFileFromPath(filePath);

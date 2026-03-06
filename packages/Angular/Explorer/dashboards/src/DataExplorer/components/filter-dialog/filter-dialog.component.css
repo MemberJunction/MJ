@@ -99,7 +99,7 @@
 /* Content */
 .dialog-content {
   flex: 1;
-  overflow: visible;
+  overflow-y: auto;
   padding: 20px;
   min-height: 200px;
 }

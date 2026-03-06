@@ -1,14 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-list',
   template: `
     <div class="conversation-list" kendoDialogContainer>
@@ -64,8 +66,8 @@ import { takeUntil } from 'rxjs/operators';
             <div class="chat-list" [class.expanded]="pinnedExpanded">
               @for (conversation of pinnedConversations; track conversation.ID) {
                 <div class="conversation-item"
-                     [class.active]="conversation.ID === selectedConversationId"
-                     [class.renamed]="conversation.ID === renamedConversationId"
+                     [class.active]="IsConversationActive(conversation)"
+                     [class.renamed]="IsConversationRenamed(conversation)"
                      (click)="handleConversationClick(conversation)">
                   @if (isSelectionMode) {
                     <div class="conversation-checkbox">
@@ -93,7 +95,7 @@ import { takeUntil } from 'rxjs/operators';
                       <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                         <i class="fas fa-ellipsis"></i>
                       </button>
-                      @if (openMenuConversationId === conversation.ID) {
+                      @if (IsMenuOpen(conversation)) {
                         <div class="context-menu" (click)="$event.stopPropagation()">
                           <button class="menu-item" (click)="togglePin(conversation, $event)">
                             <i class="fas fa-thumbtack"></i>
@@ -129,8 +131,8 @@ import { takeUntil } from 'rxjs/operators';
           <div class="chat-list" [class.expanded]="directMessagesExpanded">
             @for (conversation of unpinnedConversations; track conversation.ID) {
               <div class="conversation-item"
-                   [class.active]="conversation.ID === selectedConversationId"
-                   [class.renamed]="conversation.ID === renamedConversationId"
+                   [class.active]="IsConversationActive(conversation)"
+                   [class.renamed]="IsConversationRenamed(conversation)"
                    (click)="handleConversationClick(conversation)">
                 @if (isSelectionMode) {
                   <div class="conversation-checkbox">
@@ -158,7 +160,7 @@ import { takeUntil } from 'rxjs/operators';
                     <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                       <i class="fas fa-ellipsis"></i>
                     </button>
-                    @if (openMenuConversationId === conversation.ID) {
+                    @if (IsMenuOpen(conversation)) {
                       <div class="context-menu" (click)="$event.stopPropagation()">
                         <button class="menu-item" (click)="togglePin(conversation, $event)">
                           <i class="fas fa-thumbtack"></i>
@@ -724,9 +726,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
 
   @Output() conversationSelected = new EventEmitter<string>();
+  @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
+  @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -748,7 +752,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  get filteredConversations(): ConversationEntity[] {
+  get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
       return this.conversationData.conversations;
     }
@@ -818,11 +822,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.isRefreshing = true;
     try {
       await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+      // Signal parent to also reload messages in the active conversation
+      this.refreshRequested.emit();
     } catch (error) {
       console.error('Error refreshing conversations:', error);
       await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');
     } finally {
       this.isRefreshing = false;
+      this.cdr.detectChanges();
       this.closeHeaderMenu();
     }
   }
@@ -847,7 +854,19 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.pinnedExpanded = !this.pinnedExpanded;
   }
 
-  selectConversation(conversation: ConversationEntity): void {
+  IsConversationActive(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.selectedConversationId);
+  }
+
+  IsConversationRenamed(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.renamedConversationId);
+  }
+
+  IsMenuOpen(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.openMenuConversationId, conversation.ID);
+  }
+
+  selectConversation(conversation: MJConversationEntity): void {
     this.conversationSelected.emit(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
@@ -859,7 +878,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.newConversationRequested.emit();
   }
 
-  async renameConversation(conversation: ConversationEntity): Promise<void> {
+  async renameConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const result = await this.dialogService.input({
         title: 'Edit Conversation',
@@ -894,7 +913,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  async deleteConversation(conversation: ConversationEntity): Promise<void> {
+  async deleteConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -904,7 +923,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       });
 
       if (confirmed) {
-        await this.conversationData.deleteConversation(conversation.ID, this.currentUser);
+        const deletedId = conversation.ID;
+        await this.conversationData.deleteConversation(deletedId, this.currentUser);
+        this.cdr.detectChanges();
+        this.conversationDeleted.emit(deletedId);
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
@@ -921,7 +943,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.openMenuConversationId = null;
   }
 
-  async togglePin(conversation: ConversationEntity, event?: Event): Promise<void> {
+  async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
     try {
       await this.conversationData.togglePin(conversation.ID, this.currentUser);
@@ -998,7 +1020,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  handleConversationClick(conversation: ConversationEntity): void {
+  handleConversationClick(conversation: MJConversationEntity): void {
     if (this.isSelectionMode) {
       this.toggleConversationSelection(conversation.ID);
     } else {

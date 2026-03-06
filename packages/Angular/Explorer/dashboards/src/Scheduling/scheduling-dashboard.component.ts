@@ -1,21 +1,21 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
+import { SchedulingInstrumentationService } from './services/scheduling-instrumentation.service';
 
 interface SchedulingDashboardState {
   activeTab: string;
-  monitoringState: any;
-  jobsState: any;
-  historyState: any;
-  typesState: any;
-  healthState: any;
+  dashboardState: Record<string, unknown>;
+  jobsState: Record<string, unknown>;
+  activityState: Record<string, unknown>;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-dashboard',
   templateUrl: './scheduling-dashboard.component.html',
   styleUrls: ['./scheduling-dashboard.component.css'],
@@ -23,72 +23,77 @@ interface SchedulingDashboardState {
 })
 @RegisterClass(BaseDashboard, 'SchedulingDashboard')
 export class SchedulingDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
-  public isLoading = false;
-  public activeTab = 'monitoring';
-  public selectedIndex = 0;
+  public IsLoading = false;
+  public ActiveTab = 'dashboard';
 
-  // Component states
-  public monitoringState: any = null;
-  public jobsState: any = null;
-  public historyState: any = null;
-  public typesState: any = null;
-  public healthState: any = null;
+  public DashboardState: Record<string, unknown> = {};
+  public JobsState: Record<string, unknown> = {};
+  public ActivityState: Record<string, unknown> = {};
 
-  // Track visited tabs for lazy loading
   private visitedTabs = new Set<string>();
-
-  // Navigation items
-  public navigationItems: string[] = ['monitoring', 'jobs', 'history', 'types', 'health'];
-
-  public navigationConfig = [
-    { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: false },
-    { text: 'Jobs', icon: 'fa-solid fa-calendar-alt', selected: false },
-    { text: 'History', icon: 'fa-solid fa-history', selected: false },
-    { text: 'Types', icon: 'fa-solid fa-cogs', selected: false },
-    { text: 'Health', icon: 'fa-solid fa-heartbeat', selected: false }
-  ];
-
   private stateChangeSubject = new Subject<SchedulingDashboardState>();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  public ActiveJobCount = 0;
+  public AlertCount = 0;
+
+  private kpiSub: Subscription | undefined;
+  private alertSub: Subscription | undefined;
+
+  public NavigationItems = [
+    { id: 'dashboard', text: 'Dashboard', icon: 'fa-solid fa-gauge-high' },
+    { id: 'jobs', text: 'Jobs', icon: 'fa-solid fa-calendar-check' },
+    { id: 'activity', text: 'Activity', icon: 'fa-solid fa-clock-rotate-left' }
+  ];
+
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private schedulingService: SchedulingInstrumentationService
+  ) {
     super();
     this.setupStateManagement();
-    this.updateNavigationSelection();
   }
 
-
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return "Scheduling"
+    return 'Scheduling';
   }
 
   ngAfterViewInit(): void {
-    this.visitedTabs.add(this.activeTab);
-    this.updateNavigationSelection();
-    this.emitStateChange();
+    this.visitedTabs.add(this.ActiveTab);
+    this.loadSidebarCounts();
     this.cdr.detectChanges();
   }
 
   ngOnDestroy(): void {
     this.stateChangeSubject.complete();
+    if (this.kpiSub) this.kpiSub.unsubscribe();
+    if (this.alertSub) this.alertSub.unsubscribe();
   }
 
-  public onTabChange(tabId: string): void {
-    this.activeTab = tabId;
-    const index = this.navigationItems.indexOf(tabId);
+  private loadSidebarCounts(): void {
+    this.kpiSub = this.schedulingService.kpis$.subscribe(kpis => {
+      this.ActiveJobCount = kpis.totalActiveJobs;
+      this.cdr.markForCheck();
+    });
 
-    this.selectedIndex = index >= 0 ? index : 0;
-    this.updateNavigationSelection();
+    this.alertSub = this.schedulingService.alerts$.subscribe(alerts => {
+      this.AlertCount = alerts.length;
+      this.cdr.markForCheck();
+    });
+  }
+
+  public OnTabChange(tabId: string): void {
+    this.ActiveTab = tabId;
+    this.visitedTabs.add(tabId);
 
     setTimeout(() => {
       SharedService.Instance.InvokeManualResize();
     }, 100);
 
-    this.visitedTabs.add(tabId);
     this.emitStateChange();
     this.cdr.markForCheck();
   }
 
-  public hasVisited(tabId: string): boolean {
+  public HasVisited(tabId: string): boolean {
     return this.visitedTabs.has(tabId);
   }
 
@@ -101,97 +106,50 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
 
   private emitStateChange(): void {
-    const state: SchedulingDashboardState = {
-      activeTab: this.activeTab,
-      monitoringState: this.monitoringState || {},
-      jobsState: this.jobsState || {},
-      historyState: this.historyState || {},
-      typesState: this.typesState || {},
-      healthState: this.healthState || {}
-    };
-
-    this.stateChangeSubject.next(state);
+    this.stateChangeSubject.next({
+      activeTab: this.ActiveTab,
+      dashboardState: this.DashboardState,
+      jobsState: this.JobsState,
+      activityState: this.ActivityState
+    });
   }
 
-  public onMonitoringStateChange(state: any): void {
-    this.monitoringState = state;
+  public OnDashboardStateChange(state: Record<string, unknown>): void {
+    this.DashboardState = state;
     this.emitStateChange();
   }
 
-  public onJobsStateChange(state: any): void {
-    this.jobsState = state;
+  public OnJobsStateChange(state: Record<string, unknown>): void {
+    this.JobsState = state;
     this.emitStateChange();
   }
 
-  public onHistoryStateChange(state: any): void {
-    this.historyState = state;
+  public OnActivityStateChange(state: Record<string, unknown>): void {
+    this.ActivityState = state;
     this.emitStateChange();
   }
 
-  public onTypesStateChange(state: any): void {
-    this.typesState = state;
-    this.emitStateChange();
-  }
-
-  public onHealthStateChange(state: any): void {
-    this.healthState = state;
-    this.emitStateChange();
-  }
-
-  public loadUserState(state: Partial<SchedulingDashboardState>): void {
-    if (state.activeTab) {
-      this.activeTab = state.activeTab;
-      const index = this.navigationItems.indexOf(state.activeTab);
-      this.selectedIndex = index >= 0 ? index : 0;
-      this.visitedTabs.add(state.activeTab);
-      this.updateNavigationSelection();
-    }
-
-    if (state.monitoringState) this.monitoringState = state.monitoringState;
-    if (state.jobsState) this.jobsState = state.jobsState;
-    if (state.historyState) this.historyState = state.historyState;
-    if (state.typesState) this.typesState = state.typesState;
-    if (state.healthState) this.healthState = state.healthState;
-
-    this.cdr.markForCheck();
+  public GetCurrentTabLabel(): string {
+    const item = this.NavigationItems.find(n => n.id === this.ActiveTab);
+    return item ? item.text : 'Scheduling';
   }
 
   initDashboard(): void {
-    try {
-      this.isLoading = true;
-    } catch (error) {
-      console.error('Error initializing Scheduling dashboard:', error);
-      this.Error.emit(new Error('Failed to initialize Scheduling dashboard. Please try again.'));
-    } finally {
-      this.isLoading = false;
-    }
+    this.IsLoading = false;
   }
 
   loadData(): void {
     if (this.Config?.userState) {
-      setTimeout(() => {
-        if (this.Config?.userState) {
-          this.loadUserState(this.Config.userState);
-        }
-      }, 0);
+      const state = this.Config.userState as Partial<SchedulingDashboardState>;
+      if (state.activeTab) {
+        this.ActiveTab = state.activeTab;
+        this.visitedTabs.add(state.activeTab);
+      }
+      if (state.dashboardState) this.DashboardState = state.dashboardState;
+      if (state.jobsState) this.JobsState = state.jobsState;
+      if (state.activityState) this.ActivityState = state.activityState;
+      this.cdr.markForCheck();
     }
-
     this.NotifyLoadComplete();
   }
-
-  public getCurrentTabLabel(): string {
-    const tabIndex = this.navigationItems.indexOf(this.activeTab);
-    const labels = ['Monitor', 'Jobs', 'History', 'Types', 'Health'];
-    return tabIndex >= 0 ? labels[tabIndex] : 'Scheduling Management';
-  }
-
-  private updateNavigationSelection(): void {
-    this.navigationConfig.forEach((item, index) => {
-      item.selected = this.navigationItems[index] === this.activeTab;
-    });
-  }
-}
-
-export function LoadSchedulingDashboard() {
-  // Prevents tree-shaking
 }

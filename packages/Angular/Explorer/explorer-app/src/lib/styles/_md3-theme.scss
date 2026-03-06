@@ -1,58 +1,61 @@
 /* =============================================================================
    Material Design 3 Theme Variables
-   Maps MD3 design tokens to MemberJunction's existing color palette
+   Maps MD3 design tokens to MemberJunction's --mj-* token system.
+   By referencing --mj-* tokens (which have dark mode overrides in _tokens.scss),
+   these --mat-sys-* aliases automatically adapt to dark mode.
    ============================================================================= */
 
 :root {
-  /* Primary Colors - Using MJ Blue (#0076B6) */
-  --mat-sys-primary: #0076b6;
-  --mat-sys-on-primary: #ffffff;
-  --mat-sys-primary-container: #aae7fd;
-  --mat-sys-on-primary-container: #001f2a;
+  /* Primary Colors */
+  --mat-sys-primary: var(--mj-brand-primary);
+  --mat-sys-on-primary: var(--mj-brand-on-primary);
+  --mat-sys-primary-container: var(--mj-brand-accent-subtle);
+  --mat-sys-on-primary-container: var(--mj-text-primary);
+  --mat-sys-primary-hover: var(--mj-brand-primary-hover);
 
-  /* Secondary Colors - Using Navy (#092340) */
-  --mat-sys-secondary: #092340;
-  --mat-sys-on-secondary: #ffffff;
-  --mat-sys-secondary-container: #c8e6ff;
-  --mat-sys-on-secondary-container: #001e2f;
+  /* Secondary Colors */
+  --mat-sys-secondary: var(--mj-brand-secondary);
+  --mat-sys-on-secondary: var(--mj-brand-on-secondary);
+  --mat-sys-secondary-container: var(--mj-brand-accent-subtle);
+  --mat-sys-on-secondary-container: var(--mj-text-primary);
 
   /* Tertiary Colors */
-  --mat-sys-tertiary: #5e5d72;
-  --mat-sys-on-tertiary: #ffffff;
-  --mat-sys-tertiary-container: #e3dff9;
-  --mat-sys-on-tertiary-container: #1a1a2c;
+  --mat-sys-tertiary: var(--mj-brand-tertiary);
+  --mat-sys-on-tertiary: var(--mj-brand-on-tertiary);
+  --mat-sys-tertiary-container: var(--mj-brand-tertiary-subtle);
+  --mat-sys-on-tertiary-container: var(--mj-text-primary);
 
   /* Error Colors */
-  --mat-sys-error: #ba1a1a;
-  --mat-sys-on-error: #ffffff;
-  --mat-sys-error-container: #ffdad6;
-  --mat-sys-on-error-container: #410002;
+  --mat-sys-error: var(--mj-status-error);
+  --mat-sys-on-error: var(--mj-text-inverse);
+  --mat-sys-error-container: var(--mj-status-error-bg);
+  --mat-sys-on-error-container: var(--mj-status-error-text);
 
-  /* Surface Colors - Using existing gray palette */
-  --mat-sys-surface: #ffffff;
-  --mat-sys-on-surface: #333333;
-  --mat-sys-surface-variant: #f4f4f4;
-  --mat-sys-on-surface-variant: #666666;
+  /* Surface Colors */
+  --mat-sys-surface: var(--mj-bg-surface);
+  --mat-sys-on-surface: var(--mj-text-primary);
+  --mat-sys-surface-variant: var(--mj-bg-surface-card);
+  --mat-sys-on-surface-variant: var(--mj-text-secondary);
 
   /* Surface Container Levels */
-  --mat-sys-surface-container-lowest: #ffffff;
-  --mat-sys-surface-container-low: #fafafa;
-  --mat-sys-surface-container: #f4f4f4;
-  --mat-sys-surface-container-high: #eeeeee;
-  --mat-sys-surface-container-highest: #e8e8e8;
+  --mat-sys-surface-container-lowest: var(--mj-bg-surface);
+  --mat-sys-surface-container-low: var(--mj-bg-surface-card);
+  --mat-sys-surface-container: var(--mj-bg-surface-sunken);
+  --mat-sys-surface-container-high: var(--mj-bg-surface-hover);
+  --mat-sys-surface-container-highest: var(--mj-bg-surface-active);
 
   /* Outline Colors */
-  --mat-sys-outline: #d9d9d9;
-  --mat-sys-outline-variant: #e8e8e8;
+  --mat-sys-outline: var(--mj-border-strong);
+  --mat-sys-outline-variant: var(--mj-border-default);
 
   /* Inverse Colors */
-  --mat-sys-inverse-surface: #2e3033;
-  --mat-sys-inverse-on-surface: #f1f0f4;
-  --mat-sys-inverse-primary: #5dd4fc;
+  --mat-sys-inverse-surface: var(--mj-text-primary);
+  --mat-sys-inverse-on-surface: var(--mj-bg-surface);
+  --mat-sys-inverse-primary: var(--mj-brand-primary);
 
   /* Shadow and Scrim */
   --mat-sys-shadow: rgba(0, 0, 0, 0.25);
-  --mat-sys-scrim: rgba(0, 0, 0, 0.5);
+  --mat-sys-scrim: var(--mj-bg-overlay);
 
   /* State Layer Opacities */
   --mat-sys-state-hover-opacity: 0.08;
@@ -61,14 +64,14 @@
   --mat-sys-state-dragged-opacity: 0.16;
 
   /* Elevation Levels (Box Shadows) */
-  --mat-sys-elevation-0: none;
-  --mat-sys-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
-  --mat-sys-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
-  --mat-sys-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
-  --mat-sys-elevation-4: 0 2px 3px rgba(0, 0, 0, 0.3), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
-  --mat-sys-elevation-5: 0 4px 4px rgba(0, 0, 0, 0.3), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+  --mat-sys-elevation-0: var(--mj-shadow-none);
+  --mat-sys-elevation-1: var(--mj-shadow-sm);
+  --mat-sys-elevation-2: var(--mj-shadow-md);
+  --mat-sys-elevation-3: var(--mj-shadow-lg);
+  --mat-sys-elevation-4: var(--mj-shadow-xl);
+  --mat-sys-elevation-5: var(--mj-shadow-2xl);
 
-  /* Typography Tokens - Using Roboto */
+  /* Typography Tokens */
   --mat-sys-font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Display */
@@ -97,11 +100,11 @@
   --mat-sys-body-small: 400 12px/16px var(--mat-sys-font-family);
 
   /* Shape - Corner Radii */
-  --mat-sys-corner-none: 0;
-  --mat-sys-corner-extra-small: 4px;
-  --mat-sys-corner-small: 8px;
-  --mat-sys-corner-medium: 12px;
-  --mat-sys-corner-large: 16px;
-  --mat-sys-corner-extra-large: 28px;
-  --mat-sys-corner-full: 9999px;
+  --mat-sys-corner-none: var(--mj-radius-none);
+  --mat-sys-corner-extra-small: var(--mj-radius-sm);
+  --mat-sys-corner-small: var(--mj-radius-md);
+  --mat-sys-corner-medium: var(--mj-radius-lg);
+  --mat-sys-corner-large: var(--mj-radius-xl);
+  --mat-sys-corner-extra-large: var(--mj-radius-2xl);
+  --mat-sys-corner-full: var(--mj-radius-full);
 }

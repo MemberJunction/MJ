@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import * as nunjucks from "nunjucks";
+import nunjucks from "nunjucks";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -124,8 +124,8 @@ export class DataMapperAction extends BaseAction {
 
             // Get other parameters
             const templateType = (templateTypeParam?.Value?.toString() || 'object').toLowerCase();
-            const iterateArrays = iterateArraysParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
-            const strictVariables = strictVariablesParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const iterateArrays = iterateArraysParam?.Value?.toString()?.toLowerCase() === 'true';
+            const strictVariables = strictVariablesParam?.Value?.toString()?.toLowerCase() === 'true';
 
             // Configure Nunjucks environment for strict variables if needed
             let activeEnv = this.nunjucksEnv;
@@ -308,11 +308,4 @@ export class DataMapperAction extends BaseAction {
             throw new Error(`Template rendering error: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-}
-
-/**
- * Loader function to ensure the DataMapperAction class is included in the bundle
- */
-export function LoadDataMapperAction() {
-    // Stub function to prevent tree shaking
 }

@@ -3,16 +3,9 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 'rxjs';
-
-export function LoadChatCollectionsResource() {
-  // Force inclusion in production builds (tree shaking workaround)
-  // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatCollectionsResource(null!, null!, null!, null!, null!);
-}
-
 /**
  * Chat Collections Resource - displays the collections full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -21,26 +14,29 @@ export function LoadChatCollectionsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ChatCollectionsResource')
 @Component({
+  standalone: false,
   selector: 'mj-chat-collections-resource',
   template: `
     <div class="chat-collections-container">
       <!-- Collections view -->
       <div class="collections-main" [class.with-artifact-panel]="isArtifactPanelOpen && activeArtifactId">
-        <mj-collections-full-view
-          *ngIf="currentUser"
-          [environmentId]="environmentId"
-          [currentUser]="currentUser">
-        </mj-collections-full-view>
+        @if (currentUser) {
+          <mj-collections-full-view
+            [environmentId]="environmentId"
+            [currentUser]="currentUser">
+          </mj-collections-full-view>
+        }
       </div>
-
+    
       <!-- Artifact Panel -->
-      <ng-container *ngIf="isArtifactPanelOpen && activeArtifactId">
-        <div class="artifact-panel-resize-handle"
-             *ngIf="!isArtifactPanelMaximized"
-             (mousedown)="onResizeStart($event)"></div>
+      @if (isArtifactPanelOpen && activeArtifactId) {
+        @if (!isArtifactPanelMaximized) {
+          <div class="artifact-panel-resize-handle"
+          (mousedown)="onResizeStart($event)"></div>
+        }
         <div class="artifact-panel"
-             [style.width.%]="artifactPanelWidth"
-             [class.maximized]="isArtifactPanelMaximized">
+          [style.width.%]="artifactPanelWidth"
+          [class.maximized]="isArtifactPanelMaximized">
           <mj-artifact-viewer-panel
             [artifactId]="activeArtifactId"
             [currentUser]="currentUser"
@@ -58,9 +54,9 @@ export function LoadChatCollectionsResource() {
             (openEntityRecord)="onOpenEntityRecord($event)">
           </mj-artifact-viewer-panel>
         </div>
-      </ng-container>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;
@@ -491,7 +487,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**

@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 
 @Component({
+  standalone: false,
     selector: 'mj-json-viewer-window',
     template: `
         <div class="json-dialog-content">

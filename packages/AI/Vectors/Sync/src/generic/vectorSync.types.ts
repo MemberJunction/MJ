@@ -1,7 +1,7 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { EntityDocumentEntity, TemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export type VectorizeEntityParams = {
     entityID: string;
@@ -67,8 +67,8 @@ export type AnnotateWorkerContext = {
     executionId: number;
     entity: BaseEntity;
     entityDocument: Record<string, unknown>;
-    template: TemplateEntityExtended;
-    templateContent: TemplateContentEntity;
+    template: MJTemplateEntityExtended;
+    templateContent: MJTemplateContentEntity;
     embeddingDriverClass: string;
     embeddingAPIKey: string;
     delayTimeMS: number;
@@ -77,10 +77,10 @@ export type AnnotateWorkerContext = {
   export type ArchiveWorkerContext = {
     executionId: number;
     entity: BaseEntity;
-    entityDocument: EntityDocumentEntity;
+    entityDocument: MJEntityDocumentEntity;
     vectorDBClassKey: string;
     vectorDBAPIKey: string;
-    templateContent: TemplateContentEntity;
+    templateContent: MJTemplateContentEntity;
     embeddings: EmbedTextsResult;
     delayTimeMS: number;
   };

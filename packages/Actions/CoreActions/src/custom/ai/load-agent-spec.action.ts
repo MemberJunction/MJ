@@ -186,10 +186,3 @@ export class LoadAgentSpecAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the LoadAgentSpecAction class is included in the bundle
- */
-export function LoadLoadAgentSpecAction() {
-    // Stub function to prevent tree shaking
-}

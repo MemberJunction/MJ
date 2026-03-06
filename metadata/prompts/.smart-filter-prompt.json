@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Smart Filter Generation",
       "Description": "Generates SQL WHERE clauses from natural language filter descriptions for MemberJunction User Views. Takes entity metadata and user prompt to produce valid SQL Server WHERE clause syntax.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/views/smart-filter-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -15,14 +15,14 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 3
           },
@@ -30,14 +30,14 @@
             "ID": "A0DCF357-9D45-4343-A31E-DCBEE385E406"
           },
           "sync": {
-            "lastModified": "2026-01-21T05:00:55.649Z",
-            "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
+            "lastModified": "2026-02-13T20:49:10.948Z",
+            "checksum": "51e11c64188d53b523f7f3c7d8685ef215875a0117e00a7b40818a425c9cc82a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -45,14 +45,14 @@
             "ID": "DC7C4E5B-E730-4F39-84D7-4FB75B4C530B"
           },
           "sync": {
-            "lastModified": "2026-01-21T05:00:55.662Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:49:10.949Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1
           },
@@ -60,8 +60,8 @@
             "ID": "CFE9A5DE-D19C-4644-BFD7-3F824FC14878"
           },
           "sync": {
-            "lastModified": "2026-01-21T05:00:55.672Z",
-            "checksum": "3eca5b86bd978e497a3962d5e7620d832f92357141432a9ef5d145a3b9da6e7a"
+            "lastModified": "2026-02-13T20:49:10.950Z",
+            "checksum": "888a1042e910c9f502887d46024d39d3169c4c6d58ac51dc058896b8bdfc4909"
           }
         }
       ]
@@ -70,8 +70,8 @@
       "ID": "1F4C8B38-8419-40E2-A96F-3A6DC1243D42"
     },
     "sync": {
-      "lastModified": "2026-01-21T05:00:55.584Z",
-      "checksum": "ee4496af36ee41bc6394c649b093ea84e38ac86dcf1256d6a5b36b70f8669cbf"
+      "lastModified": "2026-02-13T20:49:10.865Z",
+      "checksum": "f53b08ff06a25c721467811acf1b0ec70d023b554713ebe9ff2cf4e93f3ad3a1"
     }
   }
 ]

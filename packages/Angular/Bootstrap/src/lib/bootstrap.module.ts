@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Bootstrap Module
+ * MemberJunction Bootstrap Module
  *
  * Provides the MJBootstrapComponent and all necessary services for MemberJunction Angular applications.
  * This module encapsulates all the authentication and initialization logic that was previously
@@ -7,9 +7,6 @@
  *
  * Usage:
  * ```typescript
- * import { LoadGeneratedEntities } from 'mj_generatedentities';
- * LoadGeneratedEntities(); // Prevent tree shaking
- *
  * @NgModule({
  *   imports: [
  *     BrowserModule,
@@ -63,8 +60,6 @@ export class MJBootstrapModule {
    * @example
    * ```typescript
    * import { environment } from '../environments/environment';
-   * import { LoadGeneratedEntities } from 'mj_generatedentities';
-   * LoadGeneratedEntities();
    *
    * @NgModule({
    *   imports: [

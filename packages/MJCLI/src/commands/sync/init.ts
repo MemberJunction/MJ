@@ -1,7 +1,6 @@
 import { Command } from '@oclif/core';
 import { input, select } from '@inquirer/prompts';
 import ora from 'ora-classic';
-import { InitService, InitOptions } from '@memberjunction/metadata-sync';
 
 export default class Init extends Command {
   static description = 'Initialize a directory for metadata synchronization';
@@ -11,14 +10,16 @@ export default class Init extends Command {
   ];
   
   async run(): Promise<void> {
+    const { InitService } = await import('@memberjunction/metadata-sync');
+
     const spinner = ora();
-    
+
     try {
       // Check if already initialized
       const initService = new InitService();
-      
+
       // Build options from user input
-      const options: InitOptions = {};
+      const options: Parameters<typeof initService.initialize>[0] = {};
       
       // Check for existing configuration
       try {
@@ -55,7 +56,7 @@ export default class Init extends Command {
       
       if (setupEntity === 'other') {
         options.entityName = await input({
-          message: 'Enter the entity name (e.g., "Templates", "AI Models"):'
+          message: 'Enter the entity name (e.g., "Templates", "MJ: AI Models"):'
         });
         
         options.dirName = await input({

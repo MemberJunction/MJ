@@ -1,0 +1,245 @@
+/* ============================================
+   CSS VARIABLES
+   ============================================ */
+:host {
+  --mj-sm-width: 340px;
+  --mj-sm-bg: #ffffff;
+  --mj-sm-header-bg: #f9fafb;
+  --mj-sm-border: #e5e7eb;
+  --mj-sm-text: #1f2937;
+  --mj-sm-text-secondary: #6b7280;
+  --mj-sm-text-muted: #9ca3af;
+  --mj-sm-accent: #667eea;
+  --mj-sm-transition: 200ms;
+}
+
+/* ============================================
+   OVERLAY
+   ============================================ */
+.mj-sm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  animation: mj-sm-fade-in 150ms ease;
+}
+
+/* ============================================
+   DRAWER
+   ============================================ */
+.mj-sm-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--mj-sm-width);
+  max-width: 90vw;
+  background: var(--mj-sm-bg);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: mj-sm-slide-in 200ms ease;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.mj-sm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--mj-sm-header-bg);
+  border-bottom: 1px solid var(--mj-sm-border);
+  flex-shrink: 0;
+}
+
+.mj-sm-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mj-sm-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mj-sm-title i {
+  color: var(--mj-sm-accent);
+  font-size: 14px;
+}
+
+.mj-sm-close {
+  background: none;
+  border: none;
+  color: var(--mj-sm-text-muted);
+  cursor: pointer;
+  padding: 6px;
+  font-size: 16px;
+  border-radius: 4px;
+  transition: all var(--mj-sm-transition);
+  line-height: 1;
+}
+
+.mj-sm-close:hover {
+  color: var(--mj-sm-text);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================
+   SECTION LIST
+   ============================================ */
+.mj-sm-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.mj-sm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background var(--mj-sm-transition);
+}
+
+.mj-sm-row:hover {
+  background: #f9fafb;
+}
+
+.mj-sm-row-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mj-sm-row-icon {
+  font-size: 13px;
+  color: var(--mj-sm-text-secondary);
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.mj-sm-row-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-sm-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Variant badges */
+.mj-sm-row-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.mj-sm-row-badge--default {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.mj-sm-row-badge--related-entity {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.mj-sm-row-badge--inherited {
+  background: #f3f0ff;
+  color: #8b5cf6;
+}
+
+/* Arrow buttons */
+.mj-sm-row-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.mj-sm-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--mj-sm-border);
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--mj-sm-text-secondary);
+  font-size: 11px;
+  transition: all var(--mj-sm-transition);
+}
+
+.mj-sm-arrow:hover:not(:disabled) {
+  background: var(--mj-sm-accent);
+  border-color: var(--mj-sm-accent);
+  color: white;
+}
+
+.mj-sm-arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+.mj-sm-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--mj-sm-border);
+  flex-shrink: 0;
+}
+
+.mj-sm-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-sm-text-secondary);
+  background: white;
+  border: 1px solid var(--mj-sm-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--mj-sm-transition);
+  font-family: inherit;
+}
+
+.mj-sm-reset:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: var(--mj-sm-text);
+}
+
+.mj-sm-reset i {
+  font-size: 12px;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes mj-sm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mj-sm-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

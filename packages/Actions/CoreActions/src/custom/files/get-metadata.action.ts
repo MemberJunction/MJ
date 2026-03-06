@@ -97,7 +97,3 @@ export class GetMetadataAction extends BaseFileStorageAction {
         }
     }
 }
-
-export function LoadGetMetadataAction() {
-    // Stub function to prevent tree shaking
-}

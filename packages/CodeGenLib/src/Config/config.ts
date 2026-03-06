@@ -213,6 +213,12 @@ const advancedGenerationSchema = z.object({
         "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
       enabled: false,
     },
+    {
+      name: 'VirtualEntityFieldDecoration',
+      description:
+        'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
+      enabled: true,
+    },
   ]),
 });
 
@@ -276,7 +282,7 @@ const sqlOutputConfigSchema = z.object({
    * The path of the folder to use when logging is enabled.
    * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
    */
-  folderPath: z.string().default('../../migrations/v3/'),
+  folderPath: z.string().default('../../migrations/v5/'),
   /**
    * Optional, the file name that will be written WITHIN the folderPath specified.
    */
@@ -294,6 +300,21 @@ const sqlOutputConfigSchema = z.object({
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
   omitRecurringScriptsFromLog: z.boolean().default(false),
+  /**
+   * Optional array of schema-to-placeholder mappings for Flyway migrations.
+   * Each mapping specifies a database schema name and its corresponding Flyway placeholder.
+   * If not provided, defaults to replacing the MJ core schema with ${flyway:defaultSchema}.
+   *
+   * Example:
+   * [
+   *   { schema: '__mj', placeholder: '${mjSchema}' },
+   *   { schema: '__BCSaaS', placeholder: '${flyway:defaultSchema}' }
+   * ]
+   */
+  schemaPlaceholders: z.array(z.object({
+    schema: z.string(),
+    placeholder: z.string()
+  })).optional(),
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
@@ -383,10 +404,15 @@ const configInfoSchema = z.object({
     { schema: '%', table: 'flyway_schema_history' }
   ]),
   customSQLScripts: customSQLScriptSchema.array().default([
-    {
-      scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
+    // AS OF 5.3.0 we are NOT including this as it wipes out standard views and procs
+    // for ZERO reason, we have a solid baseline configuration now. We are 
+    // renaming MJ_BASE_BEFORE_SQL.sql and will maintain this but the
+    // new aproach is using Baseline scripts. Assumption == nobody outside MJ modifies
+    // anything DDL-wise INSIDE __mj schema.
+    // {
+    //   scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
+    //   when: 'before-all',
+    // },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
   integrityChecks: integrityCheckConfigSchema.default({
@@ -428,6 +454,8 @@ const configInfoSchema = z.object({
   SQLOutput: sqlOutputConfigSchema,
   forceRegeneration: forceRegenerationConfigSchema,
 
+  /** Database platform type: 'mssql' for SQL Server, 'postgresql' for PostgreSQL */
+  dbType: z.enum(['mssql', 'postgresql']).default('mssql'),
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
   codeGenLogin: z.string(),
@@ -441,6 +469,7 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
+  entityPackageName: z.string().default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
 });
@@ -453,6 +482,7 @@ const configInfoSchema = z.object({
  */
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // Database connection settings (from environment variables)
+  dbType: (process.env.DB_TYPE as 'mssql' | 'postgresql') ?? 'mssql',
   dbHost: process.env.DB_HOST ?? 'localhost',
   dbPort: 1433,
   dbDatabase: process.env.DB_DATABASE ?? '',
@@ -564,11 +594,16 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
         description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
         enabled: true,
       },
+      {
+        name: 'VirtualEntityFieldDecoration',
+        description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
+        enabled: true,
+      },
     ],
   },
   SQLOutput: {
     enabled: true,
-    folderPath: './migrations/v3/',
+    folderPath: './migrations/v5/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
@@ -756,4 +791,12 @@ export const MAX_INDEX_NAME_LENGTH = 128;
  */
 export function mj_core_schema(): string {
   return getSetting('mj_core_schema').value;
+}
+
+/**
+ * Returns the configured database platform type.
+ * Defaults to 'mssql' for backward compatibility.
+ */
+export function dbType(): 'mssql' | 'postgresql' {
+  return configInfo.dbType;
 }

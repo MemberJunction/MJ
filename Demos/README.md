@@ -28,6 +28,28 @@ Automated conference abstract submission processing system demonstrating:
 
 ---
 
+### [Advanced Entities](./AdvancedEntities)
+
+**Status**: Active
+**Type**: Schema & Data Demo
+**Features**: IS-A Type Relationships, Virtual Entities
+
+Comprehensive demonstration of two key MemberJunction entity system features:
+- **IS-A Type Relationships**: Table-Per-Type inheritance with shared primary keys (Product → Meeting → Webinar, Product → Publication)
+- **Virtual Entities**: Read-only aggregation view (Customer + Order → vwCustomerOrderSummary)
+- 20 products, 25 customers, 85 orders of realistic sample data
+- Standalone SQL script — run once, then integrate with CodeGen
+
+**Key Concepts**:
+- Shared PK pattern across IS-A inheritance chains
+- Disjoint subtype enforcement
+- Aggregation views as virtual entities
+- Soft PK/FK metadata for virtual entities
+
+[→ View Demo Documentation](./AdvancedEntities/README.md)
+
+---
+
 ## Demo Structure
 
 Each demo follows this structure:

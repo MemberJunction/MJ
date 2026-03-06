@@ -1,0 +1,206 @@
+/* MCP Filter Panel - Matching Agent Filter Panel Design */
+
+.filter-panel {
+  height: 100%;
+  background: white;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.filter-panel-header {
+  padding: 20px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
+}
+
+.filter-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+  letter-spacing: -0.02em;
+}
+
+.filter-panel-header .filter-summary-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-right: 16px;
+  font-size: 13px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-radius: 20px;
+  border: 1px solid #7dd3fc;
+}
+
+.filter-panel-header .filter-summary-inline .summary-value {
+  font-weight: 700;
+  color: #0284c7;
+}
+
+.filter-panel-header .filter-summary-inline .summary-label {
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.filter-panel-header .close-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #94a3b8;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-panel-header .close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.filter-panel-header .close-btn .fa-solid {
+  font-size: 14px;
+}
+
+/* Content Area */
+.filter-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+}
+
+/* Filter Groups */
+.filter-group {
+  margin-bottom: 24px;
+}
+
+.filter-group .filter-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+}
+
+.filter-group .filter-label .fa-solid {
+  font-size: 13px;
+  color: #0284c7;
+  width: 16px;
+}
+
+.filter-group .filter-input,
+.filter-group .filter-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+  color: #334155;
+}
+
+.filter-group .filter-input:focus,
+.filter-group .filter-select:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.filter-group .filter-input::placeholder {
+  color: #94a3b8;
+}
+
+.filter-group .filter-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+/* Filter Actions */
+.filter-actions {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.filter-actions .reset-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.filter-actions .reset-btn:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+  color: #475569;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.filter-actions .reset-btn.has-filters {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+.filter-actions .reset-btn.has-filters:hover {
+  background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%);
+  border-color: #38bdf8;
+  color: #0284c7;
+}
+
+.filter-actions .reset-btn .fa-solid {
+  font-size: 13px;
+}
+
+/* Scrollbar Styling */
+.filter-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.filter-content::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 3px;
+}
+
+.filter-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.filter-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

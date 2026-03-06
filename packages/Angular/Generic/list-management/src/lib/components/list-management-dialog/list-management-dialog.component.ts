@@ -10,8 +10,9 @@ import {
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
-import { ListEntity, ListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { ListManagementService } from '../../services/list-management.service';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   ListManagementDialogConfig,
   ListManagementResult,
@@ -34,6 +35,7 @@ import {
  * - Batch operations with progress feedback
  */
 @Component({
+  standalone: false,
   selector: 'mj-list-management-dialog',
   templateUrl: './list-management-dialog.component.html',
   styleUrls: ['./list-management-dialog.component.css']
@@ -80,7 +82,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
   // Data
   allLists: ListItemViewModel[] = [];
   filteredLists: ListItemViewModel[] = [];
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
 
   // Create form state
   newListName = '';
@@ -91,7 +93,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
   private originalMembership = new Map<string, boolean>();
   public addedToLists: Set<string> = new Set();
   public removedFromLists: Set<string> = new Set();
-  public newlyCreatedLists: ListEntity[] = [];
+  public newlyCreatedLists: MJListEntity[] = [];
 
   // Cleanup
   private destroy$ = new Subject<void>();
@@ -248,7 +250,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
       // Pre-select lists if configured
       if (this.config.preSelectedListIds) {
         for (const listId of this.config.preSelectedListIds) {
-          const vm = this.allLists.find(l => l.list.ID === listId);
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             vm.isSelectedForAdd = true;
             this.addedToLists.add(listId);
@@ -525,7 +527,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
         console.log(`[ListManagementDialog] Add result:`, addResult);
 
         for (const listId of this.addedToLists) {
-          const vm = this.allLists.find(l => l.list.ID === listId);
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.added.push({
               listId,
@@ -544,7 +546,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
         );
 
         for (const listId of this.removedFromLists) {
-          const vm = this.allLists.find(l => l.list.ID === listId);
+          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.removed.push({
               listId,

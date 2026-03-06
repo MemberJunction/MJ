@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-artifact-card',
   template: `
     <div class="artifact-card" (click)="onSelect()">
@@ -14,16 +15,22 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
       <div class="card-content">
         <div class="card-header">
           <h4 class="artifact-name">{{ artifact.Name }}</h4>
-          <span class="version-badge" *ngIf="version">v{{ version.VersionNumber }}</span>
+          @if (version) {
+            <span class="version-badge">v{{ version.VersionNumber }}</span>
+          }
           <span class="artifact-type">{{ artifact.Type }}</span>
         </div>
-        <div class="artifact-description" *ngIf="artifact.Description">
-          {{ artifact.Description }}
-        </div>
+        @if (artifact.Description) {
+          <div class="artifact-description">
+            {{ artifact.Description }}
+          </div>
+        }
         <div class="artifact-meta">
-          <span class="meta-item" *ngIf="version && version.__mj_UpdatedAt">
-            <i class="fas fa-clock"></i> {{ version.__mj_UpdatedAt | date:'short' }}
-          </span>
+          @if (version && version.__mj_UpdatedAt) {
+            <span class="meta-item">
+              <i class="fas fa-clock"></i> {{ version.__mj_UpdatedAt | date:'short' }}
+            </span>
+          }
         </div>
       </div>
       <div class="card-actions">
@@ -47,7 +54,7 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
         }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .artifact-card { display: flex; gap: 16px; padding: 16px; border: 1px solid #E8E8E8; border-radius: 8px; cursor: pointer; transition: all 150ms ease; background: white; }
     .artifact-card:hover { border-color: #0076B6; box-shadow: 0 2px 8px rgba(0,118,182,0.1); }
@@ -72,8 +79,8 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
   `]
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
-  @Input() artifact!: ArtifactEntity;
-  @Input() version?: ArtifactVersionEntity; // Optional version info
+  @Input() artifact!: MJArtifactEntity;
+  @Input() version?: MJArtifactVersionEntity; // Optional version info
   @Input() currentUser!: UserInfo;
 
   @Output() selected = new EventEmitter<any>();
@@ -87,7 +94,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
 
   constructor(
     private artifactPermissionService: ArtifactPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -119,6 +127,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
       );
     } catch (err) {
       console.error('Error loading artifact permissions:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
   }
 

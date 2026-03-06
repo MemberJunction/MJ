@@ -4,59 +4,59 @@
       "Name": "MJ",
       "ParentID": null,
       "Description": "MemberJunction framework queries for core system operations, analytics, and administrative functions.",
-      "UserID": "@lookup:Users.Name=System"
+      "UserID": "@lookup:MJ: Users.Name=System"
     },
     "primaryKey": {
       "ID": "FE1AE5B2-FC57-43B2-B560-A673713E1679"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.269Z",
-      "checksum": "01d2437fde6db1e36576d6c29d748afc48403b8352d40f477ec7f7fa913dcceb"
+      "lastModified": "2026-02-13T21:09:25.531Z",
+      "checksum": "be6a973b30f50a687da6afede55410f19b77ab0b95879ea5e9959662746586fa"
     }
   },
   {
     "fields": {
       "Name": "AI",
-      "ParentID": "@lookup:Query Categories.Name=MJ",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
       "Description": "AI-related queries for operations, analytics, and management of AI services within MemberJunction.",
-      "UserID": "@lookup:Users.Name=System"
+      "UserID": "@lookup:MJ: Users.Name=System"
     },
     "primaryKey": {
       "ID": "6C8C5BA5-D9D1-47A1-8EF8-E59DA57F9D22"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.291Z",
-      "checksum": "b1fde3bb2b18f4c292a2de3abc363942a0b598866906cd7a5a16548e949ddae4"
+      "lastModified": "2026-02-13T21:09:25.556Z",
+      "checksum": "cd5d805850cf74ccc55198a58ec67c67458ffeb7b64e5d6cf519262ad2b261fa"
     }
   },
   {
     "fields": {
       "Name": "Agents",
-      "ParentID": "@lookup:Query Categories.Name=AI",
+      "ParentID": "@lookup:MJ: Query Categories.Name=AI",
       "Description": "AI Agent specific queries including run cost calculations, performance analytics, and execution monitoring.",
-      "UserID": "@lookup:Users.Name=System"
+      "UserID": "@lookup:MJ: Users.Name=System"
     },
     "primaryKey": {
       "ID": "5609FBC7-381C-4F9C-9C74-04B52C1FF3DA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.303Z",
-      "checksum": "92300690be43e880325d10582d1bda6474b2a336bf47e094eac8ba5127854d87"
+      "lastModified": "2026-02-13T21:09:25.573Z",
+      "checksum": "3013d80fd8a9b07bbbe2f2258cdee1c8b2bfe58c8942a727d218e33473c8c817"
     }
   },
   {
     "fields": {
       "Name": "Conversations",
-      "ParentID": "@lookup:Query Categories.Name=MJ",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
       "Description": "Conversation-related queries for loading messages, artifacts, and conversation analytics.",
-      "UserID": "@lookup:Users.Name=System"
+      "UserID": "@lookup:MJ: Users.Name=System"
     },
     "primaryKey": {
       "ID": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.293Z",
-      "checksum": "8596a4a0cd5ad14026414f1c9d9cccb39d918d0ac43c617df745693d91815121"
+      "lastModified": "2026-02-13T21:09:25.558Z",
+      "checksum": "6673d98d1d35b7e5e29696fb117166a3a7a4d42924c6ff2c73ebb5cda894f533"
     }
   }
 ]

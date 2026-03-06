@@ -1,176 +1,173 @@
 <!-- Dashboard Browser Resource -->
 <div class="dashboard-browser-resource">
-    <!-- List Mode - Uses Generic DashboardBrowserComponent -->
-    <ng-container *ngIf="mode === 'list'">
-        <mj-dashboard-browser
-            [Dashboards]="dashboards"
-            [Categories]="categories"
-            [SelectedCategoryId]="selectedCategoryId"
-            [ViewMode]="viewMode"
-            [IsLoading]="isLoading"
-            [ShowCreateButton]="true"
-            [AllowMultiSelect]="true"
-            [AllowDragDrop]="true"
-            [DashboardPermissions]="dashboardPermissionsMap"
-            [EffectiveCategoryMap]="effectiveCategoryMap"
-            (DashboardOpen)="onDashboardOpen($event)"
-            (DashboardEdit)="onDashboardEdit($event)"
-            (DashboardDelete)="onDashboardDelete($event)"
-            (DashboardMove)="onDashboardMove($event)"
-            (DashboardCreate)="onDashboardCreate($event)"
-            (CategoryCreate)="onCategoryCreate($event)"
-            (CategoryDelete)="onCategoryDelete($event)"
-            (CategoryChange)="onCategoryChange($event)"
-            (ViewPreferenceChange)="onViewPreferenceChange($event)">
-        </mj-dashboard-browser>
-    </ng-container>
+  <!-- List Mode - Uses Generic DashboardBrowserComponent -->
+  @if (mode === 'list') {
+    <mj-dashboard-browser
+      [Dashboards]="dashboards"
+      [Categories]="categories"
+      [SelectedCategoryId]="selectedCategoryId"
+      [ViewMode]="viewMode"
+      [IsLoading]="isLoading"
+      [ShowCreateButton]="true"
+      [AllowMultiSelect]="true"
+      [AllowDragDrop]="true"
+      [DashboardPermissions]="dashboardPermissionsMap"
+      [EffectiveCategoryMap]="effectiveCategoryMap"
+      (DashboardOpen)="onDashboardOpen($event)"
+      (DashboardEdit)="onDashboardEdit($event)"
+      (DashboardDelete)="onDashboardDelete($event)"
+      (DashboardMove)="onDashboardMove($event)"
+      (DashboardCreate)="onDashboardCreate($event)"
+      (CategoryCreate)="onCategoryCreate($event)"
+      (CategoryDelete)="onCategoryDelete($event)"
+      (CategoryChange)="onCategoryChange($event)"
+      (ViewPreferenceChange)="onViewPreferenceChange($event)">
+    </mj-dashboard-browser>
+  }
 
-    <!-- View/Edit Mode -->
-    <ng-container *ngIf="mode === 'view' || mode === 'edit'">
-        <!-- View Mode Toolbar - matches browser toolbar structure -->
-        <div class="viewer-toolbar" *ngIf="mode === 'view'">
-            <!-- Breadcrumb navigation (includes its own padding/styling) -->
-            <mj-dashboard-breadcrumb
-                [Categories]="categories"
-                [CurrentCategoryId]="selectedDashboard?.CategoryID || null"
-                [CurrentDashboard]="selectedDashboard"
-                [ShowDashboardName]="true"
-                [AllowDragDrop]="false"
-                Size="large"
-                RootIcon="fa-solid fa-gauge-high"
-                RootLabel="Dashboards"
-                (Navigate)="onBreadcrumbNavigate($event)">
-            </mj-dashboard-breadcrumb>
-
-            <!-- Right-side Actions -->
-            <div class="toolbar-actions">
-                <!-- Shared indicator for non-owned dashboards -->
-                <span class="shared-indicator" *ngIf="!selectedDashboardPermissions.IsOwner && selectedDashboardPermissions.CanRead">
-                    <i class="fa-solid fa-share-nodes"></i>
-                    Shared with you
-                </span>
-
-                <button
-                    class="btn-icon"
-                    title="Open in its own tab"
-                    (click)="openInNewTab()">
-                    <i class="fa-solid fa-up-right-from-square"></i>
-                </button>
-
-                <!-- Share button - only shown if user can share -->
-                <button
-                    *ngIf="selectedDashboardPermissions.CanShare"
-                    class="btn-icon"
-                    title="Share Dashboard"
-                    (click)="openShareDialog()">
-                    <i class="fa-solid fa-user-plus"></i>
-                </button>
-
-                <!-- Edit button - only shown if user can edit -->
-                <button
-                    *ngIf="selectedDashboardPermissions.CanEdit"
-                    class="btn-icon"
-                    title="Edit Dashboard"
-                    (click)="toggleEditMode()">
-                    <i class="fa-solid fa-edit"></i>
-                </button>
-            </div>
+  <!-- View/Edit Mode -->
+  @if (mode === 'view' || mode === 'edit') {
+    <!-- View Mode Toolbar - matches browser toolbar structure -->
+    @if (mode === 'view') {
+      <div class="viewer-toolbar">
+        <!-- Breadcrumb navigation (includes its own padding/styling) -->
+        <mj-dashboard-breadcrumb
+          [Categories]="categories"
+          [CurrentCategoryId]="selectedDashboard?.CategoryID || null"
+          [CurrentDashboard]="selectedDashboard"
+          [ShowDashboardName]="true"
+          [AllowDragDrop]="false"
+          Size="large"
+          RootIcon="fa-solid fa-gauge-high"
+          RootLabel="Dashboards"
+          (Navigate)="onBreadcrumbNavigate($event)">
+        </mj-dashboard-breadcrumb>
+        <!-- Right-side Actions -->
+        <div class="toolbar-actions">
+          <!-- Shared indicator for non-owned dashboards -->
+          @if (!selectedDashboardPermissions.IsOwner && selectedDashboardPermissions.CanRead) {
+            <span class="shared-indicator">
+              <i class="fa-solid fa-share-nodes"></i>
+              Shared with you
+            </span>
+          }
+          <button
+            class="btn-icon"
+            title="Open in its own tab"
+            (click)="openInNewTab()">
+            <i class="fa-solid fa-up-right-from-square"></i>
+          </button>
+          <!-- Share button - only shown if user can share -->
+          @if (selectedDashboardPermissions.CanShare) {
+            <button
+              class="btn-icon"
+              title="Share Dashboard"
+              (click)="openShareDialog()">
+              <i class="fa-solid fa-user-plus"></i>
+            </button>
+          }
+          <!-- Edit button - only shown if user can edit -->
+          @if (selectedDashboardPermissions.CanEdit) {
+            <button
+              class="btn-icon"
+              title="Edit Dashboard"
+              (click)="toggleEditMode()">
+              <i class="fa-solid fa-edit"></i>
+            </button>
+          }
         </div>
-
-        <!-- Edit Mode Header - different layout -->
-        <div class="viewer-header editing" *ngIf="mode === 'edit'">
-            <div class="header-left">
-                <!-- Add Part button on the left -->
-                <button
-                    class="btn-add-part"
-                    (click)="openAddPartDialog()">
-                    <i class="fa-solid fa-plus"></i>
-                    Add Part
-                </button>
-
-                <!-- Separator -->
-                <div class="header-separator"></div>
-
-                <!-- Editable name/description -->
-                <div class="dashboard-info-edit">
-                    <input
-                        type="text"
-                        class="dashboard-name-input"
-                        [(ngModel)]="editingName"
-                        placeholder="Dashboard name"
-                        (blur)="onNameBlur()">
-                    <input
-                        type="text"
-                        class="dashboard-description-input"
-                        [(ngModel)]="editingDescription"
-                        placeholder="Add a description...">
-                </div>
-            </div>
-            <div class="header-right">
-                <!-- Save, Cancel buttons -->
-                <button
-                    class="btn-primary"
-                    (click)="saveDashboard()">
-                    <i class="fa-solid fa-save"></i>
-                    Save
-                </button>
-                <button
-                    class="btn-cancel"
-                    (click)="cancelEdit()">
-                    Cancel
-                </button>
-            </div>
+      </div>
+    }
+    <!-- Edit Mode Header - different layout -->
+    @if (mode === 'edit') {
+      <div class="viewer-header editing">
+        <div class="header-left">
+          <!-- Add Part button on the left -->
+          <button
+            class="btn-add-part"
+            (click)="openAddPartDialog()">
+            <i class="fa-solid fa-plus"></i>
+            Add Part
+          </button>
+          <!-- Separator -->
+          <div class="header-separator"></div>
+          <!-- Editable name/description -->
+          <div class="dashboard-info-edit">
+            <input
+              type="text"
+              class="dashboard-name-input"
+              [(ngModel)]="editingName"
+              placeholder="Dashboard name"
+              (blur)="onNameBlur()">
+            <input
+              type="text"
+              class="dashboard-description-input"
+              [(ngModel)]="editingDescription"
+              placeholder="Add a description...">
+          </div>
         </div>
-
-        <!-- Dashboard Viewer -->
-        <div class="viewer-content">
-            <mj-dashboard-viewer
-                #dashboardViewer
-                [dashboard]="selectedDashboard"
-                [isEditing]="mode === 'edit'"
-                [showToolbar]="false"
-                [showBreadcrumb]="false"
-                (panelInteraction)="onPanelInteraction($event)"
-                (navigationRequested)="onNavigationRequested($event)">
-            </mj-dashboard-viewer>
+        <div class="header-right">
+          <!-- Save, Cancel buttons -->
+          <button
+            class="btn-primary"
+            (click)="saveDashboard()">
+            <i class="fa-solid fa-save"></i>
+            Save
+          </button>
+          <button
+            class="btn-cancel"
+            (click)="cancelEdit()">
+            Cancel
+          </button>
         </div>
-
-        <!-- Add Panel Dialog -->
-        <mj-add-panel-dialog
-            *ngIf="dashboardViewer"
-            [visible]="showAddPanelDialog"
-            [partTypes]="dashboardViewer.getPartTypes()"
-            (panelAdded)="onPanelAdded($event)"
-            (cancelled)="onAddPanelCancelled()">
-        </mj-add-panel-dialog>
-
-        <!-- Generic Edit Part Dialog - dynamically loads config panels via ClassFactory -->
-        <mj-edit-part-dialog
-            [Visible]="showConfigDialog"
-            [PartType]="configDialogPartType"
-            [Panel]="configDialogPanel"
-            [Config]="configDialogPanel?.config || null"
-            (Saved)="onConfigDialogSaved($event)"
-            (Cancelled)="onConfigDialogCancelled()">
-        </mj-edit-part-dialog>
-
-        <!-- Remove Part Confirmation Dialog -->
-        <mj-confirm-dialog
-            [visible]="showConfirmDialog"
-            type="danger"
-            title="Remove Part"
-            [message]="'Are you sure you want to remove \'' + confirmPanelTitle + '\' from this dashboard?'"
-            confirmText="Remove"
-            cancelText="Cancel"
-            (confirmed)="onRemoveConfirmed()"
-            (cancelled)="onRemoveCancelled()">
-        </mj-confirm-dialog>
-
-        <!-- Share Dashboard Dialog -->
-        <mj-dashboard-share-dialog
-            [Visible]="showShareDialog"
-            [Dashboard]="selectedDashboard"
-            (Result)="onShareDialogResult($event)">
-        </mj-dashboard-share-dialog>
-    </ng-container>
+      </div>
+    }
+    <!-- Dashboard Viewer -->
+    <div class="viewer-content">
+      <mj-dashboard-viewer
+        #dashboardViewer
+        [dashboard]="selectedDashboard"
+        [isEditing]="mode === 'edit'"
+        [showToolbar]="false"
+        [showBreadcrumb]="false"
+        (panelInteraction)="onPanelInteraction($event)"
+        (navigationRequested)="onNavigationRequested($event)">
+      </mj-dashboard-viewer>
+    </div>
+    <!-- Add Panel Dialog -->
+    @if (dashboardViewer) {
+      <mj-add-panel-dialog
+        [visible]="showAddPanelDialog"
+        [partTypes]="dashboardViewer.getPartTypes()"
+        (panelAdded)="onPanelAdded($event)"
+        (cancelled)="onAddPanelCancelled()">
+      </mj-add-panel-dialog>
+    }
+    <!-- Generic Edit Part Dialog - dynamically loads config panels via ClassFactory -->
+    <mj-edit-part-dialog
+      [Visible]="showConfigDialog"
+      [PartType]="configDialogPartType"
+      [Panel]="configDialogPanel"
+      [Config]="configDialogPanel?.config || null"
+      (Saved)="onConfigDialogSaved($event)"
+      (Cancelled)="onConfigDialogCancelled()">
+    </mj-edit-part-dialog>
+    <!-- Remove Part Confirmation Dialog -->
+    <mj-confirm-dialog
+      [visible]="showConfirmDialog"
+      type="danger"
+      title="Remove Part"
+      [message]="'Are you sure you want to remove \'' + confirmPanelTitle + '\' from this dashboard?'"
+      confirmText="Remove"
+      cancelText="Cancel"
+      (confirmed)="onRemoveConfirmed()"
+      (cancelled)="onRemoveCancelled()">
+    </mj-confirm-dialog>
+    <!-- Share Dashboard Dialog -->
+    <mj-dashboard-share-dialog
+      [Visible]="showShareDialog"
+      [Dashboard]="selectedDashboard"
+      (Result)="onShareDialogResult($event)">
+    </mj-dashboard-share-dialog>
+  }
 </div>

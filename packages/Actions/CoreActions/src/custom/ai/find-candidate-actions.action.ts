@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { RunView } from "@memberjunction/core";
-import { ActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionParamEntity } from "@memberjunction/core-entities";
 
 /**
  * Action that finds the best-matching actions for a given task using embedding-based semantic search.
@@ -117,15 +117,15 @@ export class FindBestActionAction extends BaseAction {
             // Load action parameters for all matched actions
             const actionIds = filteredActions.map(a => a.actionId);
             const rv = new RunView();
-            const paramsResult = await rv.RunView<ActionParamEntity>({
-                EntityName: 'Action Params',
+            const paramsResult = await rv.RunView<MJActionParamEntity>({
+                EntityName: 'MJ: Action Params',
                 ExtraFilter: `ActionID IN ('${actionIds.join("','")}')`,
                 OrderBy: 'ActionID, Name',
                 ResultType: 'entity_object'
             }, params.ContextUser);
 
             // Group parameters by action ID
-            const paramsByActionId = new Map<string, ActionParamEntity[]>();
+            const paramsByActionId = new Map<string, MJActionParamEntity[]>();
             if (paramsResult.Success && paramsResult.Results) {
                 for (const param of paramsResult.Results) {
                     const actionId = param.ActionID;
@@ -212,11 +212,4 @@ export class FindBestActionAction extends BaseAction {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
         return param?.Value;
     }
-}
-
-/**
- * Loader function to ensure the FindBestActionAction class is included in the bundle
- */
-export function LoadFindBestActionAction() {
-    // Stub function to prevent tree shaking
 }

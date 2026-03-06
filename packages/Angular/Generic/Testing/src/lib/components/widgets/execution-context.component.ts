@@ -6,6 +6,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
  * Shows machine info, user info, and detailed runtime context in a clean, organized layout.
  */
 @Component({
+  standalone: false,
   selector: 'mj-execution-context',
   template: `
     <div class="execution-context">
@@ -16,173 +17,200 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
           <h4>Machine & User</h4>
         </div>
         <div class="context-grid">
-          <div class="context-item" *ngIf="machineName">
-            <div class="context-icon">
-              <i class="fas fa-desktop"></i>
+          @if (machineName) {
+            <div class="context-item">
+              <div class="context-icon">
+                <i class="fas fa-desktop"></i>
+              </div>
+              <div class="context-content">
+                <div class="context-label">Machine Name</div>
+                <div class="context-value monospace">{{ machineName }}</div>
+              </div>
             </div>
-            <div class="context-content">
-              <div class="context-label">Machine Name</div>
-              <div class="context-value monospace">{{ machineName }}</div>
+          }
+    
+          @if (machineId) {
+            <div class="context-item">
+              <div class="context-icon">
+                <i class="fas fa-fingerprint"></i>
+              </div>
+              <div class="context-content">
+                <div class="context-label">Machine ID</div>
+                <div class="context-value monospace">{{ machineId }}</div>
+              </div>
             </div>
-          </div>
-
-          <div class="context-item" *ngIf="machineId">
-            <div class="context-icon">
-              <i class="fas fa-fingerprint"></i>
+          }
+    
+          @if (runByUserName) {
+            <div class="context-item">
+              <div class="context-icon">
+                <i class="fas fa-user"></i>
+              </div>
+              <div class="context-content">
+                <div class="context-label">Run By</div>
+                <div class="context-value">{{ runByUserName }}</div>
+              </div>
             </div>
-            <div class="context-content">
-              <div class="context-label">Machine ID</div>
-              <div class="context-value monospace">{{ machineId }}</div>
+          }
+    
+          @if (runByUserEmail) {
+            <div class="context-item">
+              <div class="context-icon">
+                <i class="fas fa-envelope"></i>
+              </div>
+              <div class="context-content">
+                <div class="context-label">Email</div>
+                <div class="context-value">{{ runByUserEmail }}</div>
+              </div>
             </div>
-          </div>
-
-          <div class="context-item" *ngIf="runByUserName">
-            <div class="context-icon">
-              <i class="fas fa-user"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Run By</div>
-              <div class="context-value">{{ runByUserName }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="runByUserEmail">
-            <div class="context-icon">
-              <i class="fas fa-envelope"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Email</div>
-              <div class="context-value">{{ runByUserEmail }}</div>
-            </div>
-          </div>
+          }
         </div>
       </div>
-
+    
       <!-- Runtime Environment Section -->
-      <div class="context-section" *ngIf="contextDetails">
-        <div class="section-header">
-          <i class="fas fa-cogs"></i>
-          <h4>Runtime Environment</h4>
+      @if (contextDetails) {
+        <div class="context-section">
+          <div class="section-header">
+            <i class="fas fa-cogs"></i>
+            <h4>Runtime Environment</h4>
+          </div>
+          <div class="context-grid">
+            @if (contextDetails.osType) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas" [ngClass]="getOSIcon()"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Operating System</div>
+                  <div class="context-value">{{ getOSDisplayName() }}</div>
+                  @if (contextDetails.osVersion) {
+                    <div class="context-detail">{{ contextDetails.osVersion }}</div>
+                  }
+                </div>
+              </div>
+            }
+            @if (contextDetails.nodeVersion) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fab fa-node-js"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Node.js</div>
+                  <div class="context-value">{{ contextDetails.nodeVersion }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails.timezone) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-globe"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Timezone</div>
+                  <div class="context-value">{{ contextDetails.timezone }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails.locale) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-language"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Locale</div>
+                  <div class="context-value">{{ contextDetails.locale }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails.ipAddress) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">IP Address</div>
+                  <div class="context-value monospace">{{ contextDetails.ipAddress }}</div>
+                </div>
+              </div>
+            }
+          </div>
         </div>
-        <div class="context-grid">
-          <div class="context-item" *ngIf="contextDetails.osType">
-            <div class="context-icon">
-              <i class="fas" [ngClass]="getOSIcon()"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Operating System</div>
-              <div class="context-value">{{ getOSDisplayName() }}</div>
-              <div class="context-detail" *ngIf="contextDetails.osVersion">{{ contextDetails.osVersion }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails.nodeVersion">
-            <div class="context-icon">
-              <i class="fab fa-node-js"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Node.js</div>
-              <div class="context-value">{{ contextDetails.nodeVersion }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails.timezone">
-            <div class="context-icon">
-              <i class="fas fa-globe"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Timezone</div>
-              <div class="context-value">{{ contextDetails.timezone }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails.locale">
-            <div class="context-icon">
-              <i class="fas fa-language"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Locale</div>
-              <div class="context-value">{{ contextDetails.locale }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails.ipAddress">
-            <div class="context-icon">
-              <i class="fas fa-network-wired"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">IP Address</div>
-              <div class="context-value monospace">{{ contextDetails.ipAddress }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      }
+    
       <!-- CI/CD Section -->
-      <div class="context-section ci-section" *ngIf="hasCIInfo()">
-        <div class="section-header">
-          <i class="fas fa-rocket"></i>
-          <h4>CI/CD Pipeline</h4>
-        </div>
-        <div class="ci-banner" [ngClass]="getCIProviderClass()">
-          <div class="ci-provider">
-            <i class="fab" [ngClass]="getCIProviderIcon()"></i>
-            <span class="ci-provider-name">{{ contextDetails?.ciProvider }}</span>
+      @if (hasCIInfo()) {
+        <div class="context-section ci-section">
+          <div class="section-header">
+            <i class="fas fa-rocket"></i>
+            <h4>CI/CD Pipeline</h4>
+          </div>
+          <div class="ci-banner" [ngClass]="getCIProviderClass()">
+            <div class="ci-provider">
+              <i class="fab" [ngClass]="getCIProviderIcon()"></i>
+              <span class="ci-provider-name">{{ contextDetails?.ciProvider }}</span>
+            </div>
+          </div>
+          <div class="context-grid">
+            @if (contextDetails?.pipelineId) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-project-diagram"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Pipeline</div>
+                  <div class="context-value">{{ contextDetails?.pipelineId }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails?.buildNumber) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-hashtag"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Build Number</div>
+                  <div class="context-value monospace">{{ contextDetails?.buildNumber }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails?.branch) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-code-branch"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Branch</div>
+                  <div class="context-value monospace">{{ contextDetails?.branch }}</div>
+                </div>
+              </div>
+            }
+            @if (contextDetails?.prNumber) {
+              <div class="context-item">
+                <div class="context-icon">
+                  <i class="fas fa-code-pull-request"></i>
+                </div>
+                <div class="context-content">
+                  <div class="context-label">Pull Request</div>
+                  <div class="context-value">#{{ contextDetails?.prNumber }}</div>
+                </div>
+              </div>
+            }
           </div>
         </div>
-        <div class="context-grid">
-          <div class="context-item" *ngIf="contextDetails?.pipelineId">
-            <div class="context-icon">
-              <i class="fas fa-project-diagram"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Pipeline</div>
-              <div class="context-value">{{ contextDetails?.pipelineId }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails?.buildNumber">
-            <div class="context-icon">
-              <i class="fas fa-hashtag"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Build Number</div>
-              <div class="context-value monospace">{{ contextDetails?.buildNumber }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails?.branch">
-            <div class="context-icon">
-              <i class="fas fa-code-branch"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Branch</div>
-              <div class="context-value monospace">{{ contextDetails?.branch }}</div>
-            </div>
-          </div>
-
-          <div class="context-item" *ngIf="contextDetails?.prNumber">
-            <div class="context-icon">
-              <i class="fas fa-code-pull-request"></i>
-            </div>
-            <div class="context-content">
-              <div class="context-label">Pull Request</div>
-              <div class="context-value">#{{ contextDetails?.prNumber }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      }
+    
       <!-- Empty State -->
-      <div class="empty-state" *ngIf="!hasAnyData()">
-        <div class="empty-icon">
-          <i class="fas fa-server"></i>
+      @if (!hasAnyData()) {
+        <div class="empty-state">
+          <div class="empty-icon">
+            <i class="fas fa-server"></i>
+          </div>
+          <h3>No Execution Context</h3>
+          <p>Execution context information is not available for this run.</p>
         </div>
-        <h3>No Execution Context</h3>
-        <p>Execution context information is not available for this run.</p>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .execution-context {
       padding: 20px;

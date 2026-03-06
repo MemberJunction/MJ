@@ -1,6 +1,6 @@
 <!-- Modal Backdrop -->
-@if (showDialog) {
-  <div class="modal-backdrop" (click)="close()" role="presentation"></div>
+@if (ShowDialog) {
+  <div class="modal-backdrop" (click)="Close()" role="presentation"></div>
   <div
     class="modal-dialog full-screen-dialog"
     role="dialog"
@@ -15,7 +15,7 @@
       </h2>
       <button
         class="modal-close"
-        (click)="close()"
+        (click)="Close()"
         aria-label="Close dialog"
       >
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -24,53 +24,54 @@
 
     <div class="app-config-container">
       <!-- Loading State -->
-      @if (isLoading) {
+      @if (IsLoading) {
         <div class="loading-container" role="status" aria-live="polite">
           <mj-loading text="Loading your app configuration..." size="medium"></mj-loading>
         </div>
       }
 
       <!-- Error Message -->
-      @if (errorMessage) {
+      @if (ErrorMessage) {
         <div class="error-message" role="alert">
           <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-          <span>{{ errorMessage }}</span>
+          <span>{{ ErrorMessage }}</span>
         </div>
       }
 
       <!-- Main Content -->
-      @if (!isLoading) {
+      @if (!IsLoading) {
         <div class="config-content">
           <p class="config-description">
             Select which applications appear in your app switcher and arrange them in your preferred order.
             Double-click to quickly add or remove. Drag and drop to reorder, or use the arrow buttons.
           </p>
 
-          <div class="panels-container">
+          <!-- Desktop: two-panel layout with drag-and-drop -->
+          <div class="panels-container desktop-only">
             <!-- Available Apps Panel -->
-            <div class="panel available-apps-panel" [class.collapsed]="availablePanelCollapsed">
-              <div class="panel-header" (click)="availablePanelCollapsed = !availablePanelCollapsed">
+            <div class="panel available-apps-panel" [class.collapsed]="AvailablePanelCollapsed">
+              <div class="panel-header" (click)="AvailablePanelCollapsed = !AvailablePanelCollapsed">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <h3>Available Applications</h3>
-                <span class="badge">{{ availableApps.length }}</span>
+                <span class="badge">{{ AvailableApps.length }}</span>
                 <i
                   class="collapse-toggle fa-solid"
-                  [class.fa-chevron-down]="availablePanelCollapsed"
-                  [class.fa-chevron-up]="!availablePanelCollapsed"
+                  [class.fa-chevron-down]="AvailablePanelCollapsed"
+                  [class.fa-chevron-up]="!AvailablePanelCollapsed"
                   aria-hidden="true"
                 ></i>
               </div>
 
               <div class="panel-content">
-                @if (availableApps.length === 0) {
+                @if (AvailableApps.length === 0) {
                   <div class="empty-state">
                     <i class="fa-solid fa-check-double" aria-hidden="true"></i>
                     <p>All applications added!</p>
                   </div>
                 }
 
-                @for (item of availableApps; track item.app.ID) {
-                  <div class="available-app-item" (dblclick)="addApp(item)">
+                @for (item of AvailableApps; track item.app.ID) {
+                  <div class="available-app-item" (dblclick)="AddApp(item)">
                     <div class="app-icon" [style.background-color]="item.app.GetColor()">
                       <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
                     </div>
@@ -84,7 +85,7 @@
 
                     <button
                       class="mj-btn mj-btn-primary mj-btn-outline mj-btn-sm"
-                      (click)="addApp(item)"
+                      (click)="AddApp(item)"
                       title="Add to your apps"
                     >
                       <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -96,21 +97,21 @@
             </div>
 
             <!-- Selected Apps Panel -->
-            <div class="panel selected-apps-panel" [class.collapsed]="selectedPanelCollapsed">
-              <div class="panel-header" (click)="selectedPanelCollapsed = !selectedPanelCollapsed">
+            <div class="panel selected-apps-panel" [class.collapsed]="SelectedPanelCollapsed">
+              <div class="panel-header" (click)="SelectedPanelCollapsed = !SelectedPanelCollapsed">
                 <i class="fa-solid fa-check-circle" aria-hidden="true"></i>
                 <h3>Your Applications</h3>
-                <span class="badge">{{ activeApps.length }}</span>
+                <span class="badge">{{ ActiveApps.length }}</span>
                 <i
                   class="collapse-toggle fa-solid"
-                  [class.fa-chevron-down]="selectedPanelCollapsed"
-                  [class.fa-chevron-up]="!selectedPanelCollapsed"
+                  [class.fa-chevron-down]="SelectedPanelCollapsed"
+                  [class.fa-chevron-up]="!SelectedPanelCollapsed"
                   aria-hidden="true"
                 ></i>
               </div>
 
               <div class="panel-content">
-                @if (activeApps.length === 0) {
+                @if (ActiveApps.length === 0) {
                   <div class="empty-state">
                     <i class="fa-solid fa-inbox" aria-hidden="true"></i>
                     <p>No applications selected</p>
@@ -118,21 +119,21 @@
                   </div>
                 }
 
-                @if (activeApps.length > 0) {
+                @if (ActiveApps.length > 0) {
                   <div
                     class="sortable-list"
-                    (dragover)="onDragOver($event)"
-                    (drop)="onDrop($event)"
+                    (dragover)="OnDragOver($event)"
+                    (drop)="OnDrop($event)"
                   >
-                    @for (item of activeApps; track item.app.ID; let i = $index) {
+                    @for (item of ActiveApps; track item.app.ID; let i = $index) {
                       <div
                         class="app-item"
-                        [class.dragging]="draggedItem === item"
+                        [class.dragging]="DraggedItem === item"
                         draggable="true"
-                        (dragstart)="onDragStart($event, item, i)"
-                        (dragend)="onDragEnd($event)"
-                        (dragenter)="onDragEnter($event, i)"
-                        (dblclick)="removeApp(item); $event.stopPropagation()"
+                        (dragstart)="OnDragStart($event, item, i)"
+                        (dragend)="OnDragEnd()"
+                        (dragenter)="OnDragEnter($event, i)"
+                        (dblclick)="RemoveApp(item); $event.stopPropagation()"
                       >
                         <div class="app-item-content" [style.border-left-color]="item.app.GetColor()">
                           <div class="drag-handle">
@@ -154,22 +155,22 @@
                             <button
                               class="mj-btn mj-btn-ghost mj-btn-sm"
                               [disabled]="i === 0"
-                              (click)="moveUp(item); $event.stopPropagation()"
+                              (click)="MoveUp(item); $event.stopPropagation()"
                               title="Move up"
                             >
                               <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
                             </button>
                             <button
                               class="mj-btn mj-btn-ghost mj-btn-sm"
-                              [disabled]="i === activeApps.length - 1"
-                              (click)="moveDown(item); $event.stopPropagation()"
+                              [disabled]="i === ActiveApps.length - 1"
+                              (click)="MoveDown(item); $event.stopPropagation()"
                               title="Move down"
                             >
                               <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                             </button>
                             <button
                               class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
-                              (click)="removeApp(item); $event.stopPropagation()"
+                              (click)="RemoveApp(item); $event.stopPropagation()"
                               title="Remove from your apps"
                             >
                               <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -183,17 +184,84 @@
               </div>
             </div>
           </div>
+
+          <!-- Mobile: single list with toggles + touch drag reorder -->
+          <div
+            class="mobile-view"
+            (touchmove)="OnTouchDragMove($event)"
+            (touchend)="OnTouchDragEnd()"
+            (touchcancel)="OnTouchDragEnd()"
+          >
+            <div class="mobile-list">
+              @if (ActiveApps.length > 0) {
+                <div class="mobile-section-label">Your Apps</div>
+                @for (item of ActiveApps; track item.app.ID; let i = $index) {
+                  @if (TouchDragActive && TouchDropIndex === i && TouchDragIndex > i) {
+                    <div class="mobile-drop-indicator"></div>
+                  }
+                  <div
+                    class="mobile-app-row"
+                    [class.touch-ghost]="TouchDragActive && TouchDragIndex === i"
+                  >
+                    <div
+                      class="mobile-drag-handle"
+                      (touchstart)="OnTouchDragStart($event, i)"
+                      aria-label="Drag to reorder"
+                    >
+                      <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+                    </div>
+                    <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                    </div>
+                    <span class="mobile-app-name">{{ item.app.Name }}</span>
+                    <button
+                      class="mobile-toggle on"
+                      (click)="ToggleApp(item)"
+                      aria-label="Remove {{ item.app.Name }}"
+                    >
+                      <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  @if (TouchDragActive && TouchDropIndex === i && TouchDragIndex < i) {
+                    <div class="mobile-drop-indicator"></div>
+                  }
+                }
+                @if (TouchDragActive && TouchDropIndex === ActiveApps.length - 1 && TouchDragIndex < TouchDropIndex) {
+                  <div class="mobile-drop-indicator"></div>
+                }
+              }
+
+              @if (AvailableApps.length > 0) {
+                <div class="mobile-section-label">Available</div>
+                @for (item of AvailableApps; track item.app.ID) {
+                  <div class="mobile-app-row inactive">
+                    <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+                    </div>
+                    <span class="mobile-app-name">{{ item.app.Name }}</span>
+                    <button
+                      class="mobile-toggle off"
+                      (click)="ToggleApp(item)"
+                      aria-label="Add {{ item.app.Name }}"
+                    >
+                      <i class="fa-solid fa-toggle-off" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+          </div>
         </div>
       }
 
-      <!-- Footer Actions - Primary on LEFT per MD3 -->
+      <!-- Footer Actions -->
       <div class="dialog-footer">
         <div class="footer-left">
-          @if (hasChanges()) {
+          @if (HasChanges()) {
             <button
               class="mj-btn mj-btn-secondary"
-              (click)="reset()"
-              [disabled]="isLoading || isSaving"
+              (click)="Reset()"
+              [disabled]="IsLoading || IsSaving"
             >
               <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
               Reset Changes
@@ -203,10 +271,10 @@
         <div class="footer-right">
           <button
             class="mj-btn mj-btn-primary"
-            (click)="save()"
-            [disabled]="isLoading || isSaving || !hasChanges()"
+            (click)="Save()"
+            [disabled]="IsLoading || IsSaving || !HasChanges()"
           >
-            @if (isSaving) {
+            @if (IsSaving) {
               <mj-loading [showText]="false" size="small"></mj-loading>
               <span>Saving...</span>
             } @else {
@@ -216,8 +284,8 @@
           </button>
           <button
             class="mj-btn mj-btn-secondary"
-            (click)="close()"
-            [disabled]="isSaving"
+            (click)="Close()"
+            [disabled]="IsSaving"
           >
             Cancel
           </button>

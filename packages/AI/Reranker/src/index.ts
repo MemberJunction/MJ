@@ -14,12 +14,8 @@
  * import {
  *     RerankerService,
  *     RerankerConfiguration,
- *     parseRerankerConfiguration,
- *     LoadLLMReranker
+ *     parseRerankerConfiguration
  * } from '@memberjunction/ai-reranker';
- *
- * // Ensure LLM reranker is loaded
- * LoadLLMReranker();
  *
  * // Parse configuration from agent
  * const config = parseRerankerConfiguration(agent.RerankerConfiguration);
@@ -55,10 +51,5 @@ export {
 // LLM Reranker
 export {
     LLMReranker,
-    createLLMReranker,
-    LoadLLMReranker
+    createLLMReranker
 } from './LLMReranker';
-
-// Ensure LLM reranker is registered on module load
-import { LoadLLMReranker } from './LLMReranker';
-LoadLLMReranker();

@@ -224,7 +224,7 @@ function TestEntityDataGrid({
           </p>
 
           <EntityDataGrid
-            entityName="Action Params"
+            entityName="MJ: Action Params"
             fields={['InvalidField1', 'Name', 'BadColumn', 'Type', 'ValueType', 'FakeProperty', 'IsRequired', 'IsArray', 'DefaultValue']}
             orderBy="Name ASC"
             pageSize={20}
@@ -273,7 +273,7 @@ function TestEntityDataGrid({
           </p>
 
           <EntityDataGrid
-            entityName="Action Params"
+            entityName="MJ: Action Params"
             extraFilter="IsRequired=1"
             fields={[
               'Name',  // Simple string field

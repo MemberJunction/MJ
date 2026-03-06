@@ -54,6 +54,17 @@ export class RESTEndpointHandler {
         this.options = options;
         this.setupRoutes();
     }
+
+    /**
+     * Helper to safely extract a string from Express route params
+     * Express 5.x types params as string | string[] | undefined
+     */
+    private getStringParam(param: string | string[] | undefined): string {
+        if (Array.isArray(param)) {
+            return param[0] || '';
+        }
+        return param || '';
+    }
     
     /**
      * Determines if an entity is allowed based on include/exclude lists
@@ -190,13 +201,13 @@ export class RESTEndpointHandler {
      * Middleware to check entity access based on include/exclude lists
      */
     private checkEntityAccess(req: express.Request, res: express.Response, next: express.NextFunction): void {
-        const entityName = req.params.entityName;
-        
+        const entityName = this.getStringParam(req.params.entityName);
+
         if (!entityName) {
             next();
             return;
         }
-        
+
         if (!this.isEntityAllowed(entityName)) {
             res.status(403).json({
                 error: `Access to entity '${entityName}' is not allowed through the REST API`,
@@ -284,7 +295,7 @@ export class RESTEndpointHandler {
      */
     private async getEntityList(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const { filter, orderBy, fields, maxRows, startRow } = req.query;
             
             const user = req['mjUser'];
@@ -312,12 +323,13 @@ export class RESTEndpointHandler {
      */
     private async getEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const { include } = req.query; // Optional related entities to include
-            
+
             const user = req['mjUser'];
             const relatedEntities = include ? (include as string).split(',') : null;
-            
+
             const result = await EntityCRUDHandler.getEntity(entityName, id, relatedEntities, user);
             
             if (result.success) {
@@ -336,7 +348,7 @@ export class RESTEndpointHandler {
      */
     private async createEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const entityData = req.body;
             
             const user = req['mjUser'];
@@ -362,11 +374,12 @@ export class RESTEndpointHandler {
      */
     private async updateEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const updateData = req.body;
-            
+
             const user = req['mjUser'];
-            
+
             const result = await EntityCRUDHandler.updateEntity(entityName, id, updateData, user);
             
             if (result.success) {
@@ -388,7 +401,8 @@ export class RESTEndpointHandler {
      */
     private async deleteEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const options = req.query.options ? JSON.parse(req.query.options as string) : {};
             
             const user = req['mjUser'];
@@ -417,13 +431,14 @@ export class RESTEndpointHandler {
      */
     private async getRecordChanges(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -444,13 +459,14 @@ export class RESTEndpointHandler {
      */
     private async getRecordDependencies(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -471,13 +487,14 @@ export class RESTEndpointHandler {
      */
     private async getEntityRecordName(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -497,7 +514,7 @@ export class RESTEndpointHandler {
      */
     private async runView(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const viewParams = req.body;
             
             const user = req['mjUser'];
@@ -627,8 +644,8 @@ export class RESTEndpointHandler {
      */
     private async getEntityFieldMetadata(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
-            
+            const entityName = this.getStringParam(req.params.entityName);
+
             const user = req['mjUser'];
             
             const md = new Metadata();
@@ -671,8 +688,8 @@ export class RESTEndpointHandler {
      */
     private async getViewsMetadata(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
-            
+            const entityName = this.getStringParam(req.params.entityName);
+
             const user = req['mjUser'];
             
             // This would need to be implemented to retrieve available views
@@ -691,13 +708,15 @@ export class RESTEndpointHandler {
      */
     private async getRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -717,13 +736,15 @@ export class RESTEndpointHandler {
      */
     private async setRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -743,13 +764,15 @@ export class RESTEndpointHandler {
      */
     private async removeRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             

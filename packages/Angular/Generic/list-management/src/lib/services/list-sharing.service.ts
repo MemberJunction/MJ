@@ -1,11 +1,11 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
-  ListEntity,
-  ResourcePermissionEntity,
-  ResourceTypeEntity,
-  UserEntity,
-  RoleEntity
+  MJListEntity,
+  MJResourcePermissionEntity,
+  MJResourceTypeEntity,
+  MJUserEntity,
+  MJRoleEntity
 } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ListShareInfo, ListPermissionLevel, ShareRecipient, ListShareResult } from '../models/list-sharing.models';
@@ -28,8 +28,8 @@ export class ListSharingService {
   public loading$: Observable<boolean> = this.loadingSubject.asObservable();
 
   // Cache for users and roles (for autocomplete)
-  private usersCache: UserEntity[] | null = null;
-  private rolesCache: RoleEntity[] | null = null;
+  private usersCache: MJUserEntity[] | null = null;
+  private rolesCache: MJRoleEntity[] | null = null;
 
   constructor() {}
 
@@ -48,8 +48,8 @@ export class ListSharingService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ResourcePermissionEntity>({
-        EntityName: 'Resource Permissions',
+      const result = await rv.RunView<MJResourcePermissionEntity>({
+        EntityName: 'MJ: Resource Permissions',
         ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}'`,
         ResultType: 'entity_object'
       });
@@ -81,8 +81,8 @@ export class ListSharingService {
     const rv = new RunView();
 
     // Check direct user permission
-    const userResult = await rv.RunView<ResourcePermissionEntity>({
-      EntityName: 'Resource Permissions',
+    const userResult = await rv.RunView<MJResourcePermissionEntity>({
+      EntityName: 'MJ: Resource Permissions',
       ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
       ResultType: 'entity_object'
     });
@@ -124,7 +124,7 @@ export class ListSharingService {
       }
 
       // Create new share
-      const permission = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
       permission.NewRecord();
       permission.ResourceTypeID = LIST_RESOURCE_TYPE_ID;
       permission.ResourceRecordID = listId;
@@ -176,7 +176,7 @@ export class ListSharingService {
       }
 
       // Create new share
-      const permission = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
       permission.NewRecord();
       permission.ResourceTypeID = LIST_RESOURCE_TYPE_ID;
       permission.ResourceRecordID = listId;
@@ -209,7 +209,7 @@ export class ListSharingService {
   ): Promise<ListShareResult> {
     try {
       const md = new Metadata();
-      const permission = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       const loaded = await permission.Load(shareId);
       if (!loaded) {
@@ -242,7 +242,7 @@ export class ListSharingService {
   async removeShare(shareId: string): Promise<ListShareResult> {
     try {
       const md = new Metadata();
-      const permission = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       const loaded = await permission.Load(shareId);
       if (!loaded) {
@@ -273,8 +273,8 @@ export class ListSharingService {
   async getListsSharedWithUser(userId: string): Promise<string[]> {
     const rv = new RunView();
 
-    const result = await rv.RunView<ResourcePermissionEntity>({
-      EntityName: 'Resource Permissions',
+    const result = await rv.RunView<MJResourcePermissionEntity>({
+      EntityName: 'MJ: Resource Permissions',
       ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
       Fields: ['ResourceRecordID'],
       ResultType: 'simple'
@@ -294,8 +294,8 @@ export class ListSharingService {
     // First get all lists owned by the user
     const rv = new RunView();
 
-    const listsResult = await rv.RunView<ListEntity>({
-      EntityName: 'Lists',
+    const listsResult = await rv.RunView<MJListEntity>({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `UserID = '${userId}'`,
       Fields: ['ID'],
       ResultType: 'simple'
@@ -309,8 +309,8 @@ export class ListSharingService {
     const listIdFilter = listIds.map((id: string) => `'${id}'`).join(',');
 
     // Get all shares for these lists
-    const sharesResult = await rv.RunView<ResourcePermissionEntity>({
-      EntityName: 'Resource Permissions',
+    const sharesResult = await rv.RunView<MJResourcePermissionEntity>({
+      EntityName: 'MJ: Resource Permissions',
       ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID IN (${listIdFilter}) AND Status = 'Approved'`,
       Fields: ['ResourceRecordID'],
       ResultType: 'simple'
@@ -336,8 +336,8 @@ export class ListSharingService {
     const rv = new RunView();
 
     // Check if user is the owner
-    const listResult = await rv.RunView<ListEntity>({
-      EntityName: 'Lists',
+    const listResult = await rv.RunView<MJListEntity>({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `ID = '${listId}' AND UserID = '${userId}'`,
       ResultType: 'simple'
     });
@@ -357,8 +357,8 @@ export class ListSharingService {
   async searchUsers(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
     const rv = new RunView();
 
-    const result = await rv.RunView<UserEntity>({
-      EntityName: 'Users',
+    const result = await rv.RunView<MJUserEntity>({
+      EntityName: 'MJ: Users',
       ExtraFilter: `(Name LIKE '%${searchTerm}%' OR Email LIKE '%${searchTerm}%') AND IsActive = 1`,
       OrderBy: 'Name',
       MaxRows: limit,
@@ -383,8 +383,8 @@ export class ListSharingService {
   async searchRoles(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
     const rv = new RunView();
 
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       ExtraFilter: `Name LIKE '%${searchTerm}%'`,
       OrderBy: 'Name',
       MaxRows: limit,
@@ -405,14 +405,14 @@ export class ListSharingService {
   /**
    * Get all available users (cached)
    */
-  async getAllUsers(forceRefresh: boolean = false): Promise<UserEntity[]> {
+  async getAllUsers(forceRefresh: boolean = false): Promise<MJUserEntity[]> {
     if (!forceRefresh && this.usersCache) {
       return this.usersCache;
     }
 
     const rv = new RunView();
-    const result = await rv.RunView<UserEntity>({
-      EntityName: 'Users',
+    const result = await rv.RunView<MJUserEntity>({
+      EntityName: 'MJ: Users',
       ExtraFilter: 'IsActive = 1',
       OrderBy: 'Name',
       ResultType: 'entity_object'
@@ -429,14 +429,14 @@ export class ListSharingService {
   /**
    * Get all available roles (cached)
    */
-  async getAllRoles(forceRefresh: boolean = false): Promise<RoleEntity[]> {
+  async getAllRoles(forceRefresh: boolean = false): Promise<MJRoleEntity[]> {
     if (!forceRefresh && this.rolesCache) {
       return this.rolesCache;
     }
 
     const rv = new RunView();
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       OrderBy: 'Name',
       ResultType: 'entity_object'
     });
@@ -456,12 +456,12 @@ export class ListSharingService {
     listId: string,
     type: 'User' | 'Role',
     recipientId: string
-  ): Promise<ResourcePermissionEntity | null> {
+  ): Promise<MJResourcePermissionEntity | null> {
     const rv = new RunView();
     const idField = type === 'User' ? 'UserID' : 'RoleID';
 
-    const result = await rv.RunView<ResourcePermissionEntity>({
-      EntityName: 'Resource Permissions',
+    const result = await rv.RunView<MJResourcePermissionEntity>({
+      EntityName: 'MJ: Resource Permissions',
       ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Type = '${type}' AND ${idField} = '${recipientId}'`,
       ResultType: 'entity_object'
     });
@@ -474,14 +474,14 @@ export class ListSharingService {
   }
 
   /**
-   * Convert ResourcePermissionEntity to ListShareInfo
+   * Convert MJResourcePermissionEntity to ListShareInfo
    */
-  private async convertToListShareInfo(permission: ResourcePermissionEntity): Promise<ListShareInfo | null> {
+  private async convertToListShareInfo(permission: MJResourcePermissionEntity): Promise<ListShareInfo | null> {
     const rv = new RunView();
 
     if (permission.Type === 'User' && permission.UserID) {
-      const userResult = await rv.RunView<UserEntity>({
-        EntityName: 'Users',
+      const userResult = await rv.RunView<MJUserEntity>({
+        EntityName: 'MJ: Users',
         ExtraFilter: `ID = '${permission.UserID}'`,
         ResultType: 'entity_object'
       });
@@ -502,8 +502,8 @@ export class ListSharingService {
         };
       }
     } else if (permission.Type === 'Role' && permission.RoleID) {
-      const roleResult = await rv.RunView<RoleEntity>({
-        EntityName: 'Roles',
+      const roleResult = await rv.RunView<MJRoleEntity>({
+        EntityName: 'MJ: Roles',
         ExtraFilter: `ID = '${permission.RoleID}'`,
         ResultType: 'entity_object'
       });
@@ -533,8 +533,8 @@ export class ListSharingService {
   async getListSharingSummary(listId: string): Promise<{ listId: string; totalShares: number; userShares: number; roleShares: number; isSharedWithMe: boolean; isSharedByMe: boolean }> {
     const rv = new RunView();
 
-    const result = await rv.RunView<ResourcePermissionEntity>({
-      EntityName: 'Resource Permissions',
+    const result = await rv.RunView<MJResourcePermissionEntity>({
+      EntityName: 'MJ: Resource Permissions',
       ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Status = 'Approved'`,
       Fields: ['ID', 'Type'],
       ResultType: 'simple'

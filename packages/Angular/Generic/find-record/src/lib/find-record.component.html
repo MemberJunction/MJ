@@ -1,25 +1,32 @@
 <div>
-    <kendo-textbox
-      class="find-textbox"
-      type="text"
-      placeholder="Start typing to search..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="onSearchTermChange($event)"
+  <kendo-textbox
+    class="find-textbox"
+    type="text"
+    placeholder="Start typing to search..."
+    [(ngModel)]="searchTerm"
+    (ngModelChange)="onSearchTermChange($event)"
     >
-    </kendo-textbox>
-    <button class="find-button" kendoButton (click)="onFind()">Find</button>
-  
-    <div *ngIf="loading">Searching...</div>
-    <div *ngIf="!loading && records.length > 0">
-      <kendo-grid 
-        [data]="records" 
-        [height]="280" 
+  </kendo-textbox>
+  <button class="find-button" kendoButton (click)="onFind()">Find</button>
+
+  @if (loading) {
+    <div>Searching...</div>
+  }
+  @if (!loading && records.length > 0) {
+    <div>
+      <kendo-grid
+        [data]="records"
+        [height]="280"
         [selectable]="{ mode: 'single' }"
         (selectionChange)="onSelectionChange($event)"
-      >
-        <kendo-grid-column *ngFor="let field of DisplayFields" [field]="field.Name" [title]="field.DisplayNameOrName"></kendo-grid-column>
+        >
+        @for (field of DisplayFields; track field) {
+          <kendo-grid-column [field]="field.Name" [title]="field.DisplayNameOrName"></kendo-grid-column>
+        }
       </kendo-grid>
     </div>
-    <div *ngIf="!loading && records.length === 0 && searchHasRun">No records found.</div>
+  }
+  @if (!loading && records.length === 0 && searchHasRun) {
+    <div>No records found.</div>
+  }
 </div>
-  

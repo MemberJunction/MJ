@@ -12,15 +12,17 @@
  */
 
 import { createHash, randomBytes } from 'crypto';
+import { cosmiconfigSync } from 'cosmiconfig';
 import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
-    APIKeyEntity,
-    APIApplicationEntity,
-    APIKeyApplicationEntity,
-    APIScopeEntity,
-    UserEntity
+    MJAPIKeyEntity,
+    MJAPIApplicationEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIScopeEntity,
+    MJUserEntity
 } from '@memberjunction/core-entities';
-import { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
+import { UUIDsEqual } from '@memberjunction/global';
+import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
 import { PatternMatcher } from './PatternMatcher';
@@ -28,6 +30,8 @@ import {
     AuthorizationRequest,
     AuthorizationResult,
     APIKeyEngineConfig,
+    APIKeyGenerationConfig,
+    APIKeyEncoding,
     GeneratedAPIKey,
     CreateAPIKeyParams,
     CreateAPIKeyResult,
@@ -35,8 +39,58 @@ import {
     APIKeyValidationResult
 } from './interfaces';
 
-/** Regular expression pattern for validating API key format */
-const API_KEY_FORMAT_REGEX = /^mj_sk_[a-f0-9]{64}$/;
+// =========================================================================
+// API KEY GENERATION DEFAULTS
+// =========================================================================
+
+/** Default prefix prepended to generated API keys */
+export const DEFAULT_KEY_PREFIX = 'mj_sk_';
+/** Default number of random bytes used for key entropy */
+export const DEFAULT_ENTROPY_BYTES = 32;
+/** Default encoding for the random portion of the key body */
+export const DEFAULT_KEY_ENCODING: APIKeyEncoding = 'hex';
+/** Default hash algorithm used for key storage */
+export const DEFAULT_HASH_ALGORITHM = 'sha256';
+
+/**
+ * Computes the expected encoded string length for a given byte count and encoding.
+ */
+function computeEncodedLength(entropyBytes: number, encoding: APIKeyEncoding): number {
+    if (encoding === 'base64url') {
+        return Math.ceil(entropyBytes * 4 / 3);
+    }
+    return entropyBytes * 2; // hex: 2 chars per byte
+}
+
+/**
+ * Builds a format-validation regex from the configured prefix, entropy bytes, and encoding.
+ */
+function buildFormatRegex(prefix: string, entropyBytes: number, encoding: APIKeyEncoding): RegExp {
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const encodedLength = computeEncodedLength(entropyBytes, encoding);
+    const charClass = encoding === 'base64url' ? '[A-Za-z0-9_-]' : '[a-f0-9]';
+    return new RegExp(`^${escapedPrefix}${charClass}{${encodedLength}}$`);
+}
+
+/**
+ * Reads the `apiKeyGeneration` section from the MJ config file (mj.config.cjs / .mjrc).
+ * Uses cosmiconfigSync for synchronous access in the constructor.
+ *
+ * Returns undefined if no config file is found, the file has no `apiKeyGeneration`
+ * section, or any error occurs during reading.
+ */
+function loadFileKeyGenerationConfig(): APIKeyGenerationConfig | undefined {
+    try {
+        const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+        const result = explorer.search(process.cwd());
+        if (result && !result.isEmpty && result.config?.apiKeyGeneration) {
+            return result.config.apiKeyGeneration as APIKeyGenerationConfig;
+        }
+    } catch {
+        // Non-fatal: config file errors should never prevent engine construction
+    }
+    return undefined;
+}
 
 /**
  * Result of validating an API key by hash (internal validation)
@@ -45,7 +99,7 @@ export interface KeyHashValidationResult {
     /** Whether the key is valid */
     Valid: boolean;
     /** The API key entity if valid */
-    APIKey?: APIKeyEntity;
+    APIKey?: MJAPIKeyEntity;
     /** The reason if invalid */
     Reason?: string;
 }
@@ -76,7 +130,9 @@ export interface KeyHashValidationResult {
  * ```
  */
 export class APIKeyEngine {
-    private _config: Required<APIKeyEngineConfig>;
+    private _config: Required<Omit<APIKeyEngineConfig, 'keyGeneration'>>;
+    private _keyGenConfig: Required<APIKeyGenerationConfig>;
+    private _formatRegex: RegExp;
     private _scopeEvaluator: ScopeEvaluator;
     private _usageLogger: UsageLogger;
     private _configured: boolean = false;
@@ -89,8 +145,21 @@ export class APIKeyEngine {
             scopeCacheTTLMs: config.scopeCacheTTLMs ?? 60000
         };
 
-        // Ensure APIKeysEngineBase is loaded (tree-shaking prevention)
-        LoadAPIKeysEngineBase();
+        // Read config file as middle tier: explicit > file > defaults
+        const fileConfig = loadFileKeyGenerationConfig();
+
+        this._keyGenConfig = {
+            prefix: config.keyGeneration?.prefix ?? fileConfig?.prefix ?? DEFAULT_KEY_PREFIX,
+            entropyBytes: config.keyGeneration?.entropyBytes ?? fileConfig?.entropyBytes ?? DEFAULT_ENTROPY_BYTES,
+            encoding: config.keyGeneration?.encoding ?? fileConfig?.encoding ?? DEFAULT_KEY_ENCODING,
+            hashAlgorithm: config.keyGeneration?.hashAlgorithm ?? fileConfig?.hashAlgorithm ?? DEFAULT_HASH_ALGORITHM,
+        };
+
+        this._formatRegex = buildFormatRegex(
+            this._keyGenConfig.prefix,
+            this._keyGenConfig.entropyBytes,
+            this._keyGenConfig.encoding
+        );
 
         this._scopeEvaluator = new ScopeEvaluator(this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();
@@ -119,6 +188,11 @@ export class APIKeyEngine {
     ): Promise<void> {
         await this.Base.Config(forceRefresh, contextUser, provider);
         this._configured = true;
+
+        // Check for config drift against existing keys
+        if (contextUser) {
+            await this.warnIfConfigDiffers(contextUser);
+        }
     }
 
     /**
@@ -135,14 +209,14 @@ export class APIKeyEngine {
     /**
      * All cached API Scopes from the base engine.
      */
-    public get Scopes(): APIScopeEntity[] {
+    public get Scopes(): MJAPIScopeEntity[] {
         return this.Base.Scopes;
     }
 
     /**
      * All cached API Applications from the base engine.
      */
-    public get Applications(): APIApplicationEntity[] {
+    public get Applications(): MJAPIApplicationEntity[] {
         return this.Base.Applications;
     }
 
@@ -151,26 +225,26 @@ export class APIKeyEngine {
     // =========================================================================
 
     /**
-     * Generates a new API key with the standard MemberJunction format.
+     * Generates a new API key using the configured generation parameters.
      *
-     * The key format is: `mj_sk_[64 hex characters]`
-     * - `mj_sk_` prefix identifies it as a MemberJunction secret key
-     * - 64 hex characters = 32 bytes of cryptographically secure random data
+     * The key format is: `{prefix}{encodedRandomBytes}`
+     * - Prefix, entropy size, encoding, and hash algorithm are all configurable
+     * - Defaults: `mj_sk_` prefix, 32 bytes entropy, hex encoding, SHA-256 hash
      *
-     * @returns Object containing the raw key and its SHA-256 hash
+     * @returns Object containing the raw key and its hash (hash always hex-encoded)
      *
      * @example
      * ```typescript
-     * const { raw, hash } = engine.GenerateAPIKey();
-     * // raw: 'mj_sk_a1b2c3...' (show to user once)
-     * // hash: '7f83b1657ff1...' (store in database)
+     * const { Raw, Hash } = engine.GenerateAPIKey();
+     * // Raw: 'mj_sk_a1b2c3...' (show to user once)
+     * // Hash: '7f83b1657ff1...' (store in database)
      * ```
      */
     public GenerateAPIKey(): GeneratedAPIKey {
-        const randomData = randomBytes(32);
-        const hexString = randomData.toString('hex');
-        const raw = `mj_sk_${hexString}`;
-        const hash = createHash('sha256').update(raw).digest('hex');
+        const randomData = randomBytes(this._keyGenConfig.entropyBytes);
+        const encodedBody = this.encodeBytes(randomData);
+        const raw = `${this._keyGenConfig.prefix}${encodedBody}`;
+        const hash = createHash(this._keyGenConfig.hashAlgorithm).update(raw).digest('hex');
 
         return { Raw: raw, Hash: hash };
     }
@@ -178,27 +252,38 @@ export class APIKeyEngine {
     /**
      * Hashes an API key for storage or comparison.
      *
-     * Uses SHA-256 to create a one-way hash of the key.
-     * This hash is what gets stored in the database and used for lookups.
+     * Uses the configured hash algorithm to create a one-way hash of the key.
+     * The hash is always output as a hex string regardless of the key encoding.
      *
      * @param key - The raw API key to hash
-     * @returns The SHA-256 hash as a hex string (64 characters)
+     * @returns The hash as a hex string
      */
     public HashAPIKey(key: string): string {
-        return createHash('sha256').update(key).digest('hex');
+        return createHash(this._keyGenConfig.hashAlgorithm).update(key).digest('hex');
     }
 
     /**
      * Validates that an API key has the correct format.
      *
-     * Checks that the key matches the pattern: `mj_sk_[64 hex characters]`
+     * Checks that the key matches the configured prefix, encoding character set,
+     * and expected length derived from the entropy bytes.
      * This is a quick syntactic check before attempting database validation.
      *
      * @param key - The API key to validate
      * @returns True if the format is valid, false otherwise
      */
     public IsValidAPIKeyFormat(key: string): boolean {
-        return API_KEY_FORMAT_REGEX.test(key);
+        return this._formatRegex.test(key);
+    }
+
+    /** The configured API key prefix (e.g., `'mj_sk_'`). */
+    public get KeyPrefix(): string {
+        return this._keyGenConfig.prefix;
+    }
+
+    /** The full resolved key generation config (read-only). */
+    public get KeyGenerationConfig(): Readonly<Required<APIKeyGenerationConfig>> {
+        return this._keyGenConfig;
     }
 
     /**
@@ -238,7 +323,7 @@ export class APIKeyEngine {
             const { Raw, Hash } = this.GenerateAPIKey();
 
             const md = new Metadata();
-            const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+            const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             apiKey.Hash = Hash;
             apiKey.UserID = params.UserId;
@@ -347,7 +432,7 @@ export class APIKeyEngine {
 
             if (keyApps.length > 0) {
                 // Key has app restrictions - check if this app is allowed
-                const boundToThisApp = keyApps.some((ka: APIKeyApplicationEntity) => ka.ApplicationID === appId);
+                const boundToThisApp = keyApps.some((ka: MJAPIKeyApplicationEntity) => UUIDsEqual(ka.ApplicationID, appId));
                 if (!boundToThisApp) {
                     return { IsValid: false, Error: 'API key not authorized for this application' };
                 }
@@ -357,8 +442,8 @@ export class APIKeyEngine {
 
         // 5. Get the user
         const rv = new RunView();
-        const userResult = await rv.RunView<UserEntity>({
-            EntityName: 'Users',
+        const userResult = await rv.RunView<MJUserEntity>({
+            EntityName: 'MJ: Users',
             ExtraFilter: `ID = '${apiKey.UserID}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -424,7 +509,7 @@ export class APIKeyEngine {
      */
     public async RevokeAPIKey(apiKeyId: string, contextUser: UserInfo): Promise<boolean> {
         const md = new Metadata();
-        const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+        const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
         const loaded = await apiKey.Load(apiKeyId);
         if (!loaded) {
@@ -610,7 +695,7 @@ export class APIKeyEngine {
         contextUser: UserInfo
     ): Promise<KeyHashValidationResult> {
         const rv = new RunView();
-        const result = await rv.RunView<APIKeyEntity>({
+        const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             ExtraFilter: `Hash='${hash}'`,
             ResultType: 'entity_object'
@@ -651,7 +736,7 @@ export class APIKeyEngine {
     public async GetApplicationByName(
         name: string,
         _contextUser: UserInfo
-    ): Promise<APIApplicationEntity | null> {
+    ): Promise<MJAPIApplicationEntity | null> {
         // Use cached data from Base engine
         const app = this.Base.GetApplicationByName(name);
         return app || null;
@@ -666,7 +751,7 @@ export class APIKeyEngine {
     public async GetApplicationById(
         id: string,
         _contextUser: UserInfo
-    ): Promise<APIApplicationEntity | null> {
+    ): Promise<MJAPIApplicationEntity | null> {
         // Use cached data from Base engine
         const app = this.Base.GetApplicationById(id);
         return app || null;
@@ -681,7 +766,7 @@ export class APIKeyEngine {
     ): Promise<boolean> {
         try {
             const md = new Metadata();
-            const apiKey = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', contextUser);
+            const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             if (await apiKey.Load(apiKeyId)) {
                 apiKey.LastUsedAt = new Date();
@@ -733,6 +818,74 @@ export class APIKeyEngine {
      */
     public GetPatternMatcher(): typeof PatternMatcher {
         return PatternMatcher;
+    }
+
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
+
+    /**
+     * Encodes random bytes using the configured encoding format.
+     * - `hex`: lowercase hexadecimal string
+     * - `base64url`: URL-safe Base64 without padding
+     */
+    private encodeBytes(data: Buffer): string {
+        if (this._keyGenConfig.encoding === 'base64url') {
+            return data.toString('base64url');
+        }
+        return data.toString('hex');
+    }
+
+    /**
+     * Checks if the current key generation config differs from defaults and
+     * warns if active API keys already exist in the database.
+     * Changing generation parameters after keys exist will invalidate them.
+     */
+    private async warnIfConfigDiffers(contextUser: UserInfo): Promise<void> {
+        const configDiffersFromDefaults =
+            this._keyGenConfig.prefix !== DEFAULT_KEY_PREFIX ||
+            this._keyGenConfig.entropyBytes !== DEFAULT_ENTROPY_BYTES ||
+            this._keyGenConfig.encoding !== DEFAULT_KEY_ENCODING ||
+            this._keyGenConfig.hashAlgorithm !== DEFAULT_HASH_ALGORITHM;
+
+        if (!configDiffersFromDefaults) {
+            return;
+        }
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: API Keys',
+                ExtraFilter: `Status = 'Active'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (result.Success && result.Results.length > 0) {
+                const changes: string[] = [];
+                if (this._keyGenConfig.prefix !== DEFAULT_KEY_PREFIX) {
+                    changes.push(`prefix="${this._keyGenConfig.prefix}" (default: "${DEFAULT_KEY_PREFIX}")`);
+                }
+                if (this._keyGenConfig.entropyBytes !== DEFAULT_ENTROPY_BYTES) {
+                    changes.push(`entropyBytes=${this._keyGenConfig.entropyBytes} (default: ${DEFAULT_ENTROPY_BYTES})`);
+                }
+                if (this._keyGenConfig.encoding !== DEFAULT_KEY_ENCODING) {
+                    changes.push(`encoding="${this._keyGenConfig.encoding}" (default: "${DEFAULT_KEY_ENCODING}")`);
+                }
+                if (this._keyGenConfig.hashAlgorithm !== DEFAULT_HASH_ALGORITHM) {
+                    changes.push(`hashAlgorithm="${this._keyGenConfig.hashAlgorithm}" (default: "${DEFAULT_HASH_ALGORITHM}")`);
+                }
+
+                console.warn(
+                    `[APIKeyEngine] WARNING: API key generation config differs from defaults ` +
+                    `and active API keys exist in the database. Changed: ${changes.join(', ')}. ` +
+                    `Existing keys generated with different parameters will be INVALIDATED.`
+                );
+            }
+        } catch {
+            // Non-fatal — don't block startup if this check fails
+        }
     }
 }
 

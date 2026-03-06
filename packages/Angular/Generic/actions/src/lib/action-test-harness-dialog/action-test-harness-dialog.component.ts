@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '../action-test-harness/action-test-harness.component';
 
 /**
@@ -16,29 +16,30 @@ import { ActionResult } from '../action-test-harness/action-test-harness.compone
  * </mj-action-test-harness-dialog>
  */
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness-dialog',
     templateUrl: './action-test-harness-dialog.component.html',
     styleUrls: ['./action-test-harness-dialog.component.css']
 })
 export class ActionTestHarnessDialogComponent implements OnInit {
     // Private backing fields
-    private _action!: ActionEntity;
-    private _actionParams: ActionParamEntity[] = [];
+    private _action!: MJActionEntity;
+    private _actionParams: MJActionParamEntity[] = [];
     private _isOpen = false;
 
     @Input()
-    set Action(value: ActionEntity) {
+    set Action(value: MJActionEntity) {
         this._action = value;
     }
-    get Action(): ActionEntity {
+    get Action(): MJActionEntity {
         return this._action;
     }
 
     @Input()
-    set ActionParams(value: ActionParamEntity[]) {
+    set ActionParams(value: MJActionParamEntity[]) {
         this._actionParams = value || [];
     }
-    get ActionParams(): ActionParamEntity[] {
+    get ActionParams(): MJActionParamEntity[] {
         return this._actionParams;
     }
 
@@ -77,9 +78,4 @@ export class ActionTestHarnessDialogComponent implements OnInit {
     public OnExecutionComplete(result: ActionResult): void {
         this.ExecutionComplete.emit(result);
     }
-}
-
-// Tree-shaking prevention function
-export function LoadActionTestHarnessDialogComponent(): void {
-    // This function ensures the component is included in the bundle
 }

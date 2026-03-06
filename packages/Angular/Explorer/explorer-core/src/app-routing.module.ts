@@ -4,6 +4,7 @@ import {
   SingleRecordComponent,
   AuthGuardService as AuthGuard
 } from './public-api';
+import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -269,7 +270,7 @@ export class ResourceResolver implements Resolve<void> {
               ApplicationId: app.ID,
               Title: `${entityName}${filterSuffix}`,
               Configuration: {
-                resourceType: 'User Views',
+                resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
                 isDynamic: true,
@@ -288,7 +289,7 @@ export class ResourceResolver implements Resolve<void> {
               ApplicationId: app.ID,
               Title: `View - ${viewId}`,
               Configuration: {
-                resourceType: 'User Views',
+                resourceType: 'MJ: User Views',
                 viewId,
                 recordId: viewId,
                 appName: appName,
@@ -532,7 +533,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `View - ${viewId}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           viewId,
           recordId: viewId
         },
@@ -554,7 +555,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `${entityName}${filterSuffix}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
           isDynamic: true,
@@ -649,6 +650,17 @@ export class ResourceResolver implements Resolve<void> {
 }
 
 const routes: Routes = [
+  // OAuth callback route - must be FIRST as it handles redirects from OAuth providers
+  // This route does NOT require AuthGuard because it's the callback from external OAuth
+  // The component itself handles authentication when calling the exchange endpoint
+  // NOTE: We use component directly instead of loadChildren because lazy loading
+  // doesn't work correctly when the route is defined in a library (explorer-core)
+  // rather than the main application.
+  {
+    path: 'oauth/callback',
+    component: OAuthCallbackComponent
+  },
+
   // App-scoped resource routes (new pattern)
   // These must come BEFORE app/:appName/:navItemName to be matched first
   {

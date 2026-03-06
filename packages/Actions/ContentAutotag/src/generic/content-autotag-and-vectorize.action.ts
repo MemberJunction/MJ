@@ -54,7 +54,3 @@ export class AutotagAndVectorizeContentAction extends VectorizeEntityAction {
         }
     }
 }
-
-export function LoadAutotagAndVectorizeContentAction(){
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

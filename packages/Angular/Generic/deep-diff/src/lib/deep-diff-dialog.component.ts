@@ -4,6 +4,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
  * Dialog wrapper component for the deep diff viewer
  */
 @Component({
+  standalone: false,
   selector: 'mj-deep-diff-dialog',
   templateUrl: './deep-diff-dialog.component.html',
   styleUrls: ['./deep-diff-dialog.component.css']

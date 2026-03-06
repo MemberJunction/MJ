@@ -345,10 +345,3 @@ export class GammaGeneratePresentationAction extends BaseAction {
         };
     }
 }
-
-/**
- * Loader function to ensure the GammaGeneratePresentationAction class is included in the bundle.
- */
-export function LoadGammaGeneratePresentationAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

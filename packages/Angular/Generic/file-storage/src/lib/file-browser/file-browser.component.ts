@@ -17,6 +17,7 @@ import { StorageAccountWithProvider } from '@memberjunction/core-entities';
  * Responsive layout is handled via CSS media queries.
  */
 @Component({
+  standalone: false,
   selector: 'mj-file-browser',
   templateUrl: './file-browser.component.html',
   styleUrls: ['./file-browser.component.css'],

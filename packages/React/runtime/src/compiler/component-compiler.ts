@@ -17,7 +17,7 @@ import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-co
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
 import { unwrapLibraryComponent, unwrapLibraryComponents, unwrapAllLibraryComponents } from '../utilities/component-unwrapper';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Default compiler configuration
@@ -461,7 +461,7 @@ export class ComponentCompiler {
    * @param componentLibraries - All available component libraries for dependency resolution
    * @returns Map of loaded libraries
    */
-  private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
+  private async loadRequiredLibraries(libraries: any[], componentLibraries: MJComponentLibraryEntity[]): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
     if (this.config.debug) {

@@ -23,7 +23,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Memory Manager - Extract Notes",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -31,14 +31,14 @@
             "ID": "F2BCE847-E5A4-437E-8BF3-1C9C79D4A813"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.056Z",
-            "checksum": "20e3548eade4dc96a0e8579ee5d3855c3f77ee888201a78d36ae3deb976ac4e4"
+            "lastModified": "2026-02-13T21:09:23.521Z",
+            "checksum": "aae7e9dd9735334e70da92b548f2a8db9e3d151e2f8746898f87fd7037144bfb"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Memory Manager - Extract Examples",
             "ExecutionOrder": 1,
             "Status": "Active"
           },
@@ -46,8 +46,8 @@
             "ID": "D71FB930-97A5-4BFB-B1D0-AAFA98AA542F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.057Z",
-            "checksum": "53f2ea146d71da50959266683b930c4186816ca486a5efbbd5c427e2507f1566"
+            "lastModified": "2026-02-13T21:09:23.523Z",
+            "checksum": "958d1dd8ef7d48bf7fa4bc3955b0fde33ca3f717118ca8487a2ee248e9c5df3c"
           }
         }
       ]

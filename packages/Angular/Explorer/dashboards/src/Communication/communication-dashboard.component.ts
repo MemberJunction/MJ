@@ -11,6 +11,7 @@ interface CommunicationDashboardState {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-communication-dashboard',
     templateUrl: './communication-dashboard.component.html',
     styleUrls: ['./communication-dashboard.component.css'],
@@ -19,38 +20,26 @@ interface CommunicationDashboardState {
 @RegisterClass(BaseDashboard, 'CommunicationDashboard')
 export class CommunicationDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
     public isLoading = false;
+    public isRefreshing = false;
     public activeTab = 'monitor';
     public selectedIndex = 0;
 
-    // Track visited tabs for lazy loading
     private visitedTabs = new Set<string>();
-
-    // Navigation items
-    public navigationItems: string[] = ['monitor', 'logs', 'providers', 'runs'];
-
-    public navigationConfig = [
-        { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: false },
-        { text: 'Logs', icon: 'fa-solid fa-list-ul', selected: false },
-        { text: 'Providers', icon: 'fa-solid fa-server', selected: false },
-        { text: 'Runs', icon: 'fa-solid fa-play', selected: false }
-    ];
+    public navigationItems: string[] = ['monitor', 'logs', 'providers', 'templates', 'runs', 'settings'];
 
     private stateChangeSubject = new Subject<CommunicationDashboardState>();
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
         this.setupStateManagement();
-        this.updateNavigationSelection();
     }
 
-
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        return "Communications"
+        return "Communications";
     }
 
     ngAfterViewInit(): void {
         this.visitedTabs.add(this.activeTab);
-        this.updateNavigationSelection();
         this.emitStateChange();
         this.cdr.detectChanges();
     }
@@ -62,9 +51,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     public onTabChange(tabId: string): void {
         this.activeTab = tabId;
         const index = this.navigationItems.indexOf(tabId);
-
         this.selectedIndex = index >= 0 ? index : 0;
-        this.updateNavigationSelection();
 
         setTimeout(() => {
             SharedService.Instance.InvokeManualResize();
@@ -79,6 +66,15 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         return this.visitedTabs.has(tabId);
     }
 
+    public onRefresh(): void {
+        this.isRefreshing = true;
+        this.cdr.markForCheck();
+        setTimeout(() => {
+            this.isRefreshing = false;
+            this.cdr.markForCheck();
+        }, 1000);
+    }
+
     private setupStateManagement(): void {
         this.stateChangeSubject.pipe(
             debounceTime(50)
@@ -91,7 +87,6 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         const state: CommunicationDashboardState = {
             activeTab: this.activeTab
         };
-
         this.stateChangeSubject.next(state);
     }
 
@@ -101,9 +96,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             const index = this.navigationItems.indexOf(state.activeTab);
             this.selectedIndex = index >= 0 ? index : 0;
             this.visitedTabs.add(state.activeTab);
-            this.updateNavigationSelection();
         }
-
         this.cdr.markForCheck();
     }
 
@@ -126,23 +119,12 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
                 }
             }, 0);
         }
-
         this.NotifyLoadComplete();
     }
 
     public getCurrentTabLabel(): string {
         const tabIndex = this.navigationItems.indexOf(this.activeTab);
-        const labels = ['Monitor', 'Logs', 'Providers', 'Runs'];
+        const labels = ['Monitor', 'Logs', 'Providers', 'Templates', 'Runs', 'Settings'];
         return tabIndex >= 0 ? labels[tabIndex] : 'Communication Management';
     }
-
-    private updateNavigationSelection(): void {
-        this.navigationConfig.forEach((item, index) => {
-            item.selected = this.navigationItems[index] === this.activeTab;
-        });
-    }
-}
-
-export function LoadCommunicationDashboard() {
-    // Prevents tree-shaking
 }

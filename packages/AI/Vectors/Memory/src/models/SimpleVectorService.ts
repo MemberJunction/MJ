@@ -845,6 +845,111 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   }
 
   /**
+   * Updates an existing vector entry in-place, allowing partial updates to the vector data,
+   * metadata, or both without removing and re-adding the entry. Unlike {@link AddVector}, this
+   * method requires the key to already exist and will throw if it does not.
+   *
+   * This is useful when you need to:
+   * - Update the embedding for an existing key after re-encoding (e.g., content changed)
+   * - Patch metadata without touching the vector data
+   * - Atomically update both vector and metadata in a single call
+   *
+   * @param {string} key - The unique identifier of the vector to update. Must already exist.
+   * @param {Object} updates - The fields to update. At least one of `vector` or `metadata` must be provided.
+   * @param {number[]} [updates.vector] - New vector/embedding to replace the existing one.
+   *   Must match the expected dimensions of the service.
+   * @param {TMetadata} [updates.metadata] - New metadata to replace the existing metadata.
+   * @returns {boolean} True if the update was applied successfully
+   * @throws {Error} If the key does not exist in the service
+   * @throws {Error} If neither `vector` nor `metadata` is provided
+   * @throws {Error} If the new vector has mismatched dimensions
+   *
+   * @example
+   * ```typescript
+   * // Update only the vector (e.g., after re-embedding content)
+   * service.UpdateVector('doc123', { vector: newEmbedding });
+   *
+   * // Update only metadata (e.g., status changed)
+   * service.UpdateVector('doc123', { metadata: { title: 'Updated Title', status: 'reviewed' } });
+   *
+   * // Update both vector and metadata atomically
+   * service.UpdateVector('doc123', {
+   *   vector: newEmbedding,
+   *   metadata: { title: 'Updated Title', version: 2 }
+   * });
+   * ```
+   *
+   * @public
+   * @method
+   */
+  public UpdateVector(key: string, updates: { vector?: number[]; metadata?: TMetadata }): boolean {
+    const existing = this.vectors.get(key);
+    if (!existing) {
+      throw new Error(`Vector with key "${key}" not found. Use AddVector to create new entries.`);
+    }
+
+    if (updates.vector == null && updates.metadata == null) {
+      throw new Error('At least one of vector or metadata must be provided for an update');
+    }
+
+    if (updates.vector != null) {
+      if (updates.vector.length === 0) {
+        throw new Error('Vector cannot be empty');
+      }
+      this.validateAndSetDimensions(updates.vector);
+      existing.vector = updates.vector;
+    }
+
+    if (updates.metadata != null) {
+      existing.metadata = updates.metadata;
+    }
+
+    return true;
+  }
+
+  /**
+   * Adds a new vector or updates an existing one based on whether the key already exists.
+   * If the key does not exist, a new entry is created. If the key already exists, the
+   * vector and/or metadata are updated in place.
+   *
+   * @param {string} key - The unique identifier for the vector
+   * @param {number[]} vector - The vector/embedding array
+   * @param {TMetadata} [metadata] - Optional metadata to associate with the vector
+   * @returns {boolean} True if an existing vector was updated, false if a new vector was added
+   * @throws {Error} If key is null/undefined, or if vector is invalid
+   *
+   * @example
+   * ```typescript
+   * // First call creates the entry
+   * const wasUpdate = service.AddOrUpdateVector('doc1', [0.1, 0.2, 0.3], { title: 'Doc 1' });
+   * console.log(wasUpdate); // false (new entry)
+   *
+   * // Second call updates the existing entry
+   * const wasUpdate2 = service.AddOrUpdateVector('doc1', [0.4, 0.5, 0.6], { title: 'Doc 1 v2' });
+   * console.log(wasUpdate2); // true (updated)
+   * ```
+   *
+   * @public
+   * @method
+   */
+  public AddOrUpdateVector(key: string, vector: number[], metadata?: TMetadata): boolean {
+    if (!key) {
+      throw new Error('Key cannot be null or undefined');
+    }
+    if (!vector || vector.length === 0) {
+      throw new Error('Vector cannot be null, undefined, or empty');
+    }
+
+    const exists = this.vectors.has(key);
+    if (exists) {
+      this.UpdateVector(key, { vector, metadata });
+    } else {
+      this.AddVector(key, vector, metadata);
+    }
+    return exists;
+  }
+
+  /**
    * Removes a vector from the service
    * 
    * @param {string} key - The key of the vector to remove

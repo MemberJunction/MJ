@@ -15,7 +15,7 @@
         "description": "Model usage counts: GROUP BY ModelName with COUNT(*) from AI Prompt Runs. Returns model distribution for pie chart. **Result Order: RunCount DESC** - Most frequently used models first for usage ranking.",
         "entityNames": [
           "MJ: AI Prompt Runs",
-          "AI Models"
+          "MJ: AI Models"
         ],
         "fields": [
           {
@@ -94,7 +94,7 @@
         "description": "Aggregates AI prompt run costs by vendor and optionally by model. Groups by VendorName with optional ModelName dimension when ModelName parameter provided. Calculates token usage totals (prompt, completion, combined) and estimated cost. Supports date range filtering (StartDate/EndDate) and vendor/model filtering. General-purpose query for cost analysis at vendor or vendor+model granularity. **Result Order: TotalTokens DESC** - Highest token usage first for cost prioritization.",
         "entityNames": [
           "MJ: AI Prompt Runs",
-          "AI Models",
+          "MJ: AI Models",
           "MJ: AI Vendors"
         ],
         "fields": [
@@ -317,7 +317,7 @@
         "usageContext": "Main data source for all dashboard queries. Models query groups by ModelName, Costs query groups by VendorName and calculates token costs, Trends query groups by date for time-series analysis."
       },
       {
-        "name": "AI Models",
+        "name": "MJ: AI Models",
         "description": "Referenced entity providing model metadata (name, vendor, pricing). Joined in queries to get model names and vendor information.",
         "displayFields": [
           "Name",

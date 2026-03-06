@@ -1,14 +1,42 @@
 # @memberjunction/ai-vector-dupe
 
-A MemberJunction package for identifying and managing duplicate records using AI-powered vector similarity search. This package generates vector representations of records and uses similarity scoring to detect potential duplicates, with options for automatic merging.
+AI-powered duplicate record detection for MemberJunction entities. This package uses vector embeddings and similarity search to find potential duplicate records, track detection runs, and optionally auto-merge high-confidence matches.
 
-## Overview
+## Architecture
 
-The AI Vector Dupe package provides sophisticated duplicate detection capabilities by:
-- Converting records into vector embeddings using AI models
-- Performing similarity searches in vector databases
-- Tracking duplicate detection runs and results
-- Optionally merging duplicates based on configurable thresholds
+```mermaid
+graph TD
+    subgraph DupePkg["@memberjunction/ai-vector-dupe"]
+        DRD["DuplicateRecordDetector"]
+        VSB["VectorSyncBase"]
+        ESC["EntitySyncConfig"]
+    end
+
+    subgraph Pipeline["Detection Pipeline"]
+        LIST["Load Records<br/>from List"] --> VECT["Vectorize Records<br/>via Templates"]
+        VECT --> EMBED["Generate<br/>Embeddings"]
+        EMBED --> QUERY["Query Vector DB<br/>for Matches"]
+        QUERY --> FILTER["Filter by<br/>Threshold"]
+        FILTER --> TRACK["Track Results<br/>in Duplicate Runs"]
+        TRACK --> MERGE["Auto-Merge<br/>Above Threshold"]
+    end
+
+    subgraph Dependencies["Key Dependencies"]
+        VB["ai-vectors<br/>(VectorBase)"]
+        SYNC["ai-vector-sync<br/>(EntityVectorSyncer)"]
+        VDBB["ai-vectordb<br/>(VectorDBBase)"]
+        AI["ai<br/>(BaseEmbeddings)"]
+    end
+
+    DRD -->|extends| VB
+    DRD --> SYNC
+    DRD --> VDBB
+    DRD --> AI
+
+    style DupePkg fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Pipeline fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Dependencies fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 ## Installation
 
@@ -16,49 +44,99 @@ The AI Vector Dupe package provides sophisticated duplicate detection capabiliti
 npm install @memberjunction/ai-vector-dupe
 ```
 
-## Prerequisites
+## Overview
 
-1. **MemberJunction Framework**: A properly configured MemberJunction database with the core schema
-2. **AI Model Provider**: API key for embedding models (OpenAI, Mistral, or other supported providers)
-3. **Vector Database**: Currently supports Pinecone with appropriate API credentials
-4. **Entity Documents**: Configured entity documents with templates for the entities you want to analyze
+The package provides the `DuplicateRecordDetector` class, which orchestrates a complete duplicate detection workflow:
+
+1. Loads records from a MemberJunction List
+2. Vectorizes them using a configured Entity Document template and embedding model
+3. Queries the vector database for similarity matches
+4. Filters results against configurable thresholds
+5. Creates Duplicate Run, Duplicate Run Detail, and Duplicate Run Detail Match records for tracking
+6. Optionally auto-merges records that exceed the absolute match threshold
+
+## Duplicate Detection Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant DRD as DuplicateRecordDetector
+    participant EVS as EntityVectorSyncer
+    participant Embed as Embedding Model
+    participant VDB as Vector Database
+    participant DB as MJ Database
+
+    Caller->>DRD: getDuplicateRecords(request, user)
+    DRD->>DB: Load Entity Document
+    DRD->>EVS: VectorizeEntity (ensure all records are indexed)
+    DRD->>DB: Load records from List
+
+    loop For each record
+        DRD->>Embed: Generate embedding from template
+        DRD->>VDB: queryIndex (topK=5)
+        VDB-->>DRD: Scored matches
+        DRD->>DRD: Filter by PotentialMatchThreshold
+        DRD->>DB: Create DuplicateRunDetailMatch records
+    end
+
+    DRD->>DRD: Check AbsoluteMatchThreshold
+    DRD->>DB: Auto-merge high-confidence duplicates
+    DRD-->>Caller: PotentialDuplicateResponse
+```
 
 ## Core Components
 
 ### DuplicateRecordDetector
 
-The main class that handles duplicate detection operations.
+The main class that extends `VectorBase` from `@memberjunction/ai-vectors`.
+
+**Key method:**
 
 ```typescript
-import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
-
-const detector = new DuplicateRecordDetector();
+getDuplicateRecords(
+    params: PotentialDuplicateRequest,
+    contextUser?: UserInfo
+): Promise<PotentialDuplicateResponse>
 ```
+
+**Parameters in `PotentialDuplicateRequest`:**
+
+| Field | Type | Description |
+|---|---|---|
+| `ListID` | `string` | ID of the List containing records to check |
+| `EntityID` | `string` | ID of the entity type |
+| `EntityDocumentID` | `string` | ID of the Entity Document with vectorization template |
+| `Options.DuplicateRunID` | `string` (optional) | Resume an existing duplicate run |
+
+**Thresholds (configured on Entity Document):**
+
+| Threshold | Purpose |
+|---|---|
+| `PotentialMatchThreshold` | Minimum similarity score to report as potential duplicate |
+| `AbsoluteMatchThreshold` | Minimum similarity score for automatic record merge |
 
 ### VectorSyncBase
 
-Abstract base class providing utilities for vector synchronization operations.
+A utility base class providing helper methods for vector synchronization operations:
 
-```typescript
-import { VectorSyncBase } from '@memberjunction/ai-vector-dupe';
-```
+- `parseStringTemplate(str, obj)` -- simple template variable substitution
+- `timer(ms)` -- async delay
+- `start()` / `end()` / `timeDiff()` -- execution timing
+- `saveJSONData(data, path)` -- JSON file output
 
 ### EntitySyncConfig
 
-Type definition for entity synchronization configuration.
+Configuration type for entity synchronization scheduling:
 
 ```typescript
-import { EntitySyncConfig } from '@memberjunction/ai-vector-dupe';
-
-const config: EntitySyncConfig = {
-    EntityDocumentID: 'entity-doc-id',
-    Interval: 3600,
-    RunViewParams: { /* RunView parameters */ },
-    IncludeInSync: true,
-    LastRunDate: 'January 1, 2024 00:00:00',
-    VectorIndexID: 1,
-    VectorID: 1
+type EntitySyncConfig = {
+    EntityDocumentID: string;     // Entity Document to use
+    Interval: number;             // Sync interval in seconds
+    RunViewParams: RunViewParams; // View parameters for fetching
+    IncludeInSync: boolean;       // Whether to include in sync
+    LastRunDate: string;          // Last sync timestamp
+    VectorIndexID: number;        // Vector index ID
+    VectorID: number;             // Vector database ID
 };
 ```
 
@@ -70,106 +148,109 @@ const config: EntitySyncConfig = {
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
 
-// Initialize the detector
 const detector = new DuplicateRecordDetector();
 
-// Define the request parameters
 const request: PotentialDuplicateRequest = {
-    ListID: 'your-list-id',           // ID of the list containing records to check
-    EntityID: 'your-entity-id',        // ID of the entity type
-    EntityDocumentID: 'doc-id',        // ID of the entity document with template
-    Options: {
-        DuplicateRunID: 'run-id'       // Optional: existing duplicate run to continue
-    }
+    ListID: 'list-uuid',
+    EntityID: 'entity-uuid',
+    EntityDocumentID: 'doc-uuid'
 };
 
-// Execute duplicate detection
 const response = await detector.getDuplicateRecords(request, currentUser);
 
 if (response.Status === 'Success') {
-    console.log(`Found ${response.PotentialDuplicateResult.length} records with potential duplicates`);
-    
     for (const result of response.PotentialDuplicateResult) {
-        console.log(`Record ${result.RecordCompositeKey.ToString()}:`);
-        for (const duplicate of result.Duplicates) {
-            console.log(`  - Potential duplicate: ${duplicate.ToString()} (${duplicate.ProbabilityScore * 100}% match)`);
+        console.log(`Record: ${result.RecordCompositeKey.ToString()}`);
+        for (const dupe of result.Duplicates) {
+            console.log(`  Match: ${dupe.ToString()} (${(dupe.ProbabilityScore * 100).toFixed(1)}%)`);
         }
     }
 }
 ```
 
-### Advanced Configuration
+### Resuming an Existing Run
 
 ```typescript
-// Configure thresholds via Entity Document settings
-// PotentialMatchThreshold: Minimum score to consider as potential duplicate (e.g., 0.8)
-// AbsoluteMatchThreshold: Score at which automatic merging occurs (e.g., 0.95)
+const request: PotentialDuplicateRequest = {
+    ListID: 'list-uuid',
+    EntityID: 'entity-uuid',
+    EntityDocumentID: 'doc-uuid',
+    Options: {
+        DuplicateRunID: 'existing-run-uuid'
+    }
+};
 
-const entityDocument = await vectorizer.GetEntityDocument(entityDocumentID);
-entityDocument.PotentialMatchThreshold = 0.8;  // 80% similarity
-entityDocument.AbsoluteMatchThreshold = 0.95;   // 95% for auto-merge
-await entityDocument.Save();
+const response = await detector.getDuplicateRecords(request, currentUser);
 ```
 
-## API Reference
+## Database Entities Used
 
-### DuplicateRecordDetector
+The package reads from and writes to these MemberJunction entities:
 
-#### `getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>`
+```mermaid
+erDiagram
+    DUPLICATE_RUN {
+        string ID PK
+        string EntityID
+        string StartedByUserID
+        datetime StartedAt
+        datetime EndedAt
+        string ProcessingStatus
+        string ApprovalStatus
+        string SourceListID
+    }
 
-Performs duplicate detection on records in a list.
+    DUPLICATE_RUN_DETAIL {
+        string ID PK
+        string DuplicateRunID FK
+        string RecordID
+        string MatchStatus
+        string MergeStatus
+    }
 
-**Parameters:**
-- `params`: Request parameters including:
-  - `ListID`: ID of the list containing records to analyze
-  - `EntityID`: ID of the entity type
-  - `EntityDocumentID`: ID of the entity document configuration
-  - `Options`: Optional configuration including `DuplicateRunID`
-- `contextUser`: Optional user context for permissions
+    DUPLICATE_RUN_DETAIL_MATCH {
+        string ID PK
+        string DuplicateRunDetailID FK
+        string MatchRecordID
+        float MatchProbability
+        datetime MatchedAt
+        string Action
+        string ApprovalStatus
+        string MergeStatus
+    }
 
-**Returns:** `PotentialDuplicateResponse` containing:
-- `Status`: 'Success' or 'Error'
-- `ErrorMessage`: Error details if failed
-- `PotentialDuplicateResult[]`: Array of results for each analyzed record
+    LIST {
+        string ID PK
+        string Name
+        string EntityID
+    }
 
-### VectorSyncBase
+    LIST_DETAIL {
+        string ID PK
+        string ListID FK
+        string RecordID
+    }
 
-Base class providing utility methods:
+    ENTITY_DOCUMENT {
+        string ID PK
+        string EntityID
+        string TemplateID
+        string AIModelID
+        string VectorDatabaseID
+        float PotentialMatchThreshold
+        float AbsoluteMatchThreshold
+    }
 
-- `parseStringTemplate(str: string, obj: any): string` - Parse template strings
-- `timer(ms: number): Promise<unknown>` - Async delay utility
-- `start()` / `end()` / `timeDiff()` - Timing utilities
-- `saveJSONData(data: any, path: string)` - JSON file operations
+    DUPLICATE_RUN ||--o{ DUPLICATE_RUN_DETAIL : contains
+    DUPLICATE_RUN_DETAIL ||--o{ DUPLICATE_RUN_DETAIL_MATCH : has
+    DUPLICATE_RUN }o--|| LIST : "source"
+    LIST ||--o{ LIST_DETAIL : contains
+```
 
-## Workflow Details
-
-The duplicate detection process follows these steps:
-
-1. **Vectorization**: Records are converted to vector embeddings using the configured AI model
-2. **Similarity Search**: Each vector is compared against others in the vector database
-3. **Threshold Filtering**: Results are filtered based on the potential match threshold
-4. **Result Tracking**: All operations are logged in duplicate run tables
-5. **Optional Merging**: Records exceeding the absolute match threshold are automatically merged
-
-## Database Schema Integration
-
-The package integrates with these MemberJunction entities:
-
-- **Duplicate Runs**: Master record for each duplicate detection execution
-- **Duplicate Run Details**: Individual record analysis results
-- **Duplicate Run Detail Matches**: Specific duplicate matches found
-- **Lists**: Source lists containing records to analyze
-- **List Details**: Individual records within lists
-- **Entity Documents**: Configuration for entity vectorization
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file with:
+## Environment Variables
 
 ```env
-# AI Model Configuration
+# AI Model API Keys
 OPENAI_API_KEY=your-openai-key
 MISTRAL_API_KEY=your-mistral-key
 
@@ -189,63 +270,37 @@ DB_DATABASE=your-database
 CURRENT_USER_EMAIL=user@example.com
 ```
 
-### Entity Document Templates
-
-Entity documents use template syntax to define how records are converted to text for vectorization:
-
-```javascript
-// Example template
-const template = "${FirstName} ${LastName} works at ${Company} as ${Title}";
-```
-
 ## Dependencies
 
-- `@memberjunction/ai`: AI model abstractions
-- `@memberjunction/ai-vectordb`: Vector database interfaces
-- `@memberjunction/ai-vectors`: Vector operations
-- `@memberjunction/ai-vectors-pinecone`: Pinecone implementation
-- `@memberjunction/ai-vector-sync`: Entity vectorization
-- `@memberjunction/core`: Core MJ functionality
-- `@memberjunction/core-entities`: Entity definitions
-
-## Best Practices
-
-1. **Batch Processing**: For large datasets, process records in batches to avoid timeouts
-2. **Threshold Tuning**: Start with conservative thresholds and adjust based on results
-3. **Template Design**: Create comprehensive templates that capture all relevant fields
-4. **Regular Sync**: Keep vector databases synchronized with source data
-5. **Monitor Performance**: Track processing times and optimize for large datasets
-
-## Error Handling
-
-The package provides detailed error messages for common issues:
-
-```typescript
-try {
-    const response = await detector.getDuplicateRecords(request, user);
-    if (response.Status === 'Error') {
-        console.error('Duplicate detection failed:', response.ErrorMessage);
-    }
-} catch (error) {
-    console.error('Unexpected error:', error.message);
-}
-```
+| Package | Purpose |
+|---|---|
+| `@memberjunction/ai` | `BaseEmbeddings`, `GetAIAPIKey` |
+| `@memberjunction/ai-vectordb` | `VectorDBBase`, `BaseResponse` |
+| `@memberjunction/ai-vectors` | `VectorBase` base class |
+| `@memberjunction/ai-vectors-pinecone` | Pinecone implementation |
+| `@memberjunction/ai-vector-sync` | `EntityVectorSyncer`, `EntityDocumentTemplateParser` |
+| `@memberjunction/aiengine` | AI engine integration |
+| `@memberjunction/core` | Core MJ types and data access |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | MJGlobal class factory |
 
 ## Limitations
 
-- Currently supports duplicate detection within a single entity type only
-- Requires pre-configured entity documents with templates
-- Vector database support limited to Pinecone
-- Performance depends on vector database query capabilities
+- Duplicate detection operates within a single entity type
+- Requires pre-configured Entity Documents with templates
+- Currently supports Pinecone as the vector database provider
+- Records must be added to a List before detection can run
 
-## Future Enhancements
+## Development
 
-- Cross-entity duplicate detection
-- Additional vector database providers
-- Batch processing improvements
-- Real-time duplicate prevention
-- Advanced merge strategies
+```bash
+# Build
+npm run build
 
-## Support
+# Development mode
+npm run start
+```
 
-For issues, questions, or contributions, please refer to the [MemberJunction documentation](https://docs.memberjunction.org) or contact the development team.
+## License
+
+ISC

@@ -1,0 +1,159 @@
+<div class="application-settings">
+  <h2 class="section-title">Applications</h2>
+  <p class="section-description">Choose which applications appear in your app switcher and set their order</p>
+
+  @if (IsLoading) {
+    <div class="loading-container">
+      <mj-loading text="Loading applications..."></mj-loading>
+    </div>
+  }
+
+  @if (ErrorMessage && !IsLoading) {
+    <div class="message error">
+      <i class="fa-solid fa-exclamation-circle"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  @if (SuccessMessage && !IsLoading) {
+    <div class="message success">
+      <i class="fa-solid fa-check-circle"></i>
+      <span>{{ SuccessMessage }}</span>
+    </div>
+  }
+
+  @if (!IsLoading && !ErrorMessage) {
+    <div class="app-config-layout">
+      <!-- Available Apps Panel -->
+      <div class="app-panel available-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <i class="fa-solid fa-grid-2"></i>
+            Available Applications
+          </h3>
+          <span class="panel-count">{{ AvailableApps.length }}</span>
+        </div>
+        <div class="panel-content">
+          @if (AvailableApps.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>All applications are selected</span>
+            </div>
+          }
+          @for (item of AvailableApps; track item.App.ID) {
+            <div class="app-item" (click)="AddApp(item)">
+              <div class="app-icon">
+                <i [class]="item.App.Icon || 'fa-solid fa-window-maximize'"></i>
+              </div>
+              <div class="app-info">
+                <span class="app-name">{{ item.App.Name }}</span>
+                @if (item.App.Description) {
+                  <span class="app-desc">{{ item.App.Description }}</span>
+                }
+              </div>
+              <button
+                class="app-action add-btn"
+                (click)="AddApp(item); $event.stopPropagation()"
+                title="Add to selected"
+              >
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Selected Apps Panel -->
+      <div class="app-panel selected-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <i class="fa-solid fa-star"></i>
+            Your Applications
+          </h3>
+          <span class="panel-count">{{ ActiveApps.length }}</span>
+        </div>
+        <div class="panel-content" (dragover)="OnDragOver($event)">
+          @if (ActiveApps.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span>Add applications from the list</span>
+            </div>
+          }
+          @for (item of ActiveApps; track item.App.ID; let i = $index; let first = $first; let last = $last) {
+            <div
+              class="app-item selected"
+              [class.drop-target]="IsDropTarget(i)"
+              [class.dirty]="item.IsDirty"
+              draggable="true"
+              (dragstart)="OnDragStart($event, item, i)"
+              (dragenter)="OnDragEnter($event, i)"
+              (dragend)="OnDragEnd()"
+              (drop)="OnDrop($event)"
+            >
+              <div class="drag-handle" title="Drag to reorder">
+                <i class="fa-solid fa-grip-vertical"></i>
+              </div>
+              <div class="app-icon">
+                <i [class]="item.App.Icon || 'fa-solid fa-window-maximize'"></i>
+              </div>
+              <div class="app-info">
+                <span class="app-name">{{ item.App.Name }}</span>
+                <span class="app-sequence">Position {{ i + 1 }}</span>
+              </div>
+              <div class="app-actions">
+                <button
+                  class="action-btn"
+                  [disabled]="first"
+                  (click)="MoveUp(item)"
+                  title="Move up"
+                >
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button
+                  class="action-btn"
+                  [disabled]="last"
+                  (click)="MoveDown(item)"
+                  title="Move down"
+                >
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <button
+                  class="action-btn remove-btn"
+                  (click)="RemoveApp(item)"
+                  title="Remove"
+                >
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-bar">
+      <button
+        class="btn btn-secondary"
+        (click)="Reset()"
+        [disabled]="!HasChanges() || IsSaving"
+      >
+        <i class="fa-solid fa-undo"></i>
+        Reset
+      </button>
+      <button
+        class="btn btn-primary"
+        (click)="Save()"
+        [disabled]="!HasChanges() || IsSaving"
+      >
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Saving...
+        } @else {
+          <i class="fa-solid fa-save"></i>
+          Save Changes
+        }
+      </button>
+    </div>
+  }
+</div>

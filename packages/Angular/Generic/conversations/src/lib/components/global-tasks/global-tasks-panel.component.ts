@@ -8,51 +8,59 @@ import { takeUntil } from 'rxjs/operators';
  * Appears in bottom-right corner, minimizable, shows only when tasks > 0
  */
 @Component({
+  standalone: false,
   selector: 'mj-global-tasks-panel',
   template: `
-    <div class="global-tasks-panel" *ngIf="tasks.length > 0">
-      <!-- Minimized State -->
-      <button
-        *ngIf="isMinimized"
-        class="minimized-badge"
-        (click)="expand()"
-        title="View active tasks">
-        <i class="fas fa-bolt"></i>
-        <span class="task-count">{{ tasks.length }}</span>
-      </button>
-
-      <!-- Expanded State -->
-      <div *ngIf="!isMinimized" class="expanded-panel">
-        <div class="panel-header">
-          <div class="header-left">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span>Active Tasks ({{ tasks.length }})</span>
-          </div>
-          <button class="minimize-btn" (click)="minimize()" title="Minimize">
-            <i class="fas fa-minus"></i>
+    @if (tasks.length > 0) {
+      <div class="global-tasks-panel">
+        <!-- Minimized State -->
+        @if (isMinimized) {
+          <button
+            class="minimized-badge"
+            (click)="expand()"
+            title="View active tasks">
+            <i class="fas fa-bolt"></i>
+            <span class="task-count">{{ tasks.length }}</span>
           </button>
-        </div>
-
-        <div class="panel-content">
-          <div class="task-item" *ngFor="let task of tasks" (click)="onTaskClick(task)">
-            <div class="task-header">
-              <i class="fas fa-robot"></i>
-              <span class="task-agent">{{ task.agentName }}</span>
+        }
+        <!-- Expanded State -->
+        @if (!isMinimized) {
+          <div class="expanded-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <span>Active Tasks ({{ tasks.length }})</span>
+              </div>
+              <button class="minimize-btn" (click)="minimize()" title="Minimize">
+                <i class="fas fa-minus"></i>
+              </button>
             </div>
-            <div class="task-conversation" *ngIf="task.conversationName">
-              <i class="fas fa-message"></i>
-              <span>{{ task.conversationName }}</span>
+            <div class="panel-content">
+              @for (task of tasks; track task) {
+                <div class="task-item" (click)="onTaskClick(task)">
+                  <div class="task-header">
+                    <i class="fas fa-robot"></i>
+                    <span class="task-agent">{{ task.agentName }}</span>
+                  </div>
+                  @if (task.conversationName) {
+                    <div class="task-conversation">
+                      <i class="fas fa-message"></i>
+                      <span>{{ task.conversationName }}</span>
+                    </div>
+                  }
+                  <div class="task-status">
+                    <span class="status-indicator active"></span>
+                    <span class="status-text">{{ getTrimmedStatus(task.status) }}</span>
+                  </div>
+                  <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                </div>
+              }
             </div>
-            <div class="task-status">
-              <span class="status-indicator active"></span>
-              <span class="status-text">{{ getTrimmedStatus(task.status) }}</span>
-            </div>
-            <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
           </div>
-        </div>
+        }
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .global-tasks-panel {
       position: fixed;

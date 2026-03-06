@@ -112,7 +112,7 @@ export class VariableResolver {
       return null;
     }
 
-    const parsed = SafeJSONParse(json);
+    const parsed = SafeJSONParse<TestTypeVariablesSchema>(json);
     if (!parsed || typeof parsed !== 'object') {
       return null;
     }
@@ -126,7 +126,7 @@ export class VariableResolver {
       );
     }
 
-    return parsed as TestTypeVariablesSchema;
+    return parsed;
   }
 
   /**

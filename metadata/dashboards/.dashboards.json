@@ -3,11 +3,11 @@
     "fields": {
       "Name": "ERD",
       "Description": "ERD Dashboard for visualizing and managing entity relationships within the MemberJunction framework",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "EntityAdmin",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -19,15 +19,15 @@
             "DashboardID": "@parent:ID",
             "UserID": null,
             "Scope": "App",
-            "ApplicationID": "@lookup:Applications.Name=Admin",
+            "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
             "DisplayOrder": 1
           },
           "primaryKey": {
             "ID": "02CC423E-F36B-1410-8DAC-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:38.360Z",
-            "checksum": "a493431b7faa8de5ac3c2ff9827aa9fc8b3929e02bbb34a75914702dbb34148f"
+            "lastModified": "2026-02-13T21:09:36.982Z",
+            "checksum": "e61e843827ddb9e42b5b48fea8cc19c455c82ff4648e0e388f9b552cca04b854"
           }
         }
       ]
@@ -36,19 +36,19 @@
       "ID": "F4C9433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.345Z",
-      "checksum": "6c41e581f8a1aa8f0d96e91516b555d1ad421769370a97038ce58fe56a01b977"
+      "lastModified": "2026-02-13T21:09:36.962Z",
+      "checksum": "702b69befb79b2f0947151db45240d2ebe94191893978f2677204515068134f9"
     }
   },
   {
     "fields": {
       "Name": "Security",
       "Description": "Security Dashboard for managing security settings within the MemberJunction framework",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "EntityAdmin",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -57,19 +57,19 @@
       "ID": "C8DD0C2E-C778-4867-B6CA-8229473FAEE9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.346Z",
-      "checksum": "9e2990cb8b39d6f19a4796b1fbfd0e03cf99bf2041dd53fe1c07a9f32d0c3ce2"
+      "lastModified": "2026-02-13T21:09:36.963Z",
+      "checksum": "ab595106446bd248b88e45bd7f7cd4f034a04d2b2460116810dc2d63c7160b22"
     }
   },
   {
     "fields": {
       "Name": "Role Management",
       "Description": "Dashboard for managing roles and role assignments within MemberJunction",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "RoleManagement",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -78,19 +78,19 @@
       "ID": "C36AE500-E119-4A4B-9D86-31A48E800CF8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.347Z",
-      "checksum": "8d29079d0286d15dd14d0b49f1dbbc832874c3ed4b0a0d9bbefb9d565866fac5"
+      "lastModified": "2026-02-13T21:09:36.964Z",
+      "checksum": "61b7c406f557e71b96a42bf228f5019ce19210461dd723b858139903ba6eecfe"
     }
   },
   {
     "fields": {
       "Name": "User Management",
       "Description": "Dashboard for managing users, user accounts, and user roles within MemberJunction",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "UserManagement",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -99,19 +99,19 @@
       "ID": "3484BBA8-FA3A-44B0-8E16-7C12D341812B"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.349Z",
-      "checksum": "82ddac7cb98b86e6146d460c507061e6fe5c37b53f3e240cc04da3febbeb88f1"
+      "lastModified": "2026-02-13T21:09:36.966Z",
+      "checksum": "fb8521c09f6f19fa1163f1825feb77e42e578f96ec3ff9c8638daa5f216b380b"
     }
   },
   {
     "fields": {
       "Name": "Entity Permissions",
       "Description": "Dashboard for managing entity-level permissions and access control within MemberJunction",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "EntityPermissions",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -120,19 +120,19 @@
       "ID": "536BEF62-0E9B-489E-9130-118BE5642190"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.350Z",
-      "checksum": "6fb7479eef62b9797dce960dfde603b78057a9134fb3d8190df78e1032a7ea0b"
+      "lastModified": "2026-02-13T21:09:36.967Z",
+      "checksum": "2a1e9dfb257d476cf0412c1b966e4a173d7017f752fd029cde135f4ab115d577"
     }
   },
   {
     "fields": {
       "Name": "Application Management",
       "Description": "Dashboard for managing applications and application entities within MemberJunction",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "ApplicationManagement",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -141,19 +141,19 @@
       "ID": "8419686C-930F-472A-82DD-292FB033A370"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.351Z",
-      "checksum": "2d6d068b9a7791972fa876b440581670618809034431c53b4d8a1f62efb3510a"
+      "lastModified": "2026-02-13T21:09:36.968Z",
+      "checksum": "9043e15e6cdb35ddd6a4c371487c3a188b4e0fd80a7632814384dad805f2eeab"
     }
   },
   {
     "fields": {
       "Name": "SQL Logging",
       "Description": "Dashboard for managing SQL logging sessions and monitoring SQL activity within MemberJunction",
-      "UserID": "@lookup:Users.Name=System",
+      "UserID": "@lookup:MJ: Users.Name=System",
       "CategoryID": null,
       "Type": "Code",
       "Scope": "App",
-      "ApplicationID": "@lookup:Applications.Name=Admin",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "DriverClass": "SqlLogging",
       "UIConfigDetails": "{}",
       "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -162,8 +162,8 @@
       "ID": "F5BB07DF-5EA3-4AB6-B772-568394AB5BF5"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:38.352Z",
-      "checksum": "b274595c33c369892ab54128c4316e1a5cab281d29ddc7ca0824cb00474ff62d"
+      "lastModified": "2026-02-13T21:09:36.969Z",
+      "checksum": "857bea976aab8d9d5dc41d7ba01f104ed598acb0d633572e2f525edbf52ba369"
     }
   }
 ]

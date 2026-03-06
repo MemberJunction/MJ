@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
  * Shows ALL active tasks across ALL conversations, grouped by current vs other
  */
 @Component({
+  standalone: false,
   selector: 'mj-tasks-dropdown',
   template: `
     <div class="tasks-dropdown-container">
@@ -20,90 +21,113 @@ import { takeUntil } from 'rxjs/operators';
         [class.has-tasks]="allTasks.length > 0"
         [title]="allTasks.length > 0 ? allTasks.length + ' active task' + (allTasks.length > 1 ? 's' : '') : 'View tasks'">
         <i class="fas fa-bolt"></i>
-        <span class="task-count-badge" *ngIf="allTasks.length > 0">{{ allTasks.length }}</span>
+        @if (allTasks.length > 0) {
+          <span class="task-count-badge">{{ allTasks.length }}</span>
+        }
       </button>
-
-      <div class="active-tasks-dropdown" *ngIf="isOpen">
-        <div class="dropdown-header">
-          <div class="header-left">
-            <i class="fas fa-circle-notch fa-spin" *ngIf="allTasks.length > 0"></i>
-            <i class="fas fa-tasks" *ngIf="allTasks.length === 0"></i>
-            <span>Active Tasks ({{ allTasks.length }})</span>
-          </div>
-          <button class="close-btn" (click)="closeDropdown()">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div class="dropdown-content">
-          <!-- Current Conversation Tasks -->
-          <div class="section" *ngIf="currentConversationTasks.length > 0">
-            <div class="section-header">
-              <i class="fas fa-comment"></i>
-              <span>Current Conversation ({{ currentConversationTasks.length }})</span>
+    
+      @if (isOpen) {
+        <div class="active-tasks-dropdown">
+          <div class="dropdown-header">
+            <div class="header-left">
+              @if (allTasks.length > 0) {
+                <i class="fas fa-circle-notch fa-spin"></i>
+              }
+              @if (allTasks.length === 0) {
+                <i class="fas fa-tasks"></i>
+              }
+              <span>Active Tasks ({{ allTasks.length }})</span>
             </div>
-            <div class="active-task-item"
-                 *ngFor="let task of currentConversationTasks"
-                 (click)="onTaskClick(task)">
-              <div class="task-status-indicator active"></div>
-              <div class="task-content">
-                <div class="task-title">
-                  <img *ngIf="getAgentLogoUrl(task.agentName)"
-                       [src]="getAgentLogoUrl(task.agentName)"
-                       class="agent-logo"
-                       [alt]="task.agentName" />
-                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
-                     [class]="getAgentIconClass(task.agentName)"></i>
-                  {{ task.agentName }}
+            <button class="close-btn" (click)="closeDropdown()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="dropdown-content">
+            <!-- Current Conversation Tasks -->
+            @if (currentConversationTasks.length > 0) {
+              <div class="section">
+                <div class="section-header">
+                  <i class="fas fa-comment"></i>
+                  <span>Current Conversation ({{ currentConversationTasks.length }})</span>
                 </div>
-                <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
-                <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                @for (task of currentConversationTasks; track task) {
+                  <div class="active-task-item"
+                    (click)="onTaskClick(task)">
+                    <div class="task-status-indicator active"></div>
+                    <div class="task-content">
+                      <div class="task-title">
+                        @if (getAgentLogoUrl(task.agentName)) {
+                          <img
+                            [src]="getAgentLogoUrl(task.agentName)"
+                            class="agent-logo"
+                            [alt]="task.agentName" />
+                        }
+                        @if (!getAgentLogoUrl(task.agentName)) {
+                          <i
+                          [class]="getAgentIconClass(task.agentName)"></i>
+                        }
+                        {{ task.agentName }}
+                      </div>
+                      <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
+                      <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                    </div>
+                  </div>
+                }
               </div>
-            </div>
-          </div>
-
-          <!-- Other Conversations Tasks -->
-          <div class="section" *ngIf="otherConversationTasks.length > 0">
-            <div class="section-header">
-              <i class="fas fa-comments"></i>
-              <span>Other Conversations ({{ otherConversationTasks.length }})</span>
-            </div>
-            <div class="active-task-item clickable"
-                 *ngFor="let task of otherConversationTasks"
-                 (click)="onTaskClick(task)">
-              <div class="task-status-indicator active"></div>
-              <div class="task-content">
-                <div class="task-title">
-                  <img *ngIf="getAgentLogoUrl(task.agentName)"
-                       [src]="getAgentLogoUrl(task.agentName)"
-                       class="agent-logo"
-                       [alt]="task.agentName" />
-                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
-                     [class]="getAgentIconClass(task.agentName)"></i>
-                  {{ task.agentName }}
-                  <span class="go-btn">
-                    <i class="fas fa-arrow-right"></i>
-                  </span>
+            }
+            <!-- Other Conversations Tasks -->
+            @if (otherConversationTasks.length > 0) {
+              <div class="section">
+                <div class="section-header">
+                  <i class="fas fa-comments"></i>
+                  <span>Other Conversations ({{ otherConversationTasks.length }})</span>
                 </div>
-                <div class="task-conversation" *ngIf="task.conversationName">
-                  <i class="fas fa-message"></i>
-                  {{ task.conversationName }}
-                </div>
-                <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
-                <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                @for (task of otherConversationTasks; track task) {
+                  <div class="active-task-item clickable"
+                    (click)="onTaskClick(task)">
+                    <div class="task-status-indicator active"></div>
+                    <div class="task-content">
+                      <div class="task-title">
+                        @if (getAgentLogoUrl(task.agentName)) {
+                          <img
+                            [src]="getAgentLogoUrl(task.agentName)"
+                            class="agent-logo"
+                            [alt]="task.agentName" />
+                        }
+                        @if (!getAgentLogoUrl(task.agentName)) {
+                          <i
+                          [class]="getAgentIconClass(task.agentName)"></i>
+                        }
+                        {{ task.agentName }}
+                        <span class="go-btn">
+                          <i class="fas fa-arrow-right"></i>
+                        </span>
+                      </div>
+                      @if (task.conversationName) {
+                        <div class="task-conversation">
+                          <i class="fas fa-message"></i>
+                          {{ task.conversationName }}
+                        </div>
+                      }
+                      <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
+                      <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                    </div>
+                  </div>
+                }
               </div>
-            </div>
-          </div>
-
-          <!-- No Tasks State -->
-          <div *ngIf="allTasks.length === 0" class="no-tasks">
-            <i class="fas fa-check-circle"></i>
-            <p>No active tasks</p>
+            }
+            <!-- No Tasks State -->
+            @if (allTasks.length === 0) {
+              <div class="no-tasks">
+                <i class="fas fa-check-circle"></i>
+                <p>No active tasks</p>
+              </div>
+            }
           </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .tasks-dropdown-container {
       position: relative;

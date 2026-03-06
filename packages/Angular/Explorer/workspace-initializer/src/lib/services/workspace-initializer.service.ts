@@ -11,6 +11,7 @@ import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ThemeService } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { WorkspaceEnvironment, WorkspaceInitResult, WorkspaceInitError } from '../models/workspace-types';
 import { lastValueFrom } from 'rxjs';
@@ -21,8 +22,9 @@ import { lastValueFrom } from 'rxjs';
 export class WorkspaceInitializerService {
   constructor(
     private authBase: MJAuthBase,
-    private startupValidationService: StartupValidationService
-  ) {}
+    private startupValidationService: StartupValidationService,
+    private themeService: ThemeService
+  ) { }
 
   /**
    * Initialize workspace with authenticated user
@@ -67,6 +69,7 @@ export class WorkspaceInitializerService {
 
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);
+      await this.themeService.Initialize();
       const md = new Metadata();
 
       if (!md.CurrentUser) {
@@ -93,7 +96,14 @@ export class WorkspaceInitializerService {
         success: true
       };
     } catch (err: any) {
+      console.error('[Workspace] initializeWorkspace caught error:', err);
+      console.error('[Workspace] Error message:', err?.message);
+      console.error('[Workspace] Error stack:', err?.stack);
+      if (err?.response?.errors) {
+        console.error('[Workspace] GraphQL errors:', JSON.stringify(err.response.errors, null, 2));
+      }
       const error = this.classifyError(err);
+      console.error('[Workspace] Classified as:', error.type, '-', error.message);
       return {
         success: false,
         error
@@ -190,7 +200,7 @@ export class WorkspaceInitializerService {
       if (err.message && typeof err.message === 'string') {
         const message = err.message;
         return message.includes('does not have read permissions on User Roles') ||
-               message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
+          message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
       }
 
       // Check for nested error object

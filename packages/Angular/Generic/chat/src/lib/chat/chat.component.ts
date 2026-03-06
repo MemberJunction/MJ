@@ -23,6 +23,7 @@ export class ChatMessage {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-chat',
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.css'

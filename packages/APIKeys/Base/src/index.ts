@@ -16,13 +16,3 @@
  */
 
 export { APIKeysEngineBase, APIScopeUIConfig, parseAPIScopeUIConfig } from './APIKeysEngineBase';
-
-/**
- * Tree-shaking prevention function.
- * Call this to ensure the APIKeysEngineBase class is included in the bundle.
- */
-export function LoadAPIKeysEngineBase(): void {
-    // This function exists to prevent tree shaking from removing the class.
-    // The @RegisterForStartup decorator registers the class, but this function
-    // ensures the module is imported.
-}

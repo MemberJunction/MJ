@@ -149,10 +149,3 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetGoogleFormAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

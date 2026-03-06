@@ -11,11 +11,6 @@ import {
   AuthErrorType,
   TokenRefreshResult
 } from '../auth-types';
-
-// Prevent tree-shaking by explicitly referencing the class
-export function LoadMJOktaProvider() {
-}
-
 /**
  * Okta authentication provider implementation - v3.0.0
  *
@@ -103,9 +98,10 @@ export class MJOktaProvider extends MJAuthBase {
     }
 
     // Check if we're returning from a login redirect
+    // Note: handleRedirect() is the modern v7.x replacement for deprecated handleLoginRedirect()
     if (this.oktaAuth.isLoginRedirect()) {
       try {
-        await this.oktaAuth.handleLoginRedirect();
+        await this.oktaAuth.handleRedirect();
 
         // After handling redirect, check if we're authenticated
         const authState = await this.oktaAuth.authStateManager.getAuthState();
@@ -153,8 +149,9 @@ export class MJOktaProvider extends MJAuthBase {
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     try {
       // Check if we're in a redirect callback
+      // Note: handleRedirect() is the modern v7.x replacement for deprecated handleLoginRedirect()
       if (this.oktaAuth.isLoginRedirect()) {
-        await this.oktaAuth.handleLoginRedirect();
+        await this.oktaAuth.handleRedirect();
         return;
       }
 
@@ -194,8 +191,9 @@ export class MJOktaProvider extends MJAuthBase {
 
   async handleCallback(): Promise<void> {
     try {
+      // Note: handleRedirect() is the modern v7.x replacement for deprecated handleLoginRedirect()
       if (this.oktaAuth.isLoginRedirect()) {
-        await this.oktaAuth.handleLoginRedirect();
+        await this.oktaAuth.handleRedirect();
 
         // After handling redirect, check if we're authenticated
         const authState = await this.oktaAuth.authStateManager.getAuthState();
@@ -374,15 +372,46 @@ export class MJOktaProvider extends MJAuthBase {
   /**
    * Classify Okta-specific errors into semantic types
    *
-   * Maps Okta error patterns to AuthErrorType enum
+   * Maps Okta error patterns to AuthErrorType enum.
+   * Updated for okta-auth-js v7.x error codes.
+   *
+   * Error sources:
+   * - errorCode: From Okta SDK errors (AuthSdkError, AuthApiError)
+   * - error: From OAuth /token endpoint responses (invalid_grant, access_denied, etc.)
    */
   protected classifyErrorInternal(error: unknown): StandardAuthError {
     const errorObj = error as Record<string, unknown>;
     const message = errorObj?.['message'] as string || 'Unknown error';
     const errorCode = errorObj?.['errorCode'] as string || '';
+    // OAuth errors from /token endpoint use 'error' field instead of 'errorCode'
+    const oauthError = errorObj?.['error'] as string || '';
+
+    // Handle invalid_grant - refresh token is invalid or expired
+    // This is a common error when refresh tokens expire or are revoked
+    if (errorCode === 'invalid_grant' || oauthError === 'invalid_grant' ||
+        message.includes('refresh token is invalid or expired')) {
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
+      };
+    }
+
+    // Handle access_denied - user or server denied the request
+    if (errorCode === 'access_denied' || oauthError === 'access_denied' ||
+        message.includes('access_denied')) {
+      return {
+        type: AuthErrorType.USER_CANCELLED,
+        message,
+        originalError: error,
+        userMessage: 'Access was denied. Please try again.'
+      };
+    }
 
     // Check for specific Okta error patterns
-    if (errorCode === 'login_required' || message.includes('login_required')) {
+    if (errorCode === 'login_required' || oauthError === 'login_required' ||
+        message.includes('login_required')) {
       return {
         type: AuthErrorType.NO_ACTIVE_SESSION,
         message,
@@ -391,7 +420,8 @@ export class MJOktaProvider extends MJAuthBase {
       };
     }
 
-    if (message.includes('not to prompt') || message.includes('consent_required')) {
+    if (message.includes('not to prompt') || message.includes('consent_required') ||
+        oauthError === 'consent_required') {
       return {
         type: AuthErrorType.INTERACTION_REQUIRED,
         message,
@@ -400,7 +430,10 @@ export class MJOktaProvider extends MJAuthBase {
       };
     }
 
-    if (errorCode === 'user_cancelled' || message.includes('user cancelled')) {
+    // Handle both user_cancelled (SDK) and user_canceled_request (OAuth redirect)
+    if (errorCode === 'user_cancelled' || errorCode === 'user_canceled_request' ||
+        oauthError === 'user_canceled_request' ||
+        message.includes('user cancelled') || message.includes('user canceled')) {
       return {
         type: AuthErrorType.USER_CANCELLED,
         message,
@@ -418,7 +451,7 @@ export class MJOktaProvider extends MJAuthBase {
       };
     }
 
-    if (message.includes('network') || message.includes('fetch')) {
+    if (message.includes('network') || message.includes('fetch') || message.includes('Load failed')) {
       return {
         type: AuthErrorType.NETWORK_ERROR,
         message,

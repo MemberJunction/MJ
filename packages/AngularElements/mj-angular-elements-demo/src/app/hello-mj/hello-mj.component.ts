@@ -21,6 +21,7 @@ import { MJGlobal, MJEventType } from '@memberjunction/global'
  * When used as a web component, it's registered as <mj-hello-world>.
  */
 @Component({
+  standalone: false,
   templateUrl: './hello-mj.component.html',
   styleUrls: ['./hello-mj.component.css']
 })

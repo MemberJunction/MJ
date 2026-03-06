@@ -273,10 +273,3 @@ export class ConditionalAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the ConditionalAction class is included in the bundle
- */
-export function LoadConditionalAction() {
-    // Stub function to prevent tree shaking
-}

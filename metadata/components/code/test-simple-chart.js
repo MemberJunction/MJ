@@ -18,7 +18,7 @@ function TestSimpleChart(props) {
 
   // Custom chart controls (for Custom tab)
   const [customConfig, setCustomConfig] = useState({
-    entityName: 'Actions',
+    entityName: 'MJ: Actions',
     groupBy: 'Category',
     stackBy: '',
     valueField: '',
@@ -44,7 +44,7 @@ function TestSimpleChart(props) {
 
       // Use utilities.rv.RunView() - NOT new RunView()
       const actionsResult = await utilities.rv.RunView({
-        EntityName: 'Actions',
+        EntityName: 'MJ: Actions',
         ExtraFilter: '',
         ResultType: 'simple'
       });
@@ -55,7 +55,7 @@ function TestSimpleChart(props) {
 
       // Load Action Params data
       const paramsResult = await utilities.rv.RunView({
-        EntityName: 'Action Params',
+        EntityName: 'MJ: Action Params',
         ExtraFilter: '',
         ResultType: 'simple'
       });
@@ -191,7 +191,7 @@ function TestSimpleChart(props) {
               Tests: count aggregation, auto colors, bar chart type, onClick drill-down
             </p>
             <SimpleChart
-              entityName="Actions"
+              entityName="MJ: Actions"
               data={actionsData}
               groupBy="Category"
               aggregateMethod="count"
@@ -220,7 +220,7 @@ function TestSimpleChart(props) {
               Tests: stackBy feature, secondary grouping, multi-series datasets
             </p>
             <SimpleChart
-              entityName="Action Params"
+              entityName="MJ: Action Params"
               data={actionParamsData}
               groupBy="Action"
               stackBy="Type"
@@ -252,7 +252,7 @@ function TestSimpleChart(props) {
               Tests: limit feature, pie chart type, percentage display, top-N
             </p>
             <SimpleChart
-              entityName="Actions"
+              entityName="MJ: Actions"
               data={actionsData}
               groupBy="Category"
               aggregateMethod="count"
@@ -308,7 +308,7 @@ function TestSimpleChart(props) {
       case 'custom':
         // Get data based on selected entity
         let customData = actionsData;
-        if (customConfig.entityName === 'Action Params') {
+        if (customConfig.entityName === 'MJ: Action Params') {
           customData = actionParamsData;
         } else if (customConfig.entityName === 'MJ: AI Model Costs') {
           customData = aiModelCostsData;
@@ -340,8 +340,8 @@ function TestSimpleChart(props) {
                   onChange={(e) => updateCustomConfig('entityName', e.target.value)}
                   style={{ display: 'block', width: '100%', marginTop: '4px', padding: '4px' }}
                 >
-                  <option value="Actions">Actions</option>
-                  <option value="Action Params">Action Params</option>
+                  <option value="MJ: Actions">Actions</option>
+                  <option value="MJ: Action Params">Action Params</option>
                   <option value="MJ: AI Model Costs">AI Model Costs</option>
                 </select>
               </label>

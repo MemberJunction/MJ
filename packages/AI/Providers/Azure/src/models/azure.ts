@@ -500,9 +500,3 @@ export class AzureLLM extends BaseLLM {
     }
 }
 
-/**
- * Helper function to ensure the class is registered
- */
-export function LoadAzureLLM() {
-    // This does nothing but prevents the class from being removed by the tree shaker
-}

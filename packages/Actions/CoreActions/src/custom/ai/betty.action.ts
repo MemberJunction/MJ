@@ -287,10 +287,3 @@ export class BettyAction extends BaseAction {
         return references;
     }
 }
-
-/**
- * Loader function to ensure the BettyAction class is included in the bundle.
- */
-export function LoadBettyAction() {
-    // This function ensures the class isn't tree-shaken
-}

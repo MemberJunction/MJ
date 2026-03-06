@@ -1,0 +1,412 @@
+/* ============================================================
+   Flow Editor — Main container styles
+   ============================================================ */
+
+.mj-flow-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  outline: none;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.mj-flow-editor--readonly .mj-flow-node-port {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Toolbar Area ──────────────────────────────────────────── */
+
+.mj-flow-editor-toolbar-area {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+
+/* ── Canvas Area ───────────────────────────────────────────── */
+
+.mj-flow-editor-canvas-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.mj-flow-editor-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.mj-flow-editor-canvas f-flow {
+  width: 100%;
+  height: 100%;
+}
+
+/* Pan mode — grab cursor, nodes pass through pointer events to canvas */
+.mj-flow-editor-canvas--pan-mode {
+  cursor: grab;
+}
+
+.mj-flow-editor-canvas--pan-mode:active {
+  cursor: grabbing;
+}
+
+.mj-flow-editor-canvas--pan-mode mj-flow-node {
+  pointer-events: none;
+  cursor: grab;
+}
+
+.mj-flow-editor-canvas--pan-mode f-connection {
+  pointer-events: none;
+}
+
+.mj-flow-editor-canvas--pan-mode .mj-flow-connection-label {
+  pointer-events: none;
+}
+
+/* ── Minimap ───────────────────────────────────────────────── */
+
+.mj-flow-editor-minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 160px;
+  height: 120px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  z-index: 15;
+}
+
+.mj-flow-editor-minimap f-minimap {
+  width: 100%;
+  height: 100%;
+}
+
+/* Foblex minimap SVG node rectangles (no default styles provided by Foblex) */
+.mj-flow-editor-minimap .f-minimap-node {
+  fill: #cbd5e1;
+  stroke: #94a3b8;
+  stroke-width: 1;
+  rx: 3;
+  ry: 3;
+}
+
+.mj-flow-editor-minimap .f-minimap-node.f-selected {
+  fill: #93c5fd;
+  stroke: #3b82f6;
+  stroke-width: 1.5;
+}
+
+.mj-flow-editor-minimap .f-minimap-group {
+  fill: #e2e8f0;
+  stroke: #94a3b8;
+  stroke-width: 0.5;
+  rx: 2;
+  ry: 2;
+}
+
+/* Viewport indicator rectangle */
+.mj-flow-editor-minimap .f-minimap-view {
+  fill: rgba(59, 130, 246, 0.08);
+  stroke: #3b82f6;
+  stroke-width: 1.5;
+}
+
+/* ── Empty State ───────────────────────────────────────────── */
+
+.mj-flow-editor-empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.mj-flow-editor-empty-content {
+  text-align: center;
+  padding: 40px;
+}
+
+.mj-flow-editor-empty-icon {
+  font-size: 48px;
+  color: #cbd5e1;
+  margin-bottom: 16px;
+}
+
+.mj-flow-editor-empty-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+
+.mj-flow-editor-empty-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── Connection Labels ─────────────────────────────────────── */
+
+.mj-flow-connection-label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  background: #fffef5;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.mj-flow-connection-label-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Foblex Overrides ──────────────────────────────────────── */
+
+/* Canvas — transparent so the grid pattern shows through */
+f-canvas {
+  background: transparent;
+}
+
+/* Selection area */
+f-selection-area {
+  --f-selection-area-background: rgba(59, 130, 246, 0.08);
+  --f-selection-area-border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Line alignment guides */
+f-line-alignment {
+  --f-line-alignment-color: #3b82f6;
+}
+
+/* Connection paths — default stroke color prevents invisible connections */
+.f-connection path {
+  stroke: #94a3b8;
+  stroke-width: 2;
+  fill: none;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.f-connection:hover path {
+  stroke-width: 3;
+}
+
+.f-connection.f-selected path {
+  stroke: #3b82f6;
+  stroke-width: 3;
+}
+
+/* Colored connections use the --connection-color custom property */
+.mj-flow-connection-colored path {
+  stroke: var(--connection-color, #94a3b8);
+}
+
+.mj-flow-connection-colored.f-selected path {
+  stroke: var(--connection-color, #3b82f6);
+  stroke-width: 3;
+  filter: brightness(0.85);
+}
+
+/* Dashed connection style */
+.mj-flow-connection-dashed path {
+  stroke-dasharray: 8 4;
+}
+
+/* Dotted connection style */
+.mj-flow-connection-dotted path {
+  stroke-dasharray: 3 3;
+}
+
+/* Connection for create (dragging) */
+.f-connection-for-create path {
+  stroke: #94a3b8;
+  stroke-dasharray: 6 3;
+  stroke-width: 2;
+}
+
+/* ── Legend ────────────────────────────────────────────────── */
+
+.mj-flow-editor-legend {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 15;
+  font-size: 11px;
+  color: #475569;
+  max-width: 200px;
+}
+
+.mj-flow-editor-legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mj-flow-editor-legend-section {
+  margin-bottom: 8px;
+}
+
+.mj-flow-editor-legend-section:last-child {
+  margin-bottom: 0;
+}
+
+.mj-flow-editor-legend-heading {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.mj-flow-editor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+  color: #475569;
+}
+
+.mj-flow-editor-legend-svg,
+.mj-flow-editor-legend-line-svg {
+  flex-shrink: 0;
+}
+
+.mj-flow-editor-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.mj-flow-editor-legend-box {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border: 2px solid;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Context Menu ─────────────────────────────────────────── */
+
+.mj-flow-context-menu {
+  position: fixed;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  z-index: 9999;
+  animation: mj-ctx-fade-in 0.1s ease-out;
+}
+
+@keyframes mj-ctx-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.mj-flow-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 450;
+  color: #334155;
+  cursor: pointer;
+  border-radius: 5px;
+  text-align: left;
+  transition: background-color 0.1s ease;
+}
+
+.mj-flow-context-menu-item:hover {
+  background-color: #f1f5f9;
+}
+
+.mj-flow-context-menu-item i {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mj-flow-context-menu-item--danger {
+  color: #dc2626;
+}
+
+.mj-flow-context-menu-item--danger:hover {
+  background-color: #fef2f2;
+}
+
+.mj-flow-context-menu-item--danger i {
+  color: #dc2626;
+}
+
+.mj-flow-context-menu-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 4px 8px;
+}
+
+/* ── Focus Indicators (Accessibility) ────────────────────── */
+
+.mj-flow-toolbar-btn:focus-visible,
+.mj-agent-editor-btn:focus-visible,
+.mj-agent-editor-view-btn:focus-visible,
+.mj-agent-props-close:focus-visible,
+.mj-agent-props-delete-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.mj-flow-palette-item:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+  border-radius: 6px;
+}

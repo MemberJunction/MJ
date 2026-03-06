@@ -1,28 +1,30 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, NgZone, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
-import { EntityPermissionEntity, EntityEntity, RoleEntity } from '@memberjunction/core-entities';
+import { MJEntityPermissionEntity, MJEntityEntity, MJRoleEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface PermissionDialogData {
-  entity: EntityEntity;
-  roles: RoleEntity[];
-  existingPermissions: EntityPermissionEntity[];
+  entity: MJEntityEntity;
+  roles: MJRoleEntity[];
+  existingPermissions: MJEntityPermissionEntity[];
 }
 
 export interface PermissionDialogResult {
   action: 'save' | 'cancel';
-  entity?: EntityEntity;
+  entity?: MJEntityEntity;
 }
 
 interface RolePermissions {
   roleId: string;
   roleName: string;
-  entityPermission: EntityPermissionEntity;
+  entityPermission: MJEntityPermissionEntity;
   isNew: boolean;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-permission-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',
@@ -35,13 +37,14 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public permissionForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
   public rolePermissions: RolePermissions[] = [];
-  public availableRoles: RoleEntity[] = [];
+  public availableRoles: MJRoleEntity[] = [];
 
   constructor() {
     this.permissionForm = this.fb.group({});
@@ -79,7 +82,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  onEscapeKey(event: Event): void {
     if (this.visible) {
       this.onCancel();
     }
@@ -106,7 +109,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
     // Process existing permissions
     for (const permission of this.data.existingPermissions) {
-      const role = this.data.roles.find(r => r.ID === permission.RoleID);
+      const role = this.data.roles.find(r => UUIDsEqual(r.ID, permission.RoleID));
       if (role) {
         console.log(`Processing permission for role ${role.Name}:`, {
           canCreate: permission.CanCreate,
@@ -136,9 +139,9 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.cdr.detectChanges();
   }
 
-  public async addRolePermission(role: RoleEntity): Promise<void> {
+  public async addRolePermission(role: MJRoleEntity): Promise<void> {
     // Create new EntityPermission entity
-    const entityPermission = await this.metadata.GetEntityObject<EntityPermissionEntity>('Entity Permissions');
+    const entityPermission = await this.metadata.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions');
     entityPermission.NewRecord();
     entityPermission.EntityID = this.data!.entity.ID;
     entityPermission.RoleID = role.ID;
@@ -156,21 +159,21 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     });
 
     // Remove from available roles
-    this.availableRoles = this.availableRoles.filter(r => r.ID !== role.ID);
+    this.availableRoles = this.availableRoles.filter(r => !UUIDsEqual(r.ID, role.ID));
     this.cdr.detectChanges();
   }
 
   public removeRolePermission(rolePermission: RolePermissions): void {
     // Add back to available roles if not new
     if (!rolePermission.isNew) {
-      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
       }
     } else {
       // Add back to available roles
-      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
@@ -198,11 +201,17 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       this.result.emit({ action: 'save', entity: this.data.entity });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving permissions:', error);
-      this.error = error.message || 'An unexpected error occurred while saving permissions';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred while saving permissions';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

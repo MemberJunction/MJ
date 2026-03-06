@@ -118,10 +118,3 @@ export class TestMCPConnectionAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadTestMCPConnectionAction(): void {
-    // Intentionally empty - ensures decorator executes
-}

@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
-import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 @Component({
+  standalone: false,
     selector: 'mj-execution-node',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
@@ -554,7 +555,7 @@ import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
     `]
 })
 export class ExecutionNodeComponent {
-    @Input() step!: AIAgentRunStepEntityExtended;
+    @Input() step!: MJAIAgentRunStepEntityExtended;
     @Input() depth: number = 0;
     @Input() agentPath: string[] = [];
     @Input() expanded: boolean = false;

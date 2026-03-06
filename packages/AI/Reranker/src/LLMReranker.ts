@@ -8,12 +8,12 @@
  * @since 3.0.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseReranker, RerankParams, RerankResult } from '@memberjunction/ai';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Result item from LLM reranking response
@@ -63,7 +63,7 @@ export class LLMReranker extends BaseReranker {
     private _promptID: string;
     private _contextUser: UserInfo;
     private _promptRunner: AIPromptRunner;
-    private _cachedPrompt: AIPromptEntityExtended | null = null;
+    private _cachedPrompt: MJAIPromptEntityExtended | null = null;
 
     /**
      * Create a new LLMReranker instance.
@@ -90,13 +90,13 @@ export class LLMReranker extends BaseReranker {
      * Load the rerank prompt from AIEngine cache.
      * Caches the prompt for subsequent calls.
      */
-    private async loadPrompt(): Promise<AIPromptEntityExtended | null> {
+    private async loadPrompt(): Promise<MJAIPromptEntityExtended | null> {
         if (this._cachedPrompt) {
             return this._cachedPrompt;
         }
 
         const prompts = AIEngine.Instance.Prompts;
-        const prompt = prompts.find(p => p.ID === this._promptID);
+        const prompt = prompts.find(p => UUIDsEqual(p.ID, this._promptID));
 
         if (!prompt) {
             LogError(`LLMReranker: Prompt not found with ID: ${this._promptID}`);
@@ -234,11 +234,3 @@ export function createLLMReranker(promptID: string, contextUser: UserInfo): LLMR
     return new LLMReranker('', '', promptID, contextUser);
 }
 
-/**
- * Ensure the LLMReranker class is loaded for tree-shaking prevention.
- * Import this function in your module's entry point.
- */
-export function LoadLLMReranker(): void {
-    // This function exists to ensure the class registration occurs
-    // when the module is imported, preventing tree-shaking from removing it
-}

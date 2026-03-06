@@ -80,6 +80,3 @@ export class GetObjectAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadGetObjectAction() {
-    // Stub function to prevent tree shaking
-}

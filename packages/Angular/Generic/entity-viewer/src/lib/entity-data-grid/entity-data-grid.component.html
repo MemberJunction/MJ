@@ -5,365 +5,408 @@
   [style.height]="gridHeightStyle">
 
   <!-- Toolbar -->
-  <div *ngIf="ShowToolbar" class="mj-grid-toolbar">
-    <div class="toolbar-left">
-      <!-- Search -->
-      <div *ngIf="ShowSearch" class="toolbar-search">
-        <i class="fa-solid fa-search search-icon"></i>
-        <input
-          type="text"
-          class="search-input"
-          [placeholder]="ToolbarConfig.searchPlaceholder || 'Search...'"
-          [value]="FilterText"
-          (input)="FilterText = $any($event.target).value" />
-        <button
-          *ngIf="FilterText"
-          class="search-clear"
-          (click)="FilterText = ''">
-          <i class="fa-solid fa-times"></i>
-        </button>
-      </div>
-
-      <!-- Custom Left Buttons -->
-      <ng-container *ngFor="let button of ToolbarConfig.customButtons">
-        <button
-          *ngIf="button.position !== 'right' && isButtonVisible(button)"
-          class="toolbar-button"
-          [class]="button.cssClass"
-          [disabled]="isButtonDisabled(button)"
-          [title]="button.tooltip || ''"
-          (click)="onToolbarButtonClick(button)">
-          <i *ngIf="button.icon" [class]="button.icon"></i>
-          <span *ngIf="button.text">{{ button.text }}</span>
-        </button>
-      </ng-container>
-    </div>
-
-    <div class="toolbar-center">
-      <!-- Row Count -->
-      <span *ngIf="ToolbarConfig.showRowCount !== false" class="row-count">
-        {{ totalRowCount }} {{ totalRowCount === 1 ? 'row' : 'rows' }}
-      </span>
-
-      <!-- Selection Count -->
-      <span *ngIf="ToolbarConfig.showSelectionCount && SelectedKeys.length > 0" class="selection-count">
-        ({{ SelectedKeys.length }} selected)
-      </span>
-    </div>
-
-    <div class="toolbar-right">
-      <!-- New/Add Button (predefined) -->
-      <button
-        *ngIf="ShowNewButton"
-        class="toolbar-button"
-        title="Create new record"
-        (click)="onAddClick()">
-        <i class="fa-solid fa-plus"></i>
-        <span class="button-text">New</span>
-      </button>
-
-      <!-- Refresh Button (predefined) -->
-      <button
-        *ngIf="ShowRefreshButton"
-        class="toolbar-button"
-        title="Refresh data"
-        [disabled]="loading"
-        (click)="onRefreshClick()">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="loading"></i>
-        <span class="button-text">Refresh</span>
-      </button>
-
-      <!-- Export Button (predefined) -->
-      <button
-        *ngIf="ShowExportButton"
-        class="toolbar-button"
-        title="Export to Excel"
-        (click)="onExportClick()">
-        <i class="fa-solid fa-file-excel"></i>
-        <span class="button-text">Export</span>
-      </button>
-
-      <!-- Delete Button (predefined) -->
-      <button
-        *ngIf="ShowDeleteButton && HasSelection"
-        class="toolbar-button toolbar-button-danger"
-        title="Delete selected records"
-        (click)="onDeleteClick()">
-        <i class="fa-solid fa-trash"></i>
-        <span class="button-text">Delete</span>
-      </button>
-
-      <!-- Compare Button (predefined) -->
-      <button
-        *ngIf="ShowCompareButton"
-        class="toolbar-button"
-        title="Compare selected records"
-        [disabled]="!HasMultipleSelection"
-        (click)="onCompareClick()">
-        <i class="fa-solid fa-code-compare"></i>
-        <span class="button-text">Compare</span>
-      </button>
-
-      <!-- Merge Button (predefined) -->
-      <button
-        *ngIf="ShowMergeButton"
-        class="toolbar-button"
-        title="Merge selected records"
-        [disabled]="!HasMultipleSelection"
-        (click)="onMergeClick()">
-        <i class="fa-solid fa-code-merge"></i>
-        <span class="button-text">Merge</span>
-      </button>
-
-      <!-- Add to List Button (predefined) -->
-      <button
-        *ngIf="ShowAddToListButton"
-        class="toolbar-button"
-        title="Add selected records to a list"
-        [disabled]="!HasSelection"
-        (click)="onAddToListClick()">
-        <i class="fa-solid fa-list-check"></i>
-        <span class="button-text">Add to List</span>
-      </button>
-
-      <!-- Search for Duplicates Button (predefined) -->
-      <button
-        *ngIf="ShowDuplicateSearchButton"
-        class="toolbar-button"
-        title="Search for duplicate records"
-        [disabled]="!HasMultipleSelection"
-        (click)="onDuplicateSearchClick()">
-        <i class="fa-solid fa-magnifying-glass-plus"></i>
-        <span class="button-text">Find Duplicates</span>
-      </button>
-
-      <!-- Communication Button (predefined) -->
-      <button
-        *ngIf="ShowCommunicationButton"
-        class="toolbar-button"
-        title="Send message to selected records"
-        [disabled]="!HasSelection"
-        (click)="onCommunicationClick()">
-        <i class="fa-solid fa-envelope"></i>
-        <span class="button-text">Send Message</span>
-      </button>
-
-      <!-- Legacy ToolbarConfig buttons -->
-      <!-- Add Button (legacy) -->
-      <button
-        *ngIf="ToolbarConfig.showAdd && AllowAdd && !ShowNewButton"
-        class="toolbar-button"
-        title="Add New"
-        (click)="onAddClick()">
-        <i class="fa-solid fa-plus"></i>
-      </button>
-
-      <!-- Refresh Button (legacy) -->
-      <button
-        *ngIf="ToolbarConfig.showRefresh !== false && !ShowRefreshButton"
-        class="toolbar-button"
-        title="Refresh"
-        [disabled]="loading"
-        (click)="onRefreshClick()">
-        <i class="fa-solid fa-refresh" [class.fa-spin]="loading"></i>
-      </button>
-
-      <!-- Delete Button (legacy) -->
-      <button
-        *ngIf="ToolbarConfig.showDelete && AllowDelete && HasSelection && !ShowDeleteButton"
-        class="toolbar-button toolbar-button-danger"
-        title="Delete Selected"
-        (click)="onDeleteClick()">
-        <i class="fa-solid fa-trash"></i>
-      </button>
-
-      <!-- Export Button (legacy) -->
-      <button
-        *ngIf="ToolbarConfig.showExport && !ShowExportButton"
-        class="toolbar-button"
-        title="Export"
-        (click)="onExportClick()">
-        <i class="fa-solid fa-download"></i>
-      </button>
-
-      <!-- Column Chooser Button -->
-      <button
-        *ngIf="ToolbarConfig.showColumnChooser && AllowColumnToggle"
-        class="toolbar-button"
-        title="Column Chooser"
-        (click)="onColumnChooserClick()">
-        <i class="fa-solid fa-columns"></i>
-      </button>
-
-      <!-- Custom Right Buttons -->
-      <ng-container *ngFor="let button of ToolbarConfig.customButtons">
-        <button
-          *ngIf="button.position === 'right' && isButtonVisible(button)"
-          class="toolbar-button"
-          [class]="button.cssClass"
-          [disabled]="isButtonDisabled(button)"
-          [title]="button.tooltip || ''"
-          (click)="onToolbarButtonClick(button)">
-          <i *ngIf="button.icon" [class]="button.icon"></i>
-          <span *ngIf="button.text">{{ button.text }}</span>
-        </button>
-      </ng-container>
-
-      <!-- Overflow Menu -->
-      <div *ngIf="hasOverflowMenuItems" class="toolbar-overflow" (click)="$event.stopPropagation()">
-        <button
-          class="toolbar-button overflow-trigger"
-          title="More actions"
-          (click)="toggleOverflowMenu()">
-          <i class="fa-solid fa-ellipsis-vertical"></i>
-        </button>
-
-        <div *ngIf="showOverflowMenu" class="overflow-menu" [@fadeIn]>
-          <!-- Export (if in overflow) -->
-          <button *ngIf="showExportInOverflow" class="overflow-item" (click)="onExportClick(); closeOverflowMenu()">
-            <i class="fa-solid fa-file-excel"></i>
-            <span>Export to Excel</span>
-          </button>
-
-          <!-- Entity Actions -->
-          <ng-container *ngIf="ShowEntityActionButtons && EntityActions.length > 0">
-            <div class="overflow-divider"></div>
-            <div class="overflow-section-label">Actions</div>
+  @if (ShowToolbar) {
+    <div class="mj-grid-toolbar">
+      <div class="toolbar-left">
+        <!-- Search -->
+        @if (ShowSearch) {
+          <div class="toolbar-search">
+            <i class="fa-solid fa-search search-icon"></i>
+            <input
+              type="text"
+              class="search-input"
+              [placeholder]="ToolbarConfig.searchPlaceholder || 'Search...'"
+              [value]="FilterText"
+              (input)="FilterText = $any($event.target).value" />
+            @if (FilterText) {
+              <button
+                class="search-clear"
+                (click)="FilterText = ''">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
+          </div>
+        }
+        <!-- Custom Left Buttons -->
+        @for (button of ToolbarConfig.customButtons; track button) {
+          @if (button.position !== 'right' && isButtonVisible(button)) {
             <button
-              *ngFor="let action of EntityActions"
-              class="overflow-item"
-              [disabled]="!isEntityActionEnabled(action)"
-              (click)="onEntityActionClick(action); closeOverflowMenu()">
-              <i [class]="action.icon || 'fa-solid fa-bolt'"></i>
-              <span>{{ action.name }}</span>
+              class="toolbar-button"
+              [class]="button.cssClass"
+              [disabled]="isButtonDisabled(button)"
+              [title]="button.tooltip || ''"
+              (click)="onToolbarButtonClick(button)">
+              @if (button.icon) {
+                <i [class]="button.icon"></i>
+              }
+              @if (button.text) {
+                <span>{{ button.text }}</span>
+              }
             </button>
-          </ng-container>
-
-          <!-- Column Chooser (if in overflow) -->
-          <div *ngIf="showColumnChooserInOverflow" class="overflow-divider"></div>
-          <button *ngIf="showColumnChooserInOverflow" class="overflow-item" (click)="onColumnChooserClick(); closeOverflowMenu()">
-            <i class="fa-solid fa-columns"></i>
-            <span>Manage Columns</span>
+          }
+        }
+      </div>
+      <div class="toolbar-center">
+        <!-- Row Count -->
+        @if (ToolbarConfig.showRowCount !== false) {
+          <span class="row-count">
+            {{ totalRowCount }} {{ totalRowCount === 1 ? 'row' : 'rows' }}
+          </span>
+        }
+        <!-- Selection Count -->
+        @if (ToolbarConfig.showSelectionCount && SelectedKeys.length > 0) {
+          <span class="selection-count">
+            ({{ SelectedKeys.length }} selected)
+          </span>
+        }
+      </div>
+      <div class="toolbar-right">
+        <!-- New/Add Button (predefined) -->
+        @if (ShowNewButton) {
+          <button
+            class="toolbar-button"
+            title="Create new record"
+            (click)="onAddClick()">
+            <i class="fa-solid fa-plus"></i>
+            <span class="button-text">New</span>
           </button>
-
-          <!-- Selection-dependent actions in overflow -->
-          <ng-container *ngIf="HasSelection && hasSelectionDependentOverflowActions">
-            <div class="overflow-divider"></div>
-            <button *ngIf="showCommunicationInOverflow" class="overflow-item" (click)="onCommunicationClick(); closeOverflowMenu()">
-              <i class="fa-solid fa-envelope"></i>
-              <span>Send Message</span>
+        }
+        <!-- Refresh Button (predefined) -->
+        @if (ShowRefreshButton) {
+          <button
+            class="toolbar-button"
+            title="Refresh data"
+            [disabled]="loading"
+            (click)="onRefreshClick()">
+            <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="loading"></i>
+            <span class="button-text">Refresh</span>
+          </button>
+        }
+        <!-- Export Button (predefined) -->
+        @if (ShowExportButton) {
+          <button
+            class="toolbar-button"
+            title="Export to Excel"
+            (click)="onExportClick()">
+            <i class="fa-solid fa-file-excel"></i>
+            <span class="button-text">Export</span>
+          </button>
+        }
+        <!-- Delete Button (predefined) -->
+        @if (ShowDeleteButton && HasSelection) {
+          <button
+            class="toolbar-button toolbar-button-danger"
+            title="Delete selected records"
+            (click)="onDeleteClick()">
+            <i class="fa-solid fa-trash"></i>
+            <span class="button-text">Delete</span>
+          </button>
+        }
+        <!-- Compare Button (predefined) -->
+        @if (ShowCompareButton) {
+          <button
+            class="toolbar-button"
+            title="Compare selected records"
+            [disabled]="!HasMultipleSelection"
+            (click)="onCompareClick()">
+            <i class="fa-solid fa-code-compare"></i>
+            <span class="button-text">Compare</span>
+          </button>
+        }
+        <!-- Merge Button (predefined) -->
+        @if (ShowMergeButton) {
+          <button
+            class="toolbar-button"
+            title="Merge selected records"
+            [disabled]="!HasMultipleSelection"
+            (click)="onMergeClick()">
+            <i class="fa-solid fa-code-merge"></i>
+            <span class="button-text">Merge</span>
+          </button>
+        }
+        <!-- Add to List Button (predefined) -->
+        @if (ShowAddToListButton) {
+          <button
+            class="toolbar-button"
+            title="Add selected records to a list"
+            [disabled]="!HasSelection"
+            (click)="onAddToListClick()">
+            <i class="fa-solid fa-list-check"></i>
+            <span class="button-text">Add to List</span>
+          </button>
+        }
+        <!-- Search for Duplicates Button (predefined) -->
+        @if (ShowDuplicateSearchButton) {
+          <button
+            class="toolbar-button"
+            title="Search for duplicate records"
+            [disabled]="!HasMultipleSelection"
+            (click)="onDuplicateSearchClick()">
+            <i class="fa-solid fa-magnifying-glass-plus"></i>
+            <span class="button-text">Find Duplicates</span>
+          </button>
+        }
+        <!-- Communication Button (predefined) -->
+        @if (ShowCommunicationButton) {
+          <button
+            class="toolbar-button"
+            title="Send message to selected records"
+            [disabled]="!HasSelection"
+            (click)="onCommunicationClick()">
+            <i class="fa-solid fa-envelope"></i>
+            <span class="button-text">Send Message</span>
+          </button>
+        }
+        <!-- Legacy ToolbarConfig buttons -->
+        <!-- Add Button (legacy) -->
+        @if (ToolbarConfig.showAdd && AllowAdd && !ShowNewButton) {
+          <button
+            class="toolbar-button"
+            title="Add New"
+            (click)="onAddClick()">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        }
+        <!-- Refresh Button (legacy) -->
+        @if (ToolbarConfig.showRefresh !== false && !ShowRefreshButton) {
+          <button
+            class="toolbar-button"
+            title="Refresh"
+            [disabled]="loading"
+            (click)="onRefreshClick()">
+            <i class="fa-solid fa-refresh" [class.fa-spin]="loading"></i>
+          </button>
+        }
+        <!-- Delete Button (legacy) -->
+        @if (ToolbarConfig.showDelete && AllowDelete && HasSelection && !ShowDeleteButton) {
+          <button
+            class="toolbar-button toolbar-button-danger"
+            title="Delete Selected"
+            (click)="onDeleteClick()">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        }
+        <!-- Export Button (legacy) -->
+        @if (ToolbarConfig.showExport && !ShowExportButton) {
+          <button
+            class="toolbar-button"
+            title="Export"
+            (click)="onExportClick()">
+            <i class="fa-solid fa-download"></i>
+          </button>
+        }
+        <!-- Column Chooser Button -->
+        @if (ToolbarConfig.showColumnChooser && AllowColumnToggle) {
+          <button
+            class="toolbar-button"
+            title="Column Chooser"
+            (click)="onColumnChooserClick()">
+            <i class="fa-solid fa-columns"></i>
+          </button>
+        }
+        <!-- Custom Right Buttons -->
+        @for (button of ToolbarConfig.customButtons; track button) {
+          @if (button.position === 'right' && isButtonVisible(button)) {
+            <button
+              class="toolbar-button"
+              [class]="button.cssClass"
+              [disabled]="isButtonDisabled(button)"
+              [title]="button.tooltip || ''"
+              (click)="onToolbarButtonClick(button)">
+              @if (button.icon) {
+                <i [class]="button.icon"></i>
+              }
+              @if (button.text) {
+                <span>{{ button.text }}</span>
+              }
             </button>
-          </ng-container>
-        </div>
+          }
+        }
+        <!-- Overflow Menu -->
+        @if (hasOverflowMenuItems) {
+          <div class="toolbar-overflow" (click)="$event.stopPropagation()">
+            <button
+              class="toolbar-button overflow-trigger"
+              title="More actions"
+              (click)="toggleOverflowMenu()">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            @if (showOverflowMenu) {
+              <div class="overflow-menu" [@fadeIn]>
+                <!-- Export (if in overflow) -->
+                @if (showExportInOverflow) {
+                  <button class="overflow-item" (click)="onExportClick(); closeOverflowMenu()">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <span>Export to Excel</span>
+                  </button>
+                }
+                <!-- Entity Actions -->
+                @if (ShowEntityActionButtons && EntityActions.length > 0) {
+                  <div class="overflow-divider"></div>
+                  <div class="overflow-section-label">Actions</div>
+                  @for (action of EntityActions; track action) {
+                    <button
+                      class="overflow-item"
+                      [disabled]="!isEntityActionEnabled(action)"
+                      (click)="onEntityActionClick(action); closeOverflowMenu()">
+                      <i [class]="action.icon || 'fa-solid fa-bolt'"></i>
+                      <span>{{ action.name }}</span>
+                    </button>
+                  }
+                }
+                <!-- Column Chooser (if in overflow) -->
+                @if (showColumnChooserInOverflow) {
+                  <div class="overflow-divider"></div>
+                }
+                @if (showColumnChooserInOverflow) {
+                  <button class="overflow-item" (click)="onColumnChooserClick(); closeOverflowMenu()">
+                    <i class="fa-solid fa-columns"></i>
+                    <span>Manage Columns</span>
+                  </button>
+                }
+                <!-- Selection-dependent actions in overflow -->
+                @if (HasSelection && hasSelectionDependentOverflowActions) {
+                  <div class="overflow-divider"></div>
+                  @if (showCommunicationInOverflow) {
+                    <button class="overflow-item" (click)="onCommunicationClick(); closeOverflowMenu()">
+                      <i class="fa-solid fa-envelope"></i>
+                      <span>Send Message</span>
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
     </div>
-  </div>
+  }
 
   <!-- Aggregate Cards (displayed as summary cards above the grid) -->
-  <div *ngIf="ShowAggregatePanel" class="mj-aggregate-cards">
-    <ng-container *ngFor="let agg of CardAggregates">
-      <div class="aggregate-card">
-        <div class="aggregate-card-icon" *ngIf="agg.icon">
-          <i [class]="agg.icon"></i>
+  @if (ShowAggregatePanel) {
+    <div class="mj-aggregate-cards">
+      @for (agg of CardAggregates; track agg) {
+        <div class="aggregate-card">
+          @if (agg.icon) {
+            <div class="aggregate-card-icon">
+              <i [class]="agg.icon"></i>
+            </div>
+          }
+          <div class="aggregate-card-content">
+            <span class="aggregate-card-label">{{ agg.label }}</span>
+            <span class="aggregate-card-value">{{ getAggregateValue(agg) }}</span>
+          </div>
         </div>
-        <div class="aggregate-card-content">
-          <span class="aggregate-card-label">{{ agg.label }}</span>
-          <span class="aggregate-card-value">{{ getAggregateValue(agg) }}</span>
+      }
+      @if (AggregatesLoading) {
+        <div class="aggregate-card-loading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
         </div>
-      </div>
-    </ng-container>
-    <div *ngIf="AggregatesLoading" class="aggregate-card-loading">
-      <i class="fa-solid fa-spinner fa-spin"></i>
+      }
     </div>
-  </div>
+  }
 
   <!-- Grid Content -->
   <div class="mj-grid-content">
     <!-- Loading Overlay -->
-    <div *ngIf="loading && rowData.length === 0" class="mj-grid-loading-overlay">
-      <mj-loading text="Loading..."></mj-loading>
-    </div>
+    @if (loading && rowData.length === 0) {
+      <div class="mj-grid-loading-overlay">
+        <mj-loading text="Loading..."></mj-loading>
+      </div>
+    }
 
     <!-- Error State -->
-    <div *ngIf="errorMessage && !loading" class="mj-grid-error">
-      <i class="fa-solid fa-exclamation-triangle"></i>
-      <span>{{ errorMessage }}</span>
-      <button class="error-retry" (click)="Refresh()">Retry</button>
-    </div>
+    @if (errorMessage && !loading) {
+      <div class="mj-grid-error">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        <span>{{ errorMessage }}</span>
+        <button class="error-retry" (click)="Refresh()">Retry</button>
+      </div>
+    }
 
     <!-- Empty State -->
-    <div *ngIf="!loading && !errorMessage && rowData.length === 0" class="mj-grid-empty">
-      <i class="fa-solid fa-inbox"></i>
-      <span>No data to display</span>
-    </div>
+    @if (!loading && !errorMessage && rowData.length === 0) {
+      <div class="mj-grid-empty">
+        <i class="fa-solid fa-inbox"></i>
+        <span>No data to display</span>
+      </div>
+    }
 
     <!-- AG Grid (Client-side mode) -->
-    <ag-grid-angular
-      *ngIf="!errorMessage && PaginationMode === 'client' && (rowData.length > 0 || loading)"
-      class="mj-ag-grid ag-theme-alpine"
-      [theme]="agGridTheme"
-      [columnDefs]="agColumnDefs"
-      [rowData]="rowData"
-      [defaultColDef]="defaultColDef"
-      [rowSelection]="agRowSelection"
-      [getRowId]="getRowId"
-      [suppressCellFocus]="true"
-      [rowHeight]="RowHeight"
-      [headerHeight]="ShowHeader ? undefined : 0"
-      (gridReady)="onGridReady($event)"
-      (cellClicked)="onAgCellClicked($event)"
-      (rowClicked)="onAgRowClicked($event)"
-      (rowDoubleClicked)="onAgRowDoubleClicked($event)"
-      (sortChanged)="onAgSortChanged($event)"
-      (selectionChanged)="onAgSelectionChanged($event)"
-      (columnResized)="onAgColumnResized($event)"
-      (columnMoved)="onAgColumnMoved($event)">
-    </ag-grid-angular>
+    @if (!errorMessage && PaginationMode === 'client' && (rowData.length > 0 || loading)) {
+      <ag-grid-angular
+        class="mj-ag-grid ag-theme-alpine"
+        [theme]="agGridTheme"
+        [columnDefs]="agColumnDefs"
+        [rowData]="rowData"
+        [defaultColDef]="defaultColDef"
+        [rowSelection]="agRowSelection"
+        [getRowId]="getRowId"
+        [suppressCellFocus]="true"
+        [rowHeight]="RowHeight"
+        [headerHeight]="ShowHeader ? undefined : 0"
+        (gridReady)="onGridReady($event)"
+        (cellClicked)="onAgCellClicked($event)"
+        (rowClicked)="onAgRowClicked($event)"
+        (rowDoubleClicked)="onAgRowDoubleClicked($event)"
+        (sortChanged)="onAgSortChanged($event)"
+        (selectionChanged)="onAgSelectionChanged($event)"
+        (columnResized)="onAgColumnResized($event)"
+        (columnMoved)="onAgColumnMoved($event)">
+      </ag-grid-angular>
+    }
 
     <!-- AG Grid (Infinite Scroll mode) -->
-    <ag-grid-angular
-      *ngIf="!errorMessage && PaginationMode === 'infinite'"
-      class="mj-ag-grid ag-theme-alpine"
-      [theme]="agGridTheme"
-      [columnDefs]="agColumnDefs"
-      [defaultColDef]="defaultColDef"
-      [rowSelection]="agRowSelection"
-      [getRowId]="getRowId"
-      [suppressCellFocus]="true"
-      [rowHeight]="RowHeight"
-      [headerHeight]="ShowHeader ? undefined : 0"
-      [rowModelType]="'infinite'"
-      [cacheBlockSize]="CacheBlockSize"
-      [maxBlocksInCache]="MaxBlocksInCache"
-      [infiniteInitialRowCount]="1"
-      [cacheOverflowSize]="2"
-      (gridReady)="onGridReady($event)"
-      (cellClicked)="onAgCellClicked($event)"
-      (rowClicked)="onAgRowClicked($event)"
-      (rowDoubleClicked)="onAgRowDoubleClicked($event)"
-      (sortChanged)="onAgSortChanged($event)"
-      (selectionChanged)="onAgSelectionChanged($event)"
-      (columnResized)="onAgColumnResized($event)"
-      (columnMoved)="onAgColumnMoved($event)">
-    </ag-grid-angular>
+    @if (!errorMessage && PaginationMode === 'infinite') {
+      <ag-grid-angular
+        class="mj-ag-grid ag-theme-alpine"
+        [theme]="agGridTheme"
+        [columnDefs]="agColumnDefs"
+        [defaultColDef]="defaultColDef"
+        [rowSelection]="agRowSelection"
+        [getRowId]="getRowId"
+        [suppressCellFocus]="true"
+        [rowHeight]="RowHeight"
+        [headerHeight]="ShowHeader ? undefined : 0"
+        [rowModelType]="'infinite'"
+        [cacheBlockSize]="CacheBlockSize"
+        [maxBlocksInCache]="MaxBlocksInCache"
+        [infiniteInitialRowCount]="1"
+        [cacheOverflowSize]="2"
+        (gridReady)="onGridReady($event)"
+        (cellClicked)="onAgCellClicked($event)"
+        (rowClicked)="onAgRowClicked($event)"
+        (rowDoubleClicked)="onAgRowDoubleClicked($event)"
+        (sortChanged)="onAgSortChanged($event)"
+        (selectionChanged)="onAgSelectionChanged($event)"
+        (columnResized)="onAgColumnResized($event)"
+        (columnMoved)="onAgColumnMoved($event)">
+      </ag-grid-angular>
+    }
 
   </div>
 
   <!-- Aggregate Summary Row (outside mj-grid-content so it's always visible) -->
-  <div *ngIf="ShowAggregateSummary" class="mj-aggregate-summary">
-    <div class="aggregate-summary-content">
-      <ng-container *ngFor="let agg of ColumnAggregates">
-        <div class="aggregate-summary-item">
-          <i *ngIf="agg.icon" [class]="agg.icon"></i>
-          <span class="agg-summary-label">{{ agg.label }}:</span>
-          <span class="agg-summary-value">{{ getAggregateValue(agg) }}</span>
+  @if (ShowAggregateSummary) {
+    <div class="mj-aggregate-summary">
+      <div class="aggregate-summary-content">
+        @for (agg of ColumnAggregates; track agg) {
+          <div class="aggregate-summary-item">
+            @if (agg.icon) {
+              <i [class]="agg.icon"></i>
+            }
+            <span class="agg-summary-label">{{ agg.label }}:</span>
+            <span class="agg-summary-value">{{ getAggregateValue(agg) }}</span>
+          </div>
+        }
+      </div>
+      @if (AggregatesLoading) {
+        <div class="aggregate-loading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
         </div>
-      </ng-container>
+      }
     </div>
-    <div *ngIf="AggregatesLoading" class="aggregate-loading">
-      <i class="fa-solid fa-spinner fa-spin"></i>
-    </div>
-  </div>
+  }
 </div>
 
 <!-- Export Dialog -->

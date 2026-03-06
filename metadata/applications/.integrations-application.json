@@ -1,0 +1,228 @@
+{
+  "fields": {
+    "Name": "Integrations",
+    "Description": "Manage external system integrations, data sync pipelines, field mappings, and sync activity monitoring",
+    "Icon": "fa-solid fa-plug-circle-bolt",
+    "DefaultForNewUser": false,
+    "Color": "#0ea5e9",
+    "DefaultSequence": 1006,
+    "DefaultNavItems": [
+      {
+        "Label": "Control Tower",
+        "Icon": "fa-solid fa-tower-broadcast",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationControlTower",
+        "isDefault": true
+      },
+      {
+        "Label": "Connections",
+        "Icon": "fa-solid fa-network-wired",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationConnectionStudio"
+      },
+      {
+        "Label": "Entity Mapping",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationMappingWorkspace"
+      },
+      {
+        "Label": "Sync Activity",
+        "Icon": "fa-solid fa-clock-rotate-left",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationSyncActivity"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": [
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Integrations",
+          "Sequence": 1,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "719ADB43-045D-479E-B85E-B4D6790E32C3"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:06.961Z",
+          "checksum": "8f50138534109d346cba6c90ca9966de08afb45bb5b3f2bb24740e50267b260e"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Integration Source Types",
+          "Sequence": 2,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "B48F5D71-84CD-427B-ABE5-35BAD51122EF"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:06.976Z",
+          "checksum": "152f4c3120a2f6310e81403e3803f05d9e212c5bd804705d4c96a7706a7c0352"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Integration URL Formats",
+          "Sequence": 3,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "0A110F42-BCBF-4094-A763-1C4B5420F87F"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:06.991Z",
+          "checksum": "10f7d5795c502e171e7ec590a5b4ad07f874c3f2319fb5a9bf6986ccb7752aa2"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integrations",
+          "Sequence": 4,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "21838894-5916-4090-A55E-4728E3749E21"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.007Z",
+          "checksum": "874a892315ee228dd17c7d9e4fb6c6794bf8ab37d2b3659874654a0799f43707"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Entity Maps",
+          "Sequence": 5,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "D357CA36-F014-496F-871F-7973F3EBFA15"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.024Z",
+          "checksum": "4abb2d3d28741cb63b50a1e18415bf44c24f17b1eda7444cb21f9ccf7ccc8625"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Field Maps",
+          "Sequence": 6,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "7A6E7A89-E213-4BE8-A9C7-F2EC675C27ED"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.040Z",
+          "checksum": "588474f9b396a583d8290439c5bd79f96022f73dd2650021bc6f95389f8c1e30"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Runs",
+          "Sequence": 7,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "E2525CEA-EE9C-4F11-94AD-BBCB8E208826"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.057Z",
+          "checksum": "0b3503188f9f1cd7b9a0c9fd31e54c48060b690a450e4cef37fe4f34480400e5"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details",
+          "Sequence": 8,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "DC58FB54-ABD3-4A0F-9DC8-A2DA7CA03CF2"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.072Z",
+          "checksum": "043e0ca27a668e09914add715245ca1733081054a493ebac2b3ffb0761f541bf"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run API Logs",
+          "Sequence": 9,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "DB5EB2F7-339E-4729-AE31-85DB7CD0394C"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.087Z",
+          "checksum": "db15d1d470e06452e7d0902d1b104ddf1de7c77472f57cdefc1dc69987d3553b"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps",
+          "Sequence": 10,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "A7BE551D-BB5C-41D7-BCF0-E2E5D210B724"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.101Z",
+          "checksum": "6ad43da48a487666651bde4f6c050a430b509ea8c84ae66dff9dfaaa4d0edbf7"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Company Integration Sync Watermarks",
+          "Sequence": 11,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "0084E143-A089-4770-B97B-46A877A25C53"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.134Z",
+          "checksum": "2b65a473edfeed2a4efec73e856016eb810250d61f6e36b564b083c4fa5f9768"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Employee Company Integrations",
+          "Sequence": 12,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "7FB7B25B-BD45-4CD8-8EB0-07229FC01E2D"
+        },
+        "sync": {
+          "lastModified": "2026-03-05T15:36:07.145Z",
+          "checksum": "f2f344b6985382e0b2be5975a7f7832ddaad6a9fe5cae0c55cc3d6a0bd81e017"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "1AE7EDAE-A057-497A-87CD-5DF72D0877CC"
+  },
+  "sync": {
+    "lastModified": "2026-03-05T15:33:44.304Z",
+    "checksum": "697c7e70cfa1c3ceba97de4f0187ac5b8582075fed42a7290f1b35da78cbd59d"
+  }
+}

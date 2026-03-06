@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
 import { UserInfo } from '@memberjunction/core';
-import { ArtifactEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
@@ -16,7 +16,7 @@ interface PermissionDisplay extends ArtifactPermission {
 @Component({
     selector: 'mj-artifact-share-modal',
     standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+    imports: [FormsModule, WindowModule, ButtonModule, UserPickerComponent],
     template: `
         @if (isOpen && artifact) {
             <kendo-window
@@ -200,7 +200,7 @@ interface PermissionDisplay extends ArtifactPermission {
 })
 export class ArtifactShareModalComponent implements OnInit, OnChanges {
     @Input() isOpen: boolean = false;
-    @Input() artifact: ArtifactEntity | null = null;
+    @Input() artifact: MJArtifactEntity | null = null;
     @Input() currentUser!: UserInfo;
 
     @Output() saved = new EventEmitter<void>();
@@ -294,6 +294,8 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             isOwner,
             availablePermissions: this.availablePermissions
         });
+
+        this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
 
     getExcludedUserIds(): string[] {

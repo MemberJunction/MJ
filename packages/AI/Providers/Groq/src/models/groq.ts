@@ -403,7 +403,3 @@ export class GroqLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 }
- 
-export function LoadGroqLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

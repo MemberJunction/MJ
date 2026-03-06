@@ -1,33 +1,20 @@
 {
+  "extends": "../../tsconfig.server.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "target": "es2020",
     "outDir": "dist",
     "rootDir": "src",
-    "sourceMap": true,
-    "composite": true,
-    "declarationMap": true,
-    "experimentalDecorators": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "lib": ["es2020", "esnext.asynciterable"],
-    "moduleResolution": "node",
-    "removeComments": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true,
-    "emitDecoratorMetadata": true,
-    "skipLibCheck": true
+    "module": "ESNext"
   },
   "ts-node": {
     "esm": true
   },
-  "exclude": ["node_modules", "../../node_modules/@types/plotly.js"],
-  "include": ["./src/**/*.ts"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules/@types/plotly.js",
+    "src/__tests__/**",
+    "src/**/*.test.ts"
+  ]
 }

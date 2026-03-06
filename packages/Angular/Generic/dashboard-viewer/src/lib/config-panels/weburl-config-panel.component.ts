@@ -9,6 +9,7 @@ import { PanelConfig } from '../models/dashboard-types';
  */
 @RegisterClass(BaseConfigPanel, 'WebURLPanelConfigDialog')
 @Component({
+  standalone: false,
     selector: 'mj-weburl-config-panel',
     templateUrl: './weburl-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']

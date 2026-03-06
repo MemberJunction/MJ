@@ -1,2 +1,4 @@
-<mj-loading *ngIf="loading" [showText]="false" size="large"></mj-loading>
+@if (loading) {
+  <mj-loading [showText]="false" size="large"></mj-loading>
+}
 <ng-template mjContainer></ng-template>

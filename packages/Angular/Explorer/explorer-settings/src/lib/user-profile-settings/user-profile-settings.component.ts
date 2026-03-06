@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -15,12 +15,13 @@ interface IconCategory {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-profile-settings',
   templateUrl: './user-profile-settings.component.html',
   styleUrls: ['./user-profile-settings.component.css']
 })
 export class UserProfileSettingsComponent implements OnInit, OnDestroy {
-  currentUser!: UserEntity;
+  currentUser!: MJUserEntity;
   selectedTab: 'upload' | 'url' | 'icon' | 'provider' = 'url';
 
   // Form state
@@ -126,15 +127,17 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
 
   constructor(
     private userAvatarService: UserAvatarService,
-    private sharedService: SharedService
+    private sharedService: SharedService,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   async ngOnInit() {
     const md = new Metadata();
     const currentUserInfo = md.CurrentUser;
 
-    // Load the full UserEntity to access avatar fields
-    this.currentUser = await md.GetEntityObject<UserEntity>('Users');
+    // Load the full MJUserEntity to access avatar fields
+    this.currentUser = await md.GetEntityObject<MJUserEntity>('MJ: Users');
     await this.currentUser.Load(currentUserInfo.ID);
 
     // Initialize filtered icons
@@ -418,10 +421,16 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
         this.errorMessage = 'Failed to revert avatar. Please try again.';
       }
     } catch (error) {
-      this.errorMessage = 'An error occurred while reverting. Please try again.';
       console.error('Error reverting avatar:', error);
+      this.ngZone.run(() => {
+        this.errorMessage = 'An error occurred while reverting. Please try again.';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isSaving = false;
+      this.ngZone.run(() => {
+        this.isSaving = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
@@ -513,10 +522,16 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
         this.errorMessage = 'Failed to save avatar. Please try again.';
       }
     } catch (error) {
-      this.errorMessage = 'An error occurred while saving. Please try again.';
       console.error('Error saving avatar:', error);
+      this.ngZone.run(() => {
+        this.errorMessage = 'An error occurred while saving. Please try again.';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isSaving = false;
+      this.ngZone.run(() => {
+        this.isSaving = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

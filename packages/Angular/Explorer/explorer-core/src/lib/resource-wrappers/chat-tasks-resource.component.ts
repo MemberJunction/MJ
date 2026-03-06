@@ -4,14 +4,9 @@ import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, filter } from 'rxjs';
-
-export function LoadChatTasksResource() {
-  const test = new ChatTasksResource(null!, null!); // Force inclusion in production builds (tree shaking workaround)
-}
-
 /**
  * Chat Tasks Resource - displays the tasks full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -20,21 +15,23 @@ export function LoadChatTasksResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ChatTasksResource')
 @Component({
+  standalone: false,
   selector: 'mj-chat-tasks-resource',
   template: `
     <div class="chat-tasks-container">
-      <mj-tasks-full-view
-        #tasksView
-        *ngIf="currentUser"
-        [environmentId]="environmentId"
-        [currentUser]="currentUser"
-        [baseFilter]="'1=1'"
-        [activeTaskId]="activeTaskId"
-        (taskSelected)="onTaskSelected($any($event))"
-        style="height: 100%;">
-      </mj-tasks-full-view>
+      @if (currentUser) {
+        <mj-tasks-full-view
+          #tasksView
+          [environmentId]="environmentId"
+          [currentUser]="currentUser"
+          [baseFilter]="'1=1'"
+          [activeTaskId]="activeTaskId"
+          (taskSelected)="onTaskSelected($any($event))"
+          style="height: 100%;">
+        </mj-tasks-full-view>
+      }
     </div>
-  `,
+    `,
   styles: [`
     :host {
       display: flex;
@@ -228,7 +225,7 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**

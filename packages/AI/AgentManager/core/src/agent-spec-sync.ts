@@ -5,23 +5,24 @@ import {
     LogError
 } from '@memberjunction/core';
 import {
-    AIAgentEntity,
-    AIAgentActionEntity,
-    AIAgentRelationshipEntity,
-    AIAgentStepEntity,
-    AIAgentStepPathEntity
+    MJAIAgentEntity,
+    MJAIAgentActionEntity,
+    MJAIAgentRelationshipEntity,
+    MJAIAgentStepEntity,
+    MJAIAgentStepPathEntity
 } from '@memberjunction/core-entities';
 import {
     AgentSpec,
     AgentActionSpec,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a single database mutation performed by AgentSpecSync
  */
 export interface AgentSpecSyncMutation {
-    /** Entity name (e.g., "AI Agents", "AI Prompts", "AIAgentAction") */
+    /** Entity name (e.g., "MJ: AI Agents", "MJ: AI Prompts", "AIAgentAction") */
     Entity: string;
     /** Operation type */
     Operation: 'Create' | 'Update' | 'Delete';
@@ -49,12 +50,12 @@ export interface AgentSpecSyncResult {
  * @private
  */
 interface DatabaseState {
-    actions: AIAgentActionEntity[];
-    prompts: any[]; // AIAgentPromptEntity (junction records)
-    relationships: AIAgentRelationshipEntity[];
-    steps: AIAgentStepEntity[];
-    paths: AIAgentStepPathEntity[];
-    childAgents: AIAgentEntity[];
+    actions: MJAIAgentActionEntity[];
+    prompts: any[]; // MJAIAgentPromptEntity (junction records)
+    relationships: MJAIAgentRelationshipEntity[];
+    steps: MJAIAgentStepEntity[];
+    paths: MJAIAgentStepPathEntity[];
+    childAgents: MJAIAgentEntity[];
 }
 
 /**
@@ -63,12 +64,12 @@ interface DatabaseState {
  * @private
  */
 interface Orphans {
-    actions: AIAgentActionEntity[];
-    prompts: any[]; // AIAgentPromptEntity junctions (NOT the AIPrompt entities themselves)
-    relationships: AIAgentRelationshipEntity[];
-    steps: AIAgentStepEntity[];
-    paths: AIAgentStepPathEntity[];
-    childAgents: AIAgentEntity[]; // Will be orphaned (ParentID = NULL) not deleted
+    actions: MJAIAgentActionEntity[];
+    prompts: any[]; // MJAIAgentPromptEntity junctions (NOT the AIPrompt entities themselves)
+    relationships: MJAIAgentRelationshipEntity[];
+    steps: MJAIAgentStepEntity[];
+    paths: MJAIAgentStepPathEntity[];
+    childAgents: MJAIAgentEntity[]; // Will be orphaned (ParentID = NULL) not deleted
 }
 
 /**
@@ -76,9 +77,9 @@ interface Orphans {
  *
  * This class serves as a bi-directional bridge between the simple, serializable {@link AgentSpec}
  * format and the complex MemberJunction database metadata across three core entities:
- * - {@link AIAgentEntity} - Core agent configuration
- * - {@link AIAgentActionEntity} - Agent-action relationships
- * - {@link AIAgentRelationshipEntity} - Parent-child agent relationships
+ * - {@link MJAIAgentEntity} - Core agent configuration
+ * - {@link MJAIAgentActionEntity} - Agent-action relationships
+ * - {@link MJAIAgentRelationshipEntity} - Parent-child agent relationships
  *
  * ## Key Features
  *
@@ -274,8 +275,8 @@ export class AgentSpecSync {
     ): Promise<AgentSpecSync> {
         // Find agent by name
         const rv = new RunView();
-        const result = await rv.RunView<AIAgentEntity>({
-            EntityName: 'AI Agents',
+        const result = await rv.RunView<MJAIAgentEntity>({
+            EntityName: 'MJ: AI Agents',
             ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -343,8 +344,8 @@ export class AgentSpecSync {
         const rv = new RunView();
 
         // Step 1: Load the main agent entity
-        const agentEntity = await md.GetEntityObject<AIAgentEntity>(
-            'AI Agents',
+        const agentEntity = await md.GetEntityObject<MJAIAgentEntity>(
+            'MJ: AI Agents',
             this._contextUser
         );
         const loaded = await agentEntity.Load(agentId);
@@ -356,13 +357,13 @@ export class AgentSpecSync {
         // Note: Load paths separately after steps to avoid hardcoded view name in subquery
         const [actionsResult, childAgentsResult, relatedAgentsResult, promptsResult, stepsResult] = await rv.RunViews([
             {
-                EntityName: 'AI Agent Actions',
+                EntityName: 'MJ: AI Agent Actions',
                 ExtraFilter: `AgentID='${agentId}'`,
                 OrderBy: 'Status, ActionID',
                 ResultType: 'entity_object'
             },
             {
-                EntityName: 'AI Agents',
+                EntityName: 'MJ: AI Agents',
                 ExtraFilter: `ParentID='${agentId}'`,
                 OrderBy: 'ExecutionOrder, Name',
                 ResultType: 'entity_object'
@@ -408,8 +409,8 @@ export class AgentSpecSync {
         let pathsResult;
         const steps = stepsResult.Results || [];
         if (steps.length > 0) {
-            const stepIds = steps.map((s: AIAgentStepEntity) => `'${s.ID}'`).join(',');
-            pathsResult = await rv.RunView<AIAgentStepPathEntity>({
+            const stepIds = steps.map((s: MJAIAgentStepEntity) => `'${s.ID}'`).join(',');
+            pathsResult = await rv.RunView<MJAIAgentStepPathEntity>({
                 EntityName: 'MJ: AI Agent Step Paths',
                 ExtraFilter: `OriginStepID IN (${stepIds})`,
                 OrderBy: 'Priority DESC',
@@ -434,7 +435,7 @@ export class AgentSpecSync {
         if (agentPrompts.length > 0) {
             const promptIds = agentPrompts.map((p: any) => `'${p.PromptID}'`).join(',');
             fullPromptsResult = await rv.RunView({
-                EntityName: 'AI Prompts',
+                EntityName: 'MJ: AI Prompts',
                 ExtraFilter: `ID IN (${promptIds})`,
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
@@ -516,14 +517,14 @@ export class AgentSpecSync {
      * @returns Fully populated AgentSpec object
      */
     private mapEntitiesToRawSpec(
-        agent: AIAgentEntity,
-        actions: AIAgentActionEntity[],
-        childAgents: AIAgentEntity[],
-        relatedAgents: AIAgentRelationshipEntity[],
+        agent: MJAIAgentEntity,
+        actions: MJAIAgentActionEntity[],
+        childAgents: MJAIAgentEntity[],
+        relatedAgents: MJAIAgentRelationshipEntity[],
         agentPrompts: any[],
         fullPrompts: any[],
-        steps: AIAgentStepEntity[],
-        paths: AIAgentStepPathEntity[]
+        steps: MJAIAgentStepEntity[],
+        paths: MJAIAgentStepPathEntity[]
     ): AgentSpec {
         // Map all agent fields to spec
         const spec: AgentSpec = {
@@ -597,13 +598,13 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map AIAgentActionEntity to AgentActionSpec format.
+     * Map MJAIAgentActionEntity to AgentActionSpec format.
      *
      * @private
      * @param action - The agent action entity from the database
      * @returns Mapped action spec
      */
-    private mapActionEntityToSpec(action: AIAgentActionEntity): AgentActionSpec {
+    private mapActionEntityToSpec(action: MJAIAgentActionEntity): AgentActionSpec {
         return {
             AgentActionID: action.ID,
             ActionID: action.ActionID || '',
@@ -624,7 +625,7 @@ export class AgentSpecSync {
      * @param childAgent - The child agent entity
      * @returns Mapped sub-agent spec
      */
-    private mapChildAgentToSpec(childAgent: AIAgentEntity): SubAgentSpec {
+    private mapChildAgentToSpec(childAgent: MJAIAgentEntity): SubAgentSpec {
         return {
             Type: 'child',
             SubAgent: {
@@ -642,7 +643,7 @@ export class AgentSpecSync {
      * @param relationship - The agent relationship entity
      * @returns Mapped sub-agent spec
      */
-    private mapRelatedAgentToSpec(relationship: AIAgentRelationshipEntity): SubAgentSpec {
+    private mapRelatedAgentToSpec(relationship: MJAIAgentRelationshipEntity): SubAgentSpec {
         return {
             Type: 'related',
             SubAgent: {
@@ -658,7 +659,7 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map AIAgentPromptEntity junction to AgentPromptSpec format.
+     * Map MJAIAgentPromptEntity junction to AgentPromptSpec format.
      *
      * @private
      * @param agentPrompt - The agent prompt junction entity (has PromptID, ExecutionOrder)
@@ -667,7 +668,7 @@ export class AgentSpecSync {
      */
     private mapPromptEntityToSpec(agentPrompt: any, fullPrompts: any[]): any {
         // Find the full prompt data by matching PromptID
-        const fullPrompt = fullPrompts.find((p: any) => p.ID === agentPrompt.PromptID);
+        const fullPrompt = fullPrompts.find((p: any) => UUIDsEqual(p.ID, agentPrompt.PromptID));
 
         if (!fullPrompt) {
             // Fallback if prompt not found
@@ -690,13 +691,13 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map AIAgentStepEntity to AgentStep format.
+     * Map MJAIAgentStepEntity to AgentStep format.
      *
      * @private
      * @param step - The agent step entity
      * @returns Mapped step spec
      */
-    private mapStepEntityToSpec(step: AIAgentStepEntity): any {
+    private mapStepEntityToSpec(step: MJAIAgentStepEntity): any {
         return {
             ID: step.ID,
             Name: step.Name,
@@ -712,13 +713,13 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map AIAgentStepPathEntity to AgentStepPath format.
+     * Map MJAIAgentStepPathEntity to AgentStepPath format.
      *
      * @private
      * @param path - The agent step path entity
      * @returns Mapped path spec
      */
-    private mapPathEntityToSpec(path: AIAgentStepPathEntity): any {
+    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): any {
         return {
             ID: path.ID,
             OriginStepID: path.OriginStepID,
@@ -830,8 +831,8 @@ export class AgentSpecSync {
      */
     private async saveAgentEntity(validate: boolean): Promise<string> {
         const md = new Metadata();
-        const agentEntity = await md.GetEntityObject<AIAgentEntity>(
-            'AI Agents',
+        const agentEntity = await md.GetEntityObject<MJAIAgentEntity>(
+            'MJ: AI Agents',
             this._contextUser
         );
 
@@ -939,7 +940,7 @@ export class AgentSpecSync {
 
         // Track the mutation
         this.trackMutation(
-            'AI Agents',
+            'MJ: AI Agents',
             isUpdate ? 'Update' : 'Create',
             agentEntity.ID,
             `${isUpdate ? 'Updated' : 'Created'} agent: ${this.spec.Name}`
@@ -967,8 +968,8 @@ export class AgentSpecSync {
         const md = new Metadata();
 
         for (const actionSpec of this.spec.Actions) {
-            const actionEntity = await md.GetEntityObject<AIAgentActionEntity>(
-                'AI Agent Actions',
+            const actionEntity = await md.GetEntityObject<MJAIAgentActionEntity>(
+                'MJ: AI Agent Actions',
                 this._contextUser
             );
 
@@ -1001,7 +1002,7 @@ export class AgentSpecSync {
 
             // Track the mutation
             this.trackMutation(
-                'AI Agent Actions',
+                'MJ: AI Agent Actions',
                 isUpdate ? 'Update' : 'Create',
                 actionEntity.ID,
                 `${isUpdate ? 'Updated' : 'Created'} action junction for action ${actionSpec.ActionID}`
@@ -1105,7 +1106,7 @@ export class AgentSpecSync {
      */
     private async saveRelatedSubAgent(agentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
         const md = new Metadata();
-        const relationshipEntity = await md.GetEntityObject<AIAgentRelationshipEntity>(
+        const relationshipEntity = await md.GetEntityObject<MJAIAgentRelationshipEntity>(
             'MJ: AI Agent Relationships',
             this._contextUser
         );
@@ -1186,7 +1187,7 @@ export class AgentSpecSync {
 
             // Check if this is an update (has PromptID) or create (no PromptID)
             let promptEntity = await md.GetEntityObject<any>(
-                'AI Prompts',
+                'MJ: AI Prompts',
                 this._contextUser
             );
 
@@ -1237,7 +1238,7 @@ export class AgentSpecSync {
 
             // Track mutation
             this.trackMutation(
-                'AI Prompts',
+                'MJ: AI Prompts',
                 isUpdate ? 'Update' : 'Create',
                 promptEntity.ID,
                 `${isUpdate ? 'Updated' : 'Created'} prompt: ${promptEntity.Name}`
@@ -1286,7 +1287,7 @@ export class AgentSpecSync {
 
             // Track mutation
             this.trackMutation(
-                'AI Agent Prompts',
+                'MJ: AI Agent Prompts',
                 isJunctionUpdate ? 'Update' : 'Create',
                 agentPromptEntity.ID,
                 `${isJunctionUpdate ? 'Updated' : 'Created'} agent-prompt junction for prompt ${promptEntity.ID}`
@@ -1320,7 +1321,7 @@ export class AgentSpecSync {
         const md = new Metadata();
 
         for (const stepSpec of this.spec.Steps) {
-            const stepEntity = await md.GetEntityObject<AIAgentStepEntity>(
+            const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>(
                 'MJ: AI Agent Steps',
                 this._contextUser
             );
@@ -1349,7 +1350,7 @@ export class AgentSpecSync {
 
                     // Create AIPrompt entity (using any type for TemplateText dynamic property)
                     const promptEntity = await md.GetEntityObject<any>(
-                        'AI Prompts',
+                        'MJ: AI Prompts',
                         this._contextUser
                     );
 
@@ -1368,7 +1369,7 @@ export class AgentSpecSync {
 
                     // Track mutation
                     this.trackMutation(
-                        'AI Prompts',
+                        'MJ: AI Prompts',
                         'Create',
                         promptEntity.ID,
                         `Created inline prompt: ${promptEntity.Name}`
@@ -1460,7 +1461,7 @@ export class AgentSpecSync {
         }
 
         for (const pathSpec of this.spec.Paths) {
-            const pathEntity = await md.GetEntityObject<AIAgentStepPathEntity>(
+            const pathEntity = await md.GetEntityObject<MJAIAgentStepPathEntity>(
                 'MJ: AI Agent Step Paths',
                 this._contextUser
             );
@@ -1691,7 +1692,7 @@ export class AgentSpecSync {
         // Batch load all related records for this agent
         const [actions, prompts, relationships, steps, childAgents] = await rv.RunViews([
             {
-                EntityName: 'AI Agent Actions',
+                EntityName: 'MJ: AI Agent Actions',
                 ExtraFilter: `AgentID='${agentId}'`,
                 ResultType: 'entity_object'
             },
@@ -1711,7 +1712,7 @@ export class AgentSpecSync {
                 ResultType: 'entity_object'
             },
             {
-                EntityName: 'AI Agents',
+                EntityName: 'MJ: AI Agents',
                 ExtraFilter: `ParentID='${agentId}'`,
                 ResultType: 'entity_object'
             }
@@ -1731,8 +1732,8 @@ export class AgentSpecSync {
         let pathsResult;
         const stepRecords = steps.Results || [];
         if (stepRecords.length > 0) {
-            const stepIds = stepRecords.map((s: AIAgentStepEntity) => `'${s.ID}'`).join(',');
-            pathsResult = await rv.RunView<AIAgentStepPathEntity>({
+            const stepIds = stepRecords.map((s: MJAIAgentStepEntity) => `'${s.ID}'`).join(',');
+            pathsResult = await rv.RunView<MJAIAgentStepPathEntity>({
                 EntityName: 'MJ: AI Agent Step Paths',
                 ExtraFilter: `OriginStepID IN (${stepIds})`,
                 ResultType: 'entity_object'
@@ -1775,35 +1776,35 @@ export class AgentSpecSync {
         return {
             // Orphaned actions: DB actions not in spec.Actions
             actions: dbState.actions.filter(dbAction =>
-                !spec.Actions?.some(specAction => specAction.AgentActionID === dbAction.ID)
+                !spec.Actions?.some(specAction => UUIDsEqual(specAction.AgentActionID, dbAction.ID))
             ),
 
             // Orphaned prompt junctions: DB prompts not in spec.Prompts
             prompts: dbState.prompts.filter(dbPrompt =>
-                !spec.Prompts?.some(specPrompt => (specPrompt as any).ID === dbPrompt.ID)
+                !spec.Prompts?.some(specPrompt => UUIDsEqual((specPrompt as any).ID, dbPrompt.ID))
             ),
 
             // Orphaned relationships: DB relationships not in spec.SubAgents (related type)
             relationships: dbState.relationships.filter(dbRel =>
                 !spec.SubAgents?.some(specSub =>
-                    specSub.Type === 'related' && specSub.AgentRelationshipID === dbRel.ID
+                    specSub.Type === 'related' && UUIDsEqual(specSub.AgentRelationshipID, dbRel.ID)
                 )
             ),
 
             // Orphaned steps: DB steps not in spec.Steps
             steps: dbState.steps.filter(dbStep =>
-                !spec.Steps?.some(specStep => specStep.ID === dbStep.ID)
+                !spec.Steps?.some(specStep => UUIDsEqual(specStep.ID, dbStep.ID))
             ),
 
             // Orphaned paths: DB paths not in spec.Paths
             paths: dbState.paths.filter(dbPath =>
-                !spec.Paths?.some(specPath => specPath.ID === dbPath.ID)
+                !spec.Paths?.some(specPath => UUIDsEqual(specPath.ID, dbPath.ID))
             ),
 
             // Orphaned child agents: DB children not in spec.SubAgents (child type)
             childAgents: dbState.childAgents.filter(dbChild =>
                 !spec.SubAgents?.some(specSub =>
-                    specSub.Type === 'child' && specSub.SubAgent.ID === dbChild.ID
+                    specSub.Type === 'child' && UUIDsEqual(specSub.SubAgent.ID, dbChild.ID)
                 )
             )
         };
@@ -1832,7 +1833,7 @@ export class AgentSpecSync {
 
         for (const path of orphans.paths) {
             console.log(`🗑️ deleteOrphans: Deleting path ${path.ID}...`);
-            const entity = await md.GetEntityObject<AIAgentStepPathEntity>(
+            const entity = await md.GetEntityObject<MJAIAgentStepPathEntity>(
                 'MJ: AI Agent Step Paths',
                 this._contextUser
             );
@@ -1847,13 +1848,13 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted path ${path.ID}`);
-            this.trackMutation('AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
+            this.trackMutation('MJ: AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
         }
 
         for (const action of orphans.actions) {
             console.log(`🗑️ deleteOrphans: Deleting action junction ${action.ID} (ActionID: ${action.ActionID})...`);
-            const entity = await md.GetEntityObject<AIAgentActionEntity>(
-                'AI Agent Actions',
+            const entity = await md.GetEntityObject<MJAIAgentActionEntity>(
+                'MJ: AI Agent Actions',
                 this._contextUser
             );
             const loaded = await entity.Load(action.ID);
@@ -1867,7 +1868,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted action junction ${action.ID}`);
-            this.trackMutation('AI Agent Actions', 'Delete', action.ID, `Deleted orphaned action junction`);
+            this.trackMutation('MJ: AI Agent Actions', 'Delete', action.ID, `Deleted orphaned action junction`);
         }
 
         // Phase 2: Mid-level entities (Steps, Prompt Junctions, Relationships)
@@ -1875,7 +1876,7 @@ export class AgentSpecSync {
 
         for (const step of orphans.steps) {
             console.log(`🗑️ deleteOrphans: Deleting step ${step.ID} (${step.Name})...`);
-            const entity = await md.GetEntityObject<AIAgentStepEntity>(
+            const entity = await md.GetEntityObject<MJAIAgentStepEntity>(
                 'MJ: AI Agent Steps',
                 this._contextUser
             );
@@ -1890,7 +1891,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted step ${step.ID}`);
-            this.trackMutation('AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
+            this.trackMutation('MJ: AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
         }
 
         for (const promptJunction of orphans.prompts) {
@@ -1910,13 +1911,13 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted prompt junction ${promptJunction.ID}`);
-            this.trackMutation('AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
+            this.trackMutation('MJ: AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
             // NOTE: We do NOT delete the AIPrompt itself - it's a shared resource
         }
 
         for (const relationship of orphans.relationships) {
             console.log(`🗑️ deleteOrphans: Deleting relationship ${relationship.ID} (SubAgentID: ${relationship.SubAgentID})...`);
-            const entity = await md.GetEntityObject<AIAgentRelationshipEntity>(
+            const entity = await md.GetEntityObject<MJAIAgentRelationshipEntity>(
                 'MJ: AI Agent Relationships',
                 this._contextUser
             );
@@ -1931,7 +1932,7 @@ export class AgentSpecSync {
                 continue;
             }
             console.log(`✅ deleteOrphans: Deleted relationship ${relationship.ID}`);
-            this.trackMutation('AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
+            this.trackMutation('MJ: AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
         }
 
         // Phase 3: Orphan child agents (set ParentID = NULL)
@@ -1939,7 +1940,7 @@ export class AgentSpecSync {
 
         for (const childAgent of orphans.childAgents) {
             await this.orphanChildAgent(childAgent.ID);
-            this.trackMutation('AI Agents', 'Update', childAgent.ID, `Orphaned child agent: ${childAgent.Name} (set ParentID = NULL)`);
+            this.trackMutation('MJ: AI Agents', 'Update', childAgent.ID, `Orphaned child agent: ${childAgent.Name} (set ParentID = NULL)`);
         }
     }
 
@@ -1962,7 +1963,7 @@ export class AgentSpecSync {
         console.log(`🔗 orphanChildAgent: Orphaning child agent ${childAgentId}...`);
 
         const md = new Metadata();
-        const childAgent = await md.GetEntityObject<AIAgentEntity>('AI Agents', this._contextUser);
+        const childAgent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', this._contextUser);
 
         const loaded = await childAgent.Load(childAgentId);
         if (!loaded) {

@@ -5,6 +5,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { DashboardConfigDetails, DashboardItem } from '../../single-dashboard.component';
 
 @Component({
+  standalone: false,
   selector: 'app-edit-dashboard',
   templateUrl: './edit-dashboard.component.html',
   styleUrls: ['./edit-dashboard.component.css']

@@ -1,0 +1,72 @@
+@if (Visible) {
+  <kendo-dialog [title]="'Create New Component'" (close)="OnCancel()" [width]="520" [minWidth]="400">
+    <form [formGroup]="form">
+      <div class="dialog-form">
+        <!-- Name field (required) -->
+        <div class="form-field">
+          <label class="form-label" for="component-name">Name <span class="required">*</span></label>
+          <input
+            id="component-name"
+            class="form-input"
+            type="text"
+            formControlName="name"
+            (input)="OnNameChange()"
+            placeholder="e.g. Sales Overview Dashboard"
+            autocomplete="off">
+          <span class="form-hint">A unique name for your component</span>
+        </div>
+
+        <!-- Type selection (card grid) -->
+        <div class="form-field">
+          <label class="form-label">Type</label>
+          <div class="type-options">
+            @for (option of TypeOptions; track option.value) {
+              <div
+                class="type-card"
+                [class.selected]="SelectedType === option.value"
+                (click)="OnSelectType(option.value)">
+                <div class="type-card-icon">
+                  <i [class]="option.icon"></i>
+                </div>
+                <div class="type-card-label">{{ option.label }}</div>
+                <div class="type-card-description">{{ option.description }}</div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Title field (auto-filled from name) -->
+        <div class="form-field">
+          <label class="form-label" for="component-title">Title</label>
+          <input
+            id="component-title"
+            class="form-input"
+            type="text"
+            formControlName="title"
+            placeholder="Display title (auto-filled from name)"
+            autocomplete="off">
+          <span class="form-hint">The display title shown in the component header</span>
+        </div>
+
+        <!-- Description (optional textarea) -->
+        <div class="form-field">
+          <label class="form-label" for="component-description">Description</label>
+          <textarea
+            id="component-description"
+            class="form-textarea"
+            formControlName="description"
+            placeholder="Describe what this component does..."
+            rows="3"></textarea>
+          <span class="form-hint">Optional description of the component's purpose</span>
+        </div>
+      </div>
+    </form>
+
+    <kendo-dialog-actions>
+      <button kendoButton (click)="OnCreate()" [themeColor]="'primary'" [disabled]="!form.valid">
+        <span class="fa-solid fa-plus"></span> Create
+      </button>
+      <button kendoButton (click)="OnCancel()">Cancel</button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+}

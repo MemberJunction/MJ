@@ -5,7 +5,7 @@
  * queries against the database. Handles error fixing with retry loop.
  */
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import {
   DatabaseProviderBase,
   RunQuerySQLFilterManager,

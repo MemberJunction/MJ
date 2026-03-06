@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 
 @Component({
+  standalone: false,
   selector: 'mj-input-dialog',
   template: `
     <div class="input-dialog-content">
@@ -9,35 +10,43 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
       <div class="input-field">
         <label class="input-label">
           {{ inputLabel }}
-          <span *ngIf="required" class="required-mark">*</span>
+          @if (required) {
+            <span class="required-mark">*</span>
+          }
         </label>
-        <textarea
-          *ngIf="inputType === 'textarea'"
-          [(ngModel)]="value"
-          [placeholder]="placeholder"
-          class="k-textarea">
-        </textarea>
-        <input
-          *ngIf="inputType !== 'textarea'"
-          [(ngModel)]="value"
-          [type]="inputType || 'text'"
-          [placeholder]="placeholder"
-          class="k-textbox"
-          (keydown.enter)="onEnterKey($event)">
+        @if (inputType === 'textarea') {
+          <textarea
+            [(ngModel)]="value"
+            [placeholder]="placeholder"
+            class="k-textarea">
+          </textarea>
+        }
+        @if (inputType !== 'textarea') {
+          <input
+            [(ngModel)]="value"
+            [type]="inputType || 'text'"
+            [placeholder]="placeholder"
+            class="k-textbox"
+            (keydown.enter)="onEnterKey($event)">
+        }
       </div>
-      <div class="input-field" *ngIf="secondInputLabel">
-        <label class="input-label">
-          {{ secondInputLabel }}
-          <span *ngIf="secondInputRequired" class="required-mark">*</span>
-        </label>
-        <textarea
-          [(ngModel)]="secondValue"
-          [placeholder]="secondInputPlaceholder"
-          class="k-textarea">
-        </textarea>
-      </div>
+      @if (secondInputLabel) {
+        <div class="input-field">
+          <label class="input-label">
+            {{ secondInputLabel }}
+            @if (secondInputRequired) {
+              <span class="required-mark">*</span>
+            }
+          </label>
+          <textarea
+            [(ngModel)]="secondValue"
+            [placeholder]="secondInputPlaceholder"
+            class="k-textarea">
+          </textarea>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .input-dialog-content {
       padding: 8px 0;

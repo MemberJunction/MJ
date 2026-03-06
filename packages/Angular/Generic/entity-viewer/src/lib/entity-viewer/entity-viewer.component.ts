@@ -1,9 +1,10 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
   EntityViewMode,
@@ -66,6 +67,7 @@ import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.co
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-viewer',
   templateUrl: './entity-viewer.component.html',
   styleUrls: ['./entity-viewer.component.css'],
@@ -79,12 +81,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   // ========================================
 
   private _entity: EntityInfo | null = null;
-  private _records: BaseEntity[] | null = null;
+  private _records: Record<string, unknown>[] | null = null;
   private _config: Partial<EntityViewerConfig> = {};
   private _viewMode: EntityViewMode | null = null;
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
-  private _viewEntity: UserViewEntityExtended | null = null;
+  private _viewEntity: MJUserViewEntityExtended | null = null;
   private _timelineConfig: TimelineState | null = null;
   private _initialized = false;
 
@@ -96,12 +98,21 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     return this._entity;
   }
   set entity(value: EntityInfo | null) {
+    const previousEntity = this._entity;
     this._entity = value;
 
     // Detect date fields for timeline support
     this.detectDateFields();
 
     if (this._initialized) {
+      // If entity changed to a different entity, clear stale view entity
+      // that belongs to the old entity (its WhereClause, SortState, etc. reference old fields)
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+          this._viewEntity = null;
+        }
+      }
+
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display
@@ -122,10 +133,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Pre-loaded records (optional - if not provided, component loads data)
    */
   @Input()
-  get records(): BaseEntity[] | null {
+  get records(): Record<string, unknown>[] | null {
     return this._records;
   }
-  set records(value: BaseEntity[] | null) {
+  set records(value: Record<string, unknown>[] | null) {
     this._records = value;
 
     if (value) {
@@ -245,23 +256,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
    */
   @Input()
-  get viewEntity(): UserViewEntityExtended | null {
+  get viewEntity(): MJUserViewEntityExtended | null {
     return this._viewEntity;
   }
-  set viewEntity(value: UserViewEntityExtended | null) {
+  set viewEntity(value: MJUserViewEntityExtended | null) {
     this._viewEntity = value;
 
     if (this._initialized && this._entity && !this._records) {
-      // Apply view's sort state if available
-      if (value) {
-        const viewSortInfo = value.ViewSortInfo;
-        if (viewSortInfo && viewSortInfo.length > 0) {
-          this.internalSortState = {
-            field: viewSortInfo[0].field,
-            direction: viewSortInfo[0].direction === 'Desc' ? 'desc' : 'asc'
-          };
-        }
-      }
+      // Apply view's sort state if available, then reset pagination and reload
+      this.applySortStateFromView(value);
       this.resetPaginationState();
       this.loadData();
     }
@@ -385,7 +388,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Emitted when the Delete button is clicked in the grid toolbar
    * Includes the selected records to be deleted
    */
-  @Output() deleteRequested = new EventEmitter<{ records: BaseEntity[] }>();
+  @Output() deleteRequested = new EventEmitter<{ records: Record<string, unknown>[] }>();
 
   /**
    * Emitted when the Refresh button is clicked in the grid toolbar
@@ -403,7 +406,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   @Output() addToListRequested = new EventEmitter<{
     entityInfo: EntityInfo;
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
     recordIds: string[];
   }>();
 
@@ -412,7 +415,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Parent components can use this to track selected records for their own toolbar buttons.
    */
   @Output() selectionChanged = new EventEmitter<{
-    records: BaseEntity[];
+    records: Record<string, unknown>[];
     recordIds: string[];
   }>();
 
@@ -425,7 +428,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   public debouncedFilterText: string = '';
   public isLoading: boolean = false;
   public loadingMessage: string = 'Loading...';
-  public internalRecords: BaseEntity[] = [];
+  public internalRecords: Record<string, unknown>[] = [];
   public totalRecordCount: number = 0;
   public filteredRecordCount: number = 0;
 
@@ -438,7 +441,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /** Cached grid params to avoid recreating object on every change detection */
   private _cachedGridParams: RunViewParams | null = null;
   private _lastGridParamsEntity: string | null = null;
-  private _lastGridParamsViewEntity: UserViewEntityExtended | null = null;
+  private _lastGridParamsViewEntity: MJUserViewEntityExtended | null = null;
 
   /** Pagination state */
   public pagination: PaginationState = {
@@ -460,10 +463,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   public availableDateFields: EntityFieldInfo[] = [];
 
   /** Timeline groups configuration for the timeline component */
-  get timelineGroups(): TimelineGroup<BaseEntity>[] {
+  get timelineGroups(): TimelineGroup<Record<string, unknown>>[] {
     return this._timelineGroups;
   }
-  set timelineGroups(value: TimelineGroup<BaseEntity>[]) {
+  set timelineGroups(value: TimelineGroup<Record<string, unknown>>[]) {
     const prev = this._timelineGroups;
     this._timelineGroups = value;
 
@@ -478,7 +481,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     }
   }
-  private _timelineGroups: TimelineGroup<BaseEntity>[] = [];
+  private _timelineGroups: TimelineGroup<Record<string, unknown>>[] = [];
 
   /** Timeline sort order */
   public timelineSortOrder: TimelineSortOrder = 'desc';
@@ -501,7 +504,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /** Reference to the data grid component for flushing pending changes */
   @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
 
   // ========================================
   // PUBLIC METHODS
@@ -542,8 +545,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    *           3) EntityID lookup
    * Returns null if entity cannot be determined.
    */
-  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended): EntityInfo | null {
-    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+  private getEntityInfoFromViewEntity(viewEntity: MJUserViewEntityExtended): EntityInfo | null {
+    // First try: ViewEntityInfo is the preferred source (set by MJUserViewEntityExtended.Load)
     if (viewEntity.ViewEntityInfo) {
       return viewEntity.ViewEntityInfo;
     }
@@ -560,7 +563,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Third try: Look up by EntityID
     if (viewEntity.EntityID) {
-      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
       if (entityById) {
         return entityById;
       }
@@ -681,7 +684,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /**
    * Get the records to display (external or internal)
    */
-  get displayRecords(): BaseEntity[] {
+  get displayRecords(): Record<string, unknown>[] {
     return this.records ?? this.internalRecords;
   }
 
@@ -689,7 +692,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Get filtered records - when using server-side filtering, records are already filtered
    * When using client-side filtering, apply filter locally
    */
-  get filteredRecords(): BaseEntity[] {
+  get filteredRecords(): Record<string, unknown>[] {
     const records = this.displayRecords;
 
     // If server-side filtering is enabled, records are already filtered
@@ -710,7 +713,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        const recordKey = record.PrimaryKey.ToConcatenatedString();
+        const recordKey = buildPkString(record, this.entity!);
         this.hiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
@@ -721,7 +724,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Check if a record matches the filter text (client-side)
    */
   private recordMatchesFilter(
-    record: BaseEntity,
+    record: Record<string, unknown>,
     filterText: string,
     visibleFields: Set<string>
   ): { matches: boolean; matchedField: string | null; matchedInVisibleField: boolean } {
@@ -733,7 +736,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     for (const field of this.entity.Fields) {
       if (!this.shouldSearchField(field)) continue;
 
-      const value = record.Get(field.Name);
+      const value = record[field.Name];
       if (value == null) continue;
 
       const stringValue = String(value).toLowerCase();
@@ -806,16 +809,17 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /**
    * Check if a record matched on a hidden field
    */
-  public hasHiddenFieldMatch(record: BaseEntity): boolean {
-    if (!this.debouncedFilterText) return false;
-    return this.hiddenFieldMatches.has(record.PrimaryKey.ToConcatenatedString());
+  public hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+    if (!this.debouncedFilterText || !this.entity) return false;
+    return this.hiddenFieldMatches.has(buildPkString(record, this.entity));
   }
 
   /**
    * Get the name of the hidden field that matched for display
    */
-  public getHiddenMatchFieldName(record: BaseEntity): string {
-    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
+  public getHiddenMatchFieldName(record: Record<string, unknown>): string {
+    if (!this.entity) return '';
+    const fieldName = this.hiddenFieldMatches.get(buildPkString(record, this.entity));
     if (!fieldName || !this.entity) return '';
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
@@ -845,6 +849,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Mark as initialized - setters will now trigger data loading
     this._initialized = true;
 
+    // If viewEntity was set before initialization, extract its sort state now.
+    // The viewEntity setter skips this when _initialized is false.
+    if (this._viewEntity) {
+      this.applySortStateFromView(this._viewEntity);
+    }
+
     // If entity was set before initialization, load data now
     if (this._entity && !this._records) {
       this.loadData();
@@ -859,6 +869,48 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   // ========================================
   // CONFIGURATION
   // ========================================
+
+  /**
+   * Extracts sort state from a view entity, checking ViewSortInfo first then
+   * falling back to GridState.sortSettings. Resets internalSortState if the
+   * view has no sort defined (prevents stale sort from a previous view).
+   */
+  private applySortStateFromView(view: MJUserViewEntityExtended | null): void {
+    if (!view) {
+      this.internalSortState = null;
+      return;
+    }
+
+    // Priority 1: SortState column (via ViewSortInfo)
+    const viewSortInfo = view.ViewSortInfo;
+    if (viewSortInfo && viewSortInfo.length > 0) {
+      this.internalSortState = {
+        field: viewSortInfo[0].field,
+        direction: viewSortInfo[0].direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      };
+      return;
+    }
+
+    // Priority 2: GridState.sortSettings (sort may only be stored here)
+    if (view.GridState) {
+      try {
+        const gridState = JSON.parse(view.GridState) as ViewGridState;
+        if (gridState.sortSettings && gridState.sortSettings.length > 0) {
+          const firstSort = gridState.sortSettings[0];
+          this.internalSortState = {
+            field: firstSort.field,
+            direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+          };
+          return;
+        }
+      } catch {
+        // Invalid GridState JSON — ignore
+      }
+    }
+
+    // No sort defined — reset to prevent stale sort from previous view
+    this.internalSortState = null;
+  }
 
   private applyConfig(): void {
     const config = this.effectiveConfig;
@@ -989,9 +1041,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
-      const result = await rv.RunView({
+      const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entity.Name,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
+        Fields: computeFieldsList(entity, this.gridState),
         MaxRows: config.pageSize,
         StartRow: startRow,
         OrderBy: orderBy,
@@ -1052,10 +1105,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       this.totalRecordCount = 0;
       this.filteredRecordCount = 0;
     } finally {
-      this.isLoading = false;
-      this.pagination.isLoading = false;
-      this.isInitialLoad = false;
-      this.cdr.detectChanges();
+      // Use ngZone.run() to ensure state changes trigger change detection.
+      // With es2022 native async/await + zone.js 0.16, the await resumes
+      // outside Angular's zone, so detectChanges() alone may not flush properly.
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.pagination.isLoading = false;
+        this.isInitialLoad = false;
+        this.cdr.detectChanges();
+      });
 
       // If a reload was requested while we were loading, trigger it now
       if (this._pendingReload) {
@@ -1199,7 +1257,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     this.recordSelected.emit({
       record: event.row,
       entity: entity,
-      compositeKey: event.row.PrimaryKey
+      compositeKey: buildCompositeKey(event.row, entity)
     });
   }
 
@@ -1214,7 +1272,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     this.recordOpened.emit({
       record: event.row,
       entity: entity,
-      compositeKey: event.row.PrimaryKey
+      compositeKey: buildCompositeKey(event.row, entity)
     });
   }
 
@@ -1255,7 +1313,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
-      : md.Entities.find(e => e.ID === event.relatedEntityId);
+      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
 
     if (!relatedEntity) {
       return;
@@ -1290,7 +1348,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /**
    * Handle Delete button click from data grid toolbar
    */
-  onGridDeleteRequested(records: BaseEntity[]): void {
+  onGridDeleteRequested(records: Record<string, unknown>[]): void {
     this.deleteRequested.emit({ records });
   }
 
@@ -1305,7 +1363,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Handle Add to List button click from data grid toolbar.
    * Forwards the event to parent components for list management.
    */
-  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: BaseEntity[]; recordIds: string[] }): void {
+  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
     this.addToListRequested.emit(event);
   }
 
@@ -1314,15 +1372,18 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Converts selected keys to records and forwards to parent components.
    */
   onGridSelectionChange(selectedKeys: string[]): void {
+    const entity = this.effectiveEntity;
+    if (!entity) return;
+
     // Find the actual records from our filtered records
     const records = this.filteredRecords.filter(record => {
-      const key = record.PrimaryKey?.ToConcatenatedString() || String(record.Get('ID'));
+      const key = buildPkString(record, entity);
       return selectedKeys.includes(key);
     });
 
     // Get the raw primary key values for list management
     const recordIds = records.map(record =>
-      String(record.PrimaryKey.KeyValuePairs[0].Value)
+      String(record[entity.PrimaryKeys[0].Name])
     );
 
     this.selectionChanged.emit({ records, recordIds });
@@ -1336,13 +1397,13 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Handle timeline event click - emit as record selection
    */
   onTimelineEventClick(event: AfterEventClickArgs): void {
-    const record = event.event.entity as BaseEntity;
+    const record = event.event.entity as Record<string, unknown>;
     const entity = this.effectiveEntity;
     if (record && entity) {
       this.recordSelected.emit({
         record,
         entity: entity,
-        compositeKey: record.PrimaryKey
+        compositeKey: buildCompositeKey(record, entity)
       });
     }
   }
@@ -1514,7 +1575,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const titleField = this.findTitleField();
 
     // Create a single group for the current data
-    const group = new TimelineGroup<BaseEntity>();
+    const group = new TimelineGroup<Record<string, unknown>>();
     group.DataSourceType = 'array';
     group.EntityObjects = this.filteredRecords;
     group.TitleFieldName = titleField;

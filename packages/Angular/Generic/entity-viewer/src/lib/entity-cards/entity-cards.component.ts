@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
+import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PillColorUtil } from '../pill/pill.component';
 import { HighlightUtil } from '../utils/highlight.util';
 
@@ -27,6 +27,7 @@ import { HighlightUtil } from '../utils/highlight.util';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-cards',
   templateUrl: './entity-cards.component.html',
   styleUrls: ['./entity-cards.component.css'],
@@ -45,7 +46,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   /**
    * The records to display as cards (optional - component can load its own)
    */
-  @Input() records: BaseEntity[] | null = null;
+  @Input() records: Record<string, unknown>[] | null = null;
 
   /**
    * The currently selected record's primary key string
@@ -89,7 +90,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   public autoCardTemplate: CardTemplate | null = null;
 
   /** Internal records when loading standalone */
-  private internalRecords: BaseEntity[] = [];
+  private internalRecords: Record<string, unknown>[] = [];
 
   /** Track if we're in standalone mode */
   private standaloneMode: boolean = false;
@@ -162,7 +163,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   /**
    * Get effective records (external or internal)
    */
-  get effectiveRecords(): BaseEntity[] {
+  get effectiveRecords(): Record<string, unknown>[] {
     return this.records ?? this.internalRecords;
   }
 
@@ -176,9 +177,10 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView({
+      const result = await rv.RunView<Record<string, unknown>>({
         EntityName: this.entity.Name,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
+        Fields: computeFieldsList(this.entity),
         MaxRows: this.pageSize
       });
 
@@ -347,15 +349,15 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   // VALUE FORMATTING
   // ========================================
 
-  getFieldValue(record: BaseEntity, fieldName: string | null): string {
+  getFieldValue(record: Record<string, unknown>, fieldName: string | null): string {
     if (!fieldName) return '';
-    const value = record.Get(fieldName);
+    const value = record[fieldName];
     if (value === null || value === undefined) return '';
     return String(value);
   }
 
-  getNumericValue(record: BaseEntity, fieldName: string): string {
-    const value = record.Get(fieldName);
+  getNumericValue(record: Record<string, unknown>, fieldName: string): string {
+    const value = record[fieldName];
     if (value === null || value === undefined) return '-';
 
     const num = Number(value);
@@ -372,8 +374,8 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     return num.toLocaleString();
   }
 
-  getBooleanValue(record: BaseEntity, fieldName: string): boolean {
-    const value = record.Get(fieldName);
+  getBooleanValue(record: Record<string, unknown>, fieldName: string): boolean {
+    const value = record[fieldName];
     if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value !== 0;
@@ -381,19 +383,19 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     return Boolean(value);
   }
 
-  getTextValue(record: BaseEntity, fieldName: string, maxLength: number = 50): string {
+  getTextValue(record: Record<string, unknown>, fieldName: string, maxLength: number = 50): string {
     const value = this.getFieldValue(record, fieldName);
     if (!value) return '-';
     if (value.length <= maxLength) return value;
     return value.substring(0, maxLength) + '...';
   }
 
-  getDateValue(record: BaseEntity, fieldName: string): string {
-    const value = record.Get(fieldName);
+  getDateValue(record: Record<string, unknown>, fieldName: string): string {
+    const value = record[fieldName];
     if (value === null || value === undefined) return '-';
 
     try {
-      const date = value instanceof Date ? value : new Date(value);
+      const date = value instanceof Date ? value : new Date(value as string | number);
       if (isNaN(date.getTime())) return String(value);
       return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     } catch {
@@ -412,38 +414,40 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   // CARD DISPLAY HELPERS
   // ========================================
 
-  getRecordTrackId(record: BaseEntity, index: number): string {
+  getRecordTrackId(record: Record<string, unknown>, index: number): string {
+    if (!this.entity) return `record_${index}`;
     try {
-      const pk = record?.PrimaryKey?.ToString();
+      const pk = buildPkString(record, this.entity);
       if (pk && pk.trim().length > 0) return pk;
     } catch { /* ignore */ }
     return `record_${index}`;
   }
 
-  isSelected(record: BaseEntity): boolean {
-    return record.PrimaryKey.ToConcatenatedString() === this.selectedRecordId;
+  isSelected(record: Record<string, unknown>): boolean {
+    if (!this.entity) return false;
+    return buildPkString(record, this.entity) === this.selectedRecordId;
   }
 
-  onCardClick(record: BaseEntity): void {
+  onCardClick(record: Record<string, unknown>): void {
     if (!this.entity) return;
     this.recordSelected.emit({
       record,
       entity: this.entity,
-      compositeKey: record.PrimaryKey
+      compositeKey: buildCompositeKey(record, this.entity)
     });
   }
 
-  onOpenClick(event: Event, record: BaseEntity): void {
+  onOpenClick(event: Event, record: Record<string, unknown>): void {
     event.stopPropagation();
     if (!this.entity) return;
     this.recordOpened.emit({
       record,
       entity: this.entity,
-      compositeKey: record.PrimaryKey
+      compositeKey: buildCompositeKey(record, this.entity)
     });
   }
 
-  getInitials(record: BaseEntity): string {
+  getInitials(record: Record<string, unknown>): string {
     const template = this.effectiveTemplate;
     if (!template?.titleField) return '?';
     const title = this.getFieldValue(record, template.titleField);
@@ -457,7 +461,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   /**
    * Get the thumbnail type for a record, with per-record fallback through thumbnailFields
    */
-  getThumbnailType(record: BaseEntity): 'image' | 'icon' | 'none' {
+  getThumbnailType(record: Record<string, unknown>): 'image' | 'icon' | 'none' {
     const fieldInfo = this.getEffectiveThumbnailField(record);
     if (!fieldInfo) return 'none';
 
@@ -481,7 +485,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   /**
    * Get the thumbnail URL/value for a record, with per-record fallback
    */
-  getThumbnailUrl(record: BaseEntity): string {
+  getThumbnailUrl(record: Record<string, unknown>): string {
     const fieldInfo = this.getEffectiveThumbnailField(record);
     return fieldInfo?.value || '';
   }
@@ -490,7 +494,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
    * Find the first thumbnail field that has a value for this record
    * Returns both the field name and value for type determination
    */
-  private getEffectiveThumbnailField(record: BaseEntity): { fieldName: string; value: string } | null {
+  private getEffectiveThumbnailField(record: Record<string, unknown>): { fieldName: string; value: string } | null {
     const template = this.effectiveTemplate;
     if (!template?.thumbnailFields || template.thumbnailFields.length === 0) return null;
 
@@ -524,9 +528,10 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     return false;
   }
 
-  getRecordColor(record: BaseEntity): string {
+  getRecordColor(record: Record<string, unknown>): string {
+    if (!this.entity) return '#1976d2';
     const colors = ['#1976d2', '#388e3c', '#f57c00', '#7b1fa2', '#c2185b', '#0097a7', '#5d4037', '#455a64'];
-    const pk = record.PrimaryKey.ToString();
+    const pk = buildPkString(record, this.entity);
     let hash = 0;
     for (let i = 0; i < pk.length; i++) {
       hash = pk.charCodeAt(i) + ((hash << 5) - hash);
@@ -554,15 +559,17 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   /**
    * Check if a record matched on a hidden field
    */
-  hasHiddenFieldMatch(record: BaseEntity): boolean {
-    return this.hiddenFieldMatches.has(record.PrimaryKey.ToConcatenatedString());
+  hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+    if (!this.entity) return false;
+    return this.hiddenFieldMatches.has(buildPkString(record, this.entity));
   }
 
   /**
    * Get the display name of the hidden field that matched
    */
-  getHiddenMatchFieldName(record: BaseEntity): string {
-    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
+  getHiddenMatchFieldName(record: Record<string, unknown>): string {
+    if (!this.entity) return '';
+    const fieldName = this.hiddenFieldMatches.get(buildPkString(record, this.entity));
     if (!fieldName || !this.entity) return '';
     // Look up the field in entity metadata and use DisplayNameOrName
     const field = this.entity.Fields.find(f => f.Name === fieldName);

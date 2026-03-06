@@ -1,130 +1,122 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-export-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isVisible"
-      [title]="exportTitle"
-      [width]="600"
-      [height]="600"
-      (close)="onCancel()">
-
-      <div class="export-modal-content">
-        <section class="format-section">
-          <h3 class="section-title">
-            <i class="fa-solid fa-file-export"></i>
-            Export Format
-          </h3>
-          <p class="section-description">
-            Choose a format to export this conversation:
-          </p>
-
-          <div class="format-options">
-            @for (format of formats; track format.value) {
-              <div
-                class="format-option"
-                [class.selected]="selectedFormat === format.value"
-                (click)="selectFormat(format.value)">
-                <i [class]="format.icon"></i>
-                <div class="format-details">
-                  <div class="format-name">{{ format.name }}</div>
-                  <div class="format-description">{{ format.description }}</div>
+    @if (isVisible) {
+      <kendo-dialog
+        [title]="exportTitle"
+        [width]="600"
+        [height]="600"
+        (close)="onCancel()">
+        <div class="export-modal-content">
+          <section class="format-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-file-export"></i>
+              Export Format
+            </h3>
+            <p class="section-description">
+              Choose a format to export this conversation:
+            </p>
+            <div class="format-options">
+              @for (format of formats; track format.value) {
+                <div
+                  class="format-option"
+                  [class.selected]="selectedFormat === format.value"
+                  (click)="selectFormat(format.value)">
+                  <i [class]="format.icon"></i>
+                  <div class="format-details">
+                    <div class="format-name">{{ format.name }}</div>
+                    <div class="format-description">{{ format.description }}</div>
+                  </div>
+                  @if (selectedFormat === format.value) {
+                    <i class="fa-solid fa-check-circle check-icon"></i>
+                  }
                 </div>
-                @if (selectedFormat === format.value) {
-                  <i class="fa-solid fa-check-circle check-icon"></i>
-                }
+              }
+            </div>
+          </section>
+          <section class="options-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-sliders"></i>
+              Export Options
+            </h3>
+            <div class="option-checkboxes">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="exportOptions.includeMessages"
+                  [disabled]="isExporting">
+                <span>Include messages</span>
+                <small>Export all conversation messages</small>
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="exportOptions.includeMetadata"
+                  [disabled]="isExporting">
+                <span>Include metadata</span>
+                <small>Add creation date, IDs, and other metadata</small>
+              </label>
+            </div>
+            @if (selectedFormat === 'json') {
+              <div class="format-specific-options">
+                <h4 class="subsection-title">JSON Options</h4>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.prettyPrint"
+                    [disabled]="isExporting">
+                  <span>Pretty print</span>
+                  <small>Format JSON with indentation</small>
+                </label>
               </div>
             }
-          </div>
-        </section>
-
-        <section class="options-section">
-          <h3 class="section-title">
-            <i class="fa-solid fa-sliders"></i>
-            Export Options
-          </h3>
-
-          <div class="option-checkboxes">
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                [(ngModel)]="exportOptions.includeMessages"
-                [disabled]="isExporting">
-              <span>Include messages</span>
-              <small>Export all conversation messages</small>
-            </label>
-
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                [(ngModel)]="exportOptions.includeMetadata"
-                [disabled]="isExporting">
-              <span>Include metadata</span>
-              <small>Add creation date, IDs, and other metadata</small>
-            </label>
-          </div>
-
-          @if (selectedFormat === 'json') {
-            <div class="format-specific-options">
-              <h4 class="subsection-title">JSON Options</h4>
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="exportOptions.prettyPrint"
-                  [disabled]="isExporting">
-                <span>Pretty print</span>
-                <small>Format JSON with indentation</small>
-              </label>
+            @if (selectedFormat === 'html') {
+              <div class="format-specific-options">
+                <h4 class="subsection-title">HTML Options</h4>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.includeCSS"
+                    [disabled]="isExporting">
+                  <span>Include CSS styling</span>
+                  <small>Embed styles for better presentation</small>
+                </label>
+              </div>
+            }
+          </section>
+          @if (errorMessage) {
+            <div class="error-message">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              {{ errorMessage }}
             </div>
           }
-
-          @if (selectedFormat === 'html') {
-            <div class="format-specific-options">
-              <h4 class="subsection-title">HTML Options</h4>
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="exportOptions.includeCSS"
-                  [disabled]="isExporting">
-                <span>Include CSS styling</span>
-                <small>Embed styles for better presentation</small>
-              </label>
+          @if (isExporting) {
+            <div class="loading-indicator">
+              <mj-loading text="Exporting conversation..." size="small"></mj-loading>
             </div>
           }
-        </section>
-
-        @if (errorMessage) {
-          <div class="error-message">
-            <i class="fa-solid fa-exclamation-triangle"></i>
-            {{ errorMessage }}
-          </div>
-        }
-
-        @if (isExporting) {
-          <div class="loading-indicator">
-            <mj-loading text="Exporting conversation..." size="small"></mj-loading>
-          </div>
-        }
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton [disabled]="isExporting" (click)="onCancel()">
-          <i class="fa-solid fa-times"></i>
-          Cancel
-        </button>
-        <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
-          <i class="fa-solid fa-download"></i>
-          Export
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        </div>
+        <kendo-dialog-actions>
+          <button kendoButton [disabled]="isExporting" (click)="onCancel()">
+            <i class="fa-solid fa-times"></i>
+            Cancel
+          </button>
+          <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
+            <i class="fa-solid fa-download"></i>
+            Export
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .export-modal-content {
       padding: 20px;
@@ -310,7 +302,7 @@ import { ToastService } from '../../services/toast.service';
 })
 export class ExportModalComponent {
   @Input() isVisible = false;
-  @Input() conversation?: ConversationEntity;
+  @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Output() cancelled = new EventEmitter<void>();
   @Output() exported = new EventEmitter<void>();

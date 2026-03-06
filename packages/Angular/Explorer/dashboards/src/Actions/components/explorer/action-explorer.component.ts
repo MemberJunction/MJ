@@ -10,9 +10,9 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, filter, debounceTime, distinctUntilChanged, combineLatestWith } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
-import { ActionCategoryEntity, ActionEntity, ActionParamEntity, ResourceData } from '@memberjunction/core-entities';
-import { ActionEngineBase, ActionEntityExtended } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
+import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
   ActionExplorerStateService,
@@ -21,16 +21,9 @@ import {
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionExplorerResource() {
-  // Force inclusion in production builds
-}
-
 @RegisterClass(BaseResourceComponent, 'ActionExplorerResource')
 @Component({
+  standalone: false,
   selector: 'mj-action-explorer',
   templateUrl: './action-explorer.component.html',
   styleUrls: ['./action-explorer.component.css'],
@@ -41,10 +34,10 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   @ViewChild(ActionTreePanelComponent) TreePanel!: ActionTreePanelComponent;
 
   public IsLoading = true;
-  public Actions: ActionEntityExtended[] = [];
-  public FilteredActions: ActionEntityExtended[] = [];
-  public Categories: ActionCategoryEntity[] = [];
-  public CategoriesMap = new Map<string, ActionCategoryEntity>();
+  public Actions: MJActionEntityExtended[] = [];
+  public FilteredActions: MJActionEntityExtended[] = [];
+  public Categories: MJActionCategoryEntity[] = [];
+  public CategoriesMap = new Map<string, MJActionCategoryEntity>();
 
   public ViewMode: ActionViewMode = 'card';
   public SelectedCategoryId = 'all';
@@ -52,8 +45,8 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
   // Run dialog state
   public IsRunDialogOpen = false;
-  public SelectedActionForRun: ActionEntity | null = null;
-  public SelectedActionParams: ActionParamEntity[] = [];
+  public SelectedActionForRun: MJActionEntity | null = null;
+  public SelectedActionParams: MJActionParamEntity[] = [];
 
   private destroy$ = new Subject<void>();
   private lastNavigatedUrl = '';
@@ -225,7 +218,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
     const addDescendants = (parentId: string) => {
       this.Categories.forEach(c => {
-        if (c.ParentID === parentId && !descendants.has(c.ID)) {
+        if (UUIDsEqual(c.ParentID, parentId) && !descendants.has(c.ID)) {
           descendants.add(c.ID);
           addDescendants(c.ID);
         }
@@ -236,7 +229,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     return descendants;
   }
 
-  private sortActions(actions: ActionEntityExtended[], config: SortConfig): ActionEntityExtended[] {
+  private sortActions(actions: MJActionEntityExtended[], config: SortConfig): MJActionEntityExtended[] {
     const sorted = [...actions];
     const direction = config.direction === 'asc' ? 1 : -1;
 
@@ -306,25 +299,25 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.openNewCategoryPanel();
   }
 
-  public onEditCategory(category: ActionCategoryEntity): void {
+  public onEditCategory(category: MJActionCategoryEntity): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: category.ID }]);
-    this.navigationService.OpenEntityRecord('Action Categories', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Categories', key);
   }
 
   public onNewAction(): void {
     this.StateService.openNewActionPanel();
   }
 
-  public onActionClick(action: ActionEntityExtended): void {
+  public onActionClick(action: MJActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-    this.navigationService.OpenEntityRecord('Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
-  public onActionEdit(action: ActionEntityExtended): void {
+  public onActionEdit(action: MJActionEntityExtended): void {
     this.onActionClick(action);
   }
 
-  public async onActionRun(action: ActionEntityExtended): Promise<void> {
+  public async onActionRun(action: MJActionEntityExtended): Promise<void> {
     if (action.Status !== 'Active') {
       return; // Can't run inactive actions
     }
@@ -332,16 +325,16 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     try {
       // Load action params
       const rv = new RunView();
-      const result = await rv.RunView<ActionParamEntity>({
-        EntityName: 'Action Params',
+      const result = await rv.RunView<MJActionParamEntity>({
+        EntityName: 'MJ: Action Params',
         ExtraFilter: `ActionID='${action.ID}'`,
         OrderBy: 'Name',
         ResultType: 'entity_object'
       });
 
       this.SelectedActionParams = result.Success ? result.Results || [] : [];
-      // ActionEntityExtended extends ActionEntity, so this cast is safe
-      this.SelectedActionForRun = action as unknown as ActionEntity;
+      // MJActionEntityExtended extends MJActionEntity, so this cast is safe
+      this.SelectedActionForRun = action as unknown as MJActionEntity;
       this.IsRunDialogOpen = true;
       this.cdr.markForCheck();
 
@@ -361,7 +354,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.setSelectedCategoryId(categoryId);
   }
 
-  public async onCategoryCreated(category: ActionCategoryEntity): Promise<void> {
+  public async onCategoryCreated(category: MJActionCategoryEntity): Promise<void> {
     // Refresh data to include new category
     await this.loadData();
     // Select the new category

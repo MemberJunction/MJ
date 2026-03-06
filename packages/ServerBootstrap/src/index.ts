@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Server Bootstrap
+ * MemberJunction Server Bootstrap
  *
  * Encapsulates all server initialization logic so MJAPI applications become minimal bootstrapping files.
  * This package provides a single `createMJServer` function that handles:
@@ -11,7 +11,8 @@
  * - Server startup with proper lifecycle hooks
  */
 
-import { serve, MJServerOptions, configInfo } from '@memberjunction/server';
+import { serve, MJServerOptions } from '@memberjunction/server';
+import { DynamicPackageLoader, type DynamicPackageLoad } from '@memberjunction/global';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 /**
@@ -85,6 +86,37 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
 }
 
 /**
+ * Loads dynamic packages from installed Open Apps.
+ *
+ * Reads the `dynamicPackages.server` array from mj.config.cjs and uses
+ * DynamicPackageLoader to import each enabled package at runtime. This allows
+ * Open App server packages to register their classes via @RegisterClass
+ * decorators without requiring manual import statements.
+ *
+ * @param configResult - The loaded configuration result
+ */
+async function loadDynamicOpenAppPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicPackageLoad[] } | undefined;
+  const serverPackages = dynamicPackages?.server;
+
+  if (!serverPackages || serverPackages.length === 0) {
+    return;
+  }
+
+  console.log('Loading Open App dynamic packages...');
+  const results = await DynamicPackageLoader.LoadPackages(serverPackages);
+
+  for (const result of results) {
+    if (result.Success) {
+      console.log(`  ✓ Loaded Open App package: ${result.PackageName}`);
+    } else {
+      console.error(`  ✗ Failed to load Open App package ${result.PackageName}: ${result.Error}`);
+    }
+  }
+  console.log('');
+}
+
+/**
  * Creates and starts a MemberJunction API server with minimal configuration.
  *
  * This is the primary entry point for MJ 3.0 applications. It:
@@ -123,7 +155,7 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  console.log('🚀 MemberJunction 3.0 Server Bootstrap');
+  console.log('🚀 MemberJunction Server Bootstrap');
   console.log('=====================================\n');
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
@@ -144,6 +176,9 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   console.log('Loading generated packages...');
   await discoverAndLoadGeneratedPackages(configResult);
   console.log('');
+
+  // Load dynamic packages from installed Open Apps
+  await loadDynamicOpenAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths

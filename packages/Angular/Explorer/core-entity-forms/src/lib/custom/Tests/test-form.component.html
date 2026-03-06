@@ -1,6 +1,23 @@
 <div class="test-form" kendoDialogContainer>
   <!-- Header Section -->
   <div class="test-header">
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a href="javascript:void(0)" (click)="navigateToTestingDashboard()">
+            <i class="fas fa-vial"></i>
+            <span class="breadcrumb-text">Testing</span>
+          </a>
+        </li>
+        <li class="current">
+          <i class="fas fa-chevron-right separator"></i>
+          <i class="fas fa-flask"></i>
+          <span>{{ record.Name }}</span>
+        </li>
+      </ol>
+    </nav>
+
     <div class="header-content">
       <div class="header-left">
         <div class="test-icon" [style.background-color]="getStatusColor()">
@@ -13,10 +30,12 @@
               <i class="fas" [ngClass]="getStatusIcon()"></i>
               {{ record.Status }}
             </span>
-            <span class="test-type" *ngIf="record.Type">
-              <i class="fas fa-tag"></i>
-              {{ record.Type }}
-            </span>
+            @if (record.Type) {
+              <span class="test-type">
+                <i class="fas fa-tag"></i>
+                {{ record.Type }}
+              </span>
+            }
           </div>
         </div>
       </div>
@@ -33,76 +52,84 @@
     </div>
 
     <!-- Test Description -->
-    <div class="test-description" *ngIf="record.Description">
-      <p>{{ record.Description }}</p>
-    </div>
+    @if (record.Description) {
+      <div class="test-description">
+        <p>{{ record.Description }}</p>
+      </div>
+    }
 
     <!-- Metrics Bar -->
-    <div class="metrics-bar" *ngIf="testRunsLoaded && testRuns.length > 0">
-      <div class="metric-card">
-        <div class="metric-label">Total Runs</div>
-        <div class="metric-value">{{ testRuns.length }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Pass Rate</div>
-        <div class="metric-value">{{ getPassRate().toFixed(1) }}%</div>
-        <div class="metric-progress">
-          <div class="metric-progress-fill" [style.width.%]="getPassRate()"></div>
+    @if (testRunsLoaded && testRuns.length > 0) {
+      <div class="metrics-bar">
+        <div class="metric-card">
+          <div class="metric-label">Total Runs</div>
+          <div class="metric-value">{{ testRuns.length }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Pass Rate</div>
+          <div class="metric-value">{{ getPassRate().toFixed(1) }}%</div>
+          <div class="metric-progress">
+            <div class="metric-progress-fill" [style.width.%]="getPassRate()"></div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Avg Cost</div>
+          <div class="metric-value">{{ formatCost(getAverageCost()) }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Avg Duration</div>
+          <div class="metric-value">{{ formatDuration(getAverageDuration()) }}</div>
         </div>
       </div>
-      <div class="metric-card">
-        <div class="metric-label">Avg Cost</div>
-        <div class="metric-value">{{ formatCost(getAverageCost()) }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Avg Duration</div>
-        <div class="metric-value">{{ formatDuration(getAverageDuration()) }}</div>
-      </div>
-    </div>
+    }
   </div>
 
   <!-- Tabs -->
   <div class="tabs-container">
     <div class="tabs" role="tablist">
       <button class="tab"
-              [class.active]="activeTab === 'overview'"
-              (click)="changeTab('overview')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'overview'">
+        [class.active]="activeTab === 'overview'"
+        (click)="changeTab('overview')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'overview'">
         <i class="fas fa-th-large"></i>
         <span>Overview</span>
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'config'"
-              (click)="changeTab('config')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'config'">
+        [class.active]="activeTab === 'config'"
+        (click)="changeTab('config')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'config'">
         <i class="fas fa-sliders-h"></i>
         <span>Configuration</span>
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'runs'"
-              (click)="changeTab('runs')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'runs'">
+        [class.active]="activeTab === 'runs'"
+        (click)="changeTab('runs')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'runs'">
         <i class="fas fa-history"></i>
         <span>Runs</span>
-        <span class="tab-badge" *ngIf="testRunsLoaded">{{ testRuns.length }}</span>
+        @if (testRunsLoaded) {
+          <span class="tab-badge">{{ testRuns.length }}</span>
+        }
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'suites'"
-              (click)="changeTab('suites')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'suites'">
+        [class.active]="activeTab === 'suites'"
+        (click)="changeTab('suites')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'suites'">
         <i class="fas fa-layer-group"></i>
         <span>Test Suites</span>
-        <span class="tab-badge" *ngIf="suiteTestsLoaded">{{ suiteTests.length }}</span>
+        @if (suiteTestsLoaded) {
+          <span class="tab-badge">{{ suiteTests.length }}</span>
+        }
       </button>
       <button class="tab"
-              [class.active]="activeTab === 'analytics'"
-              (click)="changeTab('analytics')"
-              role="tab"
-              [attr.aria-selected]="activeTab === 'analytics'">
+        [class.active]="activeTab === 'analytics'"
+        (click)="changeTab('analytics')"
+        role="tab"
+        [attr.aria-selected]="activeTab === 'analytics'">
         <i class="fas fa-chart-line"></i>
         <span>Analytics</span>
       </button>
@@ -112,520 +139,607 @@
   <!-- Tab Content -->
   <div class="tab-content">
     <!-- Overview Tab -->
-    <div class="overview-tab" *ngIf="activeTab === 'overview'">
-      <!-- Basic Information -->
-      <div class="info-section">
-        <h3><i class="fas fa-info-circle"></i> Test Information</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">Name</div>
-            <div class="info-value">{{ record.Name }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Type</div>
-            <div class="info-value">{{ record.Type || 'N/A' }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Status</div>
-            <div class="info-value">
-              <span class="status-badge-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+    @if (activeTab === 'overview') {
+      <div class="overview-tab">
+        <!-- Basic Information -->
+        <div class="info-section">
+          <h3><i class="fas fa-info-circle"></i> Test Information</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Name</div>
+              <div class="info-value">{{ record.Name }}</div>
             </div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Priority</div>
-            <div class="info-value">{{ record.Priority || 'N/A' }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Estimated Duration</div>
-            <div class="info-value">{{ record.EstimatedDurationSeconds ? formatDuration(record.EstimatedDurationSeconds) : 'N/A' }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Estimated Cost</div>
-            <div class="info-value">{{ record.EstimatedCostUSD ? formatCost(record.EstimatedCostUSD) : 'N/A' }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Repeat Count</div>
-            <div class="info-value">{{ record.RepeatCount || 1 }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Max Execution Time</div>
-            <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Created</div>
-            <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Updated</div>
-            <div class="info-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- JSON Data Views -->
-      <div class="json-section">
-        <h3><i class="fas fa-code"></i> Test Definition</h3>
-        <div class="json-tabs">
-          <button class="json-tab"
-                  [class.active]="activeJsonView === 'input'"
-                  (click)="setJsonView('input')">
-            <i class="fas fa-sign-in-alt"></i>
-            Input Definition
-          </button>
-          <button class="json-tab"
-                  [class.active]="activeJsonView === 'expected'"
-                  (click)="setJsonView('expected')">
-            <i class="fas fa-check-double"></i>
-            Expected Outcomes
-          </button>
-          <button class="json-tab"
-                  [class.active]="activeJsonView === 'config'"
-                  (click)="setJsonView('config')">
-            <i class="fas fa-cog"></i>
-            Configuration
-          </button>
-          <button class="json-tab"
-                  [class.active]="activeJsonView === 'tags'"
-                  (click)="setJsonView('tags')">
-            <i class="fas fa-tags"></i>
-            Tags
-          </button>
-        </div>
-        <div class="code-editor-container">
-          <mj-code-editor
-            [value]="getJsonData()"
-            language="json"
-            [readonly]="true"
-            [toolbar]="jsonToolbar"
-            [lineWrapping]="true">
-          </mj-code-editor>
-        </div>
-      </div>
-    </div>
-
-    <!-- Configuration Tab -->
-    <div class="config-tab" *ngIf="activeTab === 'config'">
-      <div class="config-section">
-        <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
-        <div class="config-grid">
-          <div class="config-item">
-            <label>Priority</label>
-            <input type="number" [(ngModel)]="record.Priority" class="config-input" placeholder="Lower = Higher Priority" />
-          </div>
-          <div class="config-item">
-            <label>Repeat Count</label>
-            <input type="number" [(ngModel)]="record.RepeatCount" class="config-input" min="1" />
-          </div>
-          <div class="config-item">
-            <label>Estimated Duration (seconds)</label>
-            <input type="number" [(ngModel)]="record.EstimatedDurationSeconds" class="config-input" />
-          </div>
-          <div class="config-item">
-            <label>Estimated Cost (USD)</label>
-            <input type="number" step="0.000001" [(ngModel)]="record.EstimatedCostUSD" class="config-input" />
-          </div>
-          <div class="config-item full-width">
-            <label>Max Execution Time (ms)</label>
-            <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
-            <span class="config-hint">Leave empty for default 5 minute timeout</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="config-section">
-        <h3><i class="fas fa-sign-in-alt"></i> Input Definition (JSON)</h3>
-        <div class="config-editor-container">
-          <mj-code-editor
-            [value]="record.InputDefinition || ''"
-            language="json"
-            [readonly]="false"
-            [lineWrapping]="true"
-            (change)="record.InputDefinition = $event">
-          </mj-code-editor>
-        </div>
-      </div>
-
-      <div class="config-section">
-        <h3><i class="fas fa-check-double"></i> Expected Outcomes (JSON)</h3>
-        <div class="config-editor-container">
-          <mj-code-editor
-            [value]="record.ExpectedOutcomes || ''"
-            language="json"
-            [readonly]="false"
-            [lineWrapping]="true"
-            (change)="record.ExpectedOutcomes = $event">
-          </mj-code-editor>
-        </div>
-      </div>
-
-      <div class="config-section">
-        <h3><i class="fas fa-cog"></i> Configuration (JSON)</h3>
-        <div class="config-editor-container">
-          <mj-code-editor
-            [value]="record.Configuration || ''"
-            language="json"
-            [readonly]="false"
-            [lineWrapping]="true"
-            (change)="record.Configuration = $event">
-          </mj-code-editor>
-        </div>
-      </div>
-
-      <div class="config-section">
-        <h3><i class="fas fa-tags"></i> Tags (JSON Array)</h3>
-        <div class="config-editor-container small">
-          <mj-code-editor
-            [value]="record.Tags || '[]'"
-            language="json"
-            [readonly]="false"
-            [lineWrapping]="true"
-            (change)="record.Tags = $event">
-          </mj-code-editor>
-        </div>
-      </div>
-    </div>
-
-    <!-- Test Runs Tab -->
-    <div class="runs-tab" *ngIf="activeTab === 'runs'">
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingRuns">
-        <div class="skeleton-list">
-          <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]">
-            <div class="skeleton-icon"></div>
-            <div class="skeleton-content">
-              <div class="skeleton-line wide"></div>
-              <div class="skeleton-line narrow"></div>
+            <div class="info-item">
+              <div class="info-label">Type</div>
+              <div class="info-value">{{ record.Type || 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Status</div>
+              <div class="info-value">
+                <span class="status-badge-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Priority</div>
+              <div class="info-value">{{ record.Priority || 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Estimated Duration</div>
+              <div class="info-value">{{ record.EstimatedDurationSeconds ? formatDuration(record.EstimatedDurationSeconds) : 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Estimated Cost</div>
+              <div class="info-value">{{ record.EstimatedCostUSD ? formatCost(record.EstimatedCostUSD) : 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Repeat Count</div>
+              <div class="info-value">{{ record.RepeatCount || 1 }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Max Execution Time</div>
+              <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Created</div>
+              <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Updated</div>
+              <div class="info-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Runs List -->
-      <div class="runs-list" *ngIf="!loadingRuns && testRuns.length > 0">
-        <div class="run-item" *ngFor="let run of testRuns" (click)="openTestRun(run.ID)">
-          <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
-            <i class="fas"
-               [class.fa-check]="run.Status === 'Passed'"
-               [class.fa-times]="run.Status === 'Failed'"
-               [class.fa-exclamation]="run.Status === 'Error'"
-               [class.fa-stopwatch]="run.Status === 'Timeout'"
-               [class.fa-spinner]="run.Status === 'Running'"
-               [class.fa-clock]="run.Status === 'Pending'"></i>
-          </div>
-          <div class="run-content">
-            <div class="run-header">
-              <span class="run-id">Run #{{ run.ID.substring(0, 8) }}</span>
-              <span class="run-status" [style.color]="getRunStatusColor(run.Status)">{{ run.Status }}</span>
-            </div>
-            <div class="run-meta">
-              <span><i class="fas fa-calendar"></i> {{ getRelativeTime(run.StartedAt) }}</span>
-              <span *ngIf="run.DurationSeconds"><i class="fas fa-clock"></i> {{ formatDuration(run.DurationSeconds) }}</span>
-              <span *ngIf="run.CostUSD"><i class="fas fa-dollar-sign"></i> {{ formatCost(run.CostUSD) }}</span>
-              <mj-entity-link-pill
-                *ngIf="run.TargetLogEntityID && run.TargetLogID"
-                [entityName]="run.TargetLogEntity"
-                [recordId]="run.TargetLogID">
-              </mj-entity-link-pill>
-            </div>
-            <!-- Evaluation indicators -->
-            <div class="run-eval-stack">
-              <!-- Status indicator -->
-              <span class="eval-pill status-pill" *ngIf="evalPreferences.showExecution"
-                    [ngClass]="'status-' + run.Status.toLowerCase()"
-                    [title]="getStatusTooltip(run.Status)">
-                <i class="fas"
-                   [class.fa-check]="run.Status === 'Passed'"
-                   [class.fa-times]="run.Status === 'Failed'"
-                   [class.fa-exclamation]="run.Status === 'Error'"
-                   [class.fa-hourglass-end]="run.Status === 'Timeout'"
-                   [class.fa-forward]="run.Status === 'Skipped'"
-                   [class.fa-spinner]="run.Status === 'Running'"
-                   [class.fa-clock]="run.Status === 'Pending'"></i>
-                <span>{{ run.Status }}</span>
-              </span>
-              <!-- Human feedback indicator -->
-              <ng-container *ngIf="evalPreferences.showHuman">
-                <span class="eval-pill human-pill no-feedback" *ngIf="!getFeedbackForRun(run.ID)?.Rating"
-                      title="Human Review: No rating submitted yet">
-                  <i class="fas fa-user-slash"></i>
-                </span>
-                <span class="eval-pill human-pill has-feedback" *ngIf="getFeedbackForRun(run.ID)?.Rating as rating"
-                      [class.rating-low]="rating <= 4"
-                      [class.rating-medium]="rating >= 5 && rating <= 6"
-                      [class.rating-good]="rating >= 7 && rating <= 8"
-                      [class.rating-excellent]="rating >= 9"
-                      [title]="getHumanTooltip(rating, getFeedbackForRun(run.ID)?.CorrectionSummary || getFeedbackForRun(run.ID)?.Comments || null)">
-                  <i class="fas fa-user"></i>
-                  <span>{{ rating }}</span>
-                </span>
-              </ng-container>
-              <!-- Auto score indicator -->
-              <ng-container *ngIf="evalPreferences.showAuto">
-                <span class="eval-pill auto-pill no-score" *ngIf="run.Score == null"
-                      title="Auto Score: No automated score available">
-                  <i class="fas fa-robot"></i>
-                </span>
-                <span class="eval-pill auto-pill has-score" *ngIf="run.Score != null"
-                      [class.score-low]="run.Score < 0.5"
-                      [class.score-medium]="run.Score >= 0.5 && run.Score < 0.7"
-                      [class.score-good]="run.Score >= 0.7 && run.Score < 0.85"
-                      [class.score-excellent]="run.Score >= 0.85"
-                      [title]="'Auto Score: ' + (run.Score * 100).toFixed(0) + '% automated evaluation'">
-                  <i class="fas fa-robot"></i>
-                  <span>{{ (run.Score * 100).toFixed(0) }}%</span>
-                </span>
-              </ng-container>
-            </div>
-            <div class="run-tags" *ngIf="getRunTags(run).length > 0">
-              <span class="run-tag" *ngFor="let tag of getRunTags(run).slice(0, 3)">{{ tag }}</span>
-              <span class="run-tag-more" *ngIf="getRunTags(run).length > 3">+{{ getRunTags(run).length - 3 }}</span>
-            </div>
-          </div>
-          <i class="fas fa-chevron-right"></i>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="testRunsLoaded && !loadingRuns && testRuns.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-play-circle"></i>
-        </div>
-        <h4>No Test Runs Yet</h4>
-        <p>Run this test to see execution history and results here.</p>
-        <button kendoButton (click)="runTest()" themeColor="primary">
-          <i class="fas fa-play"></i> Run Test Now
-        </button>
-      </div>
-    </div>
-
-    <!-- Test Suites Tab -->
-    <div class="suites-tab" *ngIf="activeTab === 'suites'">
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingSuites">
-        <div class="skeleton-list">
-          <div class="skeleton-card" *ngFor="let i of [1,2,3]">
-            <div class="skeleton-icon"></div>
-            <div class="skeleton-content">
-              <div class="skeleton-line wide"></div>
-              <div class="skeleton-line narrow"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Suites List -->
-      <div class="suites-list" *ngIf="!loadingSuites && suiteTests.length > 0">
-        <div class="suite-item" *ngFor="let suiteTest of suiteTests" (click)="openTestSuite(suiteTest.SuiteID)">
-          <div class="suite-icon">
-            <i class="fas fa-layer-group"></i>
-          </div>
-          <div class="suite-content">
-            <div class="suite-name">{{ suiteTest.Suite }}</div>
-            <div class="suite-meta">
-              <span><i class="fas fa-sort-numeric-up"></i> Sequence: {{ suiteTest.Sequence }}</span>
-              <span *ngIf="suiteTest.Status"><i class="fas fa-info-circle"></i> {{ suiteTest.Status }}</span>
-            </div>
-          </div>
-          <i class="fas fa-chevron-right"></i>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="suiteTestsLoaded && !loadingSuites && suiteTests.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-folder-open"></i>
-        </div>
-        <h4>Not Part of Any Suite</h4>
-        <p>This test is not included in any test suites. Add it to a suite to run it with other tests.</p>
-      </div>
-    </div>
-
-    <!-- Analytics Tab -->
-    <div class="history-tab" *ngIf="activeTab === 'analytics'">
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingHistory">
-        <mj-loading text="Loading history..."></mj-loading>
-      </div>
-
-      <!-- History Content -->
-      <div class="history-content" *ngIf="!loadingHistory && historyLoaded">
-        <!-- Filters -->
-        <div class="history-filters">
-          <div class="time-range-filters">
-            <span class="filter-label">Time Range:</span>
-            <button class="filter-btn"
-                    [class.active]="historyTimeRange === '7d'"
-                    (click)="setHistoryTimeRange('7d')">7 Days</button>
-            <button class="filter-btn"
-                    [class.active]="historyTimeRange === '30d'"
-                    (click)="setHistoryTimeRange('30d')">30 Days</button>
-            <button class="filter-btn"
-                    [class.active]="historyTimeRange === '90d'"
-                    (click)="setHistoryTimeRange('90d')">90 Days</button>
-            <button class="filter-btn"
-                    [class.active]="historyTimeRange === 'all'"
-                    (click)="setHistoryTimeRange('all')">All Time</button>
-          </div>
-          <div class="history-actions">
-            <button kendoButton (click)="exportHistoryToCSV()" [disabled]="historyData.length === 0">
-              <i class="fas fa-download"></i> Export CSV
+        <!-- JSON Data Views -->
+        <div class="json-section">
+          <h3><i class="fas fa-code"></i> Test Definition</h3>
+          <div class="json-tabs">
+            <button class="json-tab"
+              [class.active]="activeJsonView === 'input'"
+              (click)="setJsonView('input')">
+              <i class="fas fa-sign-in-alt"></i>
+              Input Definition
+            </button>
+            <button class="json-tab"
+              [class.active]="activeJsonView === 'expected'"
+              (click)="setJsonView('expected')">
+              <i class="fas fa-check-double"></i>
+              Expected Outcomes
+            </button>
+            <button class="json-tab"
+              [class.active]="activeJsonView === 'config'"
+              (click)="setJsonView('config')">
+              <i class="fas fa-cog"></i>
+              Configuration
+            </button>
+            <button class="json-tab"
+              [class.active]="activeJsonView === 'tags'"
+              (click)="setJsonView('tags')">
+              <i class="fas fa-tags"></i>
+              Tags
             </button>
           </div>
-        </div>
-
-        <!-- KPI Cards -->
-        <div class="history-kpi-cards" *ngIf="historyData.length > 0">
-          <div class="kpi-card">
-            <div class="kpi-icon">
-              <i class="fas fa-play-circle"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">{{ getTotalRuns() }}</div>
-              <div class="kpi-label">Total Runs</div>
-            </div>
+          <div class="code-editor-container">
+            <mj-code-editor
+              [value]="getJsonData()"
+              language="json"
+              [readonly]="true"
+              [toolbar]="jsonToolbar"
+              [lineWrapping]="true">
+            </mj-code-editor>
           </div>
-          <div class="kpi-card" *ngIf="evalPreferences.showExecution">
-            <div class="kpi-icon pass-rate">
-              <i class="fas fa-percentage"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">
-                {{ getOverallPassRate().toFixed(1) }}%
-                <i class="fas trend-icon"
-                   [class.fa-arrow-up]="getPassRateTrend() === 'up'"
-                   [class.fa-arrow-down]="getPassRateTrend() === 'down'"
-                   [class.fa-minus]="getPassRateTrend() === 'stable'"
-                   [class.trend-up]="getPassRateTrend() === 'up'"
-                   [class.trend-down]="getPassRateTrend() === 'down'"></i>
-              </div>
-              <div class="kpi-label">Pass Rate</div>
-            </div>
-          </div>
-          <div class="kpi-card" *ngIf="evalPreferences.showAuto">
-            <div class="kpi-icon">
-              <i class="fas fa-star"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">{{ (getOverallAvgScore() * 100).toFixed(1) }}%</div>
-              <div class="kpi-label">Avg Score</div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-icon">
-              <i class="fas fa-clock"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">{{ formatDuration(getOverallAvgDuration()) }}</div>
-              <div class="kpi-label">Avg Duration</div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-icon">
-              <i class="fas fa-dollar-sign"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">{{ formatCost(getOverallAvgCost()) }}</div>
-              <div class="kpi-label">Avg Cost</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Daily History Table -->
-        <div class="history-section" *ngIf="historyData.length > 0">
-          <h3><i class="fas fa-calendar-alt"></i> Daily Performance</h3>
-          <div class="history-table-container">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Runs</th>
-                  <th *ngIf="evalPreferences.showExecution">Passed</th>
-                  <th *ngIf="evalPreferences.showExecution">Failed</th>
-                  <th *ngIf="evalPreferences.showExecution">Pass Rate</th>
-                  <th *ngIf="evalPreferences.showAuto">Avg Score</th>
-                  <th>Avg Duration</th>
-                  <th>Avg Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let day of historyData">
-                  <td class="date-cell">{{ day.date | date:'mediumDate' }}</td>
-                  <td class="runs-cell">{{ day.runCount }}</td>
-                  <td class="passed-cell" *ngIf="evalPreferences.showExecution">{{ day.passCount }}</td>
-                  <td class="failed-cell" *ngIf="evalPreferences.showExecution">{{ day.failCount }}</td>
-                  <td class="pass-rate-cell" *ngIf="evalPreferences.showExecution">
-                    <div class="pass-rate-bar">
-                      <div class="pass-rate-fill" [style.width.%]="day.passRate"></div>
-                      <span class="pass-rate-text">{{ day.passRate.toFixed(1) }}%</span>
-                    </div>
-                  </td>
-                  <td class="score-cell" *ngIf="evalPreferences.showAuto">{{ (day.avgScore * 100).toFixed(1) }}%</td>
-                  <td class="duration-cell">{{ formatDuration(day.avgDuration) }}</td>
-                  <td class="cost-cell">{{ formatCost(day.avgCost) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Suite Performance -->
-        <div class="history-section" *ngIf="suitePerformance.length > 0">
-          <h3><i class="fas fa-layer-group"></i> Performance by Suite</h3>
-          <div class="suite-performance-list">
-            <div class="suite-perf-card" *ngFor="let suite of suitePerformance" (click)="openSuiteFromHistory(suite.suiteId)">
-              <div class="suite-perf-header">
-                <div class="suite-perf-name">{{ suite.suiteName }}</div>
-                <div class="suite-perf-tags" *ngIf="suite.tags.length > 0">
-                  <span class="tag-mini" *ngFor="let tag of suite.tags.slice(0, 3)">{{ tag }}</span>
-                  <span class="tag-more" *ngIf="suite.tags.length > 3">+{{ suite.tags.length - 3 }}</span>
-                </div>
-              </div>
-              <div class="suite-perf-stats">
-                <div class="suite-stat">
-                  <span class="stat-value">{{ suite.totalRuns }}</span>
-                  <span class="stat-label">Runs</span>
-                </div>
-                <div class="suite-stat" *ngIf="evalPreferences.showExecution">
-                  <span class="stat-value pass-rate" [class.high]="suite.passRate >= 80" [class.low]="suite.passRate < 50">
-                    {{ suite.passRate.toFixed(1) }}%
-                  </span>
-                  <span class="stat-label">Pass Rate</span>
-                </div>
-                <div class="suite-stat" *ngIf="evalPreferences.showAuto">
-                  <span class="stat-value">{{ (suite.avgScore * 100).toFixed(1) }}%</span>
-                  <span class="stat-label">Avg Score</span>
-                </div>
-                <div class="suite-stat">
-                  <span class="stat-value">{{ formatDuration(suite.avgDuration) }}</span>
-                  <span class="stat-label">Avg Duration</span>
-                </div>
-                <div class="suite-stat">
-                  <span class="stat-value">{{ formatCost(suite.avgCost) }}</span>
-                  <span class="stat-label">Avg Cost</span>
-                </div>
-                <div class="suite-stat" *ngIf="suite.lastRun">
-                  <span class="stat-value">{{ getRelativeTime(suite.lastRun) }}</span>
-                  <span class="stat-label">Last Run</span>
-                </div>
-              </div>
-              <i class="fas fa-chevron-right suite-perf-arrow"></i>
-            </div>
-          </div>
-        </div>
-
-        <!-- Empty State -->
-        <div class="empty-state" *ngIf="historyData.length === 0">
-          <div class="empty-icon">
-            <i class="fas fa-chart-line"></i>
-          </div>
-          <h4>No History Available</h4>
-          <p>Run this test to start building history and analytics data.</p>
-          <button kendoButton (click)="runTest()" themeColor="primary">
-            <i class="fas fa-play"></i> Run Test Now
-          </button>
         </div>
       </div>
-    </div>
+    }
+
+    <!-- Configuration Tab -->
+    @if (activeTab === 'config') {
+      <div class="config-tab">
+        <div class="config-section">
+          <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
+          <div class="config-grid">
+            <div class="config-item">
+              <label>Priority</label>
+              <input type="number" [(ngModel)]="record.Priority" class="config-input" placeholder="Lower = Higher Priority" />
+            </div>
+            <div class="config-item">
+              <label>Repeat Count</label>
+              <input type="number" [(ngModel)]="record.RepeatCount" class="config-input" min="1" />
+            </div>
+            <div class="config-item">
+              <label>Estimated Duration (seconds)</label>
+              <input type="number" [(ngModel)]="record.EstimatedDurationSeconds" class="config-input" />
+            </div>
+            <div class="config-item">
+              <label>Estimated Cost (USD)</label>
+              <input type="number" step="0.000001" [(ngModel)]="record.EstimatedCostUSD" class="config-input" />
+            </div>
+            <div class="config-item full-width">
+              <label>Max Execution Time (ms)</label>
+              <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
+              <span class="config-hint">Leave empty for default 5 minute timeout</span>
+            </div>
+          </div>
+        </div>
+        <div class="config-section">
+          <h3><i class="fas fa-sign-in-alt"></i> Input Definition (JSON)</h3>
+          <div class="config-editor-container">
+            <mj-code-editor
+              [value]="record.InputDefinition || ''"
+              language="json"
+              [readonly]="false"
+              [lineWrapping]="true"
+              (change)="record.InputDefinition = $event">
+            </mj-code-editor>
+          </div>
+        </div>
+        <div class="config-section">
+          <h3><i class="fas fa-check-double"></i> Expected Outcomes (JSON)</h3>
+          <div class="config-editor-container">
+            <mj-code-editor
+              [value]="record.ExpectedOutcomes || ''"
+              language="json"
+              [readonly]="false"
+              [lineWrapping]="true"
+              (change)="record.ExpectedOutcomes = $event">
+            </mj-code-editor>
+          </div>
+        </div>
+        <div class="config-section">
+          <h3><i class="fas fa-cog"></i> Configuration (JSON)</h3>
+          <div class="config-editor-container">
+            <mj-code-editor
+              [value]="record.Configuration || ''"
+              language="json"
+              [readonly]="false"
+              [lineWrapping]="true"
+              (change)="record.Configuration = $event">
+            </mj-code-editor>
+          </div>
+        </div>
+        <div class="config-section">
+          <h3><i class="fas fa-tags"></i> Tags (JSON Array)</h3>
+          <div class="config-editor-container small">
+            <mj-code-editor
+              [value]="record.Tags || '[]'"
+              language="json"
+              [readonly]="false"
+              [lineWrapping]="true"
+              (change)="record.Tags = $event">
+            </mj-code-editor>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Test Runs Tab -->
+    @if (activeTab === 'runs') {
+      <div class="runs-tab">
+        <!-- Loading State -->
+        @if (loadingRuns) {
+          <div class="loading-state">
+            <div class="skeleton-list">
+              @for (i of [1,2,3,4,5]; track i) {
+                <div class="skeleton-card">
+                  <div class="skeleton-icon"></div>
+                  <div class="skeleton-content">
+                    <div class="skeleton-line wide"></div>
+                    <div class="skeleton-line narrow"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- Runs List -->
+        @if (!loadingRuns && testRuns.length > 0) {
+          <div class="runs-list">
+            @for (run of testRuns; track run) {
+              <div class="run-item" (click)="openTestRun(run.ID)">
+                <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
+                  <i class="fas"
+                    [class.fa-check]="run.Status === 'Passed'"
+                    [class.fa-times]="run.Status === 'Failed'"
+                    [class.fa-exclamation]="run.Status === 'Error'"
+                    [class.fa-stopwatch]="run.Status === 'Timeout'"
+                    [class.fa-spinner]="run.Status === 'Running'"
+                  [class.fa-clock]="run.Status === 'Pending'"></i>
+                </div>
+                <div class="run-content">
+                  <div class="run-header">
+                    <span class="run-id">Run #{{ run.ID.substring(0, 8) }}</span>
+                    <span class="run-status" [style.color]="getRunStatusColor(run.Status)">{{ run.Status }}</span>
+                  </div>
+                  <div class="run-meta">
+                    <span><i class="fas fa-calendar"></i> {{ getRelativeTime(run.StartedAt) }}</span>
+                    @if (run.DurationSeconds) {
+                      <span><i class="fas fa-clock"></i> {{ formatDuration(run.DurationSeconds) }}</span>
+                    }
+                    @if (run.CostUSD) {
+                      <span><i class="fas fa-dollar-sign"></i> {{ formatCost(run.CostUSD) }}</span>
+                    }
+                    @if (run.TargetLogEntityID && run.TargetLogID) {
+                      <mj-entity-link-pill
+                        [entityName]="run.TargetLogEntity"
+                        [recordId]="run.TargetLogID">
+                      </mj-entity-link-pill>
+                    }
+                  </div>
+                  <!-- Evaluation indicators -->
+                  <div class="run-eval-stack">
+                    <!-- Status indicator -->
+                    @if (evalPreferences.showExecution) {
+                      <span class="eval-pill status-pill"
+                        [ngClass]="'status-' + run.Status.toLowerCase()"
+                        [title]="getStatusTooltip(run.Status)">
+                        <i class="fas"
+                          [class.fa-check]="run.Status === 'Passed'"
+                          [class.fa-times]="run.Status === 'Failed'"
+                          [class.fa-exclamation]="run.Status === 'Error'"
+                          [class.fa-hourglass-end]="run.Status === 'Timeout'"
+                          [class.fa-forward]="run.Status === 'Skipped'"
+                          [class.fa-spinner]="run.Status === 'Running'"
+                        [class.fa-clock]="run.Status === 'Pending'"></i>
+                        <span>{{ run.Status }}</span>
+                      </span>
+                    }
+                    <!-- Human feedback indicator -->
+                    @if (evalPreferences.showHuman) {
+                      @if (!getFeedbackForRun(run.ID)?.Rating) {
+                        <span class="eval-pill human-pill no-feedback"
+                          title="Human Review: No rating submitted yet">
+                          <i class="fas fa-user-slash"></i>
+                        </span>
+                      }
+                      @if (getFeedbackForRun(run.ID)?.Rating; as rating) {
+                        <span class="eval-pill human-pill has-feedback"
+                          [class.rating-low]="rating <= 4"
+                          [class.rating-medium]="rating >= 5 && rating <= 6"
+                          [class.rating-good]="rating >= 7 && rating <= 8"
+                          [class.rating-excellent]="rating >= 9"
+                          [title]="getHumanTooltip(rating, getFeedbackForRun(run.ID)?.CorrectionSummary || getFeedbackForRun(run.ID)?.Comments || null)">
+                          <i class="fas fa-user"></i>
+                          <span>{{ rating }}</span>
+                        </span>
+                      }
+                    }
+                    <!-- Auto score indicator -->
+                    @if (evalPreferences.showAuto) {
+                      @if (run.Score == null) {
+                        <span class="eval-pill auto-pill no-score"
+                          title="Auto Score: No automated score available">
+                          <i class="fas fa-robot"></i>
+                        </span>
+                      }
+                      @if (run.Score != null) {
+                        <span class="eval-pill auto-pill has-score"
+                          [class.score-low]="run.Score < 0.5"
+                          [class.score-medium]="run.Score >= 0.5 && run.Score < 0.7"
+                          [class.score-good]="run.Score >= 0.7 && run.Score < 0.85"
+                          [class.score-excellent]="run.Score >= 0.85"
+                          [title]="'Auto Score: ' + (run.Score * 100).toFixed(0) + '% automated evaluation'">
+                          <i class="fas fa-robot"></i>
+                          <span>{{ (run.Score * 100).toFixed(0) }}%</span>
+                        </span>
+                      }
+                    }
+                  </div>
+                  @if (getRunTags(run).length > 0) {
+                    <div class="run-tags">
+                      @for (tag of getRunTags(run).slice(0, 3); track tag) {
+                        <span class="run-tag">{{ tag }}</span>
+                      }
+                      @if (getRunTags(run).length > 3) {
+                        <span class="run-tag-more">+{{ getRunTags(run).length - 3 }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+                <i class="fas fa-chevron-right"></i>
+              </div>
+            }
+          </div>
+        }
+        <!-- Empty State -->
+        @if (testRunsLoaded && !loadingRuns && testRuns.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-play-circle"></i>
+            </div>
+            <h4>No Test Runs Yet</h4>
+            <p>Run this test to see execution history and results here.</p>
+            <button kendoButton (click)="runTest()" themeColor="primary">
+              <i class="fas fa-play"></i> Run Test Now
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Test Suites Tab -->
+    @if (activeTab === 'suites') {
+      <div class="suites-tab">
+        <!-- Loading State -->
+        @if (loadingSuites) {
+          <div class="loading-state">
+            <div class="skeleton-list">
+              @for (i of [1,2,3]; track i) {
+                <div class="skeleton-card">
+                  <div class="skeleton-icon"></div>
+                  <div class="skeleton-content">
+                    <div class="skeleton-line wide"></div>
+                    <div class="skeleton-line narrow"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- Suites List -->
+        @if (!loadingSuites && suiteTests.length > 0) {
+          <div class="suites-list">
+            @for (suiteTest of suiteTests; track suiteTest) {
+              <div class="suite-item" (click)="openTestSuite(suiteTest.SuiteID)">
+                <div class="suite-icon">
+                  <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="suite-content">
+                  <div class="suite-name">{{ suiteTest.Suite }}</div>
+                  <div class="suite-meta">
+                    <span><i class="fas fa-sort-numeric-up"></i> Sequence: {{ suiteTest.Sequence }}</span>
+                    @if (suiteTest.Status) {
+                      <span><i class="fas fa-info-circle"></i> {{ suiteTest.Status }}</span>
+                    }
+                  </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
+              </div>
+            }
+          </div>
+        }
+        <!-- Empty State -->
+        @if (suiteTestsLoaded && !loadingSuites && suiteTests.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-folder-open"></i>
+            </div>
+            <h4>Not Part of Any Suite</h4>
+            <p>This test is not included in any test suites. Add it to a suite to run it with other tests.</p>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Analytics Tab -->
+    @if (activeTab === 'analytics') {
+      <div class="history-tab">
+        <!-- Loading State -->
+        @if (loadingHistory) {
+          <div class="loading-state">
+            <mj-loading text="Loading history..."></mj-loading>
+          </div>
+        }
+        <!-- History Content -->
+        @if (!loadingHistory && historyLoaded) {
+          <div class="history-content">
+            <!-- Filters -->
+            <div class="history-filters">
+              <div class="time-range-filters">
+                <span class="filter-label">Time Range:</span>
+                <button class="filter-btn"
+                  [class.active]="historyTimeRange === '7d'"
+                (click)="setHistoryTimeRange('7d')">7 Days</button>
+                <button class="filter-btn"
+                  [class.active]="historyTimeRange === '30d'"
+                (click)="setHistoryTimeRange('30d')">30 Days</button>
+                <button class="filter-btn"
+                  [class.active]="historyTimeRange === '90d'"
+                (click)="setHistoryTimeRange('90d')">90 Days</button>
+                <button class="filter-btn"
+                  [class.active]="historyTimeRange === 'all'"
+                (click)="setHistoryTimeRange('all')">All Time</button>
+              </div>
+              <div class="history-actions">
+                <button kendoButton (click)="exportHistoryToCSV()" [disabled]="historyData.length === 0">
+                  <i class="fas fa-download"></i> Export CSV
+                </button>
+              </div>
+            </div>
+            <!-- KPI Cards -->
+            @if (historyData.length > 0) {
+              <div class="history-kpi-cards">
+                <div class="kpi-card">
+                  <div class="kpi-icon">
+                    <i class="fas fa-play-circle"></i>
+                  </div>
+                  <div class="kpi-content">
+                    <div class="kpi-value">{{ getTotalRuns() }}</div>
+                    <div class="kpi-label">Total Runs</div>
+                  </div>
+                </div>
+                @if (evalPreferences.showExecution) {
+                  <div class="kpi-card">
+                    <div class="kpi-icon pass-rate">
+                      <i class="fas fa-percentage"></i>
+                    </div>
+                    <div class="kpi-content">
+                      <div class="kpi-value">
+                        {{ getOverallPassRate().toFixed(1) }}%
+                        <i class="fas trend-icon"
+                          [class.fa-arrow-up]="getPassRateTrend() === 'up'"
+                          [class.fa-arrow-down]="getPassRateTrend() === 'down'"
+                          [class.fa-minus]="getPassRateTrend() === 'stable'"
+                          [class.trend-up]="getPassRateTrend() === 'up'"
+                        [class.trend-down]="getPassRateTrend() === 'down'"></i>
+                      </div>
+                      <div class="kpi-label">Pass Rate</div>
+                    </div>
+                  </div>
+                }
+                @if (evalPreferences.showAuto) {
+                  <div class="kpi-card">
+                    <div class="kpi-icon">
+                      <i class="fas fa-star"></i>
+                    </div>
+                    <div class="kpi-content">
+                      <div class="kpi-value">{{ (getOverallAvgScore() * 100).toFixed(1) }}%</div>
+                      <div class="kpi-label">Avg Score</div>
+                    </div>
+                  </div>
+                }
+                <div class="kpi-card">
+                  <div class="kpi-icon">
+                    <i class="fas fa-clock"></i>
+                  </div>
+                  <div class="kpi-content">
+                    <div class="kpi-value">{{ formatDuration(getOverallAvgDuration()) }}</div>
+                    <div class="kpi-label">Avg Duration</div>
+                  </div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-icon">
+                    <i class="fas fa-dollar-sign"></i>
+                  </div>
+                  <div class="kpi-content">
+                    <div class="kpi-value">{{ formatCost(getOverallAvgCost()) }}</div>
+                    <div class="kpi-label">Avg Cost</div>
+                  </div>
+                </div>
+              </div>
+            }
+            <!-- Daily History Table -->
+            @if (historyData.length > 0) {
+              <div class="history-section">
+                <h3><i class="fas fa-calendar-alt"></i> Daily Performance</h3>
+                <div class="history-table-container">
+                  <table class="history-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Runs</th>
+                        @if (evalPreferences.showExecution) {
+                          <th>Passed</th>
+                        }
+                        @if (evalPreferences.showExecution) {
+                          <th>Failed</th>
+                        }
+                        @if (evalPreferences.showExecution) {
+                          <th>Pass Rate</th>
+                        }
+                        @if (evalPreferences.showAuto) {
+                          <th>Avg Score</th>
+                        }
+                        <th>Avg Duration</th>
+                        <th>Avg Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (day of historyData; track day) {
+                        <tr>
+                          <td class="date-cell">{{ day.date | date:'mediumDate' }}</td>
+                          <td class="runs-cell">{{ day.runCount }}</td>
+                          @if (evalPreferences.showExecution) {
+                            <td class="passed-cell">{{ day.passCount }}</td>
+                          }
+                          @if (evalPreferences.showExecution) {
+                            <td class="failed-cell">{{ day.failCount }}</td>
+                          }
+                          @if (evalPreferences.showExecution) {
+                            <td class="pass-rate-cell">
+                              <div class="pass-rate-bar">
+                                <div class="pass-rate-fill" [style.width.%]="day.passRate"></div>
+                                <span class="pass-rate-text">{{ day.passRate.toFixed(1) }}%</span>
+                              </div>
+                            </td>
+                          }
+                          @if (evalPreferences.showAuto) {
+                            <td class="score-cell">{{ (day.avgScore * 100).toFixed(1) }}%</td>
+                          }
+                          <td class="duration-cell">{{ formatDuration(day.avgDuration) }}</td>
+                          <td class="cost-cell">{{ formatCost(day.avgCost) }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+            <!-- Suite Performance -->
+            @if (suitePerformance.length > 0) {
+              <div class="history-section">
+                <h3><i class="fas fa-layer-group"></i> Performance by Suite</h3>
+                <div class="suite-performance-list">
+                  @for (suite of suitePerformance; track suite) {
+                    <div class="suite-perf-card" (click)="openSuiteFromHistory(suite.suiteId)">
+                      <div class="suite-perf-header">
+                        <div class="suite-perf-name">{{ suite.suiteName }}</div>
+                        @if (suite.tags.length > 0) {
+                          <div class="suite-perf-tags">
+                            @for (tag of suite.tags.slice(0, 3); track tag) {
+                              <span class="tag-mini">{{ tag }}</span>
+                            }
+                            @if (suite.tags.length > 3) {
+                              <span class="tag-more">+{{ suite.tags.length - 3 }}</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                      <div class="suite-perf-stats">
+                        <div class="suite-stat">
+                          <span class="stat-value">{{ suite.totalRuns }}</span>
+                          <span class="stat-label">Runs</span>
+                        </div>
+                        @if (evalPreferences.showExecution) {
+                          <div class="suite-stat">
+                            <span class="stat-value pass-rate" [class.high]="suite.passRate >= 80" [class.low]="suite.passRate < 50">
+                              {{ suite.passRate.toFixed(1) }}%
+                            </span>
+                            <span class="stat-label">Pass Rate</span>
+                          </div>
+                        }
+                        @if (evalPreferences.showAuto) {
+                          <div class="suite-stat">
+                            <span class="stat-value">{{ (suite.avgScore * 100).toFixed(1) }}%</span>
+                            <span class="stat-label">Avg Score</span>
+                          </div>
+                        }
+                        <div class="suite-stat">
+                          <span class="stat-value">{{ formatDuration(suite.avgDuration) }}</span>
+                          <span class="stat-label">Avg Duration</span>
+                        </div>
+                        <div class="suite-stat">
+                          <span class="stat-value">{{ formatCost(suite.avgCost) }}</span>
+                          <span class="stat-label">Avg Cost</span>
+                        </div>
+                        @if (suite.lastRun) {
+                          <div class="suite-stat">
+                            <span class="stat-value">{{ getRelativeTime(suite.lastRun) }}</span>
+                            <span class="stat-label">Last Run</span>
+                          </div>
+                        }
+                      </div>
+                      <i class="fas fa-chevron-right suite-perf-arrow"></i>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+            <!-- Empty State -->
+            @if (historyData.length === 0) {
+              <div class="empty-state">
+                <div class="empty-icon">
+                  <i class="fas fa-chart-line"></i>
+                </div>
+                <h4>No History Available</h4>
+                <p>Run this test to start building history and analytics data.</p>
+                <button kendoButton (click)="runTest()" themeColor="primary">
+                  <i class="fas fa-play"></i> Run Test Now
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
   </div>
 
   <!-- Keyboard Shortcuts Toggle Button -->
@@ -634,27 +748,29 @@
   </button>
 
   <!-- Keyboard Shortcuts Hint (Desktop Only) -->
-  <div class="keyboard-shortcuts" *ngIf="showShortcuts">
-    <div class="shortcuts-header">
-      <i class="fas fa-keyboard"></i>
-      Shortcuts
-      <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
-        <i class="fas fa-times"></i>
-      </button>
+  @if (showShortcuts) {
+    <div class="keyboard-shortcuts">
+      <div class="shortcuts-header">
+        <i class="fas fa-keyboard"></i>
+        Shortcuts
+        <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="shortcut-list">
+        <div class="shortcut-item">
+          <span>Refresh</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
+        </div>
+        <div class="shortcut-item">
+          <span>Run Test</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>Enter</kbd></span>
+        </div>
+        <div class="shortcut-item">
+          <span>Switch Tabs</span>
+          <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
+        </div>
+      </div>
     </div>
-    <div class="shortcut-list">
-      <div class="shortcut-item">
-        <span>Refresh</span>
-        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
-      </div>
-      <div class="shortcut-item">
-        <span>Run Test</span>
-        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>Enter</kbd></span>
-      </div>
-      <div class="shortcut-item">
-        <span>Switch Tabs</span>
-        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
-      </div>
-    </div>
-  </div>
+  }
 </div>

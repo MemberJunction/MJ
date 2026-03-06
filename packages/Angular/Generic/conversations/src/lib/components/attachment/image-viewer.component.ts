@@ -13,6 +13,7 @@ import {
  * Provides a lightbox-style experience for viewing attachment images.
  */
 @Component({
+  standalone: false,
   selector: 'mj-image-viewer',
   templateUrl: './image-viewer.component.html',
   styleUrls: ['./image-viewer.component.css']

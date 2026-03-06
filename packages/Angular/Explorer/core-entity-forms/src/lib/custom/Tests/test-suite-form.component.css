@@ -35,6 +35,61 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Breadcrumb */
+.breadcrumb {
+  margin-bottom: 16px;
+}
+
+.breadcrumb ol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumb a {
+  color: var(--test-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.breadcrumb a:hover {
+  background: rgba(37, 99, 235, 0.1);
+  text-decoration: none;
+}
+
+.breadcrumb .separator {
+  font-size: 10px;
+  color: var(--test-text-muted);
+  margin: 0 4px;
+}
+
+.breadcrumb .current {
+  color: var(--test-text-secondary);
+  font-weight: 500;
+}
+
+.breadcrumb-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Header */
 .suite-header {
   background: var(--test-surface);

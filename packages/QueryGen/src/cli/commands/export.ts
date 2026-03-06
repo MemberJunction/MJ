@@ -13,7 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { getSystemUser } from '../../utils/user-helpers';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity } from '@memberjunction/core-entities';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { QueryMetadataRecord } from '../../data/schema';
 
@@ -117,11 +117,11 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
 /**
  * Load all queries from the database
  */
-async function loadQueriesFromDatabase(contextUser: UserInfo): Promise<QueryEntity[]> {
+async function loadQueriesFromDatabase(contextUser: UserInfo): Promise<MJQueryEntity[]> {
   const rv = new RunView();
-  const result = await rv.RunView<QueryEntity>(
+  const result = await rv.RunView<MJQueryEntity>(
     {
-      EntityName: 'Queries',
+      EntityName: 'MJ: Queries',
       ExtraFilter: '',
       OrderBy: 'Name',
       ResultType: 'entity_object',
@@ -137,14 +137,14 @@ async function loadQueriesFromDatabase(contextUser: UserInfo): Promise<QueryEnti
 }
 
 /**
- * Convert QueryEntity to metadata record format
+ * Convert MJQueryEntity to metadata record format
  *
  * Note: For the export command, we only export the Query entity itself.
- * QueryFields and QueryParameters are managed by QueryEntity.server.ts and
+ * QueryFields and QueryParameters are managed by MJQueryEntity.server.ts and
  * will be automatically extracted when the query is imported/saved.
  */
 async function convertQueryToMetadata(
-  query: QueryEntity,
+  query: MJQueryEntity,
   contextUser: UserInfo
 ): Promise<QueryMetadataRecord> {
   return {

@@ -3,7 +3,8 @@ import { FormControl } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface CategoryTreeNode {
   id: string;
@@ -14,7 +15,7 @@ export interface CategoryTreeNode {
   expanded?: boolean;
 }
 
-export interface ActionDisplayItem extends ActionEntity {
+export interface ActionDisplayItem extends MJActionEntity {
   selected: boolean;
   categoryName?: string;
 }
@@ -24,6 +25,7 @@ export interface ActionDisplayItem extends ActionEntity {
  * Features searchable action list, category filtering, and multi-select capability.
  */
 @Component({
+  standalone: false,
   selector: 'mj-add-action-dialog',
   templateUrl: './add-action-dialog.component.html',
   styleUrls: ['./add-action-dialog.component.css']
@@ -37,11 +39,11 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   // Reactive state management
   private destroy$ = new Subject<void>();
-  public result = new Subject<ActionEntity[]>();
+  public result = new Subject<MJActionEntity[]>();
   
   // Data streams
   allActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
-  categories$ = new BehaviorSubject<ActionCategoryEntity[]>([]);
+  categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
   filteredActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
   categoryTree$ = new BehaviorSubject<CategoryTreeNode[]>([]);
   selectedActions$ = new BehaviorSubject<Set<string>>(new Set());
@@ -100,14 +102,14 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     
     const [actionsResult, categoriesResult] = await rv.RunViews([
       {
-        EntityName: 'Actions',
+        EntityName: 'MJ: Actions',
         ExtraFilter: 'Status = \'Active\'',
         OrderBy: 'Category, Name',
         ResultType: 'entity_object',
         MaxRows: 5000
       },
       {
-        EntityName: 'Action Categories',
+        EntityName: 'MJ: Action Categories',
         ExtraFilter: 'Status = \'Active\'',
         OrderBy: 'Name',
         ResultType: 'entity_object',
@@ -116,7 +118,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     ]);
 
     if (actionsResult.Success) {
-      const actions = (actionsResult.Results as ActionEntity[] || []).map(action => ({
+      const actions = (actionsResult.Results as MJActionEntity[] || []).map(action => ({
         ...action.GetAll(),
         selected: false,
         categoryName: action.Category || 'Uncategorized'
@@ -126,7 +128,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     }
 
     if (categoriesResult.Success) {
-      this.categories$.next(categoriesResult.Results as ActionCategoryEntity[] || []);
+      this.categories$.next(categoriesResult.Results as MJActionCategoryEntity[] || []);
     }
   }
 
@@ -237,7 +239,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   }
 
   private getCategoryNameById(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || '';
   }
 
@@ -271,7 +273,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     const actions = this.allActions$.value;
     
     // Find the action and toggle its selection
-    const actionToUpdate = actions.find(a => a.ID === action.ID);
+    const actionToUpdate = actions.find(a => UUIDsEqual(a.ID, action.ID));
     if (actionToUpdate) {
       actionToUpdate.selected = !actionToUpdate.selected;
       
@@ -286,7 +288,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered actions to reflect selection state
       const filtered = this.filteredActions$.value;
-      const filteredAction = filtered.find(a => a.ID === action.ID);
+      const filteredAction = filtered.find(a => UUIDsEqual(a.ID, action.ID));
       if (filteredAction) {
         filteredAction.selected = actionToUpdate.selected;
         this.filteredActions$.next(filtered);
@@ -331,10 +333,10 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     
     // Get the selected action display items (excluding existing ones)
     const selectedDisplayItems = allActions
-      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.includes(action.ID));
+      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.some(id => UUIDsEqual(id, action.ID)));
     
-    // Convert ActionDisplayItem to ActionEntity by casting (they have the same structure)
-    const selectedActions: ActionEntity[] = selectedDisplayItems.map(item => item as ActionEntity);
+    // Convert ActionDisplayItem to MJActionEntity by casting (they have the same structure)
+    const selectedActions: MJActionEntity[] = selectedDisplayItems.map(item => item as MJActionEntity);
     
     this.result.next(selectedActions);
     this.dialogRef.close();

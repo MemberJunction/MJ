@@ -1,5 +1,4 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { ValidateCommand } from '@memberjunction/testing-cli';
 
 export default class TestValidate extends Command {
   static description = 'Validate test definitions without executing';
@@ -51,6 +50,8 @@ export default class TestValidate extends Command {
   };
 
   async run(): Promise<void> {
+    const { ValidateCommand } = await import('@memberjunction/testing-cli');
+
     const { args, flags } = await this.parse(TestValidate);
 
     try {

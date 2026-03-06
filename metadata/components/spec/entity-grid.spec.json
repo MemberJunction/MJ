@@ -10,7 +10,7 @@
     "mode": "views",
     "entities": [
       {
-        "name": "Entities",
+        "name": "MJ: Entities",
         "description": "System entities metadata",
         "displayFields": [
           "ID",

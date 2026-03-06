@@ -1,41 +1,49 @@
-<app-add-item-dialog *ngIf="isItemDialogOpened" (onClose)="closeDialog($event)" [selectedResource]="selectedResource"></app-add-item-dialog>
-<div *ngIf="isEditDialogOpened">
-  <app-edit-dashboard (onClose)="closeDashboardDialog($event)" (triggerAddItem)="addItem($event)" [items]="items" [config]="config" (onSave)="saveChanges($event)"></app-edit-dashboard>
-</div>
+@if (isItemDialogOpened) {
+  <app-add-item-dialog (onClose)="closeDialog($event)" [selectedResource]="selectedResource"></app-add-item-dialog>
+}
+@if (isEditDialogOpened) {
+  <div>
+    <app-edit-dashboard (onClose)="closeDashboardDialog($event)" (triggerAddItem)="addItem($event)" [items]="items" [config]="config" (onSave)="saveChanges($event)"></app-edit-dashboard>
+  </div>
+}
 
-<app-delete-item-dialog *ngIf="isDeletingDashboardItem" [dashboardItem]="selectedDashboardItem" (removeDashboardItem)="deleteDashboardItem($event)" (onClose)="closeDeleteItemComponent()"></app-delete-item-dialog>
+@if (isDeletingDashboardItem) {
+  <app-delete-item-dialog [dashboardItem]="selectedDashboardItem" (removeDashboardItem)="deleteDashboardItem($event)" (onClose)="closeDeleteItemComponent()"></app-delete-item-dialog>
+}
 
 <div class="dashboard-container">
   <div class="main-head-dashboard">
     <div class="dashboard-title">
-      <div *ngIf="isEditDashboardNameDialogOpened; else dashboard_name_header" class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
-        <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
-        <button kendoButton (click)="saveDashboardName()">
-          <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
-          Save
-        </button>
-        <button kendoButton (click)="cancelNameChange()" >
-          <span class="k-icon k-i-cancel"></span>
-          Cancel
-        </button>
-      </div>
-      <ng-template #dashboard_name_header>
+      @if (isEditDashboardNameDialogOpened) {
+        <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
+          <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
+          <button kendoButton (click)="saveDashboardName()">
+            <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
+            Save
+          </button>
+          <button kendoButton (click)="cancelNameChange()" >
+            <span class="k-icon k-i-cancel"></span>
+            Cancel
+          </button>
+        </div>
+      } @else {
         <span class="k-icon k-i-star"></span>
         <h3 (click)="toggleInlineNameEdit(true)">{{dashboardEntity ? dashboardEntity.Name : ''}}</h3>
-      </ng-template>
+      }
     </div>
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
-      <div *ngIf="isEditingDashboard; else edit_dashboard_buttons">
-        <button kendoButton (click)="onClickSaveDashboard()">
-          <span class="fa-solid fa-check"></span>
-          Save
-        </button>
-        <button kendoButton (click)="onclickCancelChanges()">
-          <span class="fa-solid fa-xmark"></span>
-          Cancel
-        </button>
-      </div>
-      <ng-template #edit_dashboard_buttons>
+      @if (isEditingDashboard) {
+        <div>
+          <button kendoButton (click)="onClickSaveDashboard()">
+            <span class="fa-solid fa-check"></span>
+            Save
+          </button>
+          <button kendoButton (click)="onclickCancelChanges()">
+            <span class="fa-solid fa-xmark"></span>
+            Cancel
+          </button>
+        </div>
+      } @else {
         <button kendoButton (click)="addItem()">
           <span class="fa-solid fa-plus"></span>
           Add Item
@@ -44,56 +52,59 @@
           <span class="fa-solid fa-gear"></span>
           Edit Dashboard
         </button>
-      </ng-template>
+      }
     </div>
   </div>
   <div class="tile-resource-container">
     <!-- Show empty state if no items -->
-    <div *ngIf="items.length === 0 && !isEditingDashboard" class="empty-dashboard">
-      <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-      <h3>This dashboard is empty</h3>
-      <p>Start by adding reports or user views to your dashboard</p>
-      <button kendoButton themeColor="primary" (click)="addItem()">
-        <span class="fa-solid fa-plus"></span>
-        Add Item
-      </button>
-    </div>
-    
+    @if (items.length === 0 && !isEditingDashboard) {
+      <div class="empty-dashboard">
+        <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+        <h3>This dashboard is empty</h3>
+        <p>Start by adding reports or user views to your dashboard</p>
+        <button kendoButton themeColor="primary" (click)="addItem()">
+          <span class="fa-solid fa-plus"></span>
+          Add Item
+        </button>
+      </div>
+    }
+
     <!-- Show tile layout if there are items or if editing -->
-    <kendo-tilelayout
-      *ngIf="items.length > 0 || isEditingDashboard"
-      [columns]="config.columns"
-      [rowHeight]="config.rowHeight"
-      [resizable]="allowResize"
-      [reorderable]="allowReorder"
-      (reorder)="onReorder($event)"
-      (resize)="onResize($event)"
-    >
-      @for(item of items; track item.uniqueId) {
-        <kendo-tilelayout-item (mouseenter)="onMouseEnter($event)" (mouseleave)="onMouseOut($event)" [ngClass]="[getSelectedComponentStyle(this)]" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
-          <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
-            <div class="item-title">
-              <i [class]="getResourceIcon(item.ResourceData.ResourceType)" aria-hidden="true"></i>
-              {{item.title}}
-            </div>
-            @if(!isEditingDashboard) {
-              <div>
-                <div class="btn-wrapper">
-                  <button kendoButton title="Edit dashboard" (click)="toggleEditDashboard(true)">
-                    <span class="fa-solid fa-pen-to-square"></span>
-                  </button>
-                  <button kendoButton title="Remove item" (click)="showConfirmDeleteDashboardItem(item)">
-                    <span class="fa-solid fa-trash"></span>
-                  </button>
-                </div>
+    @if (items.length > 0 || isEditingDashboard) {
+      <kendo-tilelayout
+        [columns]="config.columns"
+        [rowHeight]="config.rowHeight"
+        [resizable]="allowResize"
+        [reorderable]="allowReorder"
+        (reorder)="onReorder($event)"
+        (resize)="onResize($event)"
+        >
+        @for(item of items; track item.uniqueId) {
+          <kendo-tilelayout-item (mouseenter)="onMouseEnter($event)" (mouseleave)="onMouseOut($event)" [ngClass]="[getSelectedComponentStyle(this)]" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
+            <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
+              <div class="item-title">
+                <i [class]="getResourceIcon(item.ResourceData.ResourceType)" aria-hidden="true"></i>
+                {{item.title}}
               </div>
-            }
-          </kendo-tilelayout-item-header>
-          <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
-            <mj-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></mj-resource>
-          </kendo-tilelayout-item-body>
-        </kendo-tilelayout-item>
-      }
-    </kendo-tilelayout>
+              @if(!isEditingDashboard) {
+                <div>
+                  <div class="btn-wrapper">
+                    <button kendoButton title="Edit dashboard" (click)="toggleEditDashboard(true)">
+                      <span class="fa-solid fa-pen-to-square"></span>
+                    </button>
+                    <button kendoButton title="Remove item" (click)="showConfirmDeleteDashboardItem(item)">
+                      <span class="fa-solid fa-trash"></span>
+                    </button>
+                  </div>
+                </div>
+              }
+            </kendo-tilelayout-item-header>
+            <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
+              <mj-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></mj-resource>
+            </kendo-tilelayout-item-body>
+          </kendo-tilelayout-item>
+        }
+      </kendo-tilelayout>
+    }
   </div>
 </div>

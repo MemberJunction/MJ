@@ -6,6 +6,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
  * Viewer component for Markdown artifacts
  */
 @Component({
+  standalone: false,
   selector: 'mj-markdown-artifact-viewer',
   template: `
     <div class="markdown-artifact-viewer" [ngClass]="cssClass">

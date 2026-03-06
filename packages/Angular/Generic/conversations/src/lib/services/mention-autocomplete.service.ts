@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo } from '@memberjunction/core';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 
 /**
  * Item in the autocomplete dropdown
@@ -24,7 +24,7 @@ export interface MentionSuggestion {
   providedIn: 'root'
 })
 export class MentionAutocompleteService {
-  private agentsCache: AIAgentEntityExtended[] = [];
+  private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
@@ -66,9 +66,13 @@ export class MentionAutocompleteService {
 
       const allAgents = AIEngineBase.Instance.Agents || [];
 
-      this.agentsCache = allAgents.filter(
+      // Filter by status, hierarchy, and invocation mode first
+      const candidateAgents = allAgents.filter(
         a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent' && !a.IsRestricted
       );
+
+      // Filter by user's 'run' permission — respects open-by-default + explicit permissions
+      this.agentsCache = await this.filterAgentsByRunPermission(candidateAgents, currentUser);
 
       // Load users from the system (optional - can be expanded later)
       // For now, we'll just use the current user
@@ -79,6 +83,29 @@ export class MentionAutocompleteService {
       console.error('Failed to initialize MentionAutocompleteService:', error);
       throw error;
     }
+  }
+
+  /**
+   * Filter agents to only those the current user has 'run' permission for.
+   * Agents with no permission records are open to everyone (canRun = true).
+   * Agents with explicit permission records are checked against the user.
+   */
+  private async filterAgentsByRunPermission(
+    agents: MJAIAgentEntityExtended[],
+    user: UserInfo
+  ): Promise<MJAIAgentEntityExtended[]> {
+    const permitted: MJAIAgentEntityExtended[] = [];
+    for (const agent of agents) {
+      try {
+        const canRun = await AIAgentPermissionHelper.HasPermission(agent.ID, user, 'run');
+        if (canRun) {
+          permitted.push(agent);
+        }
+      } catch {
+        // Fail closed — exclude agent on error
+      }
+    }
+    return permitted;
   }
 
   /**
@@ -169,7 +196,7 @@ export class MentionAutocompleteService {
   /**
    * Get icon for agent based on type/name
    */
-  private getAgentIcon(agent: AIAgentEntityExtended): string {
+  private getAgentIcon(agent: MJAIAgentEntityExtended): string {
     // Use agent's icon if available, otherwise default based on type
     if (agent.IconClass) return agent.IconClass;
 
@@ -187,7 +214,7 @@ export class MentionAutocompleteService {
   /**
    * Get available agents for parsing
    */
-  getAvailableAgents(): AIAgentEntityExtended[] {
+  getAvailableAgents(): MJAIAgentEntityExtended[] {
     return this.agentsCache;
   }
 

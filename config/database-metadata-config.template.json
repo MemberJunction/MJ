@@ -1,7 +1,43 @@
 {
   "$schema": "./database-metadata-config.schema.json",
-  "description": "Database metadata configuration for MemberJunction CodeGen. This file allows you to define soft primary keys and foreign keys for tables that may not have database constraints. Copy this file to database-metadata-config.json and customize for your database.",
-  "version": "1.0",
+  "description": "Database metadata configuration for MemberJunction CodeGen. This file allows you to define soft primary keys, foreign keys, virtual entities, and IS-A type relationships for tables/views that may not have database constraints. Copy this file to database-metadata-config.json and customize for your database.",
+  "version": "1.2",
+  "ISARelationships": [
+    {
+      "ChildEntity": "Meetings",
+      "ParentEntity": "Products",
+      "SchemaName": "dbo"
+    },
+    {
+      "ChildEntity": "Webinars",
+      "ParentEntity": "Meetings",
+      "SchemaName": "dbo"
+    }
+  ],
+  "VirtualEntities": [
+    {
+      "ViewName": "vwSalesSummary",
+      "SchemaName": "dbo",
+      "EntityName": "Sales Summary",
+      "Description": "Read-only summary view aggregating sales data across all regions",
+      "PrimaryKey": ["SummaryID"],
+      "ForeignKeys": [
+        {
+          "FieldName": "RegionID",
+          "SchemaName": "dbo",
+          "RelatedTable": "Regions",
+          "RelatedField": "ID",
+          "Description": "Foreign key to Regions table"
+        }
+      ]
+    },
+    {
+      "ViewName": "vwCustomerMetrics",
+      "EntityName": "Customer Metrics",
+      "Description": "Computed customer metrics view (lifetime value, order count, etc.)",
+      "PrimaryKey": ["CustomerID"]
+    }
+  ],
   "dbo": [
     {
       "TableName": "Orders",

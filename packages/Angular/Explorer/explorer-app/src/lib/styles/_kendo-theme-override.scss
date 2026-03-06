@@ -614,22 +614,23 @@ kendo-buttongroup {
 .k-textarea,
 .k-input {
   border-radius: var(--border-radius);
-  border: 2px solid var(--gray-700);
+  border: 2px solid var(--mj-border-default);
   padding: 8px;
   font-size: 16px;
-  background: var(--white-color);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   transition: var(--transition-time);
   font-family: "Montserrat", sans-serif;
 
   &:focus,
   &.k-focus {
     outline: none;
-    border-color: var(--mj-blue);
-    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
   }
 
   &::placeholder {
-    color: var(--gray-800);
+    color: var(--mj-text-muted);
   }
   button {
     padding: 0 !important;

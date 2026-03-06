@@ -26,7 +26,7 @@ import * as Config from "./config";
  *
  * @remarks
  * **TEMPORARY INTERFACE**: This interface is part of the interim credential solution for 2.x patch release.
- * In MemberJunction 3.0, this will be integrated with the comprehensive credential management system.
+ * In a future release, this will be integrated with the comprehensive credential management system.
  */
 export interface TwilioCredentials extends ProviderCredentialsBase {
   /** Twilio Account SID */
@@ -484,8 +484,4 @@ export class TwilioProvider extends BaseCommunicationProvider {
       ErrorMessage: 'Twilio does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
     };
   }
-}
-
-export function LoadProvider() {
-  // do nothing, this prevents tree shaking from removing this class
 }

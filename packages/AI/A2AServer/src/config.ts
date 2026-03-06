@@ -1,6 +1,6 @@
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';

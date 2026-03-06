@@ -1,12 +1,12 @@
 import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { APIScopeEntity } from '@memberjunction/core-entities';
+import { MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Scope selection item */
 interface ScopeItem {
-    scope: APIScopeEntity;
+    scope: MJAPIScopeEntity;
     selected: boolean;
 }
 
@@ -27,17 +27,12 @@ export interface APIKeyCreateResult {
     rawKey?: string;
     error?: string;
 }
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyCreateDialog(): void {
-    // This function prevents tree shaking
-}
-
 /**
  * Dialog for creating new API keys
  * Shows the raw key only once - it cannot be recovered after closing
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-create-dialog',
     templateUrl: './api-key-create-dialog.component.html',
     styleUrls: ['./api-key-create-dialog.component.css']

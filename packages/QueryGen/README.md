@@ -1,8 +1,36 @@
-# QueryGen - AI-Powered SQL Query Template Generator
+# @memberjunction/query-gen
 
-**@memberjunction/query-gen** is a comprehensive tool for generating domain-specific SQL query templates using artificial intelligence. It analyzes your database schema, generates meaningful business questions, creates SQL queries, tests them, refines them through iterative feedback, and exports them to MemberJunction metadata format.
+AI-powered SQL query template generator for MemberJunction. Analyzes your database schema, generates meaningful business questions, creates SQL queries, tests them, refines them through iterative feedback, and exports them to MemberJunction metadata format.
 
 ## Overview
+
+```mermaid
+graph TD
+    A["QueryGen CLI"] --> B["Schema Analysis"]
+    B --> C["Entity Grouper<br/>(AI Semantic Grouping)"]
+    C --> D["Question Generator<br/>(Business Questions)"]
+    D --> E["Vector Similarity<br/>(Few-Shot Examples)"]
+    E --> F["Query Writer<br/>(Nunjucks SQL)"]
+    F --> G["Query Tester"]
+    G -->|fails| H["Query Fixer<br/>(up to 5 attempts)"]
+    H --> G
+    G -->|passes| I["Query Evaluator"]
+    I -->|needs improvement| J["Query Refiner<br/>(up to 3 iterations)"]
+    J --> G
+    I -->|passes| K["Validator"]
+    K --> L["Metadata Exporter"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#b8762f,stroke:#8a5722,color:#fff
+    style F fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#b8762f,stroke:#8a5722,color:#fff
+    style K fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style L fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 QueryGen automates the creation of SQL query templates through an 11-phase AI-powered pipeline:
 

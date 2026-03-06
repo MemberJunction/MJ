@@ -90,8 +90,46 @@ export function sanitizeGraphQLName(input: string): string {
 }
 
 /**
+ * Returns the schema-based prefix for programmatic identifiers (class names, GraphQL types).
+ * This is the single source of truth for schema-to-prefix mapping, shared by both TypeScript
+ * codegen and SQL (via GetClassNameSchemaPrefix function in the database).
+ *
+ * Special cases:
+ * - `__mj` (core MJ schema) → `"MJ"`
+ * - `MJ` (literal schema name) → `"MJCustom"` (prevents collision with core schema prefix)
+ * - All others → sanitized schema name via {@link sanitizeGraphQLName}
+ *
+ * @param schemaName - The SQL schema name
+ * @returns The clean prefix string to prepend to type/class names
+ *
+ * @example
+ * ```typescript
+ * getSchemaPrefix('__mj')   // "MJ"
+ * getSchemaPrefix('MJ')     // "MJCustom"
+ * getSchemaPrefix('sales')  // "sales"
+ * ```
+ */
+export function getSchemaPrefix(schemaName: string): string {
+    const trimmed = schemaName.trim().toLowerCase();
+
+    // Core MJ schema: __mj -> 'MJ'
+    if (trimmed === MJ_CORE_SCHEMA.trim().toLowerCase()) {
+        return 'MJ';
+    }
+
+    // Guard: a schema literally named 'MJ' would collide with __mj's 'MJ' prefix
+    if (trimmed === 'mj') {
+        return 'MJCustom';
+    }
+
+    // Default: sanitize the schema name
+    return sanitizeGraphQLName(schemaName);
+}
+
+/**
  * Generates the base GraphQL type name for an entity using SchemaBaseTable pattern.
- * Preserves original capitalization. Special case: MJ core schema uses "MJ" prefix.
+ * Preserves original capitalization. Uses {@link getSchemaPrefix} for the schema prefix,
+ * which aligns with the SQL GetClassNameSchemaPrefix function in vwEntities.
  * This ensures unique type names across different schemas.
  *
  * @param entity - The entity to generate the type name for
@@ -114,11 +152,7 @@ export function sanitizeGraphQLName(input: string): string {
  * ```
  */
 export function getGraphQLTypeNameBase(entity: EntityInfo): string {
-    // Special case for MJ core schema - use "MJ" instead of the schema name
-    const schemaPrefix = entity.SchemaName.trim().toLowerCase() === MJ_CORE_SCHEMA.trim().toLowerCase()
-        ? 'MJ'
-        : sanitizeGraphQLName(entity.SchemaName);
-
+    const schemaPrefix = getSchemaPrefix(entity.SchemaName);
     const sanitizedBaseTable = sanitizeGraphQLName(entity.BaseTable);
     return `${schemaPrefix}${sanitizedBaseTable}`;
 }

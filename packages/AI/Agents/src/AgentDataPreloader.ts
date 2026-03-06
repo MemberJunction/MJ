@@ -13,9 +13,22 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
-import { AIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
-import * as _ from 'lodash';
+import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
+import _ from 'lodash';
+
+/**
+ * Details about a data source that failed to load
+ */
+export interface FailedDataSource {
+    /** Name of the data source that failed */
+    name: string;
+    /** Entity name if applicable (for RunView sources) */
+    entityName?: string;
+    /** Error message describing the failure */
+    errorMessage: string;
+}
 
 /**
  * Result structure for preloaded data organized by destination
@@ -24,6 +37,10 @@ export interface PreloadedDataResult {
     data: Record<string, unknown>;
     context: Record<string, unknown>;
     payload: Record<string, unknown>;
+    /** Names of sources that loaded successfully */
+    loadedSources: string[];
+    /** Sources that failed to load, with error details */
+    failedSources: FailedDataSource[];
 }
 
 /**
@@ -129,13 +146,15 @@ export class AgentDataPreloader {
                     verboseOnly: true,
                     isVerboseEnabled: IsVerboseLoggingEnabled
                 });
-                return { data: {}, context: {}, payload: {} };
+                return { data: {}, context: {}, payload: {}, loadedSources: [], failedSources: [] };
             }
 
             const result: PreloadedDataResult = {
                 data: {},
                 context: {},
-                payload: {}
+                payload: {},
+                loadedSources: [],
+                failedSources: []
             };
 
             // Execute data sources in order
@@ -158,10 +177,16 @@ export class AgentDataPreloader {
                             _.set(result.payload, path, sourceData);
                             break;
                         default:
+                            result.failedSources.push({
+                                name: source.Name,
+                                entityName: source.EntityName || undefined,
+                                errorMessage: `Unknown destination type '${source.DestinationType}'`
+                            });
                             LogError(`Unknown destination type '${source.DestinationType}' for data source '${source.Name}'`);
                             continue;
                     }
 
+                    result.loadedSources.push(source.Name);
                     LogStatusEx({
                         message: `AgentDataPreloader: Loaded '${source.Name}' → ${source.DestinationType}${path !== source.Name ? `.${path}` : ''} for agent ${agentId}`,
                         verboseOnly: true,
@@ -169,6 +194,11 @@ export class AgentDataPreloader {
                     });
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    result.failedSources.push({
+                        name: source.Name,
+                        entityName: source.EntityName || undefined,
+                        errorMessage
+                    });
                     LogError(`Failed to preload data source '${source.Name}' for agent ${agentId}: ${errorMessage}`, undefined, error);
                     // Continue loading other sources even if one fails
                 }
@@ -180,7 +210,7 @@ export class AgentDataPreloader {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             LogError(`Failed to preload agent data for ${agentId}: ${errorMessage}`, undefined, error);
             // Return empty objects instead of throwing - agent can still run without preloaded data
-            return { data: {}, context: {}, payload: {} };
+            return { data: {}, context: {}, payload: {}, loadedSources: [], failedSources: [{ name: '*', errorMessage }] };
         }
     }
 
@@ -220,10 +250,10 @@ export class AgentDataPreloader {
     private async loadDataSourcesForAgent(
         agentId: string,
         contextUser: UserInfo
-    ): Promise<AIAgentDataSourceEntity[]> {
+    ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
         await AIEngine.Instance.Config(false, contextUser);
-        const data = AIEngine.Instance.AgentDataSources.filter(ads => ads.AgentID === agentId);
+        const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId));
         const sortedData = data.sort((a, b) => {
             if (a.ExecutionOrder === b.ExecutionOrder) {
                 return a.Name.localeCompare(b.Name);
@@ -241,7 +271,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeDataSource(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo,
         runId?: string
     ): Promise<unknown> {
@@ -279,7 +309,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeRunView(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo
     ): Promise<unknown> {
         if (!source.EntityName) {
@@ -319,7 +349,7 @@ export class AgentDataPreloader {
      * @private
      */
     private async executeRunQuery(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo
     ): Promise<unknown> {
         if (!source.QueryName) {
@@ -358,7 +388,7 @@ export class AgentDataPreloader {
      * @returns Cached data or null if not cached/expired
      */
     private getCachedData(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         runId?: string
     ): unknown | null {
         if (source.CachePolicy === 'None') {
@@ -401,7 +431,7 @@ export class AgentDataPreloader {
      * @private
      */
     private cacheData(
-        source: AIAgentDataSourceEntity,
+        source: MJAIAgentDataSourceEntity,
         data: unknown,
         runId?: string
     ): void {
@@ -440,15 +470,8 @@ export class AgentDataPreloader {
      *
      * @private
      */
-    private getPerAgentCacheKey(source: AIAgentDataSourceEntity): string {
+    private getPerAgentCacheKey(source: MJAIAgentDataSourceEntity): string {
         return `${source.AgentID}:${source.Name}`;
     }
 }
 
-/**
- * Export a load function to ensure the class isn't tree-shaken
- */
-export function LoadAgentDataPreloader() {
-    // This function ensures the class isn't tree-shaken
-    return AgentDataPreloader.Instance;
-}

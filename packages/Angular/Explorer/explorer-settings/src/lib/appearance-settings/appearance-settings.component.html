@@ -1,0 +1,31 @@
+<div class="appearance-settings">
+  <h2 class="section-title">Appearance</h2>
+  <p class="section-description">Customize how MemberJunction looks and feels</p>
+
+  <div class="coming-soon-banner">
+    <div class="banner-icon">
+      <i class="fa-solid fa-palette"></i>
+    </div>
+    <div class="banner-content">
+      <h3>Coming Soon</h3>
+      <p>We're working on bringing you more customization options.</p>
+    </div>
+  </div>
+
+  <div class="planned-features">
+    <h4 class="features-title">Planned Features</h4>
+    <div class="features-grid">
+      @for (feature of PlannedFeatures; track feature.title) {
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i [class]="feature.icon"></i>
+          </div>
+          <div class="feature-info">
+            <span class="feature-title">{{ feature.title }}</span>
+            <span class="feature-desc">{{ feature.description }}</span>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

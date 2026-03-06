@@ -1,16 +1,21 @@
-<div *ngIf="isVisible" class="actionable-commands">
-  <div class="commands-label">Actions:</div>
-  <div class="commands-buttons">
-    <button
-      *ngFor="let command of commands; trackBy: trackByCommand"
-      kendoButton
-      [themeColor]="getButtonTheme(command)"
-      [disabled]="disabled"
-      (click)="onCommandClick(command)"
-      class="command-button"
-    >
-      <i *ngIf="command.icon" class="fa {{ command.icon }}" aria-hidden="true"></i>
-      {{ command.label }}
-    </button>
+@if (isVisible) {
+  <div class="actionable-commands">
+    <div class="commands-label">Actions:</div>
+    <div class="commands-buttons">
+      @for (command of commands; track trackByCommand($index, command)) {
+        <button
+          kendoButton
+          [themeColor]="getButtonTheme(command)"
+          [disabled]="disabled"
+          (click)="onCommandClick(command)"
+          class="command-button"
+          >
+          @if (command.icon) {
+            <i class="fa {{ command.icon }}" aria-hidden="true"></i>
+          }
+          {{ command.label }}
+        </button>
+      }
+    </div>
   </div>
-</div>
+}

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export const openAIAPIKey: string = process.env.OPENAI_API_KEY;
 export const pineconeHost: string = process.env.PINECONE_HOST;

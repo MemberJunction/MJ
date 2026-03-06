@@ -1,20 +1,25 @@
-<div> 
-  <div *ngIf="step === 1" class="step-1">
-    <h2>Select a Template</h2>
-    <ul>
-      <li *ngFor="let template of templates" (click)="selectTemplate(template)">
-        {{ template.Name }}
-      </li>
-    </ul>
-  </div>
+<div>
+  @if (step === 1) {
+    <div class="step-1">
+      <h2>Select a Template</h2>
+      <ul>
+        @for (template of templates; track template) {
+          <li (click)="selectTemplate(template)">
+            {{ template.Name }}
+          </li>
+        }
+      </ul>
+    </div>
+  }
 
-  <div *ngIf="step === 2" class="step-2">
-    @if(!loading) {
-      @if (previewMessages.length === 0) {
+  @if (step === 2) {
+    <div class="step-2">
+      @if(!loading) {
+        @if (previewMessages.length === 0) {
           <h2>No Messages Available</h2>
           <button kendoButton (click)="goBack()">Back</button>
-      }
-      @else {
+        }
+        @else {
         <h2>Preview {{ selectedTemplate?.Name }}</h2>
         <button kendoButton (click)="goBack()">Back</button>
         <div class="vcr-controls">
@@ -35,11 +40,12 @@
         <div class="template-preview">
           <div class="subject-line">{{currentPreviewItemSubject()}}</div>
           <div class="preview-body" [innerHTML]="currentPreviewItemBody()"></div>
-        </div>  
+        </div>
       }
     }
     @else {
-      <mj-loading [showText]="false" size="medium"></mj-loading>
-    }
-  </div>
+    <mj-loading [showText]="false" size="medium"></mj-loading>
+  }
+</div>
+}
 </div>

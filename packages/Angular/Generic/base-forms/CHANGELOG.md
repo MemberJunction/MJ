@@ -1,0 +1,232 @@
+# @memberjunction/ng-base-forms
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-base-types@5.8.0
+  - @memberjunction/ng-entity-viewer@5.8.0
+  - @memberjunction/ng-list-management@5.8.0
+  - @memberjunction/ng-record-changes@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- 7641cd2: Fix form field autocomplete to fall back to ID field
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-base-types@5.7.0
+  - @memberjunction/ng-entity-viewer@5.7.0
+  - @memberjunction/ng-list-management@5.7.0
+  - @memberjunction/ng-record-changes@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-base-types@5.6.0
+  - @memberjunction/ng-entity-viewer@5.6.0
+  - @memberjunction/ng-list-management@5.6.0
+  - @memberjunction/ng-record-changes@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ng-entity-viewer@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-base-types@5.5.0
+  - @memberjunction/ng-list-management@5.5.0
+  - @memberjunction/ng-record-changes@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- c28af42: base forms dep fix
+  - @memberjunction/ng-list-management@5.4.1
+  - @memberjunction/ng-base-types@5.4.1
+  - @memberjunction/ng-entity-viewer@5.4.1
+  - @memberjunction/ng-record-changes@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-entity-viewer@5.4.0
+  - @memberjunction/ng-list-management@5.4.0
+  - @memberjunction/ng-record-changes@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-entity-viewer@5.3.1
+- @memberjunction/ng-list-management@5.3.1
+- @memberjunction/ng-record-changes@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/ng-entity-viewer@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-list-management@5.3.0
+  - @memberjunction/ng-record-changes@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [4618227]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ng-entity-viewer@5.2.0
+  - @memberjunction/ng-base-types@5.2.0
+  - @memberjunction/ng-list-management@5.2.0
+  - @memberjunction/ng-record-changes@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ng-base-types@5.1.0
+  - @memberjunction/ng-entity-viewer@5.1.0
+  - @memberjunction/ng-list-management@5.1.0
+  - @memberjunction/ng-record-changes@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [3cca644]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+- Updated dependencies [90bfa37]
+  - @memberjunction/ng-entity-viewer@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-types@5.0.0
+  - @memberjunction/ng-list-management@5.0.0
+  - @memberjunction/ng-record-changes@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-base-types@4.4.0
+  - @memberjunction/ng-entity-viewer@4.4.0
+  - @memberjunction/ng-list-management@4.4.0
+  - @memberjunction/ng-record-changes@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- Updated dependencies [318c578]
+  - @memberjunction/ng-record-changes@4.3.1
+  - @memberjunction/ng-base-types@4.3.1
+  - @memberjunction/ng-entity-viewer@4.3.1
+  - @memberjunction/ng-list-management@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/core-entities@4.3.1
+  - @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-base-types@4.3.0
+  - @memberjunction/ng-entity-viewer@4.3.0
+  - @memberjunction/ng-list-management@4.3.0
+  - @memberjunction/ng-record-changes@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@4.2.0
+- @memberjunction/ng-entity-viewer@4.2.0
+- @memberjunction/ng-list-management@4.2.0
+- @memberjunction/ng-record-changes@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/ng-record-changes@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ng-base-types@4.1.0
+  - @memberjunction/ng-entity-viewer@4.1.0
+  - @memberjunction/ng-list-management@4.1.0
+  - @memberjunction/global@4.1.0

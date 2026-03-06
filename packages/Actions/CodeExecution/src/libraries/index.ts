@@ -9,6 +9,14 @@
  * SECURITY NOTE: Only add libraries here that are safe for untrusted code execution.
  */
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /**
  * Allowed module names
  */
@@ -381,12 +389,6 @@ function getValidatorSource(): string {
  * We bundle the actual mathjs library for full functionality
  */
 function getMathjsSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
     const libPath = path.join(__dirname, 'bundled-libs', 'mathjs.js');
     const source = fs.readFileSync(libPath, 'utf8');
 
@@ -403,12 +405,6 @@ function getMathjsSource(): string {
  * We bundle the actual papaparse library
  */
 function getPapaparseSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
     const libPath = path.join(__dirname, 'bundled-libs', 'papaparse.js');
     const source = fs.readFileSync(libPath, 'utf8');
 
@@ -425,12 +421,6 @@ function getPapaparseSource(): string {
  * We bundle the actual jstat library
  */
 function getJstatSource(): string {
-    // Load bundled library source at compile time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const path = require('path');
-
     const libPath = path.join(__dirname, 'bundled-libs', 'jstat.js');
     const source = fs.readFileSync(libPath, 'utf8');
 

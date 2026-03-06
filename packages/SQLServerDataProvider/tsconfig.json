@@ -1,15 +1,9 @@
 {
+  "extends": "../../tsconfig.server.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "target": "es2022",
-    "declaration": true,
-    "declarationMap": true,
-    "moduleResolution": "node",
-    "sourceMap": true,
     "outDir": "dist",
-    "skipLibCheck": true
+    "rootDir": "src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "**/__tests__/**"]
+  "exclude": ["node_modules", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]
 }

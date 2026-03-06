@@ -1,7 +1,7 @@
 import { parentPort, threadId, workerData } from 'node:worker_threads';
 import type { WorkerData } from '../BatchWorker';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -18,8 +18,8 @@ export async function VectorizeEntity(): Promise<void> {
     throw new Error('batch is required for the AnnotationWorker');
   }
 
-  const template: TemplateEntityExtended = context.template;
-  const templateContent: TemplateContentEntity = context.templateContent;
+  const template: MJTemplateEntityExtended = context.template;
+  const templateContent: MJTemplateContentEntity = context.templateContent;
   TemplateEngineServer.Instance.SetupNunjucks();
   const startTime = Date.now();
   //console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
@@ -68,7 +68,7 @@ export async function VectorizeEntity(): Promise<void> {
  * This method is different from the Validate() method which validates the state of the Template itself. This method validates the data object provided meets the requirements for the template's parameter definitions.
  * @param data - the data object to validate against the template's parameter definitions
  */
-function ValidateTemplateInput(template: TemplateEntityExtended, data: any): ValidationResult {
+function ValidateTemplateInput(template: MJTemplateEntityExtended, data: any): ValidationResult {
   const result = new ValidationResult();
   let params = template.Params;
 

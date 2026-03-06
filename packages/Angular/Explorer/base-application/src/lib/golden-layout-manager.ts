@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { LogError } from '@memberjunction/core';
+import { VirtualLayout } from 'golden-layout';
 import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNode } from './interfaces/workspace-configuration.interface';
 
 // Golden Layout interfaces - defined here to avoid compile-time dependency
@@ -172,10 +173,6 @@ export class GoldenLayoutManager {
   Initialize(element: HTMLElement): void {
     this.containerElement = element;
 
-    // Import Golden Layout dynamically at runtime
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { VirtualLayout } = require('golden-layout');
-
     // Create layout with empty config
     const config: GLLayoutConfig = {
       root: {
@@ -192,9 +189,9 @@ export class GoldenLayoutManager {
 
     this.layout = new VirtualLayout(
       this.containerElement,
-      this.bindComponentEventListener.bind(this),
-      this.unbindComponentEventListener.bind(this)
-    ) as GLVirtualLayout;
+      this.bindComponentEventListener.bind(this) as VirtualLayout.BindComponentEventHandler,
+      this.unbindComponentEventListener.bind(this) as VirtualLayout.UnbindComponentEventHandler
+    ) as unknown as GLVirtualLayout;
 
     // Enable automatic resize when container size changes
     // This uses Golden Layout's built-in ResizeObserver (default is false for non-body containers)

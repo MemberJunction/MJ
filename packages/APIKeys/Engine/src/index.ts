@@ -19,14 +19,18 @@
  */
 
 // Re-export base engine for convenience
-export { APIKeysEngineBase, LoadAPIKeysEngineBase } from '@memberjunction/api-keys-base';
+export { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 
-// Main engine and singleton
+// Main engine, singleton, and generation defaults
 export {
     APIKeyEngine,
     GetAPIKeyEngine,
     ResetAPIKeyEngine,
-    KeyHashValidationResult
+    KeyHashValidationResult,
+    DEFAULT_KEY_PREFIX,
+    DEFAULT_ENTROPY_BYTES,
+    DEFAULT_KEY_ENCODING,
+    DEFAULT_HASH_ALGORITHM
 } from './APIKeyEngine';
 
 // Scope evaluation
@@ -61,15 +65,7 @@ export {
 // Interfaces - Logging and Configuration
 export {
     UsageLogEntry,
-    APIKeyEngineConfig
+    APIKeyEngineConfig,
+    APIKeyGenerationConfig,
+    APIKeyEncoding
 } from './interfaces';
-
-/**
- * Tree-shaking prevention function.
- * Call this to ensure the APIKeyEngine and related classes are included in the bundle.
- */
-export function LoadAPIKeyEngine(): void {
-    // This function exists to prevent tree shaking from removing the class.
-    // The import of LoadAPIKeysEngineBase in APIKeyEngine constructor ensures
-    // the base engine is also loaded.
-}

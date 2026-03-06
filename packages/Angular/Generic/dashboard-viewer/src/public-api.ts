@@ -40,24 +40,3 @@ export * from './lib/models/dashboard-types';
 
 // Services
 export * from './lib/services/golden-layout-wrapper.service';
-
-// Tree-shaking prevention - call load functions for module
-import { LoadDashboardViewerModule } from './lib/dashboard-viewer.module';
-import {
-    LoadWebURLConfigPanel,
-    LoadViewConfigPanel,
-    LoadQueryConfigPanel,
-    LoadArtifactConfigPanel
-} from './lib/config-panels';
-import { LoadAllDashboardParts } from './lib/parts';
-import { LoadDashboardBrowser } from './lib/dashboard-browser/dashboard-browser.component';
-import { LoadDashboardBreadcrumb } from './lib/breadcrumb/dashboard-breadcrumb.component';
-
-LoadDashboardViewerModule();
-LoadWebURLConfigPanel();
-LoadViewConfigPanel();
-LoadQueryConfigPanel();
-LoadArtifactConfigPanel();
-LoadAllDashboardParts();
-LoadDashboardBrowser();
-LoadDashboardBreadcrumb();

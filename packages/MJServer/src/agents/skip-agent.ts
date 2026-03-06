@@ -128,7 +128,7 @@ export class SkipProxyAgent extends BaseAgent {
         }
 
         // Load conversation messages from database if conversationId is provided
-        // This ensures we get real UUIDs from ConversationDetailEntity records
+        // This ensures we get real UUIDs from MJConversationDetailEntity records
         let skipMessages: SkipMessage[];
         if (conversationId && params.contextUser) {
             skipMessages = await this.loadMessagesFromDatabase(conversationId, params.contextUser);
@@ -171,15 +171,16 @@ export class SkipProxyAgent extends BaseAgent {
         // Call Skip API
         const result = await this.skipSDK.chat(skipOptions);
 
-        // Handle Skip API errors
+        // Handle Skip API errors — surface the actual error message, not a generic wrapper
         if (!result.success || !result.response) {
-            LogError(`[SkipProxyAgent] Skip API call failed: ${result.error}`);
+            const errorMsg = result.error || 'No response received from Skip API';
+            LogError(`[SkipProxyAgent] Skip API call failed: ${errorMsg}`);
             return {
                 finalStep: {
                     terminate: true,
                     step: 'Failed',
-                    message: 'Skip API call failed',
-                    errorMessage: result.error
+                    message: errorMsg,
+                    errorMessage: errorMsg
                 } as BaseAgentNextStep<P>,
                 stepCount: 1
             };
@@ -204,7 +205,7 @@ export class SkipProxyAgent extends BaseAgent {
         try {
             const rv = new RunView();
             const result = await rv.RunView({
-                EntityName: 'Conversation Details',
+                EntityName: 'MJ: Conversation Details',
                 ExtraFilter: `ConversationID='${conversationId}'`,
                 OrderBy: '__mj_CreatedAt ASC'
             }, contextUser);
@@ -286,56 +287,108 @@ export class SkipProxyAgent extends BaseAgent {
     }
 
     /**
-     * Map Skip API response to MJ agent next step
+     * Map Skip API response to MJ agent next step.
+     *
+     * Checks for Skip-level errors first, then delegates to phase-specific handlers.
      */
     private mapSkipResponseToNextStep(
         apiResponse: SkipAPIResponse,
         conversationId: string
     ): BaseAgentNextStep<ComponentSpec> {
-      //return this.tempHack();
+      // Check if Skip reported an error (success: false with any responsePhase)
+      if (!apiResponse.success) {
+          return this.handleSkipError(apiResponse);
+      }
 
       switch (apiResponse.responsePhase) {
-        case 'analysis_complete': {
-            // Skip has completed analysis and returned results
-            const completeResponse = apiResponse as SkipAPIAnalysisCompleteResponse;
-            const componentSpec = completeResponse.componentOptions[0].option;
-            // Filter on system message and get the last one
-            const skipMessage = completeResponse.messages.filter(msg => msg.role === 'system').pop();
-            return {
-                terminate: true,
-                step: 'Success',
-                message: skipMessage?.content || completeResponse.title || 'Analysis complete',
-                newPayload: componentSpec
-            };
-        }
+        case 'analysis_complete':
+            return this.handleAnalysisComplete(apiResponse as SkipAPIAnalysisCompleteResponse);
 
-        case 'clarifying_question': {
-            // Skip needs more information from the user
-            const clarifyResponse = apiResponse as SkipAPIClarifyingQuestionResponse;
-
-            return {
-                terminate: true,
-                step: 'Chat',
-                message: clarifyResponse.clarifyingQuestion,
-                responseForm: clarifyResponse.responseForm,
-                // Pass through payload for incremental artifact building (e.g., PRD in progress)
-                // The client will render this as an artifact and pass it back in the next request
-                newPayload: apiResponse.payload as any
-            };
-        }
+        case 'clarifying_question':
+            return this.handleClarifyingQuestion(apiResponse as SkipAPIClarifyingQuestionResponse);
 
         default: {
-            // Unknown or unexpected response phase
-            LogError(`[SkipProxyAgent] Unknown Skip response phase: ${apiResponse.responsePhase}`);
+            const msg = `Unexpected Skip response phase: ${apiResponse.responsePhase}`;
+            LogError(`[SkipProxyAgent] ${msg}`);
             return {
                 terminate: true,
                 step: 'Failed',
-                message: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
-                errorMessage: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
+                message: msg,
+                errorMessage: msg,
                 newPayload: undefined
             };
         }
       }
+    }
+
+    /**
+     * Handle Skip error responses — extracts the most descriptive error available
+     */
+    private handleSkipError(apiResponse: SkipAPIResponse): BaseAgentNextStep<ComponentSpec> {
+        // Try to get a meaningful error: explicit error field, last system message, or fallback
+        const lastSystemMessage = apiResponse.messages
+            ?.filter(m => m.role === 'system')
+            .pop();
+
+        const errorDetail = apiResponse.error
+            || lastSystemMessage?.content
+            || 'Skip returned an error with no details';
+
+        LogError(`[SkipProxyAgent] Skip error (phase: ${apiResponse.responsePhase}): ${errorDetail}`);
+
+        return {
+            terminate: true,
+            step: 'Failed',
+            message: errorDetail,
+            errorMessage: errorDetail,
+            newPayload: undefined
+        };
+    }
+
+    /**
+     * Handle analysis_complete phase — validates componentOptions before accessing
+     */
+    private handleAnalysisComplete(
+        response: SkipAPIAnalysisCompleteResponse
+    ): BaseAgentNextStep<ComponentSpec> {
+        if (!response.componentOptions || response.componentOptions.length === 0) {
+            const msg = 'Skip completed analysis but returned no component options. '
+                + `Title: "${response.title || 'none'}". `
+                + `Result type: "${response.resultType || 'none'}"`;
+            LogError(`[SkipProxyAgent] ${msg}`);
+            return {
+                terminate: true,
+                step: 'Failed',
+                message: msg,
+                errorMessage: msg,
+                newPayload: undefined
+            };
+        }
+
+        const componentSpec = response.componentOptions[0].option;
+        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+
+        return {
+            terminate: true,
+            step: 'Success',
+            message: skipMessage?.content || response.title || 'Analysis complete',
+            newPayload: componentSpec
+        };
+    }
+
+    /**
+     * Handle clarifying_question phase
+     */
+    private handleClarifyingQuestion(
+        response: SkipAPIClarifyingQuestionResponse
+    ): BaseAgentNextStep<ComponentSpec> {
+        return {
+            terminate: true,
+            step: 'Chat',
+            message: response.clarifyingQuestion,
+            responseForm: response.responseForm,
+            newPayload: response.payload as ComponentSpec
+        };
     }
 
     private tempHack(): BaseAgentNextStep<SkipAgentPayload> {
@@ -458,7 +511,7 @@ const demoSpecJson = {
         "usageContext": "Main entity list display and filtering"
       },
       {
-        "name": "Entity Fields",
+        "name": "MJ: Entity Fields",
         "description": "Fields belonging to each entity",
         "displayFields": [
           "Name",
@@ -565,7 +618,7 @@ const demoSpecJson = {
         "usageContext": "Details panel to show entity fields"
       },
       {
-        "name": "Entity Relationships",
+        "name": "MJ: Entity Relationships",
         "description": "Relationships between entities",
         "displayFields": [
           "RelatedEntity",
@@ -760,7 +813,7 @@ const demoSpecJson = {
             "usageContext": "Main entity list display and filtering"
           },
           {
-            "name": "Entity Fields",
+            "name": "MJ: Entity Fields",
             "description": "Fields belonging to each entity",
             "displayFields": [
               "Name",
@@ -867,7 +920,7 @@ const demoSpecJson = {
             "usageContext": "Details panel to show entity fields"
           },
           {
-            "name": "Entity Relationships",
+            "name": "MJ: Entity Relationships",
             "description": "Relationships between entities",
             "displayFields": [
               "RelatedEntity",
@@ -1154,7 +1207,7 @@ const demoSpecJson = {
             "usageContext": "Main entity list display and filtering"
           },
           {
-            "name": "Entity Fields",
+            "name": "MJ: Entity Fields",
             "description": "Fields belonging to each entity",
             "displayFields": [
               "Name",
@@ -1261,7 +1314,7 @@ const demoSpecJson = {
             "usageContext": "Details panel to show entity fields"
           },
           {
-            "name": "Entity Relationships",
+            "name": "MJ: Entity Relationships",
             "description": "Relationships between entities",
             "displayFields": [
               "RelatedEntity",
@@ -1509,5 +1562,5 @@ const demoSpecJson = {
     }
   ],
   "libraries": [],
-  "code": "function EntityBrowser({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  // Extract child components\n  const { EntityList, EntityDetails, EntityFilter } = components;\n  \n  // Initialize state from saved settings where appropriate\n  const [selectedEntityId, setSelectedEntityId] = useState(savedUserSettings?.selectedEntityId);\n  const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'grid');\n  const [filters, setFilters] = useState(savedUserSettings?.filters || {});\n  const [sortBy, setSortBy] = useState(savedUserSettings?.sortBy || 'Name');\n  const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || 'asc');\n  const [filterPanelCollapsed, setFilterPanelCollapsed] = useState(savedUserSettings?.filterPanelCollapsed || false);\n  \n  // Runtime UI state (not persisted)\n  const [entities, setEntities] = useState([]);\n  const [entityFields, setEntityFields] = useState([]);\n  const [entityRelationships, setEntityRelationships] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);\n  const [searchQuery, setSearchQuery] = useState('');\n  const [uniqueSchemas, setUniqueSchemas] = useState([]);\n  const [uniqueTables, setUniqueTables] = useState([]);\n  \n  // Load entities on mount and when filters/sort change\n  useEffect(() => {\n    const loadEntities = async () => {\n      setLoading(true);\n      try {\n        // Build filter string\n        let filterParts = [];\n        if (filters.schema) {\n          filterParts.push(`SchemaName = '${filters.schema}'`);\n        }\n        if (filters.table) {\n          filterParts.push(`BaseTable = '${filters.table}'`);\n        }\n        if (searchQuery) {\n          filterParts.push(`(Name LIKE '%${searchQuery}%' OR DisplayName LIKE '%${searchQuery}%' OR Description LIKE '%${searchQuery}%')`);\n        }\n        \n        const result = await utilities.rv.RunView({\n          EntityName: 'Entities',\n          Fields: ['ID', 'Name', 'DisplayName', 'NameSuffix', 'Description', 'SchemaName', 'BaseTable', 'BaseView'],\n          OrderBy: `${sortBy} ${sortDirection.toUpperCase()}`,\n          ExtraFilter: filterParts.length > 0 ? filterParts.join(' AND ') : undefined\n        });\n        \n        if (result?.Success && result?.Results) {\n          setEntities(result.Results);\n          \n          // Extract unique schemas and tables for filter dropdowns\n          const schemas = [...new Set(result.Results.map(e => e.SchemaName).filter(Boolean))];\n          const tables = [...new Set(result.Results.map(e => e.BaseTable).filter(Boolean))];\n          setUniqueSchemas(schemas);\n          setUniqueTables(tables);\n        } else {\n          console.error('Failed to load entities:', result?.ErrorMessage);\n          setEntities([]);\n        }\n      } catch (error) {\n        console.error('Error loading entities:', error);\n        setEntities([]);\n      } finally {\n        setLoading(false);\n      }\n    };\n    \n    loadEntities();\n  }, [filters, sortBy, sortDirection, searchQuery, utilities.rv]);\n  \n  // Load entity details when selection changes\n  useEffect(() => {\n    const loadEntityDetails = async () => {\n      if (!selectedEntityId) {\n        setEntityFields([]);\n        setEntityRelationships([]);\n        return;\n      }\n      \n      try {\n        // Load fields\n        const fieldsResult = await utilities.rv.RunView({\n          EntityName: 'Entity Fields',\n          Fields: ['Name', 'DisplayName', 'Type', 'Length', 'AllowsNull', 'IsPrimaryKey', 'IsUnique', 'Sequence'],\n          OrderBy: 'Sequence ASC, Name ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (fieldsResult?.Success && fieldsResult?.Results) {\n          setEntityFields(fieldsResult.Results);\n        } else {\n          setEntityFields([]);\n        }\n        \n        // Load relationships\n        const relationshipsResult = await utilities.rv.RunView({\n          EntityName: 'Entity Relationships',\n          Fields: ['RelatedEntity', 'Type', 'DisplayName', 'RelatedEntityJoinField', 'Sequence'],\n          OrderBy: 'Sequence ASC, RelatedEntity ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (relationshipsResult?.Success && relationshipsResult?.Results) {\n          setEntityRelationships(relationshipsResult.Results);\n        } else {\n          setEntityRelationships([]);\n        }\n      } catch (error) {\n        console.error('Error loading entity details:', error);\n        setEntityFields([]);\n        setEntityRelationships([]);\n      }\n    };\n    \n    loadEntityDetails();\n  }, [selectedEntityId, utilities.rv]);\n  \n  // Handle entity selection\n  const handleSelectEntity = useCallback((entityId) => {\n    setSelectedEntityId(entityId);\n    setDetailsPanelOpen(true);\n    \n    // Save user preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      selectedEntityId: entityId\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle view mode change\n  const handleViewModeChange = useCallback((mode) => {\n    setViewMode(mode);\n    \n    // Save preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      viewMode: mode\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter changes\n  const handleFilterChange = useCallback((newFilters) => {\n    setFilters(newFilters);\n    \n    // Save filter preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filters: newFilters\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle sort changes\n  const handleSortChange = useCallback((newSortBy, newSortDirection) => {\n    setSortBy(newSortBy);\n    setSortDirection(newSortDirection);\n    \n    // Save sort preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortBy: newSortBy,\n      sortDirection: newSortDirection\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter panel toggle\n  const handleToggleFilter = useCallback(() => {\n    const newCollapsed = !filterPanelCollapsed;\n    setFilterPanelCollapsed(newCollapsed);\n    \n    // Save collapsed state\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filterPanelCollapsed: newCollapsed\n    });\n  }, [filterPanelCollapsed, savedUserSettings, onSaveUserSettings]);\n  \n  // Handle opening entity record (kept for backward compatibility with details panel)\n  const handleOpenRecord = useCallback((entityName) => {\n    console.log('Root handleOpenRecord called with entityName:', entityName);\n    console.log('Callbacks object:', callbacks);\n    if (callbacks?.OpenEntityRecord && entityName) {\n      console.log('Calling OpenEntityRecord callback with:', 'Entities', entityName);\n      // Open the Entities entity record for the selected entity\n      callbacks.OpenEntityRecord('Entities', [{ FieldName: 'Name', Value: entityName }]);\n    } else {\n      console.error('OpenEntityRecord callback not available or entityName missing');\n    }\n  }, [callbacks]);\n  \n  // Handle closing details panel\n  const handleCloseDetails = useCallback(() => {\n    setDetailsPanelOpen(false);\n  }, []);\n  \n  // Handle search\n  const handleSearch = useCallback((query) => {\n    setSearchQuery(query);\n  }, []);\n  \n  // Get selected entity object\n  const selectedEntity = entities.find(e => e.ID === selectedEntityId);\n  \n  // Helper function to get border radius value\n  const getBorderRadius = (size) => {\n    return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;\n  };\n  \n  // Loading state\n  if (loading && entities.length === 0) {\n    return (\n      <div style={{\n        display: 'flex',\n        justifyContent: 'center',\n        alignItems: 'center',\n        height: '100vh',\n        fontSize: styles.typography.fontSize.lg,\n        color: styles.colors.textSecondary\n      }}>\n        Loading entities...\n      </div>\n    );\n  }\n  \n  return (\n    <div style={{\n      display: 'flex',\n      height: '100vh',\n      backgroundColor: styles.colors.background,\n      overflow: 'hidden'\n    }}>\n      {/* Filter Panel */}\n      {EntityFilter && (\n        <EntityFilter\n          filters={filters}\n          onFilterChange={handleFilterChange}\n          schemas={uniqueSchemas}\n          tables={uniqueTables}\n          isCollapsed={filterPanelCollapsed}\n          onToggleCollapse={handleToggleFilter}\n          savedUserSettings={savedUserSettings?.filterPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            filterPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n      \n      {/* Main Content Area */}\n      <div style={{\n        flex: 1,\n        display: 'flex',\n        flexDirection: 'column',\n        overflow: 'hidden'\n      }}>\n        {/* Header */}\n        <div style={{\n          padding: styles.spacing.lg,\n          borderBottom: `1px solid ${styles.colors.border}`,\n          backgroundColor: styles.colors.surface\n        }}>\n          <div style={{\n            display: 'flex',\n            justifyContent: 'space-between',\n            alignItems: 'center',\n            marginBottom: styles.spacing.md\n          }}>\n            <h1 style={{\n              margin: 0,\n              fontSize: styles.typography.fontSize.xxl || styles.typography.fontSize.xl,\n              fontWeight: styles.typography.fontWeight?.bold || '700',\n              color: styles.colors.text\n            }}>\n              Entity Browser\n            </h1>\n            \n            {/* View Mode Toggle */}\n            <div style={{\n              display: 'flex',\n              gap: styles.spacing.sm,\n              alignItems: 'center'\n            }}>\n              <span style={{\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.textSecondary\n              }}>\n                View:\n              </span>\n              <button\n                onClick={() => handleViewModeChange('grid')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'grid' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'grid' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Grid\n              </button>\n              <button\n                onClick={() => handleViewModeChange('card')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'card' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'card' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Cards\n              </button>\n            </div>\n          </div>\n          \n          {/* Search Bar */}\n          <div style={{\n            display: 'flex',\n            gap: styles.spacing.md\n          }}>\n            <input\n              type=\"text\"\n              placeholder=\"Search entities...\"\n              value={searchQuery}\n              onChange={(e) => handleSearch(e.target.value)}\n              style={{\n                flex: 1,\n                padding: styles.spacing.md,\n                fontSize: styles.typography.fontSize.md,\n                border: `1px solid ${styles.colors.border}`,\n                borderRadius: getBorderRadius('sm'),\n                backgroundColor: styles.colors.background\n              }}\n            />\n            {searchQuery && (\n              <button\n                onClick={() => handleSearch('')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: styles.colors.surfaceHover || styles.colors.surface,\n                  color: styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Clear\n              </button>\n            )}\n          </div>\n        </div>\n        \n        {/* Entity List */}\n        <div style={{\n          flex: 1,\n          overflow: 'auto',\n          padding: styles.spacing.lg\n        }}>\n          {EntityList && (\n            <EntityList\n              entities={entities}\n              viewMode={viewMode}\n              selectedEntityId={selectedEntityId}\n              onSelectEntity={handleSelectEntity}\n              sortBy={sortBy}\n              sortDirection={sortDirection}\n              onSortChange={handleSortChange}\n              savedUserSettings={savedUserSettings?.entityList}\n              onSaveUserSettings={(settings) => onSaveUserSettings?.({\n                ...savedUserSettings,\n                entityList: settings\n              })}\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n            />\n          )}\n          \n          {/* Empty State */}\n          {entities.length === 0 && !loading && (\n            <div style={{\n              display: 'flex',\n              flexDirection: 'column',\n              alignItems: 'center',\n              justifyContent: 'center',\n              padding: styles.spacing.xxl || styles.spacing.xl,\n              color: styles.colors.textSecondary\n            }}>\n              <div style={{\n                fontSize: styles.typography.fontSize.xl,\n                marginBottom: styles.spacing.md\n              }}>\n                No entities found\n              </div>\n              <div style={{\n                fontSize: styles.typography.fontSize.md\n              }}>\n                {searchQuery || Object.keys(filters).length > 0\n                  ? 'Try adjusting your filters or search query'\n                  : 'No entities are available'}\n              </div>\n            </div>\n          )}\n        </div>\n      </div>\n      \n      {/* Details Panel */}\n      {EntityDetails && (\n        <EntityDetails\n          entity={selectedEntity}\n          fields={entityFields}\n          relationships={entityRelationships}\n          isOpen={detailsPanelOpen}\n          onClose={handleCloseDetails}\n          onOpenRecord={() => handleOpenRecord(selectedEntity?.Name)}\n          savedUserSettings={savedUserSettings?.detailsPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            detailsPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n    </div>\n  );\n}"
+  "code": "function EntityBrowser({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  // Extract child components\n  const { EntityList, EntityDetails, EntityFilter } = components;\n  \n  // Initialize state from saved settings where appropriate\n  const [selectedEntityId, setSelectedEntityId] = useState(savedUserSettings?.selectedEntityId);\n  const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'grid');\n  const [filters, setFilters] = useState(savedUserSettings?.filters || {});\n  const [sortBy, setSortBy] = useState(savedUserSettings?.sortBy || 'Name');\n  const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || 'asc');\n  const [filterPanelCollapsed, setFilterPanelCollapsed] = useState(savedUserSettings?.filterPanelCollapsed || false);\n  \n  // Runtime UI state (not persisted)\n  const [entities, setEntities] = useState([]);\n  const [entityFields, setEntityFields] = useState([]);\n  const [entityRelationships, setEntityRelationships] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);\n  const [searchQuery, setSearchQuery] = useState('');\n  const [uniqueSchemas, setUniqueSchemas] = useState([]);\n  const [uniqueTables, setUniqueTables] = useState([]);\n  \n  // Load entities on mount and when filters/sort change\n  useEffect(() => {\n    const loadEntities = async () => {\n      setLoading(true);\n      try {\n        // Build filter string\n        let filterParts = [];\n        if (filters.schema) {\n          filterParts.push(`SchemaName = '${filters.schema}'`);\n        }\n        if (filters.table) {\n          filterParts.push(`BaseTable = '${filters.table}'`);\n        }\n        if (searchQuery) {\n          filterParts.push(`(Name LIKE '%${searchQuery}%' OR DisplayName LIKE '%${searchQuery}%' OR Description LIKE '%${searchQuery}%')`);\n        }\n        \n        const result = await utilities.rv.RunView({\n          EntityName: 'MJ: Entities',\n          Fields: ['ID', 'Name', 'DisplayName', 'NameSuffix', 'Description', 'SchemaName', 'BaseTable', 'BaseView'],\n          OrderBy: `${sortBy} ${sortDirection.toUpperCase()}`,\n          ExtraFilter: filterParts.length > 0 ? filterParts.join(' AND ') : undefined\n        });\n        \n        if (result?.Success && result?.Results) {\n          setEntities(result.Results);\n          \n          // Extract unique schemas and tables for filter dropdowns\n          const schemas = [...new Set(result.Results.map(e => e.SchemaName).filter(Boolean))];\n          const tables = [...new Set(result.Results.map(e => e.BaseTable).filter(Boolean))];\n          setUniqueSchemas(schemas);\n          setUniqueTables(tables);\n        } else {\n          console.error('Failed to load entities:', result?.ErrorMessage);\n          setEntities([]);\n        }\n      } catch (error) {\n        console.error('Error loading entities:', error);\n        setEntities([]);\n      } finally {\n        setLoading(false);\n      }\n    };\n    \n    loadEntities();\n  }, [filters, sortBy, sortDirection, searchQuery, utilities.rv]);\n  \n  // Load entity details when selection changes\n  useEffect(() => {\n    const loadEntityDetails = async () => {\n      if (!selectedEntityId) {\n        setEntityFields([]);\n        setEntityRelationships([]);\n        return;\n      }\n      \n      try {\n        // Load fields\n        const fieldsResult = await utilities.rv.RunView({\n          EntityName: 'MJ: Entity Fields',\n          Fields: ['Name', 'DisplayName', 'Type', 'Length', 'AllowsNull', 'IsPrimaryKey', 'IsUnique', 'Sequence'],\n          OrderBy: 'Sequence ASC, Name ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (fieldsResult?.Success && fieldsResult?.Results) {\n          setEntityFields(fieldsResult.Results);\n        } else {\n          setEntityFields([]);\n        }\n        \n        // Load relationships\n        const relationshipsResult = await utilities.rv.RunView({\n          EntityName: 'MJ: Entity Relationships',\n          Fields: ['RelatedEntity', 'Type', 'DisplayName', 'RelatedEntityJoinField', 'Sequence'],\n          OrderBy: 'Sequence ASC, RelatedEntity ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (relationshipsResult?.Success && relationshipsResult?.Results) {\n          setEntityRelationships(relationshipsResult.Results);\n        } else {\n          setEntityRelationships([]);\n        }\n      } catch (error) {\n        console.error('Error loading entity details:', error);\n        setEntityFields([]);\n        setEntityRelationships([]);\n      }\n    };\n    \n    loadEntityDetails();\n  }, [selectedEntityId, utilities.rv]);\n  \n  // Handle entity selection\n  const handleSelectEntity = useCallback((entityId) => {\n    setSelectedEntityId(entityId);\n    setDetailsPanelOpen(true);\n    \n    // Save user preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      selectedEntityId: entityId\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle view mode change\n  const handleViewModeChange = useCallback((mode) => {\n    setViewMode(mode);\n    \n    // Save preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      viewMode: mode\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter changes\n  const handleFilterChange = useCallback((newFilters) => {\n    setFilters(newFilters);\n    \n    // Save filter preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filters: newFilters\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle sort changes\n  const handleSortChange = useCallback((newSortBy, newSortDirection) => {\n    setSortBy(newSortBy);\n    setSortDirection(newSortDirection);\n    \n    // Save sort preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortBy: newSortBy,\n      sortDirection: newSortDirection\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter panel toggle\n  const handleToggleFilter = useCallback(() => {\n    const newCollapsed = !filterPanelCollapsed;\n    setFilterPanelCollapsed(newCollapsed);\n    \n    // Save collapsed state\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filterPanelCollapsed: newCollapsed\n    });\n  }, [filterPanelCollapsed, savedUserSettings, onSaveUserSettings]);\n  \n  // Handle opening entity record (kept for backward compatibility with details panel)\n  const handleOpenRecord = useCallback((entityName) => {\n    console.log('Root handleOpenRecord called with entityName:', entityName);\n    console.log('Callbacks object:', callbacks);\n    if (callbacks?.OpenEntityRecord && entityName) {\n      console.log('Calling OpenEntityRecord callback with:', 'MJ: Entities', entityName);\n      // Open the Entities entity record for the selected entity\n      callbacks.OpenEntityRecord('MJ: Entities', [{ FieldName: 'Name', Value: entityName }]);\n    } else {\n      console.error('OpenEntityRecord callback not available or entityName missing');\n    }\n  }, [callbacks]);\n  \n  // Handle closing details panel\n  const handleCloseDetails = useCallback(() => {\n    setDetailsPanelOpen(false);\n  }, []);\n  \n  // Handle search\n  const handleSearch = useCallback((query) => {\n    setSearchQuery(query);\n  }, []);\n  \n  // Get selected entity object\n  const selectedEntity = entities.find(e => e.ID === selectedEntityId);\n  \n  // Helper function to get border radius value\n  const getBorderRadius = (size) => {\n    return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;\n  };\n  \n  // Loading state\n  if (loading && entities.length === 0) {\n    return (\n      <div style={{\n        display: 'flex',\n        justifyContent: 'center',\n        alignItems: 'center',\n        height: '100vh',\n        fontSize: styles.typography.fontSize.lg,\n        color: styles.colors.textSecondary\n      }}>\n        Loading entities...\n      </div>\n    );\n  }\n  \n  return (\n    <div style={{\n      display: 'flex',\n      height: '100vh',\n      backgroundColor: styles.colors.background,\n      overflow: 'hidden'\n    }}>\n      {/* Filter Panel */}\n      {EntityFilter && (\n        <EntityFilter\n          filters={filters}\n          onFilterChange={handleFilterChange}\n          schemas={uniqueSchemas}\n          tables={uniqueTables}\n          isCollapsed={filterPanelCollapsed}\n          onToggleCollapse={handleToggleFilter}\n          savedUserSettings={savedUserSettings?.filterPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            filterPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n      \n      {/* Main Content Area */}\n      <div style={{\n        flex: 1,\n        display: 'flex',\n        flexDirection: 'column',\n        overflow: 'hidden'\n      }}>\n        {/* Header */}\n        <div style={{\n          padding: styles.spacing.lg,\n          borderBottom: `1px solid ${styles.colors.border}`,\n          backgroundColor: styles.colors.surface\n        }}>\n          <div style={{\n            display: 'flex',\n            justifyContent: 'space-between',\n            alignItems: 'center',\n            marginBottom: styles.spacing.md\n          }}>\n            <h1 style={{\n              margin: 0,\n              fontSize: styles.typography.fontSize.xxl || styles.typography.fontSize.xl,\n              fontWeight: styles.typography.fontWeight?.bold || '700',\n              color: styles.colors.text\n            }}>\n              Entity Browser\n            </h1>\n            \n            {/* View Mode Toggle */}\n            <div style={{\n              display: 'flex',\n              gap: styles.spacing.sm,\n              alignItems: 'center'\n            }}>\n              <span style={{\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.textSecondary\n              }}>\n                View:\n              </span>\n              <button\n                onClick={() => handleViewModeChange('grid')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'grid' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'grid' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Grid\n              </button>\n              <button\n                onClick={() => handleViewModeChange('card')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'card' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'card' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Cards\n              </button>\n            </div>\n          </div>\n          \n          {/* Search Bar */}\n          <div style={{\n            display: 'flex',\n            gap: styles.spacing.md\n          }}>\n            <input\n              type=\"text\"\n              placeholder=\"Search entities...\"\n              value={searchQuery}\n              onChange={(e) => handleSearch(e.target.value)}\n              style={{\n                flex: 1,\n                padding: styles.spacing.md,\n                fontSize: styles.typography.fontSize.md,\n                border: `1px solid ${styles.colors.border}`,\n                borderRadius: getBorderRadius('sm'),\n                backgroundColor: styles.colors.background\n              }}\n            />\n            {searchQuery && (\n              <button\n                onClick={() => handleSearch('')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: styles.colors.surfaceHover || styles.colors.surface,\n                  color: styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Clear\n              </button>\n            )}\n          </div>\n        </div>\n        \n        {/* Entity List */}\n        <div style={{\n          flex: 1,\n          overflow: 'auto',\n          padding: styles.spacing.lg\n        }}>\n          {EntityList && (\n            <EntityList\n              entities={entities}\n              viewMode={viewMode}\n              selectedEntityId={selectedEntityId}\n              onSelectEntity={handleSelectEntity}\n              sortBy={sortBy}\n              sortDirection={sortDirection}\n              onSortChange={handleSortChange}\n              savedUserSettings={savedUserSettings?.entityList}\n              onSaveUserSettings={(settings) => onSaveUserSettings?.({\n                ...savedUserSettings,\n                entityList: settings\n              })}\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n            />\n          )}\n          \n          {/* Empty State */}\n          {entities.length === 0 && !loading && (\n            <div style={{\n              display: 'flex',\n              flexDirection: 'column',\n              alignItems: 'center',\n              justifyContent: 'center',\n              padding: styles.spacing.xxl || styles.spacing.xl,\n              color: styles.colors.textSecondary\n            }}>\n              <div style={{\n                fontSize: styles.typography.fontSize.xl,\n                marginBottom: styles.spacing.md\n              }}>\n                No entities found\n              </div>\n              <div style={{\n                fontSize: styles.typography.fontSize.md\n              }}>\n                {searchQuery || Object.keys(filters).length > 0\n                  ? 'Try adjusting your filters or search query'\n                  : 'No entities are available'}\n              </div>\n            </div>\n          )}\n        </div>\n      </div>\n      \n      {/* Details Panel */}\n      {EntityDetails && (\n        <EntityDetails\n          entity={selectedEntity}\n          fields={entityFields}\n          relationships={entityRelationships}\n          isOpen={detailsPanelOpen}\n          onClose={handleCloseDetails}\n          onOpenRecord={() => handleOpenRecord(selectedEntity?.Name)}\n          savedUserSettings={savedUserSettings?.detailsPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            detailsPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n    </div>\n  );\n}"
 }

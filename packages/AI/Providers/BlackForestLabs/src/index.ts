@@ -416,9 +416,3 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 }
 
-/**
- * Prevents tree-shaking from removing this class.
- */
-export function LoadFLUXImageGenerator() {
-    // This function intentionally does nothing
-}

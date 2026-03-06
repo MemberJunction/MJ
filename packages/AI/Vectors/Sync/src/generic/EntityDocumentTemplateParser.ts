@@ -1,5 +1,5 @@
 import { CompositeKey, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { EntityVectorSyncer } from "../models/entityVectorSync";
 import { EntityDocumentTemplateParserBase } from "./EntityDocumenTemplateParserBase";
 
@@ -30,7 +30,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
         const vectorSyncer: EntityVectorSyncer = new EntityVectorSyncer();
         vectorSyncer.CurrentUser = ContextUser;
 
-        const entityInfo = md.Entities.find(e => e.ID === entityID);    
+        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));    
         if (!entityInfo){
             throw new Error(`Entity with ID ${entityID} not found.`);
         }

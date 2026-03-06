@@ -3,60 +3,60 @@
     "fields": {
       "Name": "Typeform",
       "Description": "Typeform integration for managing forms, retrieving responses, generating statistics, and automating workflows",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Form Builders&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "EAF85C0B-CA31-4187-A12E-B5D84B560239"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.720Z",
-      "checksum": "f7c8f2627be801761a6a5b31f1db67fc47f1cce9f772d59fe93692baae5b6301"
+      "lastModified": "2026-02-13T21:08:31.998Z",
+      "checksum": "d2fde24236422fe8e01c908eee3dd90e621dae4101d600cc357a4b261ad7c32d"
     }
   },
   {
     "fields": {
       "Name": "JotForm",
       "Description": "JotForm integration for managing forms, retrieving submissions, generating statistics, and automating workflows with regional endpoint support",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Form Builders&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "91028B4F-18F1-4C35-A68A-7B7ABCE395B9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.722Z",
-      "checksum": "1368534e6f7a93109393b655f08817478c8a82132fb9025585f9325a6ae82c35"
+      "lastModified": "2026-02-13T21:08:32.000Z",
+      "checksum": "e0bd6b4cbc6e968bf0efa3c0c1dbe47b6221ea0e581cfeb6b8d6cf41ae3020ef"
     }
   },
   {
     "fields": {
       "Name": "SurveyMonkey",
       "Description": "SurveyMonkey integration for enterprise surveys, advanced analytics, audience management, and professional research workflows",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Form Builders&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "B55836C4-52D4-4AAD-8FDE-5C3E394314B9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.723Z",
-      "checksum": "0973d97ac675149f124139d28d9f652c4ed36c34d7602f5e24eeff71ab2343b2"
+      "lastModified": "2026-02-13T21:08:32.001Z",
+      "checksum": "0e9acee833a6d861246be156490f7b1280613ab9c7692f54a75747e4203b780e"
     }
   },
   {
     "fields": {
       "Name": "Google Forms",
       "Description": "Google Forms integration for retrieving form responses, generating statistics, and exporting data. Read-only API integration with Google Workspace.",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Form Builders&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.724Z",
-      "checksum": "c1ac09c952bf5750dcc530adf7e0ef577262928223b894c55db04b67126b8771"
+      "lastModified": "2026-02-13T21:08:32.003Z",
+      "checksum": "befeeed3e20415f4b433538d0cf15f0bafd9d62a1c7c9b0baa15297f00fbfa82"
     }
   }
 ]

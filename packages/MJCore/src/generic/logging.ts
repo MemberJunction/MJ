@@ -1,16 +1,6 @@
 import debug, { Debugger } from 'debug';
-
-let fs: any;
-
-if (runningOnNode()) {
-    try {
-        fs = eval("require('fs')"); // wrap the require in eval to avoid bundling attempt and also avoid runtime scanning issues in the browser.
-    } catch (err) {
-        // shouldn't get here since we're checking for the node variables above, but have this
-        // try/catch block just in case.
-        // fs module is not available, normal in browser situation, we can't log to "Files" as that doesn't make sense in browser
-    }
-}
+import { MJGlobal } from '@memberjunction/global';
+import { IFileSystemProvider } from './interfaces';
 
 // Create the default logger with the "MJGlobal" namespace.
 const __defaultLogger: Debugger = debug('MJGlobal');
@@ -304,13 +294,31 @@ function logToConsole(message: any, isError: boolean, ...args: any[]) {
     else if (!GetProductionStatus()) // only do console.log() if we're not in production
         console.log(message, ...args);
 }
-function logToFile(message, isError: boolean, logToFileName: string, ...args: any[]) {
-    if (fs === null || fs === undefined) {
-        console.error('Attempting to log to file, but fs module is not available, logging to console instead');
+/**
+ * Retrieves the FileSystemProvider from the global Metadata provider.
+ * Accesses MJGlobal's object store directly (rather than importing Metadata)
+ * to avoid circular dependency — logging.ts is imported by many core modules.
+ */
+function getFileSystemProvider(): IFileSystemProvider | null {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (!g) return null;
+    const provider = g['MJ_MetadataProvider'];
+    return provider?.FileSystemProvider ?? null;
+}
+
+function logToFile(message: string, isError: boolean, logToFileName: string, ...args: unknown[]) {
+    const provider = getFileSystemProvider();
+    if (!provider) {
+        console.error('Attempting to log to file, but FileSystemProvider is not available, logging to console instead');
         logToConsole(message, isError, ...args);
+        return;
     }
-    else
-        fs.appendFileSync(logToFileName, `${isError ? 'ERROR' : 'STATUS'} (${new Date()}: ${message}${args && args.length > 0 && args.join('').length > 0 ? '\n   ARGS' + args.join('\n   ')  : ''}` + '\n');
+
+    const formattedMessage = `${isError ? 'ERROR' : 'STATUS'} (${new Date()}: ${message}${args && args.length > 0 && args.join('').length > 0 ? '\n   ARGS' + args.join('\n   ') : ''}` + '\n';
+    provider.AppendToFile(logToFileName, formattedMessage).catch(err => {
+        console.error('Failed to log to file:', err);
+        logToConsole(message, isError, ...args);
+    });
 }
 
 let _productionStatus: boolean = null;

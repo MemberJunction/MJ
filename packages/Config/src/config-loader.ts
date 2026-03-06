@@ -1,5 +1,9 @@
 import { cosmiconfig } from 'cosmiconfig';
+import { createRequire } from 'node:module';
 import { mergeConfigs, MergeOptions } from './config-merger';
+
+// Use createRequire to load CommonJS config files
+const require = createRequire(import.meta.url);
 
 /**
  * Configuration loading options

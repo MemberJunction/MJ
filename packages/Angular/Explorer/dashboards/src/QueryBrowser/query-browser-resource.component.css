@@ -13,13 +13,12 @@
 
 /* Left Panel: Query Tree */
 .query-tree-panel {
-    width: 320px;
-    min-width: 280px;
-    max-width: 400px;
+    flex-shrink: 0;
     background: #fff;
     border-right: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
+    /* Width controlled by [style.width.px] binding */
 }
 
 /* Tree Header */
@@ -299,6 +298,52 @@
     color: #5c6bc0;
 }
 
+/* Resize Handle */
+.resize-handle {
+    flex-shrink: 0;
+    width: 6px;
+    cursor: col-resize;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+    position: relative;
+    z-index: 10;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+    background: rgba(92, 107, 192, 0.15);
+}
+
+.resize-handle-grip {
+    width: 2px;
+    height: 32px;
+    border-radius: 1px;
+    background: #ccc;
+    transition: background 0.15s ease;
+}
+
+.resize-handle:hover .resize-handle-grip,
+.resize-handle.active .resize-handle-grip {
+    background: #5c6bc0;
+}
+
+/* Prevent text selection and set cursor during resize */
+.query-browser-container.resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
+.query-browser-container.resizing * {
+    pointer-events: none;
+}
+
+.query-browser-container.resizing .resize-handle {
+    pointer-events: auto;
+}
+
 /* Right Panel: Query Viewer */
 .query-viewer-panel {
     flex: 1;
@@ -367,11 +412,14 @@ mj-query-viewer {
     }
 
     .query-tree-panel {
-        width: 100%;
-        max-width: none;
+        width: 100% !important;
         height: 40%;
         border-right: none;
         border-bottom: 1px solid #e0e0e0;
+    }
+
+    .resize-handle {
+        display: none;
     }
 
     .query-viewer-panel {

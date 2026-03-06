@@ -3,14 +3,14 @@
     "fields": {
       "Name": "Get SurveyMonkey Responses",
       "Description": "Retrieves responses from a SurveyMonkey survey with advanced filtering, pagination, and sorting capabilities. Supports date range filters, status filtering, and automatic pagination through all responses.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "GetSurveyMonkeyResponsesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-inbox"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -348,7 +348,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -430,22 +430,22 @@
       "ID": "09DA4A47-0F6B-4DDC-A0FE-6C6F7D33982E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.159Z",
-      "checksum": "dea867a2d973d190522f236e0021658c8ff5a89d9c93829753e12194dcec0e1f"
+      "lastModified": "2026-02-13T21:09:07.917Z",
+      "checksum": "54eb9d9364f0cee91a0edb53a6c011c82626b7bd8a647a52a66fdfcff42bf16d"
     }
   },
   {
     "fields": {
       "Name": "Get Single SurveyMonkey Response",
       "Description": "Retrieves details of a specific SurveyMonkey response by its unique response ID. Includes all answers, metadata, recipient information, and response timing data.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "GetSingleSurveyMonkeyResponseAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-lines"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -637,7 +637,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -719,22 +719,22 @@
       "ID": "5FC6C5FA-C9C0-4E7B-9403-D638BAC8EAEF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.161Z",
-      "checksum": "1c197fae94de47e1e7940debea261320eba9f29e2ac51f58bc11b3608abd91d1"
+      "lastModified": "2026-02-13T21:09:07.918Z",
+      "checksum": "b39420115adc70be501f6cb0563b9d2c768874e201a8fc4746873f36410bdd48"
     }
   },
   {
     "fields": {
       "Name": "Get SurveyMonkey Response Statistics",
       "Description": "Calculates comprehensive statistics from SurveyMonkey responses including completion rates, response trends, answer distributions, and time-based analytics. Perfect for dashboards, reporting, and data analysis.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "GetSurveyMonkeyStatisticsAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-chart-line"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1049,7 +1049,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1116,22 +1116,22 @@
       "ID": "C8F445C1-2011-4370-8F14-2A41B057FDD6"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.163Z",
-      "checksum": "bc8fd241a56dde81d92fb690f93533e297fcadccbd2e93365ea278ab510634b7"
+      "lastModified": "2026-02-13T21:09:07.919Z",
+      "checksum": "4dfbb55ff6d1031034c7134ad2a06d2fbb9e1f78b0b446ba2600f7627397fcd7"
     }
   },
   {
     "fields": {
       "Name": "Export SurveyMonkey Responses to CSV",
       "Description": "Exports SurveyMonkey responses to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters, optional metadata columns, and flexible date filtering.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "ExportSurveyMonkeyCSVAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-csv"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1362,7 +1362,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1444,22 +1444,22 @@
       "ID": "C175F13E-16DC-4FC4-B2D1-46041B480E8C"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.165Z",
-      "checksum": "4b5b1ff7239e37d54888b0797f70b5600e97af38bd642e34ec5fa28157fa1b67"
+      "lastModified": "2026-02-13T21:09:07.920Z",
+      "checksum": "221e7c55634fede0c9629e1bbb2e71941575a4fdbb37238892b83b56b3915165"
     }
   },
   {
     "fields": {
       "Name": "Watch for New SurveyMonkey Responses",
       "Description": "Polls SurveyMonkey for new responses since the last check. Returns only new submissions and updates the last checked timestamp. Ideal for triggering workflows, sending notifications, or syncing data to other systems in real-time.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "WatchNewSurveyMonkeyResponsesAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-eye"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1722,7 +1722,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1804,22 +1804,22 @@
       "ID": "D6E11636-E826-415E-9859-B54634FE772E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.167Z",
-      "checksum": "7cb24f5ffd9b3b05e552d3eff2d4b48a76ddadaaf0ed3dcc25964207b38b4c4b"
+      "lastModified": "2026-02-13T21:09:07.921Z",
+      "checksum": "493515466aa74529e5c92b2a676796ca794ca9e5f6d01e2646503cdb9053d654"
     }
   },
   {
     "fields": {
       "Name": "Get SurveyMonkey Details",
       "Description": "Retrieves complete details of a SurveyMonkey survey including title, questions, pages, logic, quota settings, theme, and metadata. Use this to inspect survey configurations, backup survey designs, or analyze survey structure.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "GetSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-clipboard-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2061,7 +2061,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2128,22 +2128,22 @@
       "ID": "9E131E5B-2D15-4A21-86A4-A0834C31B0FB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.169Z",
-      "checksum": "3c87d53c9aa86c675b29c85430f9406fc6e8953e75b5a7dd111a14bcad3f1471"
+      "lastModified": "2026-02-13T21:09:07.922Z",
+      "checksum": "2fc4d666252cd04e0b0a2a69390288b4b1bd44d4b7e8844de7efc0610511f7a0"
     }
   },
   {
     "fields": {
       "Name": "Create SurveyMonkey",
       "Description": "Creates a new SurveyMonkey survey with specified title, pages, questions, and settings. Supports all question types including multiple choice, text, rating, matrix, and more. Returns the new survey ID and collector URLs.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "CreateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-plus-circle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2373,7 +2373,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2455,22 +2455,22 @@
       "ID": "6D55727D-B21C-4D16-B765-8AA691364A9E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.171Z",
-      "checksum": "0cb04eb04be86acffdd923874e95fb49309008e06ebaddc7cb7c37c4ddd2fd57"
+      "lastModified": "2026-02-13T21:09:07.922Z",
+      "checksum": "47e225a4625f45891066394be96e5b4bbfc98131bf5c87b7000af4e434851de0"
     }
   },
   {
     "fields": {
       "Name": "Update SurveyMonkey",
       "Description": "Updates an existing SurveyMonkey survey including title, pages, questions, and settings. Use PATCH mode (default) for safe partial updates or PUT mode for complete replacement. WARNING: PUT mode replaces all survey data - pages and questions not included will be deleted.",
-      "CategoryID": "@lookup:Action Categories.Name=SurveyMonkey&Parent=Form Builders",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=SurveyMonkey&Parent=Form Builders",
       "DriverClass": "UpdateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-pen-to-square"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2683,7 +2683,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2765,8 +2765,8 @@
       "ID": "381C8C15-E5A5-4909-9FA2-818921839786"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:21.173Z",
-      "checksum": "5ac018b56a9e7bedb7fbc67693f40685d3ad808992d57d3f358c0e820585f8e6"
+      "lastModified": "2026-02-13T21:09:07.923Z",
+      "checksum": "19b3a2f2099f0909659ffd8e39bc7e319f79b63996bdbaa528c3e50f06bb5a1a"
     }
   }
 ]

@@ -15,6 +15,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Interface for JSON Schema property definition
@@ -120,6 +121,7 @@ const ExecuteMCPToolMutation = gql`
 `;
 
 @Component({
+  standalone: false,
     selector: 'mj-mcp-test-tool-dialog',
     templateUrl: './mcp-test-tool-dialog.component.html',
     styleUrls: ['./mcp-test-tool-dialog.component.css'],
@@ -277,15 +279,15 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         // Filter connections by selected server
         if (this.ServerID) {
             this.FilteredConnections = this.Connections.filter(
-                c => c.MCPServerID === this.ServerID && c.Status === 'Active'
+                c => UUIDsEqual(c.MCPServerID, this.ServerID) && c.Status === 'Active'
             );
             // Filter tools by selected server
             this.FilteredTools = this.Tools.filter(
-                t => t.MCPServerID === this.ServerID && t.Status === 'Active'
+                t => UUIDsEqual(t.MCPServerID, this.ServerID) && t.Status === 'Active'
             );
 
             // Check if server requires authentication
-            const server = this.Servers.find(s => s.ID === this.ServerID);
+            const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID));
             const serverRequiresAuth = server?.Status === 'Active'; // All servers currently need connections
 
             // Auto-select connection logic
@@ -376,7 +378,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     async proceedToConfig(): Promise<void> {
         if (!this.CanProceedToConfig) return;
 
-        this.SelectedTool = this.Tools.find(t => t.ID === this.ToolID) || null;
+        this.SelectedTool = this.Tools.find(t => UUIDsEqual(t.ID, this.ToolID)) || null;
         if (!this.SelectedTool) return;
 
         // Parse input schema and create parameter configs
@@ -834,7 +836,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
      * Get display name for selected server
      */
     get SelectedServerName(): string {
-        const server = this.Servers.find(s => s.ID === this.ServerID);
+        const server = this.Servers.find(s => UUIDsEqual(s.ID, this.ServerID));
         return server?.Name || '';
     }
 
@@ -842,7 +844,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
      * Get display name for selected connection
      */
     get SelectedConnectionName(): string {
-        const connection = this.Connections.find(c => c.ID === this.ConnectionID);
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, this.ConnectionID));
         return connection?.Name || '';
     }
 
@@ -852,11 +854,4 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     get SelectedToolName(): string {
         return this.SelectedTool?.ToolTitle || this.SelectedTool?.ToolName || '';
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPTestToolDialog(): void {
-    // Ensures the component is not tree-shaken
 }

@@ -1,12 +1,14 @@
 <div class="test-run-form" [class.is-mobile]="false">
   <!-- Error State -->
-  <div class="error-banner" *ngIf="error" (click)="retryLoad()">
-    <i class="fas fa-exclamation-triangle"></i>
-    <span>{{ error }}</span>
-    <button class="retry-btn">
-      <i class="fas fa-redo"></i> Retry
-    </button>
-  </div>
+  @if (error) {
+    <div class="error-banner" (click)="retryLoad()">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>{{ error }}</span>
+      <button class="retry-btn">
+        <i class="fas fa-redo"></i> Retry
+      </button>
+    </div>
+  }
 
   <!-- Header Section -->
   <div class="test-run-header" [class]="getStatusClass()">
@@ -19,13 +21,15 @@
             <span class="breadcrumb-text">Testing</span>
           </a>
         </li>
-        <li *ngIf="test">
-          <i class="fas fa-chevron-right separator"></i>
-          <a href="javascript:void(0)" (click)="openTest()">
-            <i class="fas fa-flask"></i>
-            <span class="breadcrumb-text">{{ test.Name }}</span>
-          </a>
-        </li>
+        @if (test) {
+          <li>
+            <i class="fas fa-chevron-right separator"></i>
+            <a href="javascript:void(0)" (click)="openTest()">
+              <i class="fas fa-flask"></i>
+              <span class="breadcrumb-text">{{ test.Name }}</span>
+            </a>
+          </li>
+        }
         <li class="current">
           <i class="fas fa-chevron-right separator"></i>
           <span>Run #{{ record.ID.substring(0, 8) }}</span>
@@ -49,14 +53,18 @@
             <span class="status-badge" [style.background-color]="getStatusColor()">
               {{ record.Status }}
             </span>
-            <span class="meta-item" *ngIf="test">
-              <i class="fas fa-flask"></i>
-              {{ test.Type }}
-            </span>
-            <span class="meta-item" *ngIf="autoRefreshEnabled">
-              <i class="fas fa-sync-alt fa-spin"></i>
-              Auto-refreshing
-            </span>
+            @if (test) {
+              <span class="meta-item">
+                <i class="fas fa-flask"></i>
+                {{ test.Type }}
+              </span>
+            }
+            @if (autoRefreshEnabled) {
+              <span class="meta-item">
+                <i class="fas fa-sync-alt fa-spin"></i>
+                Auto-refreshing
+              </span>
+            }
           </div>
         </div>
       </div>
@@ -103,9 +111,11 @@
         <div class="metric-content">
           <div class="metric-label">Score</div>
           <div class="metric-value">{{ formatScore(record.Score) }}</div>
-          <div class="metric-progress" *ngIf="record.Score != null">
-            <div class="progress-bar" [style.width.%]="getScorePercentage()" [style.background-color]="getStatusColor()"></div>
-          </div>
+          @if (record.Score != null) {
+            <div class="metric-progress">
+              <div class="progress-bar" [style.width.%]="getScorePercentage()" [style.background-color]="getStatusColor()"></div>
+            </div>
+          }
         </div>
       </div>
 
@@ -116,9 +126,11 @@
         <div class="metric-content">
           <div class="metric-label">Checks</div>
           <div class="metric-value">{{ record.PassedChecks }}/{{ record.TotalChecks }}</div>
-          <div class="metric-progress" *ngIf="record.TotalChecks">
-            <div class="progress-bar" [style.width.%]="getPassRatePercentage()" [style.background-color]="getStatusColor()"></div>
-          </div>
+          @if (record.TotalChecks) {
+            <div class="metric-progress">
+              <div class="progress-bar" [style.width.%]="getPassRatePercentage()" [style.background-color]="getStatusColor()"></div>
+            </div>
+          }
         </div>
       </div>
 
@@ -134,439 +146,516 @@
     </div>
 
     <!-- Secondary Info -->
-    <div class="secondary-info" *ngIf="record.RunByUser || testSuiteRun || record.TargetLogEntityID">
-      <span class="info-chip" *ngIf="record.RunByUser">
-        <i class="fas fa-user"></i>
-        {{ record.RunByUser }}
-      </span>
-      <span class="info-chip clickable" *ngIf="testSuiteRun" (click)="openTestSuiteRun()">
-        <i class="fas fa-layer-group"></i>
-        Part of Suite Run (Seq: {{ record.Sequence }})
-      </span>
-      <!-- Target Entity Link Pill -->
-      <mj-entity-link-pill
-        *ngIf="record.TargetLogEntityID && record.TargetLogID"
-        [entityName]="record.TargetLogEntity"
-        [recordId]="record.TargetLogID">
-      </mj-entity-link-pill>
-    </div>
+    @if (record.RunByUser || testSuiteRun || record.TargetLogEntityID) {
+      <div class="secondary-info">
+        @if (record.RunByUser) {
+          <span class="info-chip">
+            <i class="fas fa-user"></i>
+            {{ record.RunByUser }}
+          </span>
+        }
+        @if (testSuiteRun) {
+          <span class="info-chip clickable" (click)="openTestSuiteRun()">
+            <i class="fas fa-layer-group"></i>
+            Part of Suite Run (Seq: {{ record.Sequence }})
+          </span>
+        }
+        <!-- Target Entity Link Pill -->
+        @if (record.TargetLogEntityID && record.TargetLogID) {
+          <mj-entity-link-pill
+            [entityName]="record.TargetLogEntity"
+            [recordId]="record.TargetLogID">
+          </mj-entity-link-pill>
+        }
+      </div>
+    }
 
     <!-- Tags Section - Sleek inline design -->
-    <div class="tags-bar" *ngIf="!editingTags">
-      <div class="tags-bar-content">
-        <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
-        <div class="tags-bar-chips" *ngIf="tags.length > 0">
-          <span class="tag-inline" *ngFor="let tag of tags">{{ tag }}</span>
-        </div>
-        <span class="tags-bar-empty" *ngIf="tags.length === 0">No tags</span>
-        <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
-          <i class="fas fa-plus"></i> Add
-        </button>
-      </div>
-    </div>
-
-    <!-- Tags Editor - Expanded when editing -->
-    <div class="tags-editor-panel" *ngIf="editingTags">
-      <div class="tags-editor-header">
-        <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
-      </div>
-      <div class="tags-editor-body">
-        <div class="tags-editor-chips">
-          <span class="tag-editable" *ngFor="let tag of tags">
-            {{ tag }}
-            <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
-              <i class="fas fa-times"></i>
-            </button>
-          </span>
-          <span class="tags-empty-hint" *ngIf="tags.length === 0">No tags yet</span>
-        </div>
-        <div class="tags-editor-input">
-          <input type="text"
-                 [(ngModel)]="newTag"
-                 placeholder="Type a tag and press Enter..."
-                 (keyup.enter)="addTag()"
-                 class="tag-text-input" />
-          <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
-            <i class="fas fa-plus"></i>
+    @if (!editingTags) {
+      <div class="tags-bar">
+        <div class="tags-bar-content">
+          <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
+          @if (tags.length > 0) {
+            <div class="tags-bar-chips">
+              @for (tag of tags; track tag) {
+                <span class="tag-inline">{{ tag }}</span>
+              }
+            </div>
+          }
+          @if (tags.length === 0) {
+            <span class="tags-bar-empty">No tags</span>
+          }
+          <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
+            <i class="fas fa-plus"></i> Add
           </button>
         </div>
       </div>
-      <div class="tags-editor-footer">
-        <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
-          <i class="fas fa-spinner fa-spin" *ngIf="savingTags"></i>
-          {{ savingTags ? 'Saving...' : 'Save' }}
-        </button>
-        <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+    }
+
+    <!-- Tags Editor - Expanded when editing -->
+    @if (editingTags) {
+      <div class="tags-editor-panel">
+        <div class="tags-editor-header">
+          <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
+        </div>
+        <div class="tags-editor-body">
+          <div class="tags-editor-chips">
+            @for (tag of tags; track tag) {
+              <span class="tag-editable">
+                {{ tag }}
+                <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
+                  <i class="fas fa-times"></i>
+                </button>
+              </span>
+            }
+            @if (tags.length === 0) {
+              <span class="tags-empty-hint">No tags yet</span>
+            }
+          </div>
+          <div class="tags-editor-input">
+            <input type="text"
+              [(ngModel)]="newTag"
+              placeholder="Type a tag and press Enter..."
+              (keyup.enter)="addTag()"
+              class="tag-text-input" />
+            <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="tags-editor-footer">
+          <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+            @if (savingTags) {
+              <i class="fas fa-spinner fa-spin"></i>
+            }
+            {{ savingTags ? 'Saving...' : 'Save' }}
+          </button>
+          <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+        </div>
       </div>
-    </div>
+    }
   </div>
 
   <!-- Tabs -->
   <div class="tabs-container">
     <div class="tabs" role="tablist">
       <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')"
-              role="tab" [attr.aria-selected]="activeTab === 'overview'" title="Press 1">
+        role="tab" [attr.aria-selected]="activeTab === 'overview'" title="Press 1">
         <i class="fas fa-chart-pie"></i>
         <span>Overview</span>
       </button>
       <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')"
-              role="tab" [attr.aria-selected]="activeTab === 'details'" title="Press 2">
+        role="tab" [attr.aria-selected]="activeTab === 'details'" title="Press 2">
         <i class="fas fa-info-circle"></i>
         <span>Details</span>
       </button>
       <button class="tab" [class.active]="activeTab === 'ai-runs'" (click)="changeTab('ai-runs')"
-              role="tab" [attr.aria-selected]="activeTab === 'ai-runs'" title="Press 3">
+        role="tab" [attr.aria-selected]="activeTab === 'ai-runs'" title="Press 3">
         <i class="fas fa-robot"></i>
         <span>AI Runs</span>
-        <span class="tab-badge" *ngIf="aiRunsLoaded">{{ aiAgentRuns.length + aiPromptRuns.length }}</span>
+        @if (aiRunsLoaded) {
+          <span class="tab-badge">{{ aiAgentRuns.length + aiPromptRuns.length }}</span>
+        }
       </button>
       <button class="tab" [class.active]="activeTab === 'feedback'" (click)="changeTab('feedback')"
-              role="tab" [attr.aria-selected]="activeTab === 'feedback'" title="Press 4">
+        role="tab" [attr.aria-selected]="activeTab === 'feedback'" title="Press 4">
         <i class="fas fa-comments"></i>
         <span>Feedback</span>
-        <span class="tab-badge" *ngIf="feedbackLoaded">{{ feedbacks.length }}</span>
+        @if (feedbackLoaded) {
+          <span class="tab-badge">{{ feedbacks.length }}</span>
+        }
       </button>
       <button class="tab" [class.active]="activeTab === 'execution'" (click)="changeTab('execution')"
-              role="tab" [attr.aria-selected]="activeTab === 'execution'" title="Press 5">
+        role="tab" [attr.aria-selected]="activeTab === 'execution'" title="Press 5">
         <i class="fas fa-microchip"></i>
         <span>Execution</span>
       </button>
-      <button class="tab" [class.active]="activeTab === 'log'" (click)="changeTab('log')" *ngIf="record.Log"
-              role="tab" [attr.aria-selected]="activeTab === 'log'" title="Press 6">
-        <i class="fas fa-terminal"></i>
-        <span>Log</span>
-      </button>
+      @if (record.Log) {
+        <button class="tab" [class.active]="activeTab === 'log'" (click)="changeTab('log')"
+          role="tab" [attr.aria-selected]="activeTab === 'log'" title="Press 6">
+          <i class="fas fa-terminal"></i>
+          <span>Log</span>
+        </button>
+      }
     </div>
   </div>
 
   <!-- Tab Content -->
   <div class="tab-content">
     <!-- Overview Tab -->
-    <div class="overview-tab" *ngIf="activeTab === 'overview'" [@fadeIn]>
-      <!-- Result Hero -->
-      <div class="result-hero" [class]="getStatusClass()">
-        <div class="result-icon-wrapper">
-          <div class="result-icon">
-            <i class="fas" [ngClass]="getStatusIcon()"></i>
-          </div>
-          <div class="result-pulse" *ngIf="record.Status === 'Running'"></div>
-        </div>
-        <div class="result-text">
-          <h2>TEST {{ record.Status.toUpperCase() }}</h2>
-          <div class="result-details">
-            <span class="result-score">Score: {{ formatScore(record.Score) }}</span>
-            <span class="result-divider">|</span>
-            <span class="result-checks">{{ record.PassedChecks }} of {{ record.TotalChecks }} checks passed</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Check Results -->
-      <div class="check-results" *ngIf="getCheckResults().length > 0">
-        <div class="section-header">
-          <h3><i class="fas fa-tasks"></i> Check Results</h3>
-          <span class="check-summary">{{ record.PassedChecks }} passed, {{ record.FailedChecks }} failed</span>
-        </div>
-        <div class="check-list">
-          <div class="check-item" *ngFor="let check of getCheckResults(); let i = index"
-               [class.passed]="check.passed" [class.failed]="!check.passed"
-               [style.animation-delay.ms]="i * 50">
-            <div class="check-status">
-              <i class="fas" [class.fa-check-circle]="check.passed" [class.fa-times-circle]="!check.passed"></i>
+    @if (activeTab === 'overview') {
+      <div class="overview-tab" [@fadeIn]>
+        <!-- Result Hero -->
+        <div class="result-hero" [class]="getStatusClass()">
+          <div class="result-icon-wrapper">
+            <div class="result-icon">
+              <i class="fas" [ngClass]="getStatusIcon()"></i>
             </div>
-            <div class="check-content">
-              <div class="check-name">{{ check.name }}</div>
-              <div class="check-message" *ngIf="check.message">{{ check.message }}</div>
-            </div>
-            <div class="check-weight" *ngIf="check.weight">
-              <span class="weight-label">Weight:</span> {{ check.weight }}
+            @if (record.Status === 'Running') {
+              <div class="result-pulse"></div>
+            }
+          </div>
+          <div class="result-text">
+            <h2>TEST {{ record.Status.toUpperCase() }}</h2>
+            <div class="result-details">
+              <span class="result-score">Score: {{ formatScore(record.Score) }}</span>
+              <span class="result-divider">|</span>
+              <span class="result-checks">{{ record.PassedChecks }} of {{ record.TotalChecks }} checks passed</span>
             </div>
           </div>
         </div>
+        <!-- Check Results -->
+        @if (getCheckResults().length > 0) {
+          <div class="check-results">
+            <div class="section-header">
+              <h3><i class="fas fa-tasks"></i> Check Results</h3>
+              <span class="check-summary">{{ record.PassedChecks }} passed, {{ record.FailedChecks }} failed</span>
+            </div>
+            <div class="check-list">
+              @for (check of getCheckResults(); track check; let i = $index) {
+                <div class="check-item"
+                  [class.passed]="check.passed" [class.failed]="!check.passed"
+                  [style.animation-delay.ms]="i * 50">
+                  <div class="check-status">
+                    <i class="fas" [class.fa-check-circle]="check.passed" [class.fa-times-circle]="!check.passed"></i>
+                  </div>
+                  <div class="check-content">
+                    <div class="check-name">{{ check.name }}</div>
+                    @if (check.message) {
+                      <div class="check-message">{{ check.message }}</div>
+                    }
+                  </div>
+                  @if (check.weight) {
+                    <div class="check-weight">
+                      <span class="weight-label">Weight:</span> {{ check.weight }}
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- Data Comparison -->
+        <div class="comparison-section">
+          <div class="section-header">
+            <h3><i class="fas fa-exchange-alt"></i> Data Comparison</h3>
+          </div>
+          <div class="comparison-tabs">
+            <button class="comparison-tab" [class.active]="comparisonView === 'input'" (click)="setComparisonView('input')">
+              <i class="fas fa-sign-in-alt"></i> Input
+            </button>
+            <button class="comparison-tab" [class.active]="comparisonView === 'expected'" (click)="setComparisonView('expected')">
+              <i class="fas fa-bullseye"></i> Expected
+            </button>
+            <button class="comparison-tab" [class.active]="comparisonView === 'actual'" (click)="setComparisonView('actual')">
+              <i class="fas fa-check-square"></i> Actual
+            </button>
+          </div>
+          <div class="comparison-content">
+            <mj-code-editor
+              [value]="getComparisonData()"
+              language="json"
+              [readonly]="true"
+              [toolbar]="jsonToolbar"
+              [lineWrapping]="true">
+            </mj-code-editor>
+          </div>
+        </div>
       </div>
-
-      <!-- Data Comparison -->
-      <div class="comparison-section">
-        <div class="section-header">
-          <h3><i class="fas fa-exchange-alt"></i> Data Comparison</h3>
-        </div>
-        <div class="comparison-tabs">
-          <button class="comparison-tab" [class.active]="comparisonView === 'input'" (click)="setComparisonView('input')">
-            <i class="fas fa-sign-in-alt"></i> Input
-          </button>
-          <button class="comparison-tab" [class.active]="comparisonView === 'expected'" (click)="setComparisonView('expected')">
-            <i class="fas fa-bullseye"></i> Expected
-          </button>
-          <button class="comparison-tab" [class.active]="comparisonView === 'actual'" (click)="setComparisonView('actual')">
-            <i class="fas fa-check-square"></i> Actual
-          </button>
-        </div>
-        <div class="comparison-content">
-          <mj-code-editor
-            [value]="getComparisonData()"
-            language="json"
-            [readonly]="true"
-            [toolbar]="jsonToolbar"
-            [lineWrapping]="true">
-          </mj-code-editor>
-        </div>
-      </div>
-    </div>
+    }
 
     <!-- Details Tab -->
-    <div class="details-tab" *ngIf="activeTab === 'details'" [@fadeIn]>
-      <div class="details-grid">
-        <div class="detail-card">
-          <div class="detail-icon"><i class="fas fa-fingerprint"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Test Run ID</div>
-            <div class="detail-value monospace">{{ record.ID }}</div>
+    @if (activeTab === 'details') {
+      <div class="details-tab" [@fadeIn]>
+        <div class="details-grid">
+          <div class="detail-card">
+            <div class="detail-icon"><i class="fas fa-fingerprint"></i></div>
+            <div class="detail-content">
+              <div class="detail-label">Test Run ID</div>
+              <div class="detail-value monospace">{{ record.ID }}</div>
+            </div>
+          </div>
+          @if (test) {
+            <div class="detail-card clickable" (click)="openTest()">
+              <div class="detail-icon"><i class="fas fa-flask"></i></div>
+              <div class="detail-content">
+                <div class="detail-label">Test</div>
+                <div class="detail-value link">{{ test.Name }}</div>
+              </div>
+              <i class="fas fa-external-link-alt detail-action"></i>
+            </div>
+          }
+          <div class="detail-card">
+            <div class="detail-icon"><i class="fas fa-tag"></i></div>
+            <div class="detail-content">
+              <div class="detail-label">Target Type</div>
+              <div class="detail-value">{{ record.TargetType || 'N/A' }}</div>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-icon"><i class="fas fa-play-circle"></i></div>
+            <div class="detail-content">
+              <div class="detail-label">Started At</div>
+              <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-icon"><i class="fas fa-stop-circle"></i></div>
+            <div class="detail-content">
+              <div class="detail-label">Completed At</div>
+              <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-icon"><i class="fas fa-hourglass-half"></i></div>
+            <div class="detail-content">
+              <div class="detail-label">Duration</div>
+              <div class="detail-value">{{ calculateDuration() }}</div>
+            </div>
           </div>
         </div>
-
-        <div class="detail-card clickable" *ngIf="test" (click)="openTest()">
-          <div class="detail-icon"><i class="fas fa-flask"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Test</div>
-            <div class="detail-value link">{{ test.Name }}</div>
+        <!-- Error Message -->
+        @if (record.ErrorMessage) {
+          <div class="error-section">
+            <div class="section-header error">
+              <h3><i class="fas fa-exclamation-triangle"></i> Error Message</h3>
+            </div>
+            <div class="error-content">
+              <mj-code-editor
+                [value]="record.ErrorMessage"
+                [readonly]="true"
+                [toolbar]="jsonToolbar"
+                [lineWrapping]="true">
+              </mj-code-editor>
+            </div>
           </div>
-          <i class="fas fa-external-link-alt detail-action"></i>
-        </div>
-
-        <div class="detail-card">
-          <div class="detail-icon"><i class="fas fa-tag"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Target Type</div>
-            <div class="detail-value">{{ record.TargetType || 'N/A' }}</div>
+        }
+        <!-- Result Details -->
+        @if (parsedData.resultDetails) {
+          <div class="result-details-section">
+            <div class="section-header">
+              <h3><i class="fas fa-file-code"></i> Result Details</h3>
+            </div>
+            <div class="result-details-content">
+              <mj-code-editor
+                [value]="getFormattedResultDetails()"
+                language="json"
+                [readonly]="true"
+                [toolbar]="jsonToolbar"
+                [lineWrapping]="true">
+              </mj-code-editor>
+            </div>
           </div>
-        </div>
-
-        <div class="detail-card">
-          <div class="detail-icon"><i class="fas fa-play-circle"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Started At</div>
-            <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
-          </div>
-        </div>
-
-        <div class="detail-card">
-          <div class="detail-icon"><i class="fas fa-stop-circle"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Completed At</div>
-            <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
-          </div>
-        </div>
-
-        <div class="detail-card">
-          <div class="detail-icon"><i class="fas fa-hourglass-half"></i></div>
-          <div class="detail-content">
-            <div class="detail-label">Duration</div>
-            <div class="detail-value">{{ calculateDuration() }}</div>
-          </div>
-        </div>
+        }
       </div>
-
-      <!-- Error Message -->
-      <div class="error-section" *ngIf="record.ErrorMessage">
-        <div class="section-header error">
-          <h3><i class="fas fa-exclamation-triangle"></i> Error Message</h3>
-        </div>
-        <div class="error-content">
-          <mj-code-editor
-            [value]="record.ErrorMessage"
-            [readonly]="true"
-            [toolbar]="jsonToolbar"
-            [lineWrapping]="true">
-          </mj-code-editor>
-        </div>
-      </div>
-
-      <!-- Result Details -->
-      <div class="result-details-section" *ngIf="parsedData.resultDetails">
-        <div class="section-header">
-          <h3><i class="fas fa-file-code"></i> Result Details</h3>
-        </div>
-        <div class="result-details-content">
-          <mj-code-editor
-            [value]="getFormattedResultDetails()"
-            language="json"
-            [readonly]="true"
-            [toolbar]="jsonToolbar"
-            [lineWrapping]="true">
-          </mj-code-editor>
-        </div>
-      </div>
-    </div>
+    }
 
     <!-- AI Runs Tab -->
-    <div class="ai-runs-tab" *ngIf="activeTab === 'ai-runs'" [@fadeIn]>
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingAIRuns">
-        <div class="skeleton-list">
-          <div class="skeleton-card" *ngFor="let i of [1,2,3]">
-            <div class="skeleton-icon"></div>
-            <div class="skeleton-content">
-              <div class="skeleton-line wide"></div>
-              <div class="skeleton-line narrow"></div>
+    @if (activeTab === 'ai-runs') {
+      <div class="ai-runs-tab" [@fadeIn]>
+        <!-- Loading State -->
+        @if (loadingAIRuns) {
+          <div class="loading-state">
+            <div class="skeleton-list">
+              @for (i of [1,2,3]; track i) {
+                <div class="skeleton-card">
+                  <div class="skeleton-icon"></div>
+                  <div class="skeleton-content">
+                    <div class="skeleton-line wide"></div>
+                    <div class="skeleton-line narrow"></div>
+                  </div>
+                </div>
+              }
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- AI Agent Runs -->
-      <div class="ai-section" *ngIf="!loadingAIRuns && aiAgentRuns.length > 0">
-        <div class="section-header">
-          <h3><i class="fas fa-robot"></i> AI Agent Runs</h3>
-          <span class="count-badge">{{ aiAgentRuns.length }}</span>
-        </div>
-        <div class="ai-run-list">
-          <div class="ai-run-card" *ngFor="let run of aiAgentRuns" (click)="openAIAgentRun(run.ID)">
-            <div class="ai-run-icon agent">
+        }
+        <!-- AI Agent Runs -->
+        @if (!loadingAIRuns && aiAgentRuns.length > 0) {
+          <div class="ai-section">
+            <div class="section-header">
+              <h3><i class="fas fa-robot"></i> AI Agent Runs</h3>
+              <span class="count-badge">{{ aiAgentRuns.length }}</span>
+            </div>
+            <div class="ai-run-list">
+              @for (run of aiAgentRuns; track run) {
+                <div class="ai-run-card" (click)="openAIAgentRun(run.ID)">
+                  <div class="ai-run-icon agent">
+                    <i class="fas fa-robot"></i>
+                  </div>
+                  <div class="ai-run-content">
+                    <div class="ai-run-name">{{ run.Agent }}</div>
+                    <div class="ai-run-meta">
+                      <span class="status-chip" [class]="run.Status.toLowerCase()">{{ run.Status }}</span>
+                      @if (run.TotalCost) {
+                        <span class="cost-chip">
+                          <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                  <i class="fas fa-chevron-right ai-run-arrow"></i>
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- AI Prompt Runs -->
+        @if (!loadingAIRuns && aiPromptRuns.length > 0) {
+          <div class="ai-section">
+            <div class="section-header">
+              <h3><i class="fas fa-comment-dots"></i> AI Prompt Runs</h3>
+              <span class="count-badge">{{ aiPromptRuns.length }}</span>
+            </div>
+            <div class="ai-run-list">
+              @for (run of aiPromptRuns; track run) {
+                <div class="ai-run-card" (click)="openAIPromptRun(run.ID)">
+                  <div class="ai-run-icon prompt">
+                    <i class="fas fa-comment-dots"></i>
+                  </div>
+                  <div class="ai-run-content">
+                    <div class="ai-run-name">{{ run.Prompt || run.Model }}</div>
+                    <div class="ai-run-meta">
+                      @if (run.TotalCost) {
+                        <span class="cost-chip">
+                          <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                  <i class="fas fa-chevron-right ai-run-arrow"></i>
+                </div>
+              }
+            </div>
+          </div>
+        }
+        <!-- Empty State -->
+        @if (aiRunsLoaded && aiAgentRuns.length === 0 && aiPromptRuns.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
               <i class="fas fa-robot"></i>
             </div>
-            <div class="ai-run-content">
-              <div class="ai-run-name">{{ run.Agent }}</div>
-              <div class="ai-run-meta">
-                <span class="status-chip" [class]="run.Status.toLowerCase()">{{ run.Status }}</span>
-                <span *ngIf="run.TotalCost" class="cost-chip">
-                  <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
-                </span>
-              </div>
-            </div>
-            <i class="fas fa-chevron-right ai-run-arrow"></i>
+            <h3>No AI Runs</h3>
+            <p>This test execution didn't involve any AI agent or prompt runs.</p>
           </div>
-        </div>
+        }
       </div>
-
-      <!-- AI Prompt Runs -->
-      <div class="ai-section" *ngIf="!loadingAIRuns && aiPromptRuns.length > 0">
-        <div class="section-header">
-          <h3><i class="fas fa-comment-dots"></i> AI Prompt Runs</h3>
-          <span class="count-badge">{{ aiPromptRuns.length }}</span>
-        </div>
-        <div class="ai-run-list">
-          <div class="ai-run-card" *ngFor="let run of aiPromptRuns" (click)="openAIPromptRun(run.ID)">
-            <div class="ai-run-icon prompt">
-              <i class="fas fa-comment-dots"></i>
-            </div>
-            <div class="ai-run-content">
-              <div class="ai-run-name">{{ run.Prompt || run.Model }}</div>
-              <div class="ai-run-meta">
-                <span *ngIf="run.TotalCost" class="cost-chip">
-                  <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
-                </span>
-              </div>
-            </div>
-            <i class="fas fa-chevron-right ai-run-arrow"></i>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="aiRunsLoaded && aiAgentRuns.length === 0 && aiPromptRuns.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-robot"></i>
-        </div>
-        <h3>No AI Runs</h3>
-        <p>This test execution didn't involve any AI agent or prompt runs.</p>
-      </div>
-    </div>
+    }
 
     <!-- Feedback Tab -->
-    <div class="feedback-tab" *ngIf="activeTab === 'feedback'" [@fadeIn]>
-      <!-- Loading State -->
-      <div class="loading-state" *ngIf="loadingFeedback">
-        <div class="skeleton-list">
-          <div class="skeleton-card" *ngFor="let i of [1,2]">
-            <div class="skeleton-avatar"></div>
-            <div class="skeleton-content">
-              <div class="skeleton-line wide"></div>
-              <div class="skeleton-line narrow"></div>
-              <div class="skeleton-line medium"></div>
+    @if (activeTab === 'feedback') {
+      <div class="feedback-tab" [@fadeIn]>
+        <!-- Loading State -->
+        @if (loadingFeedback) {
+          <div class="loading-state">
+            <div class="skeleton-list">
+              @for (i of [1,2]; track i) {
+                <div class="skeleton-card">
+                  <div class="skeleton-avatar"></div>
+                  <div class="skeleton-content">
+                    <div class="skeleton-line wide"></div>
+                    <div class="skeleton-line narrow"></div>
+                    <div class="skeleton-line medium"></div>
+                  </div>
+                </div>
+              }
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Feedback List -->
-      <div class="feedback-list" *ngIf="!loadingFeedback && feedbacks.length > 0">
-        <div class="feedback-item" *ngFor="let feedback of feedbacks">
-          <div class="feedback-header">
-            <div class="feedback-user">
-              <div class="user-avatar">
-                <i class="fas fa-user"></i>
+        }
+        <!-- Feedback List -->
+        @if (!loadingFeedback && feedbacks.length > 0) {
+          <div class="feedback-list">
+            @for (feedback of feedbacks; track feedback) {
+              <div class="feedback-item">
+                <div class="feedback-header">
+                  <div class="feedback-user">
+                    <div class="user-avatar">
+                      <i class="fas fa-user"></i>
+                    </div>
+                    <span class="user-name">{{ feedback.ReviewerUser }}</span>
+                  </div>
+                  <div class="feedback-date">
+                    {{ getRelativeTime(feedback.__mj_CreatedAt) }}
+                  </div>
+                </div>
+                <div class="feedback-body">
+                  <div class="feedback-rating">
+                    <div class="rating-stars">
+                      @for (s of [1,2,3,4,5,6,7,8,9,10]; track s) {
+                        <i class="fas fa-star"
+                        [class.filled]="s <= (feedback.Rating || 0)"></i>
+                      }
+                    </div>
+                    <span class="rating-value">{{ feedback.Rating }}/10</span>
+                  </div>
+                  @if (feedback.IsCorrect !== null) {
+                    <div class="feedback-verdict">
+                      <span class="verdict-badge" [class.correct]="feedback.IsCorrect" [class.incorrect]="!feedback.IsCorrect">
+                        <i class="fas" [class.fa-check]="feedback.IsCorrect" [class.fa-times]="!feedback.IsCorrect"></i>
+                        {{ feedback.IsCorrect ? 'Marked Correct' : 'Marked Incorrect' }}
+                      </span>
+                    </div>
+                  }
+                  @if (feedback.CorrectionSummary) {
+                    <div class="feedback-comments">
+                      <p>{{ feedback.CorrectionSummary }}</p>
+                    </div>
+                  }
+                </div>
               </div>
-              <span class="user-name">{{ feedback.ReviewerUser }}</span>
-            </div>
-            <div class="feedback-date">
-              {{ getRelativeTime(feedback.__mj_CreatedAt) }}
-            </div>
+            }
           </div>
-          <div class="feedback-body">
-            <div class="feedback-rating">
-              <div class="rating-stars">
-                <i class="fas fa-star" *ngFor="let s of [1,2,3,4,5,6,7,8,9,10]"
-                   [class.filled]="s <= (feedback.Rating || 0)"></i>
-              </div>
-              <span class="rating-value">{{ feedback.Rating }}/10</span>
+        }
+        <!-- Empty State -->
+        @if (feedbackLoaded && feedbacks.length === 0) {
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-comments"></i>
             </div>
-            <div class="feedback-verdict" *ngIf="feedback.IsCorrect !== null">
-              <span class="verdict-badge" [class.correct]="feedback.IsCorrect" [class.incorrect]="!feedback.IsCorrect">
-                <i class="fas" [class.fa-check]="feedback.IsCorrect" [class.fa-times]="!feedback.IsCorrect"></i>
-                {{ feedback.IsCorrect ? 'Marked Correct' : 'Marked Incorrect' }}
-              </span>
-            </div>
-            <div class="feedback-comments" *ngIf="feedback.CorrectionSummary">
-              <p>{{ feedback.CorrectionSummary }}</p>
-            </div>
+            <h3>No Feedback Yet</h3>
+            <p>No one has reviewed this test run yet. Be the first to provide feedback!</p>
           </div>
-        </div>
+        }
       </div>
-
-      <!-- Empty State -->
-      <div class="empty-state" *ngIf="feedbackLoaded && feedbacks.length === 0">
-        <div class="empty-icon">
-          <i class="fas fa-comments"></i>
-        </div>
-        <h3>No Feedback Yet</h3>
-        <p>No one has reviewed this test run yet. Be the first to provide feedback!</p>
-      </div>
-    </div>
+    }
 
     <!-- Execution Context Tab -->
-    <div class="execution-tab" *ngIf="activeTab === 'execution'" [@fadeIn]>
-      <mj-execution-context
-        [machineName]="record.MachineName"
-        [machineId]="record.MachineID"
-        [runByUserName]="record.RunByUserName"
-        [runByUserEmail]="record.RunByUserEmail"
-        [runContextDetailsJson]="record.RunContextDetails">
-      </mj-execution-context>
-    </div>
+    @if (activeTab === 'execution') {
+      <div class="execution-tab" [@fadeIn]>
+        <mj-execution-context
+          [machineName]="record.MachineName"
+          [machineId]="record.MachineID"
+          [runByUserName]="record.RunByUserName"
+          [runByUserEmail]="record.RunByUserEmail"
+          [runContextDetailsJson]="record.RunContextDetails">
+        </mj-execution-context>
+      </div>
+    }
 
     <!-- Execution Log Tab -->
-    <div class="log-tab" *ngIf="activeTab === 'log'" [@fadeIn]>
-      <div class="log-header">
-        <div class="log-title">
-          <i class="fas fa-terminal"></i>
-          <h3>Execution Log</h3>
+    @if (activeTab === 'log') {
+      <div class="log-tab" [@fadeIn]>
+        <div class="log-header">
+          <div class="log-title">
+            <i class="fas fa-terminal"></i>
+            <h3>Execution Log</h3>
+          </div>
+          <div class="log-actions">
+            <button kendoButton (click)="copyLogToClipboard()" look="flat">
+              <i class="fas fa-copy"></i>
+              <span class="btn-text">Copy</span>
+            </button>
+          </div>
         </div>
-        <div class="log-actions">
-          <button kendoButton (click)="copyLogToClipboard()" look="flat">
-            <i class="fas fa-copy"></i>
-            <span class="btn-text">Copy</span>
-          </button>
+        <div class="log-container">
+          <mj-code-editor
+            [value]="record.Log || ''"
+            [readonly]="true"
+            [toolbar]="jsonToolbar"
+            [lineWrapping]="true">
+          </mj-code-editor>
         </div>
       </div>
-      <div class="log-container">
-        <mj-code-editor
-          [value]="record.Log || ''"
-          [readonly]="true"
-          [toolbar]="jsonToolbar"
-          [lineWrapping]="true">
-        </mj-code-editor>
-      </div>
-    </div>
+    }
   </div>
 
   <!-- Keyboard Shortcuts Help (shown on hover of ? icon) -->

@@ -1,17 +1,18 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceTypeEntity, ViewInfo} from '@memberjunction/core-entities';
+import { MJResourceTypeEntity, ViewInfo} from '@memberjunction/core-entities';
 import { ResourceData } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-add-item-dialog',
   templateUrl: './add-item.component.html',
   styleUrls: ['./add-item.component.css']
 })
 export class AddItemComponent implements OnInit {
   @Output() onClose = new EventEmitter<any>();
-  @Input() selectedResource!:ResourceTypeEntity | null;
+  @Input() selectedResource!:MJResourceTypeEntity | null;
   public showloader: boolean = false;
   public resourceType: any = null;
   public selectedEntity: any = null;

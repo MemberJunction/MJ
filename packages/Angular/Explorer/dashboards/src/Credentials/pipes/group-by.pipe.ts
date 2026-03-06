@@ -6,6 +6,7 @@ interface GroupedResult<T> {
 }
 
 @Pipe({
+  standalone: false,
     name: 'groupBy'
 })
 export class GroupByPipe implements PipeTransform {

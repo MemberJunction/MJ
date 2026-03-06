@@ -419,9 +419,3 @@ export function createAgentToolAdapter(contextUser: UserInfo): AgentToolAdapter 
     return new AgentToolAdapter(contextUser);
 }
 
-/**
- * Tree-shaking prevention function
- */
-export function LoadAgentToolAdapter(): void {
-    // Ensures the adapter is not tree-shaken
-}

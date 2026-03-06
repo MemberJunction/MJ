@@ -68,6 +68,3 @@ export class DeleteObjectAction extends BaseFileStorageAction {
         }
     }
 }
-export function LoadDeleteObjectAction() {
-    // Stub function to prevent tree shaking
-}

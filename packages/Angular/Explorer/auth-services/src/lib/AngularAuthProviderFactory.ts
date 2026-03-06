@@ -80,7 +80,7 @@ export class AngularAuthProviderFactory {
    */
   getRegisteredTypes(): string[] {
     const registrations = MJGlobal.Instance.ClassFactory.GetRegistrationsByRootClass(MJAuthBase);
-    const types = registrations.map(reg => reg.Key);
+    const types = registrations.map(reg => reg.Key).filter((key): key is string => key !== null);
     // Return unique types only, as multiple classes can be registered with the same key
     return [...new Set(types)];
   }

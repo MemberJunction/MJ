@@ -50,6 +50,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
+import { cosmiconfigSync } from 'cosmiconfig';
 
 // Type for cosmiconfig result
 interface CosmiconfigResult {
@@ -123,10 +124,6 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
      */
     async Initialize(): Promise<void> {
         try {
-            // Dynamic import to avoid bundling cosmiconfig if not used
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { cosmiconfigSync } = require('cosmiconfig');
-
             const explorer: CosmiconfigExplorer = cosmiconfigSync('mj', {
                 searchStrategy: 'global'
             });

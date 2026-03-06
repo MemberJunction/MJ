@@ -1,10 +1,38 @@
 # @memberjunction/server-bootstrap
 
-MemberJunction 3.0 Server Bootstrap - Encapsulates all server initialization logic into a single, simple function.
+MemberJunction Server Bootstrap - Encapsulates all server initialization logic into a single, simple function.
 
 ## Overview
 
-In MemberJunction 3.0, server applications (MJAPI) become **minimal bootstrapping files** (~6 lines of code) that import all functionality from NPM packages. This package provides the `createMJServer()` function that handles all the complex initialization logic.
+In MemberJunction 3.0, server applications (MJAPI) became **minimal bootstrapping files** (~6 lines of code) that import all functionality from NPM packages. This package provides the `createMJServer()` function that handles all the complex initialization logic.
+
+```mermaid
+graph TD
+    A["createMJServer()"] --> B["Load Configuration<br/>(mj.config.cjs / .mjrc)"]
+    B --> C["Discover Generated Packages<br/>(entities, actions, resolvers)"]
+    C --> D["Auto-Import via<br/>@RegisterClass Side Effects"]
+    D --> E["Build Resolver Paths"]
+    E --> F["Run beforeStart Hook"]
+    F --> G["serve() from @memberjunction/server"]
+
+    G --> H["Database Connection Pool"]
+    G --> I["GraphQL Schema Builder"]
+    G --> J["WebSocket Subscriptions"]
+    G --> K["REST API Endpoints"]
+    G --> L["Graceful Shutdown"]
+
+    G --> M["Run afterStart Hook"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#b8762f,stroke:#8a5722,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 
@@ -14,7 +42,7 @@ npm install @memberjunction/server-bootstrap
 
 ## Usage
 
-### Basic Usage (Minimal MJAPI 3.0)
+### Basic Usage (Minimal MJAPI)
 
 Create your `packages/api/src/index.ts`:
 
@@ -89,7 +117,7 @@ module.exports = {
 
   graphqlPort: process.env.PORT || 4000,
 
-  // 3.0 Code Generation Configuration
+  // Code Generation Configuration
   codeGeneration: {
     outputMode: 'packages',
     packageScope: '@mycompany',

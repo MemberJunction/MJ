@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
-import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-step-detail',
   templateUrl: './ai-agent-run-step-detail.component.html',
   styleUrls: ['./ai-agent-run-step-detail.component.css']
@@ -33,7 +34,7 @@ export class AIAgentRunStepDetailComponent {
     
     // Get all the data from the entity
     let data;
-    if (this.selectedTimelineItem.data instanceof AIAgentRunStepEntity) {
+    if (this.selectedTimelineItem.data instanceof MJAIAgentRunStepEntity) {
       // If it's a step entity, we need to get the full run data
       data = this.selectedTimelineItem.data.GetAll();
     } else {

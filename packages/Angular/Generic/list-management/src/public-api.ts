@@ -16,12 +16,3 @@ export * from './lib/services/list-sharing.service';
 // Models
 export * from './lib/models/list-management.models';
 export * from './lib/models/list-sharing.models';
-
-/**
- * Tree-shaking prevention function.
- * Call this from the consuming module to ensure the components are included.
- */
-export function LoadListManagement(): void {
-  // This function exists solely to prevent tree-shaking
-  // of the list management components
-}

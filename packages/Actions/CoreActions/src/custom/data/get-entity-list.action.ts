@@ -183,10 +183,3 @@ export class GetEntityListAction extends BaseAction {
         return defaultValue;
     }
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadGetEntityListAction() {
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, "Get Entity List");
-}

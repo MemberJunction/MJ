@@ -37,15 +37,17 @@
  * ```
  */
 
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-LoadAIProviders(); // Ensure all AI providers are loaded
-
 // Configuration exports
 export { initializeConfig } from './Config/config'
 export * from './Config/config'
 export * from './Config/db-connection'
 
 // Database exports
+export * from './Database/codeGenDatabaseProvider'
+export * from './Database/providers/sqlserver/SQLServerCodeGenProvider'
+export * from './Database/providers/sqlserver/SQLServerCodeGenConnection'
+export * from './Database/providers/postgresql/PostgreSQLCodeGenProvider'
+export * from './Database/providers/postgresql/PostgreSQLCodeGenConnection'
 export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'
@@ -71,6 +73,11 @@ export * from './Misc/util'
 
 // Manifest generation
 export * from './Manifest/GenerateClassRegistrationsManifest'
+
+// Entity name scanning
+export * from './EntityNameScanner/EntityNameScanner'
+export * from './EntityNameScanner/MetadataNameScanner'
+export * from './EntityNameScanner/HtmlEntityNameScanner'
 
 // Main runner
 export * from './runCodeGen'

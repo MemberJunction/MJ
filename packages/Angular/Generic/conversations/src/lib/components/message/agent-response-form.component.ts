@@ -7,6 +7,7 @@ import { AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
  * Handles both simple button choices and complex multi-question forms
  */
 @Component({
+  standalone: false,
   selector: 'mj-agent-response-form',
   templateUrl: './agent-response-form.component.html',
   styleUrls: ['./agent-response-form.component.css']

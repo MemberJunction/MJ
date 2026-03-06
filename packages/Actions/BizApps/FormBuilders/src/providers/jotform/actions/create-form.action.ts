@@ -279,10 +279,3 @@ export class CreateJotFormAction extends JotFormBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadCreateJotFormAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

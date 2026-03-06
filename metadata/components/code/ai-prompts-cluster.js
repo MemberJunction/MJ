@@ -75,7 +75,7 @@ function AIPromptsCluster({
       setError(null);
       
       const result = await utilities.rv.RunView({
-        EntityName: 'AI Prompts',
+        EntityName: 'MJ: AI Prompts',
         OrderBy: 'Name',
         ResultType: 'entity_object'
       });
@@ -558,7 +558,7 @@ Format your response in clear markdown with headers and bullet points.`;
   };
 
   const handleEditPrompt = (promptId) => {
-    callbacks.OpenEntityRecord('AI Prompts', [
+    callbacks.OpenEntityRecord('MJ: AI Prompts', [
       { FieldName: 'ID', Value: promptId }
     ]);
   };

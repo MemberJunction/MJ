@@ -86,7 +86,3 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
         return ["CreateAvatarVideo", "CreateVideoTranslation", "GetAvatars"];
     }
 }
-
-export function LoadHeyGenVideoGenerator() {
-    // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
-}

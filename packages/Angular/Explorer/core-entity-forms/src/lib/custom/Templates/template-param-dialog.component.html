@@ -1,297 +1,278 @@
-<kendo-dialog *ngIf="_isVisible"
-              [minWidth]="600"
-              [width]="800"
-              [height]="700"
-              (close)="close()"
-              [title]="'Test Template: ' + (template?.Name || 'Unknown')">
-              
+@if (_isVisible) {
+  <kendo-dialog
+    [minWidth]="600"
+    [width]="800"
+    [height]="700"
+    (close)="close()"
+    [title]="'Test Template: ' + (template?.Name || 'Unknown')">
     <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-        
-        <!-- Header Section -->
-        <div class="header-section" style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e9ecef;">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                <i class="fa-solid fa-sliders" style="color: #6c757d; font-size: 1.2em;"></i>
-                <h5 style="margin: 0; color: #495057; font-weight: 600;">Template Testing</h5>
-            </div>
-            <p style="margin: 0; color: #6c757d; font-size: 0.9em;">
-                Configure parameter values for testing. Parameters with <span style="color: #dc3545;">*</span> are required.
-            </p>
+      <!-- Header Section -->
+      <div class="header-section" style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e9ecef;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+          <i class="fa-solid fa-sliders" style="color: #6c757d; font-size: 1.2em;"></i>
+          <h5 style="margin: 0; color: #495057; font-weight: 600;">Template Testing</h5>
         </div>
-
-        <!-- Loading State -->
-        @if (isLoading) {
-            <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px;">
-                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-                <span style="color: #6c757d;">Loading template parameters...</span>
+        <p style="margin: 0; color: #6c757d; font-size: 0.9em;">
+          Configure parameter values for testing. Parameters with <span style="color: #dc3545;">*</span> are required.
+        </p>
+      </div>
+      <!-- Loading State -->
+      @if (isLoading) {
+        <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+          <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+          <span style="color: #6c757d;">Loading template parameters...</span>
+        </div>
+      } @else {
+        <!-- Template Parameters Section -->
+        <kendo-expansionpanel
+          [(expanded)]="parametersExpanded"
+          style="margin-bottom: 16px; flex-shrink: 0;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+              <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+              Template Parameters
+              @if (parameters.length > 0) {
+                <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                  {{ parameters.length }}
+                </span>
+              }
+            </span>
+          </ng-template>
+          <div style="padding: 12px 0;">
+            <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
+              <i class="fa-solid fa-info-circle"></i>
+              Configure parameter values for template testing. Values can be JSON objects, strings, or numbers.
             </div>
-        } @else {
-            
-            <!-- Template Parameters Section -->
-            <kendo-expansionpanel 
-                [(expanded)]="parametersExpanded"
-                style="margin-bottom: 16px; flex-shrink: 0;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                        Template Parameters
-                        @if (parameters.length > 0) {
-                            <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                {{ parameters.length }}
-                            </span>
+            <!-- Parameters Table -->
+            @if (parameters.length > 0) {
+              <div style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
+                <!-- Header -->
+                <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
+                  <div>Parameter Name</div>
+                  <div>Value</div>
+                  <div>Actions</div>
+                </div>
+                <!-- Parameter Rows -->
+                @for (param of parameters; track $index; let i = $index) {
+                  <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; background: white;">
+                    <!-- Parameter Name -->
+                    <div class="param-name" style="display: flex; flex-direction: column;">
+                      <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                        @if (param.isFromTemplate) {
+                          <i class="fa-solid fa-database" style="color: #28a745; font-size: 0.75em;" title="From template definition"></i>
+                        } @else {
+                          <i class="fa-solid fa-edit" style="color: #fd7e14; font-size: 0.75em;" title="Custom parameter"></i>
                         }
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0;">
-                    <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
-                        <i class="fa-solid fa-info-circle"></i>
-                        Configure parameter values for template testing. Values can be JSON objects, strings, or numbers.
-                    </div>
-                    
-                    <!-- Parameters Table -->
-                    @if (parameters.length > 0) {
-                        <div style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
-                            <!-- Header -->
-                            <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
-                                <div>Parameter Name</div>
-                                <div>Value</div>
-                                <div>Actions</div>
-                            </div>
-                            
-                            <!-- Parameter Rows -->
-                            @for (param of parameters; track $index; let i = $index) {
-                                <div style="display: grid; grid-template-columns: 200px 1fr 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: start; background: white;">
-                                    
-                                    <!-- Parameter Name -->
-                                    <div class="param-name" style="display: flex; flex-direction: column;">
-                                        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-                                            @if (param.isFromTemplate) {
-                                                <i class="fa-solid fa-database" style="color: #28a745; font-size: 0.75em;" title="From template definition"></i>
-                                            } @else {
-                                                <i class="fa-solid fa-edit" style="color: #fd7e14; font-size: 0.75em;" title="Custom parameter"></i>
-                                            }
-                                            @if (param.isRequired) {
-                                                <span style="color: #dc3545; font-weight: bold;">*</span>
-                                            }
-                                        </div>
-                                        
-                                        @if (param.isFromTemplate) {
-                                            <div style="font-family: 'Courier New', monospace; font-size: 0.9em; font-weight: 500; color: #495057; padding: 4px 0; word-break: break-word;">
-                                                {{ param.key }}
-                                            </div>
-                                            @if (param.description) {
-                                                <div style="font-size: 0.75em; color: #6c757d; margin-top: 2px; font-style: italic; word-break: break-word;">
-                                                    {{ param.description }}
-                                                </div>
-                                            }
-                                            @if (param.type && param.type !== 'Scalar') {
-                                                <div style="font-size: 0.7em; color: #17a2b8; margin-top: 2px;">
-                                                    Type: {{ param.type }}
-                                                </div>
-                                            }
-                                        } @else {
-                                            <kendo-textbox [(ngModel)]="param.key"
-                                                          (ngModelChange)="onParameterChange()"
-                                                          placeholder="Parameter name..."
-                                                          [disabled]="isRunning"
-                                                          style="font-family: 'Courier New', monospace; width: 100%;">
-                                            </kendo-textbox>
-                                        }
-                                    </div>
-                                    
-                                    <!-- Parameter Value -->
-                                    <div class="param-value">
-                                        <kendo-textarea [(ngModel)]="param.value"
-                                                       (ngModelChange)="onParameterChange()"
-                                                       [rows]="2"
-                                                       placeholder="Enter value (JSON strings, numbers, objects)..."
-                                                       [disabled]="isRunning"
-                                                       style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;">
-                                        </kendo-textarea>
-                                    </div>
-                                    
-                                    <!-- Actions -->
-                                    <div class="param-actions" style="display: flex; align-items: start; justify-content: center; padding-top: 4px;">
-                                        @if (!param.isFromTemplate && parameters.length > 1) {
-                                            <button kendoButton fillMode="flat"
-                                                        themeColor="error"
-                                                        size="small"
-                                                        (click)="removeParameter(i)"
-                                                        [disabled]="isRunning"
-                                                        title="Remove parameter">
-                                                <i class="fa-solid fa-times"></i>
-                                            </button>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                            
-                            <!-- Add Parameter Row -->
-                            <div style="padding: 12px 16px; text-align: center; background: white; border-top: 1px solid #dee2e6;">
-                                <button kendoButton fillMode="outline"
-                                            themeColor="success"
-                                            size="small"
-                                            (click)="addParameter()"
-                                            [disabled]="isRunning">
-                                    <i class="fa-solid fa-plus"></i> Add Parameter
-                                </button>
-                            </div>
-                        </div>
-                    } @else {
-                        <div style="text-align: center; padding: 20px; color: #6c757d;">
-                            <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 12px; opacity: 0.5;"></i>
-                            <p style="margin: 0 0 12px 0;">No parameters defined yet</p>
-                            <button kendoButton themeColor="primary" size="small"
-                                        (click)="addParameter()"
-                                        [disabled]="isRunning">
-                                <i class="fa-solid fa-plus"></i> Add First Parameter
-                            </button>
-                        </div>
-                    }
-                </div>
-            </kendo-expansionpanel>
-
-            <!-- JSON Preview Section -->
-            <kendo-expansionpanel 
-                [(expanded)]="jsonPreviewExpanded"
-                style="margin-bottom: 16px; flex-shrink: 0;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-code" style="color: #6c757d;"></i>
-                        Context Data (JSON)
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0;">
-                    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.85em; color: #495057; max-height: 200px; overflow-y: auto;">
-                        <pre style="margin: 0; white-space: pre-wrap;">{{ parametersAsJson }}</pre>
-                    </div>
-                </div>
-            </kendo-expansionpanel>
-
-            <!-- Test Results Section -->
-            <kendo-expansionpanel 
-                [(expanded)]="resultsExpanded"
-                style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-chart-line" style="color: #6c757d;"></i>
-                        Test Results
-                        @if (testResult) {
-                            <span class="badge" 
-                                  [style.background]="testResult.success ? '#28a745' : '#dc3545'"
-                                  style="color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                {{ testResult.success ? 'Success' : 'Error' }}
-                            </span>
+                        @if (param.isRequired) {
+                          <span style="color: #dc3545; font-weight: bold;">*</span>
                         }
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
-                    @if (isRunning) {
-                        <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px; flex: 1;">
-                            <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-                            <span style="color: #6c757d;">Running template...</span>
+                      </div>
+                      @if (param.isFromTemplate) {
+                        <div style="font-family: 'Courier New', monospace; font-size: 0.9em; font-weight: 500; color: #495057; padding: 4px 0; word-break: break-word;">
+                          {{ param.key }}
                         </div>
-                    } @else if (testResult) {
-                        <div style="flex: 1; display: flex; flex-direction: column;">
-                            <!-- Result Header with Stats -->
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid #dee2e6; border-radius: 6px;"
-                                 [style.background]="testResult.success ? '#d4edda' : '#f8d7da'">
-                                <div style="text-align: center;">
-                                    <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">STATUS</div>
-                                    <div style="font-weight: 600;" [style.color]="testResult.success ? '#155724' : '#721c24'">
-                                        {{ testResult.success ? 'Success' : 'Failed' }}
-                                    </div>
-                                </div>
-                                @if (testResult.executionTimeMs) {
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">EXECUTION TIME</div>
-                                        <div style="font-weight: 600;" [style.color]="testResult.success ? '#155724' : '#721c24'">{{ testResult.executionTimeMs }}ms</div>
-                                    </div>
-                                }
-                                <div style="text-align: center;">
-                                    <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">ACTIONS</div>
-                                    <button kendoButton fillMode="flat" size="small"
-                                                (click)="saveResults()"
-                                                title="Save results to file"
-                                                style="min-width: auto; padding: 4px 8px;">
-                                        <i class="fa-solid fa-download"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Result Content -->
-                            <div style="flex: 1; display: flex; flex-direction: column;">
-                                @if (testResult.success && testResult.output) {
-                                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
-                                        <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
-                                            <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
-                                            Template Output
-                                        </h6>
-                                        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; height: 150px;">
-                                            {{ testResult.output }}
-                                        </div>
-                                    </div>
-                                } @else if (!testResult.success && testResult.error) {
-                                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
-                                        <h6 style="margin: 0 0 8px 0; color: #dc3545; display: flex; align-items: center; gap: 6px;">
-                                            <i class="fa-solid fa-exclamation-triangle"></i>
-                                            Error Details
-                                        </h6>
-                                        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 12px; color: #721c24; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; height: 150px;">{{ testResult.error }}</div>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    } @else {
-                        <div style="display: flex; align-items: center; justify-content: center; padding: 40px; color: #6c757d; flex: 1;">
-                            <div style="text-align: center;">
-                                <i class="fa-solid fa-play-circle" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
-                                <p style="margin: 0;">No test results yet. Run the template to see results here.</p>
-                            </div>
-                        </div>
-                    }
+                        @if (param.description) {
+                          <div style="font-size: 0.75em; color: #6c757d; margin-top: 2px; font-style: italic; word-break: break-word;">
+                            {{ param.description }}
+                          </div>
+                        }
+                        @if (param.type && param.type !== 'Scalar') {
+                          <div style="font-size: 0.7em; color: #17a2b8; margin-top: 2px;">
+                            Type: {{ param.type }}
+                          </div>
+                        }
+                      } @else {
+                        <kendo-textbox [(ngModel)]="param.key"
+                          (ngModelChange)="onParameterChange()"
+                          placeholder="Parameter name..."
+                          [disabled]="isRunning"
+                          style="font-family: 'Courier New', monospace; width: 100%;">
+                        </kendo-textbox>
+                      }
+                    </div>
+                    <!-- Parameter Value -->
+                    <div class="param-value">
+                      <kendo-textarea [(ngModel)]="param.value"
+                        (ngModelChange)="onParameterChange()"
+                        [rows]="2"
+                        placeholder="Enter value (JSON strings, numbers, objects)..."
+                        [disabled]="isRunning"
+                        style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;">
+                      </kendo-textarea>
+                    </div>
+                    <!-- Actions -->
+                    <div class="param-actions" style="display: flex; align-items: start; justify-content: center; padding-top: 4px;">
+                      @if (!param.isFromTemplate && parameters.length > 1) {
+                        <button kendoButton fillMode="flat"
+                          themeColor="error"
+                          size="small"
+                          (click)="removeParameter(i)"
+                          [disabled]="isRunning"
+                          title="Remove parameter">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+                <!-- Add Parameter Row -->
+                <div style="padding: 12px 16px; text-align: center; background: white; border-top: 1px solid #dee2e6;">
+                  <button kendoButton fillMode="outline"
+                    themeColor="success"
+                    size="small"
+                    (click)="addParameter()"
+                    [disabled]="isRunning">
+                    <i class="fa-solid fa-plus"></i> Add Parameter
+                  </button>
                 </div>
-            </kendo-expansionpanel>
-        }
+              </div>
+            } @else {
+              <div style="text-align: center; padding: 20px; color: #6c757d;">
+                <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 12px; opacity: 0.5;"></i>
+                <p style="margin: 0 0 12px 0;">No parameters defined yet</p>
+                <button kendoButton themeColor="primary" size="small"
+                  (click)="addParameter()"
+                  [disabled]="isRunning">
+                  <i class="fa-solid fa-plus"></i> Add First Parameter
+                </button>
+              </div>
+            }
+          </div>
+        </kendo-expansionpanel>
+        <!-- JSON Preview Section -->
+        <kendo-expansionpanel
+          [(expanded)]="jsonPreviewExpanded"
+          style="margin-bottom: 16px; flex-shrink: 0;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+              <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+              Context Data (JSON)
+            </span>
+          </ng-template>
+          <div style="padding: 12px 0;">
+            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.85em; color: #495057; max-height: 200px; overflow-y: auto;">
+              <pre style="margin: 0; white-space: pre-wrap;">{{ parametersAsJson }}</pre>
+            </div>
+          </div>
+        </kendo-expansionpanel>
+        <!-- Test Results Section -->
+        <kendo-expansionpanel
+          [(expanded)]="resultsExpanded"
+          style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+              <i class="fa-solid fa-chart-line" style="color: #6c757d;"></i>
+              Test Results
+              @if (testResult) {
+                <span class="badge"
+                  [style.background]="testResult.success ? '#28a745' : '#dc3545'"
+                  style="color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                  {{ testResult.success ? 'Success' : 'Error' }}
+                </span>
+              }
+            </span>
+          </ng-template>
+          <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
+            @if (isRunning) {
+              <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px; flex: 1;">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                <span style="color: #6c757d;">Running template...</span>
+              </div>
+            } @else if (testResult) {
+              <div style="flex: 1; display: flex; flex-direction: column;">
+                <!-- Result Header with Stats -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid #dee2e6; border-radius: 6px;"
+                  [style.background]="testResult.success ? '#d4edda' : '#f8d7da'">
+                  <div style="text-align: center;">
+                    <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">STATUS</div>
+                    <div style="font-weight: 600;" [style.color]="testResult.success ? '#155724' : '#721c24'">
+                      {{ testResult.success ? 'Success' : 'Failed' }}
+                    </div>
+                  </div>
+                  @if (testResult.executionTimeMs) {
+                    <div style="text-align: center;">
+                      <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">EXECUTION TIME</div>
+                      <div style="font-weight: 600;" [style.color]="testResult.success ? '#155724' : '#721c24'">{{ testResult.executionTimeMs }}ms</div>
+                    </div>
+                  }
+                  <div style="text-align: center;">
+                    <div style="font-size: 0.75em; margin-bottom: 2px;" [style.color]="testResult.success ? '#155724' : '#721c24'">ACTIONS</div>
+                    <button kendoButton fillMode="flat" size="small"
+                      (click)="saveResults()"
+                      title="Save results to file"
+                      style="min-width: auto; padding: 4px 8px;">
+                      <i class="fa-solid fa-download"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- Result Content -->
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                  @if (testResult.success && testResult.output) {
+                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
+                      <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
+                        Template Output
+                      </h6>
+                      <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; height: 150px;">
+                        {{ testResult.output }}
+                      </div>
+                    </div>
+                  } @else if (!testResult.success && testResult.error) {
+                    <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
+                      <h6 style="margin: 0 0 8px 0; color: #dc3545; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        Error Details
+                      </h6>
+                      <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 12px; color: #721c24; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; height: 150px;">{{ testResult.error }}</div>
+                    </div>
+                  }
+                </div>
+              </div>
+            } @else {
+              <div style="display: flex; align-items: center; justify-content: center; padding: 40px; color: #6c757d; flex: 1;">
+                <div style="text-align: center;">
+                  <i class="fa-solid fa-play-circle" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
+                  <p style="margin: 0;">No test results yet. Run the template to see results here.</p>
+                </div>
+              </div>
+            }
+          </div>
+        </kendo-expansionpanel>
+      }
     </div>
-
     <!-- Dialog Actions -->
     <kendo-dialog-actions>
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div>
-                @if (hasUnsavedParameters) {
-                    <button kendoButton fillMode="outline"
-                                themeColor="info"
-                                (click)="updateTemplateParams()"
-                                [disabled]="isRunning">
-                        <i class="fa-solid fa-save"></i> Update Template Params
-                    </button>
-                }
-            </div>
-            
-            <div style="display: flex; gap: 8px;">
-                <button kendoButton fillMode="outline" (click)="close()">
-                    Close
-                </button>
-                
-                @if (testResult) {
-                    <button kendoButton fillMode="outline" themeColor="info" (click)="saveResults()">
-                        <i class="fa-solid fa-download"></i> Save Results
-                    </button>
-                }
-
-                <button kendoButton themeColor="primary"
-                             [disabled]="isRunning || isLoading"
-                             (click)="runTemplate()">
-                    @if (isRunning) {
-                        <i class="fa-solid fa-spinner fa-spin"></i> Running...
-                    } @else {
-                        <i class="fa-solid fa-play"></i> Run Template
-                    }
-                </button>
-            </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div>
+          @if (hasUnsavedParameters) {
+            <button kendoButton fillMode="outline"
+              themeColor="info"
+              (click)="updateTemplateParams()"
+              [disabled]="isRunning">
+              <i class="fa-solid fa-save"></i> Update Template Params
+            </button>
+          }
         </div>
+        <div style="display: flex; gap: 8px;">
+          <button kendoButton fillMode="outline" (click)="close()">
+            Close
+          </button>
+          @if (testResult) {
+            <button kendoButton fillMode="outline" themeColor="info" (click)="saveResults()">
+              <i class="fa-solid fa-download"></i> Save Results
+            </button>
+          }
+          <button kendoButton themeColor="primary"
+            [disabled]="isRunning || isLoading"
+            (click)="runTemplate()">
+            @if (isRunning) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Running...
+            } @else {
+              <i class="fa-solid fa-play"></i> Run Template
+            }
+          </button>
+        </div>
+      </div>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
+}

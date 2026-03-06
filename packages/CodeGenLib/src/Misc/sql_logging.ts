@@ -1,4 +1,4 @@
-import * as sql from 'mssql';
+import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { configInfo, mj_core_schema, SQLOutputConfig } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
@@ -121,9 +121,9 @@ export class SQLLogging {
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: sql.ConnectionPool, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
         SQLLogging.appendToSQLLogFile(query, description, isRecurringScript);
-        const result = await ds.request().query(query);
+        const result = await ds.query(query);
         return result.recordset;
     }
 
@@ -138,17 +138,36 @@ export class SQLLogging {
     }
 
     protected static convertSQLLogToFlywaySchema(): void {
-        if(!this.SQLLoggingFilePath){
+        if(!this.SQLLoggingFilePath || !configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
            return;
         }
 
-        const coreSchema: string = mj_core_schema();
-        const regex: RegExp = new RegExp(`${coreSchema}(?!(_(\\w+)At))`, 'g');
+        let data: string = fs.readFileSync(this.SQLLoggingFilePath, 'utf-8');
 
-        const data: string = fs.readFileSync(this.SQLLoggingFilePath, 'utf-8');
-        const replacedData: string = data.replace(regex, "${flyway:defaultSchema}");
+        // Get schema placeholder mappings, defaulting to legacy behavior if not specified
+        const schemaPlaceholders = configInfo.SQLOutput.schemaPlaceholders || [
+            { schema: mj_core_schema(), placeholder: '${flyway:defaultSchema}' }
+        ];
 
-        fs.writeFileSync(`${this.SQLLoggingFilePath}`, replacedData);
-        logStatus(`   >>> Flyway Migration File Completed: Replaced all instances of ${coreSchema} with \${flyway:defaultSchema} in the metadata log file`);
+        // Apply each schema-to-placeholder mapping in order
+        for (const mapping of schemaPlaceholders) {
+            // Negative lookahead to avoid matching schema_CreatedAt, schema_UpdatedAt, etc.
+            const regex: RegExp = new RegExp(`${this.escapeRegex(mapping.schema)}(?!(_(\\w+)At))`, 'g');
+            const beforeCount = (data.match(regex) || []).length;
+            data = data.replace(regex, mapping.placeholder);
+            logStatus(`   >>> Replaced ${beforeCount} instances of ${mapping.schema} with ${mapping.placeholder}`);
+        }
+
+        fs.writeFileSync(`${this.SQLLoggingFilePath}`, data);
+        logStatus(`   >>> Flyway Migration File Completed`);
+     }
+
+     /**
+      * Escapes special regex characters in a string
+      * @param str The string to escape
+      * @returns The escaped string safe for use in regex
+      */
+     private static escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
      }
 }

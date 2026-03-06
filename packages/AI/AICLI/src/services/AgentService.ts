@@ -1,6 +1,6 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
@@ -36,8 +36,8 @@ export class AgentService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntityExtended>({
-        EntityName: 'AI Agents',
+      const result = await rv.RunView<MJAIAgentEntityExtended>({
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -72,13 +72,13 @@ For help with agent configuration, see the MJ documentation.`);
     }
   }
 
-  async findAgent(agentName: string): Promise<AIAgentEntityExtended | null> {
+  async findAgent(agentName: string): Promise<MJAIAgentEntityExtended | null> {
     await this.ensureInitialized();
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntityExtended>({
-        EntityName: 'AI Agents',
+      const result = await rv.RunView<MJAIAgentEntityExtended>({
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: `Name = '${agentName.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
       }, this.contextUser);

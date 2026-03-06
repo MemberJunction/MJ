@@ -21,6 +21,7 @@ import { EntityInfo } from '@memberjunction/core'
  * The entity property can be set directly on the element in JavaScript.
  */
 @Component({
+  standalone: false,
   selector: 'app-entity-detail-demo',
   templateUrl: './entity-detail-demo.component.html',
   styleUrls: ['./entity-detail-demo.component.css']

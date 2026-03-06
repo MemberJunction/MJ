@@ -10,27 +10,28 @@
   }
 
   <!-- Context Menu (only relevant in multi-tab mode) -->
-  <div
-    class="context-menu"
-    *ngIf="contextMenuVisible"
-    [style.left.px]="contextMenuX"
-    [style.top.px]="contextMenuY">
-    <div class="context-menu-item" (click)="onContextPin()">
-      <i class="fa-solid fa-thumbtack"></i>
-      <span>{{ isContextTabPinned ? 'Unpin Tab' : 'Pin Tab' }}</span>
+  @if (contextMenuVisible) {
+    <div
+      class="context-menu"
+      [style.left.px]="contextMenuX"
+      [style.top.px]="contextMenuY">
+      <div class="context-menu-item" (click)="onContextPin()">
+        <i class="fa-solid fa-thumbtack"></i>
+        <span>{{ isContextTabPinned ? 'Unpin Tab' : 'Pin Tab' }}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item" (click)="onContextClose()">
+        <i class="fa-solid fa-xmark"></i>
+        <span>Close Tab</span>
+      </div>
+      <div class="context-menu-item" (click)="onContextCloseOthers()">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Close Others</span>
+      </div>
+      <div class="context-menu-item" (click)="onContextCloseToRight()">
+        <i class="fa-solid fa-angles-right"></i>
+        <span>Close to Right</span>
+      </div>
     </div>
-    <div class="context-menu-divider"></div>
-    <div class="context-menu-item" (click)="onContextClose()">
-      <i class="fa-solid fa-xmark"></i>
-      <span>Close Tab</span>
-    </div>
-    <div class="context-menu-item" (click)="onContextCloseOthers()">
-      <i class="fa-solid fa-layer-group"></i>
-      <span>Close Others</span>
-    </div>
-    <div class="context-menu-item" (click)="onContextCloseToRight()">
-      <i class="fa-solid fa-angles-right"></i>
-      <span>Close to Right</span>
-    </div>
-  </div>
+  }
 </div>

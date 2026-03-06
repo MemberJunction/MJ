@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Splitters - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-4);
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    /* Demo pane content styles */
+    .demo-pane-content {
+      padding: var(--mj-space-4);
+      height: 100%;
+    }
+    .demo-pane-label {
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      color: var(--mj-text-secondary);
+      margin-bottom: var(--mj-space-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Splitters</h1>
+      <p>Resizable split pane layouts for organizing complex interfaces.</p>
+    </header>
+
+    <!-- Horizontal Splitter -->
+    <section class="section">
+      <h2 class="section-title">Horizontal Splitter (Side-by-Side)</h2>
+      <p class="mj-text-secondary mj-mb-4">Two panes arranged horizontally with a draggable divider.</p>
+      <div class="demo-row">
+        <div class="mj-splitter mj-splitter-horizontal" style="height: 300px;">
+          <div class="mj-splitter-pane" style="width: 40%;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Left Pane</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Navigation or master list content goes here.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-horizontal">
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="flex: 1;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Right Pane</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Main content or detail view goes here.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-splitter mj-splitter-horizontal"&gt;
+  &lt;div class="mj-splitter-pane" style="width: 40%;"&gt;
+    &lt;!-- Left pane content --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-handle mj-splitter-handle-horizontal"&gt;
+    &lt;div class="mj-splitter-handle-grip"&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-pane" style="flex: 1;"&gt;
+    &lt;!-- Right pane content --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Vertical Splitter -->
+    <section class="section">
+      <h2 class="section-title">Vertical Splitter (Top/Bottom)</h2>
+      <p class="mj-text-secondary mj-mb-4">Two panes arranged vertically with a horizontal divider.</p>
+      <div class="demo-row">
+        <div class="mj-splitter mj-splitter-vertical" style="height: 400px;">
+          <div class="mj-splitter-pane" style="height: 50%;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Top Pane</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Editor or primary content area.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-vertical">
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="flex: 1;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Bottom Pane</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Console, output, or secondary information.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-splitter mj-splitter-vertical"&gt;
+  &lt;div class="mj-splitter-pane" style="height: 50%;"&gt;
+    &lt;!-- Top pane content --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-handle mj-splitter-handle-vertical"&gt;
+    &lt;div class="mj-splitter-handle-grip"&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-pane" style="flex: 1;"&gt;
+    &lt;!-- Bottom pane content --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Three-Pane Layout -->
+    <section class="section">
+      <h2 class="section-title">Three-Pane Layout</h2>
+      <p class="mj-text-secondary mj-mb-4">Classic three-column layout with two splitters.</p>
+      <div class="demo-row">
+        <div class="mj-splitter mj-splitter-horizontal" style="height: 350px;">
+          <div class="mj-splitter-pane" style="width: 200px; min-width: 150px;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Navigation</div>
+              <nav class="mj-sidebar-nav">
+                <a href="#" class="mj-nav-item active">
+                  <i class="fa-solid fa-home"></i> Home
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-folder"></i> Projects
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-users"></i> Users
+                </a>
+                <a href="#" class="mj-nav-item">
+                  <i class="fa-solid fa-gear"></i> Settings
+                </a>
+              </nav>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-horizontal">
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="flex: 1;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Main Content</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <h4>Project List</h4>
+                  <ul class="mj-list">
+                    <li class="mj-list-item mj-list-item-active">Project Alpha</li>
+                    <li class="mj-list-item">Project Beta</li>
+                    <li class="mj-list-item">Project Gamma</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-horizontal">
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="width: 280px; min-width: 200px;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Details Panel</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <h4>Project Alpha</h4>
+                  <p class="mj-text-sm mj-text-secondary">Created: Jan 15, 2024</p>
+                  <p class="mj-text-sm mj-mt-2">Project description and additional details.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-splitter mj-splitter-horizontal"&gt;
+  &lt;div class="mj-splitter-pane" style="width: 200px;"&gt;
+    &lt;!-- Navigation pane --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-handle mj-splitter-handle-horizontal"&gt;...&lt;/div&gt;
+  &lt;div class="mj-splitter-pane" style="flex: 1;"&gt;
+    &lt;!-- Main content --&gt;
+  &lt;/div&gt;
+  &lt;div class="mj-splitter-handle mj-splitter-handle-horizontal"&gt;...&lt;/div&gt;
+  &lt;div class="mj-splitter-pane" style="width: 280px;"&gt;
+    &lt;!-- Details panel --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Nested Splitters -->
+    <section class="section">
+      <h2 class="section-title">Nested Splitters</h2>
+      <p class="mj-text-secondary mj-mb-4">Complex layouts with splitters inside splitters.</p>
+      <div class="demo-row">
+        <div class="mj-splitter mj-splitter-horizontal" style="height: 400px;">
+          <div class="mj-splitter-pane" style="width: 250px;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Sidebar</div>
+              <div class="mj-panel mj-panel-flat" style="height: calc(100% - 24px);">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">File explorer or navigation tree.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-horizontal">
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="flex: 1;">
+            <!-- Nested vertical splitter -->
+            <div class="mj-splitter mj-splitter-vertical" style="height: 100%;">
+              <div class="mj-splitter-pane" style="height: 70%;">
+                <div class="demo-pane-content">
+                  <div class="demo-pane-label">Editor</div>
+                  <div class="mj-panel mj-panel-flat" style="height: calc(100% - 24px);">
+                    <div class="mj-panel-body">
+                      <pre class="mj-text-sm" style="margin: 0; font-family: var(--mj-font-family-mono);">
+function hello() {
+  console.log('Hello, World!');
+}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="mj-splitter-handle mj-splitter-handle-vertical">
+                <div class="mj-splitter-handle-grip"></div>
+              </div>
+              <div class="mj-splitter-pane" style="flex: 1;">
+                <div class="demo-pane-content">
+                  <div class="demo-pane-label">Terminal / Output</div>
+                  <div class="mj-panel mj-panel-flat" style="height: calc(100% - 24px); background: var(--mj-bg-surface-sunken);">
+                    <div class="mj-panel-body">
+                      <pre class="mj-text-sm mj-text-secondary" style="margin: 0; font-family: var(--mj-font-family-mono);">
+$ npm run build
+> Building project...
+> Build complete!
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-splitter mj-splitter-horizontal"&gt;
+  &lt;div class="mj-splitter-pane"&gt;Sidebar&lt;/div&gt;
+  &lt;div class="mj-splitter-handle mj-splitter-handle-horizontal"&gt;...&lt;/div&gt;
+  &lt;div class="mj-splitter-pane"&gt;
+    &lt;!-- Nested vertical splitter --&gt;
+    &lt;div class="mj-splitter mj-splitter-vertical"&gt;
+      &lt;div class="mj-splitter-pane"&gt;Editor&lt;/div&gt;
+      &lt;div class="mj-splitter-handle mj-splitter-handle-vertical"&gt;...&lt;/div&gt;
+      &lt;div class="mj-splitter-pane"&gt;Terminal&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+    <!-- Collapsible Splitter -->
+    <section class="section">
+      <h2 class="section-title">Collapsible Splitter Panes</h2>
+      <p class="mj-text-secondary mj-mb-4">Splitter with panes that can be collapsed to maximize space.</p>
+      <div class="demo-row">
+        <div class="mj-splitter mj-splitter-horizontal" style="height: 300px;">
+          <div class="mj-splitter-pane mj-splitter-pane-collapsible" style="width: 250px;">
+            <div class="demo-pane-content">
+              <div class="mj-flex mj-justify-between mj-items-center mj-mb-2">
+                <div class="demo-pane-label mj-mb-0">Sidebar</div>
+                <button class="mj-btn-icon mj-btn-collapse" title="Collapse">
+                  <i class="fa-solid fa-chevron-left"></i>
+                </button>
+              </div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Collapsible sidebar content.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mj-splitter-handle mj-splitter-handle-horizontal mj-splitter-handle-collapsible">
+            <button class="mj-splitter-collapse-btn" title="Expand sidebar">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+            <div class="mj-splitter-handle-grip"></div>
+          </div>
+          <div class="mj-splitter-pane" style="flex: 1;">
+            <div class="demo-pane-content">
+              <div class="demo-pane-label">Main Content</div>
+              <div class="mj-panel mj-panel-flat">
+                <div class="mj-panel-body">
+                  <p class="mj-text-sm">Main content area that expands when sidebar is collapsed.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="mj-splitter-pane mj-splitter-pane-collapsible"&gt;
+  &lt;button class="mj-btn-collapse"&gt;
+    &lt;i class="fa-solid fa-chevron-left"&gt;&lt;/i&gt;
+  &lt;/button&gt;
+  &lt;!-- Pane content --&gt;
+&lt;/div&gt;
+&lt;div class="mj-splitter-handle mj-splitter-handle-collapsible"&gt;
+  &lt;button class="mj-splitter-collapse-btn"&gt;
+    &lt;i class="fa-solid fa-chevron-right"&gt;&lt;/i&gt;
+  &lt;/button&gt;
+&lt;/div&gt;
+      </div>
+    </section>
+
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+  <script>
+    // Splitter drag functionality
+    document.querySelectorAll('.mj-splitter-handle').forEach(handle => {
+      let isResizing = false;
+      let startPos = 0;
+      let startSize = 0;
+      let prevPane = null;
+      let nextPane = null;
+      let isHorizontal = true;
+
+      handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        prevPane = handle.previousElementSibling;
+        nextPane = handle.nextElementSibling;
+
+        // Skip if prev/next is another handle
+        while (prevPane && prevPane.classList.contains('mj-splitter-handle')) {
+          prevPane = prevPane.previousElementSibling;
+        }
+        while (nextPane && nextPane.classList.contains('mj-splitter-handle')) {
+          nextPane = nextPane.nextElementSibling;
+        }
+
+        isHorizontal = handle.classList.contains('mj-splitter-handle-horizontal');
+
+        if (isHorizontal) {
+          startPos = e.clientX;
+          startSize = prevPane ? prevPane.offsetWidth : 0;
+        } else {
+          startPos = e.clientY;
+          startSize = prevPane ? prevPane.offsetHeight : 0;
+        }
+
+        document.body.style.cursor = isHorizontal ? 'col-resize' : 'row-resize';
+        document.body.style.userSelect = 'none';
+
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing || !prevPane) return;
+
+        const splitter = handle.closest('.mj-splitter');
+        const splitterRect = splitter.getBoundingClientRect();
+
+        if (isHorizontal) {
+          const delta = e.clientX - startPos;
+          const newSize = startSize + delta;
+          const minSize = 100;
+          const maxSize = splitterRect.width - 100;
+
+          if (newSize >= minSize && newSize <= maxSize) {
+            prevPane.style.width = newSize + 'px';
+            prevPane.style.flex = 'none';
+          }
+        } else {
+          const delta = e.clientY - startPos;
+          const newSize = startSize + delta;
+          const minSize = 50;
+          const maxSize = splitterRect.height - 50;
+
+          if (newSize >= minSize && newSize <= maxSize) {
+            prevPane.style.height = newSize + 'px';
+            prevPane.style.flex = 'none';
+          }
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        }
+      });
+    });
+
+    // Collapse button functionality
+    document.querySelectorAll('.mj-btn-collapse, .mj-splitter-collapse-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pane = btn.closest('.mj-splitter-pane') ||
+                     btn.closest('.mj-splitter-handle')?.previousElementSibling;
+
+        if (pane && pane.classList.contains('mj-splitter-pane')) {
+          const isCollapsed = pane.dataset.collapsed === 'true';
+
+          if (isCollapsed) {
+            // Expand
+            pane.style.width = pane.dataset.originalWidth || '250px';
+            pane.style.minWidth = '';
+            pane.dataset.collapsed = 'false';
+            pane.style.overflow = '';
+          } else {
+            // Collapse
+            pane.dataset.originalWidth = pane.style.width || pane.offsetWidth + 'px';
+            pane.style.width = '0';
+            pane.style.minWidth = '0';
+            pane.dataset.collapsed = 'true';
+            pane.style.overflow = 'hidden';
+          }
+
+          // Toggle icon direction
+          const icon = btn.querySelector('i');
+          if (icon) {
+            if (icon.classList.contains('fa-chevron-left')) {
+              icon.classList.remove('fa-chevron-left');
+              icon.classList.add('fa-chevron-right');
+            } else {
+              icon.classList.remove('fa-chevron-right');
+              icon.classList.add('fa-chevron-left');
+            }
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,20 +1,21 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
-import { LogError, LogStatus } from "./logging";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { LogError, LogStatus, LogStatusEx } from "./logging";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
+import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 
 
 
@@ -88,6 +89,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllQueryEntities', class: QueryEntityInfo },
     { key: 'AllQueryParameters', class: QueryParameterInfo },
+    { key: 'AllSQLDialects', class: SQLDialectInfo },
+    { key: 'AllQuerySQLs', class: QuerySQLInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
     { key: 'AllLibraries', class: LibraryInfo },
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
@@ -104,6 +107,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    private _entityRecordNameCache = new Map<string, string>();
 
     private _refresh = false;
 
@@ -129,23 +133,156 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public abstract get DatabaseConnection(): any;
 
     /**
-     * Gets the display name for a single entity record.
+     * Helper to generate cache key for entity record names
+     */
+    private getCacheKey(entityName: string, compositeKey: CompositeKey): string {
+        return `${entityName}|${compositeKey.ToString()}`;
+    }
+
+    /**
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        let cachedEntry = this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+        if (!cachedEntry && loadIfNeeded) {
+            cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cachedEntry
+    }
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._entityRecordNameCache.set(this.getCacheKey(entityName, compositeKey), recordName);
+    }
+
+    /**
+     * Gets the display name for a single entity record with caching.
      * Uses the entity's IsNameField or falls back to 'Name' field if available.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database
+     * @returns The display name of the record or null if not found
+     */
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        const cacheKey = this.getCacheKey(entityName, compositeKey);
+
+        // Check cache unless forceRefresh
+        if (!forceRefresh) {
+            const cached = this._entityRecordNameCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        // Fetch from database via provider-specific implementation
+        const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
+        if (name) {
+            this._entityRecordNameCache.set(cacheKey, name);
+        }
+        return name;
+    }
+
+    /**
+     * Gets display names for multiple entity records in a single operation with caching.
+     * More efficient than multiple GetEntityRecordName calls.
+     * @param info - Array of entity/key pairs to lookup
+     * @param contextUser - Optional user context for permissions
+     * @param forceRefresh - If true, bypasses cache and queries database for all records
+     * @returns Array of results with names and status for each requested record
+     */
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        if (!forceRefresh) {
+            // Check cache for each item, collect uncached items
+            const results: EntityRecordNameResult[] = [];
+            const uncachedInfo: EntityRecordNameInput[] = [];
+            const uncachedIndexes: number[] = [];
+
+            for (let i = 0; i < info.length; i++) {
+                const item = info[i];
+                const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
+                const cached = this._entityRecordNameCache.get(cacheKey);
+
+                if (cached !== undefined) {
+                    // Cache hit
+                    results[i] = {
+                        EntityName: item.EntityName,
+                        CompositeKey: item.CompositeKey,
+                        Status: 'cached',
+                        Success: true,
+                        RecordName: cached
+                    };
+                } else {
+                    // Cache miss - need to fetch
+                    uncachedInfo.push(item);
+                    uncachedIndexes.push(i);
+                }
+            }
+
+            // Fetch uncached items from database
+            if (uncachedInfo.length > 0) {
+                const uncachedResults = await this.InternalGetEntityRecordNames(uncachedInfo, contextUser);
+
+                // Merge results and update cache
+                for (let i = 0; i < uncachedResults.length; i++) {
+                    const result = uncachedResults[i];
+                    const originalIndex = uncachedIndexes[i];
+                    results[originalIndex] = result;
+
+                    // Cache successful results
+                    if (result.Success && result.RecordName) {
+                        const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                        this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                    }
+                }
+            }
+
+            return results;
+        } else {
+            // Force refresh - bypass cache entirely
+            const results = await this.InternalGetEntityRecordNames(info, contextUser);
+
+            // Update cache with fresh results
+            for (const result of results) {
+                if (result.Success && result.RecordName) {
+                    const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
+                    this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                }
+            }
+
+            return results;
+        }
+    }
+
+    /**
+     * Internal provider-specific implementation to get a single entity record name from database.
+     * Subclasses must implement this to query the database.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param contextUser - Optional user context for permissions
      * @returns The display name of the record or null if not found
      */
-    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
-    
+    protected abstract InternalGetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>;
+
     /**
-     * Gets display names for multiple entity records in a single operation.
-     * More efficient than multiple GetEntityRecordName calls.
+     * Internal provider-specific implementation to get multiple entity record names from database.
+     * Subclasses must implement this to query the database in batch.
      * @param info - Array of entity/key pairs to lookup
      * @param contextUser - Optional user context for permissions
      * @returns Array of results with names and status for each requested record
      */
-    public abstract GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
+    protected abstract InternalGetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>;
 
     /**
      * Checks if a specific record is marked as a favorite by the user.
@@ -413,6 +550,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected get PreRunQueriesResult(): typeof this._preRunQueriesResultType { return this._preRunQueriesResultType; }
 
     // ========================================================================
+    // PLATFORM SQL RESOLUTION
+    // ========================================================================
+
+    /**
+     * Returns the database platform key for this provider.
+     * Override in subclasses to return the appropriate platform.
+     * Defaults to 'sqlserver' for backward compatibility.
+     */
+    get PlatformKey(): DatabasePlatform {
+        return 'sqlserver';
+    }
+
+    /**
+     * Resolves a PlatformSQL value to the appropriate SQL string for this provider's platform.
+     * If the value is a plain string, it is returned as-is (backward compatible).
+     * If the value is a PlatformSQL object, the platform-specific variant is used if available,
+     * otherwise the default variant is used.
+     */
+    public ResolveSQL(value: string | PlatformSQL | undefined | null): string {
+        if (value == null) return '';
+        if (typeof value === 'string') return value;
+        const platformVariant = value[this.PlatformKey];
+        if (platformVariant != null && platformVariant.length > 0) return platformVariant;
+        return value.default;
+    }
+
+    /**
+     * Resolves any PlatformSQL values in RunViewParams to plain strings for the active platform.
+     * Mutates the params object in place so downstream InternalRunView implementations
+     * always receive plain string values for ExtraFilter and OrderBy.
+     */
+    protected ResolvePlatformSQLInParams(params: RunViewParams): void {
+        if (IsPlatformSQL(params.ExtraFilter)) {
+            params.ExtraFilter = this.ResolveSQL(params.ExtraFilter);
+        }
+        if (IsPlatformSQL(params.OrderBy)) {
+            params.OrderBy = this.ResolveSQL(params.OrderBy);
+        }
+    }
+
+    // ========================================================================
     // PRE-PROCESSING HOOKS
     // ========================================================================
 
@@ -426,8 +604,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
 
+        // Resolve any PlatformSQL values to plain strings for the active platform
+        this.ResolvePlatformSQLInParams(params);
+
         // Start telemetry tracking
         const telemetryStart = performance.now();
+        // After ResolvePlatformSQLInParams, ExtraFilter/OrderBy are guaranteed to be strings
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunView',
@@ -435,8 +617,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 EntityName: params.EntityName,
                 ViewID: params.ViewID,
                 ViewName: params.ViewName,
-                ExtraFilter: params.ExtraFilter,
-                OrderBy: params.OrderBy,
+                ExtraFilter: params.ExtraFilter as string,
+                OrderBy: params.OrderBy as string,
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
@@ -492,7 +674,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         const totalPreTime = performance.now() - preViewStart;
         if (totalPreTime > 50) {
-            console.log(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
+            LogStatus(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
         }
 
         return {
@@ -511,6 +693,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Pre-processing result with cache status for each view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        // Resolve any PlatformSQL values to plain strings for the active platform
+        for (const p of params) {
+            this.ResolvePlatformSQLInParams(p);
+        }
+
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
@@ -1187,6 +1374,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
         // Start telemetry tracking
+        // Resolve PlatformSQL values before telemetry
+        this.ResolvePlatformSQLInParams(params);
         const eventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunView',
@@ -1194,8 +1383,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 EntityName: params.EntityName,
                 ViewID: params.ViewID,
                 ViewName: params.ViewName,
-                ExtraFilter: params.ExtraFilter,
-                OrderBy: params.OrderBy,
+                ExtraFilter: params.ExtraFilter as string,
+                OrderBy: params.OrderBy as string,
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
@@ -1374,7 +1563,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const start = new Date().getTime();
             const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
-            LogStatus(`GetAllMetadata() took ${end - start} ms`);
+            LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
             if (res) {
                 // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
                 // Readers now see new metadata instead of old
@@ -1490,8 +1679,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationID === a.ID)
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => as.ApplicationID === a.ID)
+                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => UUIDsEqual(ae.ApplicationID, a.ID))
+                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => UUIDsEqual(as.ApplicationID, a.ID))
                     return new ApplicationInfo(a, this);
                 });
 
@@ -1543,16 +1732,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
+                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
             }
 
         for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
-            e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);
-            e.EntitySettings = settings.filter(s => s.EntityID === e.ID);
+            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
+            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
+            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
             result.push(new EntityInfo(e));
         }
+
+        // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,
+        // the class name prefix for 'MJ' is 'MJCustom' which would collide with the
+        // 'MJCustom' schema's natural prefix. This is an extremely unlikely scenario but
+        // would cause silent class name collisions that are very hard to debug.
+        const distinctSchemas = new Set(result.map(e => e.SchemaName?.toLowerCase()));
+        if (distinctSchemas.has('mj') && distinctSchemas.has('mjcustom')) {
+            LogError(`SCHEMA COLLISION DETECTED: Your database contains both 'MJ' and 'MJCustom' schemas. ` +
+                `The 'MJ' schema uses 'MJCustom' as its class name prefix (to avoid colliding with the core '__mj' schema's 'MJ' prefix), ` +
+                `which collides with the 'MJCustom' schema's natural prefix. ` +
+                `Please rename one of these schemas to avoid class name collisions in generated TypeScript code, GraphQL types, and resolvers.`);
+        }
+
         return result;
     }
 
@@ -1654,6 +1856,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
+    }
+    /**
+     * Gets all SQL dialect definitions.
+     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
+     */
+    public get SQLDialects(): SQLDialectInfo[] {
+        return this._localMetadata.AllSQLDialects;
+    }
+    /**
+     * Gets all query SQL dialect variants.
+     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
+     */
+    public get QuerySQLs(): QuerySQLInfo[] {
+        return this._localMetadata.AllQuerySQLs;
     }
     /**
      * Gets all library definitions in the system.
@@ -1776,9 +1992,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this); 
+                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
                     await newObject.Config(actualContextUser);
-                    
+
+                    // Initialize IS-A parent entity composition chain before any data operations
+                    await newObject.InitializeParentEntity();
+
                     if (actualLoadKey) {
                         // Load existing record
                         const loadResult = await newObject.InnerLoad(actualLoadKey);
@@ -1955,7 +2174,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
                     for (const eu of status.EntityUpdateDates) {
-                        const localEntity = localDataset.Results.find(e => e.EntityID === eu.EntityID);
+                        const localEntity = localDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
                         if (!localEntity || localEntity.Results.length !== eu.RowCount) {
                             // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
                             // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
@@ -2216,6 +2435,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Local storage provider instance
      */
     abstract get LocalStorageProvider(): ILocalStorageProvider;
+
+    /**
+     * Returns the filesystem provider for the current environment.
+     * Default implementation returns null (no filesystem access).
+     * Server-side providers should override this to return a NodeFileSystemProvider.
+     */
+    get FileSystemProvider(): IFileSystemProvider | null {
+        return null;
+    }
 
     /**
      * Loads metadata from local storage if available.

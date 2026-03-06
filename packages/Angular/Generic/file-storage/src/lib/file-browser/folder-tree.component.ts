@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a breadcrumb item in the path
@@ -24,6 +25,7 @@ export interface FolderItem {
  * Loads actual folder structure from storage accounts via GraphQL.
  */
 @Component({
+  standalone: false,
   selector: 'mj-folder-tree',
   templateUrl: './folder-tree.component.html',
   styleUrls: ['./folder-tree.component.css']
@@ -48,7 +50,7 @@ export class FolderTreeComponent {
     const previousAccount = this._account;
     this._account = value;
 
-    if (value && value.account.ID !== previousAccount?.account.ID) {
+    if (value && !UUIDsEqual(value.account.ID, previousAccount?.account.ID)) {
       this.resetNavigation();
       this.loadFolders();
     }

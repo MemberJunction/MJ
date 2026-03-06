@@ -233,10 +233,3 @@ export class UpdateTypeformAction extends TypeformBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadUpdateTypeformAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

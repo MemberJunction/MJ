@@ -1,46 +1,50 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailRatingEntity } from '@memberjunction/core-entities';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Component for displaying and managing multi-user ratings on conversation messages.
  * Shows aggregate ratings and allows users to provide their own rating.
  */
 @Component({
+  standalone: false,
     selector: 'mj-conversation-message-rating',
     template: `
         <div class="rating-container">
-            <div class="aggregate-rating" *ngIf="totalRatings > 0" [title]="getRatingsTooltip()">
-                <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
-                    👍 {{ thumbsUpCount }}
-                </span>
-                <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
-                    👎 {{ thumbsDownCount }}
-                </span>
-                <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
+          @if (totalRatings > 0) {
+            <div class="aggregate-rating" [title]="getRatingsTooltip()">
+              <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
+                👍 {{ thumbsUpCount }}
+              </span>
+              <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
+                👎 {{ thumbsDownCount }}
+              </span>
+              <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
             </div>
-
-            <div class="user-rating" [class.has-rated]="currentUserRating != null">
-                <button
-                    class="rating-button thumbs-up-btn"
-                    [class.active]="currentUserRating != null && currentUserRating >= 8"
-                    (click)="RateThumbsUp()"
-                    title="This was helpful"
-                    type="button">
-                    👍
-                </button>
-                <button
-                    class="rating-button thumbs-down-btn"
-                    [class.active]="currentUserRating != null && currentUserRating <= 3"
-                    (click)="RateThumbsDown()"
-                    title="This was not helpful"
-                    type="button">
-                    👎
-                </button>
-            </div>
+          }
+        
+          <div class="user-rating" [class.has-rated]="currentUserRating != null">
+            <button
+              class="rating-button thumbs-up-btn"
+              [class.active]="currentUserRating != null && currentUserRating >= 8"
+              (click)="RateThumbsUp()"
+              title="This was helpful"
+              type="button">
+              👍
+            </button>
+            <button
+              class="rating-button thumbs-down-btn"
+              [class.active]="currentUserRating != null && currentUserRating <= 3"
+              (click)="RateThumbsDown()"
+              title="This was not helpful"
+              type="button">
+              👎
+            </button>
+          </div>
         </div>
-    `,
+        `,
     styles: [`
         .rating-container {
             display: flex;
@@ -152,13 +156,13 @@ export class ConversationMessageRatingComponent implements OnInit {
     /**
      * Process ratings data (from query or API)
      */
-    private ProcessRatings(ratings: RatingJSON[] | ConversationDetailRatingEntity[]): void {
+    private ProcessRatings(ratings: RatingJSON[] | MJConversationDetailRatingEntity[]): void {
         this.allRatings = ratings as RatingJSON[];
         this.thumbsUpCount = ratings.filter(r => r.Rating ? r.Rating >= 8 : false).length;
         this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
         this.totalRatings = ratings.length;
 
-        const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
+        const currentUserRating = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId));
         this.currentUserRating = currentUserRating?.Rating ?? null;
     }
 
@@ -191,7 +195,7 @@ export class ConversationMessageRatingComponent implements OnInit {
     async LoadRatings(): Promise<void> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ConversationDetailRatingEntity>({
+            const result = await rv.RunView<MJConversationDetailRatingEntity>({
                 EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
                 ResultType: 'entity_object'
@@ -228,11 +232,11 @@ export class ConversationMessageRatingComponent implements OnInit {
     private async SaveRating(rating: number): Promise<void> {
         try {
             const md = new Metadata();
-            let ratingEntity: ConversationDetailRatingEntity;
+            let ratingEntity: MJConversationDetailRatingEntity;
 
             // Try to load existing rating
             const rv = new RunView();
-            const existing = await rv.RunView<ConversationDetailRatingEntity>({
+            const existing = await rv.RunView<MJConversationDetailRatingEntity>({
                 EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}' AND UserID='${this.currentUserId}'`,
                 MaxRows: 1,
@@ -253,7 +257,7 @@ export class ConversationMessageRatingComponent implements OnInit {
                 ratingEntity.Rating = rating;
             } else {
                 // Create new
-                ratingEntity = await md.GetEntityObject<ConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
+                ratingEntity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
                 ratingEntity.ConversationDetailID = this.conversationDetailId;
                 ratingEntity.UserID = this.currentUserId;
                 ratingEntity.Rating = rating;

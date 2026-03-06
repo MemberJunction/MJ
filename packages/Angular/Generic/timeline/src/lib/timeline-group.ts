@@ -31,7 +31,7 @@ import {
  * @example
  * ```typescript
  * // Works with BaseEntity
- * const entity = await md.GetEntityObject<TaskEntity>('Tasks');
+ * const entity = await md.GetEntityObject<MJTaskEntity>('Tasks');
  * const name = getFieldValue(entity, 'Name');  // Uses entity.Get('Name')
  *
  * // Works with plain objects
@@ -120,9 +120,9 @@ export function getRecordId(record: any, idFieldName?: string): string {
  *
  * @example MemberJunction usage with BaseEntity
  * ```typescript
- * import { TaskEntity } from '@memberjunction/core-entities';
+ * import { MJTaskEntity } from '@memberjunction/core-entities';
  *
- * const group = new TimelineGroup<TaskEntity>();
+ * const group = new TimelineGroup<MJTaskEntity>();
  * group.EntityName = 'Tasks';
  * group.DataSourceType = 'entity';
  * group.Filter = "Status = 'Open'";
@@ -132,7 +132,7 @@ export function getRecordId(record: any, idFieldName?: string): string {
  *
  * @example With full configuration
  * ```typescript
- * const group = new TimelineGroup<TaskEntity>();
+ * const group = new TimelineGroup<MJTaskEntity>();
  * group.EntityName = 'Tasks';
  * group.TitleFieldName = 'Name';
  * group.DateFieldName = 'CompletedAt';
@@ -170,7 +170,7 @@ export class TimelineGroup<T = any> {
    * The MemberJunction entity name for this group.
    * Required when `DataSourceType` is `'entity'`.
    *
-   * @example 'Tasks', 'AI Agents', 'Users'
+   * @example 'Tasks', 'MJ: AI Agents', 'Users'
    */
   EntityName?: string;
 
@@ -499,7 +499,7 @@ export class TimelineGroup<T = any> {
    *
    * @example
    * ```typescript
-   * const group = await TimelineGroup.FromView<TaskEntity>({
+   * const group = await TimelineGroup.FromView<MJTaskEntity>({
    *   EntityName: 'Tasks',
    *   ExtraFilter: "Status = 'Open'",
    *   OrderBy: 'DueDate DESC'

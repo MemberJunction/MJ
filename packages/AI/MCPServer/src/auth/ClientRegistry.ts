@@ -184,8 +184,8 @@ export class ClientRegistry {
 
     const providedHash = this.hashSecret(providedSecret);
     return crypto.timingSafeEqual(
-      Buffer.from(client.clientSecretHash),
-      Buffer.from(providedHash)
+      Uint8Array.from(Buffer.from(client.clientSecretHash)),
+      Uint8Array.from(Buffer.from(providedHash))
     );
   }
 

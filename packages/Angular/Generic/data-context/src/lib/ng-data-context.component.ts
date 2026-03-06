@@ -1,8 +1,10 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
-import { DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJDataContextEntity, MJDataContextItemEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
   selector: 'mj-data-context',
   templateUrl: './ng-data-context.component.html',
   styleUrls: ['./ng-data-context.component.css']
@@ -11,8 +13,8 @@ export class DataContextComponent implements OnInit {
   @Input() dataContextId!: string;
   @Input() Provider: IMetadataProvider | null = null;
  
-  public dataContextRecord?: DataContextEntity;
-  public dataContextItems: DataContextItemEntity[] = [];
+  public dataContextRecord?: MJDataContextEntity;
+  public dataContextItems: MJDataContextItemEntity[] = [];
   public showLoader: boolean = false;
   public errorMessage: string = '';
   public searchTerm: string = '';
@@ -27,7 +29,7 @@ export class DataContextComponent implements OnInit {
     return this.Provider || Metadata.Provider;
   }
 
-  public get filteredItems(): DataContextItemEntity[] {
+  public get filteredItems(): MJDataContextItemEntity[] {
     if (!this.searchTerm) {
       return this.dataContextItems;
     }
@@ -56,13 +58,13 @@ export class DataContextComponent implements OnInit {
     try {
       if (dataContextId) {
         const p = this.ProviderToUse;
-        this.dataContextRecord = await p.GetEntityObject<DataContextEntity>("Data Contexts", p.CurrentUser);
+        this.dataContextRecord = await p.GetEntityObject<MJDataContextEntity>("MJ: Data Contexts", p.CurrentUser);
         await this.dataContextRecord.Load(dataContextId);
 
         const rv = new RunView(<IRunViewProvider><any>p);
-        const response = await rv.RunView<DataContextItemEntity>(
+        const response = await rv.RunView<MJDataContextItemEntity>(
           { 
-            EntityName: "Data Context Items", 
+            EntityName: "MJ: Data Context Items", 
             ExtraFilter: `DataContextID='${dataContextId}'`,
             OrderBy: '__mj_CreatedAt DESC',
             ResultType: 'entity_object'
@@ -111,7 +113,7 @@ export class DataContextComponent implements OnInit {
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
     const md = new Metadata();
-    return md.Entities.find(e => e.ID === entityId)?.Name;
+    return md.Entities.find(e => UUIDsEqual(e.ID, entityId))?.Name;
   }
 
   public async getViewName(viewId: string): Promise<string | undefined> {
@@ -128,7 +130,7 @@ export class DataContextComponent implements OnInit {
   public async getQueryName(queryId: string): Promise<string | undefined> {
     try {
       const p = this.ProviderToUse;
-      const query = await p.GetEntityObject("Queries", p.CurrentUser);
+      const query = await p.GetEntityObject("MJ: Queries", p.CurrentUser);
       await (query as any).Load(queryId);
       return (query as any).Get('Name');
     } catch {

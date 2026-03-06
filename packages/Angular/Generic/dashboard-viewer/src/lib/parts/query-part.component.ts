@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata } from '@memberjunction/core';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
 /**
@@ -12,42 +12,51 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
  */
 @RegisterClass(BaseDashboardPart, 'QueryPanelRenderer')
 @Component({
+  standalone: false,
     selector: 'mj-query-part',
     template: `
         <div class="query-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
-            <!-- Loading state -->
-            <div class="loading-state" *ngIf="IsLoading">
-                <mj-loading text="Loading query..."></mj-loading>
+          <!-- Loading state -->
+          @if (IsLoading) {
+            <div class="loading-state">
+              <mj-loading text="Loading query..."></mj-loading>
             </div>
-
-            <!-- Error state -->
-            <div class="error-state" *ngIf="ErrorMessage && !IsLoading">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
+          }
+        
+          <!-- Error state -->
+          @if (ErrorMessage && !IsLoading) {
+            <div class="error-state">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <span>{{ ErrorMessage }}</span>
             </div>
-
-            <!-- No query configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !hasQuery">
-                <i class="fa-solid fa-flask"></i>
-                <h4>No Query Selected</h4>
-                <p>Click the configure button to select a query for this part.</p>
+          }
+        
+          <!-- No query configured -->
+          @if (!IsLoading && !ErrorMessage && !hasQuery) {
+            <div class="empty-state">
+              <i class="fa-solid fa-flask"></i>
+              <h4>No Query Selected</h4>
+              <p>Click the configure button to select a query for this part.</p>
             </div>
-
-            <!-- Query Viewer -->
-            <div class="query-content" *ngIf="!IsLoading && !ErrorMessage && hasQuery && queryId">
-                <mj-query-viewer
-                    #queryViewer
-                    [QueryId]="queryId"
-                    [AutoRun]="true"
-                    [ShowToolbar]="showToolbar"
-                    [PersistState]="true"
-                    [PersistParameters]="true"
-                    (EntityLinkClick)="onEntityLinkClick($event)"
-                    (QueryError)="onQueryError($event)">
-                </mj-query-viewer>
+          }
+        
+          <!-- Query Viewer -->
+          @if (!IsLoading && !ErrorMessage && hasQuery && queryId) {
+            <div class="query-content">
+              <mj-query-viewer
+                #queryViewer
+                [QueryId]="queryId"
+                [AutoRun]="true"
+                [ShowToolbar]="showToolbar"
+                [PersistState]="true"
+                [PersistParameters]="true"
+                (EntityLinkClick)="onEntityLinkClick($event)"
+                (QueryError)="onQueryError($event)">
+              </mj-query-viewer>
             </div>
+          }
         </div>
-    `,
+        `,
     styles: [`
         :host {
             display: block;
@@ -117,7 +126,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     public queryId: string | null = null;
     public showToolbar = true;
 
-    private queryEntity: QueryEntity | null = null;
+    private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(cdr: ChangeDetectorRef) {
@@ -149,7 +158,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries');
+                this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
                 const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {
@@ -232,11 +241,4 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         this.queryEntity = null;
         this.queryId = null;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadQueryPart() {
-    // Prevents tree-shaking of the component
 }

@@ -23,39 +23,49 @@
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
 
       <!-- Status indicator for user messages -->
-      <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
-        <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
-        <span class="status-text">{{ getStatusText() }}</span>
-      </span>
+      @if (isUserMessage && messageStatus !== 'Complete') {
+        <span class="message-status" [class.error]="messageStatus === 'Error'">
+          <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
+          <span class="status-text">{{ getStatusText() }}</span>
+        </span>
+      }
 
       <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
-      <span *ngIf="!isUserMessage && timePillText"
-            class="time-pill"
-            [class.in-progress]="isInProgressAIMessage"
-            [class.active]="!isInProgressAIMessage && isAgentRunActive"
-            [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
-            [class.failed]="messageStatus === 'Error'">
-        <i class="fas fa-clock"></i>
-        {{ timePillText }}
-      </span>
+      @if (!isUserMessage && timePillText) {
+        <span
+          class="time-pill"
+          [class.in-progress]="isInProgressAIMessage"
+          [class.active]="!isInProgressAIMessage && isAgentRunActive"
+          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
+          [class.failed]="messageStatus === 'Error'">
+          <i class="fas fa-clock"></i>
+          {{ timePillText }}
+        </span>
+      }
 
       <!-- Test feedback icon (appears for test runs only) -->
-      <span *ngIf="message.TestRunID"
-            class="test-feedback-icon"
-            (click)="onTestFeedbackClick()"
-            title="Provide Test Feedback">
-        <i class="fas fa-flask"></i>
-      </span>
+      @if (message.TestRunID) {
+        <span
+          class="test-feedback-icon"
+          (click)="onTestFeedbackClick()"
+          title="Provide Test Feedback">
+          <i class="fas fa-flask"></i>
+        </span>
+      }
 
       <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
-      <span *ngIf="hasAgentRun"
-            class="agent-run-icon"
-            (click)="toggleAgentDetails()"
-            [class.expanded]="isAgentDetailsExpanded"
-            [title]="hasRatings() ? 'Agent details & ' + getRatingCount() + ' rating(s)' : 'Click to view agent execution details'">
-        <i class="fas fa-cog"></i>
-        <span class="rating-badge" *ngIf="hasRatings()">{{ getRatingCount() }}</span>
-      </span>
+      @if (hasAgentRun) {
+        <span
+          class="agent-run-icon"
+          (click)="toggleAgentDetails()"
+          [class.expanded]="isAgentDetailsExpanded"
+          [title]="hasRatings() ? 'Agent details & ' + getRatingCount() + ' rating(s)' : 'Click to view agent execution details'">
+          <i class="fas fa-cog"></i>
+          @if (hasRatings()) {
+            <span class="rating-badge">{{ getRatingCount() }}</span>
+          }
+        </span>
+      }
     </div>
 
     <div class="message-body">
@@ -72,8 +82,8 @@
           <div class="message-attachments">
             @for (attachment of attachments; track attachment.id) {
               <div class="attachment-item"
-                   [class.image-attachment]="attachment.type === 'Image'"
-                   (click)="onAttachmentClick(attachment)">
+                [class.image-attachment]="attachment.type === 'Image'"
+                (click)="onAttachmentClick(attachment)">
                 @if (attachment.type === 'Image') {
                   <img
                     [src]="attachment.thumbnailUrl || attachment.contentUrl"
@@ -154,7 +164,7 @@
             [(ngModel)]="editedText"
             (keydown)="onEditKeydown($event)"
             rows="4"
-            placeholder="Edit your message..."></textarea>
+          placeholder="Edit your message..."></textarea>
           <div class="edit-actions">
             <button class="edit-action-btn save" (click)="saveEdit()">
               <i class="fas fa-check"></i>
@@ -247,27 +257,35 @@
                   </span>
                 </div>
 
-                <div class="detail-row" *ngIf="agentRunStepCount > 0">
-                  <span class="detail-label">Steps:</span>
-                  <span class="detail-value">{{ agentRunStepCount }}</span>
-                </div>
+                @if (agentRunStepCount > 0) {
+                  <div class="detail-row">
+                    <span class="detail-label">Steps:</span>
+                    <span class="detail-value">{{ agentRunStepCount }}</span>
+                  </div>
+                }
 
-                <div class="detail-row" *ngIf="agentRunTotalTokens > 0">
-                  <span class="detail-label">Tokens:</span>
-                  <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
-                </div>
+                @if (agentRunTotalTokens > 0) {
+                  <div class="detail-row">
+                    <span class="detail-label">Tokens:</span>
+                    <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
+                  </div>
+                }
 
-                <div class="detail-row" *ngIf="agentRunTotalCost > 0">
-                  <span class="detail-label">Cost:</span>
-                  <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
-                </div>
+                @if (agentRunTotalCost > 0) {
+                  <div class="detail-row">
+                    <span class="detail-label">Cost:</span>
+                    <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
+                  </div>
+                }
 
-                <div class="detail-row" *ngIf="agentRun.Status">
-                  <span class="detail-label">Status:</span>
-                  <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
-                    {{ agentRun.Status }}
-                  </span>
-                </div>
+                @if (agentRun.Status) {
+                  <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
+                      {{ agentRun.Status }}
+                    </span>
+                  </div>
+                }
               </div>
             </div>
           }
@@ -280,14 +298,15 @@
                 <span>Associated Tasks ({{ detailTasks.length }})</span>
               </div>
               <div class="tasks-list">
-                <mj-task-widget
-                  *ngFor="let task of detailTasks"
-                  [task]="task"
-                  [compact]="false"
-                  [clickable]="false"
-                  [showProgress]="true"
-                  [showDuration]="true">
-                </mj-task-widget>
+                @for (task of detailTasks; track task) {
+                  <mj-task-widget
+                    [task]="task"
+                    [compact]="false"
+                    [clickable]="false"
+                    [showProgress]="true"
+                    [showDuration]="true">
+                  </mj-task-widget>
+                }
               </div>
             </div>
           }
@@ -309,15 +328,17 @@
     }
 
     <!-- Reaction Buttons -->
-    <div class="message-reactions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
-      <button class="reaction-btn" (click)="toggleReaction('like')">
-        <i class="far fa-thumbs-up"></i>
-        <span class="reaction-count">0</span>
-      </button>
-      <button class="reaction-btn" (click)="toggleReaction('comment')">
-        <i class="far fa-comment"></i>
-        <span class="reaction-count">0</span>
-      </button>
-    </div>
+    @if (!isProcessing && !isInProgressAIMessage && !isEditing) {
+      <div class="message-reactions">
+        <button class="reaction-btn" (click)="toggleReaction('like')">
+          <i class="far fa-thumbs-up"></i>
+          <span class="reaction-count">0</span>
+        </button>
+        <button class="reaction-btn" (click)="toggleReaction('comment')">
+          <i class="far fa-comment"></i>
+          <span class="reaction-count">0</span>
+        </button>
+      </div>
+    }
   </div>
 </div>

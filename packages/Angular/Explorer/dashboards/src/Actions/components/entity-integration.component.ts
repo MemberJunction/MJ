@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsEntitiesResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Entity Integration Resource - displays entity-action mappings
  */
 @RegisterClass(BaseResourceComponent, 'ActionsEntitiesResource')
 @Component({
+  standalone: false,
   selector: 'mj-entity-integration',
   template: `
     <div class="entity-integration-placeholder" >

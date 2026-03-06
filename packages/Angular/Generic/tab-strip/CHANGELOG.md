@@ -1,5 +1,134 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 5.8.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [df2457c]
+  - @memberjunction/ng-container-directives@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [4aa1b54]
+  - @memberjunction/ng-container-directives@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [8366d44]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ng-container-directives@4.0.0
+
+## 3.4.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@3.4.0
+
 ## 3.3.0
 
 ### Patch Changes

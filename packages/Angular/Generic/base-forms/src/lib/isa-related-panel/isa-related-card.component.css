@@ -1,0 +1,207 @@
+/* ============================================
+   ISA RELATED CARD
+   Compact summary card for one sibling/child entity
+   ============================================ */
+
+.mj-isa-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  border-left: 3px solid #667eea;
+}
+
+/* ---- Header ---- */
+.mj-isa-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f0f1f5;
+  border-bottom: 1px solid #e4e6eb;
+}
+
+.mj-isa-card__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mj-isa-card__icon {
+  font-size: 14px;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.mj-isa-card__entity-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+}
+
+.mj-isa-card__record-name {
+  font-size: 11px;
+  color: #888;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-isa-card__open-link {
+  font-size: 11px;
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mj-isa-card__open-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- Body / Fields ---- */
+.mj-isa-card__body {
+  padding: 8px 14px 10px;
+}
+
+.mj-isa-card__field {
+  display: flex;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: 8px;
+}
+
+.mj-isa-card__field-label {
+  font-size: 11px;
+  color: #999;
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.mj-isa-card__field-value {
+  font-size: 12px;
+  color: #333;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-isa-card__field-value--bool-yes {
+  color: #2e7d32;
+}
+
+.mj-isa-card__field-value--bool-no {
+  color: #c62828;
+}
+
+/* ---- Expand/Collapse ---- */
+.mj-isa-card__expand-row {
+  padding: 0 14px 8px;
+}
+
+.mj-isa-card__expand-btn {
+  font-size: 11px;
+  color: #667eea;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-isa-card__expand-btn:hover {
+  text-decoration: underline;
+}
+
+.mj-isa-card__expand-chevron {
+  font-size: 9px;
+}
+
+.mj-isa-card__extra-fields {
+  padding: 0 14px 10px;
+  border-top: 1px dashed #eee;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/* ---- Loading State ---- */
+.mj-isa-card__body--loading {
+  padding: 12px 14px;
+}
+
+.mj-isa-card__loading-bar {
+  height: 10px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: mj-isa-shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  width: 80%;
+}
+
+.mj-isa-card__loading-bar--short {
+  width: 50%;
+}
+
+@keyframes mj-isa-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---- Nested Sub-Cards (grandchild+ rendered inside parent card) ---- */
+.mj-isa-card__children {
+  padding: 6px 10px 8px;
+  border-top: 1px solid #eee;
+}
+
+.mj-isa-card--nested {
+  box-shadow: none;
+  border: 1px solid #e0e2e8;
+  border-left: 2px solid #8b9cf0;
+  border-radius: 8px;
+}
+
+.mj-isa-card--nested .mj-isa-card__header {
+  padding: 6px 10px;
+  background: #f5f6fa;
+  border-bottom-color: #ebedf2;
+}
+
+.mj-isa-card--nested .mj-isa-card__entity-name {
+  font-size: 12px;
+}
+
+.mj-isa-card--nested .mj-isa-card__icon {
+  font-size: 12px;
+}
+
+.mj-isa-card--nested .mj-isa-card__body {
+  padding: 6px 10px 8px;
+}
+
+.mj-isa-card--nested .mj-isa-card__field-label {
+  width: 95px;
+  font-size: 10px;
+}
+
+.mj-isa-card--nested .mj-isa-card__field-value {
+  font-size: 11px;
+}
+
+/* ---- Error State ---- */
+.mj-isa-card__body--error {
+  padding: 10px 14px;
+}
+
+.mj-isa-card__error-text {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+}

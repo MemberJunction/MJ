@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { MJGlobal } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
-import { FileStorageAccountEntity, FileStorageProviderEntity } from "@memberjunction/core-entities";
+import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 import { BaseAction } from "@memberjunction/actions";
 
@@ -53,7 +53,7 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'File Storage Providers',
+                    EntityName: 'MJ: File Storage Providers',
                     ExtraFilter: 'IsActive=1',
                     OrderBy: 'Name',
                     ResultType: 'entity_object'
@@ -74,11 +74,11 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
                 );
             }
 
-            const accounts = accountsResult.Results as FileStorageAccountEntity[] || [];
-            const providers = providersResult.Results as FileStorageProviderEntity[] || [];
+            const accounts = accountsResult.Results as MJFileStorageAccountEntity[] || [];
+            const providers = providersResult.Results as MJFileStorageProviderEntity[] || [];
 
             // Create provider lookup map
-            const providerMap = new Map<string, FileStorageProviderEntity>();
+            const providerMap = new Map<string, MJFileStorageProviderEntity>();
             providers.forEach(p => providerMap.set(p.ID, p));
 
             const availableAccounts: Array<{
@@ -168,12 +168,4 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
             );
         }
     }
-}
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadListStorageAccountsAction() {
-    // This function call ensures the class decorator executes
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseFileStorageAction, "List Storage Accounts");
 }

@@ -218,10 +218,3 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetJotFormSubmissionsAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

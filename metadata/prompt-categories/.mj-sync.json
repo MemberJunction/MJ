@@ -1,5 +1,5 @@
 {
-  "entity": "AI Prompt Categories",
+  "entity": "MJ: AI Prompt Categories",
   "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
@@ -12,10 +12,10 @@
     "backupDirectory": ".backups",
     "lookupFields": {
       "ParentID": {
-        "entity": "AI Prompt Categories",
+        "entity": "MJ: AI Prompt Categories",
         "field": "Name"
       }
-    }, 
+    },
     "excludeFields": [
       "Parent"
     ]

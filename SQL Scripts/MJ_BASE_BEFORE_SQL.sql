@@ -1,3 +1,12 @@
+/*****************************************************************
+ - Prior to 5.3.0 this script was run as a "before-all" script in CodeGen
+ - As of 5.3.0 and beyond this script is NEVER run automatically as we do
+   not need this anymore due to flyway baseline migrations - in addtion this script
+   can be destructive in that it doesn't restore all aspects of prior migrations/baselines such as
+   sp_addextendedproperty calls for things like vwEntities. 
+ - In a future MJ release we will DELETE this file
+******************************************************************/
+
 DROP PROCEDURE IF EXISTS __mj.spRecompileAllViews
 GO
 CREATE PROCEDURE __mj.spRecompileAllViews
@@ -83,6 +92,36 @@ BEGIN
 END;
 GO
 GRANT EXEC ON __mj.GetProgrammaticName to public
+
+GO
+
+---------------------------
+-- StripToAlphanumeric: Removes ALL non-alphanumeric characters from a string.
+-- Unlike GetProgrammaticName (which replaces them with underscores), this function
+-- strips them entirely. Used to clean schema prefixes like "MJ: " → "MJ" before
+-- concatenation with table names in vwEntities ClassName/CodeName computations.
+DROP FUNCTION IF EXISTS __mj.StripToAlphanumeric
+GO
+CREATE FUNCTION __mj.StripToAlphanumeric(@input NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @output NVARCHAR(MAX) = '';
+    DECLARE @i INT = 1;
+    DECLARE @currentChar NCHAR(1);
+
+    WHILE @i <= LEN(@input)
+    BEGIN
+        SET @currentChar = SUBSTRING(@input, @i, 1);
+        IF @currentChar LIKE '[A-Za-z0-9]'
+            SET @output = @output + @currentChar;
+        SET @i = @i + 1;
+    END;
+
+    RETURN @output;
+END;
+GO
+GRANT EXEC ON __mj.StripToAlphanumeric to public
 
 GO
 
@@ -194,24 +233,99 @@ INNER JOIN sys.schemas sch2
     ON tab2.schema_id = sch2.schema_id
 GO
 
+
+
+
+
+
+IF OBJECT_ID('[__mj].GetClassNameSchemaPrefix', 'FN') IS NOT NULL
+    DROP FUNCTION [__mj].GetClassNameSchemaPrefix;
+GO
+
+CREATE FUNCTION [__mj].GetClassNameSchemaPrefix(@schemaName NVARCHAR(255))
+RETURNS NVARCHAR(255)
+AS
+BEGIN
+    DECLARE @trimmed NVARCHAR(255) = LTRIM(RTRIM(@schemaName));
+
+    -- Core MJ schema: __mj -> 'MJ'
+    IF LOWER(@trimmed) = '__mj'
+        RETURN 'MJ';
+
+    -- Guard: a schema literally named 'MJ' (case-insensitive) would collide with __mj's prefix
+    IF LOWER(@trimmed) = 'mj'
+        RETURN 'MJCustom';
+
+    -- Default: strip to alphanumeric (same as StripToAlphanumeric, which removes
+    -- all non-[A-Za-z0-9] characters). Then guard against leading digit.
+    DECLARE @cleaned NVARCHAR(255) = [__mj].StripToAlphanumeric(@trimmed);
+
+    -- If empty after cleaning, return empty (schema with no prefix needed - shouldn't happen)
+    IF LEN(@cleaned) = 0 OR @cleaned IS NULL
+        RETURN '';
+
+    -- If starts with a digit, prepend underscore
+    IF @cleaned LIKE '[0-9]%'
+        RETURN '_' + @cleaned;
+
+    RETURN @cleaned;
+END;
+GO
+
+
+
+
+
+
+
+
 DROP VIEW IF EXISTS [__mj].vwEntities
 GO
-CREATE VIEW [__mj].vwEntities
+CREATE VIEW [__mj].[vwEntities]
 AS
-SELECT 
-	e.*,
-	__mj.GetProgrammaticName(REPLACE(e.Name,' ','')) AS CodeName, /*For just the CodeName for the entity, we remove spaces before we convert to a programmatic name as many entity names have spaces automatically added to them and it is not needed to make those into _ characters*/
-	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS ClassName,
-	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
-	par.Name ParentEntity,
-	par.BaseTable ParentBaseTable,
-	par.BaseView ParentBaseView
-FROM 
-	[__mj].Entity e
-LEFT OUTER JOIN 
-	[__mj].Entity par
+SELECT
+    e.*,
+    /* CodeName: Schema-prefixed programmatic name derived from entity Name.
+       Uses GetClassNameSchemaPrefix(SchemaName) for the prefix, then strips the
+       EntityNamePrefix from the Name (if present) and removes spaces.
+       Example: schema '__mj', name 'MJ: AI Models' -> 'MJAIModels'
+       Example: schema 'sales', name 'Invoice' -> 'salesInvoice' */
+    [__mj].GetProgrammaticName(
+        [__mj].GetClassNameSchemaPrefix(e.SchemaName) +
+        REPLACE(
+            IIF(si.EntityNamePrefix IS NOT NULL,
+                REPLACE(e.Name, si.EntityNamePrefix, ''),
+                e.Name
+            ),
+            ' ',
+            ''
+        )
+    ) AS CodeName,
+    /* ClassName: Schema-prefixed programmatic class name for TypeScript entity classes,
+       Zod schemas, and Angular form components. Uses GetClassNameSchemaPrefix(SchemaName)
+       which is guaranteed unique (SQL Server enforces schema name uniqueness).
+       Example: schema '__mj', table 'AIModel' -> 'MJAIModel' -> class MJAIModelEntity
+       Example: schema 'sales', table 'Invoice' -> 'salesInvoice' -> class salesInvoiceEntity
+       This prevents cross-schema collisions and aligns with GraphQL type naming. */
+    [__mj].GetProgrammaticName(
+        [__mj].GetClassNameSchemaPrefix(e.SchemaName) +
+        e.BaseTable +
+        ISNULL(e.NameSuffix, '')
+    ) AS ClassName,
+    [__mj].GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
+    par.Name ParentEntity,
+    par.BaseTable ParentBaseTable,
+    par.BaseView ParentBaseView
+FROM
+    [__mj].Entity e
+LEFT OUTER JOIN
+    [__mj].Entity par
 ON
-	e.ParentID = par.ID
+    e.ParentID = par.ID
+LEFT OUTER JOIN
+    [__mj].SchemaInfo si
+ON
+    e.SchemaName = si.SchemaName
 GO
 
 DROP VIEW IF EXISTS [__mj].vwEntityFields
@@ -376,24 +490,7 @@ ON
 
 GO
   
-
-DROP VIEW IF EXISTS [__mj].vwCompanies
-GO
-CREATE VIEW [__mj].vwCompanies
-AS
-SELECT * FROM __mj.Company
-
-
-
-GO
  
-
-DROP VIEW IF EXISTS [__mj].vwIntegrations
-GO
-CREATE VIEW [__mj].vwIntegrations AS
-SELECT * FROM __mj.Integration
-GO
-
 DROP VIEW IF EXISTS [__mj].vwIntegrationURLFormats 
 GO
 CREATE VIEW [__mj].vwIntegrationURLFormats
@@ -817,7 +914,8 @@ LEFT OUTER JOIN
 	sys.all_objects v
 ON
 	e.BaseView = v.name AND 
-	v.type = 'V' 
+	v.type = 'V' AND
+  v.schema_id = s.schema_id
 LEFT OUTER JOIN
     sys.schemas s_v
 ON   
@@ -1435,9 +1533,9 @@ LEFT OUTER JOIN -- left join since can have table level constraints
 LEFT OUTER JOIN
   __mj.vwGeneratedCodes gc 
   ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
-  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='MJ: Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
         OR
-      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+      (ef.ID IS NULL and gc.LinkedEntity='MJ: Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
   ) AND -- MUST MATCH Source=definition
   cc.definition = gc.Source
 GO
@@ -1816,4 +1914,3 @@ BEGIN
     DROP TABLE #Procedures;
     DROP TABLE #ExcludedSchemas;
 END
-GO

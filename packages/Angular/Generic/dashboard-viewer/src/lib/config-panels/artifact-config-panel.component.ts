@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef, ViewChild, OnInit } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseConfigPanel } from './base-config-panel';
 import { PanelConfig } from '../models/dashboard-types';
 import {
@@ -17,6 +17,7 @@ import {
  */
 @RegisterClass(BaseConfigPanel, 'ArtifactPanelConfigDialog')
 @Component({
+  standalone: false,
     selector: 'mj-artifact-config-panel',
     templateUrl: './artifact-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']
@@ -36,7 +37,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
     public showMetadata = false;
 
     // Version selection
-    public versions: ArtifactVersionEntity[] = [];
+    public versions: MJArtifactVersionEntity[] = [];
     public isLoadingVersions = false;
     private previousArtifactName = ''; // Track for smart title updates
 
@@ -224,7 +225,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ArtifactVersionEntity>({
+            const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID = '${artifactId}'`,
                 OrderBy: 'VersionNumber DESC',

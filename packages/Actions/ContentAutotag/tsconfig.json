@@ -1,23 +1,9 @@
 {
-    "compilerOptions": {
-      "experimentalDecorators": true,
-      "emitDecoratorMetadata": true,
-      "module": "commonjs",
-      "esModuleInterop": true,
-      "target": "es2022",
-      "lib": ["es2022"],
-      "skipLibCheck": true,
-      "declaration": true,
-      "declarationMap": true,
-      "moduleResolution": "node",
-      "sourceMap": true,
-      "rootDir": "./src",
-      "outDir": "dist",
-      "strict": false,
-      "paths": {
-      "@memberjunction/content-autotagging": ["./node_modules/@memberjunction/content-autotagging"]
-    }
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "**/*.spec.ts"]
-  }
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}

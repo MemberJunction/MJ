@@ -1,0 +1,169 @@
+<div class="control-tower">
+  <div class="tower-header">
+    <h2><i class="fa-solid fa-tower-broadcast"></i> Integration Control Tower</h2>
+    <button kendoButton [look]="'flat'" [themeColor]="'primary'" (click)="Refresh()">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </button>
+  </div>
+
+  @if (IsLoading) {
+    <mj-loading text="Loading integrations..." size="medium"></mj-loading>
+  } @else if (Summaries.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-plug-circle-xmark"></i>
+      <h3>No Integrations Configured</h3>
+      <p>Set up your first integration using the Connection Studio to start syncing data.</p>
+      <button kendoButton [themeColor]="'primary'" class="empty-cta">
+        <i class="fa-solid fa-plus"></i> Create Integration
+      </button>
+    </div>
+  } @else {
+    <!-- KPI Strip -->
+    <div class="kpi-strip">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-icon"><i class="fa-solid fa-plug"></i></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ KPIs.TotalIntegrations }}</span>
+          <span class="kpi-label">Total Integrations</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-green">
+        <div class="kpi-icon"><i class="fa-solid fa-sync fa-spin"></i></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ KPIs.ActiveSyncs }}</span>
+          <span class="kpi-label">Active Syncs</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-purple">
+        <div class="kpi-icon"><i class="fa-solid fa-database"></i></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ KPIs.RecordsSyncedToday | number }}</span>
+          <span class="kpi-label">Records Synced Today</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-icon"><i class="fa-solid fa-exclamation-triangle"></i></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ FormatErrorRate(KPIs.ErrorRate) }}</span>
+          <span class="kpi-label">Error Rate</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-orange">
+        <div class="kpi-icon"><i class="fa-solid fa-clock"></i></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ FormatDuration(KPIs.AverageSyncDurationMs) }}</span>
+          <span class="kpi-label">Avg Sync Duration</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Integration Health Grid -->
+    <div class="section-header">
+      <h3><i class="fa-solid fa-heartbeat"></i> Integration Health</h3>
+    </div>
+    <kendo-grid [data]="Summaries" [resizable]="true" class="health-grid">
+      <kendo-grid-column field="Integration.Name" title="Integration Name" [width]="200">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <div class="grid-integration-name">
+            <i [class]="SourceIconClass(dataItem)" class="grid-source-icon"></i>
+            <span>{{ dataItem.Integration.Name }}</span>
+          </div>
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Source Type" [width]="140">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          {{ dataItem.SourceType?.Name ?? 'Unknown' }}
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Status" [width]="110">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <span [class]="StatusChipClass(dataItem.StatusColor)">
+            {{ StatusLabel(dataItem.StatusColor) }}
+          </span>
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Last Run" [width]="120">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          {{ dataItem.RelativeTime }}
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Duration" [width]="110">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          {{ FormatDuration(dataItem.DurationMs) }}
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Records" [width]="100">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          {{ (dataItem.LatestRun?.TotalRecords ?? 0) | number }}
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Errors" [width]="90">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <span [class.error-count]="dataItem.TotalErrors > 0">
+            {{ dataItem.TotalErrors }}
+          </span>
+        </ng-template>
+      </kendo-grid-column>
+      <kendo-grid-column title="Actions" [width]="100">
+        <ng-template kendoGridCellTemplate let-dataItem>
+          <button kendoButton [look]="'flat'" [themeColor]="'primary'" [size]="'small'"
+                  (click)="OnRunNow(dataItem.Integration.ID)"
+                  [disabled]="!dataItem.Integration.IsActive">
+            <i class="fa-solid fa-play"></i> Run
+          </button>
+        </ng-template>
+      </kendo-grid-column>
+    </kendo-grid>
+
+    <!-- Bottom Section: Activity Feed & Performance -->
+    <div class="bottom-section">
+      <!-- Activity Feed -->
+      <div class="activity-feed-panel">
+        <h3 class="section-title"><i class="fa-solid fa-stream"></i> Recent Activity</h3>
+        @if (ActivityFeed.length === 0) {
+          <p class="empty-hint">No recent activity.</p>
+        } @else {
+          <div class="activity-list">
+            @for (item of ActivityFeed; track item.RunID) {
+              <div class="activity-item">
+                <i [class]="ActivityStatusIcon(item.Status)"
+                   [class.status-icon-green]="item.StatusColor === 'green'"
+                   [class.status-icon-red]="item.StatusColor === 'red'"
+                   [class.status-icon-amber]="item.StatusColor === 'amber'">
+                </i>
+                <div class="activity-details">
+                  <span class="activity-name">{{ item.IntegrationName }}</span>
+                  <span class="activity-meta">
+                    {{ item.TotalRecords | number }} records &middot; {{ item.RelativeTime }}
+                    &middot; {{ item.RunByUser }}
+                  </span>
+                </div>
+                <span class="activity-status-chip" [class]="'activity-' + item.StatusColor">
+                  {{ item.Status }}
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Performance Bar Chart -->
+      <div class="performance-panel">
+        <h3 class="section-title"><i class="fa-solid fa-chart-bar"></i> Records Synced (7 days)</h3>
+        @if (DailyCounts.length === 0) {
+          <p class="empty-hint">No data available.</p>
+        } @else {
+          <div class="bar-chart">
+            @for (day of DailyCounts; track day.Date) {
+              <div class="bar-column">
+                <div class="bar-value">{{ day.Records | number }}</div>
+                <div class="bar-fill" [style.height.%]="BarHeight(day.Records)"></div>
+                <div class="bar-label">{{ day.Label }}</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

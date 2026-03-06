@@ -1,339 +1,327 @@
-<kendo-dialog 
-    *ngIf="isVisible"
+@if (isVisible) {
+  <kendo-dialog
     [width]="900"
     [height]="800"
     (close)="close()">
-    
     <kendo-dialog-titlebar>
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-play-circle" style="color: #007bff;"></i>
-            Run Query: {{ query?.Name || 'Untitled' }}
-        </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-play-circle" style="color: #007bff;"></i>
+        Run Query: {{ query?.Name || 'Untitled' }}
+      </div>
     </kendo-dialog-titlebar>
-    
     <div style="display: flex; flex-direction: column; height: 100%; overflow-y: auto; overflow-x: hidden;">
-        @if (isLoadingParams) {
-            <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
-                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-                <span style="color: #6c757d;">Loading query parameters...</span>
-            </div>
-        } @else {
-            
-            <!-- Query Parameters Section -->
-            @if (parameterPairs.length > 0) {
-                <kendo-expansionpanel 
-                    [(expanded)]="parametersExpanded"
-                    style="margin-bottom: 16px; flex-shrink: 0;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                            Query Parameters
-                            <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                {{ parameterPairs.length }}
-                            </span>
-                        </span>
-                    </ng-template>
-                    
-                    <div style="padding: 12px 0;">
-                        <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
-                            <i class="fa-solid fa-info-circle"></i>
-                            Configure parameter values for query execution.
-                        </div>
-                        
-                        <!-- Parameters List -->
-                        <div style="display: flex; flex-direction: column; gap: 16px;">
-                            @for (param of parameterPairs; track param.name) {
-                                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                                        <div>
-                                            <label style="font-weight: 600; color: #495057; display: flex; align-items: center; gap: 6px;">
-                                                <i class="fa-solid fa-at" style="color: #007bff;"></i>
-                                                {{ param.name }}
-                                                @if (param.isRequired) {
-                                                    <span style="color: #dc3545;">*</span>
-                                                }
-                                            </label>
-                                            @if (param.description) {
-                                                <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
-                                                    {{ param.description }}
-                                                </div>
-                                            }
-                                        </div>
-                                        <div style="display: flex; gap: 8px; align-items: center;">
-                                            <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em;">
-                                                {{ param.type }}
-                                            </span>
-                                            @if (!isParameterValid(param)) {
-                                                <i class="fa-solid fa-exclamation-triangle" style="color: #dc3545;" title="Required parameter is empty"></i>
-                                            }
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Parameter Value Input -->
-                                    @if (param.type === 'number') {
-                                        <kendo-numerictextbox
-                                            [(ngModel)]="param.value"
-                                            placeholder="Enter number value..."
-                                            style="width: 100%;">
-                                        </kendo-numerictextbox>
-                                    } @else {
-                                        <kendo-textarea
-                                            [(ngModel)]="param.value"
-                                            [rows]="2"
-                                            placeholder="Enter value (JSON, string, or number)..."
-                                            style="width: 100%; font-family: 'Courier New', monospace;">
-                                        </kendo-textarea>
-                                    }
-                                    
-                                    @if (param.defaultValue) {
-                                        <div style="font-size: 0.8em; color: #6c757d; margin-top: 4px;">
-                                            Default: <code style="background: #e9ecef; padding: 2px 4px; border-radius: 3px;">{{ param.defaultValue }}</code>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </kendo-expansionpanel>
-            } @else {
-                <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-bottom: 16px; text-align: center; color: #6c757d;">
-                    <i class="fa-solid fa-info-circle"></i> This query has no parameters.
-                </div>
-            }
-            
-            <!-- Pagination Settings -->
-            <kendo-expansionpanel 
-                [(expanded)]="paginationExpanded"
-                style="margin-bottom: 16px;">
-                <ng-template kendoExpansionPanelTitleDirective>
-                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                        <i class="fa-solid fa-table-list" style="color: #6c757d;"></i>
-                        Pagination Settings
-                        @if (maxRows && maxRows > 0) {
-                            <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                {{ maxRows }} rows/page
-                            </span>
+      @if (isLoadingParams) {
+        <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+          <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+          <span style="color: #6c757d;">Loading query parameters...</span>
+        </div>
+      } @else {
+        <!-- Query Parameters Section -->
+        @if (parameterPairs.length > 0) {
+          <kendo-expansionpanel
+            [(expanded)]="parametersExpanded"
+            style="margin-bottom: 16px; flex-shrink: 0;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                Query Parameters
+                <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                  {{ parameterPairs.length }}
+                </span>
+              </span>
+            </ng-template>
+            <div style="padding: 12px 0;">
+              <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
+                <i class="fa-solid fa-info-circle"></i>
+                Configure parameter values for query execution.
+              </div>
+              <!-- Parameters List -->
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                @for (param of parameterPairs; track param.name) {
+                  <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                      <div>
+                        <label style="font-weight: 600; color: #495057; display: flex; align-items: center; gap: 6px;">
+                          <i class="fa-solid fa-at" style="color: #007bff;"></i>
+                          {{ param.name }}
+                          @if (param.isRequired) {
+                            <span style="color: #dc3545;">*</span>
+                          }
+                        </label>
+                        @if (param.description) {
+                          <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
+                            {{ param.description }}
+                          </div>
                         }
-                    </span>
-                </ng-template>
-                
-                <div style="padding: 12px 0;">
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <!-- Max Rows -->
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
-                                <i class="fa-solid fa-list-ol" style="color: #6c757d; margin-right: 6px;"></i>
-                                Max Rows:
-                            </label>
-                            <kendo-numerictextbox
-                                [(ngModel)]="maxRows"
-                                [min]="1"
-                                [step]="100"
-                                placeholder="All rows"
-                                style="width: 150px;">
-                            </kendo-numerictextbox>
-                            <span style="font-size: 0.85em; color: #6c757d;">
-                                Leave empty to return all rows
-                            </span>
-                        </div>
-                        <!-- Start Row -->
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
-                                <i class="fa-solid fa-forward" style="color: #6c757d; margin-right: 6px;"></i>
-                                Start Row:
-                            </label>
-                            <kendo-numerictextbox
-                                [(ngModel)]="startRow"
-                                [min]="0"
-                                [step]="1"
-                                placeholder="0"
-                                style="width: 150px;">
-                            </kendo-numerictextbox>
-                            <span style="font-size: 0.85em; color: #6c757d;">
-                                0-based offset for pagination
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </kendo-expansionpanel>
-            
-            <!-- Results Section -->
-            @if (runResult) {
-                <kendo-expansionpanel 
-                    [(expanded)]="resultsExpanded"
-                    style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
-                    <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-table" style="color: #28a745;"></i>
-                            Query Results
-                            @if (runResult.Success) {
-                                <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                    {{ runResult.RowCount }} rows
-                                </span>
-                                @if (runResult.TotalRowCount > runResult.RowCount) {
-                                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                        of {{ runResult.TotalRowCount }} total
-                                    </span>
-                                }
-                            } @else {
-                                <span class="badge" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                    Error
-                                </span>
-                            }
-                            @if (runResult.ExecutionTime) {
-                                <span style="font-size: 0.8em; color: #6c757d; font-weight: normal;">
-                                    ({{ runResult.ExecutionTime }}ms)
-                                </span>
-                            }
+                      </div>
+                      <div style="display: flex; gap: 8px; align-items: center;">
+                        <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em;">
+                          {{ param.type }}
                         </span>
-                    </ng-template>
-                    
-                    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
-                        @if (runResult.Success) {
-                            @if (resultRows.length > 0) {
-                                <!-- Export and Pagination Controls -->
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #dee2e6;">
-                                    <!-- Pagination Info and Controls -->
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        @if (runResult.TotalRowCount > runResult.RowCount || startRow > 0) {
-                                            <span style="font-size: 0.9em; color: #6c757d;">
-                                                Showing rows {{ startRow + 1 }} - {{ startRow + runResult.RowCount }} of {{ runResult.TotalRowCount }}
-                                            </span>
-                                            <div style="display: flex; gap: 4px;">
-                                                <button kendoButton 
-                                                        fillMode="flat"
-                                                        size="small"
-                                                        [disabled]="startRow === 0"
-                                                        (click)="goToFirstPage()"
-                                                        title="First page">
-                                                    <i class="fa-solid fa-angles-left"></i>
-                                                </button>
-                                                <button kendoButton 
-                                                        fillMode="flat"
-                                                        size="small"
-                                                        [disabled]="startRow === 0"
-                                                        (click)="goToPreviousPage()"
-                                                        title="Previous page">
-                                                    <i class="fa-solid fa-angle-left"></i>
-                                                </button>
-                                                <button kendoButton 
-                                                        fillMode="flat"
-                                                        size="small"
-                                                        [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
-                                                        (click)="goToNextPage()"
-                                                        title="Next page">
-                                                    <i class="fa-solid fa-angle-right"></i>
-                                                </button>
-                                                <button kendoButton 
-                                                        fillMode="flat"
-                                                        size="small"
-                                                        [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
-                                                        (click)="goToLastPage()"
-                                                        title="Last page">
-                                                    <i class="fa-solid fa-angles-right"></i>
-                                                </button>
-                                            </div>
-                                        }
-                                    </div>
-                                    <!-- Export Buttons -->
-                                    <div style="display: flex; gap: 8px;">
-                                        <button kendoButton 
-                                                fillMode="flat"
-                                                (click)="copyToClipboard()"
-                                                title="Copy to clipboard">
-                                            <i class="fa-solid fa-copy"></i> Copy
-                                        </button>
-                                        <button kendoButton 
-                                                fillMode="flat"
-                                                (click)="exportToCSV()"
-                                                title="Export to CSV">
-                                            <i class="fa-solid fa-download"></i> Export CSV
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Results Grid -->
-                                <div class="results-table-container" style="flex: 1; overflow: auto; border: 1px solid #dee2e6; border-radius: 4px; min-height: 0;">
-                                    <table class="results-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                                        <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10;">
-                                            <tr>
-                                                @for (col of resultColumns; track col.field) {
-                                                    <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; background: #f8f9fa; white-space: nowrap;">
-                                                        {{ col.title }}
-                                                    </th>
-                                                }
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @for (row of resultRows; track $index) {
-                                                <tr style="border-bottom: 1px solid #e9ecef; transition: background-color 0.2s;">
-                                                    @for (col of resultColumns; track col.field) {
-                                                        <td style="padding: 10px 16px; color: #212529; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
-                                                            [title]="row[col.field]">
-                                                            {{ row[col.field] || '' }}
-                                                        </td>
-                                                    }
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                    @if (resultRows.length === 0) {
-                                        <div style="padding: 40px; text-align: center; color: #6c757d;">
-                                            <i class="fa-solid fa-table" style="font-size: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
-                                            <p>No data in results</p>
-                                        </div>
-                                    }
-                                </div>
-                            } @else {
-                                <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: #6c757d;">
-                                    <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i>
-                                    <p>No results returned</p>
-                                </div>
-                            }
-                        } @else {
-                            <div style="padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; margin: 12px;">
-                                <div style="color: #721c24;">
-                                    <i class="fa-solid fa-exclamation-circle"></i>
-                                    <strong>Query execution failed</strong>
-                                </div>
-                                @if (runResult.ErrorMessage) {
-                                    <div style="margin-top: 8px; font-family: 'Courier New', monospace; font-size: 0.9em;">
-                                        {{ runResult.ErrorMessage }}
-                                    </div>
-                                }
-                            </div>
+                        @if (!isParameterValid(param)) {
+                          <i class="fa-solid fa-exclamation-triangle" style="color: #dc3545;" title="Required parameter is empty"></i>
                         }
+                      </div>
                     </div>
-                </kendo-expansionpanel>
-            }
-        }
-    </div>
-    
-    <kendo-dialog-actions>
-        @if (!runResult) {
-            <button kendoButton (click)="close()">
-                <i class="fa-solid fa-times"></i> Cancel
-            </button>
-            <button kendoButton 
-                    [themeColor]="'primary'"
-                    [disabled]="isRunning || hasInvalidParameters()"
-                    (click)="runQuery()">
-                @if (isRunning) {
-                    <i class="fa-solid fa-spinner fa-spin"></i> Running...
-                } @else {
-                    <i class="fa-solid fa-play"></i> Run Query
+                    <!-- Parameter Value Input -->
+                    @if (param.type === 'number') {
+                      <kendo-numerictextbox
+                        [(ngModel)]="param.value"
+                        placeholder="Enter number value..."
+                        style="width: 100%;">
+                      </kendo-numerictextbox>
+                    } @else {
+                      <kendo-textarea
+                        [(ngModel)]="param.value"
+                        [rows]="2"
+                        placeholder="Enter value (JSON, string, or number)..."
+                        style="width: 100%; font-family: 'Courier New', monospace;">
+                      </kendo-textarea>
+                    }
+                    @if (param.defaultValue) {
+                      <div style="font-size: 0.8em; color: #6c757d; margin-top: 4px;">
+                        Default: <code style="background: #e9ecef; padding: 2px 4px; border-radius: 3px;">{{ param.defaultValue }}</code>
+                      </div>
+                    }
+                  </div>
                 }
-            </button>
+              </div>
+            </div>
+          </kendo-expansionpanel>
         } @else {
-            <button kendoButton (click)="close()">
-                <i class="fa-solid fa-times"></i> Close
-            </button>
-            <button kendoButton 
-                    [themeColor]="'primary'"
-                    [disabled]="isRunning"
-                    (click)="runQuery()">
-                <i class="fa-solid fa-refresh"></i> Run Again
-            </button>
+          <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-bottom: 16px; text-align: center; color: #6c757d;">
+            <i class="fa-solid fa-info-circle"></i> This query has no parameters.
+          </div>
         }
+        <!-- Pagination Settings -->
+        <kendo-expansionpanel
+          [(expanded)]="paginationExpanded"
+          style="margin-bottom: 16px;">
+          <ng-template kendoExpansionPanelTitleDirective>
+            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+              <i class="fa-solid fa-table-list" style="color: #6c757d;"></i>
+              Pagination Settings
+              @if (maxRows && maxRows > 0) {
+                <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                  {{ maxRows }} rows/page
+                </span>
+              }
+            </span>
+          </ng-template>
+          <div style="padding: 12px 0;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Max Rows -->
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
+                  <i class="fa-solid fa-list-ol" style="color: #6c757d; margin-right: 6px;"></i>
+                  Max Rows:
+                </label>
+                <kendo-numerictextbox
+                  [(ngModel)]="maxRows"
+                  [min]="1"
+                  [step]="100"
+                  placeholder="All rows"
+                  style="width: 150px;">
+                </kendo-numerictextbox>
+                <span style="font-size: 0.85em; color: #6c757d;">
+                  Leave empty to return all rows
+                </span>
+              </div>
+              <!-- Start Row -->
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
+                  <i class="fa-solid fa-forward" style="color: #6c757d; margin-right: 6px;"></i>
+                  Start Row:
+                </label>
+                <kendo-numerictextbox
+                  [(ngModel)]="startRow"
+                  [min]="0"
+                  [step]="1"
+                  placeholder="0"
+                  style="width: 150px;">
+                </kendo-numerictextbox>
+                <span style="font-size: 0.85em; color: #6c757d;">
+                  0-based offset for pagination
+                </span>
+              </div>
+            </div>
+          </div>
+        </kendo-expansionpanel>
+        <!-- Results Section -->
+        @if (runResult) {
+          <kendo-expansionpanel
+            [(expanded)]="resultsExpanded"
+            style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-table" style="color: #28a745;"></i>
+                Query Results
+                @if (runResult.Success) {
+                  <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ runResult.RowCount }} rows
+                  </span>
+                  @if (runResult.TotalRowCount > runResult.RowCount) {
+                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                      of {{ runResult.TotalRowCount }} total
+                    </span>
+                  }
+                } @else {
+                  <span class="badge" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    Error
+                  </span>
+                }
+                @if (runResult.ExecutionTime) {
+                  <span style="font-size: 0.8em; color: #6c757d; font-weight: normal;">
+                    ({{ runResult.ExecutionTime }}ms)
+                  </span>
+                }
+              </span>
+            </ng-template>
+            <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+              @if (runResult.Success) {
+                @if (resultRows.length > 0) {
+                  <!-- Export and Pagination Controls -->
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #dee2e6;">
+                    <!-- Pagination Info and Controls -->
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      @if (runResult.TotalRowCount > runResult.RowCount || startRow > 0) {
+                        <span style="font-size: 0.9em; color: #6c757d;">
+                          Showing rows {{ startRow + 1 }} - {{ startRow + runResult.RowCount }} of {{ runResult.TotalRowCount }}
+                        </span>
+                        <div style="display: flex; gap: 4px;">
+                          <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            [disabled]="startRow === 0"
+                            (click)="goToFirstPage()"
+                            title="First page">
+                            <i class="fa-solid fa-angles-left"></i>
+                          </button>
+                          <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            [disabled]="startRow === 0"
+                            (click)="goToPreviousPage()"
+                            title="Previous page">
+                            <i class="fa-solid fa-angle-left"></i>
+                          </button>
+                          <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
+                            (click)="goToNextPage()"
+                            title="Next page">
+                            <i class="fa-solid fa-angle-right"></i>
+                          </button>
+                          <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
+                            (click)="goToLastPage()"
+                            title="Last page">
+                            <i class="fa-solid fa-angles-right"></i>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                    <!-- Export Buttons -->
+                    <div style="display: flex; gap: 8px;">
+                      <button kendoButton
+                        fillMode="flat"
+                        (click)="copyToClipboard()"
+                        title="Copy to clipboard">
+                        <i class="fa-solid fa-copy"></i> Copy
+                      </button>
+                      <button kendoButton
+                        fillMode="flat"
+                        (click)="exportToCSV()"
+                        title="Export to CSV">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Results Grid -->
+                  <div class="results-table-container" style="flex: 1; overflow: auto; border: 1px solid #dee2e6; border-radius: 4px; min-height: 0;">
+                    <table class="results-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                      <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10;">
+                        <tr>
+                          @for (col of resultColumns; track col.field) {
+                            <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; background: #f8f9fa; white-space: nowrap;">
+                              {{ col.title }}
+                            </th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of resultRows; track $index) {
+                          <tr style="border-bottom: 1px solid #e9ecef; transition: background-color 0.2s;">
+                            @for (col of resultColumns; track col.field) {
+                              <td style="padding: 10px 16px; color: #212529; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                [title]="row[col.field]">
+                                {{ row[col.field] || '' }}
+                              </td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                    @if (resultRows.length === 0) {
+                      <div style="padding: 40px; text-align: center; color: #6c757d;">
+                        <i class="fa-solid fa-table" style="font-size: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
+                        <p>No data in results</p>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: #6c757d;">
+                    <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i>
+                    <p>No results returned</p>
+                  </div>
+                }
+              } @else {
+                <div style="padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; margin: 12px;">
+                  <div style="color: #721c24;">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                    <strong>Query execution failed</strong>
+                  </div>
+                  @if (runResult.ErrorMessage) {
+                    <div style="margin-top: 8px; font-family: 'Courier New', monospace; font-size: 0.9em;">
+                      {{ runResult.ErrorMessage }}
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </kendo-expansionpanel>
+        }
+      }
+    </div>
+    <kendo-dialog-actions>
+      @if (!runResult) {
+        <button kendoButton (click)="close()">
+          <i class="fa-solid fa-times"></i> Cancel
+        </button>
+        <button kendoButton
+          [themeColor]="'primary'"
+          [disabled]="isRunning || hasInvalidParameters()"
+          (click)="runQuery()">
+          @if (isRunning) {
+            <i class="fa-solid fa-spinner fa-spin"></i> Running...
+          } @else {
+            <i class="fa-solid fa-play"></i> Run Query
+          }
+        </button>
+      } @else {
+        <button kendoButton (click)="close()">
+          <i class="fa-solid fa-times"></i> Close
+        </button>
+        <button kendoButton
+          [themeColor]="'primary'"
+          [disabled]="isRunning"
+          (click)="runQuery()">
+          <i class="fa-solid fa-refresh"></i> Run Again
+        </button>
+      }
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
+}

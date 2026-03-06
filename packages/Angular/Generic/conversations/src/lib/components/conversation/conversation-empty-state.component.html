@@ -1,16 +1,19 @@
 <div class="conversation-empty-state">
   <!-- Sidebar Toggle Button (top-left when sidebar is collapsed) -->
-  <button class="sidebar-toggle-btn"
-          *ngIf="showSidebarToggle"
-          (click)="sidebarToggleClicked.emit()"
-          title="Show conversations">
-    <i class="fas fa-table-columns"></i>
-  </button>
+  @if (showSidebarToggle) {
+    <button class="sidebar-toggle-btn"
+      (click)="sidebarToggleClicked.emit()"
+      title="Show conversations">
+      <i class="fas fa-table-columns"></i>
+    </button>
+  }
 
   <!-- Loading Overlay -->
-  <div class="loading-overlay" *ngIf="disabled">
-    <mj-loading text="Creating your conversation..." size="large"></mj-loading>
-  </div>
+  @if (disabled) {
+    <div class="loading-overlay">
+      <mj-loading text="Creating your conversation..." size="large"></mj-loading>
+    </div>
+  }
 
   <div class="empty-state-container" [class.loading]="disabled">
     <!-- Greeting Header -->
@@ -27,20 +30,21 @@
     <!-- Suggested Prompts -->
     <div class="suggested-prompts">
       <div class="prompt-grid">
-        <div
-          *ngFor="let prompt of suggestedPrompts"
-          class="prompt-card"
-          (click)="onSuggestedPromptClicked(prompt.prompt)"
-          [class.disabled]="disabled"
-        >
-          <div class="prompt-icon">
-            <i class="fa-solid {{prompt.icon}}"></i>
+        @for (prompt of suggestedPrompts; track prompt) {
+          <div
+            class="prompt-card"
+            (click)="onSuggestedPromptClicked(prompt.prompt)"
+            [class.disabled]="disabled"
+            >
+            <div class="prompt-icon">
+              <i class="fa-solid {{prompt.icon}}"></i>
+            </div>
+            <div class="prompt-content">
+              <div class="prompt-title">{{prompt.title}}</div>
+              <div class="prompt-text">{{prompt.prompt}}</div>
+            </div>
           </div>
-          <div class="prompt-content">
-            <div class="prompt-title">{{prompt.title}}</div>
-            <div class="prompt-text">{{prompt.prompt}}</div>
-          </div>
-        </div>
+        }
       </div>
     </div>
 

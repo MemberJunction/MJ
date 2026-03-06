@@ -1,8 +1,8 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 
 export interface UserSearchResult {
     id: string;
@@ -15,7 +15,7 @@ export interface UserSearchResult {
 @Component({
     selector: 'mj-user-picker',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [FormsModule],
     template: `
         <div class="user-picker">
             <div class="search-input-wrapper">
@@ -205,6 +205,8 @@ export class UserPickerComponent implements OnInit, OnDestroy {
     @Input() excludeUserIds: string[] = [];
     @Input() placeholder: string = 'Search for a user (press Enter)...';
 
+    constructor(private cdr: ChangeDetectorRef) {}
+
     @Output() userSelected = new EventEmitter<UserSearchResult>();
 
     searchQuery: string = '';
@@ -275,8 +277,8 @@ export class UserPickerComponent implements OnInit, OnDestroy {
                 LastName LIKE '%${escapedQuery}%'
             )${excludeFilter}`;
 
-            const result = await rv.RunView<UserEntity>({
-                EntityName: 'Users',
+            const result = await rv.RunView<MJUserEntity>({
+                EntityName: 'MJ: Users',
                 ExtraFilter: searchFilter,
                 OrderBy: 'Name ASC',
                 MaxRows: 20,
@@ -307,6 +309,7 @@ export class UserPickerComponent implements OnInit, OnDestroy {
             this.searchResults = [];
         } finally {
             this.isSearching = false;
+            this.cdr.detectChanges();
         }
     }
 }

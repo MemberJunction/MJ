@@ -18,11 +18,11 @@
     "ignoreVirtualFields": true,
     "lookupFields": {
       "EmailTemplateID": {
-        "entity": "Templates",
+        "entity": "MJ: Templates",
         "field": "Name"
       },
       "SMSTemplateID": {
-        "entity": "Templates",
+        "entity": "MJ: Templates",
         "field": "Name"
       }
     }

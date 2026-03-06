@@ -51,18 +51,18 @@ Determine appropriate scope:
 - **Company-specific** (`companyId`): Example relevant to org's domain/process
 - **General** (agent only): Broadly applicable example
 
-### Multi-Tenant Scope Level (for SaaS deployments)
+### Multi-Tenant Scope Level
 
-When the agent is used in a multi-tenant SaaS context, determine the appropriate scope level using the `scopeLevel` field:
+When the agent is used in a multi-tenant context, determine the appropriate scope level using the `scopeLevel` field:
 
-- **"global"**: Applies to ALL users and organizations (e.g., "How to format dates", "Standard greeting patterns")
-- **"organization"**: Applies to all contacts within an organization (e.g., "This org's product catalog structure", "Company-specific terminology")
-- **"contact"**: Specific to one individual contact (e.g., "John's preferred response format", "Sarah's typical questions")
+- **"global"**: Applies to ALL users and companies (e.g., "How to format dates", "Standard greeting patterns")
+- **"company"**: Applies to all users within a company (e.g., "This company's product catalog structure", "Company-specific terminology")
+- **"user"**: Specific to one individual user (e.g., "John's preferred response format", "Sarah's typical questions")
 
 **Hints for determining scope level:**
 - Keywords like "always", "all customers", "everyone" → `global`
-- Keywords like "company", "organization", "all users here", "our policy" → `organization`
-- Specific person names, individual preferences, personal context → `contact`
+- Keywords like "company", "organization", "all users here", "our policy" → `company`
+- Specific person names, individual preferences, personal context → `user`
 
 If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
 
@@ -70,11 +70,11 @@ If the conversation doesn't have clear multi-tenant context, omit the `scopeLeve
 
 Use these phrase patterns to determine appropriate scope level:
 
-**Ephemeral Indicators (→ contact scope or skip entirely):**
+**Ephemeral Indicators (→ user scope or skip entirely):**
 - "this time", "just for now", "today only", "for this call"
 - "temporarily", "one-time", "exception", "just once"
 
-**Durable Indicators (→ organization or global scope):**
+**Durable Indicators (→ company or global scope):**
 - "always", "never", "company policy", "all customers"
 - "standard practice", "we typically", "our preference"
 - "every time", "by default", "as a rule"
@@ -113,7 +113,7 @@ Return **only high-quality examples (successScore ≥70, confidence ≥70)** in 
       "exampleOutput": "Here's Q1 data (April-June): Widget Pro: $450K (+15%), Gadget Plus: $320K",
       "successScore": 85,
       "confidence": 90,
-      "scopeLevel": "organization",
+      "scopeLevel": "company",
       "sourceConversationId": "<use actual conversation ID from input>",
       "sourceConversationDetailId": "<use actual message ID from input>"
     }

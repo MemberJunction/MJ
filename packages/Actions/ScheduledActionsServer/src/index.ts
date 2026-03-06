@@ -5,20 +5,6 @@ import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { currentUserEmail, serverPort } from "./config";
 import { handleServerInit } from './util';
 import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
-import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
-import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
-import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
-import { LoadAutotagAndVectorizeContentAction } from '@memberjunction/actions-content-autotag';
-
-
-LoadMistralEmbedding();
-LoadOpenAIEmbedding();
-LoadPineconeVectorDB();
-LoadApolloAccountsEnrichmentAction();
-LoadApolloContactsEnrichmentAction();
-LoadAutotagAndVectorizeContentAction();
-
 const app = express();
 
 app.use(express.json());

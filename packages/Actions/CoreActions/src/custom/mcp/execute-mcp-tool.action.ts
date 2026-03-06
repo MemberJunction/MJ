@@ -177,10 +177,3 @@ export class ExecuteMCPToolAction extends BaseAction {
         });
     }
 }
-
-/**
- * Loader function to prevent tree-shaking
- */
-export function LoadExecuteMCPToolAction(): void {
-    // Intentionally empty - ensures decorator executes
-}

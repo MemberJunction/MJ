@@ -1,6 +1,32 @@
 # @memberjunction/ng-deep-diff
 
-Angular component for visualizing deep object differences using the non-visual functionality from the @memberjunction/global package.
+Angular component for visualizing deep object differences using the non-visual `DeepDiffer` functionality from `@memberjunction/global`. Provides both an inline comparison view and a dialog wrapper.
+
+## Overview
+
+The `@memberjunction/ng-deep-diff` package renders a hierarchical diff of two JavaScript objects, highlighting additions, removals, and modifications. It supports expandable tree navigation, change type filtering, text search, copy-to-clipboard, and JSON export. A dialog variant wraps the inline component for modal use.
+
+```mermaid
+graph TD
+    A[DeepDiffModule] --> B[DeepDiffComponent]
+    A --> C[DeepDiffDialogComponent]
+
+    B --> D["Diff Computation
+    (DeepDiffer from @memberjunction/global)"]
+    B --> E["Tree Display"]
+    B --> F["Filter & Search"]
+    B --> G["Export & Copy"]
+
+    E --> E1["Added (green)"]
+    E --> E2["Removed (red)"]
+    E --> E3["Modified (blue)"]
+    E --> E4["Unchanged (gray)"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 
@@ -55,8 +81,8 @@ export class YourModule { }
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `oldValue` | `any` | - | The original value to compare |
-| `newValue` | `any` | - | The new value to compare against |
+| `oldValue` | `Record<string, unknown>` | - | The original value to compare |
+| `newValue` | `Record<string, unknown>` | - | The new value to compare against |
 | `title` | `string` | `'Deep Diff Analysis'` | Title displayed in the header |
 | `showSummary` | `boolean` | `true` | Whether to show summary statistics |
 | `showUnchanged` | `boolean` | `false` | Whether to show unchanged properties |
@@ -119,7 +145,6 @@ export class MyComponent {
 
 ```typescript
 export class ApiComponent {
-  // API responses often use null and undefined interchangeably
   apiResponse1 = {
     id: 123,
     name: null,
@@ -150,7 +175,7 @@ export class ApiComponent {
 ```typescript
 export class ConfigComponent {
   showComparison = false;
-  
+
   compareVersions() {
     this.showComparison = true;
   }
@@ -176,17 +201,31 @@ export class ConfigComponent {
 
 The component uses CSS classes that can be customized:
 
-- `.diff-added` - Added items (green)
-- `.diff-removed` - Removed items (red)
-- `.diff-modified` - Modified items (blue)
-- `.diff-unchanged` - Unchanged items (gray)
+- `.diff-added` -- Added items (green)
+- `.diff-removed` -- Removed items (red)
+- `.diff-modified` -- Modified items (blue)
+- `.diff-unchanged` -- Unchanged items (gray)
 
 ## Dependencies
 
-- `@memberjunction/global` - Provides the core DeepDiffer functionality
-- `@angular/common`
-- `@angular/core`
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/global` | Provides the core `DeepDiffer` functionality |
+| `@angular/common` | Angular common module |
+| `@angular/core` | Angular core framework |
+
+### Peer Dependencies
+
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
+
+## Build
+
+```bash
+cd packages/Angular/Generic/deep-diff
+npm run build
+```
 
 ## License
 
-See the main MemberJunction repository for license information.
+ISC

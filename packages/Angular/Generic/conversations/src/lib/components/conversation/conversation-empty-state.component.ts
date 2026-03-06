@@ -3,6 +3,7 @@ import { UserInfo } from '@memberjunction/core';
 import { PendingAttachment } from '../mention/mention-editor.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-empty-state',
   templateUrl: './conversation-empty-state.component.html',
   styleUrls: ['./conversation-empty-state.component.css']

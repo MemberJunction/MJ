@@ -147,7 +147,7 @@ export class AggregateDataAction extends BaseAction {
             }
 
             // Get other parameters
-            const includeEmptyGroups = includeEmptyGroupsParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const includeEmptyGroups = includeEmptyGroupsParam?.Value?.toString()?.toLowerCase() === 'true';
             const sortBy = sortByParam?.Value?.toString();
             const sortOrder = (sortOrderParam?.Value?.toString() || 'asc').toLowerCase();
 
@@ -342,11 +342,4 @@ export class AggregateDataAction extends BaseAction {
         const squaredDifferences = values.map(val => Math.pow(val - mean, 2));
         return squaredDifferences.reduce((sum, val) => sum + val, 0) / values.length;
     }
-}
-
-/**
- * Loader function to ensure the AggregateDataAction class is included in the bundle
- */
-export function LoadAggregateDataAction() {
-    // Stub function to prevent tree shaking
 }

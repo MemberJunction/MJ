@@ -97,7 +97,3 @@ export class MistralEmbedding extends BaseEmbeddings {
         }
     }
 }
-
-export function LoadMistralEmbedding() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

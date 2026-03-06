@@ -15,6 +15,11 @@ import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid
 import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-panel.component';
 import { AggregatePanelComponent } from './lib/aggregate-panel/aggregate-panel.component';
 import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
+import { ConfirmDialogComponent } from './lib/confirm-dialog/confirm-dialog.component';
+import { QuickSaveDialogComponent } from './lib/quick-save-dialog/quick-save-dialog.component';
+import { ViewHeaderComponent } from './lib/view-header/view-header.component';
+import { DuplicateViewDialogComponent } from './lib/duplicate-view-dialog/duplicate-view-dialog.component';
+import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
@@ -48,7 +53,12 @@ import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggr
     EntityDataGridComponent,
     ViewConfigPanelComponent,
     AggregatePanelComponent,
-    AggregateSetupDialogComponent
+    AggregateSetupDialogComponent,
+    ConfirmDialogComponent,
+    QuickSaveDialogComponent,
+    ViewHeaderComponent,
+    DuplicateViewDialogComponent,
+    SharedViewWarningDialogComponent
   ],
   imports: [
     CommonModule,
@@ -67,7 +77,12 @@ import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggr
     EntityDataGridComponent,
     ViewConfigPanelComponent,
     AggregatePanelComponent,
-    AggregateSetupDialogComponent
+    AggregateSetupDialogComponent,
+    ConfirmDialogComponent,
+    QuickSaveDialogComponent,
+    ViewHeaderComponent,
+    DuplicateViewDialogComponent,
+    SharedViewWarningDialogComponent
   ]
 })
 export class EntityViewerModule { }

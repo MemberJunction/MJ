@@ -1,19 +1,20 @@
 <div class="toast-container">
-  <div
-    *ngFor="let toast of toasts; trackBy: trackByToastId"
-    class="toast toast-{{ toast.type }}"
-    [@slideIn]
-  >
-    <div class="toast-content">
-      <i [class]="getIconClass(toast.type)" class="toast-icon"></i>
-      <span class="toast-message">{{ toast.message }}</span>
-      <button
-        class="toast-close"
-        (click)="dismiss(toast.id)"
-        aria-label="Close notification"
+  @for (toast of toasts; track trackByToastId($index, toast)) {
+    <div
+      class="toast toast-{{ toast.type }}"
+      [@slideIn]
       >
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+      <div class="toast-content">
+        <i [class]="getIconClass(toast.type)" class="toast-icon"></i>
+        <span class="toast-message">{{ toast.message }}</span>
+        <button
+          class="toast-close"
+          (click)="dismiss(toast.id)"
+          aria-label="Close notification"
+          >
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
     </div>
-  </div>
+  }
 </div>

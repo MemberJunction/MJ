@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
-import { RecentItem, FavoriteItem } from '../../models/explorer-state.interface';
+import { RecentItem, FavoriteItem, AppEntityGroup } from '../../models/explorer-state.interface';
 
 /**
  * Event emitted when a record should be opened in a full tab
@@ -19,6 +19,7 @@ export interface SelectRecordEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-explorer-navigation-panel',
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']
@@ -34,6 +35,8 @@ export class NavigationPanelComponent {
    * If provided, only items matching these entities will be shown.
    */
   @Input() allowedEntityNames: Set<string> | null = null;
+  /** Application-based entity groups from the parent dashboard */
+  @Input() appEntityGroups: AppEntityGroup[] = [];
 
   // Section expansion states
   @Input() favoritesSectionExpanded = true;
@@ -49,14 +52,25 @@ export class NavigationPanelComponent {
   @Output() selectRecord = new EventEmitter<SelectRecordEvent>();
   /** Emitted when a collapsed icon is clicked - expands panel and focuses section */
   @Output() expandAndFocus = new EventEmitter<'favorites' | 'recent' | 'entities'>();
+  /** Emitted when a nav panel app group is toggled */
+  @Output() appGroupToggled = new EventEmitter<string>();
 
   private metadata = new Metadata();
 
   // Entity search/filter
   public entitySearchTerm = '';
+  // Local expand state for nav panel groups (independent of home view state)
+  private navGroupExpanded = new Map<string, boolean>();
 
   /**
-   * Get filtered entities based on search term
+   * Whether to show grouped entity view (when groups are available)
+   */
+  get hasAppGroups(): boolean {
+    return this.appEntityGroups.length > 0;
+  }
+
+  /**
+   * Get filtered entities based on search term (used in flat/ungrouped mode)
    */
   get filteredEntities(): EntityInfo[] {
     if (!this.entitySearchTerm) {
@@ -67,6 +81,47 @@ export class NavigationPanelComponent {
       e.Name.toLowerCase().includes(term) ||
       (e.Description && e.Description.toLowerCase().includes(term))
     );
+  }
+
+  /**
+   * Get app entity groups filtered by search term
+   * Auto-expands groups when searching to show matches
+   */
+  get filteredNavGroups(): AppEntityGroup[] {
+    if (!this.entitySearchTerm) {
+      return this.appEntityGroups.filter(g => g.entities.length > 0);
+    }
+    const term = this.entitySearchTerm.toLowerCase();
+    return this.appEntityGroups
+      .map(g => ({
+        ...g,
+        entities: g.entities.filter(e =>
+          e.Name.toLowerCase().includes(term) ||
+          (e.Description && e.Description.toLowerCase().includes(term))
+        ),
+        isExpanded: true // auto-expand when searching
+      }))
+      .filter(g => g.entities.length > 0);
+  }
+
+  /**
+   * Check if a nav panel group is expanded
+   */
+  isNavGroupExpanded(groupId: string): boolean {
+    if (this.entitySearchTerm) return true; // auto-expand during search
+    const localState = this.navGroupExpanded.get(groupId);
+    if (localState !== undefined) return localState;
+    // Default: first group expanded, others collapsed
+    const idx = this.appEntityGroups.findIndex(g => g.applicationId === groupId);
+    return idx === 0;
+  }
+
+  /**
+   * Toggle a nav panel group expand/collapse
+   */
+  onNavGroupToggle(groupId: string): void {
+    const current = this.isNavGroupExpanded(groupId);
+    this.navGroupExpanded.set(groupId, !current);
   }
 
   /**

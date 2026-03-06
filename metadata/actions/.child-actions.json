@@ -2,8 +2,8 @@
   {
     "fields": {
       "Name": "Create Conversation Record",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
-      "ParentID": "@lookup:Actions.Name=Create Record&Category=Data",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "ParentID": "@lookup:MJ: Actions.Name=Create Record&Category=Data",
       "Description": "Creates a record in the Conversations entity.",
       "UserPrompt": "Create a record in the Conversations entity using parameters from this action and maps to the parent Create Record action and its format for parameters",
       "Type": "Generated",
@@ -14,15 +14,15 @@
       "ID": "DD7AFB84-8381-482A-B6C7-88DDE4D2FF17"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:14.496Z",
-      "checksum": "be6f7717682a19f4d608f02255bac90f3986fc93e6ac96f9483b5a875a31a6ef"
+      "lastModified": "2026-02-13T21:09:01.887Z",
+      "checksum": "b78b5fcbfef8b8c096bd8b025743473d1d989df32387f11a54fdfa2a21b357a1"
     }
   },
   {
     "fields": {
       "Name": "Get AI Model Cost",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
-      "ParentID": "@lookup:Actions.Name=Get Record&Category=Data",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "ParentID": "@lookup:MJ: Actions.Name=Get Record&Category=Data",
       "Description": "Gets an AI Model Cost record from the database.",
       "UserPrompt": "Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters",
       "CodeApprovalStatus": "Approved",
@@ -33,8 +33,8 @@
       "ID": "6A699E09-87ED-45F1-B7D2-0C38286C2EFF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:14.497Z",
-      "checksum": "c409516878d55a87ac7761fc6acc896aebf7a97d8ea054c806d3acbaaacba2fe"
+      "lastModified": "2026-02-13T21:09:01.888Z",
+      "checksum": "2d9e19621c259372eaf343e799785c3b4abe68a4ad3b80eaa37e0e0b7cb390e4"
     }
   }
 ]

@@ -3,9 +3,10 @@ import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;
@@ -20,6 +21,7 @@ export interface SubAgentAdvancedSettingsFormData {
  * Manages execution order, execution mode, and other advanced sub-agent configurations.
  */
 @Component({
+  standalone: false,
   selector: 'mj-sub-agent-advanced-settings-dialog',
   templateUrl: './sub-agent-advanced-settings-dialog.component.html',
   styleUrls: ['./sub-agent-advanced-settings-dialog.component.css']
@@ -27,8 +29,8 @@ export interface SubAgentAdvancedSettingsFormData {
 export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  subAgent!: AIAgentEntityExtended;
-  allSubAgents: AIAgentEntityExtended[] = []; // For execution order validation
+  subAgent!: MJAIAgentEntityExtended;
+  allSubAgents: MJAIAgentEntityExtended[] = []; // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();
@@ -40,7 +42,7 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   isSaving$ = new BehaviorSubject<boolean>(false);
   
   // Dropdown data
-  agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
+  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   
   // Available options
   executionModeOptions = [
@@ -129,8 +131,8 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
 
     // Check for conflicts with other sub-agents under the same parent (excluding current one)
     const conflictingAgent = this.allSubAgents.find(agent => 
-      agent.ID !== this.subAgent.ID && 
-      agent.ParentID === this.subAgent.ParentID &&
+      !UUIDsEqual(agent.ID, this.subAgent.ID) && 
+      UUIDsEqual(agent.ParentID, this.subAgent.ParentID) &&
       agent.ExecutionOrder === order
     );
 
@@ -150,7 +152,7 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
       const rv = new RunView();
       
       // Load AI Agent Types
-      const agentTypesResult = await rv.RunView<AIAgentTypeEntity>({
+      const agentTypesResult = await rv.RunView<MJAIAgentTypeEntity>({
         EntityName: 'MJ: AI Agent Types',
         ExtraFilter: 'IsActive = 1',
         OrderBy: 'Name',

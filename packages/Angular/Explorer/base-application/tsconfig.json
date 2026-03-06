@@ -1,43 +1,20 @@
 {
+  "extends": "../../../../tsconfig.angular.json",
   "compileOnSave": false,
   "compilerOptions": {
     "baseUrl": "./",
     "outDir": "./dist",
-    "sourceMap": true,
-    "declaration": true,
     "downlevelIteration": true,
-    "experimentalDecorators": true,
-    "moduleResolution": "node",
     "importHelpers": true,
-    "target": "ES2022",
-    "module": "ES2022",
-    "lib": [
-      "ES2022",
-      "dom"
-    ],
-    "skipLibCheck": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
-    "strictInputAccessModifiers": true,
-    "strictTemplates": true
+    "strictInputAccessModifiers": true
   },
-  "files": [
-    "src/public-api.ts"
-  ],
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "files": ["src/public-api.ts"],
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

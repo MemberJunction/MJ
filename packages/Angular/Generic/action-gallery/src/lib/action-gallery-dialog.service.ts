@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef, DialogSettings } from '@progress/kendo-angular-dialog';
 import { ActionGalleryComponent, ActionGalleryConfig } from './action-gallery.component';
-import { ActionEntity } from '@memberjunction/core-entities';
+import { MJActionEntity } from '@memberjunction/core-entities';
 import { Observable, Subject } from 'rxjs';
 
 export interface ActionGalleryDialogConfig extends ActionGalleryConfig {
@@ -32,8 +32,8 @@ export class ActionGalleryDialogService {
   openForSingleSelection(
     config: ActionGalleryDialogConfig = {}, 
     viewContainerRef?: ViewContainerRef
-  ): Observable<ActionEntity | null> {
-    const resultSubject = new Subject<ActionEntity | null>();
+  ): Observable<MJActionEntity | null> {
+    const resultSubject = new Subject<MJActionEntity | null>();
     
     // Configure for single selection
     const galleryConfig: ActionGalleryDialogConfig = {
@@ -68,8 +68,8 @@ export class ActionGalleryDialogService {
   openForMultiSelection(
     config: ActionGalleryDialogConfig = {}, 
     viewContainerRef?: ViewContainerRef
-  ): Observable<ActionEntity[]> {
-    const resultSubject = new Subject<ActionEntity[]>();
+  ): Observable<MJActionEntity[]> {
+    const resultSubject = new Subject<MJActionEntity[]>();
     
     // Configure for multi selection
     const galleryConfig: ActionGalleryDialogConfig = {

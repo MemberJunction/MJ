@@ -24,6 +24,7 @@ import { ChangeDetectorRef } from '@angular/core';
  * When used as a web component, it's registered as <mj-entity-list-demo>.
  */
 @Component({
+  standalone: false,
   selector: 'app-entity-list-demo',
   templateUrl: './entity-list-demo.component.html',
   styleUrls: ['./entity-list-demo.component.css']

@@ -1,0 +1,288 @@
+<div class="component-browser">
+
+  <!-- Header -->
+  <div class="browser-header">
+    <div class="header-top-row">
+      <button kendoButton
+        [themeColor]="'primary'"
+        (click)="OnNewComponent()">
+        <i class="fa-solid fa-plus"></i> New Component
+      </button>
+      <div class="import-dropdown" [class.open]="ImportDropdownOpen">
+        <button kendoButton
+          [themeColor]="'base'"
+          (click)="ToggleImportDropdown()">
+          <i class="fa-solid fa-file-import"></i> Import
+          <i class="fa-solid fa-chevron-down dropdown-chevron"></i>
+        </button>
+        @if (ImportDropdownOpen) {
+          <div class="dropdown-menu">
+            <button class="dropdown-item" (click)="OnImportFromArtifact()">
+              <i class="fa-solid fa-database"></i> From Artifact
+            </button>
+            <button class="dropdown-item" (click)="OnImportFromFile()">
+              <i class="fa-solid fa-file"></i> From File
+            </button>
+            <button class="dropdown-item" (click)="OnImportFromText()">
+              <i class="fa-solid fa-keyboard"></i> From Text
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="header-controls-row">
+      <button
+        class="filter-toggle-btn"
+        [class.active]="State.IsFilterPanelExpanded || State.GetActiveFilterCount() > 0"
+        (click)="State.ToggleFilterPanel()"
+        [title]="State.IsFilterPanelExpanded ? 'Hide filters' : 'Show filters'">
+        <i class="fa-solid fa-sliders"></i>
+        @if (State.GetActiveFilterCount() > 0) {
+          <span class="filter-count-badge">{{ State.GetActiveFilterCount() }}</span>
+        }
+      </button>
+      <span class="component-count">
+        {{ State.FilteredComponents.length }} of {{ State.AllComponents.length }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-box">
+    <kendo-textbox
+      [value]="State.SearchQuery"
+      (valueChange)="OnSearchChange($event)"
+      placeholder="Search components..."
+      [clearButton]="true">
+      <ng-template kendoTextBoxPrefixTemplate>
+        <i class="fa-solid fa-search search-icon"></i>
+      </ng-template>
+    </kendo-textbox>
+  </div>
+
+  <!-- Collapsible Filter Panel -->
+  @if (State.IsFilterPanelExpanded) {
+    <div class="filter-panel">
+      <div class="filter-panel-content">
+
+        <!-- Quick Filters -->
+        <div class="filter-section">
+          <label class="filter-section-label">Quick Filters</label>
+          <div class="filter-options">
+            <label class="filter-checkbox">
+              <input type="checkbox"
+                [checked]="State.ShowOnlyFavorites"
+                (change)="State.ToggleShowOnlyFavorites()">
+              <i class="fa-solid fa-star filter-icon favorites-icon"></i>
+              <span>Favorites only</span>
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox"
+                [checked]="State.ShowDeprecatedComponents"
+                (change)="State.ToggleShowDeprecatedComponents()">
+              <i class="fa-solid fa-archive filter-icon deprecated-icon"></i>
+              <span>Show deprecated
+                @if (State.GetDeprecatedCount() > 0) {
+                  <span class="deprecated-count">({{ State.GetDeprecatedCount() }})</span>
+                }
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Category Pills -->
+        @if (State.AvailableCategories.length > 0) {
+          <div class="filter-section">
+            <label class="filter-section-label">Categories</label>
+            <div class="category-pills">
+              @for (category of State.GetVisibleCategories(); track TrackByCategoryName($index, category)) {
+                <button
+                  class="category-pill"
+                  [class.active]="State.IsCategorySelected(category.name)"
+                  [style.--pill-color]="category.color"
+                  (click)="State.ToggleCategory(category.name)">
+                  <span class="pill-name">{{ category.name }}</span>
+                  <span class="pill-count">{{ category.count }}</span>
+                </button>
+              }
+            </div>
+            @if (State.AvailableCategories.length > 5) {
+              <button
+                class="show-more-btn"
+                (click)="State.ToggleShowAllCategories()">
+                @if (State.ShowAllCategories) {
+                  <i class="fa-solid fa-chevron-up"></i> Show less
+                } @else {
+                  <i class="fa-solid fa-chevron-down"></i> Show {{ State.AvailableCategories.length - 5 }} more
+                }
+              </button>
+            }
+          </div>
+        }
+
+        <!-- Clear All -->
+        @if (State.GetActiveFilterCount() > 0) {
+          <div class="filter-panel-footer">
+            <button class="clear-all-btn" (click)="State.ClearAllFilters()">
+              <i class="fa-solid fa-times"></i> Clear All Filters
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Component Card List -->
+  <div class="component-list">
+    @if (State.IsLoading) {
+      <div class="loading-state">
+        <mj-loading text="Loading components..." size="small"></mj-loading>
+      </div>
+    } @else if (State.FilteredComponents.length === 0) {
+      <div class="empty-state">
+        @if (State.AllComponents.length === 0) {
+          <i class="fa-solid fa-puzzle-piece empty-icon"></i>
+          <p class="empty-title">No components found</p>
+          <p class="empty-subtitle">Create a new component or import one to get started.</p>
+        } @else {
+          <i class="fa-solid fa-filter empty-icon"></i>
+          <p class="empty-title">No matching components</p>
+          <p class="empty-subtitle">Try adjusting your search or filters.</p>
+        }
+      </div>
+    } @else {
+      @for (component of State.FilteredComponents; track TrackByComponentId($index, component)) {
+        <div class="component-card"
+          [class.expanded]="IsExpanded(component)"
+          [class.running]="IsComponentRunning(component)"
+          [class.file-loaded]="State.IsFileLoadedComponent(component)">
+
+          <!-- Card Header (always visible) -->
+          <div class="card-header" (click)="ToggleComponentExpansion(component)">
+            <div class="card-type-icon"
+              [style.color]="State.GetComponentTypeColor(State.GetComponentType(component))">
+              <i class="fa-solid"
+                [ngClass]="State.GetComponentTypeIcon(State.GetComponentType(component))"></i>
+            </div>
+
+            <div class="card-body">
+              <div class="card-title-row">
+                <span class="card-name">{{ State.GetComponentName(component) }}</span>
+                @if (State.IsFileLoadedComponent(component)) {
+                  <span class="file-badge" [title]="GetFileBadgeTooltip(component)">
+                    <i class="fa-solid" [ngClass]="GetFileBadgeIcon(component)"></i>
+                    {{ GetFileBadgeLabel(component) }}
+                  </span>
+                }
+              </div>
+              <div class="card-meta-row">
+                <span class="version-badge">v{{ State.GetComponentVersion(component) }}</span>
+                <span class="status-badge" [ngClass]="GetStatusBadgeClass(component)">
+                  {{ GetStatusLabel(component) }}
+                </span>
+                <span class="namespace-chip"
+                  [style.background-color]="State.GetNamespaceColor(State.GetComponentNamespace(component))"
+                  [title]="State.GetComponentNamespace(component) || 'Uncategorized'">
+                  <i class="fa-solid fa-folder-tree"></i>
+                  {{ State.FormatNamespace(State.GetComponentNamespace(component)) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="card-end">
+              @if (!State.IsFileLoadedComponent(component)) {
+                <button
+                  class="favorite-btn"
+                  [class.is-favorite]="State.IsFavorite(component)"
+                  (click)="OnToggleFavorite(component, $event)"
+                  [title]="State.IsFavorite(component) ? 'Remove from favorites' : 'Add to favorites'">
+                  @if (State.IsFavorite(component)) {
+                    <i class="fa-solid fa-star"></i>
+                  } @else {
+                    <i class="fa-regular fa-star"></i>
+                  }
+                </button>
+              }
+              @if (State.IsFileLoadedComponent(component)) {
+                <button
+                  class="remove-btn"
+                  (click)="OnRemoveFileComponent($any(component), $event)"
+                  title="Remove imported component">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              }
+              <div class="card-chevron">
+                @if (IsExpanded(component)) {
+                  <i class="fa-solid fa-chevron-up"></i>
+                } @else {
+                  <i class="fa-solid fa-chevron-down"></i>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Details (expanded) -->
+          @if (IsExpanded(component)) {
+            <div class="card-details">
+              @if (State.GetComponentDescription(component)) {
+                <div class="detail-description">
+                  <p>{{ State.GetComponentDescription(component) }}</p>
+                </div>
+              }
+
+              <div class="detail-info-grid">
+                <div class="info-item">
+                  <span class="info-label">Type</span>
+                  <span class="info-value">{{ State.GetComponentType(component) || 'Unknown' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Version</span>
+                  <span class="info-value">{{ State.GetComponentVersion(component) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Status</span>
+                  <span class="info-value">{{ State.GetComponentStatus(component) || 'Draft' }}</span>
+                </div>
+                @if (State.IsFileLoadedComponent(component)) {
+                  <div class="info-item">
+                    <span class="info-label">Loaded</span>
+                    <span class="info-value">{{ State.GetComponentLoadedAt(component) | date:'short' }}</span>
+                  </div>
+                } @else if (State.GetComponentUpdatedAt(component)) {
+                  <div class="info-item">
+                    <span class="info-label">Updated</span>
+                    <span class="info-value">{{ State.GetComponentUpdatedAt(component) | date:'short' }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="detail-actions">
+                @if (IsComponentRunning(component)) {
+                  <button kendoButton
+                    [themeColor]="'error'"
+                    (click)="OnStopComponent($event)">
+                    <i class="fa-solid fa-stop"></i> Stop
+                  </button>
+                } @else if (IsAnotherComponentRunning(component)) {
+                  <button kendoButton
+                    [themeColor]="'base'"
+                    title="Stop current component and run this one"
+                    (click)="OnSwitchComponent(component, $event)">
+                    <i class="fa-solid fa-exchange-alt"></i> Switch To This
+                  </button>
+                } @else {
+                  <button kendoButton
+                    [themeColor]="'primary'"
+                    (click)="OnRunComponent(component, $event)">
+                    <i class="fa-solid fa-play"></i> Run
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>

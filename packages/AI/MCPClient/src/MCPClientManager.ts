@@ -17,19 +17,23 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
-    MCPServerEntity,
-    MCPServerConnectionEntity,
-    MCPServerToolEntity,
-    ActionEntity,
-    ActionCategoryEntity,
-    ActionParamEntity,
-    ActionResultCodeEntity
+    MJMCPServerEntity,
+    MJMCPServerConnectionEntity,
+    MJMCPServerToolEntity,
+    MJActionEntity,
+    MJActionCategoryEntity,
+    MJActionParamEntity,
+    MJActionResultCodeEntity
 } from '@memberjunction/core-entities';
 
 import { RateLimiterRegistry, RateLimiter } from './RateLimiter.js';
 import { ExecutionLogger } from './ExecutionLogger.js';
+import { OAuthManager } from './oauth/OAuthManager.js';
+import { OAuthAuthorizationRequiredError, OAuthReauthorizationRequiredError } from './oauth/types.js';
+import type { MCPServerOAuthConfig } from './oauth/types.js';
 import type {
     MCPServerConfig,
     MCPConnectionConfig,
@@ -103,8 +107,14 @@ export class MCPClientManager {
     /** Event listeners */
     private readonly eventListeners: Map<MCPClientEventType, Set<MCPClientEventListener>> = new Map();
 
+    /** OAuth manager for OAuth2 authentication */
+    private readonly oauthManager: OAuthManager = new OAuthManager();
+
     /** Whether the manager has been initialized */
     private initialized = false;
+
+    /** Public URL for OAuth callbacks (set during initialization) */
+    private publicUrl: string = '';
 
     /** Client name for MCP handshake */
     private static readonly CLIENT_NAME = 'MemberJunction';
@@ -153,8 +163,12 @@ export class MCPClientManager {
      * Initializes the manager. Should be called once at application startup.
      *
      * @param contextUser - User context for initialization
+     * @param options - Optional initialization options
      */
-    public async initialize(contextUser: UserInfo): Promise<void> {
+    public async initialize(
+        contextUser: UserInfo,
+        options?: { publicUrl?: string }
+    ): Promise<void> {
         if (this.initialized) {
             return;
         }
@@ -162,12 +176,27 @@ export class MCPClientManager {
         try {
             // Ensure CredentialEngine is configured
             await CredentialEngine.Instance.Config(false, contextUser);
+
+            // Store public URL for OAuth callbacks
+            if (options?.publicUrl) {
+                this.publicUrl = options.publicUrl;
+            }
+
             this.initialized = true;
             LogStatus('[MCPClient] Manager initialized');
         } catch (error) {
             LogError(`[MCPClient] Failed to initialize: ${error}`);
             throw error;
         }
+    }
+
+    /**
+     * Sets the public URL for OAuth callbacks.
+     *
+     * @param publicUrl - The public URL (e.g., https://api.example.com)
+     */
+    public setPublicUrl(publicUrl: string): void {
+        this.publicUrl = publicUrl;
     }
 
     /**
@@ -239,7 +268,12 @@ export class MCPClientManager {
 
             // Get credentials if needed
             let credentials: MCPCredentialData | undefined;
-            if (connectionConfig.CredentialID && serverConfig.DefaultAuthType !== 'None') {
+            const authType = serverConfig.DefaultAuthType as MCPAuthType;
+
+            if (authType === 'OAuth2') {
+                // Handle OAuth2 authentication
+                credentials = await this.getOAuth2Credentials(connectionId, serverConfig, contextUser);
+            } else if (connectionConfig.CredentialID && authType !== 'None') {
                 try {
                     credentials = await this.getCredentials(connectionConfig.CredentialID, contextUser);
                 } catch (error) {
@@ -313,7 +347,41 @@ export class MCPClientManager {
             return activeConnection;
 
         } catch (error) {
-            // Update connection status to Error
+            // Check for OAuth-specific errors and emit appropriate events
+            if (error instanceof OAuthAuthorizationRequiredError) {
+                // Emit authorizationRequired event before re-throwing
+                this.emitEvent({
+                    type: 'authorizationRequired',
+                    connectionId,
+                    timestamp: new Date(),
+                    data: {
+                        authorizationUrl: error.authorizationUrl,
+                        stateParameter: error.stateParameter,
+                        expiresAt: error.expiresAt.toISOString()
+                    }
+                });
+                // Don't update connection status to Error for auth required - it's expected flow
+                throw error;
+            }
+
+            if (error instanceof OAuthReauthorizationRequiredError) {
+                // Emit tokenRefreshFailed event when re-authorization is needed
+                this.emitEvent({
+                    type: 'tokenRefreshFailed',
+                    connectionId,
+                    timestamp: new Date(),
+                    data: {
+                        reason: error.reason,
+                        requiresReauthorization: true,
+                        authorizationUrl: error.authorizationUrl,
+                        stateParameter: error.stateParameter
+                    }
+                });
+                // Don't update connection status to Error for reauth required - it's expected flow
+                throw error;
+            }
+
+            // Update connection status to Error for other errors
             await this.updateConnectionStatus(connectionId, 'Error', contextUser, error);
 
             // Emit error event
@@ -652,7 +720,7 @@ export class MCPClientManager {
 
                 if (existing) {
                     // Update existing tool
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -670,7 +738,7 @@ export class MCPClientManager {
                     }
                 } else {
                     // Add new tool
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -694,7 +762,7 @@ export class MCPClientManager {
             let deprecated = 0;
             for (const existing of existingTools) {
                 if (!seenToolNames.has(existing.ToolName) && existing.Status === 'Active') {
-                    const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+                    const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                         MCPClientManager.ENTITY_MCP_TOOLS,
                         contextUser
                     );
@@ -760,7 +828,7 @@ export class MCPClientManager {
             const rv = new RunView();
 
             // Load the server
-            const serverResult = await rv.RunView<MCPServerEntity>({
+            const serverResult = await rv.RunView<MJMCPServerEntity>({
                 EntityName: MCPClientManager.ENTITY_MCP_SERVERS,
                 ExtraFilter: `ID='${serverId}'`,
                 ResultType: 'entity_object'
@@ -795,7 +863,7 @@ export class MCPClientManager {
             }
 
             // Load all tools for this server
-            const toolsResult = await rv.RunView<MCPServerToolEntity>({
+            const toolsResult = await rv.RunView<MJMCPServerToolEntity>({
                 EntityName: MCPClientManager.ENTITY_MCP_TOOLS,
                 ExtraFilter: `MCPServerID='${serverId}' AND Status='Active'`,
                 ResultType: 'entity_object'
@@ -938,8 +1006,8 @@ export class MCPClientManager {
             : 'ParentID IS NULL';
 
         // Try to find existing category
-        const existingResult = await rv.RunView<ActionCategoryEntity>({
-            EntityName: 'Action Categories',
+        const existingResult = await rv.RunView<MJActionCategoryEntity>({
+            EntityName: 'MJ: Action Categories',
             ExtraFilter: `Name='${name}' AND ${parentFilter}`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -949,7 +1017,7 @@ export class MCPClientManager {
         }
 
         // Create new category
-        const category = await md.GetEntityObject<ActionCategoryEntity>('Action Categories', contextUser);
+        const category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', contextUser);
         category.NewRecord();
         category.Name = name;
         category.Description = description;
@@ -975,19 +1043,19 @@ export class MCPClientManager {
      * @returns Result with created flag and param counts
      */
     private async syncActionForTool(
-        tool: MCPServerToolEntity,
+        tool: MJMCPServerToolEntity,
         categoryId: string,
         contextUser: UserInfo
     ): Promise<{ created: boolean; paramsCreated: number; paramsUpdated: number; paramsDeleted: number }> {
         const md = new Metadata();
         const rv = new RunView();
 
-        let action: ActionEntity;
+        let action: MJActionEntity;
         let created = false;
 
         // Check if tool already has a linked action
         if (tool.GeneratedActionID) {
-            const actionEntity = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+            const actionEntity = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
             const loaded = await actionEntity.Load(tool.GeneratedActionID);
             if (loaded) {
                 action = actionEntity;
@@ -998,8 +1066,8 @@ export class MCPClientManager {
             }
         } else {
             // Check if an action with this name already exists in the category
-            const existingResult = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
+            const existingResult = await rv.RunView<MJActionEntity>({
+                EntityName: 'MJ: Actions',
                 ExtraFilter: `Name='${tool.ToolName.replace(/'/g, "''")}' AND CategoryID='${categoryId}'`,
                 ResultType: 'entity_object'
             }, contextUser);
@@ -1022,8 +1090,8 @@ export class MCPClientManager {
         }
 
         // Update the tool's GeneratedActionID and GeneratedActionCategoryID if needed
-        if (tool.GeneratedActionID !== action.ID || tool.GeneratedActionCategoryID !== categoryId) {
-            const toolEntity = await md.GetEntityObject<MCPServerToolEntity>(
+        if (!UUIDsEqual(tool.GeneratedActionID, action.ID) || !UUIDsEqual(tool.GeneratedActionCategoryID, categoryId)) {
+            const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                 MCPClientManager.ENTITY_MCP_TOOLS,
                 contextUser
             );
@@ -1059,13 +1127,13 @@ export class MCPClientManager {
      * @returns The created Action entity
      */
     private async createActionForTool(
-        tool: MCPServerToolEntity,
+        tool: MJMCPServerToolEntity,
         categoryId: string,
         contextUser: UserInfo
-    ): Promise<ActionEntity> {
+    ): Promise<MJActionEntity> {
         const md = new Metadata();
 
-        const action = await md.GetEntityObject<ActionEntity>('Actions', contextUser);
+        const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
         action.NewRecord();
         action.Name = tool.ToolName;
         action.Description = tool.ToolDescription || `MCP Tool: ${tool.ToolName}`;
@@ -1112,8 +1180,8 @@ export class MCPClientManager {
         }
 
         // Get existing params for this action
-        const existingResult = await rv.RunView<ActionParamEntity>({
-            EntityName: 'Action Params',
+        const existingResult = await rv.RunView<MJActionParamEntity>({
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID='${actionId}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1147,7 +1215,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new param
-                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
                 param.NewRecord();
                 param.ActionID = actionId;
                 param.Name = paramName;
@@ -1242,8 +1310,8 @@ export class MCPClientManager {
         let updated = 0;
 
         // Get existing output params for this action
-        const existingResult = await rv.RunView<ActionParamEntity>({
-            EntityName: 'Action Params',
+        const existingResult = await rv.RunView<MJActionParamEntity>({
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID='${actionId}' AND Type='Output'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1276,7 +1344,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new output param
-                const param = await md.GetEntityObject<ActionParamEntity>('Action Params', contextUser);
+                const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
                 param.NewRecord();
                 param.ActionID = actionId;
                 param.Name = paramDef.Name;
@@ -1308,8 +1376,8 @@ export class MCPClientManager {
         const rv = new RunView();
 
         // Get existing result codes for this action
-        const existingResult = await rv.RunView<ActionResultCodeEntity>({
-            EntityName: 'Action Result Codes',
+        const existingResult = await rv.RunView<MJActionResultCodeEntity>({
+            EntityName: 'MJ: Action Result Codes',
             ExtraFilter: `ActionID='${actionId}'`,
             ResultType: 'entity_object'
         }, contextUser);
@@ -1337,7 +1405,7 @@ export class MCPClientManager {
                 }
             } else {
                 // Create new result code
-                const code = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes', contextUser);
+                const code = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes', contextUser);
                 code.NewRecord();
                 code.ActionID = actionId;
                 code.ResultCode = codeDef.ResultCode;
@@ -1457,6 +1525,63 @@ export class MCPClientManager {
     }
 
     // ========================================
+    // OAuth Event Notification Methods
+    // ========================================
+
+    /**
+     * Notifies listeners that OAuth authorization has completed successfully.
+     * Called by OAuth callback handler after code exchange succeeds.
+     *
+     * @param connectionId - The connection ID that was authorized
+     * @param data - Optional additional data (token info, etc.)
+     */
+    public notifyOAuthAuthorizationCompleted(connectionId: string, data?: Record<string, unknown>): void {
+        this.emitEvent({
+            type: 'authorizationCompleted',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
+    }
+
+    /**
+     * Notifies listeners that an OAuth token was successfully refreshed.
+     * Called by TokenManager after successful token refresh.
+     *
+     * @param connectionId - The connection ID whose token was refreshed
+     * @param data - Optional additional data (new expiration, etc.)
+     */
+    public notifyOAuthTokenRefreshed(connectionId: string, data?: Record<string, unknown>): void {
+        this.emitEvent({
+            type: 'tokenRefreshed',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
+    }
+
+    /**
+     * Notifies listeners that OAuth token refresh failed.
+     * Called by TokenManager when refresh fails.
+     *
+     * @param connectionId - The connection ID whose token refresh failed
+     * @param data - Error details and whether re-authorization is required
+     */
+    public notifyOAuthTokenRefreshFailed(connectionId: string, data: {
+        error: string;
+        requiresReauthorization: boolean;
+        authorizationUrl?: string;
+        stateParameter?: string;
+    }): void {
+        this.emitEvent({
+            type: 'tokenRefreshFailed',
+            connectionId,
+            timestamp: new Date(),
+            data
+        });
+    }
+
+    // ========================================
     // Private Helper Methods
     // ========================================
 
@@ -1573,6 +1698,108 @@ export class MCPClientManager {
         } catch (error) {
             LogError(`[MCPClient] Failed to get credentials: ${error}`);
             throw error;
+        }
+    }
+
+    /**
+     * Gets OAuth2 access token for an MCP server connection.
+     *
+     * Uses OAuthManager to get a valid access token, refreshing if needed.
+     * If authorization is required, throws OAuthAuthorizationRequiredError.
+     *
+     * @param connectionId - MCP Server Connection ID
+     * @param serverConfig - Server configuration with OAuth settings
+     * @param contextUser - User context
+     * @returns Credential data with the access token
+     * @throws OAuthAuthorizationRequiredError if user authorization is needed
+     * @throws OAuthReauthorizationRequiredError if re-authorization is needed
+     */
+    private async getOAuth2Credentials(
+        connectionId: string,
+        serverConfig: MCPServerConfig,
+        contextUser: UserInfo
+    ): Promise<MCPCredentialData> {
+        if (!this.publicUrl) {
+            throw new Error(
+                'Public URL not configured. Call MCPClientManager.Instance.setPublicUrl() or ' +
+                'initialize with publicUrl option before using OAuth2 authentication.'
+            );
+        }
+
+        // Build OAuth config from server settings
+        const oauthConfig: MCPServerOAuthConfig = {
+            OAuthIssuerURL: serverConfig.OAuthIssuerURL,
+            OAuthScopes: serverConfig.OAuthScopes,
+            OAuthMetadataCacheTTLMinutes: serverConfig.OAuthMetadataCacheTTLMinutes,
+            OAuthClientID: serverConfig.OAuthClientID,
+            OAuthClientSecretEncrypted: serverConfig.OAuthClientSecretEncrypted,
+            OAuthRequirePKCE: serverConfig.OAuthRequirePKCE
+        };
+
+        // Get a valid access token (may throw OAuthAuthorizationRequiredError)
+        const accessToken = await this.oauthManager.getAccessToken(
+            connectionId,
+            serverConfig.ID,
+            oauthConfig,
+            this.publicUrl,
+            contextUser
+        );
+
+        // Return credentials in the expected format
+        return {
+            apiKey: accessToken  // OAuth2 uses Bearer token in Authorization header
+        };
+    }
+
+    /**
+     * Gets the OAuth connection status for a connection.
+     *
+     * @param connectionId - MCP Server Connection ID
+     * @param contextUser - User context
+     * @returns OAuth connection status or null if not an OAuth2 connection
+     */
+    public async getOAuthConnectionStatus(
+        connectionId: string,
+        contextUser: UserInfo
+    ): Promise<{
+        isOAuthEnabled: boolean;
+        hasValidTokens: boolean;
+        requiresReauthorization: boolean;
+        reauthorizationReason?: string;
+        tokenExpiresAt?: Date;
+    } | null> {
+        try {
+            // Load connection and server config
+            const connectionConfig = await this.loadConnectionConfig(connectionId, contextUser);
+            if (!connectionConfig) {
+                return null;
+            }
+
+            const serverConfig = await this.loadServerConfig(connectionConfig.MCPServerID, contextUser);
+            if (!serverConfig || serverConfig.DefaultAuthType !== 'OAuth2') {
+                return { isOAuthEnabled: false, hasValidTokens: false, requiresReauthorization: false };
+            }
+
+            const oauthConfig: MCPServerOAuthConfig = {
+                OAuthIssuerURL: serverConfig.OAuthIssuerURL,
+                OAuthScopes: serverConfig.OAuthScopes,
+                OAuthMetadataCacheTTLMinutes: serverConfig.OAuthMetadataCacheTTLMinutes,
+                OAuthClientID: serverConfig.OAuthClientID,
+                OAuthClientSecretEncrypted: serverConfig.OAuthClientSecretEncrypted,
+                OAuthRequirePKCE: serverConfig.OAuthRequirePKCE
+            };
+
+            const status = await this.oauthManager.getConnectionStatus(connectionId, oauthConfig, contextUser);
+            return {
+                isOAuthEnabled: status.isOAuthEnabled,
+                hasValidTokens: status.hasValidTokens,
+                requiresReauthorization: status.requiresReauthorization,
+                reauthorizationReason: status.reauthorizationReason,
+                tokenExpiresAt: status.tokenExpiresAt
+            };
+        } catch (error) {
+            LogError(`[MCPClient] Failed to get OAuth status: ${error}`);
+            return null;
         }
     }
 
@@ -1876,7 +2103,7 @@ export class MCPClientManager {
 
             // Permissions exist - check if user has explicit access
             const md = new Metadata();
-            const userRolesSchema = md.EntityByName("User Roles")?.SchemaName ?? '__mj';
+            const userRolesSchema = md.EntityByName("MJ: User Roles")?.SchemaName ?? '__mj';
             const userPermissions = await rv.RunView<MCPConnectionPermission>({
                 EntityName: MCPClientManager.ENTITY_MCP_PERMISSIONS,
                 ExtraFilter: `MCPServerConnectionID = '${connectionId}' AND (UserID = '${contextUser.ID}' OR RoleID IN (SELECT RoleID FROM [${userRolesSchema}].vwUserRoles WHERE UserID = '${contextUser.ID}'))`,
@@ -1921,7 +2148,7 @@ export class MCPClientManager {
     ): Promise<void> {
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>(
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>(
                 MCPClientManager.ENTITY_MCP_CONNECTIONS,
                 contextUser
             );
@@ -1947,7 +2174,7 @@ export class MCPClientManager {
     private async updateServerLastSync(serverId: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerEntity>(
+            const entity = await md.GetEntityObject<MJMCPServerEntity>(
                 MCPClientManager.ENTITY_MCP_SERVERS,
                 contextUser
             );

@@ -14,11 +14,12 @@ import {
   RegistryComponentMetadata
 } from './registry-provider';
 import { UserInfo, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { 
-  ComponentEntity, 
-  ComponentRegistryEntity,
-  ComponentDependencyEntity,
-  ComponentLibraryLinkEntity,
+  MJComponentEntity, 
+  MJComponentRegistryEntity,
+  MJComponentDependencyEntity,
+  MJComponentLibraryLinkEntity,
   ComponentMetadataEngine
 } from '@memberjunction/core-entities';
 
@@ -219,11 +220,11 @@ export class ComponentRegistryService {
     await this.initialize(contextUser);
     
     // Find component in metadata
-    const component = this.componentEngine.Components.find((c: ComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
-    
+
     const key = this.getComponentKey(component.Name, component.Namespace, component.Version, component.SourceRegistryID);
     
     // Check if already compiled and cached
@@ -473,11 +474,11 @@ export class ComponentRegistryService {
   ): Promise<ComponentSpec> {
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: ComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
-    
+
     if (!component.SourceRegistryID) {
       // LOCAL: Use specification from database
       if (!component.Specification) {
@@ -497,7 +498,7 @@ export class ComponentRegistryService {
     
     // Need to fetch from external registry
     const registry = this.componentEngine.ComponentRegistries?.find(
-      r => r.ID === component.SourceRegistryID
+      r => UUIDsEqual(r.ID, component.SourceRegistryID)
     );
     
     if (!registry) {
@@ -585,7 +586,7 @@ export class ComponentRegistryService {
   ): Promise<void> {
     // Get the actual entity object to save
     const md = new Metadata();
-    const componentEntity = await md.GetEntityObject<ComponentEntity>('MJ: Components', contextUser);
+    const componentEntity = await md.GetEntityObject<MJComponentEntity>('MJ: Components', contextUser);
     
     // Load the existing component
     if (!await componentEntity.Load(componentId)) {
@@ -624,7 +625,7 @@ export class ComponentRegistryService {
     
     if (spec.type) {
       // Map spec type to entity type (entity has specific enum values)
-      const typeMap: Record<string, ComponentEntity['Type']> = {
+      const typeMap: Record<string, MJComponentEntity['Type']> = {
         'report': 'Report',
         'dashboard': 'Dashboard',
         'form': 'Form',
@@ -676,7 +677,7 @@ export class ComponentRegistryService {
     
     // Get dependencies from metadata cache
     const dependencies = this.componentEngine.ComponentDependencies?.filter(
-      d => d.ComponentID === componentId
+      d => UUIDsEqual(d.ComponentID, componentId)
     ) || [];
     
     const result: ComponentDependencyInfo[] = [];
@@ -684,7 +685,7 @@ export class ComponentRegistryService {
     for (const dep of dependencies) {
       // Find the dependency component
       const depComponent = this.componentEngine.Components.find(
-        (c: ComponentEntity) => c.ID === dep.DependencyComponentID
+        (c: MJComponentEntity) => UUIDsEqual(c.ID, dep.DependencyComponentID)
       );
       
       if (depComponent) {
@@ -720,7 +721,7 @@ export class ComponentRegistryService {
     
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: ComponentEntity) => c.ID === componentId);
+    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
     if (!component) {
       return { componentId, dependencies: [] };
     }

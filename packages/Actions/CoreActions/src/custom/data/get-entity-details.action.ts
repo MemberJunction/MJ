@@ -315,10 +315,3 @@ export class GetEntityDetailsAction extends BaseAction {
         return defaultValue;
     }
 }
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadGetEntityDetailsAction() {
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, "Get Entity Details");
-}

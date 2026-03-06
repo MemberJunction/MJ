@@ -1,0 +1,258 @@
+<mj-slide-panel
+  [Mode]="'slide'"
+  [Title]="'Record Changes History'"
+  [Visible]="IsVisible"
+  [Resizable]="true"
+  [MinWidthPx]="400"
+  [MaxWidthRatio]="0.6"
+  (Closed)="OnClose()">
+
+  @if (IsLoading) {
+    <mj-loading text="Loading history..." size="medium"></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <div class="rc-container">
+      <!-- Version Labels Section -->
+      <div class="rc-labels-section">
+        <div class="rc-labels-header">
+          <div class="rc-labels-title">
+            <i class="fa-solid fa-tags" aria-hidden="true"></i>
+            <span>Version Labels</span>
+            @if (RecordLabels.length > 0) {
+              <span class="rc-labels-count">{{ RecordLabels.length }}</span>
+            }
+          </div>
+          <button class="rc-create-label-btn" (click)="OpenCreateWizard()" title="Create a version label for this record">
+            <i class="fa-solid fa-plus"></i> Create Label
+          </button>
+        </div>
+        @if (IsLoadingLabels) {
+          <div class="rc-labels-loading">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
+          </div>
+        } @else if (RecordLabels.length === 0) {
+          <div class="rc-labels-empty">
+            No version labels for this record yet.
+          </div>
+        } @else {
+          <div class="rc-labels-list">
+            @for (label of RecordLabels; track label.ID) {
+              <div class="rc-label-chip" [title]="label.Description || label.Name">
+                <i class="fa-solid fa-tag rc-label-chip-icon"></i>
+                <span class="rc-label-chip-name">{{ label.Name }}</span>
+                <span class="rc-label-chip-meta">
+                  <span class="rc-label-chip-status" [class]="getLabelStatusClass(label.Status)">{{ label.Status }}</span>
+                  <span class="rc-label-chip-items">{{ label.ItemCount }} item{{ label.ItemCount !== 1 ? 's' : '' }}</span>
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      @if (viewData.length === 0) {
+        <!-- Empty state -->
+        <div class="rc-empty-state">
+          <div class="rc-empty-state-icon">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <h3 class="rc-empty-state-title">No Change History</h3>
+          <p class="rc-empty-state-description">
+            This record doesn't have any tracked changes yet.
+            Changes will appear here automatically as edits are made.
+          </p>
+          <div class="rc-empty-state-hint">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Record change tracking is managed at the entity level</span>
+          </div>
+        </div>
+      } @else {
+        <!-- Page Header -->
+        <div class="rc-page-header">
+          <div>
+            <h2 class="rc-page-title">Change History</h2>
+            <div class="rc-page-subtitle">{{ record.EntityInfo.Name }}</div>
+          </div>
+          <div class="rc-header-meta">
+            <div class="rc-entity-badge">
+              <i class="fa-solid fa-database" aria-hidden="true"></i>
+              {{ record.EntityInfo.Name }}
+            </div>
+            <div class="rc-change-count">{{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot; {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}</div>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="rc-filter-bar">
+          <div class="rc-search-wrap">
+            <i class="fa-solid fa-search" aria-hidden="true"></i>
+            <input
+              class="rc-search-box"
+              type="text"
+              placeholder="Search changes..."
+              [(ngModel)]="searchTerm"
+              (input)="onSearchChange()"
+              aria-label="Search record changes"
+            />
+          </div>
+          <button class="rc-filter-pill" [class.active]="!selectedType" (click)="SetTypeFilter('')">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i> All
+          </button>
+          <button class="rc-filter-pill" [class.active]="selectedType === 'Update'" (click)="SetTypeFilter('Update')">
+            <i class="fa-solid fa-pen" aria-hidden="true"></i> Updates
+          </button>
+          <button class="rc-filter-pill" [class.active]="selectedType === 'Create'" (click)="SetTypeFilter('Create')">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Creates
+          </button>
+          <button class="rc-filter-pill" [class.active]="selectedType === 'Delete'" (click)="SetTypeFilter('Delete')">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i> Deletes
+          </button>
+        </div>
+
+        @if (filteredData.length !== viewData.length) {
+          <div class="rc-filter-results">
+            Showing {{ filteredData.length }} of {{ viewData.length }} changes
+            <button class="rc-clear-filters-link" (click)="ClearFilters()">Clear filters</button>
+          </div>
+        }
+
+        <!-- Timeline -->
+        <div class="rc-timeline" [attr.aria-label]="'Timeline of changes for ' + record.EntityInfo.Name + ' record'">
+          @if (filteredData.length === 0) {
+            <div class="rc-no-results">
+              <i class="fa-solid fa-filter" aria-hidden="true"></i>
+              <p>No changes match your current filters.</p>
+              <button class="rc-clear-filters-btn" (click)="ClearFilters()">
+                <i class="fa-solid fa-xmark"></i> Clear Filters
+              </button>
+            </div>
+          } @else {
+            @for (group of dateGroups; track group.label) {
+              <div class="rc-date-group">
+                <div class="rc-date-label">{{ group.label }}</div>
+
+                @for (change of group.changes; track change.ID) {
+                  <div
+                    class="rc-card"
+                    [class]="getChangeTypeCardClass(change.Type)"
+                    [class.expanded]="expandedItems.has(change.ID)"
+                    [attr.tabindex]="0"
+                    [attr.aria-expanded]="expandedItems.has(change.ID)"
+                    [attr.aria-label]="getTimelineItemLabel(change)"
+                    (keydown)="onTimelineItemKeydown($event, change.ID)"
+                  >
+                    <!-- Card Header -->
+                    <div class="rc-card-header" (click)="toggleExpansion(change.ID)">
+                      <div class="rc-card-header-left">
+                        <span class="rc-card-type-badge">{{ getChangeTypeBadgeText(change.Type) }}</span>
+                        <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+                      </div>
+                      <div class="rc-card-meta">
+                        <div class="rc-card-user">
+                          <div class="rc-avatar">{{ getUserInitials(change.User) }}</div>
+                          {{ getUserDisplayName(change.User) }}
+                        </div>
+                        <span class="rc-card-time" [title]="formatFullDateTime(change.ChangedAt)">{{ formatTime(change.ChangedAt) }}</span>
+                        <span class="rc-card-source" [class]="getSourceClass(change.Source)">{{ change.Source }}</span>
+                        <span class="rc-card-status" [class]="getStatusClass(change.Status)">{{ change.Status }}</span>
+                        <i class="fa-solid fa-chevron-down rc-card-chevron" aria-hidden="true"></i>
+                      </div>
+                    </div>
+
+                    <!-- Card Body (expanded) -->
+                    @if (expandedItems.has(change.ID)) {
+                      <div class="rc-card-body">
+                        @if (change.Type === 'Create') {
+                          <!-- Created record fields -->
+                          @if (change.FullRecordJSON) {
+                            @for (field of getCreatedFields(change); track field.name) {
+                              <div class="rc-field-row">
+                                <div class="rc-field-label">{{ field.displayName }}</div>
+                                <div class="rc-field-values">
+                                  <span class="rc-val-new">{{ field.value }}</span>
+                                </div>
+                              </div>
+                            }
+                          }
+                        } @else if (change.Type === 'Delete') {
+                          <div class="rc-deletion-note">
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                            This record was permanently removed from the system.
+                          </div>
+                        } @else {
+                          <!-- Update: type-aware field changes -->
+                          @for (fc of getFieldChanges(change); track fc.field) {
+                            <div class="rc-field-row">
+                              <div class="rc-field-label">{{ fc.displayName }}</div>
+                              <div class="rc-field-values">
+                                @if (fc.fieldType === 'boolean') {
+                                  <!-- Boolean: dot indicators -->
+                                  <div class="rc-bool-change">
+                                    <span class="rc-bool-dot" [class.on]="fc.oldValue === 'true' || fc.oldValue === '1'" [class.off]="fc.oldValue !== 'true' && fc.oldValue !== '1'"></span>
+                                    <span class="rc-bool-label old">{{ fc.oldValue === 'true' || fc.oldValue === '1' ? 'Yes' : 'No' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-bool-dot" [class.on]="fc.newValue === 'true' || fc.newValue === '1'" [class.off]="fc.newValue !== 'true' && fc.newValue !== '1'"></span>
+                                    <span class="rc-bool-label new" [class.active]="fc.newValue === 'true' || fc.newValue === '1'" [class.inactive]="fc.newValue !== 'true' && fc.newValue !== '1'">{{ fc.newValue === 'true' || fc.newValue === '1' ? 'Yes' : 'No' }}</span>
+                                  </div>
+                                } @else if (fc.fieldType === 'date' || fc.fieldType === 'number') {
+                                  <!-- Atomic: old → new -->
+                                  <div class="rc-atomic-change">
+                                    <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                                  </div>
+                                } @else if (fc.diffHtml) {
+                                  <!-- Text: word/char diff -->
+                                  <div class="rc-text-diff" [innerHTML]="fc.diffHtml"></div>
+                                } @else {
+                                  <!-- Fallback: old → new -->
+                                  <div class="rc-atomic-change">
+                                    <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          }
+                        }
+
+                        @if (change.Comments) {
+                          <div class="rc-comments">
+                            <i class="fa-solid fa-comment" aria-hidden="true"></i>
+                            {{ change.Comments }}
+                          </div>
+                        }
+
+                        @if (change.ErrorLog) {
+                          <div class="rc-errors">
+                            <i class="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
+                            <pre class="rc-error-log">{{ change.ErrorLog }}</pre>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @if (ShowCreateWizard) {
+    <div class="rc-wizard-overlay" (click)="OnLabelCreateCancelled()">
+      <div class="rc-wizard-container" (click)="$event.stopPropagation()">
+        <mj-label-create
+          [PreselectedEntity]="record.EntityInfo"
+          [PreselectedRecordIds]="[record.PrimaryKey.KeyValuePairs[0].Value]"
+          (Created)="OnLabelCreated($event)"
+          (Cancel)="OnLabelCreateCancelled()">
+        </mj-label-create>
+      </div>
+    </div>
+  }
+</mj-slide-panel>

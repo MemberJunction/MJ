@@ -9,6 +9,7 @@ export type ConfirmDialogType = 'warning' | 'danger' | 'info';
  * A nice confirmation dialog to replace browser confirm().
  */
 @Component({
+  standalone: false,
     selector: 'mj-confirm-dialog',
     templateUrl: './confirm-dialog.component.html',
     styleUrls: ['./config-dialog.component.css']

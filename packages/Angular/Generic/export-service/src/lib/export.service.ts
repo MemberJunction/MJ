@@ -101,7 +101,7 @@ export class ExportService {
       throw new Error(result.error || 'Export failed - no data to download');
     }
 
-    const blob = new Blob([result.data], { type: result.mimeType });
+    const blob = new Blob([result.data as BlobPart], { type: result.mimeType });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');

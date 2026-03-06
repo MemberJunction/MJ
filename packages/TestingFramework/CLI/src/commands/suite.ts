@@ -38,7 +38,7 @@ export class SuiteCommand {
             }
 
             const config = loadCLIConfig();
-            const format = flags.format || config.defaultFormat;
+            const format = flags.format || config.defaultFormat || 'console';
 
             // Get engine instance
             console.log('Getting TestEngine instance...');

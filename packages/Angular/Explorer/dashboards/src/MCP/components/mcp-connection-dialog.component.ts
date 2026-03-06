@@ -7,9 +7,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { MCPServerConnectionEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
+import { MJMCPServerConnectionEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
 import { CredentialDialogComponent, CredentialDialogResult } from '@memberjunction/ng-credentials';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Dialog result interface
@@ -23,6 +24,7 @@ export interface ConnectionDialogResult {
  * MCP Connection Dialog Component
  */
 @Component({
+  standalone: false,
     selector: 'mj-mcp-connection-dialog',
     templateUrl: './mcp-connection-dialog.component.html',
     styleUrls: ['./mcp-connection-dialog.component.css']
@@ -39,7 +41,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
     public connectionForm: FormGroup;
     public credentials: Array<{ ID: string; Name: string }> = [];
     public companies: Array<{ ID: string; Name: string }> = [];
-    public credentialTypes: CredentialTypeEntity[] = [];
+    public credentialTypes: MJCredentialTypeEntity[] = [];
     public IsSaving = false;
     public IsLoadingDropdowns = false;
     public ErrorMessage: string | null = null;
@@ -150,7 +152,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'Companies',
+                    EntityName: 'MJ: Companies',
                     Fields: ['ID', 'Name'],
                     OrderBy: 'Name',
                     ResultType: 'simple'
@@ -161,7 +163,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 this.credentials = credResult.Results as Array<{ ID: string; Name: string }> || [];
             }
             if (typeResult.Success) {
-                this.credentialTypes = typeResult.Results as CredentialTypeEntity[] || [];
+                this.credentialTypes = typeResult.Results as MJCredentialTypeEntity[] || [];
             }
             if (companyResult.Success) {
                 this.companies = companyResult.Results as Array<{ ID: string; Name: string }> || [];
@@ -207,7 +209,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
     public onServerChange(): void {
         const serverId = this.connectionForm.get('MCPServerID')?.value;
-        const server = this.servers.find(s => s.ID === serverId);
+        const server = this.servers.find(s => UUIDsEqual(s.ID, serverId));
         if (server && !this.connectionForm.get('Name')?.value) {
             // Auto-fill name based on server
             this.connectionForm.patchValue({
@@ -228,7 +230,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
 
             if (this.IsEditMode && this.connection) {
                 await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.connection.ID }]));
@@ -281,11 +283,4 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         const control = this.connectionForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
     }
-}
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadMCPConnectionDialog(): void {
-    // Ensures the component is not tree-shaken
 }

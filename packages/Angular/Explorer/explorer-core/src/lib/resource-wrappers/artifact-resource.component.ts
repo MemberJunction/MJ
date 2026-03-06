@@ -3,11 +3,6 @@ import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-
-export function LoadArtifactResource() {
-  // Function for registration - actual instances created by Angular DI
-}
-
 /**
  * Artifact Resource - displays versioned content artifacts
  * Wraps the artifact-viewer-panel component for tab-based display
@@ -15,20 +10,22 @@ export function LoadArtifactResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ArtifactResource')
 @Component({
+  standalone: false,
   selector: 'mj-artifact-resource',
   template: `
     <div class="artifact-container">
-      <mj-artifact-viewer-panel
-        *ngIf="currentUser && artifactId"
-        [artifactId]="artifactId"
-        [currentUser]="currentUser"
-        [environmentId]="environmentId"
-        [showSaveToCollection]="true"
-        [canShare]="true"
-        [canEdit]="true">
-      </mj-artifact-viewer-panel>
+      @if (currentUser && artifactId) {
+        <mj-artifact-viewer-panel
+          [artifactId]="artifactId"
+          [currentUser]="currentUser"
+          [environmentId]="environmentId"
+          [showSaveToCollection]="true"
+          [canShare]="true"
+          [canEdit]="true">
+        </mj-artifact-viewer-panel>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .artifact-container {
       display: flex;

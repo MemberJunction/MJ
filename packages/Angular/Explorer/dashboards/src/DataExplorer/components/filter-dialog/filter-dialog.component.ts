@@ -8,6 +8,7 @@ import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@
  * suitable for complex filter expressions.
  */
 @Component({
+  standalone: false,
   selector: 'mj-filter-dialog',
   templateUrl: './filter-dialog.component.html',
   styleUrls: ['./filter-dialog.component.css']

@@ -1,4 +1,4 @@
-import { AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { MJAIAgentExampleEntity } from '@memberjunction/core-entities';
 
 /**
  * Metadata stored with each example embedding in the vector service.
@@ -13,7 +13,7 @@ export interface ExampleEmbeddingMetadata {
     exampleInput: string;
     exampleOutput: string;
     successScore: number | null;
-    exampleEntity: AIAgentExampleEntity;
+    exampleEntity: MJAIAgentExampleEntity;
 }
 
 /**
@@ -21,6 +21,6 @@ export interface ExampleEmbeddingMetadata {
  * Returns full entity object to avoid database round-trip.
  */
 export interface ExampleMatchResult {
-    example: AIAgentExampleEntity;
+    example: MJAIAgentExampleEntity;
     similarity: number;
 }

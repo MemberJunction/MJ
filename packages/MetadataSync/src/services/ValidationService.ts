@@ -1,6 +1,7 @@
 import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
+import { minimatch } from 'minimatch';
 import {
   ValidationResult,
   ValidationError,
@@ -315,7 +316,7 @@ export class ValidationService {
       if (!fieldInfo) {
         // Check if this might be a virtual property (getter/setter)
         try {
-          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
+          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name, getSystemUser());
           // we use this approach instead of checking Entity Fields because
           // some sub-classes implement setter properties that allow you to set
           // values that are not physically in the database but are resolved by the sub-class
@@ -371,8 +372,8 @@ export class ValidationService {
     // Check for required fields
     if (this.options.checkBestPractices) {
       for (const field of entityFields) {
-        // Skip if field allows null or has a value already
-        if (field.AllowsNull || fields[field.Name]) {
+        // Skip if field allows null or has a value already (use 'in' to handle falsy values like 0, false, "")
+        if (field.AllowsNull || field.Name in fields) {
           continue;
         }
 
@@ -406,6 +407,11 @@ export class ValidationService {
 
         // Skip Template field if TemplateText is provided
         if (field.Name === 'Template' && fields['TemplateText']) {
+          continue;
+        }
+
+        // Skip Path on Applications - it is auto-calculated by the server on save
+        if (field.Name === 'Path' && entityInfo.Name === 'MJ: Applications') {
           continue;
         }
 
@@ -1032,7 +1038,6 @@ export class ValidationService {
 
     // Apply include filter (whitelist)
     if (this.options.include && this.options.include.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = directories.filter(dirName => {
         return this.options.include!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })
@@ -1042,7 +1047,6 @@ export class ValidationService {
 
     // Apply exclude filter (blacklist)
     if (this.options.exclude && this.options.exclude.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = filteredDirs.filter(dirName => {
         return !this.options.exclude!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })
@@ -1202,7 +1206,7 @@ export class ValidationService {
       // Load all user roles with role names
       const result = await rv.RunView(
         {
-          EntityName: 'User Roles',
+          EntityName: 'MJ: User Roles',
           ExtraFilter: '',
           OrderBy: 'UserID',
           MaxRows: 10000,

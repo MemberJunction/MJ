@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
-import { ProjectEntity } from '@memberjunction/core-entities';
+import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
 
 export interface ProjectFormData {
@@ -57,6 +57,7 @@ const DEFAULT_PROJECT_ICONS = [
 ];
 
 @Component({
+  standalone: false,
   selector: 'mj-project-form-modal',
   template: `
     <kendo-dialog
@@ -342,11 +343,11 @@ const DEFAULT_PROJECT_ICONS = [
 })
 export class ProjectFormModalComponent implements OnInit {
   @Input() dialogRef!: DialogRef;
-  @Input() project: ProjectEntity | null = null;
+  @Input() project: MJProjectEntity | null = null;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() projectSaved = new EventEmitter<ProjectEntity>();
+  @Output() projectSaved = new EventEmitter<MJProjectEntity>();
 
   public formData: ProjectFormData = {
     name: '',
@@ -403,7 +404,7 @@ export class ProjectFormModalComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const project = this.project || await md.GetEntityObject<ProjectEntity>('MJ: Projects', this.currentUser);
+      const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
 
       project.Name = this.formData.name.trim();
       project.Description = this.formData.description.trim() || null;

@@ -1,0 +1,131 @@
+.oauth-callback-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1rem;
+}
+
+.oauth-callback-card {
+    background: white;
+    padding: 3rem;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 450px;
+    width: 100%;
+}
+
+.oauth-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.oauth-status h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.oauth-status p {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+/* Icon containers */
+.icon-container {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.icon-container i {
+    font-size: 3rem;
+}
+
+.success-icon {
+    background: #dcfce7;
+}
+
+.success-icon i {
+    color: #22c55e;
+}
+
+.error-icon {
+    background: #fee2e2;
+}
+
+.error-icon i {
+    color: #ef4444;
+}
+
+/* Success state */
+.oauth-status.success h2 {
+    color: #22c55e;
+}
+
+/* Error state */
+.oauth-status.error h2 {
+    color: #ef4444;
+}
+
+.error-code {
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.error-message {
+    background: #f1f5f9;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    color: #475569;
+    width: 100%;
+}
+
+/* Buttons */
+.button-group {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.button-group button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Loading state */
+.oauth-status.loading {
+    padding: 2rem 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .oauth-callback-card {
+        padding: 2rem 1.5rem;
+    }
+
+    .button-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .button-group button {
+        width: 100%;
+        justify-content: center;
+    }
+}

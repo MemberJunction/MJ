@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import * as env from 'env-var';
-import * as mime from 'mime-types';
+import env from 'env-var';
+import mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
@@ -1393,7 +1393,7 @@ export class BoxFileStorage extends FileStorageBase {
         const chunks: Buffer[] = [];
         stream.on('data', (chunk: Buffer) => chunks.push(chunk));
         stream.on('error', reject);
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('end', () => resolve(Buffer.concat(chunks as unknown as Uint8Array[])));
       });
     } catch (error) {
       console.error('Error getting object', { params, error });

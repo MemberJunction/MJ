@@ -1,96 +1,102 @@
 <div  class="wrapper scrollable">
-    @if(isLoading) {
-        <div>
-            <mj-loading [showText]="false" size="medium"></mj-loading>
-        </div>
+  @if(isLoading) {
+    <div>
+      <mj-loading [showText]="false" size="medium"></mj-loading>
+    </div>
+  }
+  @else {
+  <div class="vertical-full-width">
+    @if(AllowNew) {
+      <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
     }
-    @else {
-        <div class="vertical-full-width">
-            @if(AllowNew) {
-                <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
+    <table class="grid">
+      <thead class="sticky-header">
+        <tr>
+          @for (c of Columns; track c) {
+            <th>
+              {{ c }}
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of records; track r) {
+          <tr (click)="selectRecord(undefined, r)">
+            @for (c of Columns; track c; let i = $index) {
+              <td>
+                <span>{{ r.Get(c) }}</span>
+                @if(i === 0 && (AllowDelete || AllowEdit)) {
+                  <span>
+                    @if (AllowEdit) {
+                      <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)" title="Edit"></span>
+                    }
+                    @if (AllowCustomAction) {
+                      <span
+                        class="fa-solid {{getCustomActionIcon(r)}} icon"
+                        (click)="performCustomAction($event, r)"
+                        title="{{getCustomActionTooltip(r)}}"
+                      ></span>
+                    }
+                    @if (AllowDelete) {
+                      <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)" title="Delete"></span>
+                    }
+                  </span>
+                }
+              </td>
             }
-            <table class="grid">
-                <thead class="sticky-header">
-                    <tr>
-                        <th *ngFor="let c of Columns">
-                            {{ c }}
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr *ngFor="let r of records" (click)="selectRecord(undefined, r)">
-                        <td *ngFor="let c of Columns; let i = index">
-                            <span>{{ r.Get(c) }}</span>
-                            @if(i === 0 && (AllowDelete || AllowEdit)) {
-                                <span>
-                                    @if (AllowEdit) {
-                                        <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)" title="Edit"></span>
-                                    }
-                                    @if (AllowCustomAction) {
-                                        <span 
-                                            class="fa-solid {{getCustomActionIcon(r)}} icon" 
-                                            (click)="performCustomAction($event, r)" 
-                                            title="{{getCustomActionTooltip(r)}}"
-                                        ></span>
-                                    }
-                                    @if (AllowDelete) {
-                                        <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)" title="Delete"></span>
-                                    }
-                                </span>    
-                            }
-                        </td>
-                    </tr>
-                </tbody>
-            </table>  
-        </div>  
-    }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
 </div>
- 
+
 @if(AllowNew || AllowEdit) {
-<mj-entity-form-dialog #entityForm 
-    [Record]="editOrNewRecord" 
+  <mj-entity-form-dialog #entityForm
+    [Record]="editOrNewRecord"
     [SectionName]="EditSectionName"
-    Mode="section" 
-    [Visible]="showEditOrNewRecordForm" 
+    Mode="section"
+    [Visible]="showEditOrNewRecordForm"
     [AutoRevertOnCancel]="true"
     [HandleSave]="true"
     [Width]="550"
     [Height]="450"
     (DialogClosed)="onEditOrNewRecordFormClosed($event)">
-</mj-entity-form-dialog>
+  </mj-entity-form-dialog>
 }
 
 @if(deleteRecordDialogVisible && AllowDelete) {
-<kendo-dialog
-    [title]="'Delete ' + EntityName + '?'" 
+  <kendo-dialog
+    [title]="'Delete ' + EntityName + '?'"
     [width]="450"
     [height]="200"
     (close)="closeDeleteDialog('No')" >
     <div>
-        Are you sure you want to delete '{{getRecordName(deleteRecordItem!)}}'?
+      Are you sure you want to delete '{{getRecordName(deleteRecordItem!)}}'?
     </div>
     <kendo-dialog-actions>
-        <button kendoButton (click)="closeDeleteDialog('Yes')"  themeColor="primary">Yes</button>
-        <button kendoButton (click)="closeDeleteDialog('No')">No</button>
+      <button kendoButton (click)="closeDeleteDialog('Yes')"  themeColor="primary">Yes</button>
+      <button kendoButton (click)="closeDeleteDialog('No')">No</button>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
 }
 
 @if(customActionDialogVisible && AllowCustomAction) {
-<kendo-dialog
-    [title]="CustomActionDialogTitle" 
+  <kendo-dialog
+    [title]="CustomActionDialogTitle"
     [width]="450"
     [height]="200"
     (close)="closeCustomActionDialog('No')" >
     <div>
-        {{ CustomActionDialogMessage.replace('{{recordName}}', getRecordName(customActionItem!)) }}
-        @if(CustomActionDialogInfo) {
-            <p>{{ CustomActionDialogInfo }}</p>
-        }
+      {{ CustomActionDialogMessage.replace('{{recordName}}', getRecordName(customActionItem!)) }}
+      @if(CustomActionDialogInfo) {
+        <p>{{ CustomActionDialogInfo }}</p>
+      }
     </div>
     <kendo-dialog-actions>
-        <button kendoButton (click)="closeCustomActionDialog('Yes')" themeColor="primary">Yes</button>
-        <button kendoButton (click)="closeCustomActionDialog('No')">No</button>
+      <button kendoButton (click)="closeCustomActionDialog('Yes')" themeColor="primary">Yes</button>
+      <button kendoButton (click)="closeCustomActionDialog('No')">No</button>
     </kendo-dialog-actions>
-</kendo-dialog>
+  </kendo-dialog>
 }

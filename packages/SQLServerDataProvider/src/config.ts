@@ -1,7 +1,7 @@
 import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { UserCache } from "./UserCache";
 
 
@@ -48,6 +48,9 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
         }
     }
     catch (e) {
-        LogError("Error in setupSQLServerClient", e)
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        const errorStack = e instanceof Error ? e.stack : '';
+        LogError(`Error in setupSQLServerClient: ${errorMessage}\n${errorStack}`);
+        throw e; // Re-throw so caller knows about the failure
     }
 }

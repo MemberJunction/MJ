@@ -7,10 +7,11 @@
 
 import { UserInfo } from '@memberjunction/core';
 import {
-    APIApplicationScopeEntity,
-    APIKeyApplicationEntity,
-    APIKeyScopeEntity
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyApplicationEntity,
+    MJAPIKeyScopeEntity
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { PatternMatcher } from './PatternMatcher';
 import {
@@ -73,7 +74,7 @@ export class ScopeEvaluator {
         const keyApps = this.Base.GetKeyApplicationsByKeyId(request.APIKeyId);
 
         if (keyApps.length > 0) {
-            const boundToThisApp = keyApps.some(ka => ka.ApplicationID === request.ApplicationId);
+            const boundToThisApp = keyApps.some(ka => UUIDsEqual(ka.ApplicationID, request.ApplicationId));
             if (!boundToThisApp) {
                 return {
                     Allowed: false,
@@ -286,7 +287,7 @@ export class ScopeEvaluator {
     public async GetKeyApplications(
         apiKeyId: string,
         _contextUser: UserInfo
-    ): Promise<APIKeyApplicationEntity[]> {
+    ): Promise<MJAPIKeyApplicationEntity[]> {
         return this.Base.GetKeyApplicationsByKeyId(apiKeyId);
     }
 
@@ -329,10 +330,10 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Convert APIApplicationScopeEntity to ScopeRule
+     * Convert MJAPIApplicationScopeEntity to ScopeRule
      */
     private toScopeRules(
-        entities: APIApplicationScopeEntity[],
+        entities: MJAPIApplicationScopeEntity[],
         fullPath?: string
     ): ScopeRule[] {
         return entities.map(e => ({
@@ -347,10 +348,10 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Convert APIKeyScopeEntity to ScopeRule
+     * Convert MJAPIKeyScopeEntity to ScopeRule
      */
     private toScopeRulesFromKey(
-        entities: APIKeyScopeEntity[],
+        entities: MJAPIKeyScopeEntity[],
         fullPath?: string
     ): ScopeRule[] {
         return entities.map(e => ({

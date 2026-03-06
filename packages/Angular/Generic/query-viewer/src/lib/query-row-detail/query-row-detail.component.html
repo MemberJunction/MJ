@@ -1,188 +1,215 @@
 <!-- Row Detail Slide-in Panel -->
-<div class="row-detail-panel"
-     *ngIf="Visible"
-     @slideIn
-     [style.width.px]="PanelWidth">
-
+@if (Visible) {
+  <div class="row-detail-panel"
+    @slideIn
+    [style.width.px]="PanelWidth">
     <!-- Resize handle -->
     <div class="resize-handle"
-         (mousedown)="onResizeStart($event)"
-         [class.resizing]="IsResizing">
+      (mousedown)="onResizeStart($event)"
+      [class.resizing]="IsResizing">
     </div>
-
     <!-- Header -->
     <div class="panel-header">
-        <div class="header-left">
-            <i class="fa-solid fa-table-cells-large header-icon"></i>
-            <h3 class="panel-title">Row Details</h3>
-        </div>
-        <div class="header-right">
-            <!-- Row navigation -->
-            <div class="row-nav" *ngIf="TotalRows > 1">
-                <button class="nav-btn"
-                        [disabled]="RowIndex === 0"
-                        (click)="onNavigatePrev()"
-                        title="Previous row (↑ or K)">
-                    <i class="fa-solid fa-chevron-up"></i>
-                </button>
-                <span class="row-indicator">{{ RowIndex + 1 }} / {{ TotalRows }}</span>
-                <button class="nav-btn"
-                        [disabled]="RowIndex >= TotalRows - 1"
-                        (click)="onNavigateNext()"
-                        title="Next row (↓ or J)">
-                    <i class="fa-solid fa-chevron-down"></i>
-                </button>
-            </div>
-            <!-- Toggle empty fields -->
-            <button class="action-btn"
-                    (click)="toggleHideEmptyFields()"
-                    [class.active]="HideEmptyFields"
-                    [title]="HideEmptyFields ? 'Show empty fields' : 'Hide empty fields'">
-                <i class="fa-solid" [class.fa-eye]="!HideEmptyFields" [class.fa-eye-slash]="HideEmptyFields"></i>
+      <div class="header-left">
+        <i class="fa-solid fa-table-cells-large header-icon"></i>
+        <h3 class="panel-title">Row Details</h3>
+      </div>
+      <div class="header-right">
+        <!-- Row navigation -->
+        @if (TotalRows > 1) {
+          <div class="row-nav">
+            <button class="nav-btn"
+              [disabled]="RowIndex === 0"
+              (click)="onNavigatePrev()"
+              title="Previous row (↑ or K)">
+              <i class="fa-solid fa-chevron-up"></i>
             </button>
-            <!-- Copy JSON button -->
-            <button class="action-btn" (click)="copyRowAsJson()" title="Copy row as JSON">
-                <i class="fa-solid fa-copy"></i>
+            <span class="row-indicator">{{ RowIndex + 1 }} / {{ TotalRows }}</span>
+            <button class="nav-btn"
+              [disabled]="RowIndex >= TotalRows - 1"
+              (click)="onNavigateNext()"
+              title="Next row (↓ or J)">
+              <i class="fa-solid fa-chevron-down"></i>
             </button>
-            <!-- Close button -->
-            <button class="close-btn" (click)="onClose()" title="Close (Esc)">
-                <i class="fa-solid fa-times"></i>
-            </button>
-        </div>
+          </div>
+        }
+        <!-- Toggle empty fields -->
+        <button class="action-btn"
+          (click)="toggleHideEmptyFields()"
+          [class.active]="HideEmptyFields"
+          [title]="HideEmptyFields ? 'Show empty fields' : 'Hide empty fields'">
+          <i class="fa-solid" [class.fa-eye]="!HideEmptyFields" [class.fa-eye-slash]="HideEmptyFields"></i>
+        </button>
+        <!-- Copy JSON button -->
+        <button class="action-btn" (click)="copyRowAsJson()" title="Copy row as JSON">
+          <i class="fa-solid fa-copy"></i>
+        </button>
+        <!-- Close button -->
+        <button class="close-btn" (click)="onClose()" title="Close (Esc)">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
     </div>
-
     <!-- Content -->
     <div class="panel-content">
-        <!-- Primary Keys Section -->
-        <div class="field-section" *ngIf="getVisibleFields(PrimaryKeyFields).length > 0">
-            <h4 class="section-title">
-                <i class="fa-solid fa-key section-icon pk-icon"></i>
-                Primary Key
-            </h4>
-            <div class="field-list">
-                <div class="field-item" *ngFor="let field of getVisibleFields(PrimaryKeyFields)">
-                    <div class="field-header">
-                        <span class="field-name">{{ field.displayName }}</span>
-                        <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
-                            <i class="fa-solid fa-copy"></i>
-                        </button>
-                    </div>
-                    <div class="field-value"
-                         [class.clickable]="field.targetEntityName"
-                         (click)="field.targetEntityName && onEntityLinkClick(field)">
-                        <i *ngIf="field.targetEntityIcon"
-                           [class]="field.targetEntityIcon"
-                           class="entity-icon"></i>
-                        <span class="value-text monospace">{{ field.formattedValue }}</span>
-                        <i *ngIf="field.targetEntityName"
-                           class="fa-solid fa-arrow-up-right-from-square link-icon"></i>
-                    </div>
+      <!-- Primary Keys Section -->
+      @if (getVisibleFields(PrimaryKeyFields).length > 0) {
+        <div class="field-section">
+          <h4 class="section-title">
+            <i class="fa-solid fa-key section-icon pk-icon"></i>
+            Primary Key
+          </h4>
+          <div class="field-list">
+            @for (field of getVisibleFields(PrimaryKeyFields); track field) {
+              <div class="field-item">
+                <div class="field-header">
+                  <span class="field-name">{{ field.displayName }}</span>
+                  <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Foreign Keys Section -->
-        <div class="field-section" *ngIf="getVisibleFields(ForeignKeyFields).length > 0">
-            <h4 class="section-title">
-                <i class="fa-solid fa-link section-icon fk-icon"></i>
-                Related Records
-            </h4>
-            <div class="field-list">
-                <div class="field-item" *ngFor="let field of getVisibleFields(ForeignKeyFields)">
-                    <div class="field-header">
-                        <span class="field-name">{{ field.displayName }}</span>
-                        <span class="target-entity" *ngIf="field.targetEntityName">
-                            <i class="fa-solid fa-arrow-right"></i>
-                            {{ field.targetEntityName }}
-                        </span>
-                        <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
-                            <i class="fa-solid fa-copy"></i>
-                        </button>
-                    </div>
-                    <div class="field-value clickable"
-                         *ngIf="field.value != null"
-                         (click)="onEntityLinkClick(field)">
-                        <i *ngIf="field.targetEntityIcon"
-                           [class]="field.targetEntityIcon"
-                           class="entity-icon"></i>
-                        <span class="value-text monospace">{{ field.formattedValue }}</span>
-                        <i class="fa-solid fa-arrow-up-right-from-square link-icon"></i>
-                    </div>
-                    <div class="field-value empty" *ngIf="field.value == null">
-                        <span class="value-text">(empty)</span>
-                    </div>
+                <div class="field-value"
+                  [class.clickable]="field.targetEntityName"
+                  (click)="field.targetEntityName && onEntityLinkClick(field)">
+                  @if (field.targetEntityIcon) {
+                    <i
+                      [class]="field.targetEntityIcon"
+                    class="entity-icon"></i>
+                  }
+                  <span class="value-text monospace">{{ field.formattedValue }}</span>
+                  @if (field.targetEntityName) {
+                    <i
+                    class="fa-solid fa-arrow-up-right-from-square link-icon"></i>
+                  }
                 </div>
-            </div>
+              </div>
+            }
+          </div>
         </div>
-
-        <!-- Regular Fields Section -->
-        <div class="field-section" *ngIf="getVisibleFields(RegularFields).length > 0">
-            <h4 class="section-title">
-                <i class="fa-solid fa-list section-icon"></i>
-                Fields
-                <span class="hidden-count" *ngIf="HideEmptyFields && getEmptyFieldCount(RegularFields) > 0">
-                    ({{ getEmptyFieldCount(RegularFields) }} empty hidden)
-                </span>
-            </h4>
-            <div class="field-list">
-                <div class="field-item" *ngFor="let field of getVisibleFields(RegularFields)">
-                    <div class="field-header">
-                        <span class="field-name">{{ field.displayName }}</span>
-                        <span class="field-type">{{ field.sqlType }}</span>
-                        <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
-                            <i class="fa-solid fa-copy"></i>
-                        </button>
-                    </div>
-
-                    <!-- JSON value -->
-                    <div class="field-value json-value"
-                         *ngIf="isJson(field.formattedValue)"
-                         [class.expanded]="field.isExpanded">
-                        <pre class="json-content">{{ formatJson(field.formattedValue) }}</pre>
-                        <button class="expand-btn" (click)="toggleFieldExpand(field)">
-                            {{ field.isExpanded ? 'Collapse' : 'Expand' }}
-                        </button>
-                    </div>
-
-                    <!-- Long text value -->
-                    <div class="field-value long-text"
-                         *ngIf="!isJson(field.formattedValue) && field.isLongText"
-                         [class.expanded]="field.isExpanded">
-                        <span class="value-text">{{ field.formattedValue }}</span>
-                        <button class="expand-btn" (click)="toggleFieldExpand(field)">
-                            {{ field.isExpanded ? 'Show less' : 'Show more' }}
-                        </button>
-                    </div>
-
-                    <!-- Boolean value -->
-                    <div class="field-value boolean-value"
-                         *ngIf="field.sqlType.toLowerCase() === 'bit' && !isJson(field.formattedValue)">
-                        <i [class]="field.value ? 'fa-solid fa-check-circle bool-true' : 'fa-solid fa-times-circle bool-false'"></i>
-                        <span class="value-text">{{ field.formattedValue }}</span>
-                    </div>
-
-                    <!-- Empty value -->
-                    <div class="field-value empty"
-                         *ngIf="field.value == null && !isJson(field.formattedValue)">
-                        <span class="value-text">(empty)</span>
-                    </div>
-
-                    <!-- Regular value -->
-                    <div class="field-value"
-                         *ngIf="field.value != null && !isJson(field.formattedValue) && !field.isLongText && field.sqlType.toLowerCase() !== 'bit'">
-                        <span class="value-text"
-                              [class.monospace]="field.sqlType.toLowerCase().includes('uniqueidentifier') || field.name.toLowerCase().includes('id')">
-                            {{ field.formattedValue }}
-                        </span>
-                    </div>
+      }
+      <!-- Foreign Keys Section -->
+      @if (getVisibleFields(ForeignKeyFields).length > 0) {
+        <div class="field-section">
+          <h4 class="section-title">
+            <i class="fa-solid fa-link section-icon fk-icon"></i>
+            Related Records
+          </h4>
+          <div class="field-list">
+            @for (field of getVisibleFields(ForeignKeyFields); track field) {
+              <div class="field-item">
+                <div class="field-header">
+                  <span class="field-name">{{ field.displayName }}</span>
+                  @if (field.targetEntityName) {
+                    <span class="target-entity">
+                      <i class="fa-solid fa-arrow-right"></i>
+                      {{ field.targetEntityName }}
+                    </span>
+                  }
+                  <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
                 </div>
-            </div>
+                @if (field.value != null) {
+                  <div class="field-value clickable"
+                    (click)="onEntityLinkClick(field)">
+                    @if (field.targetEntityIcon) {
+                      <i
+                        [class]="field.targetEntityIcon"
+                      class="entity-icon"></i>
+                    }
+                    <span class="value-text monospace">{{ field.formattedValue }}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square link-icon"></i>
+                  </div>
+                }
+                @if (field.value == null) {
+                  <div class="field-value empty">
+                    <span class="value-text">(empty)</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
+      }
+      <!-- Regular Fields Section -->
+      @if (getVisibleFields(RegularFields).length > 0) {
+        <div class="field-section">
+          <h4 class="section-title">
+            <i class="fa-solid fa-list section-icon"></i>
+            Fields
+            @if (HideEmptyFields && getEmptyFieldCount(RegularFields) > 0) {
+              <span class="hidden-count">
+                ({{ getEmptyFieldCount(RegularFields) }} empty hidden)
+              </span>
+            }
+          </h4>
+          <div class="field-list">
+            @for (field of getVisibleFields(RegularFields); track field) {
+              <div class="field-item">
+                <div class="field-header">
+                  <span class="field-name">{{ field.displayName }}</span>
+                  <span class="field-type">{{ field.sqlType }}</span>
+                  <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
+                </div>
+                <!-- JSON value -->
+                @if (isJson(field.formattedValue)) {
+                  <div class="field-value json-value"
+                    [class.expanded]="field.isExpanded">
+                    <pre class="json-content">{{ formatJson(field.formattedValue) }}</pre>
+                    <button class="expand-btn" (click)="toggleFieldExpand(field)">
+                      {{ field.isExpanded ? 'Collapse' : 'Expand' }}
+                    </button>
+                  </div>
+                }
+                <!-- Long text value -->
+                @if (!isJson(field.formattedValue) && field.isLongText) {
+                  <div class="field-value long-text"
+                    [class.expanded]="field.isExpanded">
+                    <span class="value-text">{{ field.formattedValue }}</span>
+                    <button class="expand-btn" (click)="toggleFieldExpand(field)">
+                      {{ field.isExpanded ? 'Show less' : 'Show more' }}
+                    </button>
+                  </div>
+                }
+                <!-- Boolean value -->
+                @if (field.sqlType.toLowerCase() === 'bit' && !isJson(field.formattedValue)) {
+                  <div class="field-value boolean-value"
+                    >
+                    <i [class]="field.value ? 'fa-solid fa-check-circle bool-true' : 'fa-solid fa-times-circle bool-false'"></i>
+                    <span class="value-text">{{ field.formattedValue }}</span>
+                  </div>
+                }
+                <!-- Empty value -->
+                @if (field.value == null && !isJson(field.formattedValue)) {
+                  <div class="field-value empty"
+                    >
+                    <span class="value-text">(empty)</span>
+                  </div>
+                }
+                <!-- Regular value -->
+                @if (field.value != null && !isJson(field.formattedValue) && !field.isLongText && field.sqlType.toLowerCase() !== 'bit') {
+                  <div class="field-value"
+                    >
+                    <span class="value-text"
+                      [class.monospace]="field.sqlType.toLowerCase().includes('uniqueidentifier') || field.name.toLowerCase().includes('id')">
+                      {{ field.formattedValue }}
+                    </span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
     </div>
-</div>
+  </div>
+}
 
 <!-- Backdrop -->
-<div class="panel-backdrop"
-     *ngIf="Visible"
-     (click)="onClose()">
-</div>
+@if (Visible) {
+  <div class="panel-backdrop"
+    (click)="onClose()">
+  </div>
+}

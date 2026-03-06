@@ -5,8 +5,9 @@
 
 import { TestEngine } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
-import { TestEntity } from '@memberjunction/core-entities';
+import { MJTestEntity } from '@memberjunction/core-entities';
 import { ValidateFlags } from '../types';
+import { UUIDsEqual } from '@memberjunction/global';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
@@ -50,7 +51,7 @@ export class ValidateCommand {
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
 
-            let testsToValidate: TestEntity[];
+            let testsToValidate: MJTestEntity[];
 
             if (testId) {
                 // Validate specific test
@@ -70,7 +71,7 @@ export class ValidateCommand {
                     console.error(OutputFormatter.formatError(`Test type not found: ${flags.type}`));
                     process.exit(1);
                 }
-                testsToValidate = engine.Tests.filter(t => t.TypeID === type.ID);
+                testsToValidate = engine.Tests.filter(t => UUIDsEqual(t.TypeID, type.ID));
             } else {
                 console.error(OutputFormatter.formatError('Must specify test ID, --all, or --type'));
                 process.exit(1);
@@ -117,7 +118,7 @@ export class ValidateCommand {
     /**
      * Validate a single test
      */
-    private validateTest(test: TestEntity, engine: TestEngine): ValidationResult {
+    private validateTest(test: MJTestEntity, engine: TestEngine): ValidationResult {
         const result: ValidationResult = {
             testName: test.Name,
             testId: test.ID,

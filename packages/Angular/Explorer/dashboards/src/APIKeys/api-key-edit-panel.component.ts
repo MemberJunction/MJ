@@ -1,17 +1,11 @@
 import { Component, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity, APIKeyScopeEntity, APIKeyUsageLogEntity } from '@memberjunction/core-entities';
+import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
-
-/** Tree shaking prevention function */
-export function LoadAPIKeyEditPanel(): void {
-    // This function prevents tree shaking
-}
-
 /** Scope with selection state */
 interface ScopeItem {
-    scope: APIScopeEntity;
+    scope: MJAPIScopeEntity;
     selected: boolean;
     originallySelected: boolean;
 }
@@ -40,6 +34,7 @@ interface UsageLogItem {
  * Panel for viewing and editing existing API keys
  */
 @Component({
+  standalone: false,
     selector: 'mj-api-key-edit-panel',
     templateUrl: './api-key-edit-panel.component.html',
     styleUrls: ['./api-key-edit-panel.component.css']
@@ -48,14 +43,14 @@ export class APIKeyEditPanelComponent implements OnChanges {
     @Input() Visible = false;
     @Input() KeyId: string | null = null;
     @Output() VisibleChange = new EventEmitter<boolean>();
-    @Output() Updated = new EventEmitter<APIKeyEntity>();
-    @Output() Revoked = new EventEmitter<APIKeyEntity>();
+    @Output() Updated = new EventEmitter<MJAPIKeyEntity>();
+    @Output() Revoked = new EventEmitter<MJAPIKeyEntity>();
     @Output() Closed = new EventEmitter<void>();
 
     private md = new Metadata();
 
     // Current key
-    public APIKey: APIKeyEntity | null = null;
+    public APIKey: MJAPIKeyEntity | null = null;
     public IsLoading = true;
     public IsSaving = false;
     public IsRevoking = false;
@@ -116,7 +111,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
         this.resetState();
 
         try {
-            const key = await this.md.GetEntityObject<APIKeyEntity>('MJ: API Keys');
+            const key = await this.md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys');
             if (await key.Load(this.KeyId!)) {
                 this.APIKey = key;
                 this.EditLabel = key.Label;
@@ -148,7 +143,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
 
             // Get all scopes from cache, load assigned scopes from DB
             const allScopes = base.Scopes;
-            const assignedScopesResult = await rv.RunView<APIKeyScopeEntity>({
+            const assignedScopesResult = await rv.RunView<MJAPIKeyScopeEntity>({
                 EntityName: 'MJ: API Key Scopes',
                 ExtraFilter: `APIKeyID='${this.KeyId}'`,
                 ResultType: 'entity_object'
@@ -212,7 +207,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
         this.IsLoadingLogs = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<APIKeyUsageLogEntity>({
+            const result = await rv.RunView<MJAPIKeyUsageLogEntity>({
                 EntityName: 'MJ: API Key Usage Logs',
                 ExtraFilter: `APIKeyID='${this.KeyId}'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -312,7 +307,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
 
             // Add new scope assignments
             for (const item of toAdd) {
-                const keyScope = await this.md.GetEntityObject<APIKeyScopeEntity>('MJ: API Key Scopes');
+                const keyScope = await this.md.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes');
                 keyScope.NewRecord();
                 keyScope.APIKeyID = this.APIKey.ID;
                 keyScope.ScopeID = item.scope.ID;
@@ -323,7 +318,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
             // Remove scope assignments
             const rv = new RunView();
             for (const item of toRemove) {
-                const result = await rv.RunView<APIKeyScopeEntity>({
+                const result = await rv.RunView<MJAPIKeyScopeEntity>({
                     EntityName: 'MJ: API Key Scopes',
                     ExtraFilter: `APIKeyID='${this.APIKey.ID}' AND ScopeID='${item.scope.ID}'`,
                     ResultType: 'entity_object'

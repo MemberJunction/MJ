@@ -5,7 +5,7 @@
       "Description": "Basic Agentic Loop Agent Type",
       "AgentPromptPlaceholder": "agentSpecificPrompt",
       "DriverClass": "LoopAgentType",
-      "SystemPromptID": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
+      "SystemPromptID": "@lookup:MJ: AI Prompts.Name=Loop Agent Type: System Prompt",
       "IsActive": true,
       "UIFormSectionKey": null,
       "UIFormKey": null,
@@ -106,8 +106,8 @@
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2026-01-20T17:25:39.956Z",
-      "checksum": "e61c116632b2d6e8be71476051052ef573d85fd0abb65960009243b0f8849d17"
+      "lastModified": "2026-02-13T21:09:21.835Z",
+      "checksum": "2c440bcd16aa241cad45c86aa9e27ef9f04d420dadae3e76e49803dd52c95980"
     }
   },
   {

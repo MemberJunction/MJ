@@ -263,10 +263,3 @@ export class SlackWebhookAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the SlackWebhookAction class is included in the bundle
- */
-export function LoadSlackWebhookAction() {
-    // Stub function to prevent tree shaking
-}

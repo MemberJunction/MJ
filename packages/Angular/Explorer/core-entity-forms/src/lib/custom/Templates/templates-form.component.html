@@ -1,222 +1,296 @@
-<div class="record-form-container">
+<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
     @if (record) {
-        <form class="record-form" #form="ngForm" >
-        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+        <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
-        <!-- Top Section - Key Fields -->
-        <div class="template-header" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 8px 20px;">
-            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 12px; align-items: start;">
-                
-                <!-- Name -->
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
-                        <i class="fa-solid fa-file-text"></i> Template Name
-                    </label>
-                    @if (EditMode) {
-                        <kendo-textbox [(ngModel)]="record.Name" name="templateName" placeholder="Enter template name..."></kendo-textbox>
-                    } @else {
-                        <div class="form-control-plaintext" style="font-size: 1em; font-weight: 500; padding: 6px 0;">
-                            {{ record.Name || 'Unnamed Template' }}
+        <!-- Main Content Area -->
+        <div class="template-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
+
+            <!-- Header Section -->
+            <div class="template-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+
+                    <!-- Left: Template Info -->
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <i class="fa-solid fa-file-code" style="color: #17a2b8; font-size: 1.4em;"></i>
+                            @if (EditMode) {
+                                <kendo-textbox [(ngModel)]="record.Name"
+                                              name="templateName"
+                                              placeholder="Enter template name..."
+                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                                </kendo-textbox>
+                            } @else {
+                                <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Unnamed Template' }}</h4>
+                                @if (record.IsActive) {
+                                    <span style="background: #28a745; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                        <i class="fa-solid fa-check-circle"></i> Active
+                                    </span>
+                                } @else {
+                                    <span style="background: #6c757d; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                        <i class="fa-solid fa-pause-circle"></i> Inactive
+                                    </span>
+                                }
+                            }
                         </div>
-                    }
-                </div>
 
-                <!-- Description -->
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
-                        <i class="fa-solid fa-align-left"></i> Description
-                    </label>
-                    @if (EditMode) {
-                        <kendo-textarea [(ngModel)]="record.Description" 
-                                       name="description"
-                                       [rows]="2"
-                                       placeholder="Enter template description..."></kendo-textarea>
-                    } @else {
-                        <div class="form-control-plaintext" style="padding: 8px 0; color: #6c757d;">
-                            {{ record.Description || 'No description provided' }}
+                        <!-- Category and Active toggle when in edit mode -->
+                        @if (EditMode) {
+                            <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Category</label>
+                                    <kendo-combobox [(ngModel)]="record.CategoryID"
+                                                   name="categoryId"
+                                                   [data]="categoryOptions"
+                                                   textField="text"
+                                                   valueField="value"
+                                                   [valuePrimitive]="true"
+                                                   [allowCustom]="true"
+                                                   (valueChange)="onCategoryChange($event)"
+                                                   placeholder="Select or enter new category..."
+                                                   style="width: 250px;">
+                                    </kendo-combobox>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Active</label>
+                                    <kendo-switch [(ngModel)]="record.IsActive" name="isActive"></kendo-switch>
+                                </div>
+                            </div>
+                        }
+
+                        @if (EditMode) {
+                            <kendo-textarea [(ngModel)]="record.Description"
+                                           name="description"
+                                           [rows]="2"
+                                           placeholder="Enter template description..."
+                                           style="width: 100%; max-width: 600px; margin-bottom: 12px;">
+                            </kendo-textarea>
+                        } @else if (record.Description) {
+                            <p style="margin: 0 0 12px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+                        }
+
+                        <!-- Quick Info Row -->
+                        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                            @if (record.Category) {
+                                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                    <i class="fa-solid fa-folder" style="color: #6c757d;"></i>
+                                    <span style="color: #6c757d;">Category:</span>
+                                    <span style="color: #495057; font-weight: 500;">{{ record.Category }}</span>
+                                </div>
+                            }
+
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                <i class="fa-solid fa-file-lines" style="color: #6c757d;"></i>
+                                <span style="color: #6c757d;">Contents:</span>
+                                <span style="color: #495057; font-weight: 500;">{{ templateContents.length }}</span>
+                            </div>
                         </div>
-                    }
-                </div>
+                    </div>
 
-                <!-- Category -->
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
-                        <i class="fa-solid fa-folder"></i> Category
-                    </label>
-                    @if (EditMode) {
-                        <kendo-combobox [(ngModel)]="record.CategoryID" 
-                                       name="categoryId"
-                                       [data]="categoryOptions"
-                                       textField="text"
-                                       valueField="value"
-                                       [valuePrimitive]="true"
-                                       [allowCustom]="true"
-                                       (valueChange)="onCategoryChange($event)"
-                                       placeholder="Select or enter new category...">
-                        </kendo-combobox>
-                    } @else {
-                        <div class="form-control-plaintext" style="padding: 8px 0;">
-                            {{ record.Category || 'Uncategorized' }}
-                        </div>
-                    }
-                </div>
-
-                <!-- Template Status -->
-                <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center;">
-                    @if (record.IsActive) {
-                        <span class="badge badge-success" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85em;">
-                            <i class="fa-solid fa-check-circle"></i> Active
-                        </span>
-                    } @else {
-                        <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85em;">
-                            <i class="fa-solid fa-pause-circle"></i> Inactive
-                        </span>
-                    }
-                </div>
-            </div>
-        </div>
-
-        <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-            
-            <!-- Contents Tab - Main Focus -->
-            <mj-tab Name="Contents">
-                <i class="fa-solid fa-file-lines"></i> Contents 
-                <span class="badge badge-info" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 6px;">
-                    {{ templateContents.length }}
-                </span>
-            </mj-tab>
-            <mj-tab-body>
-                <div class="template-contents-main content-margin">
-                    <!-- Shared Template Editor -->
-                    <mj-template-editor 
-                        [template]="record"
-                        [config]="templateEditorConfig"
-                        (contentChange)="onSharedTemplateContentChange($event)"
-                        (runTemplate)="onSharedTemplateRun($event)"
-                        style="height: 100%; display: block;">
-                    </mj-template-editor>
-                </div>
-            </mj-tab-body>
-
-            <!-- Details Tab - Extra Fields -->
-            <mj-tab Name="Details">
-                <i class="fa-solid fa-cogs"></i> Details
-            </mj-tab>
-            <mj-tab-body>
-                <div style="padding: 20px;">
-                    <div class="record-form">
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="UserPrompt"
-                            Type="textarea"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="UserID"
-                            Type="textbox"
-                            [EditMode]="EditMode"
-                            LinkType="Record"
-                            LinkComponentType="Search">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="ActiveAt"
-                            Type="datepicker"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="DisabledAt"
-                            Type="datepicker"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="IsActive"
-                            Type="checkbox"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="__mj_CreatedAt"
-                            Type="textbox"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="__mj_UpdatedAt"
-                            Type="textbox"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="Category"
-                            Type="textbox"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
-                        <mj-form-field 
-                            [record]="record"
-                            [ShowLabel]="true"
-                            FieldName="User"
-                            Type="textbox"
-                            [EditMode]="EditMode">
-                        </mj-form-field>
+                    <!-- Right: Action Buttons -->
+                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        @if (record.IsSaved) {
+                            <button kendoButton [themeColor]="'primary'" [size]="'large'"
+                                    (click)="runTemplate()"
+                                    title="Run Template">
+                                <i class="fa-solid fa-play"></i> Run
+                            </button>
+                        }
                     </div>
                 </div>
-            </mj-tab-body>
+            </div>
 
-            <!-- Template Params Tab -->
-            <mj-tab Name="Template Params" [Visible]="record.IsSaved"> 
-                <i class="fa-solid fa-sliders"></i> Parameters
-            </mj-tab>
-            <mj-tab-body>
-                <mj-template-params-grid 
-                    [template]="record"
-                    [editMode]="EditMode">
-                </mj-template-params-grid>                    
-            </mj-tab-body>
+            <!-- Configuration Sections with Expansion Panels -->
+            <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
 
-            <!-- AI Prompts Tab -->
-            <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
-                <i class="fa-solid fa-robot"></i> AI Prompts
-            </mj-tab>
-            <mj-tab-body>
-                <mj-user-view-grid 
-                    [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"  
-                    [NewRecordValues]="NewRecordValues('AI Prompts')"
-                    [AllowLoad]="IsCurrentTab('AI Prompts')"  
-                    [EditMode]="GridEditMode()"  
-                >
-                </mj-user-view-grid>                    
-            </mj-tab-body>
+                <!-- Template Editor Section -->
+                <kendo-expansionpanel
+                    [expanded]="true"
+                    style="margin-bottom: 12px;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                            Template Editor
+                            @if (templateContents.length > 0) {
+                                <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    {{ templateContents.length }}
+                                </span>
+                            }
+                        </span>
+                    </ng-template>
 
-            <!-- Entity Documents Tab -->
-            <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
-                <i class="fa-solid fa-file-text"></i> Documents
-            </mj-tab>
-            <mj-tab-body>
-                <mj-user-view-grid 
-                    [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"  
-                    [NewRecordValues]="NewRecordValues('Entity Documents')"
-                    [AllowLoad]="IsCurrentTab('Entity Documents')"  
-                    [EditMode]="GridEditMode()"  
-                >
-                </mj-user-view-grid>                    
-            </mj-tab-body>
-        </mj-tabstrip>
+                    <div style="padding: 8px; min-height: 400px;">
+                        <mj-template-editor
+                            [template]="record"
+                            [config]="templateEditorConfig"
+                            (contentChange)="onSharedTemplateContentChange($event)"
+                            (runTemplate)="onSharedTemplateRun($event)"
+                            style="height: 100%; display: block;">
+                        </mj-template-editor>
+                    </div>
+                </kendo-expansionpanel>
+
+                <!-- Details Section -->
+                <kendo-expansionpanel
+                    [expanded]="false"
+                    style="margin-bottom: 12px;">
+                    <ng-template kendoExpansionPanelTitleDirective>
+                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                            <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                            Details
+                        </span>
+                    </ng-template>
+
+                    <div style="padding: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <!-- Left Column -->
+                            <div>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="UserPrompt"
+                                    Type="textarea"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="UserID"
+                                    Type="textbox"
+                                    [EditMode]="EditMode"
+                                    LinkType="Record"
+                                    LinkComponentType="Search">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="ActiveAt"
+                                    Type="datepicker"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="DisabledAt"
+                                    Type="datepicker"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                            </div>
+
+                            <!-- Right Column -->
+                            <div>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="IsActive"
+                                    Type="checkbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="__mj_CreatedAt"
+                                    Type="textbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="__mj_UpdatedAt"
+                                    Type="textbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="Category"
+                                    Type="textbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                <mj-form-field
+                                    [Record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="User"
+                                    Type="textbox"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                            </div>
+                        </div>
+                    </div>
+                </kendo-expansionpanel>
+
+                <!-- Template Parameters Section -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                                Parameters
+                            </span>
+                        </ng-template>
+
+                        <div style="padding: 16px 0;">
+                            <mj-template-params-grid
+                                [template]="record"
+                                [editMode]="EditMode">
+                            </mj-template-params-grid>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- AI Prompts Section -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-robot" style="color: #6c757d;"></i>
+                                AI Prompts
+                            </span>
+                        </ng-template>
+
+                        <div style="padding: 16px 0;">
+                            <mj-explorer-entity-data-grid
+                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','TemplateID')"
+                                [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
+                                [AllowLoad]="true"
+                                [ShowToolbar]="false">
+                            </mj-explorer-entity-data-grid>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+
+                <!-- Entity Documents Section -->
+                @if (record.IsSaved) {
+                    <kendo-expansionpanel
+                        [expanded]="false"
+                        style="margin-bottom: 12px;">
+                        <ng-template kendoExpansionPanelTitleDirective>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-file-text" style="color: #6c757d;"></i>
+                                Entity Documents
+                            </span>
+                        </ng-template>
+
+                        <div style="padding: 16px 0;">
+                            <mj-explorer-entity-data-grid
+                                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','TemplateID')"
+                                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
+                                [AllowLoad]="true"
+                                [ShowToolbar]="false">
+                            </mj-explorer-entity-data-grid>
+                        </div>
+                    </kendo-expansionpanel>
+                }
+            </div>
+        </div>
         </form>
 
         <!-- Template Parameter Dialog -->
-        <mj-template-param-dialog 
+        <mj-template-param-dialog
             [template]="record"
             [(isVisible)]="showParamDialog"
             (onClose)="onParamDialogClose()">

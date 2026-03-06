@@ -174,7 +174,3 @@ export class ExecuteCodeAction extends BaseAction {
         });
     }
 }
-
-export function LoadCodeExecutionAction() {
-    // do nothing - prevents tree-shaking
-}

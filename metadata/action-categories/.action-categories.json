@@ -18,45 +18,45 @@
     "fields": {
       "Name": "AI",
       "Description": "AI Actions",
-      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "75DD6103-E7B1-4B83-81C1-B5D135403344"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.319Z",
-      "checksum": "3652afbbc5811a5d20aca10e9acb710b63e5166027a4a3001d8033446866e229"
+      "lastModified": "2026-02-13T21:08:31.759Z",
+      "checksum": "7bced98684af4e63fe3bb3eca05ad88998bd9ffbdebc4cc18e2421b5565d537d"
     }
   },
   {
     "fields": {
       "Name": "Data",
       "Description": "Data management actions for CRUD operations",
-      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "22285832-93AD-427E-81BA-E332F63FC5B9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.321Z",
-      "checksum": "f9b6d547ff1215a50a67c206694ec86b2552ce047b56e386f63d9fb7bcd3d578"
+      "lastModified": "2026-02-13T21:08:31.760Z",
+      "checksum": "ea8a35820c50ba960395a180d767f1c102ea6047ed153de56a332b47dd2d5116"
     }
   },
   {
     "fields": {
       "Name": "Agent Management",
       "Description": "Actions for creating, managing, and configuring AI agents. Restricted to Agent Manager agent only.",
-      "ParentID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "0AC137DD-7E2F-4A57-AFE3-688D097B594F"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.322Z",
-      "checksum": "7e2f11c6251aea356b5f7556b1cf8cf9675cfd2c79713c66eb5f4abeccd33941"
+      "lastModified": "2026-02-13T21:08:31.762Z",
+      "checksum": "97a47b9a949c0d22fbf5269f9ec1ac20a79364c860e720948114686a07522728"
     }
   },
   {
@@ -134,15 +134,15 @@
     "fields": {
       "Name": "File Storage",
       "Description": "File storage and cloud storage operations",
-      "ParentID": "@lookup:Action Categories.Name=Utilities",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Utilities",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "0750DCEB-123A-485D-9052-C72FC7BFA5F8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.335Z",
-      "checksum": "401087d02adc088afe0a28a606d2bbac843235f53c53fccdc0c4c42c6bec3913"
+      "lastModified": "2026-02-13T21:08:31.771Z",
+      "checksum": "0b43653ed07d9a33ef043a81ac87873b7f3489f35b6021bc726bd2a1f582b0dd"
     }
   }
 ]

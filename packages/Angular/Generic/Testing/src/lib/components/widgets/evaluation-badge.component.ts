@@ -25,83 +25,117 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'app-evaluation-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Compact mode: inline icons and values -->
-    <div class="eval-badge compact" *ngIf="mode === 'compact'">
-      <!-- Execution status -->
-      <span class="eval-item exec" *ngIf="preferences?.showExecution" [class]="getExecClass()">
-        <i [class]="getExecIcon()"></i>
-      </span>
-
-      <!-- Human rating -->
-      <span class="eval-item human" *ngIf="preferences?.showHuman && hasHumanFeedback && humanRating != null">
-        <i class="fa-solid fa-user"></i>
-        <span class="value">{{ humanRating }}</span>
-        <i class="fa-solid fa-check correctness-icon" *ngIf="humanIsCorrect === true"></i>
-        <i class="fa-solid fa-xmark correctness-icon incorrect" *ngIf="humanIsCorrect === false"></i>
-      </span>
-
-      <!-- Human pending indicator -->
-      <span class="eval-item human pending" *ngIf="preferences?.showHuman && !hasHumanFeedback" title="Needs review">
-        <i class="fa-solid fa-user-clock"></i>
-      </span>
-
-      <!-- Auto score -->
-      <span class="eval-item auto" *ngIf="preferences?.showAuto && autoScore != null" [class]="getAutoClass()">
-        <i class="fa-solid fa-robot"></i>
-        <span class="value">{{ formatAutoScore() }}</span>
-      </span>
-    </div>
-
+    @if (mode === 'compact') {
+      <div class="eval-badge compact">
+        <!-- Execution status -->
+        @if (preferences?.showExecution) {
+          <span class="eval-item exec" [class]="getExecClass()">
+            <i [class]="getExecIcon()"></i>
+          </span>
+        }
+        <!-- Human rating -->
+        @if (preferences?.showHuman && hasHumanFeedback && humanRating != null) {
+          <span class="eval-item human">
+            <i class="fa-solid fa-user"></i>
+            <span class="value">{{ humanRating }}</span>
+            @if (humanIsCorrect === true) {
+              <i class="fa-solid fa-check correctness-icon"></i>
+            }
+            @if (humanIsCorrect === false) {
+              <i class="fa-solid fa-xmark correctness-icon incorrect"></i>
+            }
+          </span>
+        }
+        <!-- Human pending indicator -->
+        @if (preferences?.showHuman && !hasHumanFeedback) {
+          <span class="eval-item human pending" title="Needs review">
+            <i class="fa-solid fa-user-clock"></i>
+          </span>
+        }
+        <!-- Auto score -->
+        @if (preferences?.showAuto && autoScore != null) {
+          <span class="eval-item auto" [class]="getAutoClass()">
+            <i class="fa-solid fa-robot"></i>
+            <span class="value">{{ formatAutoScore() }}</span>
+          </span>
+        }
+      </div>
+    }
+    
     <!-- Expanded mode: stacked with labels -->
-    <div class="eval-badge expanded" *ngIf="mode === 'expanded'">
-      <!-- Execution status -->
-      <div class="eval-row" *ngIf="preferences?.showExecution">
-        <span class="label">Status</span>
-        <span class="value-wrap" [class]="getExecClass()">
-          <i [class]="getExecIcon()"></i>
-          <span class="text">{{ getExecText() }}</span>
-        </span>
-      </div>
-
-      <!-- Human rating -->
-      <div class="eval-row" *ngIf="preferences?.showHuman">
-        <span class="label">Human</span>
-        <span class="value-wrap" *ngIf="hasHumanFeedback && humanRating != null" [class]="getHumanClass()">
-          <span class="rating-stars">{{ getRatingStars() }}</span>
-          <span class="rating-num">{{ humanRating }}/10</span>
-          <span class="correctness" *ngIf="humanIsCorrect === true"><i class="fa-solid fa-check"></i> Correct</span>
-          <span class="correctness incorrect" *ngIf="humanIsCorrect === false"><i class="fa-solid fa-xmark"></i> Incorrect</span>
-        </span>
-        <span class="value-wrap pending" *ngIf="!hasHumanFeedback">
-          <i class="fa-solid fa-clock"></i>
-          <span class="text">Needs review</span>
-        </span>
-      </div>
-
-      <!-- Auto score -->
-      <div class="eval-row" *ngIf="preferences?.showAuto">
-        <span class="label">Auto</span>
-        <span class="value-wrap" *ngIf="autoScore != null" [class]="getAutoClass()">
-          <div class="score-bar">
-            <div class="score-fill" [style.width.%]="(autoScore || 0) * 100"></div>
+    @if (mode === 'expanded') {
+      <div class="eval-badge expanded">
+        <!-- Execution status -->
+        @if (preferences?.showExecution) {
+          <div class="eval-row">
+            <span class="label">Status</span>
+            <span class="value-wrap" [class]="getExecClass()">
+              <i [class]="getExecIcon()"></i>
+              <span class="text">{{ getExecText() }}</span>
+            </span>
           </div>
-          <span class="score-text">{{ formatAutoScore() }}</span>
-          <span class="checks" *ngIf="totalChecks">{{ passedChecks }}/{{ totalChecks }} checks</span>
-        </span>
-        <span class="value-wrap na" *ngIf="autoScore == null">
-          <span class="text">Not evaluated</span>
-        </span>
+        }
+        <!-- Human rating -->
+        @if (preferences?.showHuman) {
+          <div class="eval-row">
+            <span class="label">Human</span>
+            @if (hasHumanFeedback && humanRating != null) {
+              <span class="value-wrap" [class]="getHumanClass()">
+                <span class="rating-stars">{{ getRatingStars() }}</span>
+                <span class="rating-num">{{ humanRating }}/10</span>
+                @if (humanIsCorrect === true) {
+                  <span class="correctness"><i class="fa-solid fa-check"></i> Correct</span>
+                }
+                @if (humanIsCorrect === false) {
+                  <span class="correctness incorrect"><i class="fa-solid fa-xmark"></i> Incorrect</span>
+                }
+              </span>
+            }
+            @if (!hasHumanFeedback) {
+              <span class="value-wrap pending">
+                <i class="fa-solid fa-clock"></i>
+                <span class="text">Needs review</span>
+              </span>
+            }
+          </div>
+        }
+        <!-- Auto score -->
+        @if (preferences?.showAuto) {
+          <div class="eval-row">
+            <span class="label">Auto</span>
+            @if (autoScore != null) {
+              <span class="value-wrap" [class]="getAutoClass()">
+                <div class="score-bar">
+                  <div class="score-fill" [style.width.%]="(autoScore || 0) * 100"></div>
+                </div>
+                <span class="score-text">{{ formatAutoScore() }}</span>
+                @if (totalChecks) {
+                  <span class="checks">{{ passedChecks }}/{{ totalChecks }} checks</span>
+                }
+              </span>
+            }
+            @if (autoScore == null) {
+              <span class="value-wrap na">
+                <span class="text">Not evaluated</span>
+              </span>
+            }
+          </div>
+        }
       </div>
-    </div>
-
+    }
+    
     <!-- Inline mode: single primary value -->
-    <span class="eval-badge inline" *ngIf="mode === 'inline'" [class]="getQualityColorClass()">
-      {{ getPrimaryValue() }}
-    </span>
-  `,
+    @if (mode === 'inline') {
+      <span class="eval-badge inline" [class]="getQualityColorClass()">
+        {{ getPrimaryValue() }}
+      </span>
+    }
+    `,
   styles: [`
     .eval-badge {
       display: inline-flex;

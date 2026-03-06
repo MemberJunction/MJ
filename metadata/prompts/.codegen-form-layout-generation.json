@@ -3,7 +3,7 @@
     "fields": {
       "Name": "CodeGen: Form Layout Generation",
       "Description": "Analyzes entity fields to generate semantic categories with icons for collapsible section layouts",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -17,38 +17,83 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 1
-          },
-          "primaryKey": {
-            "ID": "4EAD0807-9E6E-496D-8F9E-F64376C5522A"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:29.564Z",
-            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
-          }
-        },
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 2
+            "Priority": 5
           },
           "primaryKey": {
             "ID": "63B92084-D3C0-42FD-B5A1-0C98811D4075"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:29.565Z",
-            "checksum": "e9b1e0df1114ad130d76df24a66b3aee574595f779f023ff9d6b694d311f5ece"
+            "lastModified": "2026-02-13T20:48:55.583Z",
+            "checksum": "72a39de6b3e7877160bdf3970c2af6bda70f947fd7f44ee85c8a0d7b863f8d1c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "4EAD0807-9E6E-496D-8F9E-F64376C5522A"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:55.585Z",
+            "checksum": "bbd25c184e2faf2a27fc3ea45401fe1bb491833448227011952b9c2a5dbc535a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "C8C0FD78-0474-49EC-BC8F-BC07F6B30D7E"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:55.586Z",
+            "checksum": "681b374ee1553a33bd3eaec4ccf26074c9ecdc0aaf252d7f6efb2a0424addee5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "A117EB14-411D-4590-A8DC-F9AF5C82DA5D"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:55.587Z",
+            "checksum": "0c37082d81bbfc64102c4d37d41dad6c079860f1c7a8f53fea8d8d3528518875"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "3BA8C588-3954-4180-86C5-666D886849F7"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:55.588Z",
+            "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
           }
         }
       ]
@@ -57,8 +102,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:29.537Z",
-      "checksum": "a82db03ad07163a007df7af5909e8f1fb609538102ee82274cf38cc29ef5cbca"
+      "lastModified": "2026-02-13T20:48:55.457Z",
+      "checksum": "41fa51fcc497dcdd724bdd74a6d31330613ba8e3ab62ad6e71c293d9376deabb"
     }
   }
 ]

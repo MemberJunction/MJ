@@ -1,0 +1,30 @@
+<div class="mj-flow-palette" [class.mj-flow-palette--collapsed]="Collapsed">
+  <div class="mj-flow-palette-header">
+    <i class="fa-solid fa-puzzle-piece"></i>
+    @if (!Collapsed) {
+      <span>Steps</span>
+    }
+  </div>
+
+  @if (!Collapsed) {
+    <div class="mj-flow-palette-content">
+      @for (category of categories; track category) {
+        <div class="mj-flow-palette-category">
+          <div class="mj-flow-palette-category-label">{{ category }}</div>
+          @for (nodeType of GetTypesForCategory(category); track nodeType) {
+            <div
+              class="mj-flow-palette-item"
+              fExternalItem
+              [fData]="nodeType.Type"
+              [title]="nodeType.Label">
+              <div class="mj-flow-palette-item-icon" [style.backgroundColor]="GetBgColor(nodeType.Color, 0.08)" [style.color]="nodeType.Color">
+                <i class="fa-solid" [ngClass]="nodeType.Icon"></i>
+              </div>
+              <span class="mj-flow-palette-item-label">{{ nodeType.Label }}</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

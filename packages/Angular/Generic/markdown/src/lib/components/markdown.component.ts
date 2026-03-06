@@ -47,6 +47,7 @@ import {
  */
 @Component({
   selector: 'mj-markdown',
+  standalone: false,
   template: `
     <div
       class="mj-markdown-container"

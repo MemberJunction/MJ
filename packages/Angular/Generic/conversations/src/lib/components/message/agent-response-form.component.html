@@ -1,77 +1,100 @@
-<div *ngIf="isVisible" class="agent-response-form">
-  <!-- Simple Choice Mode (single question, no title, buttongroup/radio) -->
-  <div *ngIf="isSimpleChoice" class="simple-choice-buttons">
-    <button
-      *ngFor="let option of getOptions(responseForm.questions[0]); trackBy: trackByValue"
-      kendoButton
-      [disabled]="disabled || isSubmitting"
-      (click)="onSimpleChoiceClick(option.value)"
-      class="choice-button"
-    >
-      <i *ngIf="hasIcon(option)" class="fa {{ option.icon }}" aria-hidden="true"></i>
-      {{ option.label }}
-    </button>
-  </div>
-
-  <!-- Full Form Mode (complex forms) -->
-  <form *ngIf="!isSimpleChoice" [formGroup]="formGroup" (ngSubmit)="onSubmit()" class="response-form">
-    <!-- Form Title -->
-    <h3 *ngIf="responseForm.title" class="form-title">{{ responseForm.title }}</h3>
-
-    <!-- Form Description -->
-    <p *ngIf="responseForm.description" class="form-description">{{ responseForm.description }}</p>
-
-    <!-- Questions (excludes footer choice question) -->
-    <div class="form-questions" *ngIf="mainQuestions.length > 0">
-      <mj-form-question
-        *ngFor="let question of mainQuestions; trackBy: trackByQuestionId"
-        [question]="question"
-        [control]="getControl(question.id)"
-        [formControlName]="question.id"
-      ></mj-form-question>
-    </div>
-
-    <!-- Footer Actions -->
-    <div class="form-actions">
-      <!-- Footer Choice Buttons (replaces Submit when present) -->
-      <ng-container *ngIf="footerChoiceQuestion">
-        <button
-          *ngFor="let option of getOptions(footerChoiceQuestion); trackBy: trackByValue"
-          kendoButton
-          type="button"
-          [themeColor]="'primary'"
-          [disabled]="disabled || isSubmitting"
-          (click)="onFooterChoiceClick(option.value)"
-          class="footer-choice-button"
-        >
-          <span *ngIf="!isSubmitting">
-            <i *ngIf="hasIcon(option)" class="fa {{ option.icon }}" aria-hidden="true"></i>
+@if (isVisible) {
+  <div class="agent-response-form">
+    <!-- Simple Choice Mode (single question, no title, buttongroup/radio) -->
+    @if (isSimpleChoice) {
+      <div class="simple-choice-buttons">
+        @for (option of getOptions(responseForm.questions[0]); track trackByValue($index, option)) {
+          <button
+            kendoButton
+            [disabled]="disabled || isSubmitting"
+            (click)="onSimpleChoiceClick(option.value)"
+            class="choice-button"
+            >
+            @if (hasIcon(option)) {
+              <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+            }
             {{ option.label }}
-          </span>
-          <span *ngIf="isSubmitting">
-            <span class="k-icon k-i-loading"></span>
-          </span>
-        </button>
-      </ng-container>
-
-      <!-- Standard Submit Button (when no footer choice) -->
-      <button
-        *ngIf="showSubmitButton"
-        kendoButton
-        type="submit"
-        [themeColor]="'primary'"
-        [disabled]="disabled || isSubmitting || formGroup.invalid"
-        class="submit-button"
-      >
-        <span *ngIf="!isSubmitting">
-          <i class="fa fa-check" aria-hidden="true"></i>
-          {{ submitLabel }}
-        </span>
-        <span *ngIf="isSubmitting">
-          <span class="k-icon k-i-loading"></span>
-          Submitting...
-        </span>
-      </button>
-    </div>
-  </form>
-</div>
+          </button>
+        }
+      </div>
+    }
+    <!-- Full Form Mode (complex forms) -->
+    @if (!isSimpleChoice) {
+      <form [formGroup]="formGroup" (ngSubmit)="onSubmit()" class="response-form">
+        <!-- Form Title -->
+        @if (responseForm.title) {
+          <h3 class="form-title">{{ responseForm.title }}</h3>
+        }
+        <!-- Form Description -->
+        @if (responseForm.description) {
+          <p class="form-description">{{ responseForm.description }}</p>
+        }
+        <!-- Questions (excludes footer choice question) -->
+        @if (mainQuestions.length > 0) {
+          <div class="form-questions">
+            @for (question of mainQuestions; track trackByQuestionId($index, question)) {
+              <mj-form-question
+                [question]="question"
+                [control]="getControl(question.id)"
+                [formControlName]="question.id"
+              ></mj-form-question>
+            }
+          </div>
+        }
+        <!-- Footer Actions -->
+        <div class="form-actions">
+          <!-- Footer Choice Buttons (replaces Submit when present) -->
+          @if (footerChoiceQuestion) {
+            @for (option of getOptions(footerChoiceQuestion); track trackByValue($index, option)) {
+              <button
+                kendoButton
+                type="button"
+                [themeColor]="'primary'"
+                [disabled]="disabled || isSubmitting"
+                (click)="onFooterChoiceClick(option.value)"
+                class="footer-choice-button"
+                >
+                @if (!isSubmitting) {
+                  <span>
+                    @if (hasIcon(option)) {
+                      <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+                    }
+                    {{ option.label }}
+                  </span>
+                }
+                @if (isSubmitting) {
+                  <span>
+                    <span class="k-icon k-i-loading"></span>
+                  </span>
+                }
+              </button>
+            }
+          }
+          <!-- Standard Submit Button (when no footer choice) -->
+          @if (showSubmitButton) {
+            <button
+              kendoButton
+              type="submit"
+              [themeColor]="'primary'"
+              [disabled]="disabled || isSubmitting || formGroup.invalid"
+              class="submit-button"
+              >
+              @if (!isSubmitting) {
+                <span>
+                  <i class="fa fa-check" aria-hidden="true"></i>
+                  {{ submitLabel }}
+                </span>
+              }
+              @if (isSubmitting) {
+                <span>
+                  <span class="k-icon k-i-loading"></span>
+                  Submitting...
+                </span>
+              }
+            </button>
+          }
+        </div>
+      </form>
+    }
+  </div>
+}

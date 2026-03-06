@@ -1,73 +1,76 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating and editing collections
  */
 @Component({
+  standalone: false,
   selector: 'mj-collection-form-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isOpen"
-      [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
-      (close)="onCancel()"
-      [width]="500"
-      [minWidth]="300">
-      <div class="collection-form">
-        <div class="form-group">
-          <label class="form-label">
-            Name <span class="required">*</span>
-          </label>
-          <input
-            type="text"
-            class="k-textbox form-control"
-            [(ngModel)]="formData.name"
-            placeholder="Collection name"
-            #nameInput
-            (keydown.enter)="onSave()">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea
-            class="k-textarea form-control"
-            [(ngModel)]="formData.description"
-            placeholder="Optional description"
-            rows="3">
-          </textarea>
-        </div>
-
-        <div class="form-group" *ngIf="parentCollection">
-          <label class="form-label">Parent Collection</label>
-          <div class="parent-info">
-            <i class="fas fa-folder"></i>
-            <span>{{ parentCollection.Name }}</span>
+    @if (isOpen) {
+      <kendo-dialog
+        [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
+        (close)="onCancel()"
+        [width]="500"
+        [minWidth]="300">
+        <div class="collection-form">
+          <div class="form-group">
+            <label class="form-label">
+              Name <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              class="k-textbox form-control"
+              [(ngModel)]="formData.name"
+              placeholder="Collection name"
+              #nameInput
+              (keydown.enter)="onSave()">
           </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea
+              class="k-textarea form-control"
+              [(ngModel)]="formData.description"
+              placeholder="Optional description"
+              rows="3">
+            </textarea>
+          </div>
+          @if (parentCollection) {
+            <div class="form-group">
+              <label class="form-label">Parent Collection</label>
+              <div class="parent-info">
+                <i class="fas fa-folder"></i>
+                <span>{{ parentCollection.Name }}</span>
+              </div>
+            </div>
+          }
+          @if (errorMessage) {
+            <div class="form-error">
+              <i class="fas fa-exclamation-circle"></i>
+              {{ errorMessage }}
+            </div>
+          }
         </div>
-
-        <div class="form-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-circle"></i>
-          {{ errorMessage }}
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving">
-          Cancel
-        </button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSave()"
-                [disabled]="!canSave || isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        <kendo-dialog-actions>
+          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+            Cancel
+          </button>
+          <button kendoButton
+            [primary]="true"
+            (click)="onSave()"
+            [disabled]="!canSave || isSaving">
+            {{ isSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </kendo-dialog-actions>
+      </kendo-dialog>
+    }
+    `,
   styles: [`
     .collection-form {
       padding: 20px 0;
@@ -126,12 +129,12 @@ import { CollectionPermissionService } from '../../services/collection-permissio
 })
 export class CollectionFormModalComponent implements OnChanges {
   @Input() isOpen: boolean = false;
-  @Input() collection?: CollectionEntity;
-  @Input() parentCollection?: CollectionEntity;
+  @Input() collection?: MJCollectionEntity;
+  @Input() parentCollection?: MJCollectionEntity;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() saved = new EventEmitter<CollectionEntity>();
+  @Output() saved = new EventEmitter<MJCollectionEntity>();
   @Output() cancelled = new EventEmitter<void>();
 
   public formData = {
@@ -172,7 +175,7 @@ export class CollectionFormModalComponent implements OnChanges {
       // Validate permissions before saving
       if (this.collection) {
         // Editing existing collection - need Edit permission
-        if (this.collection.OwnerID && this.collection.OwnerID !== this.currentUser.ID) {
+        if (this.collection.OwnerID && !UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.collection.ID,
             this.currentUser.ID,
@@ -187,7 +190,7 @@ export class CollectionFormModalComponent implements OnChanges {
         }
       } else if (this.parentCollection) {
         // Creating child collection - need Edit permission on parent
-        if (this.parentCollection.OwnerID && this.parentCollection.OwnerID !== this.currentUser.ID) {
+        if (this.parentCollection.OwnerID && !UUIDsEqual(this.parentCollection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.parentCollection.ID,
             this.currentUser.ID,
@@ -204,7 +207,7 @@ export class CollectionFormModalComponent implements OnChanges {
 
       const md = new Metadata();
       const collection = this.collection ||
-        await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.formData.name.trim();
       collection.Description = this.formData.description.trim() || null;

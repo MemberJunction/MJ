@@ -1,14 +1,17 @@
 {
   "name": "@memberjunction/actions-bizapps-lms",
-  "version": "3.3.0",
+  "type": "module",
+  "version": "5.8.0",
   "description": "LMS system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
     "clean": "rimraf dist",
-    "test": "echo \"No tests yet\""
+    "test": "vitest run --exclude src/__tests__/integration.test.ts",
+    "test:watch": "vitest --exclude src/__tests__/integration.test.ts",
+    "test:integration": "vitest run src/__tests__/integration.test.ts"
   },
   "keywords": [
     "memberjunction",
@@ -23,16 +26,17 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "3.3.0",
-    "@memberjunction/global": "3.3.0",
-    "@memberjunction/actions-base": "3.3.0",
-    "@memberjunction/actions": "3.3.0",
-    "@memberjunction/core-entities": "3.3.0"
+    "@memberjunction/core": "5.8.0",
+    "@memberjunction/global": "5.8.0",
+    "@memberjunction/actions-base": "5.8.0",
+    "@memberjunction/actions": "5.8.0",
+    "@memberjunction/core-entities": "5.8.0"
   },
   "devDependencies": {
-    "@types/node": "20.8.7",
-    "rimraf": "^5.0.5",
-    "typescript": "~5.3.3"
+    "@types/node": "24.10.11",
+    "dotenv": "^16.4.7",
+    "rimraf": "^6.1.2",
+    "typescript": "~5.9.3"
   },
   "engines": {
     "node": ">=16"

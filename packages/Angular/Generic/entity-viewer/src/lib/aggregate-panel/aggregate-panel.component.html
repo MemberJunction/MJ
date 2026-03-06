@@ -1,8 +1,8 @@
 <div class="aggregate-panel"
-     [class.position-right]="Position === 'right'"
-     [class.position-bottom]="Position === 'bottom'"
-     [class.collapsed]="IsCollapsed"
-     [ngStyle]="PanelStyle">
+  [class.position-right]="Position === 'right'"
+  [class.position-bottom]="Position === 'bottom'"
+  [class.collapsed]="IsCollapsed"
+  [ngStyle]="PanelStyle">
 
   <!-- Panel Header -->
   <div class="panel-header" (click)="ToggleCollapse()">
@@ -10,53 +10,59 @@
 
     <div class="panel-header-right">
       <!-- Loading indicator -->
-      <span class="loading-indicator" *ngIf="Loading">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-      </span>
+      @if (Loading) {
+        <span class="loading-indicator">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        </span>
+      }
 
       <!-- Collapse toggle -->
-      <button class="collapse-toggle" *ngIf="Collapsible" type="button">
-        <i class="fa-solid" [class.fa-chevron-up]="!IsCollapsed" [class.fa-chevron-down]="IsCollapsed"></i>
-      </button>
+      @if (Collapsible) {
+        <button class="collapse-toggle" type="button">
+          <i class="fa-solid" [class.fa-chevron-up]="!IsCollapsed" [class.fa-chevron-down]="IsCollapsed"></i>
+        </button>
+      }
     </div>
   </div>
 
   <!-- Panel Content -->
-  <div class="panel-content" *ngIf="!IsCollapsed">
-    <!-- Empty state -->
-    <div class="empty-state" *ngIf="CardAggregates.length === 0">
-      <i class="fa-solid fa-chart-simple"></i>
-      <p>No summaries configured</p>
-    </div>
-
-    <!-- Cards Container -->
-    <div class="cards-container"
-         [class.layout-horizontal]="Layout === 'horizontal'"
-         [class.layout-vertical]="Layout === 'vertical'"
-         [class.layout-grid]="Layout === 'grid'"
-         [ngStyle]="Layout === 'grid' ? {'grid-template-columns': GridTemplateColumns} : {}">
-
-      <!-- Individual Aggregate Cards -->
-      <div class="aggregate-card"
-           *ngFor="let agg of CardAggregates"
-           [class]="GetStyleClass(agg)"
-           (click)="OnAggregateClick(agg)"
-           [title]="agg.description || agg.label">
-
-        <!-- Icon -->
-        <div class="card-icon" *ngIf="agg.icon">
-          <i [class]="agg.icon"></i>
+  @if (!IsCollapsed) {
+    <div class="panel-content">
+      <!-- Empty state -->
+      @if (CardAggregates.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-chart-simple"></i>
+          <p>No summaries configured</p>
         </div>
-
-        <!-- Content -->
-        <div class="card-content">
-          <div class="card-value" [class.loading]="Loading">
-            {{ Loading ? '...' : FormatValue(agg) }}
+      }
+      <!-- Cards Container -->
+      <div class="cards-container"
+        [class.layout-horizontal]="Layout === 'horizontal'"
+        [class.layout-vertical]="Layout === 'vertical'"
+        [class.layout-grid]="Layout === 'grid'"
+        [ngStyle]="Layout === 'grid' ? {'grid-template-columns': GridTemplateColumns} : {}">
+        <!-- Individual Aggregate Cards -->
+        @for (agg of CardAggregates; track agg) {
+          <div class="aggregate-card"
+            [class]="GetStyleClass(agg)"
+            (click)="OnAggregateClick(agg)"
+            [title]="agg.description || agg.label">
+            <!-- Icon -->
+            @if (agg.icon) {
+              <div class="card-icon">
+                <i [class]="agg.icon"></i>
+              </div>
+            }
+            <!-- Content -->
+            <div class="card-content">
+              <div class="card-value" [class.loading]="Loading">
+                {{ Loading ? '...' : FormatValue(agg) }}
+              </div>
+              <div class="card-label">{{ agg.label }}</div>
+            </div>
           </div>
-          <div class="card-label">{{ agg.label }}</div>
-        </div>
+        }
       </div>
-
     </div>
-  </div>
+  }
 </div>

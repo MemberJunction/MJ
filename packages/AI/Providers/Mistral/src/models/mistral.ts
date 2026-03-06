@@ -453,7 +453,3 @@ export class MistralLLM extends BaseLLM {
         return returnMessages;
     }
 }
-
-export function LoadMistralLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

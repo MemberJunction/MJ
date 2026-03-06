@@ -228,7 +228,7 @@
                               <div class="stat-item">
                                 <span class="stat-label">Template</span>
                                 <span class="stat-value">
-                                  @if (prompt.TemplateEntity) {
+                                  @if (prompt.MJTemplateEntity) {
                                     <i class="fa-solid fa-check" style="color: #28a745;"></i> Yes
                                   } @else {
                                     <i class="fa-solid fa-times" style="color: #dc3545;"></i> No
@@ -335,7 +335,7 @@
                             </span>
                           </td>
                           <td>
-                            @if (prompt.TemplateEntity) {
+                            @if (prompt.MJTemplateEntity) {
                               <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
                             } @else {
                               <i class="fa-solid fa-times-circle" style="color: #6c757d;"></i>
@@ -409,7 +409,7 @@
               <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
               {{ selectedPrompt.Status || 'Unknown' }}
             </span>
-            @if (selectedPrompt.TemplateEntity) {
+            @if (selectedPrompt.MJTemplateEntity) {
               <span class="feature-badge">
                 <i class="fa-solid fa-file-code"></i>
                 Has Template

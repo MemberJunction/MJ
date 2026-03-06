@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
-import { UserViewEntityExtended } from "../custom/UserViewEntity";
+import { UUIDsEqual } from "@memberjunction/global";
+import { MJUserViewEntityExtended } from "../custom/MJUserViewEntityExtended";
 
 /**
  * UserViewEngine is a singleton engine that provides centralized access to User Views.
@@ -32,7 +33,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
     }
 
     // Private storage for view data
-    private _views: UserViewEntityExtended[] = [];
+    private _views: MJUserViewEntityExtended[] = [];
 
     // Track the user ID for filtering purposes
     private _contextUserId: string | null = null;
@@ -55,7 +56,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
-                EntityName: 'User Views',
+                EntityName: 'MJ: User Views',
                 PropertyName: '_views',
                 CacheLocal: true
             }
@@ -71,7 +72,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
     /**
      * Get all views in the cache (unfiltered)
      */
-    public get AllViews(): UserViewEntityExtended[] {
+    public get AllViews(): MJUserViewEntityExtended[] {
         return this._views || [];
     }
 
@@ -80,8 +81,8 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param viewId - The view ID to find
      * @returns The view entity or undefined if not found
      */
-    public GetViewById(viewId: string): UserViewEntityExtended | undefined {
-        return this.AllViews.find(v => v.ID === viewId);
+    public GetViewById(viewId: string): MJUserViewEntityExtended | undefined {
+        return this.AllViews.find(v => UUIDsEqual(v.ID, viewId));
     }
 
     /**
@@ -89,7 +90,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param viewName - The view name to find
      * @returns The view entity or undefined if not found
      */
-    public GetViewByName(viewName: string): UserViewEntityExtended | undefined {
+    public GetViewByName(viewName: string): MJUserViewEntityExtended | undefined {
         return this.AllViews.find(v => v.Name.toLowerCase() === viewName.toLowerCase());
     }
 
@@ -102,9 +103,9 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityId - The entity ID to filter by
      * @returns Array of views for the entity
      */
-    public GetViewsForEntity(entityId: string): UserViewEntityExtended[] {
+    public GetViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.EntityID === entityId)
+            .filter(v => UUIDsEqual(v.EntityID, entityId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -113,7 +114,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityName - The entity name to filter by
      * @returns Array of views for the entity
      */
-    public GetViewsForEntityByName(entityName: string): UserViewEntityExtended[] {
+    public GetViewsForEntityByName(entityName: string): MJUserViewEntityExtended[] {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
         if (!entity) return [];
@@ -128,7 +129,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * Get all views owned by the current user (based on context user)
      * @returns Array of views owned by the current user
      */
-    public GetViewsForCurrentUser(): UserViewEntityExtended[] {
+    public GetViewsForCurrentUser(): MJUserViewEntityExtended[] {
         if (!this._contextUserId) return [];
         return this.GetViewsForUser(this._contextUserId);
     }
@@ -138,9 +139,9 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param userId - The user ID to filter by
      * @returns Array of views owned by the user
      */
-    public GetViewsForUser(userId: string): UserViewEntityExtended[] {
+    public GetViewsForUser(userId: string): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.UserID === userId)
+            .filter(v => UUIDsEqual(v.UserID, userId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -148,9 +149,9 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * Get all shared views (views marked as shared that the user doesn't own)
      * @returns Array of shared views
      */
-    public GetSharedViews(): UserViewEntityExtended[] {
+    public GetSharedViews(): MJUserViewEntityExtended[] {
         return this.AllViews
-            .filter(v => v.IsShared && v.UserID !== this._contextUserId)
+            .filter(v => v.IsShared && !UUIDsEqual(v.UserID, this._contextUserId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -160,7 +161,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityId - The entity ID to filter by
      * @returns Array of accessible views for the entity
      */
-    public GetAccessibleViewsForEntity(entityId: string): UserViewEntityExtended[] {
+    public GetAccessibleViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         if (!this._contextUserId) {
             // No user context - return all views for entity
             return this.GetViewsForEntity(entityId);
@@ -168,14 +169,14 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
 
         return this.AllViews
             .filter(v =>
-                v.EntityID === entityId &&
-                (v.UserID === this._contextUserId || v.IsShared)
+                UUIDsEqual(v.EntityID, entityId) &&
+                (UUIDsEqual(v.UserID, this._contextUserId) || v.IsShared)
             )
             .filter(v => v.UserCanView) // Respect permission checks
             .sort((a, b) => {
                 // Sort: owned first, then by name
-                const aOwned = a.UserID === this._contextUserId;
-                const bOwned = b.UserID === this._contextUserId;
+                const aOwned = UUIDsEqual(a.UserID, this._contextUserId);
+                const bOwned = UUIDsEqual(b.UserID, this._contextUserId);
                 if (aOwned && !bOwned) return -1;
                 if (!aOwned && bOwned) return 1;
                 return a.Name.localeCompare(b.Name);
@@ -191,10 +192,10 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityId - The entity ID to filter by
      * @returns Array of views for the entity owned by the current user
      */
-    public GetMyViewsForEntity(entityId: string): UserViewEntityExtended[] {
+    public GetMyViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         if (!this._contextUserId) return [];
         return this.AllViews
-            .filter(v => v.EntityID === entityId && v.UserID === this._contextUserId)
+            .filter(v => UUIDsEqual(v.EntityID, entityId) && UUIDsEqual(v.UserID, this._contextUserId))
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -203,12 +204,12 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityId - The entity ID to filter by
      * @returns Array of shared views for the entity
      */
-    public GetSharedViewsForEntity(entityId: string): UserViewEntityExtended[] {
+    public GetSharedViewsForEntity(entityId: string): MJUserViewEntityExtended[] {
         return this.AllViews
             .filter(v =>
-                v.EntityID === entityId &&
+                UUIDsEqual(v.EntityID, entityId) &&
                 v.IsShared &&
-                v.UserID !== this._contextUserId
+                !UUIDsEqual(v.UserID, this._contextUserId)
             )
             .filter(v => v.UserCanView)
             .sort((a, b) => a.Name.localeCompare(b.Name));
@@ -219,7 +220,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param entityId - The entity ID to find default view for
      * @returns The default view or undefined if none exists
      */
-    public GetDefaultViewForEntity(entityId: string): UserViewEntityExtended | undefined {
+    public GetDefaultViewForEntity(entityId: string): MJUserViewEntityExtended | undefined {
         const myViews = this.GetMyViewsForEntity(entityId);
         return myViews.find(v => v.IsDefault);
     }
@@ -245,7 +246,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      */
     public ViewNameExistsForEntity(entityId: string, viewName: string): boolean {
         return this.AllViews.some(v =>
-            v.EntityID === entityId &&
+            UUIDsEqual(v.EntityID, entityId) &&
             v.Name.toLowerCase() === viewName.toLowerCase()
         );
     }

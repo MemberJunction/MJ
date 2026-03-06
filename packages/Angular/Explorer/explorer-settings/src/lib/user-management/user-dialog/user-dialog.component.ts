@@ -1,21 +1,22 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation, ChangeDetectorRef, NgZone } from '@angular/core';
+
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 
 export interface UserDialogData {
-  user?: UserEntity;
+  user?: MJUserEntity;
   mode: 'create' | 'edit';
-  availableRoles: RoleEntity[];
+  availableRoles: MJRoleEntity[];
 }
 
 export interface UserDialogResult {
   action: 'save' | 'cancel';
-  user?: UserEntity;
+  user?: MJUserEntity;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
@@ -27,13 +28,15 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Output() result = new EventEmitter<UserDialogResult>();
 
   private fb = inject(FormBuilder);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public userForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
   public selectedRoleIds = new Set<string>();
-  public existingUserRoles: UserRoleEntity[] = [];
+  public existingUserRoles: MJUserRoleEntity[] = [];
 
   constructor() {
     this.userForm = this.fb.group({
@@ -89,7 +92,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeKey(event: KeyboardEvent): void {
+  onEscapeKey(event: Event): void {
     if (this.visible) {
       this.onCancel();
     }
@@ -124,8 +127,8 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   private async loadExistingUserRoles(userId: string): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<UserRoleEntity>({
-        EntityName: 'User Roles',
+      const result = await rv.RunView<MJUserRoleEntity>({
+        EntityName: 'MJ: User Roles',
         ExtraFilter: `UserID='${userId}'`,
         ResultType: 'entity_object'
       });
@@ -170,14 +173,14 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.error = null;
 
     try {
-      let user: UserEntity;
+      let user: MJUserEntity;
 
       if (this.isEditMode && this.data?.user) {
         // Edit existing user
         user = this.data.user;
       } else {
         // Create new user
-        user = await this.metadata.GetEntityObject<UserEntity>('Users');
+        user = await this.metadata.GetEntityObject<MJUserEntity>('MJ: Users');
         user.NewRecord();
       }
 
@@ -202,11 +205,17 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       this.result.emit({ action: 'save', user });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving user:', error);
-      this.error = error.message || 'An unexpected error occurred';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
@@ -231,7 +240,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       // Add new selected roles
       for (const roleId of rolesToAdd) {
         try {
-          const userRole = await this.metadata.GetEntityObject<UserRoleEntity>('User Roles');
+          const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = roleId;

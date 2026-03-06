@@ -1,5 +1,5 @@
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { AIAgentEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentMatchResult, AgentEmbeddingMetadata } from '../types/AgentMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
 import { LogError } from '@memberjunction/core';
@@ -37,8 +37,8 @@ export class AgentEmbeddingService {
      * @returns Vector entries ready for loading into vector service
      */
     public static async GenerateAgentEmbeddings(
-        agents: AIAgentEntityExtended[],
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>
+        agents: MJAIAgentEntityExtended[],
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>
     ): Promise<VectorEntry<AgentEmbeddingMetadata>[]> {
         const entries: VectorEntry<AgentEmbeddingMetadata>[] = [];
 
@@ -94,7 +94,7 @@ export class AgentEmbeddingService {
     public static async FindSimilarAgents(
         vectorService: SimpleVectorService<AgentEmbeddingMetadata>,
         taskDescription: string,
-        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: AIModelEntityExtended} | null>,
+        embedFunction: (text: string) => Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null>,
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<AgentMatchResult[]> {
@@ -224,7 +224,7 @@ export class AgentEmbeddingService {
      * Combines name and description with proper weighting.
      * @private
      */
-    private static createEmbeddingText(agent: AIAgentEntityExtended): string {
+    private static createEmbeddingText(agent: MJAIAgentEntityExtended): string {
         // Weight the agent name more heavily by repeating it
         // This ensures that name matches have higher similarity
         const parts = [

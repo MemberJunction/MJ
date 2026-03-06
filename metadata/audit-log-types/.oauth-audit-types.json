@@ -1,0 +1,92 @@
+[
+  {
+    "fields": {
+      "Name": "OAuth Authorization Initiated",
+      "Description": "Logs when a user initiates an OAuth 2.1 authorization flow for an MCP server connection, including the requested scopes and authorization server.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "23F70C22-7BE1-4142-BE85-1EDB2301751F"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.799Z",
+      "checksum": "eab3956da49a713a23a149ca34b92d0f30d035299746cf024bd3b23285349cec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Authorization Completed",
+      "Description": "Logs when an OAuth authorization flow completes successfully with tokens received and stored.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "42533E07-2361-4525-AAB3-7020EA893305"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.815Z",
+      "checksum": "50b6f051bfc0c810bf1ae5ac30accf178e26ac5b0ba80611789e21f7ff8e90ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Authorization Failed",
+      "Description": "Logs when an OAuth authorization flow fails due to user denial, timeout, or error from the authorization server.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "A563DD1B-B40C-4BAA-8DA2-01073DF6577F"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.830Z",
+      "checksum": "0327e457571b95c3e0629c48323619e50be7fa083cc4f65d406df270d5007f49"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Token Refreshed",
+      "Description": "Logs when OAuth tokens are successfully refreshed using a refresh token.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "548E002C-17A2-40BD-9999-C59E939E85D1"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.844Z",
+      "checksum": "0406e943fda0eab6a112ae3266f1f578190b20789da3dc31972a459d888ca72b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Token Refresh Failed",
+      "Description": "Logs when an OAuth token refresh fails, which may require user re-authorization.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "AA9BD002-5DD7-41B3-989F-FCF31274BF29"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.858Z",
+      "checksum": "863abc6a8c1e555dad31f43a34697f92f2d11a436ca95e108062bd46137bb1c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OAuth Credentials Revoked",
+      "Description": "Logs when OAuth credentials are revoked by an administrator or the system.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "C5082AA3-9EC7-45C5-A1EE-D1C6DFCF2564"
+    },
+    "sync": {
+      "lastModified": "2026-02-09T20:54:44.872Z",
+      "checksum": "4412c80768a73c703c3d4872fdd713a9e925518474ff6f072ddf04b02f0beda2"
+    }
+  }
+]

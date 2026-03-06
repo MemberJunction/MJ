@@ -1,81 +1,7 @@
 /* ============================================
-   Material Design 3 - User Dialog Component
+   User Dialog Component
+   Uses MJ Design Tokens (--mj-*)
    ============================================ */
-
-/* MD3 Design Tokens */
-:host {
-  /* Primary Colors (MJ Blue) */
-  --md-primary: #0076B6;
-  --md-on-primary: #FFFFFF;
-  --md-primary-container: #C2E7FF;
-  --md-on-primary-container: #001E2F;
-
-  /* Secondary Colors (Orange) */
-  --md-secondary: #F5A623;
-  --md-on-secondary: #FFFFFF;
-  --md-secondary-container: #FFE5B4;
-  --md-on-secondary-container: #7A4D0C;
-
-  /* Tertiary Colors (Green) */
-  --md-tertiary: #4CAF50;
-  --md-on-tertiary: #FFFFFF;
-  --md-tertiary-container: #C8E6C9;
-  --md-on-tertiary-container: #1B5E20;
-
-  /* Error Colors */
-  --md-error: #D32F2F;
-  --md-on-error: #FFFFFF;
-  --md-error-container: #FFEBEE;
-  --md-on-error-container: #5F1313;
-
-  /* Surface Colors */
-  --md-surface: #FAFAFA;
-  --md-on-surface: #1C1B1F;
-  --md-surface-variant: #E7E0EC;
-  --md-on-surface-variant: #49454F;
-  --md-surface-container-lowest: #FFFFFF;
-  --md-surface-container-low: #F5F5F5;
-  --md-surface-container: #EEEEEE;
-  --md-surface-container-high: #E0E0E0;
-
-  /* Outline Colors */
-  --md-outline: #79747E;
-  --md-outline-variant: #CAC4D0;
-
-  /* MD3 Elevation System */
-  --md-elevation-0: none;
-  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.1);
-  --md-elevation-4: 0 6px 12px rgba(0, 0, 0, 0.14), 0 12px 24px rgba(0, 0, 0, 0.12);
-  --md-elevation-5: 0 8px 16px rgba(0, 0, 0, 0.12), 0 16px 32px rgba(0, 0, 0, 0.1);
-
-  /* MD3 Corner Radii */
-  --md-corner-none: 0px;
-  --md-corner-extra-small: 4px;
-  --md-corner-small: 8px;
-  --md-corner-medium: 12px;
-  --md-corner-large: 16px;
-  --md-corner-extra-large: 28px;
-  --md-corner-full: 9999px;
-
-  /* Typography Scale */
-  --md-display-large: 57px;
-  --md-display-medium: 45px;
-  --md-display-small: 36px;
-  --md-headline-large: 32px;
-  --md-headline-medium: 28px;
-  --md-headline-small: 24px;
-  --md-title-large: 22px;
-  --md-title-medium: 16px;
-  --md-title-small: 14px;
-  --md-body-large: 16px;
-  --md-body-medium: 14px;
-  --md-body-small: 12px;
-  --md-label-large: 14px;
-  --md-label-medium: 12px;
-  --md-label-small: 11px;
-}
 
 /* ============================================
    Modal Backdrop & Container
@@ -107,9 +33,9 @@
 }
 
 .modal-dialog {
-  background: var(--md-surface-container-lowest);
-  border-radius: var(--md-corner-extra-large);
-  box-shadow: var(--md-elevation-5);
+  background: var(--mj-bg-page);
+  border-radius: var(--mj-radius-2xl);
+  box-shadow: var(--mj-shadow-2xl);
   width: 100%;
   max-width: 900px;
   max-height: calc(100vh - 2rem);
@@ -135,14 +61,14 @@
    ============================================ */
 
 .modal-header {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
   padding: 24px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-radius: var(--md-corner-extra-large) var(--md-corner-extra-large) 0 0;
+  border-radius: var(--mj-radius-2xl) var(--mj-radius-2xl) 0 0;
   flex-shrink: 0;
 }
 
@@ -153,13 +79,13 @@
 
 .dialog-title {
   margin: 0;
-  font-size: var(--md-headline-small);
+  font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.3;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: var(--md-on-primary);
+  color: var(--mj-brand-on-primary);
 }
 
 .dialog-title i {
@@ -169,7 +95,7 @@
 
 .dialog-subtitle {
   margin: 0.5rem 0 0 0;
-  font-size: var(--md-body-medium);
+  font-size: 0.875rem;
   opacity: 0.9;
   font-weight: 400;
   line-height: 1.4;
@@ -178,13 +104,13 @@
 .modal-close {
   background: transparent;
   border: none;
-  color: var(--md-on-primary);
+  color: var(--mj-brand-on-primary);
   cursor: pointer;
   padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   width: 40px;
   height: 40px;
@@ -213,7 +139,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
-  background: var(--md-surface-container-lowest);
+  background: var(--mj-bg-page);
 }
 
 .modal-body::-webkit-scrollbar {
@@ -221,16 +147,16 @@
 }
 
 .modal-body::-webkit-scrollbar-track {
-  background: var(--md-surface-container-low);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .modal-body::-webkit-scrollbar-thumb {
-  background: var(--md-outline-variant);
-  border-radius: var(--md-corner-full);
+  background: var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
 }
 
 .modal-body::-webkit-scrollbar-thumb:hover {
-  background: var(--md-outline);
+  background: var(--mj-color-neutral-400);
 }
 
 /* ============================================
@@ -239,7 +165,7 @@
 
 .content-section {
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--md-outline-variant);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .content-section:last-child {
@@ -258,9 +184,9 @@
 
 .section-title {
   margin: 0 0 0.5rem 0;
-  font-size: var(--md-title-large);
+  font-size: 1.375rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -268,13 +194,13 @@
 
 .section-title i {
   font-size: 1.25rem;
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .section-description {
   margin: 0;
-  font-size: var(--md-body-medium);
-  color: var(--md-on-surface-variant);
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
   line-height: 1.5;
 }
 
@@ -302,7 +228,7 @@
 }
 
 /* ============================================
-   Form Fields (MD3 Input Pattern)
+   Form Fields
    ============================================ */
 
 .form-field {
@@ -312,9 +238,9 @@
 }
 
 .field-label {
-  font-size: var(--md-label-large);
+  font-size: 0.875rem;
   font-weight: 500;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -322,19 +248,19 @@
 
 .field-label.required::after {
   content: '*';
-  color: var(--md-error);
+  color: var(--mj-status-error);
   margin-left: 0.25rem;
 }
 
 .field-input,
 .field-select {
-  border: 2px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-small);
+  border: 2px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   padding: 0.875rem 1rem;
-  font-size: var(--md-body-large);
+  font-size: 1rem;
   font-family: inherit;
-  color: var(--md-on-surface);
-  background: var(--md-surface-container-lowest);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   box-sizing: border-box;
@@ -342,27 +268,27 @@
 
 .field-input:hover:not(:disabled),
 .field-select:hover:not(:disabled) {
-  border-color: var(--md-outline);
+  border-color: var(--mj-color-neutral-400);
 }
 
 .field-input:focus,
 .field-select:focus {
   outline: none;
-  border-color: var(--md-primary);
+  border-color: var(--mj-brand-primary);
   box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
 }
 
 .field-input:disabled,
 .field-select:disabled {
-  background: var(--md-surface-container);
-  color: var(--md-on-surface-variant);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .field-input.error,
 .field-select.error {
-  border-color: var(--md-error);
+  border-color: var(--mj-status-error);
 }
 
 .field-input.error:focus,
@@ -372,7 +298,7 @@
 
 .field-input::placeholder,
 .field-select::placeholder {
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 /* Select Dropdown Styling */
@@ -387,8 +313,8 @@
 }
 
 .field-error {
-  font-size: var(--md-body-small);
-  color: var(--md-error);
+  font-size: 0.75rem;
+  color: var(--mj-status-error);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -400,7 +326,7 @@
 }
 
 /* ============================================
-   Checkboxes (MD3 Pattern)
+   Checkboxes
    ============================================ */
 
 .checkbox-field {
@@ -422,8 +348,8 @@
   align-items: flex-start;
   gap: 0.75rem;
   cursor: pointer;
-  font-size: var(--md-body-medium);
-  color: var(--md-on-surface);
+  font-size: 0.875rem;
+  color: var(--mj-text-primary);
   line-height: 1.4;
   margin: 0;
   flex: 1;
@@ -432,9 +358,9 @@
 .checkbox-indicator {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--md-outline);
-  border-radius: var(--md-corner-extra-small);
-  background: var(--md-surface-container-lowest);
+  border: 2px solid var(--mj-color-neutral-400);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-page);
   flex-shrink: 0;
   position: relative;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -448,7 +374,7 @@
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid var(--md-on-primary);
+  border: solid var(--mj-brand-on-primary);
   border-width: 0 2px 2px 0;
   opacity: 0;
   transform: rotate(45deg) scale(0.8);
@@ -456,8 +382,8 @@
 }
 
 .checkbox-input:checked + .checkbox-label .checkbox-indicator {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .checkbox-input:checked + .checkbox-label .checkbox-indicator::after {
@@ -476,7 +402,7 @@
 }
 
 /* ============================================
-   Role Cards (MD3 Interactive Card Pattern)
+   Role Cards
    ============================================ */
 
 .roles-grid {
@@ -492,9 +418,9 @@
 }
 
 .role-card {
-  background: var(--md-surface);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
   padding: 1.25rem;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -503,15 +429,15 @@
 }
 
 .role-card:hover {
-  border-color: var(--md-primary);
-  box-shadow: var(--md-elevation-2);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-md);
   transform: translateY(-2px);
 }
 
 .role-card.selected {
-  background: var(--md-primary-container);
-  border-color: var(--md-primary);
-  box-shadow: var(--md-elevation-2);
+  background: var(--mj-brand-accent-subtle);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .role-content {
@@ -526,16 +452,16 @@
 }
 
 .role-name {
-  font-size: var(--md-body-large);
+  font-size: 1rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
 }
 
 .role-description {
-  font-size: var(--md-body-small);
-  color: var(--md-on-surface-variant);
+  font-size: 0.75rem;
+  color: var(--mj-text-secondary);
   line-height: 1.4;
   margin: 0;
   display: -webkit-box;
@@ -545,7 +471,7 @@
 }
 
 /* ============================================
-   Alert Messages (MD3 Containers)
+   Alert Messages
    ============================================ */
 
 .alert {
@@ -553,9 +479,9 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  border-radius: var(--md-corner-small);
+  border-radius: var(--mj-radius-md);
   border: 1px solid;
-  font-size: var(--md-body-medium);
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -572,13 +498,13 @@
 
 /* Error Alert (Red) */
 .alert-error {
-  background: var(--md-error-container);
-  border-color: var(--md-error);
-  color: var(--md-on-error-container);
+  background: var(--mj-color-error-100);
+  border-color: var(--mj-status-error);
+  color: var(--mj-color-error-700);
 }
 
 .alert-error i {
-  color: var(--md-error);
+  color: var(--mj-status-error);
 }
 
 /* ============================================
@@ -591,20 +517,20 @@
   justify-content: flex-end;
   gap: 1rem;
   padding: 1.5rem 2rem;
-  background: var(--md-surface-container-lowest);
-  border-top: 1px solid var(--md-outline-variant);
+  background: var(--mj-bg-surface-sunken);
+  border-top: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
 /* ============================================
-   Buttons (MD3 Patterns)
+   Buttons
    ============================================ */
 
 .btn {
   padding: 0.75rem 1.5rem;
-  font-size: var(--md-label-large);
+  font-size: 0.875rem;
   font-weight: 500;
-  border-radius: var(--md-corner-full);
+  border-radius: var(--mj-radius-full);
   border: none;
   cursor: pointer;
   display: inline-flex;
@@ -619,7 +545,7 @@
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -646,19 +572,19 @@
 
 /* Primary Button (MJ Blue - Dark Button) */
 .btn-primary {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #3395C8; /* Lightens on hover (MD3 rule: dark buttons lighten) */
-  box-shadow: var(--md-elevation-2);
+  background: var(--mj-brand-primary-light);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .btn-primary:disabled {
-  background: var(--md-surface-container);
-  color: var(--md-on-surface-variant);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
   box-shadow: none;
   cursor: not-allowed;
   opacity: 0.5;
@@ -666,23 +592,23 @@
 
 /* Secondary Button (Light Button) */
 .btn-secondary {
-  background: var(--md-surface-container-lowest);
-  color: var(--md-primary);
-  border: 1px solid var(--md-outline);
+  background: var(--mj-bg-page);
+  color: var(--mj-brand-primary);
+  border: 1px solid var(--mj-color-neutral-400);
   box-shadow: none;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--md-primary); /* Fills with primary on hover (MD3 rule: light buttons darken/fill) */
-  color: var(--md-on-primary);
-  border-color: var(--md-primary);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .btn-secondary:disabled {
-  background: var(--md-surface-container);
-  color: var(--md-on-surface-variant);
-  border-color: var(--md-outline-variant);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  border-color: var(--mj-border-default);
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -720,11 +646,11 @@
   }
 
   .dialog-title {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
 
   .dialog-subtitle {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .content-section {
@@ -732,7 +658,7 @@
   }
 
   .section-title {
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 
   .modal-footer {
@@ -756,7 +682,7 @@
   }
 
   .dialog-title {
-    font-size: 18px;
+    font-size: 1.125rem;
     gap: 0.5rem;
   }
 
@@ -765,7 +691,7 @@
   }
 
   .dialog-subtitle {
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-top: 0.25rem;
   }
 
@@ -774,14 +700,14 @@
   }
 
   .section-title {
-    font-size: 16px;
+    font-size: 1rem;
     gap: 0.5rem;
   }
 
   .field-input,
   .field-select {
     padding: 0.75rem;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .modal-footer {
@@ -790,7 +716,7 @@
 
   .btn {
     padding: 0.625rem 1.25rem;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
@@ -800,7 +726,7 @@
 
 /* Focus Visible Styles */
 *:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -818,7 +744,7 @@
 /* High Contrast Mode Support */
 @media (prefers-contrast: high) {
   .modal-dialog {
-    border: 2px solid var(--md-outline);
+    border: 2px solid var(--mj-border-default);
   }
 
   .btn {

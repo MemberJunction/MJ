@@ -1,4 +1,4 @@
-You are a database migration specialist for MemberJunction. Your task is to create a migration file that adds a new AI model to the MJ database.
+You are a metadata specialist for MemberJunction. Your task is to add a new AI model to the MemberJunction metadata system by editing the metadata JSON files.
 
 ## Process
 
@@ -43,35 +43,24 @@ You are a database migration specialist for MemberJunction. Your task is to crea
      - Variant suffixes with space instead of hyphen (`GPT 5 mini` → `GPT 5-mini`)
    - **SupportsEffortLevel Determination**: See detailed guidance in "SupportsEffortLevel Guidelines" section below
 
-4. **Query Database for Required IDs**
-   - Connect using these credentials:
-     ```
-     Server: sqlserver.local
-     Database: mj_test
-     Username: MJ_CodeGen
-     Password: YourStrong@Passw0rd789
-     ```
-   - Get vendor ID: `SELECT ID, Name FROM __mj.AIVendor WHERE Name LIKE '%VendorName%'`
-   - Get type IDs (standard across all models):
-     - LLM Type: `E8A5CCEC-6A37-EF11-86D4-000D3A4E707E`
-     - Model Developer: `10DB468E-F2CE-475D-9F39-2DF2DE75D257`
-     - Inference Provider: `5B043EC3-1FF2-4730-B5D2-7CFDA50979B3`
-   - Get price type ID (usually "Tokens"): `ECE2BCB7-C854-4BF7-A517-D72793A40652`
-   - Get unit type ID (usually "Per 1M Tokens"): `54208F7D-331C-40AB-84E8-163338EE9EA1`
+4. **Verify Vendor Exists in Metadata**
+   - Check `/metadata/ai-vendors/.ai-vendors.json` for the vendor
+   - Confirm the vendor name matches exactly (e.g., "Anthropic", "OpenAI", "Google")
+   - If vendor doesn't exist, you'll need to add it first (see "Adding New Vendors" section)
 
-5. **Generate UUIDs**
-   - Run `uuidgen` 4 times to generate:
-     - Model ID
-     - Model Developer AIModelVendor ID
-     - Inference Provider AIModelVendor ID
-     - AIModelCost ID
+5. **UUIDs Are Generated Automatically**
+   - **DO NOT generate UUIDs** for new records
+   - **DO NOT include `primaryKey` or `sync` sections** for new records
+   - The `mj-sync push` command will automatically generate UUIDs and sync metadata
+   - Only include `primaryKey` and `sync` when editing existing records
 
 6. **Determine Rankings**
-   - **PowerRank** (1-12): Model capability level
-     - 1-3: Basic models
-     - 4-6: Capable models
-     - 7-9: Advanced models
-     - 10-12: Most advanced models
+   - **PowerRank** (1-21+): Model capability level
+     - 1-5: Basic models
+     - 6-10: Capable models
+     - 11-15: Advanced models
+     - 16-20: Highly advanced models
+     - 21+: State-of-the-art frontier models
    - **SpeedRank** (1-12): Response speed
      - 1-4: Slower models
      - 5-8: Medium speed
@@ -82,115 +71,85 @@ You are a database migration specialist for MemberJunction. Your task is to crea
      - 7-9: Higher pricing
      - 10-12: Premium pricing
 
-7. **Create Migration File**
-   - Filename format: `V{YYYYMMDDHHMM}__v2.{VERSION}.x__Add_{Model_Name}.sql`
-   - Use current timestamp for version number
-   - **Find latest version number**: `ls -1 migrations/v2/V2025*.sql | tail -1 | sed -E 's/.*v2\.([0-9]+)\.x.*/\1/'`
-   - Increment by 1 for new version
-   - Follow the template below
-   - Use proper SQL Server syntax with `[${flyway:defaultSchema}].[TableName]`
+7. **Add Model to Metadata File**
+   - Open `/metadata/ai-models/.ai-models.json`
+   - Add the new model entry at the **end of the array** (before the closing `]`)
+   - Follow the template structure below
+   - Use `@lookup` syntax for foreign key references
+   - Use `@parent:ID` for related entity references to the parent model
+   - **CRITICAL**: Do NOT include `primaryKey` or `sync` sections - mj-sync generates these automatically
 
-8. **Review Previous Migration**
-   - Look at `/migrations/v2/V202510031321__v2.104.x__Add_Claude_4.5_Sonnet.sql` as reference
+8. **Review Existing Models**
+   - Look at other models in `.ai-models.json` as reference
    - Ensure consistency with existing patterns
+   - Verify vendor name matches exactly with `.ai-vendors.json`
 
-## Migration Template
+## Metadata JSON Template
 
-```sql
--- Add {Model Name} model
--- This migration adds:
--- 1. {Model Name} as a new AI Model
--- 2. AIModelVendor associations for {Vendor} as the model developer
--- 3. AIModelVendor associations for {Vendor} as the inference provider
--- 4. Cost tracking record for {Vendor} pricing
+**IMPORTANT**: For new records, DO NOT include `primaryKey` or `sync` sections. These are generated automatically by mj-sync.
 
--- Use existing {Vendor} Vendor ID
-DECLARE @VendorID UNIQUEIDENTIFIER = '{VENDOR_ID}'; -- {Vendor} Vendor ID (existing)
-
--- Model ID for the new model
-DECLARE @ModelID UNIQUEIDENTIFIER = '{GENERATED_UUID_1}';
-
--- Type IDs (standard from MemberJunction)
-DECLARE @LLMTypeID UNIQUEIDENTIFIER = 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
-DECLARE @ModelDeveloperTypeID UNIQUEIDENTIFIER = '10DB468E-F2CE-475D-9F39-2DF2DE75D257';
-DECLARE @InferenceProviderTypeID UNIQUEIDENTIFIER = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3';
-
--- 1. Create {Model Name} model record
-INSERT INTO [${flyway:defaultSchema}].[AIModel]
-    (ID, Name, Description, AIModelTypeID, IsActive, PowerRank, SpeedRank, CostRank)
-VALUES
-    (
-        @ModelID,
-        '{Model Name}',
-        '{Vendor}''s {positioning description}. Features {X}M token input context window and {Y}k output capacity. {Key benchmark results if available}. {Notable capabilities} with knowledge cutoff of {Month Year}.',
-        @LLMTypeID, -- LLM type
-        1, -- IsActive
-        {PowerRank}, -- PowerRank
-        {SpeedRank}, -- SpeedRank
-        {CostRank}  -- CostRank
-    );
-
--- 2. Create AI Model Vendor association for {Vendor} as model developer
-INSERT INTO [${flyway:defaultSchema}].[AIModelVendor]
-    (ID, ModelID, VendorID, TypeID, Priority, Status, SupportedResponseFormats, SupportsEffortLevel, SupportsStreaming)
-VALUES
-    (
-        '{GENERATED_UUID_2}',
-        @ModelID,
-        @VendorID,
-        @ModelDeveloperTypeID,
-        0, -- Priority (lower number = higher priority)
-        'Active',
-        'Any',
-        0, -- SupportsEffortLevel (0 or 1 based on capabilities)
-        0  -- SupportsStreaming (0 for developer role)
-    );
-
--- 3. Create AI Model Vendor association for {Vendor} as inference provider
--- IMPORTANT: Verify SupportsEffortLevel by querying existing models and searching vendor docs
---            See "SupportsEffortLevel Guidelines" section for patterns and determination steps
-INSERT INTO [${flyway:defaultSchema}].[AIModelVendor]
-    (ID, ModelID, VendorID, TypeID, APIName, Priority, Status, SupportedResponseFormats, SupportsEffortLevel, SupportsStreaming, DriverClass, DriverImportPath, MaxInputTokens, MaxOutputTokens)
-VALUES
-    (
-        '{GENERATED_UUID_3}',
-        @ModelID,
-        @VendorID,
-        @InferenceProviderTypeID,
-        '{api-name-from-vendor}', -- API name
-        1, -- Priority
-        'Active',
-        '{Any, JSON or JSON only}',
-        {0 or 1}, -- SupportsEffortLevel: 1 = supports reasoning/extended thinking, 0 = standard model
-        1, -- SupportsStreaming
-        '{VendorDriverClass}', -- Driver class (e.g., AnthropicLLM, OpenAILLM, GeminiLLM)
-        NULL, -- DriverImportPath (usually NULL)
-        {MaxInputTokens}, -- MaxInputTokens
-        {MaxOutputTokens}  -- MaxOutputTokens
-    );
-
--- 4. Add cost tracking record for {Vendor} pricing
--- Note: If model has tiered pricing based on prompt size or other factors,
--- document all tiers in Comments field and use base tier pricing in the record.
--- Additional tiers can be added as separate AIModelCost records if needed.
-INSERT INTO [${flyway:defaultSchema}].[AIModelCost]
-    (ID, ModelID, VendorID, StartedAt, EndedAt, Status, Currency, PriceTypeID, InputPricePerUnit, OutputPricePerUnit, UnitTypeID, ProcessingType, Comments)
-VALUES
-    (
-        '{GENERATED_UUID_4}',
-        @ModelID,
-        @VendorID,
-        '{YYYY-MM-DD}', -- Model release date
-        NULL,
-        'Active',
-        'USD',
-        'ece2bcb7-c854-4bf7-a517-d72793a40652', -- Standard token pricing type
-        {InputPrice}, -- Input price per M tokens
-        {OutputPrice}, -- Output price per M tokens
-        '54208f7d-331c-40ab-84e8-163338ee9ea1', -- Per 1M tokens unit type
-        'Realtime',
-        '{Model Name} pricing on {Vendor} as of {Month Year}. {Tiered pricing details if applicable - e.g., "Base tier pricing shown ($X/$Y per 1M tokens for prompts <= Zk). Higher tier available for prompts > Zk ($A/$B per 1M tokens)."} Released {exact date} {notable deployment info}. API name is {api-name} {note about preview/GA transitions if applicable}. Features {input count} token input context window, {output count} output capacity, and knowledge cutoff of {Month Year}. {Include benchmark scores if available: "Achieves state-of-the-art performance across X of Y major AI benchmarks including top scores in reasoning (A%), coding (B%), and multimodal understanding (C%)."}'
-    );
+```json
+{
+  "fields": {
+    "Name": "{Model Name}",
+    "PowerRank": {PowerRank},
+    "Description": "{Vendor}'s {positioning description}. Features {context window} token context window and {output capacity} output capacity. {Notable capabilities} with knowledge cutoff of {Month Year}.",
+    "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+    "IsActive": true,
+    "SpeedRank": {SpeedRank},
+    "CostRank": {CostRank},
+    "InheritTypeModalities": true
+  },
+  "relatedEntities": {
+    "MJ: AI Model Vendors": [
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name={Vendor}",
+          "Priority": 0,
+          "Status": "Active",
+          "SupportedResponseFormats": "Any",
+          "SupportsEffortLevel": {false or true},
+          "SupportsStreaming": false,
+          "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+        }
+      },
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name={Vendor}",
+          "Priority": 0,
+          "Status": "Active",
+          "DriverClass": "{VendorDriverClass}",
+          "APIName": "{api-name-from-vendor}",
+          "MaxInputTokens": {MaxInputTokens},
+          "MaxOutputTokens": {MaxOutputTokens},
+          "SupportedResponseFormats": "{Any, JSON or Any}",
+          "SupportsEffortLevel": {false or true},
+          "SupportsStreaming": true,
+          "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+        }
+      }
+    ],
+    "MJ: AI Model Costs": [
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name={Vendor}",
+          "StartedAt": "{YYYY-MM-DDTHH:MM:SS.sssZ}",
+          "Status": "Active",
+          "Currency": "USD",
+          "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+          "InputPricePerUnit": {InputPrice},
+          "OutputPricePerUnit": {OutputPrice},
+          "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+          "ProcessingType": "Realtime",
+          "Comments": "{Model Name} pricing on {Vendor} as of {Month Year}. {Additional pricing notes if applicable}"
+        }
+      }
+    ]
+  }
+}
 ```
 
 ## Naming Conventions
@@ -236,7 +195,7 @@ VALUES
 
 ### Validation Checklist
 
-Before creating the migration, verify:
+Before adding to metadata, verify:
 1. Does the name match existing models in the same family?
 2. Are spaces and hyphens used correctly per conventions above?
 3. Is the version format consistent (e.g., `5.2` not `5-2`)?
@@ -250,13 +209,13 @@ Before creating the migration, verify:
 
 ### What is SupportsEffortLevel?
 
-- **Value = 1**: Model supports extended reasoning/thinking time before responding
+- **Value = true (or 1)**: Model supports extended reasoning/thinking time before responding
   - User can request deeper analysis with longer processing time
   - Model "thinks through" complex problems step-by-step
   - Often associated with higher quality reasoning on difficult tasks
   - Examples: OpenAI's "o1" reasoning, Anthropic's Extended Thinking, Google's thinking mode
 
-- **Value = 0**: Standard model without extended reasoning capabilities
+- **Value = false (or 0)**: Standard model without extended reasoning capabilities
   - Responds with normal latency
   - No adjustable thinking/reasoning time
   - Standard generation behavior
@@ -264,22 +223,22 @@ Before creating the migration, verify:
 ### Current Patterns by Vendor (as of database state)
 
 **OpenAI:**
-- ✅ SupportsEffortLevel = 1: `GPT 5`, `GPT 5-mini`, `GPT 5-nano`, `GPT 5.2`
-- ❌ SupportsEffortLevel = 0: `GPT 3.5`, `GPT 4`, `GPT 4.1`, `GPT 4o`, `GPT 4o-mini`
+- ✅ SupportsEffortLevel = true: `GPT 5`, `GPT 5-mini`, `GPT 5-nano`, `GPT 5.2`
+- ❌ SupportsEffortLevel = false: `GPT 3.5`, `GPT 4`, `GPT 4.1`, `GPT 4o`, `GPT 4o-mini`
 - **Pattern**: GPT 5.x series introduced reasoning capabilities
 
 **Anthropic:**
-- ✅ SupportsEffortLevel = 1: `Claude 4 Opus`, `Claude 4 Sonnet`, `Claude 4.5 Opus`, `Claude 4.5 Sonnet`, `Claude Haiku 4.5`
-- ❌ SupportsEffortLevel = 0: `Claude 3 - Haiku`, `Claude 3 - Opus`, `Claude 3 - Sonnet`, `Claude 3.5 Sonnet`, `Claude 3.7 Sonnet`
+- ✅ SupportsEffortLevel = true: `Claude 4 Opus`, `Claude 4 Sonnet`, `Claude 4.5 Opus`, `Claude 4.5 Sonnet`, `Claude Haiku 4.5`
+- ❌ SupportsEffortLevel = false: `Claude 3 - Haiku`, `Claude 3 - Opus`, `Claude 3 - Sonnet`, `Claude 3.5 Sonnet`, `Claude 3.7 Sonnet`
 - **Pattern**: Claude 4.x and later support Extended Thinking
 
 **Google:**
-- ✅ SupportsEffortLevel = 1: `Gemini 3 Pro`
-- ❌ SupportsEffortLevel = 0: All Gemini 1.x and 2.x models (Flash, Pro, Ultra)
+- ✅ SupportsEffortLevel = true: `Gemini 3 Pro`
+- ❌ SupportsEffortLevel = false: All Gemini 1.x and 2.x models (Flash, Pro, Ultra)
 - **Pattern**: Gemini 3.x series introduced thinking mode capabilities
 
 **Other Vendors:**
-- Groq/Cerebras: Set to 1 for OSS models (may support reasoning depending on model architecture)
+- Groq/Cerebras: Set to true for OSS models (may support reasoning depending on model architecture)
 - LM Studio/Azure/Bedrock: Follow the underlying model's capabilities
 
 ### How to Determine SupportsEffortLevel
@@ -305,7 +264,7 @@ Search for terms like:
 **Step 3: Version-Based Rules**
 - **If adding a variant** (mini, nano) of an existing model:
   - Use same SupportsEffortLevel as base model
-  - Example: `GPT 5-mini` follows `GPT 5` → both are 1
+  - Example: `GPT 5-mini` follows `GPT 5` → both are true
 
 - **If adding a new version series**:
   - Check if vendor announced reasoning/thinking support
@@ -313,9 +272,9 @@ Search for terms like:
   - When in doubt, search for "{Model Name} reasoning" or "{Model Name} thinking"
 
 **Step 4: Conservative Default**
-- If documentation is unclear, default to 0
-- Better to under-promise and verify than incorrectly set to 1
-- Can be updated in a future migration if reasoning support is confirmed
+- If documentation is unclear, default to false
+- Better to under-promise and verify than incorrectly set to true
+- Can be updated in a future sync if reasoning support is confirmed
 
 ### Search Examples
 
@@ -327,29 +286,28 @@ Good search queries:
 
 ### Validation Checklist
 
-Before setting SupportsEffortLevel in migration:
+Before setting SupportsEffortLevel in metadata:
 - [ ] Queried database for existing models in same family
 - [ ] Searched vendor docs for reasoning/thinking capabilities
-- [ ] Verified version series patterns (e.g., all GPT 5.x = 1)
-- [ ] If uncertain, defaulted to 0 and documented reason
+- [ ] Verified version series patterns (e.g., all GPT 5.x = true)
+- [ ] If uncertain, defaulted to false and documented reason
 
 ## Key Rules
 
-1. **ALWAYS use `uuidgen`** to generate UUIDs - never make them up
-2. **Use square brackets** around schema and table names: `[${flyway:defaultSchema}].[TableName]`
-3. **Never use NEWID()** - use hardcoded UUIDs
-4. **Never insert __mj timestamp columns** - they're auto-generated
-5. **Escape single quotes** in descriptions with double quotes: `'Vendor''s model'`
-6. **Query database** to get correct vendor IDs - don't guess
-7. **Validate naming convention** before creating migration (see Naming Conventions section)
-8. **Query existing models** in the same family to confirm naming pattern
-9. **Determine SupportsEffortLevel correctly** by querying database and searching for reasoning/thinking capabilities (see SupportsEffortLevel Guidelines)
-10. **Use WebFetch for official docs** when URLs are provided by the user
-11. **Use WebSearch** to get accurate, current model specifications
-12. **Search specifically for output token limits** - they're often documented separately from pricing
-13. **Verify dates match current year** - check environment context, don't assume
-14. **Include benchmark data** when available to justify PowerRank/SpeedRank assignments
-15. **Review reference migration** for consistency
+1. **DO NOT include `primaryKey` or `sync` sections** for new records - mj-sync generates these automatically
+2. **DO NOT generate UUIDs** for new records - mj-sync handles this
+3. **Use @lookup syntax** for foreign key references: `@lookup:EntityName.FieldName=Value`
+4. **Use @parent:ID** for referencing the parent model's ID in related entities
+5. **Validate naming convention** before adding to metadata (see Naming Conventions section)
+6. **Query existing models** in the same family to confirm naming pattern
+7. **Determine SupportsEffortLevel correctly** by querying database and searching for reasoning/thinking capabilities (see SupportsEffortLevel Guidelines)
+8. **Use WebFetch for official docs** when URLs are provided by the user
+9. **Use WebSearch** to get accurate, current model specifications
+10. **Search specifically for output token limits** - they're often documented separately from pricing
+11. **Verify dates match current year** - check environment context, don't assume
+12. **Include benchmark data** when available to justify PowerRank/SpeedRank assignments
+13. **Add new entries at the end** of the .ai-models.json array
+14. **Use ISO 8601 format** for timestamps in date fields: `YYYY-MM-DDTHH:MM:SS.sssZ`
 
 ## Driver Class Names by Vendor
 
@@ -359,9 +317,102 @@ Before setting SupportsEffortLevel in migration:
 - **Mistral**: `MistralLLM`
 - **Groq**: `GroqLLM`
 - **Cerebras**: `CerebrasLLM`
+- **x.ai**: `xAILLM`
+- **Alibaba Cloud**: `QwenLLM`
+- **Moonshot AI**: `KimiLLM`
+
+## Adding New Vendors
+
+If the vendor doesn't exist in `/metadata/ai-vendors/.ai-vendors.json`, add it following this template:
+
+**IMPORTANT**: For new vendor records, DO NOT include `primaryKey` or `sync` sections. These are generated automatically by mj-sync.
+
+```json
+{
+  "fields": {
+    "Name": "{Vendor Name}",
+    "Description": "{Brief description of vendor}",
+    "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+  }
+}
+```
+
+Add the new vendor entry at the end of the array in `.ai-vendors.json`.
 
 ## Final Steps
 
-1. Create the migration file in `/migrations/v2/`
-2. Display the file path and key details (model name, pricing, token limits)
-3. Confirm the migration is ready for review
+1. Add the model entry to `/metadata/ai-models/.ai-models.json`
+2. Save the file with proper JSON formatting
+3. Run metadata sync to push changes to database: `npx mj-sync push --dir=./metadata`
+4. Verify the model appears in the database with correct relationships
+5. Confirm the model is available in the application
+
+## Example Entry
+
+Here's an example of a complete model entry for a **new** record (without `primaryKey` and `sync` sections):
+
+```json
+{
+  "fields": {
+    "Name": "Grok 4",
+    "PowerRank": 19,
+    "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains.",
+    "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+    "IsActive": true,
+    "SpeedRank": 6,
+    "CostRank": 8,
+    "InheritTypeModalities": true
+  },
+  "relatedEntities": {
+    "MJ: AI Model Vendors": [
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+          "Priority": 0,
+          "Status": "Active",
+          "SupportedResponseFormats": "Any",
+          "SupportsEffortLevel": false,
+          "SupportsStreaming": false,
+          "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+        }
+      },
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+          "Priority": 0,
+          "Status": "Active",
+          "DriverClass": "xAILLM",
+          "APIName": "grok-4-0709",
+          "MaxInputTokens": 256000,
+          "MaxOutputTokens": 8192,
+          "SupportedResponseFormats": "Any, JSON",
+          "SupportsEffortLevel": false,
+          "SupportsStreaming": true,
+          "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+        }
+      }
+    ],
+    "MJ: AI Model Costs": [
+      {
+        "fields": {
+          "ModelID": "@parent:ID",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+          "StartedAt": "2026-01-08T14:56:43.153Z",
+          "Status": "Active",
+          "Currency": "USD",
+          "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+          "InputPricePerUnit": 3,
+          "OutputPricePerUnit": 15,
+          "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+          "ProcessingType": "Realtime",
+          "Comments": "Grok 4 pricing on x.ai as of January 2025"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Note**: When you run `npx mj-sync push`, the tool will automatically add `primaryKey` (with generated UUIDs) and `sync` sections to this record.

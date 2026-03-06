@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView, CompositeKey, EntityInfo } from "@memberjunction/core";
-import { ListEntity, ListDetailEntity } from "@memberjunction/core-entities";
+import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
  * Action to retrieve records from a list with optional filtering and pagination.
@@ -53,8 +53,8 @@ export class GetListRecordsAction extends BaseAction {
       const rv = new RunView();
 
       // Verify list exists and get entity info
-      const listResult = await rv.RunView<ListEntity>({
-        EntityName: 'Lists',
+      const listResult = await rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
         ExtraFilter: `ID = '${listId}'`,
         ResultType: 'entity_object'
       }, params.ContextUser);
@@ -76,8 +76,8 @@ export class GetListRecordsAction extends BaseAction {
       }
 
       // Get list details
-      const detailsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const detailsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: filter,
         OrderBy: orderBy,
         MaxRows: maxRecords,
@@ -228,7 +228,7 @@ export class GetListRecordsAction extends BaseAction {
    * For single PK entities, uses a simple IN clause with the raw RecordID values.
    * For composite PK entities, uses an OR clause with concatenated key matching.
    */
-  private buildRecordFilter(entityInfo: EntityInfo, details: ListDetailEntity[]): string {
+  private buildRecordFilter(entityInfo: EntityInfo, details: MJListDetailEntity[]): string {
     const primaryKeys = entityInfo.PrimaryKeys;
     const recordIds = details.map(d => d.RecordID);
 
@@ -263,8 +263,4 @@ export class GetListRecordsAction extends BaseAction {
       return `(${compositeKeyExpr}) IN (${escapedRecordIds})`;
     }
   }
-}
-
-export function LoadGetListRecordsAction(): void {
-  // Prevents tree-shaking
 }

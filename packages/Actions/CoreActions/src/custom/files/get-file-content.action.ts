@@ -2,9 +2,9 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
-import * as ExcelJS from 'exceljs';
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+import ExcelJS from 'exceljs';
 
 /**
  * Smart file content retrieval action that automatically handles content extraction
@@ -125,7 +125,7 @@ export class GetFileContentAction extends BaseFileStorageAction {
             } else if (this.isExcel(contentType)) {
                 // Excel: Parse to structured text
                 const workbook = new ExcelJS.Workbook();
-                await workbook.xlsx.load(buffer);
+                await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
 
                 const sheets: Record<string, unknown[]> = {};
                 workbook.eachSheet((worksheet, sheetId) => {
@@ -230,8 +230,4 @@ export class GetFileContentAction extends BaseFileStorageAction {
         return contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || // docx
                contentType === 'application/msword'; // doc
     }
-}
-
-export function LoadGetFileContentAction() {
-    // Stub function to prevent tree shaking
 }

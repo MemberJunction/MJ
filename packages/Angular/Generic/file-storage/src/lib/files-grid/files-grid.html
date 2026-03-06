@@ -10,7 +10,7 @@
         <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="downloadFile(dataItem)"
-        >
+          >
           <span class="fa-solid fa-download"></span>
         </button>
         <button kendoButton [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
@@ -19,7 +19,7 @@
         <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="editFile = dataItem"
-        >
+          >
           <span class="fa-solid fa-pen-to-square"></span>
         </button>
       </ng-template>
@@ -33,27 +33,29 @@
     (fileUpload)="handleFileUpload($event)"
   ></mj-files-file-upload>
 
-  <kendo-dialog title="Edit file" *ngIf="editFile" (close)="resetEditFile()" [minWidth]="250" [width]="450">
-    <div class="container">
-      <form #templateForm="ngForm">
-        <kendo-label class="k-form" text="Name">
-          <kendo-textbox
-            name="name"
-            [(ngModel)]="editFile.Name"
-            [showSuccessIcon]="editFile.Name.length > 0"
-            showErrorIcon="initial"
-            required
-            [disabled]="isLoading"
-          ></kendo-textbox>
-        </kendo-label>
-        <kendo-label class="k-form" text="Description">
-          <kendo-textbox name="description" [(ngModel)]="editFile.Description" [disabled]="isLoading"></kendo-textbox>
-        </kendo-label>
-      </form>
-    </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
-      <button kendoButton (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty" themeColor="primary">Save</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+  @if (editFile) {
+    <kendo-dialog title="Edit file" (close)="resetEditFile()" [minWidth]="250" [width]="450">
+      <div class="container">
+        <form #templateForm="ngForm">
+          <kendo-label class="k-form" text="Name">
+            <kendo-textbox
+              name="name"
+              [(ngModel)]="editFile.Name"
+              [showSuccessIcon]="editFile.Name.length > 0"
+              showErrorIcon="initial"
+              required
+              [disabled]="isLoading"
+            ></kendo-textbox>
+          </kendo-label>
+          <kendo-label class="k-form" text="Description">
+            <kendo-textbox name="description" [(ngModel)]="editFile.Description" [disabled]="isLoading"></kendo-textbox>
+          </kendo-label>
+        </form>
+      </div>
+      <kendo-dialog-actions>
+        <button kendoButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
+        <button kendoButton (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty" themeColor="primary">Save</button>
+      </kendo-dialog-actions>
+    </kendo-dialog>
+  }
 </div>

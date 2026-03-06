@@ -282,10 +282,3 @@ export class ColorConverterAction extends BaseAction {
         return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     }
 }
-
-/**
- * Loader function to ensure the ColorConverterAction class is included in the bundle.
- */
-export function LoadColorConverterAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

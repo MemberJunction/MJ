@@ -324,6 +324,75 @@
   flex: 1;
 }
 
+/* ============================================
+   NAV PANEL APPLICATION GROUPS
+   ============================================ */
+
+.nav-app-group {
+  margin-bottom: 2px;
+}
+
+.nav-app-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s;
+  user-select: none;
+}
+
+.nav-app-group-header:hover {
+  background: #f5f5f5;
+}
+
+.nav-app-group-icon {
+  font-size: 12px;
+  color: #6b7280;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.nav-app-group-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-app-group-count {
+  font-size: 10px;
+  color: #9ca3af;
+  background: #f5f7fa;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.nav-app-group-chevron {
+  font-size: 9px;
+  color: #9ca3af;
+  transition: transform 0.15s;
+}
+
+.nav-app-group-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.nav-app-group-entities {
+  padding-left: 8px;
+}
+
+.nav-app-group-entities .nav-item {
+  padding: 8px 10px 8px 16px;
+}
+
 .collapsed-icons {
   display: flex;
   flex-direction: column;

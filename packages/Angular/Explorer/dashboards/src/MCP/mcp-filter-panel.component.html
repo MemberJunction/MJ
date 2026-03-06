@@ -1,0 +1,91 @@
+<div class="filter-panel">
+  <div class="filter-panel-header">
+    <h3>MCP Filters</h3>
+    <div class="filter-summary-inline">
+      <span class="summary-value">{{ filteredCount }}</span>
+      <span class="summary-label">of {{ totalCount }}</span>
+    </div>
+    <button class="close-btn" (click)="toggleFilterPanel()">
+      <span class="fa-solid fa-times"></span>
+    </button>
+  </div>
+
+  <div class="filter-content">
+    <!-- Search Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-search"></span>
+        Search
+      </label>
+      <input
+        type="text"
+        class="filter-input"
+        [ngModel]="filters.searchTerm"
+        (ngModelChange)="onSearchChange($event)"
+        placeholder="Search {{ getTabLabel().toLowerCase() }}s...">
+    </div>
+
+    <!-- Status Filter (context-aware based on active tab) -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-toggle-on"></span>
+        {{ getTabLabel() }} Status
+      </label>
+      <select
+        class="filter-select"
+        [ngModel]="currentStatusValue"
+        (ngModelChange)="onCurrentStatusChange($event)">
+        @for (option of currentStatusOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
+    </div>
+
+    <!-- Additional filters visible based on context -->
+    @if (activeTab === 'connections' || activeTab === 'tools' || activeTab === 'logs') {
+      <div class="filter-group">
+        <label class="filter-label">
+          <span class="fa-solid fa-server"></span>
+          Server Status
+        </label>
+        <select
+          class="filter-select"
+          [ngModel]="filters.serverStatus"
+          (ngModelChange)="onServerStatusChange($event)">
+          @for (option of serverStatusOptions; track option.value) {
+            <option [value]="option.value">{{ option.text }}</option>
+          }
+        </select>
+      </div>
+    }
+
+    @if (activeTab === 'logs') {
+      <div class="filter-group">
+        <label class="filter-label">
+          <span class="fa-solid fa-link"></span>
+          Connection Status
+        </label>
+        <select
+          class="filter-select"
+          [ngModel]="filters.connectionStatus"
+          (ngModelChange)="onConnectionStatusChange($event)">
+          @for (option of connectionStatusOptions; track option.value) {
+            <option [value]="option.value">{{ option.text }}</option>
+          }
+        </select>
+      </div>
+    }
+
+    <!-- Reset Button -->
+    <div class="filter-actions">
+      <button
+        class="reset-btn"
+        (click)="resetAllFilters()"
+        title="Reset all filters"
+        [class.has-filters]="hasActiveFilters">
+        <span class="fa-solid fa-undo"></span>
+        Reset Filters
+      </button>
+    </div>
+  </div>
+</div>

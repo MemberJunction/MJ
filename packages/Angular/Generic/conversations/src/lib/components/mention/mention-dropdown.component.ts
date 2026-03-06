@@ -13,6 +13,7 @@ import { MentionSuggestion } from '../../services/mention-autocomplete.service';
  * Dropdown component for @mention autocomplete
  */
 @Component({
+  standalone: false,
   selector: 'mj-mention-dropdown',
   templateUrl: './mention-dropdown.component.html',
   styleUrls: [

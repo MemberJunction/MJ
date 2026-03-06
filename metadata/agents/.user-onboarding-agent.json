@@ -14,7 +14,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=User Onboarding Flow Agent - System Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=User Onboarding Flow Agent - System Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -22,94 +22,94 @@
             "ID": "0C2220BB-8477-4AB5-B72B-EA61D9E9D2CA"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.890Z",
-            "checksum": "7b897609f1bb6842005224e9b52a20fb3fa50d4526f5f574e19a2fa8d6ab739d"
+            "lastModified": "2026-02-13T21:09:25.069Z",
+            "checksum": "8fad8aacb01cf0694fec3f6f25b34cb9fe0985f64529c18320aa63386da60c97"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionID": "@lookup:MJ: Actions.Name=Check User Permission",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C28DF6B0-CACF-4CDD-B9B6-C1377F836375"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.892Z",
-            "checksum": "4782426773448f9a815ccd97c1b08c95e2015afe2ad20eedc09057a3fc937001"
+            "lastModified": "2026-02-13T21:09:25.070Z",
+            "checksum": "8a4c528cc57b7fdc88973ff7dd68bf6dfe11a1c9619439ac600775175b905237"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Validate Email Unique",
+            "ActionID": "@lookup:MJ: Actions.Name=Validate Email Unique",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "B5A7C8E9-4D2F-11EE-9E3B-0242AC120002"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.894Z",
-            "checksum": "0804b56caf242f72cc734020d0dd1d732fe1ce61346289a15a49bf77e49573b9"
+            "lastModified": "2026-02-13T21:09:25.072Z",
+            "checksum": "041985d01db733becfa9ee8856b27cea3f8c151c9e0de8a1060846210dc7b350"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create User",
+            "ActionID": "@lookup:MJ: Actions.Name=Create User",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "D92309DC-A212-4729-A502-4984CF90A8E6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.895Z",
-            "checksum": "55f1ecb3f3bfb2b61e8117f9a6f58eec33895a5dec596f6ec1da364a80bead6c"
+            "lastModified": "2026-02-13T21:09:25.073Z",
+            "checksum": "c470f1c817791f33abc049b28b6e72ad9cad197e896844c2fed05b81fc8ec03f"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create Employee",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Employee",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "A6C93359-1CA8-41EE-9010-56BDA1EFC8B2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.897Z",
-            "checksum": "7b2d4f09351aee46ab11ed91e126eb45a42f87d70259c070e8b9861da06caa6e"
+            "lastModified": "2026-02-13T21:09:25.074Z",
+            "checksum": "835073e0ad3f39f62340a028f1ec4a65d695246aacd59454897948d0281bee33"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Assign User Roles",
+            "ActionID": "@lookup:MJ: Actions.Name=Assign User Roles",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2BF42A0C-DAE4-494E-BE51-0AC9EF094F3E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.898Z",
-            "checksum": "47e1563d439ee9327cad4bce50d988616c94a81fc51176a704373c4afc4d2e50"
+            "lastModified": "2026-02-13T21:09:25.076Z",
+            "checksum": "b37473b4077520b0ffd0cf32f51c9a7b6ed2a67c114a9e4fac75acae6adea994"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Send Single Message",
+            "ActionID": "@lookup:MJ: Actions.Name=Send Single Message",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "0274F2D6-DD12-46BF-969A-982CB585AE62"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.900Z",
-            "checksum": "a55111d2391d2c84e545bd9ca9ebab0fc22f70bf2b16cc97e291e8db9ba12845"
+            "lastModified": "2026-02-13T21:09:25.077Z",
+            "checksum": "db1e8236afc63fbfccce464a0d3dda2dcc3298e076214d8108b49fe922e6d4bb"
           }
         }
       ],
@@ -120,19 +120,21 @@
             "Name": "Check Users Permission",
             "StepType": "Action",
             "StartingStep": true,
-            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionID": "@lookup:MJ: Actions.Name=Check User Permission",
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Users\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.users.canCreate\", \"CanUpdate\": \"permissions.users.canUpdate\"}",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 100
+            "PositionX": 280,
+            "PositionY": -60,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.901Z",
-            "checksum": "9648e6955f5618ed998ec2fb1400a97fc59eaf9620079f857a3a5ddc9237b2b7"
+            "lastModified": "2026-02-13T21:09:25.078Z",
+            "checksum": "f76be52b85a44c470173919db2cb181a77b33fdf8a42a40299fd9b2cd6a3d11a"
           }
         },
         {
@@ -141,19 +143,21 @@
             "Name": "Check User Roles Permission",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionID": "@lookup:MJ: Actions.Name=Check User Permission",
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:User Roles\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.userRoles.canCreate\"}",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 100
+            "PositionX": 170,
+            "PositionY": 220,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.903Z",
-            "checksum": "b9a9348635be10d572933211a73ca814e298b78ec8c14803ac5b2e2d1928a6a5"
+            "lastModified": "2026-02-13T21:09:25.080Z",
+            "checksum": "b5b29ad58c6bfd27a28ae6db295481b8f76988e4e79669b7e6ce380111cfc6b1"
           }
         },
         {
@@ -162,19 +166,21 @@
             "Name": "Check Employees Permission",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionID": "@lookup:MJ: Actions.Name=Check User Permission",
             "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Employees\"}",
             "ActionOutputMapping": "{\"CanCreate\": \"permissions.employees.canCreate\"}",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 100
+            "PositionX": -380,
+            "PositionY": 400,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.905Z",
-            "checksum": "ac0ce48ce6b0ad9bb57a4a5fe47dc5dda9365725a09c68c8bf20c8c478284137"
+            "lastModified": "2026-02-13T21:09:25.081Z",
+            "checksum": "dd2bf63bd87404786524e2a31941e7b8d1a29e6d44a8e0ac7080956faf3366d1"
           }
         },
         {
@@ -183,17 +189,19 @@
             "Name": "Permission Denied - Users",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Users",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Permission Denied - Users",
             "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 250
+            "PositionX": 720,
+            "PositionY": 320,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.063Z",
-            "checksum": "ba6f96b79cb993cb6a984e51c3453f82fc1fb320586001899d2a3002a72d19ac"
+            "lastModified": "2026-02-13T21:09:25.242Z",
+            "checksum": "010348747773fd583f2a8ac83ed8d5919ff3b2fdeee696deb6acdaf1e2a8b5a1"
           }
         },
         {
@@ -202,17 +210,19 @@
             "Name": "Permission Denied - Roles",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - User Roles",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Permission Denied - User Roles",
             "Status": "Active",
-            "PositionX": 200,
-            "PositionY": 250
+            "PositionX": 520,
+            "PositionY": 500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.065Z",
-            "checksum": "e9c844cd00a64309d087667034a4eb03c386ca744f2ad44c4a6c02a5b803f2af"
+            "lastModified": "2026-02-13T21:09:25.244Z",
+            "checksum": "752c00809d22bd8254a128e3db812116b19aca0f06fb766d3955f20fbe77a324"
           }
         },
         {
@@ -221,17 +231,19 @@
             "Name": "Permission Denied - Employees",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Employees",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Permission Denied - Employees",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 250
+            "PositionX": 630,
+            "PositionY": 40,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "CB7B4615-1CCB-403F-B406-25F51130D703"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.066Z",
-            "checksum": "69d878312e11681d9ab3113d5e2820ce64f16333c6e47c5f61490e1362bbe4fb"
+            "lastModified": "2026-02-13T21:09:25.245Z",
+            "checksum": "613d381d8f93dac0776fe84d4286d2baac5071da422923ba8851f3a1cd74f53a"
           }
         },
         {
@@ -240,17 +252,19 @@
             "Name": "Collect User Information",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Collect User Information - Prompt Step",
             "Status": "Active",
-            "PositionX": 400,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 580,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.068Z",
-            "checksum": "982df890f7fe9fc6e17be81062609c3baa8419445a432b6e662467816878db7a"
+            "lastModified": "2026-02-13T21:09:25.247Z",
+            "checksum": "a9caedc5a0371ea7789d22b5ccbadac562011d0e51d13957195a939a5386a896"
           }
         },
         {
@@ -259,19 +273,21 @@
             "Name": "Validate User Data",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Validate Email Unique",
+            "ActionID": "@lookup:MJ: Actions.Name=Validate Email Unique",
             "ActionInputMapping": "{\"Email\": \"payload.userData.email\"}",
             "ActionOutputMapping": "{\"IsUnique\": \"emailIsUnique\", \"ExistingUserID\": \"existingUserID\"}",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 100
+            "PositionX": 40,
+            "PositionY": 760,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.070Z",
-            "checksum": "d876f17da88fd80ca38e2338f7370b9a90f365a9286d2a3b5c553f1a7f505081"
+            "lastModified": "2026-02-13T21:09:25.248Z",
+            "checksum": "6f26d30705ac37a36d62d8e7a9e5b2c0a303d08421ab959db3e6713af3b9f5ff"
           }
         },
         {
@@ -280,19 +296,21 @@
             "Name": "Create Employee Record",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Create Employee",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Employee",
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Phone\": \"payload.userData.employeeData.phone\", \"CompanyID\": \"payload.userData.employeeData.companyID\", \"SupervisorID\": \"payload.userData.employeeData.supervisorID\"}",
             "ActionOutputMapping": "{\"EmployeeID\": \"createdEmployeeID\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 50
+            "PositionX": 500,
+            "PositionY": 960,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.071Z",
-            "checksum": "b5b9439124e17f3df78d0a1736bd965adb0c7e2efd46fc7741577e500504ccc8"
+            "lastModified": "2026-02-13T21:09:25.249Z",
+            "checksum": "bea5f8f919c287d53dae2aa197ba02ef97e9ae4c2d31b7f15f1a7875905ea172"
           }
         },
         {
@@ -301,19 +319,21 @@
             "Name": "Create User Record",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Create User",
+            "ActionID": "@lookup:MJ: Actions.Name=Create User",
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Type\": \"payload.userData.type\", \"IsActive\": \"true\", \"EmployeeID\": \"payload.createdEmployeeID\"}",
             "ActionOutputMapping": "{\"UserID\": \"createdUserID\", \"Name\": \"createdUserName\"}",
             "Status": "Active",
-            "PositionX": 800,
-            "PositionY": 150
+            "PositionX": -20,
+            "PositionY": 1100,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.072Z",
-            "checksum": "cde17a658f86be1810da8c16d5e43d0482d49deaf6e87a86cf28d668d6b2890e"
+            "lastModified": "2026-02-13T21:09:25.250Z",
+            "checksum": "590a0b5fe525fbb315ba76229c233dbde8f4a683f55d8148bad79d683a5d9606"
           }
         },
         {
@@ -322,19 +342,21 @@
             "Name": "Assign User Roles",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Assign User Roles",
+            "ActionID": "@lookup:MJ: Actions.Name=Assign User Roles",
             "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"RoleNames\": \"payload.userData.roles\"}",
             "ActionOutputMapping": "{\"AssignedUserRoleIDs\": \"assignedUserRoleIDs\", \"AssignedCount\": \"assignedRoleCount\"}",
             "Status": "Active",
-            "PositionX": 1000,
-            "PositionY": 100
+            "PositionX": 80,
+            "PositionY": 1300,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "5A977380-2AA5-4119-A329-4450FC603025"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.073Z",
-            "checksum": "d83b3774eb7d74ac10f1590f2883561f50c8c6e46a4db38820225e876aace773"
+            "lastModified": "2026-02-13T21:09:25.252Z",
+            "checksum": "b59dfd51fe748f90c6f794fb16288104f5039b7fc0aa6f5e68ff2f8eef603e0b"
           }
         },
         {
@@ -343,17 +365,19 @@
             "Name": "Prepare Welcome Email",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Prepare Welcome Email - User Onboarding",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Prepare Welcome Email - User Onboarding",
             "Status": "Active",
-            "PositionX": 1200,
-            "PositionY": 100
+            "PositionX": 20,
+            "PositionY": 1500,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.075Z",
-            "checksum": "3bfafea756874b9b58995dc3f70b330272511438e15f907bc82e2c8dd3bf8c89"
+            "lastModified": "2026-02-13T21:09:25.254Z",
+            "checksum": "5987b744c06a8ca13ff594907c1a0b1eb9dc188655568f2925635c5175f0a82e"
           }
         },
         {
@@ -362,19 +386,21 @@
             "Name": "Send Email",
             "StepType": "Action",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Send Single Message",
+            "ActionID": "@lookup:MJ: Actions.Name=Send Single Message",
             "ActionInputMapping": "{\"Subject\": \"payload.emailSubject\", \"Body\": \"payload.emailBody\", \"To\": \"payload.userData.email\", \"From\": \"static:noreply@memberjunction.com\", \"Provider\": \"static:SendGrid\", \"MessageType\": \"static:Email\"}",
             "ActionOutputMapping": "{}",
             "Status": "Active",
-            "PositionX": 1400,
-            "PositionY": 100
+            "PositionX": 240,
+            "PositionY": 1700,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.076Z",
-            "checksum": "bc3749e03d355acdd4c97d7af0b8de495758002221faea3fd3280b2483ca764a"
+            "lastModified": "2026-02-13T21:09:25.256Z",
+            "checksum": "4b834da90dbf5116f7f71e91090ce544dbd20555e34375278aa5987959d11bbf"
           }
         },
         {
@@ -383,17 +409,19 @@
             "Name": "Email Already Exists",
             "StepType": "Prompt",
             "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Generic Error Message",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Generic Error Message",
             "Status": "Active",
-            "PositionX": 600,
-            "PositionY": 250
+            "PositionX": -320,
+            "PositionY": 1000,
+            "Width": 200,
+            "Height": 80
           },
           "primaryKey": {
             "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:36.091Z",
-            "checksum": "bd7022a89409a379774479c5ad433dbadc6243dbc836bfa5c65d2a8c1d0244f9"
+            "lastModified": "2026-02-13T21:09:25.277Z",
+            "checksum": "2947dcfb88b15e155c22b442d2a96b84e9742a77142984925331e75a7204a90a"
           }
         }
       ],

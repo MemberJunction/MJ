@@ -25,6 +25,7 @@ interface SortOption {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-action-toolbar',
   templateUrl: './action-toolbar.component.html',
   styleUrls: ['./action-toolbar.component.css'],

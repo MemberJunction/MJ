@@ -1,11 +1,12 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
@@ -27,59 +28,37 @@ import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
-
-import { LoadAllCoreActions } from '@memberjunction/core-actions';
-LoadAllCoreActions(); // prevent tree shaking for this dynamic module
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
-LoadApolloAccountsEnrichmentAction();
-LoadApolloContactsEnrichmentAction();
-
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
-LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
-
-import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
-LoadAgentManagementActions();
-
-// Load agent manager core classes (registers custom agent classes like AgentBuilderAgent, AgentArchitectAgent)
-import { LoadAgentManagerCore } from '@memberjunction/ai-agent-manager';
-LoadAgentManagerCore();
-
-import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
-LoadSchedulingEngine(); // This also loads drivers
-
-import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
-LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
-
-import { GetTypeformResponsesAction } from '@memberjunction/actions-bizapps-formbuilders';
-const x = GetTypeformResponsesAction; // prevent tree shaking for this dynamic module
+import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
-import { LoadAIEngine } from '@memberjunction/aiengine';
-import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
-// Load AI Engine and all providers to prevent tree shaking
-LoadAIEngine();
-LoadAIProviders();
-
-// Load Communication Providers
-import { LoadMSGraphProvider } from '@memberjunction/communication-ms-graph';
-import { LoadProvider as LoadSendGridProvider } from '@memberjunction/communication-sendgrid';
-LoadMSGraphProvider();
-LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
+
+/**
+ * Returns the configured database platform type based on the DB_TYPE environment variable.
+ * Defaults to 'sqlserver' for backward compatibility.
+ */
+export function getDbType(): DatabasePlatform {
+    const dbType = process.env.DB_TYPE?.toLowerCase();
+    if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
+        return 'postgresql';
+    }
+    return 'sqlserver';
+}
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
-export * from './entitySubclasses/entityPermissions.server.js';
+export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
     TokenExpiredError,
@@ -106,7 +85,6 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
-export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -124,6 +102,19 @@ export * from './resolvers/CreateQueryResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
+export * from './resolvers/ActionResolver.js';
+export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './resolvers/EntityResolver.js';
+export * from './resolvers/ISAEntityResolver.js';
+export * from './resolvers/FileCategoryResolver.js';
+export * from './resolvers/FileResolver.js';
+export * from './resolvers/InfoResolver.js';
+export * from './resolvers/PotentialDuplicateRecordResolver.js';
+export * from './resolvers/RunTestResolver.js';
+export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserResolver.js';
+export * from './resolvers/UserViewResolver.js';
+export * from './resolvers/VersionHistoryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -157,32 +148,145 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
-  const pool = new sql.ConnectionPool(createMSSQLConfig());
   const setupComplete$ = new ReplaySubject(1);
-  await pool.connect();
+  const dbType = getDbType();
+  const dataSources: DataSourceInfo[] = [];
 
-  const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
-  
-  // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
-  let readOnlyPool: sql.ConnectionPool | null = null;
-  if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
-    const readOnlyConfig = {
-      ...createMSSQLConfig(),
-      user: configInfo.dbReadOnlyUsername,
-      password: configInfo.dbReadOnlyPassword,
+  if (dbType === 'postgresql') {
+    // ─── PostgreSQL Path ───────────────────────────────────────────
+    console.log('Database type: PostgreSQL');
+    const pg = await import('pg');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
+    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const pgPool = new pg.default.Pool({
+      host: pgHost,
+      port: pgPort,
+      user: pgUser,
+      password: pgPass,
+      database: pgDatabase,
+      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
+      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
+      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
+      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
+    });
+
+    // Verify connection
+    const testClient = await pgPool.connect();
+    await testClient.query('SELECT 1');
+    testClient.release();
+    console.log(`PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
+    // This allows existing code (types, util, context) to work without changes
+    const mssqlCompatPool = createMSSQLCompatPool(pgPool);
+    dataSources.push(new DataSourceInfo({
+      dataSource: mssqlCompatPool,
+      type: 'Read-Write',
+      host: pgHost,
+      port: pgPort,
+      database: pgDatabase,
+      userName: pgUser,
+    }));
+
+    // Set up the PostgreSQL provider
+    const pgConnectionConfig = {
+      Host: pgHost,
+      Port: pgPort,
+      Database: pgDatabase,
+      User: pgUser,
+      Password: pgPass,
+      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
+      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
     };
-    readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
-    await readOnlyPool.connect();
+    const pgConfigData = new PostgreSQLProviderConfigData(
+      pgConnectionConfig,
+      mj_core_schema,
+      cacheRefreshInterval / 1000, // convert ms to seconds
+    );
+    const provider = new PostgreSQLDataProvider();
+    await provider.Config(pgConfigData);
+    SetProvider(provider);
 
-    // since we created a read-only pool, add it to the list of data sources
-    dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
-    console.log('Read-only Connection Pool has been initialized.');
+    // Refresh user cache using PostgreSQL
+    await refreshUserCacheFromPG(pgPool, mj_core_schema);
+
+    // Run startup actions
+    const sysUser = UserCache.Instance.GetSystemUser();
+    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider);
+
+    // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
+    // Generated resolvers call this static method with bracket-quoted SQL.
+    // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
+    const origExecuteSQLWithPool = SQLServerDataProvider.ExecuteSQLWithPool;
+    SQLServerDataProvider.ExecuteSQLWithPool = async function(
+      pool: sql.ConnectionPool, query: string, parameters?: unknown[], contextUser?: import('@memberjunction/core').UserInfo
+    ): Promise<unknown[]> {
+      const poolAny = pool as unknown as Record<string, unknown>;
+      if (poolAny._pgPool) {
+        const thePgPool = poolAny._pgPool as import('pg').Pool;
+        // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
+        const pgQuery = translateBracketsToPG(query);
+        const result = await thePgPool.query(pgQuery);
+        return result.rows;
+      }
+      return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
+    };
+
+    const md = new Metadata();
+    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  } else {
+    // ─── SQL Server Path (existing behavior) ───────────────────────
+    console.log('Database type: SQL Server');
+    const pool = new sql.ConnectionPool(createMSSQLConfig());
+
+    // Handle connection-level errors from dead/stale connections in the pool.
+    // Without this handler, when Azure drops idle TCP connections, the pool silently
+    // hands out dead connections that throw "Final state" errors on next use.
+    pool.on('error', (err) => {
+      console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+    });
+
+    await pool.connect();
+
+    dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
+
+    // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
+    if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
+      const readOnlyConfig = {
+        ...createMSSQLConfig(),
+        user: configInfo.dbReadOnlyUsername,
+        password: configInfo.dbReadOnlyPassword,
+      };
+      const readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+
+      readOnlyPool.on('error', (err) => {
+        console.error('[ConnectionPool] Read-only pool connection error (stale connection evicted):', err.message);
+      });
+
+      await readOnlyPool.connect();
+
+      dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
+      console.log('Read-only Connection Pool has been initialized.');
+    }
+
+    const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
+    await setupSQLServerClient(config);
+    const md = new Metadata();
+    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   }
 
-  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
-  const md = new Metadata();
-  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+  // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
+  // read it without a circular dependency on MJServer
+  if (configInfo.queryDialects) {
+    MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
+  }
 
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;
@@ -200,6 +304,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Initialize LocalCacheManager with the server-side storage provider (in-memory)
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
   console.log('LocalCacheManager initialized');
+
+  // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
+  // This must happen before any request handler calls GetAPIKeyEngine()
+  GetAPIKeyEngine();
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -301,20 +409,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  app.use(
-    graphqlRootPath,
-    cors<cors.CorsRequest>(),
-    BodyParser.json({ limit: '50mb' }),
-    expressMiddleware(apolloServer, {
-      context: contextFunction({ 
-                                 setupComplete$, 
-                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
-                                 dataSources // all data source
-                               }),
-    })
-  );
-  
-  // Setup REST API endpoints
+  // Setup REST API endpoints BEFORE GraphQL (since graphqlRootPath may be '/' which catches all routes)
   const authMiddleware = async (req, res, next) => {
     try {
       const sessionIdRaw = req.headers['x-session-id'];
@@ -327,27 +422,58 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       if (!userPayload) {
         return res.status(401).json({ error: 'Invalid token' });
       }
-      
+
+      // Set both req.user (standard Express convention) and req['mjUser'] (MJ REST convention)
+      // Note: userPayload contains { userRecord: UserInfo, email, sessionId }
+      // The mjUser property expects the UserInfo directly (userRecord)
       req.user = userPayload;
+      req['mjUser'] = userPayload.userRecord;
       next();
     } catch (error) {
       console.error('Auth error:', error);
       return res.status(401).json({ error: 'Authentication failed' });
     }
   };
-  
-  // Get REST API configuration from the config file
-  const restApiConfig: RESTApiOptions = {
-    enabled: configInfo.restApiOptions?.enabled ?? true,
+
+  // Build public URL for OAuth callbacks
+  const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+  console.log(`[OAuth] publicUrl: ${oauthPublicUrl}`);
+
+  // Set up OAuth callback routes at /oauth (independent of REST API)
+  // These must be registered BEFORE GraphQL middleware since graphqlRootPath may be '/'
+  if (oauthPublicUrl) {
+    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
+      publicUrl: oauthPublicUrl,
+      // TODO: These should be configurable to point to the MJ Explorer UI
+      successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+    });
+
+    // Create CORS middleware for OAuth routes (needed for cross-origin requests from frontend)
+    const oauthCors = cors<cors.CorsRequest>();
+
+    // OAuth callback is unauthenticated (called by external auth server)
+    app.use('/oauth', oauthCors, callbackRouter);
+    console.log('[OAuth] Callback route registered at /oauth/callback');
+
+    // OAuth status, initiate, and exchange endpoints require authentication
+    // Must also have CORS for frontend requests and JSON body parsing
+    app.use('/oauth', oauthCors, BodyParser.json(), authMiddleware, authenticatedRouter);
+    console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
+  }
+
+  // Get REST API configuration
+  const restApiConfig = {
+    enabled: configInfo.restApiOptions?.enabled ?? false,
     includeEntities: configInfo.restApiOptions?.includeEntities,
-    excludeEntities: configInfo.restApiOptions?.excludeEntities
+    excludeEntities: configInfo.restApiOptions?.excludeEntities,
   };
-  
+
   // Apply options from server options if provided (these override the config file)
   if (options?.restApiOptions) {
     Object.assign(restApiConfig, options.restApiOptions);
   }
-  
+
   // Get REST API configuration from environment variables if present (env vars override everything)
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
@@ -355,17 +481,36 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       console.log('REST API is enabled via environment variable');
     }
   }
-  
+
   if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
     restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-  
+
   if (process.env.MJ_REST_API_EXCLUDE_ENTITIES) {
     restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-  
+
   // Set up REST endpoints with the configured options and auth middleware
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
+
+  // GraphQL middleware (after REST so /api/v1/* routes are handled first)
+  // Note: Type assertion needed due to @apollo/server bundling older @types/express types
+  // that are incompatible with Express 5.x types (missing 'param' property)
+  app.use(
+    graphqlRootPath,
+    cors<cors.CorsRequest>(),
+    BodyParser.json({ limit: '50mb' }),
+    // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
+    // Apollo Server's expressMiddleware requires req.body to be defined.
+    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
+    expressMiddleware(apolloServer, {
+      context: contextFunction({
+                                 setupComplete$,
+                                 dataSource: extendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
+                                 dataSources // all data source
+                               }),
+    }) as unknown as express.RequestHandler
+  );
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -426,3 +571,61 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/**
+ * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.
+ * This allows existing code that references DataSourceInfo.dataSource (typed as sql.ConnectionPool)
+ * to work with PostgreSQL pools. Only the .query() and .connected properties are used.
+ */
+function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
+  const wrapper = {
+    connected: true,
+    query: async (sqlQuery: string): Promise<{ recordset: Record<string, unknown>[] }> => {
+      const result = await pgPool.query(sqlQuery);
+      return { recordset: result.rows };
+    },
+    request: (): { query: (sql: string) => Promise<{ recordset: Record<string, unknown>[] }> } => ({
+      query: async (sqlQuery: string) => {
+        const result = await pgPool.query(sqlQuery);
+        return { recordset: result.rows };
+      },
+    }),
+    // pg.Pool reference for consumers that need it
+    _pgPool: pgPool,
+  };
+  return wrapper as unknown as sql.ConnectionPool;
+}
+
+/**
+ * Refreshes the UserCache using PostgreSQL queries instead of MSSQL.
+ * This mirrors the logic in UserCache.Refresh() but uses pg.Pool.
+ */
+async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
+  const { UserInfo } = await import('@memberjunction/core');
+  const uResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUsers"`);
+  const rResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUserRoles"`);
+  const users = uResult.rows;
+  const roles = rResult.rows;
+
+  if (users) {
+    const userInfos = users.map((user: Record<string, unknown>) => {
+      const userWithRoles = {
+        ...user,
+        UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
+      };
+      return new UserInfo(Metadata.Provider, userWithRoles);
+    });
+    // Access the UserCache internals to set users
+    const cache = UserCache.Instance;
+    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
+  }
+}
+
+/**
+ * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
+ * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
+ */
+function translateBracketsToPG(sql: string): string {
+  // Replace [identifier] with "identifier"
+  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
+}

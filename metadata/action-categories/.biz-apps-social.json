@@ -3,135 +3,135 @@
     "fields": {
       "Name": "Social Media",
       "Description": "Social media management integrations for content creation, scheduling, analytics, and engagement across multiple platforms",
-      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps&ParentID=null",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "7CE1C185-A2DC-4642-A680-B87034BEB439"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.466Z",
-      "checksum": "08f866bc71b4ef542dc6f201ff9d366664f4966cbf601df99ff0c48737ce4da2"
+      "lastModified": "2026-02-13T21:08:31.853Z",
+      "checksum": "09de9c02f92cc0c587890640b03f82dc4a181921d3e99887d4a4204767b29750"
     }
   },
   {
     "fields": {
       "Name": "HootSuite",
       "Description": "HootSuite social media management platform integration for multi-network posting and analytics",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "6F9D27D2-D604-4C27-B290-B51A7DD63F41"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.468Z",
-      "checksum": "a574f475f8177be937e3fb36fb46c045a333b275b0531532d0edb93e14e570ac"
+      "lastModified": "2026-02-13T21:08:31.854Z",
+      "checksum": "fa262e7ae83aeb999d3fbbeee62280564867f5e185725b0984e153c1839a7bfc"
     }
   },
   {
     "fields": {
       "Name": "Buffer",
       "Description": "Buffer social media scheduling and analytics platform integration",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "ADC4AFE8-50BF-4F38-B254-3FE01C4A4933"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.469Z",
-      "checksum": "1cdbf9aaa7856a441de450e01dfcae3db353f60ce53adda74f71087cb794f724"
+      "lastModified": "2026-02-13T21:08:31.855Z",
+      "checksum": "e45c119746f60e0a0d4e5a95a93e45a9c593a218634cd800c8f2daaf46faa1eb"
     }
   },
   {
     "fields": {
       "Name": "LinkedIn",
       "Description": "LinkedIn professional networking platform integration for posts, connections, and company pages",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "DDDA7F84-A16A-4BAB-A473-66776D19F8A9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.471Z",
-      "checksum": "d406c459849cfc25a492ba151234a618c8cc228ba9ac8649ce85a830b4030e10"
+      "lastModified": "2026-02-13T21:08:31.856Z",
+      "checksum": "e0d1db7b1208044abd6d1330899c853ce469482f41a4aa97fc1acb047c4647ac"
     }
   },
   {
     "fields": {
       "Name": "Twitter",
       "Description": "Twitter/X microblogging platform integration for tweets, analytics, and engagement",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "ECC0F88F-7E71-4AD7-9F5E-64AE0DFC2D29"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.472Z",
-      "checksum": "21c8d70f7da620c5c1c07419e98c343894f9b5eba426adea548774fd70631b4f"
+      "lastModified": "2026-02-13T21:08:31.858Z",
+      "checksum": "e2c86be2fad512b49084cf6b1b24893e815e23d3f0020bf5dd7f6d32e48d096d"
     }
   },
   {
     "fields": {
       "Name": "Facebook",
       "Description": "Facebook social network integration for pages, posts, insights, and advertising",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "BF28FDF8-19B3-4705-BAD0-60E2FB26FE39"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.474Z",
-      "checksum": "6e1975c85d4f3f07f8dd9aec5429e326de7c7222a0d39bfb167265317adebe5d"
+      "lastModified": "2026-02-13T21:08:31.859Z",
+      "checksum": "97c029e4fe39b65f530495c5b80d1c99a14249b4c6e48595d0d74c20d53221a3"
     }
   },
   {
     "fields": {
       "Name": "Instagram",
       "Description": "Instagram visual content platform integration for posts, stories, reels, and insights",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "F33E4A1E-2BDC-4B10-98A3-BC7D25F86A2E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.475Z",
-      "checksum": "b8aae964f4128e1e9f0e4bef68ef1cff44c16ead58325cf40bff4c852501288d"
+      "lastModified": "2026-02-13T21:08:31.863Z",
+      "checksum": "89caa7a90dd04a342eb1ce25d654f408345c77cbac01f4358b3143cdd52a3da3"
     }
   },
   {
     "fields": {
       "Name": "TikTok",
       "Description": "TikTok short-form video platform integration for content creation and analytics",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "190DB532-16F4-469C-B55B-B927EADC8489"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.476Z",
-      "checksum": "302c46a992361c52baec7d5bc58107684b2499406743cfdd4a2c125d413895a3"
+      "lastModified": "2026-02-13T21:08:31.864Z",
+      "checksum": "ae7b9d8e99ce285c9952ac374b091027c717fc62818bfb689584044d593e24ca"
     }
   },
   {
     "fields": {
       "Name": "YouTube",
       "Description": "YouTube video platform integration for video management, playlists, and channel analytics",
-      "ParentID": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Social Media&Parent=Business Apps",
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "AE1E4000-96BF-4BCC-A7A3-5F12AAABD515"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.477Z",
-      "checksum": "b43b8a483db90b0882a8b986f623ecc2172065a654a254fd20215ed1f8d16714"
+      "lastModified": "2026-02-13T21:08:31.866Z",
+      "checksum": "440bb59bd9840fae9f80da1a5d9394baa68f0c7c2d8ec32132a3cd52ea49d8b3"
     }
   }
 ]

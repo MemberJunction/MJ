@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit";
 import { marked } from "marked";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 import { BaseAction } from '@memberjunction/actions';
@@ -186,7 +186,7 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
                 // Collect PDF data
                 const chunks: Buffer[] = [];
                 doc.on('data', (chunk) => chunks.push(chunk));
-                doc.on('end', () => resolve(Buffer.concat(chunks)));
+                doc.on('end', () => resolve(Buffer.concat(chunks as unknown as Uint8Array[])));
                 doc.on('error', reject);
 
                 // Set default font
@@ -267,11 +267,4 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
 
         return lines;
     }
-}
-
-/**
- * Loader function to ensure the PDFGeneratorAction class is included in the bundle
- */
-export function LoadPDFGeneratorAction() {
-    // Stub function to prevent tree shaking
 }

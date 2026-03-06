@@ -1,12 +1,13 @@
 import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil, take } from 'rxjs/operators';
-import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface NodeData {
-  step: AIAgentRunStepEntity;
+  step: MJAIAgentRunStepEntity;
   x: number;
   y: number;
   width: number;
@@ -27,6 +28,7 @@ interface ScopeData {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-visualization',
   templateUrl: './ai-agent-run-visualization.component.html',
   styleUrls: ['./ai-agent-run-visualization.component.css'],
@@ -50,7 +52,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       this.activeTimeouts.splice(index, 1);
     }
   }
-  private pendingData: { steps: AIAgentRunStepEntity[], subRuns: AIAgentRunEntity[], actionLogs: ActionExecutionLogEntity[], promptRuns: AIPromptRunEntity[] } | null = null;
+  private pendingData: { steps: MJAIAgentRunStepEntity[], subRuns: MJAIAgentRunEntity[], actionLogs: MJActionExecutionLogEntity[], promptRuns: MJAIPromptRunEntity[] } | null = null;
   
   loading = false;  // Start with false so the container renders
   error: string | null = null;
@@ -309,10 +311,10 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   }
   
   private async buildVisualization(
-    steps: AIAgentRunStepEntity[],
-    subRuns: AIAgentRunEntity[],
-    actionLogs: ActionExecutionLogEntity[],
-    promptRuns: AIPromptRunEntity[]
+    steps: MJAIAgentRunStepEntity[],
+    subRuns: MJAIAgentRunEntity[],
+    actionLogs: MJActionExecutionLogEntity[],
+    promptRuns: MJAIPromptRunEntity[]
   ) {
     console.log('buildVisualization called', { 
       steps: steps?.length || 0, 
@@ -396,9 +398,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   }
   
   private async buildNodesAndScopes(
-    steps: AIAgentRunStepEntity[],
-    subRuns: AIAgentRunEntity[],
-    promptRuns: AIPromptRunEntity[]
+    steps: MJAIAgentRunStepEntity[],
+    subRuns: MJAIAgentRunEntity[],
+    promptRuns: MJAIPromptRunEntity[]
   ) {
     const svg = this.svgContainer?.nativeElement?.querySelector('svg');
     if (!svg) return;
@@ -416,7 +418,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       
       if (step.StepType === 'Sub-Agent' && step.TargetLogID) {
         // Create a scope for sub-agent
-        const subRun = subRuns.find(sr => sr.ID === step.TargetLogID);
+        const subRun = subRuns.find(sr => UUIDsEqual(sr.ID, step.TargetLogID));
         const scopeElement = await this.createScopeElement(step, subRun);
         mainGroup.appendChild(scopeElement);
         
@@ -460,7 +462,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     }
   }
   
-  private createNodeElement(step: AIAgentRunStepEntity, promptRuns: AIPromptRunEntity[]): SVGGElement {
+  private createNodeElement(step: MJAIAgentRunStepEntity, promptRuns: MJAIPromptRunEntity[]): SVGGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'step-node');
     g.setAttribute('data-step-id', step.ID);
@@ -521,7 +523,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     // Model info for prompts
     if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
-      const promptRun = promptRuns.find(pr => pr.ID === step.TargetLogID);
+      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID));
       if (promptRun) {
         const model = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         model.setAttribute('x', '12');
@@ -548,7 +550,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     return g;
   }
   
-  private async createScopeElement(step: AIAgentRunStepEntity, subRun?: AIAgentRunEntity): Promise<SVGGElement> {
+  private async createScopeElement(step: MJAIAgentRunStepEntity, subRun?: MJAIAgentRunEntity): Promise<SVGGElement> {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'scope-container');
     g.setAttribute('data-scope-id', step.ID);
@@ -649,7 +651,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     // Arrange nodes and scopes sequentially
     const allItems = [...this.nodes.values(), ...Array.from(this.scopes.values()).map(s => ({ 
-      step: { ID: s.id } as AIAgentRunStepEntity, 
+      step: { ID: s.id } as MJAIAgentRunStepEntity, 
       x: 0, 
       y: 0, 
       width: s.width, 
@@ -658,8 +660,8 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     // Sort by step number if available
     allItems.sort((a, b) => {
-      const aStep = a.step as AIAgentRunStepEntity;
-      const bStep = b.step as AIAgentRunStepEntity;
+      const aStep = a.step as MJAIAgentRunStepEntity;
+      const bStep = b.step as MJAIAgentRunStepEntity;
       return (aStep.StepNumber || 0) - (bStep.StepNumber || 0);
     });
     
@@ -762,7 +764,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     svg.setAttribute('viewBox', viewBox);
   }
   
-  private getStepColor(step: AIAgentRunStepEntity): string {
+  private getStepColor(step: MJAIAgentRunStepEntity): string {
     const colorMap: Record<string, string> = {
       'Prompt': '#2196f3',
       'Actions': '#4caf50',
@@ -813,7 +815,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   }
   
   // Event handlers
-  private onNodeClick(event: MouseEvent, step: AIAgentRunStepEntity) {
+  private onNodeClick(event: MouseEvent, step: MJAIAgentRunStepEntity) {
     event.stopPropagation();
     
     // Create timeline item from step
@@ -884,7 +886,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     if (!scope) return;
     
     // Find the step
-    const step = Array.from(this.nodes.values()).find(n => n.step.ID === scopeId)?.step
+    const step = Array.from(this.nodes.values()).find(n => UUIDsEqual(n.step.ID, scopeId))?.step
       || Array.from(this.scopes.values()).find(s => s.id === scopeId);
     
     if (!step || !(step as any).TargetLogID) return;
@@ -904,7 +906,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     }
   }
   
-  private createScopeNodes(scope: ScopeData, steps: AIAgentRunStepEntity[], promptRuns: AIPromptRunEntity[]) {
+  private createScopeNodes(scope: ScopeData, steps: MJAIAgentRunStepEntity[], promptRuns: MJAIPromptRunEntity[]) {
     const svg = this.svgContainer?.nativeElement?.querySelector('svg');
     if (!svg) return;
     

@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { BaseEntity, LogError } from "@memberjunction/core";
@@ -7,7 +7,7 @@ import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
@@ -55,35 +55,6 @@ import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 @RegisterClass(BaseAction, "Execute Research Query")
 export class ExecuteResearchQueryAction extends BaseAction {
 
-    /**
-     * List of dangerous SQL keywords and patterns that should be blocked
-     */
-    private readonly DANGEROUS_PATTERNS = [
-        /\bEXEC\b/i,
-        /\bEXECUTE\b/i,
-        /\bsp_/i,
-        /\bxp_/i,
-        /\bOPENROWSET\b/i,
-        /\bOPENQUERY\b/i,
-        /\bOPENDATASOURCE\b/i,
-        /\bINSERT\b/i,
-        /\bUPDATE\b/i,
-        /\bDELETE\b/i,
-        /\bDROP\b/i,
-        /\bCREATE\b/i,
-        /\bALTER\b/i,
-        /\bTRUNCATE\b/i,
-        /\bGRANT\b/i,
-        /\bREVOKE\b/i,
-        /\bDENY\b/i,
-        /\bBACKUP\b/i,
-        /\bRESTORE\b/i,
-        /\bSHUTDOWN\b/i,
-        /\bDBCC\b/i,
-        /--\+/,  // SQL hints
-        /\/\*\+/  // Oracle-style hints
-    ];
-
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const startTime = Date.now();
 
@@ -106,18 +77,23 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 (analysisRequest ? 'data and analysis' : 'data only');
             const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
 
-            // Validate query security
-            const securityValidation = this.validateQuerySecurity(query);
-            if (!securityValidation.isValid) {
+            // Normalize literal escape sequences — agent-generated SQL may have
+            // literal \n instead of real newlines from double-escaped JSON
+            const normalizedQuery = this.normalizeSQLWhitespace(query);
+
+            // Validate query security using centralized SQLExpressionValidator
+            const validator = SQLExpressionValidator.Instance;
+            const securityValidation = validator.validateFullQuery(normalizedQuery);
+            if (!securityValidation.valid) {
                 return {
                     Success: false,
-                    ResultCode: securityValidation.resultCode!,
-                    Message: securityValidation.message!
+                    ResultCode: 'DANGEROUS_QUERY',
+                    Message: securityValidation.error || 'SQL validation failed'
                 } as ActionResultSimple;
             }
 
             // Ensure query returns limited results
-            const limitedQuery = this.ensureRowLimit(query, maxRows);
+            const limitedQuery = this.ensureRowLimit(normalizedQuery, maxRows);
 
             const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
 
@@ -262,37 +238,6 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 Message: `Query execution failed: ${errorMessage}`
             } as ActionResultSimple;
         }
-    }
-
-    /**
-     * Validates query for security concerns
-     */
-    private validateQuerySecurity(query: string): { isValid: boolean; message?: string; resultCode?: string } {
-        // Check for dangerous patterns
-        for (const pattern of this.DANGEROUS_PATTERNS) {
-            if (pattern.test(query)) {
-                return {
-                    isValid: false,
-                    message: `Query contains potentially dangerous operation: ${pattern.source}. Only SELECT queries are allowed.`,
-                    resultCode: 'DANGEROUS_QUERY'
-                };
-            }
-        }
-
-        // Check if query starts with SELECT (allowing for whitespace and comments)
-        const trimmedQuery = query.trim();
-        const cleanQuery = trimmedQuery.replace(/^\/\*[\s\S]*?\*\//, '').replace(/^--.*$/gm, '').trim();
-
-        if (!cleanQuery.toUpperCase().startsWith('SELECT') &&
-            !cleanQuery.toUpperCase().startsWith('WITH')) {  // Allow CTEs
-            return {
-                isValid: false,
-                message: 'Only SELECT queries are allowed. Query must start with SELECT or WITH (for Common Table Expressions).',
-                resultCode: 'NOT_SELECT_STATEMENT'
-            };
-        }
-
-        return { isValid: true };
     }
 
     /**
@@ -491,11 +436,24 @@ export class ExecuteResearchQueryAction extends BaseAction {
     /**
      * Get prompt by name and category from AIEngine
      */
-    private getPromptByNameAndCategory(name: string, category: string): AIPromptEntityExtended | undefined {
+    private getPromptByNameAndCategory(name: string, category: string): MJAIPromptEntityExtended | undefined {
         return AIEngine.Instance.Prompts.find(p =>
             p.Name.trim().toLowerCase() === name.trim().toLowerCase() &&
             p.Category?.trim().toLowerCase() === category?.trim().toLowerCase()
         );
+    }
+
+    /**
+     * Normalize literal escape sequences in SQL strings.
+     * Agent-generated SQL sometimes arrives with literal \n (backslash + n)
+     * instead of actual newlines from double-escaped JSON.
+     */
+    private normalizeSQLWhitespace(sql: string): string {
+        return sql
+            .replace(/\\r\\n/g, '\n')
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '\r')
+            .replace(/\\t/g, '\t');
     }
 
     /**
@@ -602,11 +560,4 @@ export class ExecuteResearchQueryAction extends BaseAction {
         return lines.join('\n');
     }
 
-}
-
-/**
- * Load function to ensure the class is registered and not tree-shaken
- */
-export function LoadExecuteResearchQueryAction() {
-    MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, "Execute Research Query");
 }

@@ -11,17 +11,18 @@ import {
   ComponentRef,
   Type
 } from '@angular/core';
-import { ArtifactVersionEntity, ArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
-import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, NavigationRequest } from './base-artifact-viewer.component';
 
 /**
  * Artifact type plugin viewer that loads the appropriate plugin based on the artifact's DriverClass.
  * Uses MJGlobal.Instance.ClassFactory.CreateInstance() to dynamically load viewer plugins.
  */
 @Component({
+  standalone: false,
   selector: 'mj-artifact-type-plugin-viewer',
   template: `
     <div class="artifact-type-plugin-viewer">
@@ -112,7 +113,7 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
   `]
 })
 export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
-  @Input() artifactVersion!: ArtifactVersionEntity;
+  @Input() artifactVersion!: MJArtifactVersionEntity;
   @Input() artifactTypeName!: string;
   @Input() contentType?: string;
   @Input() height?: string;
@@ -120,7 +121,9 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() cssClass?: string;
 
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() pluginLoaded = new EventEmitter<void>();
+  @Output() tabsChanged = new EventEmitter<void>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -253,9 +256,23 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
       // Subscribe to openEntityRecord event if the plugin emits it
       const componentInstance = this.componentRef.instance;
-      if ((componentInstance as any).openEntityRecord) {
-        (componentInstance as any).openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
+      if (componentInstance.openEntityRecord) {
+        componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
           this.openEntityRecord.emit(event);
+        });
+      }
+
+      // Subscribe to navigationRequest event if the plugin emits it
+      if (componentInstance.navigationRequest) {
+        componentInstance.navigationRequest.subscribe((event: NavigationRequest) => {
+          this.navigationRequest.emit(event);
+        });
+      }
+
+      // Subscribe to tabsChanged event if the plugin emits it (e.g., after async spec loading)
+      if (componentInstance.tabsChanged) {
+        componentInstance.tabsChanged.subscribe(() => {
+          this.tabsChanged.emit();
         });
       }
 
@@ -292,7 +309,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   /**
    * Get the artifact type entity for the current artifact using the cached ArtifactMetadataEngine
    */
-  private async getArtifactType(): Promise<ArtifactTypeEntity | null> {
+  private async getArtifactType(): Promise<MJArtifactTypeEntity | null> {
     try {
       // Use the cached metadata engine instead of querying the database
       const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifactTypeName);
@@ -310,7 +327,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
    * @param artifactType The artifact type to resolve the DriverClass for
    * @returns The DriverClass string, or null if none found and no JSON fallback available
    */
-  private async resolveDriverClass(artifactType: ArtifactTypeEntity): Promise<string | null> {
+  private async resolveDriverClass(artifactType: MJArtifactTypeEntity): Promise<string | null> {
     // Check if current artifact type has a DriverClass
     if (artifactType.DriverClass) {
       console.log(`✅ Found DriverClass '${artifactType.DriverClass}' on artifact type '${artifactType.Name}'`);
@@ -338,10 +355,10 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   /**
    * Loads an artifact type by ID
    */
-  private async getArtifactTypeById(id: string): Promise<ArtifactTypeEntity | null> {
+  private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
       const md = new Metadata();
-      const artifactType = await md.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types');
+      const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types');
       const loaded = await artifactType.Load(id);
 
       if (loaded) {

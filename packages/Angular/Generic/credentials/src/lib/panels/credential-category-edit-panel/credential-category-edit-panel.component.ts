@@ -1,24 +1,22 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
-import { CredentialCategoryEntity } from '@memberjunction/core-entities';
+import { MJCredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export function LoadCredentialCategoryEditPanel() {
-    // Prevents tree-shaking
-}
-
 @Component({
+  standalone: false,
     selector: 'mj-credential-category-edit-panel',
     templateUrl: './credential-category-edit-panel.component.html',
     styleUrls: ['./credential-category-edit-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialCategoryEditPanelComponent implements OnInit {
-    @Input() category: CredentialCategoryEntity | null = null;
+    @Input() category: MJCredentialCategoryEntity | null = null;
     @Input() isOpen = false;
 
     @Output() close = new EventEmitter<void>();
-    @Output() saved = new EventEmitter<CredentialCategoryEntity>();
+    @Output() saved = new EventEmitter<MJCredentialCategoryEntity>();
     @Output() deleted = new EventEmitter<string>();
 
     public isLoading = false;
@@ -26,7 +24,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
     public isNew = false;
 
     // All categories for parent selection
-    public allCategories: CredentialCategoryEntity[] = [];
+    public allCategories: MJCredentialCategoryEntity[] = [];
 
     // Form fields
     public name = '';
@@ -66,7 +64,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         return this.name.trim().length > 0;
     }
 
-    public get availableParentCategories(): CredentialCategoryEntity[] {
+    public get availableParentCategories(): MJCredentialCategoryEntity[] {
         // Exclude the current category and its descendants from parent options
         if (!this.category || this.isNew) {
             return this.allCategories;
@@ -83,7 +81,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         const descendants = new Set<string>();
         const findChildren = (parentId: string): void => {
             for (const cat of this.allCategories) {
-                if (cat.ParentID === parentId) {
+                if (UUIDsEqual(cat.ParentID, parentId)) {
                     descendants.add(cat.ID);
                     findChildren(cat.ID);
                 }
@@ -93,7 +91,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         return descendants;
     }
 
-    public async open(category: CredentialCategoryEntity | null, preselectedParentId?: string): Promise<void> {
+    public async open(category: MJCredentialCategoryEntity | null, preselectedParentId?: string): Promise<void> {
         this.isLoading = true;
         this.isOpen = true;
         this.category = category;
@@ -116,7 +114,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
     private async loadCategories(): Promise<void> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<CredentialCategoryEntity>({
+            const result = await rv.RunView<MJCredentialCategoryEntity>({
                 EntityName: 'MJ: Credential Categories',
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
@@ -138,7 +136,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         this.iconClass = '';
     }
 
-    private populateFromCategory(category: CredentialCategoryEntity): void {
+    private populateFromCategory(category: MJCredentialCategoryEntity): void {
         this.name = category.Name || '';
         this.description = category.Description || '';
         this.parentId = category.ParentID || '';
@@ -160,10 +158,10 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         this.cdr.markForCheck();
 
         try {
-            let entity: CredentialCategoryEntity;
+            let entity: MJCredentialCategoryEntity;
 
             if (this.isNew) {
-                entity = await this._metadata.GetEntityObject<CredentialCategoryEntity>('MJ: Credential Categories');
+                entity = await this._metadata.GetEntityObject<MJCredentialCategoryEntity>('MJ: Credential Categories');
             } else {
                 entity = this.category!;
             }
@@ -262,11 +260,11 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
 
     public getParentPath(categoryId: string): string {
         const parts: string[] = [];
-        let current = this.allCategories.find(c => c.ID === categoryId);
+        let current = this.allCategories.find(c => UUIDsEqual(c.ID, categoryId));
 
         while (current) {
             parts.unshift(current.Name);
-            current = current.ParentID ? this.allCategories.find(c => c.ID === current!.ParentID) : undefined;
+            current = current.ParentID ? this.allCategories.find(c => UUIDsEqual(c.ID, current!.ParentID)) : undefined;
         }
 
         return parts.join(' / ');

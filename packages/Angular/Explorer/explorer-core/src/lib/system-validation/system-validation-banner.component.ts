@@ -8,35 +8,52 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div *ngIf="issues.length > 0" class="system-validation-wrapper">
-      <!-- Dark overlay for serious errors -->
-      <div *ngIf="hasErrors" class="system-validation-overlay"></div>
-      
-      <div class="system-validation-container">
-        <div *ngFor="let issue of issues" 
-             class="system-validation-banner" 
-             [ngClass]="'system-validation-' + issue.severity">
-          <div class="banner-content">
-            <div class="banner-icon">
-              <span *ngIf="issue.severity === 'error'" class="severity-icon severity-error">❌</span>
-              <span *ngIf="issue.severity === 'warning'" class="severity-icon severity-warning">⚠️</span>
-              <span *ngIf="issue.severity === 'info'" class="severity-icon severity-info">ℹ️</span>
+    @if (issues.length > 0) {
+      <div class="system-validation-wrapper">
+        <!-- Dark overlay for serious errors -->
+        @if (hasErrors) {
+          <div class="system-validation-overlay"></div>
+        }
+        <div class="system-validation-container">
+          @for (issue of issues; track issue) {
+            <div
+              class="system-validation-banner"
+              [ngClass]="'system-validation-' + issue.severity">
+              <div class="banner-content">
+                <div class="banner-icon">
+                  @if (issue.severity === 'error') {
+                    <span class="severity-icon severity-error">❌</span>
+                  }
+                  @if (issue.severity === 'warning') {
+                    <span class="severity-icon severity-warning">⚠️</span>
+                  }
+                  @if (issue.severity === 'info') {
+                    <span class="severity-icon severity-info">ℹ️</span>
+                  }
+                </div>
+                <div class="banner-message">
+                  <h3>{{ issue.message }}</h3>
+                  @if (issue.details) {
+                    <p>{{ issue.details }}</p>
+                  }
+                  @if (issue.help) {
+                    <p class="help-text">{{ issue.help }}</p>
+                  }
+                </div>
+                <div class="banner-close">
+                  @if (issue.severity !== 'error') {
+                    <button (click)="dismissIssue(issue.id)" aria-label="Dismiss" class="dismiss-button">
+                      ✕
+                    </button>
+                  }
+                </div>
+              </div>
             </div>
-            <div class="banner-message">
-              <h3>{{ issue.message }}</h3>
-              <p *ngIf="issue.details">{{ issue.details }}</p>
-              <p *ngIf="issue.help" class="help-text">{{ issue.help }}</p>
-            </div>
-            <div class="banner-close">
-              <button *ngIf="issue.severity !== 'error'" (click)="dismissIssue(issue.id)" aria-label="Dismiss" class="dismiss-button">
-                ✕
-              </button>
-            </div>
-          </div>
+          }
         </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .system-validation-wrapper {
       position: fixed;

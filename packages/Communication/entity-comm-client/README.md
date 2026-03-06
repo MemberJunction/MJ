@@ -1,25 +1,46 @@
 # @memberjunction/entity-communications-client
 
-A client library for interacting with the MemberJunction Entity Communications Engine. This package provides a GraphQL-based client implementation for executing communication requests against views of entity records.
+Client-side (Angular / browser) implementation of the MemberJunction Entity Communications Engine. This package sends entity communication requests to the server via GraphQL, enabling bulk messaging to records retrieved from entity views.
 
-## Overview
+## Architecture
 
-The Entity Communications Client enables you to send templated messages (email, SMS, etc.) to recipients based on entity data views. It supports various communication providers and message types while leveraging MemberJunction's templating system for dynamic content generation.
+```mermaid
+graph TD
+    subgraph client["@memberjunction/entity-comm-client"]
+        ECC["EntityCommunicationsEngineClient"]
+    end
+
+    subgraph base["@memberjunction/entity-communications-base"]
+        ECB["EntityCommunicationsEngineBase"]
+        PARAMS["EntityCommunicationParams"]
+        RESULT["EntityCommunicationResult"]
+    end
+
+    subgraph graphql["@memberjunction/graphql-dataprovider"]
+        GQL["GraphQLDataProvider"]
+    end
+
+    subgraph api["MJAPI Server"]
+        RESOLVER["GraphQL Resolver"]
+        SERVER["EntityCommunicationsEngine\n(Server)"]
+    end
+
+    ECB --> ECC
+    ECC -->|mutation| GQL
+    GQL -->|HTTP| RESOLVER
+    RESOLVER --> SERVER
+
+    style client fill:#b8762f,stroke:#8a5722,color:#fff
+    style base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style graphql fill:#7c5295,stroke:#563a6b,color:#fff
+    style api fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
 ```bash
 npm install @memberjunction/entity-communications-client
 ```
-
-## Dependencies
-
-This package depends on:
-- `@memberjunction/global` - Core MemberJunction utilities
-- `@memberjunction/core` - Core MemberJunction functionality
-- `@memberjunction/core-entities` - Entity definitions
-- `@memberjunction/entity-communications-base` - Base classes for entity communications
-- `@memberjunction/graphql-dataprovider` - GraphQL data provider for API calls
 
 ## Usage
 
@@ -29,219 +50,139 @@ This package depends on:
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
-// Initialize the client
 const client = new EntityCommunicationsEngineClient();
-
-// Configure the client (required before first use)
 await client.Config();
 
-// Set up communication parameters
 const params: EntityCommunicationParams = {
-  EntityID: '123',  // ID of the entity to communicate about
-  RunViewParams: {
-    ViewID: '456',  // ID of the view that defines recipients
-    ExtraFilter: 'IsActive = 1',  // Additional filtering
-    OrderBy: 'LastName ASC',
-    MaxRows: 100
-  },
-  ProviderName: 'SendGrid',  // Communication provider to use
-  ProviderMessageTypeName: 'Email',  // Type of message
-  Message: {
-    From: 'noreply@example.com',
-    To: '{{Email}}',  // Can use template variables
-    Subject: 'Important Update',
-    Body: 'Hello {{FirstName}}, we have an update for you.',
-    ContextData: {
-      // Additional data for template rendering
-      CompanyName: 'Acme Corp',
-      UpdateDate: new Date()
-    }
-  },
-  PreviewOnly: false,  // Set to true to preview without sending
-  IncludeProcessedMessages: true  // Include processed message content in results
+    EntityID: '123',
+    RunViewParams: {
+        ViewID: '456',
+        ExtraFilter: 'IsActive = 1',
+        MaxRows: 100
+    },
+    ProviderName: 'SendGrid',
+    ProviderMessageTypeName: 'Email',
+    Message: {
+        From: 'noreply@example.com',
+        To: '{{Email}}',
+        Subject: 'Important Update',
+        Body: 'Hello {{FirstName}}, we have an update for you.',
+        ContextData: {
+            CompanyName: 'Acme Corp'
+        }
+    },
+    PreviewOnly: false,
+    IncludeProcessedMessages: true
 };
 
-// Execute the communication
 const result = await client.RunEntityCommunication(params);
 
 if (result.Success) {
-  console.log(`Successfully sent ${result.Results.length} messages`);
-  
-  // Process results
-  result.Results.forEach(item => {
-    console.log(`Sent to: ${item.RecipientData.Email}`);
-    console.log(`Message: ${item.Message.ProcessedBody}`);
-  });
+    console.log(`Sent ${result.Results.length} messages`);
 } else {
-  console.error(`Communication failed: ${result.ErrorMessage}`);
+    console.error(`Failed: ${result.ErrorMessage}`);
 }
+```
+
+### Preview Mode
+
+Test communications without actually sending messages:
+
+```typescript
+const params: EntityCommunicationParams = {
+    // ...same parameters...
+    PreviewOnly: true,
+    IncludeProcessedMessages: true
+};
+
+const result = await client.RunEntityCommunication(params);
+result.Results.forEach(item => {
+    console.log('Would send to:', item.RecipientData);
+    console.log('Subject:', item.Message.ProcessedSubject);
+    console.log('Body:', item.Message.ProcessedBody);
+});
 ```
 
 ### Using Templates
 
 ```typescript
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
-
-// Load your template (example)
-const template = await getTemplate('Welcome Email');  // Your template loading logic
-
 const params: EntityCommunicationParams = {
-  EntityID: '123',
-  RunViewParams: {
-    ViewID: '456',
-    // View should return records with fields matching template variables
-  },
-  ProviderName: 'SendGrid',
-  ProviderMessageTypeName: 'Email',
-  Message: {
-    From: 'welcome@example.com',
-    To: '{{Email}}',
-    SubjectTemplate: subjectTemplate,  // Template for subject line
-    BodyTemplate: bodyTemplate,        // Template for plain text body
-    HTMLBodyTemplate: htmlTemplate,    // Template for HTML body
-    ContextData: {
-      // Global context data available to all recipients
-      Year: new Date().getFullYear()
+    EntityID: '123',
+    RunViewParams: { ViewID: '456' },
+    ProviderName: 'SendGrid',
+    ProviderMessageTypeName: 'Email',
+    Message: {
+        From: 'welcome@example.com',
+        To: '{{Email}}',
+        SubjectTemplate: subjectTemplate,
+        BodyTemplate: bodyTemplate,
+        HTMLBodyTemplate: htmlTemplate,
+        ContextData: { Year: new Date().getFullYear() }
     }
-  }
 };
-
-const result = await client.RunEntityCommunication(params);
 ```
 
-### Preview Mode
+## How It Works
 
-To test your communications without actually sending messages:
+The client serializes `EntityCommunicationParams` and sends them to the MJAPI server via a GraphQL mutation. The server-side `EntityCommunicationsEngine` handles the actual view execution, template rendering, and message delivery through communication providers.
 
-```typescript
-const params: EntityCommunicationParams = {
-  // ... other parameters ...
-  PreviewOnly: true,  // Enable preview mode
-  IncludeProcessedMessages: true  // Get the processed message content
-};
+```mermaid
+sequenceDiagram
+    participant UI as Angular UI
+    participant Client as EntityCommClient
+    participant GQL as GraphQL Provider
+    participant API as MJAPI
+    participant Server as EntityCommEngine
 
-const result = await client.RunEntityCommunication(params);
-
-// Review what would be sent
-result.Results.forEach(item => {
-  console.log('Would send to:', item.RecipientData);
-  console.log('Subject:', item.Message.ProcessedSubject);
-  console.log('Body:', item.Message.ProcessedBody);
-});
+    UI->>Client: RunEntityCommunication(params)
+    Client->>Client: Serialize params
+    Client->>GQL: GraphQL mutation
+    GQL->>API: HTTP POST
+    API->>Server: RunEntityCommunication(params)
+    Server->>Server: Execute view, render templates, send
+    Server-->>API: EntityCommunicationResult
+    API-->>GQL: Response
+    GQL-->>Client: Deserialized result
+    Client-->>UI: EntityCommunicationResult
 ```
 
 ## API Reference
 
-### EntityCommunicationsEngineClient
-
-The main client class for entity communications.
-
-#### Methods
-
-##### `Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void>`
-
-Configures the client by loading necessary metadata. Must be called before using other methods.
-
-- `forceRefresh` - Force reload of metadata cache
-- `contextUser` - User context for permissions
-- `provider` - Custom metadata provider
-
-##### `RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult>`
-
-Executes a communication request against entity records.
-
-- `params` - Communication parameters (see below)
-- Returns: Promise resolving to communication results
-
-### Types
-
-#### EntityCommunicationParams
-
-```typescript
-interface EntityCommunicationParams {
-  EntityID: string;                    // ID of the entity to communicate about
-  RunViewParams: RunViewParams;        // View parameters to select recipients
-  ProviderName: string;                // Name of communication provider
-  ProviderMessageTypeName: string;     // Type of message for the provider
-  Message: Message;                    // Message content and templates
-  PreviewOnly?: boolean;               // If true, preview without sending
-  IncludeProcessedMessages?: boolean;  // Include processed content in results
-}
-```
-
-#### Message
-
-```typescript
-interface Message {
-  MessageType?: CommunicationProviderMessageTypeEntity;
-  From?: string;                       // Sender address
-  To?: string;                         // Recipient address (can use templates)
-  Body?: string;                       // Plain text body
-  BodyTemplate?: TemplateEntityExtended;
-  HTMLBody?: string;                   // HTML body
-  HTMLBodyTemplate?: TemplateEntityExtended;
-  Subject?: string;                    // Subject line
-  SubjectTemplate?: TemplateEntityExtended;
-  ContextData?: any;                   // Additional template context
-}
-```
-
-#### EntityCommunicationResult
-
-```typescript
-interface EntityCommunicationResult {
-  Success: boolean;                    // Whether communication succeeded
-  ErrorMessage?: string;               // Error details if failed
-  Results?: EntityCommunicationResultItem[];  // Individual message results
-}
-
-interface EntityCommunicationResultItem {
-  RecipientData: any;                  // Data for this recipient
-  Message: ProcessedMessage;           // The processed message
-}
-```
-
-## Integration with MemberJunction
-
-This client integrates seamlessly with other MemberJunction packages:
-
-- **Templates**: Use `@memberjunction/templates-base-types` for dynamic content
-- **Entities**: Works with any entity defined in your MemberJunction schema
-- **Views**: Leverages MemberJunction views to select communication recipients
-- **Providers**: Supports all registered communication providers (SendGrid, Twilio, MS Graph, etc.)
-
-## Configuration
-
-The client uses GraphQL to communicate with the MemberJunction API. Ensure your GraphQL endpoint is properly configured through the `GraphQLDataProvider`.
+| Method | Description |
+|--------|-------------|
+| `Config(forceRefresh?, contextUser?, provider?)` | Load metadata (required before first use) |
+| `RunEntityCommunication(params)` | Execute entity communication via GraphQL |
 
 ## Error Handling
-
-The client provides detailed error information:
 
 ```typescript
 const result = await client.RunEntityCommunication(params);
 
 if (!result.Success) {
-  console.error('Communication failed:', result.ErrorMessage);
-  
-  // Check individual message failures
-  result.Results?.forEach(item => {
-    if (!item.Message.Success) {
-      console.error(`Failed for ${item.RecipientData.Email}:`, item.Message.Error);
-    }
-  });
+    console.error('Communication failed:', result.ErrorMessage);
+
+    // Check individual message failures
+    result.Results?.forEach(item => {
+        if (!item.Message.Success) {
+            console.error(`Failed for ${item.RecipientData.Email}:`, item.Message.Error);
+        }
+    });
 }
 ```
 
-## Best Practices
+## Dependencies
 
-1. **Always call `Config()` before first use** - This loads necessary metadata
-2. **Use preview mode for testing** - Set `PreviewOnly: true` to test without sending
-3. **Handle errors gracefully** - Check both overall and individual message success
-4. **Use templates for consistency** - Leverage MemberJunction's template system
-5. **Filter recipients carefully** - Use view filters to target the right audience
-6. **Include context data** - Provide all necessary data for template rendering
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/entity-communications-base` | Shared types and base engine |
+| `@memberjunction/graphql-dataprovider` | GraphQL client for API communication |
+| `@memberjunction/core` | Core framework utilities |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Class registration |
 
-## License
+## Development
 
-ISC
+```bash
+npm run build    # Compile TypeScript
+npm start        # Watch mode
+```

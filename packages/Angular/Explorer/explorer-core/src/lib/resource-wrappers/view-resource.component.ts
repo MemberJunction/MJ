@@ -1,15 +1,10 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
+import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-
-export function LoadViewResource() {
-    // Force class to be included in production builds (tree shaking workaround)
-}
-
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -24,6 +19,7 @@ export function LoadViewResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
+  standalone: false,
     selector: 'mj-userview-resource',
     templateUrl: './view-resource.component.html',
     styles: [`
@@ -147,7 +143,7 @@ export class UserViewResource extends BaseResourceComponent {
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewEntity: UserViewEntityExtended | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
     // Export state
@@ -167,9 +163,21 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
+        const previousEntity = super.Data?.Configuration?.Entity;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+        const newEntity = value?.Configuration?.Entity;
+
+        // Load on first set, or when the view/entity has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
             this.dataLoaded = true;
+            // Reset state before loading new view
+            this.entityInfo = null;
+            this.viewEntity = null;
+            this.gridState = null;
+            this.errorMessage = null;
             this.loadView();
         }
     }
@@ -235,7 +243,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`View with ID ${viewId} not found`);
         }
 
-        this.viewEntity = view as UserViewEntityExtended;
+        this.viewEntity = view as MJUserViewEntityExtended;
 
         // Check permissions
         if (!this.viewEntity.UserCanView) {
@@ -243,7 +251,7 @@ export class UserViewResource extends BaseResourceComponent {
         }
 
         // Load the entity info
-        const entity = this.metadata.Entities.find(e => e.ID === this.viewEntity!.EntityID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID));
 
         if (!entity) {
             throw new Error(`Entity for view not found`);
@@ -304,7 +312,7 @@ export class UserViewResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
-            const name = await this.metadata.GetEntityRecordName('User Views', compositeKey);
+            const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

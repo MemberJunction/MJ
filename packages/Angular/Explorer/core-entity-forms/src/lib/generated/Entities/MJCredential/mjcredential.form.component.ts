@@ -1,0 +1,31 @@
+import { Component } from '@angular/core';
+import { MJCredentialEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'MJ: Credentials') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjcredential-form',
+    templateUrl: './mjcredential.form.component.html'
+})
+export class MJCredentialFormComponent extends BaseFormComponent {
+    public record!: MJCredentialEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'classification', sectionName: 'Classification', isExpanded: true },
+            { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
+            { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJOAuthTokens', sectionName: 'O Auth Tokens', isExpanded: false },
+            { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
+            { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false }
+        ]);
+    }
+}
+

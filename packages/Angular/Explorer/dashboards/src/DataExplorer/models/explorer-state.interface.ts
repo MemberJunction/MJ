@@ -1,3 +1,5 @@
+import { EntityInfo } from '@memberjunction/core';
+
 /**
  * Filter configuration for the Data Explorer
  * Allows constraining which entities are shown in the explorer
@@ -124,6 +126,24 @@ export interface FavoriteRecord {
 }
 
 /**
+ * Represents an application group with its entities for the home view.
+ * Used by Concept D to organize entities by their first Application membership.
+ */
+export interface AppEntityGroup {
+  applicationId: string;
+  applicationName: string;
+  applicationIcon: string;
+  applicationColor: string | null;
+  entities: EntityInfo[];
+  isExpanded: boolean;
+}
+
+/**
+ * Home view mode for the All/Favorites toggle
+ */
+export type HomeViewMode = 'all' | 'favorites';
+
+/**
  * State interface for the Data Explorer dashboard
  */
 export interface DataExplorerState {
@@ -186,6 +206,16 @@ export interface DataExplorerState {
   favoriteEntities: FavoriteEntity[];
   /** Favorite records for home screen (non-entity favorites) */
   favoriteRecords: FavoriteRecord[];
+
+  // Concept D: Application Groups + Search-First
+  /** Which application group IDs are currently expanded */
+  expandedAppGroups: string[];
+  /** Whether the right-side quick access panel is open */
+  quickAccessPanelOpen: boolean;
+  /** Collapse state per section in the quick access panel (key = section id, value = expanded) */
+  quickAccessSections: Record<string, boolean>;
+  /** Home view mode toggle: show all entities or favorites only */
+  homeViewMode: HomeViewMode;
 }
 
 export interface RecentItem {
@@ -263,5 +293,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   showAllEntities: false,  // Default to showing only common entities
   recentEntityAccesses: [],
   favoriteEntities: [],
-  favoriteRecords: []
+  favoriteRecords: [],
+  // Concept D: Application Groups + Search-First
+  expandedAppGroups: [],
+  quickAccessPanelOpen: false,
+  quickAccessSections: { recentRecords: true, recentEntities: true, favoriteRecords: true },
+  homeViewMode: 'all',
 };

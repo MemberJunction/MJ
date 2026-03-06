@@ -7,6 +7,10 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { ConfigLoader } from '../utils/config-loader.js';
 import { DatabaseConnection } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
