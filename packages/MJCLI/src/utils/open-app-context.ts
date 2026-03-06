@@ -43,7 +43,7 @@ async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; 
       user: config.codeGenLogin,
       password: config.codeGenPassword,
       options: {
-        encrypt: false,
+        encrypt: config.dbHost.includes('.database.windows.net'),
         trustServerCertificate: config.dbTrustServerCertificate ?? true,
         enableArithAbort: true,
       },
@@ -146,6 +146,9 @@ export async function buildOrchestratorContext(
     },
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
+    ServerPackagePath: config.openApps?.serverPackagePath,
+    ClientPackagePath: config.openApps?.clientPackagePath,
+    PackageManager: config.openApps?.packageManager,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -176,6 +179,9 @@ interface OrchestratorContextShape {
   };
   RepoRoot: string;
   MJVersion: string;
+  ServerPackagePath?: string;
+  ClientPackagePath?: string;
+  PackageManager?: string;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;
@@ -185,16 +191,25 @@ interface OrchestratorContextShape {
   };
 }
 
-/** Reads the current MJ version from MJGlobal's package.json. */
+/** Reads the current MJ version. Tries @memberjunction/core first, then local MJGlobal. */
 function getMJVersion(): string {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+
+  // Try installed @memberjunction/core (works for all project layouts)
   try {
-    const { readFileSync } = require('node:fs');
-    const { resolve } = require('node:path');
+    const corePkgPath = require.resolve('@memberjunction/core/package.json');
+    const pkgJson = JSON.parse(readFileSync(corePkgPath, 'utf-8')) as { version: string };
+    return pkgJson.version;
+  } catch { /* not found as dependency */ }
+
+  // Fall back to local monorepo MJGlobal
+  try {
     const pkgJson = JSON.parse(
       readFileSync(resolve(process.cwd(), 'packages/MJGlobal/package.json'), 'utf-8'),
     ) as { version: string };
     return pkgJson.version;
   } catch {
-    return '4.3.1';
+    return '5.7.0';
   }
 }

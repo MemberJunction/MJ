@@ -31,14 +31,18 @@ export interface ClientBootstrapEntry {
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param entries - List of installed app client bootstrap entries
+ * @param clientPackagePath - Path to client workspace relative to repoRoot (default: 'packages/MJExplorer')
  */
 export function RegenerateClientBootstrap(
     repoRoot: string,
-    entries: ClientBootstrapEntry[]
+    entries: ClientBootstrapEntry[],
+    clientPackagePath?: string,
 ): void {
+    const basePath = clientPackagePath ?? 'packages/MJExplorer';
     const filePath = resolve(
         repoRoot,
-        'packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts'
+        basePath,
+        'src/app/generated/open-app-bootstrap.generated.ts',
     );
 
     const content = BuildBootstrapFileContent(entries);

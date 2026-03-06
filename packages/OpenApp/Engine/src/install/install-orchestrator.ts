@@ -16,7 +16,7 @@ import type { InstalledAppMap, DependencyNode, DependencyValue } from '../depend
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunNpmInstall } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -52,6 +52,12 @@ export interface OrchestratorContext {
   MJVersion: string;
   /** Progress callbacks */
   Callbacks?: AppInstallCallbacks;
+  /** Path to server workspace relative to RepoRoot (default: 'packages/MJAPI') */
+  ServerPackagePath?: string;
+  /** Path to client workspace relative to RepoRoot (default: 'packages/MJExplorer') */
+  ClientPackagePath?: string;
+  /** Package manager to use (default: auto-detected from lockfile) */
+  PackageManager?: PackageManagerType;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -515,15 +521,18 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
           ClientPackages: manifest.packages?.client ?? [],
           SharedPackages: manifest.packages?.shared ?? [],
           Version: existingApp.Version,
+          ServerPackagePath: context.ServerPackagePath,
+          ClientPackagePath: context.ClientPackagePath,
+          PackageManager: context.PackageManager,
         }),
       ),
     ]);
 
-    // npm install must run after package.json changes are written
-    Callbacks?.OnProgress?.('Packages', 'Running npm install...');
-    const npmResult = RunNpmInstall(context.RepoRoot, options.Verbose);
-    if (!npmResult.Success) {
-      Callbacks?.OnWarn?.('Packages', `npm install warning during removal: ${npmResult.ErrorMessage}`);
+    // Package install must run after package.json changes are written
+    Callbacks?.OnProgress?.('Packages', 'Running package install...');
+    const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
+    if (!installResult.Success) {
+      Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
     }
 
     // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
@@ -772,21 +781,24 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
     return { Success: true };
   }
 
-  context.Callbacks?.OnProgress?.('Packages', 'Adding npm packages...');
+  context.Callbacks?.OnProgress?.('Packages', 'Adding packages...');
   const addResult = AddAppPackages({
     RepoRoot: context.RepoRoot,
     ServerPackages: manifest.packages.server ?? [],
     ClientPackages: manifest.packages.client ?? [],
     SharedPackages: manifest.packages.shared ?? [],
     Version: manifest.version,
+    ServerPackagePath: context.ServerPackagePath,
+    ClientPackagePath: context.ClientPackagePath,
+    PackageManager: context.PackageManager,
   });
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
   }
 
-  context.Callbacks?.OnProgress?.('Packages', 'Running npm install...');
-  const installResult = RunNpmInstall(context.RepoRoot, undefined, manifest.packages.registry);
+  context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
+  const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
   return { Success: installResult.Success, ErrorMessage: installResult.ErrorMessage };
 }
 
@@ -838,7 +850,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
     }
   }
 
-  RegenerateClientBootstrap(context.RepoRoot, entries);
+  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath);
 }
 
 /**

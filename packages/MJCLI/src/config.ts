@@ -74,6 +74,12 @@ const openAppsConfigSchema = z.object({
     overrideApps: z.array(z.string()).default([]),
   }).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
+  /** Path to server workspace relative to repo root (default: 'packages/MJAPI') */
+  serverPackagePath: z.string().optional(),
+  /** Path to client workspace relative to repo root (default: 'packages/MJExplorer') */
+  clientPackagePath: z.string().optional(),
+  /** Package manager to use: 'npm' | 'pnpm' | 'yarn' (default: auto-detected from lockfile) */
+  packageManager: z.enum(['npm', 'pnpm', 'yarn']).optional(),
 }).optional();
 
 // Schema for dynamic packages section

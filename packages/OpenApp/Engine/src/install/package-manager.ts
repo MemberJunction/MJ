@@ -1,14 +1,23 @@
 /**
- * NPM package management for MJ Open Apps.
+ * Package management for MJ Open Apps.
  *
  * Adds/removes app packages to/from the correct workspace package.json
- * files (MJAPI for server, MJExplorer for client) and runs npm install
- * from the monorepo root.
+ * files and runs the appropriate package manager install from the monorepo root.
+ *
+ * Paths to the server (MJAPI) and client (MJExplorer) workspaces are configurable
+ * via PackageManagerOptions to support different project layouts (e.g., MJ template
+ * uses packages/MJAPI while MJC platform uses apps/MJAPI).
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
+
+/** Supported package managers. */
+export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
+
+const DEFAULT_SERVER_PATH = 'packages/MJAPI';
+const DEFAULT_CLIENT_PATH = 'packages/MJExplorer';
 
 /**
  * Options for package operations.
@@ -26,6 +35,12 @@ export interface PackageManagerOptions {
   Version: string;
   /** Enable verbose output */
   Verbose?: boolean;
+  /** Path to server workspace relative to RepoRoot (default: 'packages/MJAPI') */
+  ServerPackagePath?: string;
+  /** Path to client workspace relative to RepoRoot (default: 'packages/MJExplorer') */
+  ClientPackagePath?: string;
+  /** Package manager to use (default: auto-detected from lockfile) */
+  PackageManager?: PackageManagerType;
 }
 
 /**
@@ -54,19 +69,21 @@ export interface PackageOperationResult {
  */
 export function AddAppPackages(options: PackageManagerOptions): PackageOperationResult {
   const added: string[] = [];
+  const serverPath = options.ServerPackagePath ?? DEFAULT_SERVER_PATH;
+  const clientPath = options.ClientPackagePath ?? DEFAULT_CLIENT_PATH;
 
   try {
     const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
     const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
 
     if (serverPkgs.length > 0) {
-      const serverPkgJsonPath = resolve(options.RepoRoot, 'packages/MJAPI/package.json');
+      const serverPkgJsonPath = resolve(options.RepoRoot, serverPath, 'package.json');
       AddDependenciesToPackageJson(serverPkgJsonPath, serverPkgs, options.Version);
       added.push(...serverPkgs.map((p) => p.name));
     }
 
     if (clientPkgs.length > 0) {
-      const clientPkgJsonPath = resolve(options.RepoRoot, 'packages/MJExplorer/package.json');
+      const clientPkgJsonPath = resolve(options.RepoRoot, clientPath, 'package.json');
       AddDependenciesToPackageJson(clientPkgJsonPath, clientPkgs, options.Version);
       added.push(...clientPkgs.map((p) => p.name));
     }
@@ -86,19 +103,21 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
  */
 export function RemoveAppPackages(options: PackageManagerOptions): PackageOperationResult {
   const removed: string[] = [];
+  const serverPath = options.ServerPackagePath ?? DEFAULT_SERVER_PATH;
+  const clientPath = options.ClientPackagePath ?? DEFAULT_CLIENT_PATH;
 
   try {
     const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
     const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
 
     if (serverPkgs.length > 0) {
-      const serverPkgJsonPath = resolve(options.RepoRoot, 'packages/MJAPI/package.json');
+      const serverPkgJsonPath = resolve(options.RepoRoot, serverPath, 'package.json');
       RemoveDependenciesFromPackageJson(serverPkgJsonPath, serverPkgs);
       removed.push(...serverPkgs.map((p) => p.name));
     }
 
     if (clientPkgs.length > 0) {
-      const clientPkgJsonPath = resolve(options.RepoRoot, 'packages/MJExplorer/package.json');
+      const clientPkgJsonPath = resolve(options.RepoRoot, clientPath, 'package.json');
       RemoveDependenciesFromPackageJson(clientPkgJsonPath, clientPkgs);
       removed.push(...clientPkgs.map((p) => p.name));
     }
@@ -111,19 +130,47 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 }
 
 /**
- * Runs npm install from the monorepo root.
- * NPM workspaces handle resolution across all packages.
+ * Detects which package manager is in use by checking for lockfiles.
+ */
+export function detectPackageManager(repoRoot: string): PackageManagerType {
+  if (existsSync(resolve(repoRoot, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(resolve(repoRoot, 'yarn.lock'))) return 'yarn';
+  return 'npm';
+}
+
+/**
+ * Runs package install from the monorepo root using the appropriate package manager.
  *
  * @param repoRoot - Absolute path to the monorepo root
- * @param verbose - Enable verbose npm output
+ * @param verbose - Enable verbose output
+ * @param registryUrl - Optional custom registry URL
+ * @param packageManager - Package manager to use (auto-detected if not provided)
  */
-export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?: string): PackageOperationResult {
+export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
+  const pm = packageManager ?? detectPackageManager(repoRoot);
+
   try {
-    let flags = verbose ? '' : '--loglevel=warn';
-    if (registryUrl) {
-      flags += ` --registry=${registryUrl}`;
+    let cmd: string;
+    switch (pm) {
+      case 'pnpm': {
+        cmd = 'pnpm install';
+        if (registryUrl) cmd += ` --registry=${registryUrl}`;
+        break;
+      }
+      case 'yarn': {
+        cmd = 'yarn install';
+        if (registryUrl) cmd += ` --registry=${registryUrl}`;
+        break;
+      }
+      default: {
+        let flags = verbose ? '' : '--loglevel=warn';
+        if (registryUrl) flags += ` --registry=${registryUrl}`;
+        cmd = `npm install ${flags}`;
+        break;
+      }
     }
-    execSync(`npm install ${flags}`, {
+
+    execSync(cmd, {
       cwd: repoRoot,
       encoding: 'utf-8',
       timeout: 300000,
@@ -132,8 +179,15 @@ export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?:
     return { Success: true, Added: [], Removed: [] };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, Added: [], Removed: [], ErrorMessage: `npm install failed: ${message}` };
+    return { Success: false, Added: [], Removed: [], ErrorMessage: `${pm} install failed: ${message}` };
   }
+}
+
+/**
+ * @deprecated Use {@link RunPackageInstall} instead.
+ */
+export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?: string): PackageOperationResult {
+  return RunPackageInstall(repoRoot, verbose, registryUrl, 'npm');
 }
 
 /**
