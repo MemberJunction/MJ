@@ -1,4 +1,4 @@
-export * from './generated/action_subclasses';
+export * from './generated/action_subclasses.js';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
