@@ -92,19 +92,9 @@ export class GraphQLServerGeneratorBase {
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
 
-      // Track generated field names to skip duplicate EntityRelationship records
-      const generatedTypeFieldNames = new Set<string>();
-
       for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
         const r = sortedRelatedEntities[j];
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
-
-        // Build the unique code name to check for duplicates
-        const joinField = r.Type.toLowerCase().trim() === 'many to many' ? r.JoinEntityJoinField : r.RelatedEntityJoinField;
-        const uniqueCodeName = `${r.RelatedEntityCodeName}_${joinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
-        if (generatedTypeFieldNames.has(uniqueCodeName)) continue; // Skip duplicate EntityRelationship record
-        generatedTypeFieldNames.add(uniqueCodeName);
-
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
@@ -185,9 +175,6 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
     const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
 
-    // Track imported table names to avoid duplicate imports from duplicate EntityRelationship records
-    const importedTableNames = new Set<string>();
-
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
       const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
@@ -195,10 +182,7 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
         // we only include entities that are in the same schema as the current entity
         // OR if we are not excluding related entities external to the schema
         const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
-        if (!importedTableNames.has(tableName)) {
-          importedTableNames.add(tableName);
-          sRet += `\nimport ${tableName} from './${tableName}';`;
-        }
+        sRet += `\nimport ${tableName} from './${tableName}';`;
       }
     }
     return sRet;
@@ -415,18 +399,9 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
 
-      // Track generated resolver names to skip duplicate EntityRelationship records
-      const generatedResolverNames = new Set<string>();
-
       for (let i = 0; i < sortedRelatedEntities.length; i++) {
         const r = sortedRelatedEntities[i];
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
-
-        // Build the unique code name to check for duplicates
-        const joinField = r.Type.toLowerCase().trim() === 'many to many' ? r.JoinEntityJoinField : r.RelatedEntityJoinField;
-        const uniqueCodeName = `${r.RelatedEntityCodeName}_${joinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
-        if (generatedResolverNames.has(uniqueCodeName)) continue; // Skip duplicate EntityRelationship record
-        generatedResolverNames.add(uniqueCodeName);
 
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
