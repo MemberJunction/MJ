@@ -390,7 +390,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (97 classes)
+// @memberjunction/core-actions (101 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -436,6 +436,7 @@ import {
     FindBestAgentAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
+    GeocodeAddressAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
@@ -468,9 +469,11 @@ import {
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
+    PostalCodeLookupAction,
     QRCodeAction,
     RemoveRecordsFromListAction,
     RetryAction,
+    ReverseGeocodeAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -484,6 +487,7 @@ import {
     UnitConverterAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
+    ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
     WebPageContentAction,
@@ -1156,6 +1160,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FindBestAgentAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
+    GeocodeAddressAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
@@ -1188,9 +1193,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
+    PostalCodeLookupAction,
     QRCodeAction,
     RemoveRecordsFromListAction,
     RetryAction,
+    ReverseGeocodeAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -1204,6 +1211,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     UnitConverterAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
+    ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
     WebPageContentAction,
@@ -1559,7 +1567,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 652;
+export const CLASS_REGISTRATIONS_COUNT = 656;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

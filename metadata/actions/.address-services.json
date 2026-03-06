@@ -1,0 +1,1290 @@
+[
+  {
+    "fields": {
+      "Name": "Postal Code Lookup",
+      "Description": "Looks up city, state, country, and geographic coordinates from a postal code using the Google Geocoding API. Supports international postal codes.",
+      "DriverClass": "Postal Code Lookup",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-location-dot",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostalCode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The postal/ZIP code to look up (e.g., '70115', 'SW1A 1AA').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "45BBBF09-54EB-4ACA-A5D0-956B42528973"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.723Z",
+            "checksum": "588a74a800a27f032bf463c1ed577d71ac2d0d7ff816eb9dc8372cb9656a54b5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Input: optional country name or 2-letter ISO code to narrow results (e.g., 'US', 'GB'). Output: full country name resolved from the postal code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "66E44D82-5677-4695-8099-FC4C584B9D2B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.734Z",
+            "checksum": "2140a331e29ad9d6155a63c7877101c77cbd54c57f27f7cc22f595e9a92596d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "City",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "City/locality name for the postal code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F2B14296-B54A-4C00-AB51-A09454B66177"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.745Z",
+            "checksum": "647bdb17e67af08803373d32f2f4a8c5f2a2cf88e47403a56773f275cebe6ecb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "State",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "State/province/administrative area abbreviation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "44D04D57-0916-4D11-AD12-3F6CCAE4B2B7"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.766Z",
+            "checksum": "09b95594095d977ab97f07755e06d9f88f40a0a2ddef0ecd8120cd633a1a837f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CountryCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "2-letter ISO country code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1F34EF16-81D0-445C-BC5D-6B8A1D1067B6"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.778Z",
+            "checksum": "b03da58a7214df8f4b45390717337fb620f0dbf32e0039bc8617d965f909f563"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Latitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic latitude of the postal code centroid.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "56710059-FAC6-47DB-A635-EA69ABE5F769"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.790Z",
+            "checksum": "972bf00c5b7db85a2c1f670dfe1af0411d22dfd2a3c9e710a064777e4b450710"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Longitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic longitude of the postal code centroid.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "815BCFD2-F01C-4B2B-8C01-A1E190352F18"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.801Z",
+            "checksum": "ea2bca9cbcaba6fcb7b58e5ec80ab32a20422e6cbedf47bc5734f1f48c4d50d4"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Postal code resolved successfully."
+          },
+          "primaryKey": {
+            "ID": "5B521615-4A1F-4FE5-9F6A-7168DE5A670B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.818Z",
+            "checksum": "164757ded19bba23b6e52c47ad82ead20a1691bf59313dfb40853dac33612c9c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_POSTAL_CODE",
+            "IsSuccess": false,
+            "Description": "PostalCode parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "D34F7412-9144-4B5A-837F-51C7FFAF76EC"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.829Z",
+            "checksum": "1b4ab3e53c842ae5f91a9bfec29cd97639451b8ee66a6facbc7362b800753fb2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API key not found. Set google.geocoding.apiKey in mj.config.cjs or GOOGLE_GEOCODING_API_KEY environment variable."
+          },
+          "primaryKey": {
+            "ID": "DFD2D525-50BF-437A-A9A7-E1E7BFF93404"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.838Z",
+            "checksum": "2db0ce8c93b8f3e2b05446668e974a71907fa40b7e54a07f3706b841779868b7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No results found for the specified postal code."
+          },
+          "primaryKey": {
+            "ID": "70F42AF7-D968-4342-9F6C-AD2EA8F25429"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.871Z",
+            "checksum": "ffe74e7f742b31d43106e63561691f34fae5c7ecc76f7c0f011d70f8efd4b28a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API returned an error."
+          },
+          "primaryKey": {
+            "ID": "9BA7EF90-9D54-4E90-A118-A8F23222393B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.882Z",
+            "checksum": "c481ae2e902cf7e41419269354f55e7c75e35a6be77193acb0f80f203c033a0e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "73706A73-0455-47E5-B5DF-D23A259027F6"
+    },
+    "sync": {
+      "lastModified": "2026-03-06T20:49:23.626Z",
+      "checksum": "42b6ec4562bbae3aef8512ba283f6fa76c5513a430a031944eb811ee75a7eac2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Geocode Address",
+      "Description": "Converts a free-form address string into structured address components (street, city, state, postal code, country) and geographic coordinates using the Google Geocoding API.",
+      "DriverClass": "Geocode Address",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-map-location-dot",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Address",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Free-form address string to geocode (e.g., '1600 Amphitheatre Parkway, Mountain View, CA').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "927BBE7B-5D9B-4D7E-B355-43D07BA63B1A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.892Z",
+            "checksum": "a5c69e66a5368d1824141e616fd91a005b28ed189c945287a7a0cafcfca8dd36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line1",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 1 (street number and name).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "789280C8-31C3-4496-B392-C1C49B2BD674"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.903Z",
+            "checksum": "095ed64b86c93df9aac8eed9ce2e054ba89249938fa5cfb07e2d8ef922259c3c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line2",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 2 (unit, suite, apt).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1CF8D389-89F4-4E4C-8FC9-77E49B224679"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.915Z",
+            "checksum": "2d042154e14f4d2bc9a8c3057e27a0872edbe9ddd2022b13f31e8c4881e35d97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "City",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "City/locality name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F751F905-796E-43C7-A5AE-4BA2A0D50ACA"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.928Z",
+            "checksum": "6e232948e2a4fb662b43705985b351e7d1d816c5dede2c1f9db7889179047a2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "State",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "State/province abbreviation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "53E9EA69-70E6-42CE-A6ED-3DCA92260305"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.938Z",
+            "checksum": "c8d218a960f9ce64aff6e8c73a0cc6db4c3e9d12b1a4a06ec7834b76f5f01d5c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostalCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Postal/ZIP code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C236DB6A-7ECD-4531-8D5F-82ED25B309CB"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.950Z",
+            "checksum": "fab24626fb55e5770859e4da07ae1b4b03acd5e47bb13797d2851c6606f57b8a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Full country name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E2C64E04-92D7-44A4-BD9F-75942BC837D4"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.962Z",
+            "checksum": "3e4309e5d4d47b9544a9a4dff88404418e791eaaad8abe6340facbffc2944994"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CountryCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "2-letter ISO country code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "413B2383-3B91-4065-807F-DA71542DD415"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:23.972Z",
+            "checksum": "b03da58a7214df8f4b45390717337fb620f0dbf32e0039bc8617d965f909f563"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Latitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic latitude.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9EB9BDB3-83BB-49BB-861B-A93ABCBC36A6"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.005Z",
+            "checksum": "917963d2074d80c7a9b3b1efbf5bd6307bdd0bf287d0b79d3447872ffef2a914"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Longitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic longitude.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "518C2067-60C4-4082-8355-AA8513ED750B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.017Z",
+            "checksum": "d6894a6ff6fc23c7751879de5e3a8012d4fdaef2b474a4f3a61c8242f75e8a4a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormattedAddress",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google's formatted/standardized version of the full address.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "50E81FF8-166D-403C-B9E2-978AD908760A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.029Z",
+            "checksum": "c983096d1077c254ca2bd4d7aeae4535889d96727e785dffed0cc66e7fa2dcb9"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Address geocoded successfully."
+          },
+          "primaryKey": {
+            "ID": "4BE74C5B-EAA3-42B9-A8DE-F798F7D2D7BD"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.039Z",
+            "checksum": "d41ca6318e2abae2b4411475223e9383f0d308c2d7a23e37d5a51b9e80fe8fa1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ADDRESS",
+            "IsSuccess": false,
+            "Description": "Address parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "7A7D3CEE-5328-4FA7-A357-6EF078AC0702"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.050Z",
+            "checksum": "c9561b66420d82947fe6c9b0e6dd309c8c077a0f63000d2a6cecd700ac489c65"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API key not found."
+          },
+          "primaryKey": {
+            "ID": "2362F1A7-F1EE-47E4-9833-ED3DC43CF681"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.060Z",
+            "checksum": "466554acf916afefee0e99b8ad8b576943bcc9a84a49f03d2aa865a8281202f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No results found for the specified address."
+          },
+          "primaryKey": {
+            "ID": "59AF8813-6FE8-4302-8007-422DC8F39053"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.070Z",
+            "checksum": "66de1f62825d65730a28405b38adee9194bfc3264a9c23f2cf06af3a8e42e306"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API returned an error."
+          },
+          "primaryKey": {
+            "ID": "C6546614-E972-439E-9B0C-204004BFFAFC"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.079Z",
+            "checksum": "c481ae2e902cf7e41419269354f55e7c75e35a6be77193acb0f80f203c033a0e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "70F3F65B-7D83-4DC2-9B4F-6075F2515E2D"
+    },
+    "sync": {
+      "lastModified": "2026-03-06T20:49:23.642Z",
+      "checksum": "55191330ecd2553f4db4c2a8651008a45d77b9f6172b705a9751522b662a2a92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reverse Geocode",
+      "Description": "Converts geographic coordinates (latitude/longitude) into a structured address using the Google Geocoding API. Useful for finding the address at a known location.",
+      "DriverClass": "Reverse Geocode",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-map-pin",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Latitude",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic latitude (e.g., 37.4224764).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "806B2E4E-5394-417A-87EB-6F21ECE9379F"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.089Z",
+            "checksum": "88145090c86df01763ec411544bd5948c517fc4083f85c1e6bb29578dca04044"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Longitude",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic longitude (e.g., -122.0842499).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E75B3795-A2E0-42FD-A1B8-918A48090119"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.101Z",
+            "checksum": "6615f6edc419756b28367cd9db852e75193c96fe9b566099d58e1cd266d74060"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line1",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0872D8F6-4A8B-4B75-B011-3F326443E549"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.135Z",
+            "checksum": "c2770f43a283c9d6c988fc82db23f4cdb07e3de73154489620ac42649debdca1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line2",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 2.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EB6E9995-A106-4CE6-9D08-C5BB7310E377"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.146Z",
+            "checksum": "50c8435a8b9a9e0e9d7be16ec450811345111852b8e567154c1deaf51071f9ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "City",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "City/locality name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD7CB04A-822D-4FE7-99B6-145620379956"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.157Z",
+            "checksum": "6e232948e2a4fb662b43705985b351e7d1d816c5dede2c1f9db7889179047a2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "State",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "State/province abbreviation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "08F682B5-B0D8-44DB-B3F0-702FDB47B111"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.169Z",
+            "checksum": "c8d218a960f9ce64aff6e8c73a0cc6db4c3e9d12b1a4a06ec7834b76f5f01d5c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostalCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Postal/ZIP code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FCBAAFCC-575B-4E88-BFCE-9E61A6E273E3"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.180Z",
+            "checksum": "fab24626fb55e5770859e4da07ae1b4b03acd5e47bb13797d2851c6606f57b8a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Full country name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4D27EC82-EB47-4593-931D-A04BD1879C24"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.190Z",
+            "checksum": "3e4309e5d4d47b9544a9a4dff88404418e791eaaad8abe6340facbffc2944994"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CountryCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "2-letter ISO country code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "256D3289-727D-46E1-9AC7-9F0705F7C458"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.201Z",
+            "checksum": "b03da58a7214df8f4b45390717337fb620f0dbf32e0039bc8617d965f909f563"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormattedAddress",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google's formatted version of the full address.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4141005A-62E0-4C4F-B4F8-552DEB77BF33"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.212Z",
+            "checksum": "9e813066cbb93733786f1c73817ad56c2e5a63c353f5bfb726f4015efea3627f"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Coordinates resolved to an address successfully."
+          },
+          "primaryKey": {
+            "ID": "54207E51-B76E-4369-B159-D1476EF7B39A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.221Z",
+            "checksum": "08da7baa456b29588fa1729461c4e8d9034be1482db332d90848991339ea694b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_COORDINATES",
+            "IsSuccess": false,
+            "Description": "Both Latitude and Longitude parameters are required."
+          },
+          "primaryKey": {
+            "ID": "897D4332-FD25-47C8-9DA7-26248664D7CB"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.230Z",
+            "checksum": "95136dfc5418d5562f04119980aa83937571f45f6897f7d133da8d39c7ab32f0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_COORDINATES",
+            "IsSuccess": false,
+            "Description": "Latitude and Longitude must be valid numbers."
+          },
+          "primaryKey": {
+            "ID": "4068E5DB-C86B-4021-B3E6-5B466330C2A0"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.261Z",
+            "checksum": "beec0b004a9447a7a908af1ce0df1c607680e4599acc7228ccbe41bb0c2220d1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API key not found."
+          },
+          "primaryKey": {
+            "ID": "15DECDD8-B4A0-4590-B645-20F23935CC91"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.270Z",
+            "checksum": "466554acf916afefee0e99b8ad8b576943bcc9a84a49f03d2aa865a8281202f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No address found for the specified coordinates."
+          },
+          "primaryKey": {
+            "ID": "C26D8A6A-364F-4D05-B0E9-C1DFCF702DB0"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.279Z",
+            "checksum": "51713da406ef46cebb97fb8ab1a5ee38dae507ebc27eaf70f4e5d092fa179282"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API returned an error."
+          },
+          "primaryKey": {
+            "ID": "DC87A770-0773-4918-8A09-36E2A0B35961"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.290Z",
+            "checksum": "c481ae2e902cf7e41419269354f55e7c75e35a6be77193acb0f80f203c033a0e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "63455BF7-1B4B-47C7-9F91-5C1E5E8E0BEE"
+    },
+    "sync": {
+      "lastModified": "2026-03-06T20:49:23.658Z",
+      "checksum": "4a475d7733e3cffa592ef68edeb3ab7e19d75603cac9e3ab107e5cf27c300e8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Address",
+      "Description": "Validates and standardizes an address using the Google Address Validation API. Returns corrected address fields, deliverability verdict, geographic coordinates, and USPS data for US addresses. Requires the Address Validation API to be enabled in Google Cloud.",
+      "DriverClass": "Validate Address",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ABC2B3B2-F3D4-4C1C-B2AC-65F318956F6F"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.303Z",
+            "checksum": "51a748b6d99daf7e2103a379560db362c19cb731319317ff7a898b2296d6907c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Line2",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Street address line 2 (unit, suite, apt).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A55CA28C-23F3-4C22-8BE6-B6879A680628"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.316Z",
+            "checksum": "74a6e9174b982fb4164da74dfd4036bca7caf056e54bdc340e1c3279ddda6dad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "City",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "City/locality name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "602EF9B2-2ADB-4EEA-A6C8-028B4DAC2C6B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.327Z",
+            "checksum": "50845ed6ada7ff4dddb1d7da690aed2b08ab2a6229618c8ac6cef0fa47dc86d4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "State",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "State/province.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54531582-DCC0-4F10-AA83-C6BF0BFBB242"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.338Z",
+            "checksum": "74f074f36a03a0240147dafdf0c1464a40de316d255edff0f3f1cd28afb9c520"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PostalCode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Postal/ZIP code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8030CA34-8A3B-4ABA-B9D8-E9CE856E55D4"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.348Z",
+            "checksum": "baf622ad960c272c4ab0eeb3e00e27655e33141750717d4ec1dc6fd79091f7b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "DefaultValue": "US",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Country name or 2-letter ISO code. Defaults to 'US'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A6CFBA93-9A3A-4D99-88D9-B76C3EDA490B"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.358Z",
+            "checksum": "50d5cf129d0a806f5f2b96e61eb0b633e6a8b4afe298c14b0fc660ab9926d1ae"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedLine1",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected/standardized street address line 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4725C082-5284-41E2-93AC-7FF5B440FA9A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.395Z",
+            "checksum": "592d4dfb7ef8733d93510b8336ad1685c77b721296b689d1d2234e1b0914895a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedLine2",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected/standardized street address line 2.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8BE3CDA2-54EB-48FF-B79A-85DD00B233CD"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.406Z",
+            "checksum": "bb3c61170887cf9eaea699c408a84aa2ba3582de3659f4c3e2c98ae51a9fbc0c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedCity",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected city/locality name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "905BFFA2-CEAC-4927-941A-26D5F32F7E74"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.417Z",
+            "checksum": "9b22059dbb363f1d25396fab6f71dd5b132c3b21802739c8a9ccbe59ed52d845"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedState",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected state/province.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0E3693EB-6D52-4332-BDDA-EE60C1A72FCD"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.428Z",
+            "checksum": "03fcbcb4ee9835e83fe250656c7ba2cf2f0105fc70a88f157d61f0563811f123"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedPostalCode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected postal/ZIP code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DEAE4C94-2F4D-4B9C-AEBD-499D135164EC"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.438Z",
+            "checksum": "57aae617434a9f9bd004208055ecd94c72ac99f10c22fc3dc90cac623eba2b48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CorrectedCountry",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Corrected 2-letter ISO country code.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7D25F4D7-7571-4D1A-ABD3-5EE2F1826511"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.448Z",
+            "checksum": "e0c3bf2f1328e0e5791845a8a2509192712e179510030455d3e6520e3490a6ab"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormattedAddress",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google's fully formatted/standardized address string.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9F7BCB47-C9ED-4658-8EF7-C7A32D9ED7A4"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.461Z",
+            "checksum": "c849896f69d44b2bdfeaa7b33c610ef90b2e5dce23706251f82bcc0a49b68408"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Latitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic latitude of the validated address.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "23D70B39-9244-4C3F-BF49-76D7F014442A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.471Z",
+            "checksum": "c188f0b35e2ade0a0ab2be94804d69d6712991dfefb168c4d75b1446fe28539a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Longitude",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geographic longitude of the validated address.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CF3B098E-F2AE-4BF4-92FD-C282A4475B7C"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.481Z",
+            "checksum": "65a55ce6c1835f8c748f49319472390395c8b79e68df86fca48a3db160539c08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsComplete",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the address has all required components (true/false).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6B91BDA3-2471-4033-AC49-01D595B3CC3A"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.491Z",
+            "checksum": "fcb314ce1481746275a8c928098179877cc2340020b76a587001b784967f97d9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Deliverable",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the address is likely deliverable based on validation granularity (true/false).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "40DE8E64-BCD9-4381-9314-8BFB955D47C4"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.523Z",
+            "checksum": "00bfb2bf25d3af2421b030877e348fcf1b69c5d59f67fc8336ae0ab376bc4b4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValidationGranularity",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Level of validation: PREMISE, SUB_PREMISE, ROUTE, BLOCK, or OTHER.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5CA90EA2-5D0A-4D5A-AA6E-4758F70591C7"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.534Z",
+            "checksum": "95dd8012bbebc2146df6fc8c175b58b8bb20db04983b72f05ee44c2fc09b3d99"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DPVConfirmation",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "USPS Delivery Point Validation confirmation code (US addresses only). Y=confirmed, N=not confirmed, S=secondary missing, D=secondary not confirmed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "27A43643-73D0-4E57-835A-FDA72E475234"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.546Z",
+            "checksum": "d5d9d31124833416f32a82873722fc8074863d9cf7bfc8c6a788aa8616630c1d"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DELIVERABLE",
+            "IsSuccess": true,
+            "Description": "Address validated successfully and is deliverable."
+          },
+          "primaryKey": {
+            "ID": "B15BD713-239E-4668-BC54-372F553F1B00"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.557Z",
+            "checksum": "cc83c2060b3d5cbe8a6d4678308dd3a113e27de2e45caa2d52a9df57041976ee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNDELIVERABLE",
+            "IsSuccess": true,
+            "Description": "Address validated but may not be deliverable (validation granularity below PREMISE level)."
+          },
+          "primaryKey": {
+            "ID": "510C5C8E-4A97-47FF-ADE1-8D04191A9DDC"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.567Z",
+            "checksum": "ffe9523d50e5e21787c683182c3ba511feb99b7459d774ff0e8c30cd2dad9e14"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ADDRESS",
+            "IsSuccess": false,
+            "Description": "At least one of Line1, City, or PostalCode is required."
+          },
+          "primaryKey": {
+            "ID": "3D17BE63-738B-44DF-9907-20616A46BC40"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.577Z",
+            "checksum": "5d53157311f14ea41e24045a99b5cfd7b89db3a37499611012051fab13a6f16c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Geocoding API key not found."
+          },
+          "primaryKey": {
+            "ID": "EF47E8B1-52E9-4F49-8FC0-C0AADF4950B4"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.586Z",
+            "checksum": "466554acf916afefee0e99b8ad8b576943bcc9a84a49f03d2aa865a8281202f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Google Address Validation API returned an empty response."
+          },
+          "primaryKey": {
+            "ID": "0DE48A70-DEFB-4653-BF3C-1B2C13FE8645"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.596Z",
+            "checksum": "2fb48fb10a0806a631dacca2cf62bf1d8484eafe41b34dac058d16090bff9e0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_NOT_ENABLED",
+            "IsSuccess": false,
+            "Description": "Google Address Validation API is not enabled or credentials are invalid."
+          },
+          "primaryKey": {
+            "ID": "20A15C47-4086-4B3D-BD90-C6C7786F2426"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.607Z",
+            "checksum": "dc86ac4e9fd70179c070f502b195856d1f3b9dae9e0b733a9b1cff869a2927ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Address Validation API returned an error."
+          },
+          "primaryKey": {
+            "ID": "C0F52F81-D508-4CD9-AD7C-54505C9A58BF"
+          },
+          "sync": {
+            "lastModified": "2026-03-06T20:49:24.616Z",
+            "checksum": "02240146d6e4ad6849f2e15addb65b0a090631aa18c90dea3651a17494563717"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1D7611E4-C5F9-4761-9BB2-060C8B9D05F4"
+    },
+    "sync": {
+      "lastModified": "2026-03-06T20:49:23.672Z",
+      "checksum": "399179a5f018a8e93ad82193943eb6f061999d8c23003c0f4880c915277f6388"
+    }
+  }
+]
