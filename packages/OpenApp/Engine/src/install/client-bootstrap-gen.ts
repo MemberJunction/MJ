@@ -22,6 +22,9 @@ export interface ClientBootstrapEntry {
     Enabled: boolean;
 }
 
+/** Default subpath within the client workspace where the bootstrap file is generated. */
+const DEFAULT_BOOTSTRAP_SUBPATH = 'src/app/generated/open-app-bootstrap.generated.ts';
+
 /**
  * Regenerates the open-app-bootstrap.generated.ts file with import
  * lines for all installed apps.
@@ -31,15 +34,18 @@ export interface ClientBootstrapEntry {
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param entries - List of installed app client bootstrap entries
+ * @param clientPackagePath - Path to client workspace relative to repoRoot (default: 'packages/MJExplorer')
+ * @param bootstrapSubpath - File subpath within the client workspace (default: 'src/app/generated/open-app-bootstrap.generated.ts')
  */
 export function RegenerateClientBootstrap(
     repoRoot: string,
-    entries: ClientBootstrapEntry[]
+    entries: ClientBootstrapEntry[],
+    clientPackagePath?: string,
+    bootstrapSubpath?: string,
 ): void {
-    const filePath = resolve(
-        repoRoot,
-        'packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts'
-    );
+    const basePath = clientPackagePath ?? 'packages/MJExplorer';
+    const subPath = bootstrapSubpath ?? DEFAULT_BOOTSTRAP_SUBPATH;
+    const filePath = resolve(repoRoot, basePath, subPath);
 
     const content = BuildBootstrapFileContent(entries);
     writeFileSync(filePath, content, 'utf-8');

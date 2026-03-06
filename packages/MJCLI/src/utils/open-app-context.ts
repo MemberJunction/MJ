@@ -43,7 +43,7 @@ async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; 
       user: config.codeGenLogin,
       password: config.codeGenPassword,
       options: {
-        encrypt: false,
+        encrypt: config.dbHost.includes('.database.windows.net'),
         trustServerCertificate: config.dbTrustServerCertificate ?? true,
         enableArithAbort: true,
       },
@@ -140,12 +140,22 @@ export async function buildOrchestratorContext(
       Database: config.dbDatabase,
       User: config.codeGenLogin,
       Password: config.codeGenPassword,
+      Encrypt: config.dbEncrypt,
+      TrustServerCertificate: config.dbTrustServerCertificate,
+      RequestTimeout: config.dbRequestTimeout,
     },
     GitHubOptions: {
       Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
     },
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
+    ServerPackagePath: config.openApps?.serverPackagePath,
+    ClientPackagePath: config.openApps?.clientPackagePath,
+    PackageManager: config.openApps?.packageManager,
+    VersionStrategy: config.openApps?.versionStrategy,
+    // Zod infers object fields as optional; runtime schema validates they're present
+    AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
+    ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -170,12 +180,21 @@ interface OrchestratorContextShape {
     User: string;
     Password: string;
     TrustedConnection?: boolean;
+    Encrypt?: boolean;
+    TrustServerCertificate?: boolean;
+    RequestTimeout?: number;
   };
   GitHubOptions: {
     Token?: string;
   };
   RepoRoot: string;
   MJVersion: string;
+  ServerPackagePath?: string;
+  ClientPackagePath?: string;
+  PackageManager?: 'npm' | 'pnpm' | 'yarn';
+  VersionStrategy?: 'semver' | 'catalog' | 'workspace' | 'auto';
+  AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
+  ClientBootstrapSubpath?: string;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;
@@ -185,16 +204,26 @@ interface OrchestratorContextShape {
   };
 }
 
-/** Reads the current MJ version from MJGlobal's package.json. */
+/** Reads the current MJ version. Tries @memberjunction/core first, then local MJGlobal. */
 function getMJVersion(): string {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+
+  // Try installed @memberjunction/core (works for all project layouts)
   try {
-    const { readFileSync } = require('node:fs');
-    const { resolve } = require('node:path');
-    const pkgJson = JSON.parse(
-      readFileSync(resolve(process.cwd(), 'packages/MJGlobal/package.json'), 'utf-8'),
-    ) as { version: string };
+    const corePkgPath = require.resolve('@memberjunction/core/package.json');
+    const pkgJson: { version: string } = JSON.parse(readFileSync(corePkgPath, 'utf-8'));
+    return pkgJson.version;
+  } catch { /* not found */ }
+
+  // Fall back to local monorepo MJGlobal
+  try {
+    const raw: string = readFileSync(resolve(process.cwd(), 'packages/MJGlobal/package.json'), 'utf-8');
+    const pkgJson: { version: string } = JSON.parse(raw);
     return pkgJson.version;
   } catch {
-    return '4.3.1';
+    throw new Error(
+      'Could not determine MJ version. Ensure @memberjunction/core is installed or packages/MJGlobal/package.json exists.'
+    );
   }
 }
