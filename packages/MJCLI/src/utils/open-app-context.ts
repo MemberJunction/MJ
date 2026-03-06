@@ -153,7 +153,7 @@ export async function buildOrchestratorContext(
     ClientPackagePath: config.openApps?.clientPackagePath,
     PackageManager: config.openApps?.packageManager,
     VersionStrategy: config.openApps?.versionStrategy,
-    AdditionalTargets: config.openApps?.additionalTargets,
+    AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
     ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
@@ -190,8 +190,8 @@ interface OrchestratorContextShape {
   MJVersion: string;
   ServerPackagePath?: string;
   ClientPackagePath?: string;
-  PackageManager?: string;
-  VersionStrategy?: string;
+  PackageManager?: 'npm' | 'pnpm' | 'yarn';
+  VersionStrategy?: 'semver' | 'catalog' | 'workspace' | 'auto';
   AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
   ClientBootstrapSubpath?: string;
   Callbacks?: {
