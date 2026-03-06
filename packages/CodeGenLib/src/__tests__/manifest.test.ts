@@ -207,6 +207,175 @@ describe('Manifest Generator Types', () => {
     });
 });
 
+// =============================================================================
+// Compiled JS Extraction Tests
+// =============================================================================
+// When a package ships only dist/ (no src/), the manifest generator falls back
+// to scanning compiled .js files. TypeScript downlevels decorators into
+// __decorate() calls. We re-implement the regex extraction logic here to test it.
+// =============================================================================
+
+describe('Manifest Generator - Compiled JS Extraction', () => {
+    /**
+     * Re-implements the regex logic from extractRegisterClassFromCompiledJS()
+     * so we can test it without exporting the private function.
+     */
+    function parseCompiledJSForRegisterClass(
+        sourceCode: string
+    ): { className: string; baseClass?: string; key?: string }[] {
+        const results: { className: string; baseClass?: string; key?: string }[] = [];
+        if (!sourceCode.includes('RegisterClass')) return results;
+
+        const decorateBlockRegex = /(\w+)\s*=\s*__decorate\(\[([\s\S]*?)\]\s*,\s*\1\s*\)/g;
+        let blockMatch;
+        while ((blockMatch = decorateBlockRegex.exec(sourceCode)) !== null) {
+            const className = blockMatch[1];
+            const decoratorsBlock = blockMatch[2];
+
+            const registerClassRegex = /RegisterClass\((\w+)(?:\s*,\s*['"]([^'"]+)['"])?\)/g;
+            let rcMatch;
+            while ((rcMatch = registerClassRegex.exec(decoratorsBlock)) !== null) {
+                results.push({
+                    className,
+                    baseClass: rcMatch[1],
+                    key: rcMatch[2]
+                });
+            }
+        }
+        return results;
+    }
+
+    it('should detect RegisterClass in standard ESM compiled output', () => {
+        const source = `
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length;
+    return c;
+};
+import { BaseEntity } from "@memberjunction/core";
+import { RegisterClass } from "@memberjunction/global";
+
+let MJDashboardEntityExtended = class MJDashboardEntityExtended extends MJDashboardEntity {
+    constructor() { super(); }
+};
+MJDashboardEntityExtended = __decorate([
+    RegisterClass(BaseEntity, 'MJ: Dashboards')
+], MJDashboardEntityExtended);
+export { MJDashboardEntityExtended };
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].className).toBe('MJDashboardEntityExtended');
+        expect(results[0].baseClass).toBe('BaseEntity');
+        expect(results[0].key).toBe('MJ: Dashboards');
+    });
+
+    it('should detect multiple RegisterClass decorators across classes', () => {
+        const source = `
+let UserEntity = class UserEntity extends BaseEntity {};
+UserEntity = __decorate([
+    RegisterClass(BaseEntity, 'Users')
+], UserEntity);
+
+let RoleEntity = class RoleEntity extends BaseEntity {};
+RoleEntity = __decorate([
+    RegisterClass(BaseEntity, 'Roles')
+], RoleEntity);
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(2);
+        expect(results[0].className).toBe('UserEntity');
+        expect(results[0].key).toBe('Users');
+        expect(results[1].className).toBe('RoleEntity');
+        expect(results[1].key).toBe('Roles');
+    });
+
+    it('should handle RegisterClass without a key argument', () => {
+        const source = `
+let MyAction = class MyAction extends BaseAction {};
+MyAction = __decorate([
+    RegisterClass(BaseAction)
+], MyAction);
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].className).toBe('MyAction');
+        expect(results[0].baseClass).toBe('BaseAction');
+        expect(results[0].key).toBeUndefined();
+    });
+
+    it('should handle RegisterClass alongside other decorators', () => {
+        const source = `
+let MJTestEntity = class MJTestEntity extends BaseEntity {};
+MJTestEntity = __decorate([
+    SomeOtherDecorator(),
+    RegisterClass(BaseEntity, 'Test Entities'),
+    Injectable()
+], MJTestEntity);
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].className).toBe('MJTestEntity');
+        expect(results[0].baseClass).toBe('BaseEntity');
+        expect(results[0].key).toBe('Test Entities');
+    });
+
+    it('should return empty for files without RegisterClass', () => {
+        const source = `
+let SimpleClass = class SimpleClass {};
+SimpleClass = __decorate([
+    Injectable()
+], SimpleClass);
+export { SimpleClass };
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(0);
+    });
+
+    it('should return empty for files with no __decorate calls', () => {
+        const source = `
+export class PlainClass {
+    doSomething() { return 42; }
+}
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(0);
+    });
+
+    it('should handle single-line minified output', () => {
+        const source = `let Foo=class Foo extends Bar{};Foo=__decorate([RegisterClass(Bar,'Foos')],Foo);`;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].className).toBe('Foo');
+        expect(results[0].baseClass).toBe('Bar');
+        expect(results[0].key).toBe('Foos');
+    });
+
+    it('should handle double-quoted key strings', () => {
+        const source = `
+let MyEntity = class MyEntity extends BaseEntity {};
+MyEntity = __decorate([
+    RegisterClass(BaseEntity, "My Entities")
+], MyEntity);
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].key).toBe('My Entities');
+    });
+
+    it('should handle keys with special characters like MJ: prefix', () => {
+        const source = `
+let AIAgentRunEntity = class AIAgentRunEntity extends BaseEntity {};
+AIAgentRunEntity = __decorate([
+    RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
+], AIAgentRunEntity);
+        `;
+        const results = parseCompiledJSForRegisterClass(source);
+        expect(results).toHaveLength(1);
+        expect(results[0].className).toBe('AIAgentRunEntity');
+        expect(results[0].key).toBe('MJ: AI Agent Runs');
+    });
+});
+
 describe('isPackageExcluded (logic test)', () => {
     // Re-implement the logic to test it since it's a private function
     function isPackageExcluded(packageName: string, excludePackages: string[]): boolean {

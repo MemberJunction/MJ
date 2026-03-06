@@ -228,35 +228,84 @@ function walkDependencyTree(
 // ============================================================================
 
 /**
- * Finds all TypeScript source files in a package directory.
- * Looks in the src/ folder by default.
+ * Result of finding scannable files in a package directory.
+ * Indicates whether source (.ts) or compiled (.js) files were found.
  */
-  async function findSourceFiles(packageDir: string, excludePatterns: string[]): Promise<string[]>
-  {
-      const srcDir = path.join(packageDir, 'src');
-      if (!fs.existsSync(srcDir)) return [];
+interface FindFilesResult {
+    /** The discovered file paths */
+    files: string[];
+    /** Whether these are compiled JS files from dist/ (true) or TS source from src/ (false) */
+    isCompiledJS: boolean;
+}
 
-      const defaultExcludes = [
-          '**/node_modules/**',
-          '**/dist/**',
-          '**/build/**',
-          '**/.git/**',
-          '**/__tests__/**',
-          '**/*.d.ts',
-          '**/*.spec.ts',
-          '**/*.test.ts',
-          ...excludePatterns.map(p => `**/${p}/**`)
-      ];
+/**
+ * Finds scannable files in a package directory.
+ * Prefers TypeScript source files from src/, but falls back to compiled JS
+ * files in dist/ when src/ doesn't exist (e.g., npm-published packages).
+ */
+async function findScannableFiles(packageDir: string, excludePatterns: string[]): Promise<FindFilesResult> {
+    const srcDir = path.join(packageDir, 'src');
+    if (fs.existsSync(srcDir)) {
+        const files = await findSourceFiles(srcDir, excludePatterns);
+        return { files, isCompiledJS: false };
+    }
 
-      const files = await glob('**/*.ts', {
-          cwd: srcDir,
-          absolute: true,
-          ignore: defaultExcludes,
-          nodir: true
-      });
+    // Fallback: scan compiled JS files in dist/
+    const distDir = path.join(packageDir, 'dist');
+    if (fs.existsSync(distDir)) {
+        const files = await findDistFiles(distDir, excludePatterns);
+        return { files, isCompiledJS: true };
+    }
 
-      return files;
-  }
+    return { files: [], isCompiledJS: false };
+}
+
+/**
+ * Finds all TypeScript source files in a package's src/ directory.
+ */
+async function findSourceFiles(srcDir: string, excludePatterns: string[]): Promise<string[]> {
+    const defaultExcludes = [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/.git/**',
+        '**/__tests__/**',
+        '**/*.d.ts',
+        '**/*.spec.ts',
+        '**/*.test.ts',
+        ...excludePatterns.map(p => `**/${p}/**`)
+    ];
+
+    return glob('**/*.ts', {
+        cwd: srcDir,
+        absolute: true,
+        ignore: defaultExcludes,
+        nodir: true
+    });
+}
+
+/**
+ * Finds compiled JavaScript files in a package's dist/ directory.
+ * Used as a fallback when src/ doesn't exist (npm-published packages).
+ */
+async function findDistFiles(distDir: string, excludePatterns: string[]): Promise<string[]> {
+    const defaultExcludes = [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/*.d.ts',
+        '**/*.d.ts.map',
+        '**/*.js.map',
+        '**/*.min.js',
+        ...excludePatterns.map(p => `**/${p}/**`)
+    ];
+
+    return glob('**/*.{js,mjs,cjs}', {
+        cwd: distDir,
+        absolute: true,
+        ignore: defaultExcludes,
+        nodir: true
+    });
+}
 
 /**
  * Parses a TypeScript file and extracts @RegisterClass decorator information
@@ -325,6 +374,55 @@ function parseRegisterClassDecorator(
     }
 
     return { className, filePath, packageName, baseClassName, key };
+}
+
+/**
+ * Extracts @RegisterClass decorator information from compiled JavaScript files.
+ *
+ * In compiled JS output, TypeScript decorators are downleveled into
+ * `__decorate()` calls with the pattern:
+ *
+ *   ClassName = __decorate([ RegisterClass(BaseClass, 'key') ], ClassName);
+ *
+ * This function uses a two-pass regex approach:
+ * 1. Find all `__decorate([...], ClassName)` blocks using a backreference
+ * 2. Within each block, extract `RegisterClass(BaseClass, 'key')` calls
+ */
+function extractRegisterClassFromCompiledJS(
+    filePath: string,
+    sourceText: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    const results: RegisteredClassInfo[] = [];
+
+    // Quick check before running regexes
+    if (!sourceText.includes('RegisterClass')) return results;
+
+    // Match: ClassName = __decorate([ ... ], ClassName)
+    // The backreference \1 ensures we capture the correct closing class name.
+    // [\s\S]*? lazily matches the decorator array contents.
+    const decorateBlockRegex = /(\w+)\s*=\s*__decorate\(\[([\s\S]*?)\]\s*,\s*\1\s*\)/g;
+
+    let blockMatch;
+    while ((blockMatch = decorateBlockRegex.exec(sourceText)) !== null) {
+        const className = blockMatch[1];
+        const decoratorsBlock = blockMatch[2];
+
+        // Within the decorator array, find RegisterClass(...) calls
+        const registerClassRegex = /RegisterClass\((\w+)(?:\s*,\s*['"]([^'"]+)['"])?\)/g;
+        let rcMatch;
+        while ((rcMatch = registerClassRegex.exec(decoratorsBlock)) !== null) {
+            results.push({
+                className,
+                filePath,
+                packageName,
+                baseClassName: rcMatch[1],
+                key: rcMatch[2]
+            });
+        }
+    }
+
+    return results;
 }
 
 // ============================================================================
@@ -771,14 +869,16 @@ export async function generateClassRegistrationsManifest(
     // Scan each dependency for @RegisterClass decorators
     let packagesWithDecorators = 0;
     for (const [depName, depDir] of Array.from(depTree.entries())) {
-        const sourceFiles = await findSourceFiles(depDir, excludePatterns);
-        if (sourceFiles.length === 0) continue;
+        const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns);
+        if (files.length === 0) continue;
 
         let foundInPackage = false;
-        for (const filePath of sourceFiles) {
+        for (const filePath of files) {
             try {
                 const sourceText = fs.readFileSync(filePath, 'utf-8');
-                const classes = extractRegisterClassDecorators(filePath, sourceText, depName);
+                const classes = isCompiledJS
+                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
+                    : extractRegisterClassDecorators(filePath, sourceText, depName);
                 if (classes.length > 0) {
                     foundInPackage = true;
                     allClasses.push(...classes);
