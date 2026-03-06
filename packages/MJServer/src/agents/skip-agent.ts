@@ -171,15 +171,16 @@ export class SkipProxyAgent extends BaseAgent {
         // Call Skip API
         const result = await this.skipSDK.chat(skipOptions);
 
-        // Handle Skip API errors
+        // Handle Skip API errors — surface the actual error message, not a generic wrapper
         if (!result.success || !result.response) {
-            LogError(`[SkipProxyAgent] Skip API call failed: ${result.error}`);
+            const errorMsg = result.error || 'No response received from Skip API';
+            LogError(`[SkipProxyAgent] Skip API call failed: ${errorMsg}`);
             return {
                 finalStep: {
                     terminate: true,
                     step: 'Failed',
-                    message: 'Skip API call failed',
-                    errorMessage: result.error
+                    message: errorMsg,
+                    errorMessage: errorMsg
                 } as BaseAgentNextStep<P>,
                 stepCount: 1
             };
@@ -286,56 +287,108 @@ export class SkipProxyAgent extends BaseAgent {
     }
 
     /**
-     * Map Skip API response to MJ agent next step
+     * Map Skip API response to MJ agent next step.
+     *
+     * Checks for Skip-level errors first, then delegates to phase-specific handlers.
      */
     private mapSkipResponseToNextStep(
         apiResponse: SkipAPIResponse,
         conversationId: string
     ): BaseAgentNextStep<ComponentSpec> {
-      //return this.tempHack();
+      // Check if Skip reported an error (success: false with any responsePhase)
+      if (!apiResponse.success) {
+          return this.handleSkipError(apiResponse);
+      }
 
       switch (apiResponse.responsePhase) {
-        case 'analysis_complete': {
-            // Skip has completed analysis and returned results
-            const completeResponse = apiResponse as SkipAPIAnalysisCompleteResponse;
-            const componentSpec = completeResponse.componentOptions[0].option;
-            // Filter on system message and get the last one
-            const skipMessage = completeResponse.messages.filter(msg => msg.role === 'system').pop();
-            return {
-                terminate: true,
-                step: 'Success',
-                message: skipMessage?.content || completeResponse.title || 'Analysis complete',
-                newPayload: componentSpec
-            };
-        }
+        case 'analysis_complete':
+            return this.handleAnalysisComplete(apiResponse as SkipAPIAnalysisCompleteResponse);
 
-        case 'clarifying_question': {
-            // Skip needs more information from the user
-            const clarifyResponse = apiResponse as SkipAPIClarifyingQuestionResponse;
-
-            return {
-                terminate: true,
-                step: 'Chat',
-                message: clarifyResponse.clarifyingQuestion,
-                responseForm: clarifyResponse.responseForm,
-                // Pass through payload for incremental artifact building (e.g., PRD in progress)
-                // The client will render this as an artifact and pass it back in the next request
-                newPayload: apiResponse.payload as any
-            };
-        }
+        case 'clarifying_question':
+            return this.handleClarifyingQuestion(apiResponse as SkipAPIClarifyingQuestionResponse);
 
         default: {
-            // Unknown or unexpected response phase
-            LogError(`[SkipProxyAgent] Unknown Skip response phase: ${apiResponse.responsePhase}`);
+            const msg = `Unexpected Skip response phase: ${apiResponse.responsePhase}`;
+            LogError(`[SkipProxyAgent] ${msg}`);
             return {
                 terminate: true,
                 step: 'Failed',
-                message: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
-                errorMessage: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
+                message: msg,
+                errorMessage: msg,
                 newPayload: undefined
             };
         }
       }
+    }
+
+    /**
+     * Handle Skip error responses — extracts the most descriptive error available
+     */
+    private handleSkipError(apiResponse: SkipAPIResponse): BaseAgentNextStep<ComponentSpec> {
+        // Try to get a meaningful error: explicit error field, last system message, or fallback
+        const lastSystemMessage = apiResponse.messages
+            ?.filter(m => m.role === 'system')
+            .pop();
+
+        const errorDetail = apiResponse.error
+            || lastSystemMessage?.content
+            || 'Skip returned an error with no details';
+
+        LogError(`[SkipProxyAgent] Skip error (phase: ${apiResponse.responsePhase}): ${errorDetail}`);
+
+        return {
+            terminate: true,
+            step: 'Failed',
+            message: errorDetail,
+            errorMessage: errorDetail,
+            newPayload: undefined
+        };
+    }
+
+    /**
+     * Handle analysis_complete phase — validates componentOptions before accessing
+     */
+    private handleAnalysisComplete(
+        response: SkipAPIAnalysisCompleteResponse
+    ): BaseAgentNextStep<ComponentSpec> {
+        if (!response.componentOptions || response.componentOptions.length === 0) {
+            const msg = 'Skip completed analysis but returned no component options. '
+                + `Title: "${response.title || 'none'}". `
+                + `Result type: "${response.resultType || 'none'}"`;
+            LogError(`[SkipProxyAgent] ${msg}`);
+            return {
+                terminate: true,
+                step: 'Failed',
+                message: msg,
+                errorMessage: msg,
+                newPayload: undefined
+            };
+        }
+
+        const componentSpec = response.componentOptions[0].option;
+        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+
+        return {
+            terminate: true,
+            step: 'Success',
+            message: skipMessage?.content || response.title || 'Analysis complete',
+            newPayload: componentSpec
+        };
+    }
+
+    /**
+     * Handle clarifying_question phase
+     */
+    private handleClarifyingQuestion(
+        response: SkipAPIClarifyingQuestionResponse
+    ): BaseAgentNextStep<ComponentSpec> {
+        return {
+            terminate: true,
+            step: 'Chat',
+            message: response.clarifyingQuestion,
+            responseForm: response.responseForm,
+            newPayload: response.payload as ComponentSpec
+        };
     }
 
     private tempHack(): BaseAgentNextStep<SkipAgentPayload> {

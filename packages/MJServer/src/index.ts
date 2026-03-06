@@ -37,6 +37,7 @@ import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-de
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -303,6 +304,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Initialize LocalCacheManager with the server-side storage provider (in-memory)
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
   console.log('LocalCacheManager initialized');
+
+  // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
+  // This must happen before any request handler calls GetAPIKeyEngine()
+  GetAPIKeyEngine();
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);

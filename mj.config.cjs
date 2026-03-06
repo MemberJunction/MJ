@@ -250,6 +250,37 @@ module.exports = {
 
   /**
    * ====================
+   * API Key Generation
+   * ====================
+   *
+   * Configuration for API key generation parameters.
+   *
+   * WARNING: Changing these values after API keys have been issued will
+   * INVALIDATE all existing keys. Only modify before creating any keys,
+   * or be prepared to rotate all keys.
+   *
+   * All properties are optional and default to:
+   *   prefix: 'mj_sk_'       - Prefix prepended to generated keys
+   *   entropyBytes: 32        - Random bytes of entropy (64 hex chars / 43 base64url chars)
+   *   encoding: 'hex'         - Key body encoding: 'hex' or 'base64url'
+   *   hashAlgorithm: 'sha256' - Hash algorithm for key storage
+   *
+   * Example: base64url encoding with custom prefix for shorter keys:
+   *   apiKeyGeneration: {
+   *     prefix: 'skip-',
+   *     entropyBytes: 50,
+   *     encoding: 'base64url',
+   *   },
+   */
+  // apiKeyGeneration: {
+  //   prefix: 'mj_sk_',
+  //   entropyBytes: 32,
+  //   encoding: 'hex',
+  //   hashAlgorithm: 'sha256',
+  // },
+
+  /**
+   * ====================
    * All Other Settings
    * ====================
    *

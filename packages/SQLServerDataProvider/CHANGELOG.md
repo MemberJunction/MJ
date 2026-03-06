@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [064cf3a]
+- Updated dependencies [0753249]
+  - @memberjunction/generic-database-provider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-vector-dupe@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/actions@5.8.0
+  - @memberjunction/encryption@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/queue@5.8.0
+  - @memberjunction/query-processor@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes

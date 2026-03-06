@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/server
 
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [064cf3a]
+- Updated dependencies [de9f2c0]
+- Updated dependencies [4b26456]
+- Updated dependencies [0753249]
+  - @memberjunction/api-keys@5.8.0
+  - @memberjunction/generic-database-provider@5.8.0
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/actions-bizapps-lms@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/postgresql-dataprovider@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/ai-agent-manager-actions@5.8.0
+  - @memberjunction/ai-agent-manager@5.8.0
+  - @memberjunction/ai-agents@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-mcp-client@5.8.0
+  - @memberjunction/computer-use-engine@5.8.0
+  - @memberjunction/ai-prompts@5.8.0
+  - @memberjunction/ai-vectors-pinecone@5.8.0
+  - @memberjunction/actions-apollo@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/actions-bizapps-accounting@5.8.0
+  - @memberjunction/actions-bizapps-crm@5.8.0
+  - @memberjunction/actions-bizapps-formbuilders@5.8.0
+  - @memberjunction/actions-bizapps-social@5.8.0
+  - @memberjunction/core-actions@5.8.0
+  - @memberjunction/actions@5.8.0
+  - @memberjunction/communication-types@5.8.0
+  - @memberjunction/entity-communications-base@5.8.0
+  - @memberjunction/entity-communications-server@5.8.0
+  - @memberjunction/notifications@5.8.0
+  - @memberjunction/communication-ms-graph@5.8.0
+  - @memberjunction/communication-sendgrid@5.8.0
+  - @memberjunction/component-registry-client-sdk@5.8.0
+  - @memberjunction/doc-utils@5.8.0
+  - @memberjunction/encryption@5.8.0
+  - @memberjunction/external-change-detection@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/core-entities-server@5.8.0
+  - @memberjunction/data-context@5.8.0
+  - @memberjunction/data-context-server@5.8.0
+  - @memberjunction/queue@5.8.0
+  - @memberjunction/storage@5.8.0
+  - @memberjunction/scheduling-actions@5.8.0
+  - @memberjunction/scheduling-engine-base@5.8.0
+  - @memberjunction/scheduling-engine@5.8.0
+  - @memberjunction/skip-types@5.8.0
+  - @memberjunction/templates@5.8.0
+  - @memberjunction/testing-engine@5.8.0
+  - @memberjunction/testing-engine-base@5.8.0
+  - @memberjunction/version-history@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/global@5.8.0
+  - @memberjunction/sql-dialect@5.8.0
+  - @memberjunction/scheduling-base-types@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes

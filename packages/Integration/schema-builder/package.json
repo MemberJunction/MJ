@@ -1,23 +1,31 @@
 {
   "name": "@memberjunction/integration-schema-builder",
   "type": "module",
-  "version": "5.7.0",
+  "version": "5.8.0",
   "description": "MemberJunction Integration Schema Builder - file-emission-only DDL generation for integration tables",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/global": "5.7.0",
-    "@memberjunction/integration-engine": "5.7.0"
+    "@memberjunction/global": "5.8.0",
+    "@memberjunction/integration-engine": "5.8.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
     "vitest": "^4.0.18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC"
 }

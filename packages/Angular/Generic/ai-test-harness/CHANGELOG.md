@@ -1,5 +1,24 @@
 # @memberjunction/ng-ai-test-harness
 
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [de9f2c0]
+- Updated dependencies [0753249]
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-shared@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ai-engine-base@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/ng-code-editor@5.8.0
+  - @memberjunction/ng-container-directives@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes
