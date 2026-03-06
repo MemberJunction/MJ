@@ -157,12 +157,17 @@ export class PostalCodeLookupAction extends BaseAction {
         }
 
         const country = params.Params.find(p => p.Name.toLowerCase() === 'country')?.Value || '';
-        const query = country ? `${postalCode}, ${country}` : postalCode;
 
         try {
+            // Use the components parameter to restrict results to the specified country
+            const queryParams: Record<string, string> = { address: postalCode, key: apiKey };
+            if (country) {
+                queryParams.components = `country:${country}`;
+            }
+
             const response = await axios.get<GoogleGeocodingResult>(
                 'https://maps.googleapis.com/maps/api/geocode/json',
-                { params: { address: query, key: apiKey }, timeout: 10000 }
+                { params: queryParams, timeout: 10000 }
             );
 
             if (response.data.status !== 'OK' || !response.data.results.length) {
