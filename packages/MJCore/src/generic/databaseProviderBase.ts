@@ -1136,7 +1136,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         if (!createRLSPass) {
                             entityResult.Success = false;
                             entityResult.EndedAt = new Date();
-                            entityResult.Message = `Create denied by Row Level Security for entity ${entity.EntityInfo.Name}`;
+                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record`;
                             throw new Error(entityResult.Message);
                         }
                     } else {
@@ -1144,7 +1144,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         if (!updateRLSPass) {
                             entityResult.Success = false;
                             entityResult.EndedAt = new Date();
-                            entityResult.Message = `Update denied by Row Level Security for entity ${entity.EntityInfo.Name}`;
+                            entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
                             throw new Error(entityResult.Message);
                         }
                     }
@@ -1278,7 +1278,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (!deleteRLSPass) {
                     entityResult.Success = false;
                     entityResult.EndedAt = new Date();
-                    entityResult.Message = `Delete denied by Row Level Security for entity ${entity.EntityInfo.Name}`;
+                    entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
                     throw new Error(entityResult.Message);
                 }
             }

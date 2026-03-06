@@ -222,7 +222,7 @@ describe('DatabaseProviderBase', () => {
 
             await expect(
                 sqlServer.Save(entity, mockUser, new EntitySaveOptions())
-            ).rejects.toThrow('Create denied by Row Level Security');
+            ).rejects.toThrow('Access denied for new');
         });
 
         it('throws when Update RLS check fails for existing record', async () => {
@@ -231,7 +231,7 @@ describe('DatabaseProviderBase', () => {
 
             await expect(
                 sqlServer.Save(entity, mockUser, new EntitySaveOptions())
-            ).rejects.toThrow('Update denied by Row Level Security');
+            ).rejects.toThrow('Record not found or access denied');
         });
 
         it('does not check RLS when in replay mode', async () => {
