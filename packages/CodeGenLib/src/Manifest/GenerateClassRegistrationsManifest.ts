@@ -97,6 +97,21 @@ export interface GenerateManifestOptions {
      * @default true
      */
     syncDependencies?: boolean;
+
+    /**
+     * When true, scans compiled JavaScript files in dist/ directories for
+     * packages that don't have src/ (e.g., npm-published packages).
+     *
+     * By default, the manifest generator only scans TypeScript source files
+     * in src/ directories. Enable this flag to additionally discover
+     * @RegisterClass decorators in pre-compiled dist/ output using AST parsing.
+     *
+     * Use this when your dependency tree includes npm-published packages
+     * (not workspace-linked) that contain @RegisterClass decorators.
+     *
+     * @default false
+     */
+    scanDist?: boolean;
 }
 
 /**
@@ -267,18 +282,20 @@ interface FindFilesResult {
  * Prefers TypeScript source files from src/, but falls back to compiled JS
  * files in dist/ when src/ doesn't exist (e.g., npm-published packages).
  */
-async function findScannableFiles(packageDir: string, excludePatterns: string[]): Promise<FindFilesResult> {
+async function findScannableFiles(packageDir: string, excludePatterns: string[], scanDist: boolean): Promise<FindFilesResult> {
     const srcDir = path.join(packageDir, 'src');
     if (fs.existsSync(srcDir)) {
         const files = await findSourceFiles(srcDir, excludePatterns);
         return { files, isCompiledJS: false };
     }
 
-    // Fallback: scan compiled JS files in dist/
-    const distDir = path.join(packageDir, 'dist');
-    if (fs.existsSync(distDir)) {
-        const files = await findDistFiles(distDir, excludePatterns);
-        return { files, isCompiledJS: true };
+    // Only scan dist/ when explicitly opted in via --scan-dist
+    if (scanDist) {
+        const distDir = path.join(packageDir, 'dist');
+        if (fs.existsSync(distDir)) {
+            const files = await findDistFiles(distDir, excludePatterns);
+            return { files, isCompiledJS: true };
+        }
     }
 
     return { files: [], isCompiledJS: false };
@@ -408,9 +425,9 @@ function parseRegisterClassDecorator(
  *
  *   ClassName = __decorate([ RegisterClass(BaseClass, 'key') ], ClassName);
  *
- * This function uses a two-pass regex approach:
- * 1. Find all `__decorate([...], ClassName)` blocks using a backreference
- * 2. Within each block, extract `RegisterClass(BaseClass, 'key')` calls
+ * This function uses TypeScript's parser with ScriptKind.JS to build a proper
+ * AST, then walks it looking for assignment expressions whose right-hand side
+ * is a `__decorate([ ... ], ClassName)` call containing `RegisterClass()`.
  */
 function extractRegisterClassFromCompiledJS(
     filePath: string,
@@ -419,31 +436,90 @@ function extractRegisterClassFromCompiledJS(
 ): RegisteredClassInfo[] {
     const results: RegisteredClassInfo[] = [];
 
-    // Quick check before running regexes
+    // Quick check before parsing
     if (!sourceText.includes('RegisterClass')) return results;
 
-    // Match: ClassName = __decorate([ ... ], ClassName)
-    // The backreference \1 ensures we capture the correct closing class name.
-    // [\s\S]*? lazily matches the decorator array contents.
-    const decorateBlockRegex = /(\w+)\s*=\s*__decorate\(\[([\s\S]*?)\]\s*,\s*\1\s*\)/g;
+    const sourceFile = ts.createSourceFile(
+        filePath,
+        sourceText,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+    );
 
-    let blockMatch;
-    while ((blockMatch = decorateBlockRegex.exec(sourceText)) !== null) {
-        const className = blockMatch[1];
-        const decoratorsBlock = blockMatch[2];
-
-        // Within the decorator array, find RegisterClass(...) calls
-        const registerClassRegex = /RegisterClass\((\w+)(?:\s*,\s*['"]([^'"]+)['"])?\)/g;
-        let rcMatch;
-        while ((rcMatch = registerClassRegex.exec(decoratorsBlock)) !== null) {
-            results.push({
-                className,
-                filePath,
-                packageName,
-                baseClassName: rcMatch[1],
-                key: rcMatch[2]
-            });
+    function visit(node: ts.Node): void {
+        if (ts.isExpressionStatement(node)) {
+            const expr = node.expression;
+            if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                const found = parseDecorateAssignment(expr, filePath, packageName);
+                results.push(...found);
+            }
         }
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return results;
+}
+
+/**
+ * Parses a binary assignment expression of the form:
+ *   ClassName = __decorate([...decorators], ClassName)
+ *
+ * Validates the structure and delegates to extractRegisterClassFromDecoratorArray
+ * for the actual RegisterClass extraction.
+ */
+function parseDecorateAssignment(
+    expr: ts.BinaryExpression,
+    filePath: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    // Left side must be an identifier (the class name)
+    if (!ts.isIdentifier(expr.left)) return [];
+    const className = expr.left.text;
+
+    // Right side must be a call to __decorate
+    if (!ts.isCallExpression(expr.right)) return [];
+    const callExpr = expr.right;
+    if (!ts.isIdentifier(callExpr.expression) || callExpr.expression.text !== '__decorate') return [];
+
+    // First argument must be an array literal (the decorators list)
+    if (callExpr.arguments.length < 1) return [];
+    const decoratorsArray = callExpr.arguments[0];
+    if (!ts.isArrayLiteralExpression(decoratorsArray)) return [];
+
+    return extractRegisterClassFromDecoratorArray(decoratorsArray, className, filePath, packageName);
+}
+
+/**
+ * Walks the elements of a __decorate() array literal and extracts
+ * RegisterClass(...) calls, returning a RegisteredClassInfo for each.
+ */
+function extractRegisterClassFromDecoratorArray(
+    arrayLiteral: ts.ArrayLiteralExpression,
+    className: string,
+    filePath: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    const results: RegisteredClassInfo[] = [];
+
+    for (const element of arrayLiteral.elements) {
+        if (!ts.isCallExpression(element)) continue;
+        if (!ts.isIdentifier(element.expression)) continue;
+        if (element.expression.text !== 'RegisterClass') continue;
+
+        let baseClassName: string | undefined;
+        let key: string | undefined;
+
+        const args = element.arguments;
+        if (args.length > 0 && ts.isIdentifier(args[0])) {
+            baseClassName = args[0].text;
+        }
+        if (args.length > 1 && ts.isStringLiteral(args[1])) {
+            key = args[1].text;
+        }
+
+        results.push({ className, filePath, packageName, baseClassName, key });
     }
 
     return results;
@@ -983,7 +1059,8 @@ export async function generateClassRegistrationsManifest(
         filterBaseClasses,
         excludePatterns = [],
         excludePackages = [],
-        syncDependencies = true
+        syncDependencies = true,
+        scanDist = false
     } = options;
 
     const errors: string[] = [];
@@ -1009,11 +1086,14 @@ export async function generateClassRegistrationsManifest(
     // Walk the dependency tree
     const depTree = walkDependencyTree(absoluteAppDir, log, excludePackages);
     log(`Dependency tree: ${depTree.size} packages`);
+    if (scanDist) {
+        log('Dist scanning enabled: will scan dist/ for packages without src/');
+    }
 
     // Scan each dependency for @RegisterClass decorators
     let packagesWithDecorators = 0;
     for (const [depName, depDir] of Array.from(depTree.entries())) {
-        const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns);
+        const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns, scanDist);
         if (files.length === 0) continue;
 
         let foundInPackage = false;

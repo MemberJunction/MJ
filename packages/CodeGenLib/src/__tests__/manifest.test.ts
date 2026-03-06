@@ -179,15 +179,18 @@ describe('Manifest Generator Types', () => {
             excludePatterns?: string[];
             excludePackages?: string[];
             syncDependencies?: boolean;
+            scanDist?: boolean;
         } = {
             outputPath: './manifest.ts',
             verbose: true,
             excludePackages: ['@memberjunction'],
-            syncDependencies: true
+            syncDependencies: true,
+            scanDist: false
         };
         expect(options.outputPath).toBe('./manifest.ts');
         expect(options.excludePackages).toContain('@memberjunction');
         expect(options.syncDependencies).toBe(true);
+        expect(options.scanDist).toBe(false);
     });
 
     it('should have GenerateManifestResult shape', () => {
@@ -219,15 +222,18 @@ describe('Manifest Generator Types', () => {
 // =============================================================================
 // Compiled JS Extraction Tests
 // =============================================================================
-// When a package ships only dist/ (no src/), the manifest generator falls back
-// to scanning compiled .js files. TypeScript downlevels decorators into
-// __decorate() calls. We re-implement the regex extraction logic here to test it.
+// When a package ships only dist/ (no src/), the manifest generator can scan
+// compiled .js files (with --scan-dist). TypeScript downlevels decorators into
+// __decorate() calls. We re-implement the AST extraction logic here to test it.
 // =============================================================================
 
 describe('Manifest Generator - Compiled JS Extraction', () => {
     /**
-     * Re-implements the regex logic from extractRegisterClassFromCompiledJS()
+     * Re-implements the AST logic from extractRegisterClassFromCompiledJS()
      * so we can test it without exporting the private function.
+     *
+     * Uses TypeScript's parser with ScriptKind.JS to walk the AST for
+     * `ClassName = __decorate([ RegisterClass(Base, 'key') ], ClassName)` patterns.
      */
     function parseCompiledJSForRegisterClass(
         sourceCode: string
@@ -235,22 +241,45 @@ describe('Manifest Generator - Compiled JS Extraction', () => {
         const results: { className: string; baseClass?: string; key?: string }[] = [];
         if (!sourceCode.includes('RegisterClass')) return results;
 
-        const decorateBlockRegex = /(\w+)\s*=\s*__decorate\(\[([\s\S]*?)\]\s*,\s*\1\s*\)/g;
-        let blockMatch;
-        while ((blockMatch = decorateBlockRegex.exec(sourceCode)) !== null) {
-            const className = blockMatch[1];
-            const decoratorsBlock = blockMatch[2];
+        const sourceFile = ts.createSourceFile(
+            'test.js',
+            sourceCode,
+            ts.ScriptTarget.Latest,
+            true,
+            ts.ScriptKind.JS
+        );
 
-            const registerClassRegex = /RegisterClass\((\w+)(?:\s*,\s*['"]([^'"]+)['"])?\)/g;
-            let rcMatch;
-            while ((rcMatch = registerClassRegex.exec(decoratorsBlock)) !== null) {
-                results.push({
-                    className,
-                    baseClass: rcMatch[1],
-                    key: rcMatch[2]
-                });
+        function visit(node: ts.Node): void {
+            if (ts.isExpressionStatement(node)) {
+                const expr = node.expression;
+                if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                    if (ts.isIdentifier(expr.left) && ts.isCallExpression(expr.right)) {
+                        const className = expr.left.text;
+                        const callExpr = expr.right;
+                        if (ts.isIdentifier(callExpr.expression) && callExpr.expression.text === '__decorate' &&
+                            callExpr.arguments.length >= 1 && ts.isArrayLiteralExpression(callExpr.arguments[0])) {
+                            for (const element of callExpr.arguments[0].elements) {
+                                if (!ts.isCallExpression(element)) continue;
+                                if (!ts.isIdentifier(element.expression) || element.expression.text !== 'RegisterClass') continue;
+
+                                const info: { className: string; baseClass?: string; key?: string } = { className };
+                                const args = element.arguments;
+                                if (args.length > 0 && ts.isIdentifier(args[0])) {
+                                    info.baseClass = args[0].text;
+                                }
+                                if (args.length > 1 && ts.isStringLiteral(args[1])) {
+                                    info.key = args[1].text;
+                                }
+                                results.push(info);
+                            }
+                        }
+                    }
+                }
             }
+            ts.forEachChild(node, visit);
         }
+
+        visit(sourceFile);
         return results;
     }
 
@@ -723,5 +752,141 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
         expect(manifestWrite!.content).toContain("import {");
         expect(manifestWrite!.content).toContain("TestProvider");
         expect(manifestWrite!.content).toContain("@test/provider");
+    });
+});
+
+// =============================================================================
+// scanDist Opt-In Integration Tests
+// =============================================================================
+// These tests verify that dist/ scanning only happens when --scan-dist is
+// explicitly enabled, and that src/ is always preferred over dist/.
+// =============================================================================
+
+describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
+    let virtualFiles: Record<string, string>;
+    let writtenFiles: Array<{ path: string; content: string }>;
+    const appDir = '/test-scan-dist';
+    const outputPath = '/test-scan-dist/src/generated/manifest.ts';
+
+    function setupDistOnlyPackage(): void {
+        virtualFiles = {
+            // App package.json
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-scan-dist-app',
+                dependencies: { '@test/dist-only': '1.0.0' }
+            }, null, 2),
+
+            // Package with ONLY dist/ (no src/) — simulates npm-published package
+            [`${appDir}/node_modules/@test/dist-only/package.json`]: JSON.stringify({
+                name: '@test/dist-only',
+                version: '1.0.0',
+                types: './dist/index.d.ts',
+                dependencies: {}
+            }),
+
+            // Compiled JS file in dist/ with __decorate pattern
+            [`${appDir}/node_modules/@test/dist-only/dist/index.js`]: [
+                'var __decorate = (this && this.__decorate) || function (d, t, k, desc) { return t; };',
+                'import { RegisterClass } from "@memberjunction/global";',
+                'let DistOnlyClass = class DistOnlyClass extends BaseEntity {};',
+                'DistOnlyClass = __decorate([',
+                "    RegisterClass(BaseEntity, 'Dist Only Items')",
+                '], DistOnlyClass);',
+                'export { DistOnlyClass };',
+            ].join('\n'),
+
+            // Type declarations needed for export verification
+            [`${appDir}/node_modules/@test/dist-only/dist/index.d.ts`]:
+                'export declare class DistOnlyClass extends BaseEntity {}\n',
+        };
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        writtenFiles = [];
+        setupDistOnlyPackage();
+
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+
+        vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
+            writtenFiles.push({ path: p.toString(), content: content.toString() });
+        });
+
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+
+        // glob: return matching files under the requested cwd based on pattern
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = (opts?.cwd as string) || '';
+            const patternStr = Array.isArray(_pattern) ? _pattern.join(',') : _pattern;
+            const wantsTS = patternStr.includes('.ts');
+            const wantsJS = patternStr.includes('js'); // matches .js, .mjs, .cjs, and {js,mjs,cjs}
+            return Object.keys(virtualFiles).filter(f => {
+                if (!f.startsWith(cwd + '/')) return false;
+                if (wantsTS && f.endsWith('.ts') && !f.endsWith('.d.ts')) return true;
+                if (wantsJS && (f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.cjs')) && !f.endsWith('.d.ts')) return true;
+                return false;
+            });
+        });
+    });
+
+    it('should NOT find classes from dist/ when scanDist is false (default)', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+        });
+        expect(result.success).toBe(true);
+        expect(result.classes.some(c => c.className === 'DistOnlyClass')).toBe(false);
+    });
+
+    it('should find classes from dist/ when scanDist is true', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            scanDist: true,
+        });
+        expect(result.success).toBe(true);
+        expect(result.classes.some(c => c.className === 'DistOnlyClass')).toBe(true);
+        expect(result.classes.some(c => c.packageName === '@test/dist-only')).toBe(true);
+    });
+
+    it('should prefer src/ over dist/ even when scanDist is true', async () => {
+        // Add src/ directory with a different class to the same package
+        virtualFiles[`${appDir}/node_modules/@test/dist-only/src/index.ts`] = [
+            "import { RegisterClass } from '@memberjunction/global';",
+            "@RegisterClass(BaseEntity, 'Src Items')",
+            "export class SrcOnlyClass extends BaseEntity {}"
+        ].join('\n');
+        // Update .d.ts to export the src class (as a real build would)
+        virtualFiles[`${appDir}/node_modules/@test/dist-only/dist/index.d.ts`] =
+            'export declare class SrcOnlyClass extends BaseEntity {}\n';
+
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            scanDist: true,
+        });
+        expect(result.success).toBe(true);
+        // Should find the TS source class, not the dist class
+        expect(result.classes.some(c => c.className === 'SrcOnlyClass')).toBe(true);
+        expect(result.classes.some(c => c.className === 'DistOnlyClass')).toBe(false);
     });
 });

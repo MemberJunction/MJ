@@ -35,6 +35,10 @@ generate a supplemental manifest covering only your own application classes.`;
             command: '<%= config.bin %> <%= command.id %> --filter BaseEngine --filter BaseAction --verbose',
             description: 'Only include specific base classes with detailed progress',
         },
+        {
+            command: '<%= config.bin %> <%= command.id %> --scan-dist',
+            description: 'Include dist/ scanning for npm-published packages without src/',
+        },
     ];
 
     static flags = {
@@ -71,6 +75,12 @@ generate a supplemental manifest covering only your own application classes.`;
             description: 'Show detailed progress including per-package scanning info and skipped classes.',
             default: false,
         }),
+        'scan-dist': Flags.boolean({
+            description: 'Scan compiled JavaScript files in dist/ directories for packages without src/. ' +
+                'Use this when your dependency tree includes npm-published packages that contain @RegisterClass decorators. ' +
+                'Without this flag, only TypeScript source in src/ is scanned.',
+            default: false,
+        }),
     };
 
     async run(): Promise<void> {
@@ -80,6 +90,7 @@ generate a supplemental manifest covering only your own application classes.`;
 
         const excludePackages = flags['exclude-packages'];
         const syncDependencies = !flags['no-sync-deps'];
+        const scanDist = flags['scan-dist'];
         const result = await generateClassRegistrationsManifest({
             outputPath: flags.output,
             appDir: flags.appDir || process.cwd(),
@@ -87,6 +98,7 @@ generate a supplemental manifest covering only your own application classes.`;
             filterBaseClasses: flags.filter && flags.filter.length > 0 ? flags.filter : undefined,
             excludePackages: excludePackages && excludePackages.length > 0 ? excludePackages : undefined,
             syncDependencies,
+            scanDist,
         });
 
         if (!result.success) {
