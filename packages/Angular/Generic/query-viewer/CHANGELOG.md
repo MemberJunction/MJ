@@ -1,5 +1,18 @@
 # @memberjunction/ng-query-viewer
 
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/ng-export-service@5.8.0
+  - @memberjunction/export-engine@5.8.0
+  - @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes

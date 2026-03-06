@@ -1,5 +1,19 @@
 # @memberjunction/react-test-harness
 
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/react-runtime@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-vectors-memory@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes

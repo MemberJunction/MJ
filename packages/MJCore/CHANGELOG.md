@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 5.8.0
+
+### Minor Changes
+
+- 0753249: Add metadata migration script for v5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Minor Changes

@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.8.0
+
+### Patch Changes
+
+- de9f2c0: Fix agent run info not displaying during live streaming by ensuring AIAgentRunDetailResult returns full run info data when the agent run is actively streaming
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/global@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes

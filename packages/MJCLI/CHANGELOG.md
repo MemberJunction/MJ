@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/cli
 
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [064cf3a]
+- Updated dependencies [0753249]
+  - @memberjunction/codegen-lib@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/metadata-sync@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/server-bootstrap-lite@5.8.0
+  - @memberjunction/ai-cli@5.8.0
+  - @memberjunction/db-auto-doc@5.8.0
+  - @memberjunction/query-gen@5.8.0
+  - @memberjunction/testing-cli@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/installer@5.8.0
+  - @memberjunction/sql-converter@5.8.0
+
 ## 5.7.0
 
 ### Patch Changes
