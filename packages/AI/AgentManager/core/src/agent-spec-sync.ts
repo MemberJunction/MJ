@@ -1787,7 +1787,7 @@ export class AgentSpecSync {
             // Orphaned relationships: DB relationships not in spec.SubAgents (related type)
             relationships: dbState.relationships.filter(dbRel =>
                 !spec.SubAgents?.some(specSub =>
-                    specSub.Type === 'related' && specSub.AgentRelationshipID === dbRel.ID
+                    specSub.Type === 'related' && UUIDsEqual(specSub.AgentRelationshipID, dbRel.ID)
                 )
             ),
 
@@ -1804,7 +1804,7 @@ export class AgentSpecSync {
             // Orphaned child agents: DB children not in spec.SubAgents (child type)
             childAgents: dbState.childAgents.filter(dbChild =>
                 !spec.SubAgents?.some(specSub =>
-                    specSub.Type === 'child' && specSub.SubAgent.ID === dbChild.ID
+                    specSub.Type === 'child' && UUIDsEqual(specSub.SubAgent.ID, dbChild.ID)
                 )
             )
         };

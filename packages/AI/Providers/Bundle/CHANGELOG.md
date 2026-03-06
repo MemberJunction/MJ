@@ -1,5 +1,125 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.8.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.8.0
+- @memberjunction/ai-vectors-pinecone@5.8.0
+- @memberjunction/ai-anthropic@5.8.0
+- @memberjunction/ai-azure@5.8.0
+- @memberjunction/ai-bedrock@5.8.0
+- @memberjunction/ai-betty-bot@5.8.0
+- @memberjunction/ai-blackforestlabs@5.8.0
+- @memberjunction/ai-cerebras@5.8.0
+- @memberjunction/ai-cohere@5.8.0
+- @memberjunction/ai-elevenlabs@5.8.0
+- @memberjunction/ai-fireworks@5.8.0
+- @memberjunction/ai-gemini@5.8.0
+- @memberjunction/ai-groq@5.8.0
+- @memberjunction/ai-heygen@5.8.0
+- @memberjunction/ai-lmstudio@5.8.0
+- @memberjunction/ai-local-embeddings@5.8.0
+- @memberjunction/ai-minimax@5.8.0
+- @memberjunction/ai-mistral@5.8.0
+- @memberjunction/ai-ollama@5.8.0
+- @memberjunction/ai-openai@5.8.0
+- @memberjunction/ai-openrouter@5.8.0
+- @memberjunction/ai-vertex@5.8.0
+- @memberjunction/ai-zhipu@5.8.0
+- @memberjunction/ai-xai@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@5.7.0
+- @memberjunction/ai-azure@5.7.0
+- @memberjunction/ai-bedrock@5.7.0
+- @memberjunction/ai-betty-bot@5.7.0
+- @memberjunction/ai-blackforestlabs@5.7.0
+- @memberjunction/ai-cerebras@5.7.0
+- @memberjunction/ai-cohere@5.7.0
+- @memberjunction/ai-elevenlabs@5.7.0
+- @memberjunction/ai-fireworks@5.7.0
+- @memberjunction/ai-gemini@5.7.0
+- @memberjunction/ai-groq@5.7.0
+- @memberjunction/ai-heygen@5.7.0
+- @memberjunction/ai-lmstudio@5.7.0
+- @memberjunction/ai-local-embeddings@5.7.0
+- @memberjunction/ai-minimax@5.7.0
+- @memberjunction/ai-mistral@5.7.0
+- @memberjunction/ai-ollama@5.7.0
+- @memberjunction/ai-openai@5.7.0
+- @memberjunction/ai-openrouter@5.7.0
+- @memberjunction/ai-recommendations-rex@5.7.0
+- @memberjunction/ai-vertex@5.7.0
+- @memberjunction/ai-zhipu@5.7.0
+- @memberjunction/ai-xai@5.7.0
+- @memberjunction/ai-vectors-pinecone@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.6.0
+- @memberjunction/ai-vectors-pinecone@5.6.0
+- @memberjunction/ai-anthropic@5.6.0
+- @memberjunction/ai-azure@5.6.0
+- @memberjunction/ai-bedrock@5.6.0
+- @memberjunction/ai-betty-bot@5.6.0
+- @memberjunction/ai-blackforestlabs@5.6.0
+- @memberjunction/ai-cerebras@5.6.0
+- @memberjunction/ai-cohere@5.6.0
+- @memberjunction/ai-elevenlabs@5.6.0
+- @memberjunction/ai-fireworks@5.6.0
+- @memberjunction/ai-gemini@5.6.0
+- @memberjunction/ai-groq@5.6.0
+- @memberjunction/ai-heygen@5.6.0
+- @memberjunction/ai-lmstudio@5.6.0
+- @memberjunction/ai-local-embeddings@5.6.0
+- @memberjunction/ai-minimax@5.6.0
+- @memberjunction/ai-mistral@5.6.0
+- @memberjunction/ai-ollama@5.6.0
+- @memberjunction/ai-openai@5.6.0
+- @memberjunction/ai-openrouter@5.6.0
+- @memberjunction/ai-vertex@5.6.0
+- @memberjunction/ai-zhipu@5.6.0
+- @memberjunction/ai-xai@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- df2457c: no migration, just small code changes
+- Updated dependencies [a1648c5]
+- Updated dependencies [df2457c]
+  - @memberjunction/ai-minimax@5.5.0
+  - @memberjunction/ai-anthropic@5.5.0
+  - @memberjunction/ai-azure@5.5.0
+  - @memberjunction/ai-bedrock@5.5.0
+  - @memberjunction/ai-betty-bot@5.5.0
+  - @memberjunction/ai-blackforestlabs@5.5.0
+  - @memberjunction/ai-cerebras@5.5.0
+  - @memberjunction/ai-cohere@5.5.0
+  - @memberjunction/ai-elevenlabs@5.5.0
+  - @memberjunction/ai-fireworks@5.5.0
+  - @memberjunction/ai-gemini@5.5.0
+  - @memberjunction/ai-groq@5.5.0
+  - @memberjunction/ai-heygen@5.5.0
+  - @memberjunction/ai-lmstudio@5.5.0
+  - @memberjunction/ai-local-embeddings@5.5.0
+  - @memberjunction/ai-mistral@5.5.0
+  - @memberjunction/ai-ollama@5.5.0
+  - @memberjunction/ai-openai@5.5.0
+  - @memberjunction/ai-openrouter@5.5.0
+  - @memberjunction/ai-recommendations-rex@5.5.0
+  - @memberjunction/ai-vectors-pinecone@5.5.0
+  - @memberjunction/ai-vertex@5.5.0
+  - @memberjunction/ai-zhipu@5.5.0
+  - @memberjunction/ai-xai@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

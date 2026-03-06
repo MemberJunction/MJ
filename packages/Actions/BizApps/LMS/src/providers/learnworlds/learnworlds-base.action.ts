@@ -102,7 +102,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   /**
    * Resolves integration credentials and builds the base URL and headers.
    */
-  private async buildRequestConfig(contextUser: UserInfo): Promise<{ fullUrl: string; headers: Record<string, string> }> {
+  private async buildRequestConfig(contextUser: UserInfo): Promise<{ fullUrl: string; nonVersionedUrl: string; headers: Record<string, string> }> {
     const companyId = this.getParamValue(this.params, 'CompanyID') as string | undefined;
     if (!companyId) {
       throw new Error('CompanyID parameter is required');
@@ -122,15 +122,56 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
 
     this.validateSchoolDomain(schoolDomain);
 
+    const lwClient = this.getCredentialFromEnv(companyId, 'CLIENT_ID') || schoolDomain;
+    const nonVersionedUrl = `https://${schoolDomain}/admin/api`;
+
     return {
-      fullUrl: `https://${schoolDomain}/api/${this.apiVersion}`,
+      fullUrl: `${nonVersionedUrl}/${this.apiVersion}`,
+      nonVersionedUrl,
       headers: {
         Authorization: `Bearer ${credentials.apiKey}`,
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'Lw-Client': 'MemberJunction',
+        'Lw-Client': lwClient,
       },
     };
+  }
+
+  /**
+   * Makes an authenticated request to a non-versioned LearnWorlds API endpoint (e.g. /admin/api/sso).
+   */
+  protected async makeLearnWorldsNonVersionedRequest<T = Record<string, unknown>>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    body?: object | null,
+    contextUser?: UserInfo,
+  ): Promise<T> {
+    if (!contextUser) {
+      throw new Error('Context user is required for LearnWorlds API calls');
+    }
+
+    const { nonVersionedUrl, headers } = await this.buildRequestConfig(contextUser);
+    const requestUrl = `${nonVersionedUrl}/${endpoint}`;
+
+    try {
+      this.apiCallCount++;
+      const response = await fetch(requestUrl, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error(await this.buildErrorMessage(response));
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`LearnWorlds API request failed: ${error}`);
+    }
   }
 
   /**
@@ -161,11 +202,13 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     endpoint: string,
     queryParams: Record<string, string | number | boolean> = {},
     contextUser?: UserInfo,
+    maxResults?: number,
   ): Promise<T[]> {
     const results: T[] = [];
     let page = 1;
     let hasMore = true;
     const limit = (queryParams.limit as number) || LearnWorldsBaseAction.LW_MAX_PAGE_SIZE;
+    const effectiveMax = maxResults ?? (this.getParamValue(this.params, 'MaxResults') as number | undefined);
 
     while (hasMore) {
       const paginatedParams: Record<string, string> = {};
@@ -190,10 +233,9 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
         hasMore = false;
       }
 
-      // Respect max results if specified
-      const maxResults = this.getParamValue(this.params, 'MaxResults') as number | undefined;
-      if (maxResults && results.length >= maxResults) {
-        return results.slice(0, maxResults);
+      // Respect max results
+      if (effectiveMax && results.length >= effectiveMax) {
+        return results.slice(0, effectiveMax);
       }
     }
 
@@ -450,9 +492,12 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
    * Re-throws errors for network failures, auth errors, rate limiting, etc.
    */
   public async FindUserByEmail(email: string, contextUser: UserInfo): Promise<LearnWorldsUser | null> {
-    const response = await this.makeLearnWorldsPaginatedRequest<LWApiUser>('users', { search: email, limit: 5 }, contextUser);
-
-    const match = response.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const qs = new URLSearchParams({ search: email, limit: '50' });
+    const response = await this.makeLearnWorldsRequest<LearnWorldsPaginatedResponse<LWApiUser>>(
+      `users?${qs}`, 'GET', undefined, contextUser,
+    );
+    const users = (response.data && Array.isArray(response.data)) ? response.data : [];
+    const match = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     if (!match) return null;
 
     return this.mapLWApiUserToLearnWorldsUser(match);

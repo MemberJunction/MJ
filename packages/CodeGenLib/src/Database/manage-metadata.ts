@@ -1666,44 +1666,47 @@ export class ManageMetadataBase {
          const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
+         // Group FK fields by entity pair (ParentEntityID -> ChildEntityID) so we can
+         // match N FK fields to N relationship records correctly. Processing fields
+         // individually caused a ping-pong bug where multi-FK pairs swapped JoinFields
+         // on every CodeGen run.
+         const entityPairGroups = this.groupFieldsByEntityPair(entityFields);
 
-         // Function to process a batch of entity fields
-         const processBatch = async (batch: any[]) => {
-            let batchSQL = '';
-            batch.forEach((f) => {
-               // for each field determine if an existing relationship exists, if not, create it
-               const relationships = allRelationships.filter((r: { EntityID: string; RelatedEntityID: string; }) => UUIDsEqual(r.EntityID, f.RelatedEntityID) && UUIDsEqual(r.RelatedEntityID, f.EntityID));
-               if (relationships && relationships.length === 0) {
-                  // no relationship exists, so create it
-                  const e = md.Entities.find(e => UUIDsEqual(e.ID, f.EntityID))!;
-                  const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, f.RelatedEntityID));
-                  const parentEntityName = parentEntity ? parentEntity.Name : f.RelatedEntityID;
-                  // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
-                  const relCount = relationshipCountMap.get(f.EntityID) || 0;
-                  const sequence = relCount + 1;
-                  const newEntityRelationshipUUID = this.createNewUUID();
-                  const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
-                  const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
-                              VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
-                  batchSQL += `
-/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
-   ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
-                              `;
-                  // now update the map for the relationship count
-                  relationshipCountMap.set(f.EntityID, sequence);
+         let batchSQL = '';
+         let batchCount = 0;
+         for (const [_pairKey, fkFields] of entityPairGroups) {
+            const firstField = fkFields[0];
+            const relationships = allRelationships.filter(
+               (r: { EntityID: string; RelatedEntityID: string }) =>
+                  UUIDsEqual(r.EntityID, firstField.RelatedEntityID as string) &&
+                  UUIDsEqual(r.RelatedEntityID, firstField.EntityID as string)
+            );
+
+            if (relationships.length === 0) {
+               // No relationships exist for this pair — create one per FK field
+               for (const f of fkFields) {
+                  batchSQL += this.buildInsertRelationshipSQL(f, md, relationshipCountMap);
                }
-            });
-
-            if (batchSQL.length > 0){
-               await this.LogSQLAndExecute(pool, batchSQL);
+            } else {
+               // Match FK fields to existing relationships as a group
+               batchSQL += this.buildEntityPairRelationshipSQL(relationships, fkFields, md, relationshipCountMap);
             }
-         };
 
-         // Split entityFields into batches and process each batch
-         for (let i = 0; i < entityFields.length; i += batchItems) {
-               const batch = entityFields.slice(i, i + batchItems);
-               await processBatch(batch);
+            batchCount++;
+            if (batchCount % batchItems === 0 && batchSQL.length > 0) {
+               await this.LogSQLAndExecute(pool, batchSQL);
+               batchSQL = '';
+            }
          }
+         if (batchSQL.length > 0) {
+            await this.LogSQLAndExecute(pool, batchSQL);
+         }
+
+         // NOTE: Stale relationship cleanup is intentionally NOT done here because this
+         // method runs BEFORE deleteUnneededEntityFields(). Stale EntityField records
+         // (for dropped columns) still exist at this point and would prevent detection
+         // of stale relationships. The cleanup is handled by cleanupStaleEntityRelationships()
+         // which is called from sql_codegen.ts AFTER entity fields are fully synced.
 
          return true;
       }
@@ -1713,6 +1716,174 @@ export class ManageMetadataBase {
       }
    }
 
+
+   /**
+    * Builds SQL to INSERT a new EntityRelationship record for a discovered FK field.
+    */
+   protected buildInsertRelationshipSQL(f: Record<string, unknown>, md: Metadata, relationshipCountMap: Map<number, number>): string {
+      const e = md.Entities.find(e => UUIDsEqual(e.ID, (f.EntityID as string)))!;
+      const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, (f.RelatedEntityID as string)));
+      const parentEntityName = parentEntity ? parentEntity.Name : String(f.RelatedEntityID);
+      const relCount = relationshipCountMap.get(f.EntityID as number) || 0;
+      const sequence = relCount + 1;
+      const newEntityRelationshipUUID = this.createNewUUID();
+      const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
+      const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+                    VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
+      relationshipCountMap.set(f.EntityID as number, sequence);
+      return `
+/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
+   ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
+                    `;
+   }
+
+   /**
+    * Groups FK fields by their entity pair key (ParentEntityID|ChildEntityID).
+    * This ensures all FK fields for the same entity pair are processed together,
+    * preventing the ping-pong bug where multi-FK pairs swap JoinFields on each run.
+    */
+   protected groupFieldsByEntityPair(entityFields: Record<string, unknown>[]): Map<string, Record<string, unknown>[]> {
+      const groups = new Map<string, Record<string, unknown>[]>();
+      for (const f of entityFields) {
+         // Entity pair key: ParentEntityID (the "one" side) | ChildEntityID (the "many" side)
+         // In EntityRelationship terms: EntityID = RelatedEntityID of the FK field, RelatedEntityID = EntityID of the FK field
+         const pairKey = `${f.RelatedEntityID}|${f.EntityID}`;
+         const existing = groups.get(pairKey);
+         if (existing) {
+            existing.push(f);
+         } else {
+            groups.set(pairKey, [f]);
+         }
+      }
+      return groups;
+   }
+
+   /**
+    * Handles relationship management for an entire entity pair at once.
+    * Matches N FK fields to N existing relationship records using a 1:1 mapping:
+    *   1. Exact matches (relationship.JoinField === fk.Name) — already correct, skip
+    *   2. Unmatched FK fields assigned to unmatched relationships (update JoinField)
+    *   3. Remaining FK fields with no available relationship — create new records
+    */
+   protected buildEntityPairRelationshipSQL(
+      relationships: Record<string, unknown>[],
+      fkFields: Record<string, unknown>[],
+      md: Metadata,
+      relationshipCountMap: Map<number, number>
+   ): string {
+      let sql = '';
+
+      // Build sets for matching
+      const fkFieldNames = new Set(fkFields.map(f => String(f.Name).trim()));
+      const matchedRelationshipIDs = new Set<string>();
+      const matchedFieldNames = new Set<string>();
+
+      // Pass 1: exact matches — relationship already has the correct JoinField
+      for (const r of relationships) {
+         const joinField = String(r.RelatedEntityJoinField).trim();
+         if (fkFieldNames.has(joinField) && !matchedFieldNames.has(joinField)) {
+            matchedRelationshipIDs.add(String(r.ID));
+            matchedFieldNames.add(joinField);
+         }
+      }
+
+      // Pass 2: assign unmatched FK fields to unmatched auto-update relationships
+      const unmatchedFields = fkFields.filter(f => !matchedFieldNames.has(String(f.Name).trim()));
+      const unmatchedRelationships = relationships.filter(
+         r => !matchedRelationshipIDs.has(String(r.ID)) && r.AutoUpdateFromSchema
+      );
+
+      for (let i = 0; i < Math.min(unmatchedFields.length, unmatchedRelationships.length); i++) {
+         const r = unmatchedRelationships[i];
+         const f = unmatchedFields[i];
+         const oldJoinField = String(r.RelatedEntityJoinField).trim();
+         const newJoinField = String(f.Name).trim();
+         if (oldJoinField !== newJoinField) {
+            logStatus(`      > Updating EntityRelationship join field: ${oldJoinField} -> ${newJoinField} (ID: ${r.ID})`);
+            sql += `
+/* Update EntityRelationship join field from '${oldJoinField}' to '${newJoinField}' */
+   UPDATE ${this.qs(mj_core_schema(), 'EntityRelationship')}
+      SET ${this.qi('RelatedEntityJoinField')} = '${newJoinField}',
+          ${this.qi('__mj_UpdatedAt')} = ${this.utcNow()}
+      WHERE ${this.qi('ID')} = '${r.ID}';
+`;
+         }
+      }
+
+      // Pass 3: create new relationships for any remaining unmatched FK fields
+      const remainingFields = unmatchedFields.slice(unmatchedRelationships.length);
+      for (const f of remainingFields) {
+         sql += this.buildInsertRelationshipSQL(f, md, relationshipCountMap);
+      }
+
+      return sql;
+   }
+
+   /**
+    * Public entry point for cleaning up stale EntityRelationship records. This must be called
+    * AFTER deleteUnneededEntityFields() has run, so that stale EntityField records (for dropped
+    * columns) are removed before we check which relationships are still valid.
+    * Called from sql_codegen.ts after the second manageEntityFields() pass.
+    * @param pool - database connection
+    * @param excludeSchemas - schemas to exclude from FK field lookup
+    */
+   public async cleanupStaleEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const sSQL = `SELECT *
+                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                       WHERE
+                             RelatedEntityID IS NOT NULL AND
+                             IsVirtual = 0 AND
+                             EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
+                       ORDER BY RelatedEntityID`;
+         const entityFieldsResult = await this.runQuery(pool, sSQL);
+         const entityFields = entityFieldsResult.recordset;
+
+         const sSQLRelationship = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityRelationship')}`;
+         const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
+         const allRelationships = allRelationshipsResult.recordset;
+
+         await this.removeStaleOneToManyRelationships(pool, allRelationships, entityFields);
+         return true;
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
+   /**
+    * Removes stale One-To-Many EntityRelationship records whose RelatedEntityJoinField no longer
+    * corresponds to a valid FK field in the database. Only removes relationships where
+    * AutoUpdateFromSchema = true and Type = 'One To Many'.
+    */
+   protected async removeStaleOneToManyRelationships(pool: CodeGenConnection, allRelationships: Record<string, unknown>[], entityFields: Record<string, unknown>[]): Promise<void> {
+      // Build a set of valid (ParentEntityID, ChildEntityID, JoinFieldName) tuples from current FK fields.
+      // In EntityRelationship terms: EntityID = ParentEntityID (the "one" side), RelatedEntityID = ChildEntityID (the "many" side)
+      // In entityFields: f.RelatedEntityID = ParentEntityID, f.EntityID = ChildEntityID, f.Name = FK field name
+      const validRelationshipKeys = new Set<string>();
+      for (const f of entityFields) {
+         validRelationshipKeys.add(`${f.RelatedEntityID}|${f.EntityID}|${f.Name}`);
+      }
+
+      const staleRelationships = allRelationships.filter(r =>
+         String(r.Type).trim() === 'One To Many' &&
+         r.AutoUpdateFromSchema === true &&
+         !validRelationshipKeys.has(`${r.EntityID}|${r.RelatedEntityID}|${r.RelatedEntityJoinField}`)
+      );
+
+      if (staleRelationships.length > 0) {
+         let deleteSQL = '';
+         for (const r of staleRelationships) {
+            logStatus(`      > Removing stale EntityRelationship: ${r.Entity} -> ${r.RelatedEntity} via '${r.RelatedEntityJoinField}' (ID: ${r.ID})`);
+            deleteSQL += `
+/* Remove stale EntityRelationship: ${r.Entity} -> ${r.RelatedEntity} (FK field '${r.RelatedEntityJoinField}' no longer exists) */
+   DELETE FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${r.ID}';
+`;
+         }
+         await this.LogSQLAndExecute(pool, deleteSQL, 'Remove stale One-To-Many EntityRelationships');
+      }
+   }
 
    /**
     * This method will look for situations where entity metadata exist in the entities metadata table but the underlying table has been deleted. In this case, the metadata for the entity

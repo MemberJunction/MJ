@@ -627,9 +627,9 @@ export class AIPromptRunner {
         selectedModel = modelResult.model;
         modelSelectionInfo = modelResult.selectionInfo;
         if (!selectedModel) {
-          throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
         }
-        
+
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
           // Use the override instead of rendering child templates and parent template
@@ -688,7 +688,7 @@ export class AIPromptRunner {
         selectedModel = modelResult.model;
         modelSelectionInfo = modelResult.selectionInfo;
         if (!selectedModel) {
-          throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
         }
       }
 
@@ -752,12 +752,16 @@ export class AIPromptRunner {
         }
       }
 
+      // Classify the error so downstream consumers (e.g., isFatalPromptError) can
+      // detect fatal conditions like missing credentials without relying on string matching
+      const errorInfo = ErrorAnalyzer.analyzeError(error, 'AIPromptRunner');
+
       const errorResult: AIPromptRunResult<T> = {
         success: false,
         errorMessage: error.message,
         promptRun,
         executionTimeMS,
-        chatResult: { success: false, errorMessage: error.message } as ChatResult,
+        chatResult: { success: false, errorMessage: error.message, errorInfo } as ChatResult,
         tokensUsed: 0,
         combinedTokensUsed: 0
       };
@@ -830,7 +834,7 @@ export class AIPromptRunner {
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
       if (!selectedModel) {
-        throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
+        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
       }
     }
 
@@ -1665,7 +1669,7 @@ export class AIPromptRunner {
     }
 
     // Check model type compatibility
-    if (prompt.AIModelTypeID && model.AIModelTypeID !== prompt.AIModelTypeID) {
+    if (prompt.AIModelTypeID && !UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID)) {
       return [];
     }
 
@@ -2361,7 +2365,36 @@ export class AIPromptRunner {
 
     return { selected: selectedCandidate, consideredModels };
   }
- 
+
+  /**
+   * Builds a descriptive error message when no model could be selected for a prompt.
+   * Includes details about which models were considered and why they were unavailable
+   * so the error message is actionable for end users (e.g., missing API credentials).
+   */
+  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
+    const base = `No suitable model found for prompt ${promptName}`;
+
+    if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
+      return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
+    }
+
+    // Check if all models were unavailable due to missing credentials
+    const unavailableModels = selectionInfo.modelsConsidered.filter(m => !m.available);
+    if (unavailableModels.length === selectionInfo.modelsConsidered.length) {
+      const triedSummary = unavailableModels.slice(0, 5).map(m => {
+        const vendorName = m.vendor?.Name || 'default';
+        return `${m.model.Name}/${vendorName}`;
+      }).join(', ');
+
+      const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+      return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
+        `Tried: ${triedSummary}${suffix}. ` +
+        `Please configure API credentials in your environment or AI Credential settings.`;
+    }
+
+    return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
+  }
+
   /**
    * Creates an AIPromptRun entity for execution tracking
    */

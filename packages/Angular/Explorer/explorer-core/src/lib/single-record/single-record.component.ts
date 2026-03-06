@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
 import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
@@ -26,6 +26,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   private recentAccessService: RecentAccessService;
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);
+  private cdr = inject(ChangeDetectorRef);
 
   constructor (private route: ActivatedRoute) {
     this.recentAccessService = new RecentAccessService();
@@ -116,6 +117,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.loading = false;
+    this.cdr.detectChanges();
   }
 
   protected SetNewRecordValues(record: BaseEntity) {

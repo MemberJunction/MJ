@@ -158,6 +158,14 @@ export class BaseAgent {
     private static readonly MAX_VALIDATION_RETRIES = 10;
 
     /**
+     * Maximum consecutive failed (non-terminating) steps before forcing termination.
+     * Prevents infinite retry loops when an unclassified error repeatedly returns
+     * terminate=false. Each successful step resets the counter.
+     * @private
+     */
+    private static readonly MAX_CONSECUTIVE_FAILED_STEPS = 10;
+
+    /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
      * @private
      */
@@ -1181,12 +1189,13 @@ export class BaseAgent {
      * @protected
      */
     protected async executeAgentInternal<P = any>(
-        params: ExecuteAgentParams, 
+        params: ExecuteAgentParams,
         config: AgentConfiguration
     ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         let continueExecution = true;
-        let currentNextStep: BaseAgentNextStep<P> | null = null;        
+        let currentNextStep: BaseAgentNextStep<P> | null = null;
         let stepCount = 0;
+        let consecutiveFailedSteps = 0;
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -1207,6 +1216,31 @@ export class BaseAgent {
                 this.promoteMediaOutputs(nextStep.promoteMediaOutputs);
             }
 
+            // Track consecutive failed steps to prevent infinite retry loops.
+            // Any non-Failed step resets the counter.
+            if (nextStep.step === 'Failed' && !nextStep.terminate) {
+                consecutiveFailedSteps++;
+                if (consecutiveFailedSteps >= BaseAgent.MAX_CONSECUTIVE_FAILED_STEPS) {
+                    this.logError(
+                        `⛔ Agent '${params.agent.Name}' reached maximum consecutive failed steps ` +
+                        `(${BaseAgent.MAX_CONSECUTIVE_FAILED_STEPS}). Forcing termination to prevent infinite loop.`,
+                        {
+                            agent: params.agent,
+                            category: 'ExecutionSafetyNet',
+                            metadata: {
+                                consecutiveFailures: consecutiveFailedSteps,
+                                lastError: nextStep.errorMessage
+                            }
+                        }
+                    );
+                    nextStep.terminate = true;
+                    nextStep.errorMessage = `Agent terminated after ${consecutiveFailedSteps} consecutive failed steps. ` +
+                        `Last error: ${nextStep.errorMessage || 'Unknown'}`;
+                }
+            } else if (nextStep.step !== 'Failed') {
+                consecutiveFailedSteps = 0;
+            }
+
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
@@ -1217,7 +1251,7 @@ export class BaseAgent {
                 // the previous payload to the next step
                 if (!currentNextStep.newPayload && currentNextStep.previousPayload) {
                     currentNextStep.newPayload = currentNextStep.previousPayload;
-                }          
+                }
                 this.logStatus(`➡️ Agent '${params.agent.Name}' continuing to next step: ${nextStep.step}`, true, params);
             }
 
@@ -2680,6 +2714,14 @@ export class BaseAgent {
             if (templateErrorPattern.test(promptResult.errorMessage)) {
                 return true; // Template rendering errors are fatal
             }
+
+            // Credential/configuration errors are permanent — retrying won't help.
+            // Check by message pattern as a safety net in case errorInfo is missing.
+            if (promptResult.errorMessage.includes('No suitable model found') ||
+                promptResult.errorMessage.includes('No credentials found') ||
+                promptResult.errorMessage.includes('No valid API credentials')) {
+                return true;
+            }
         }
 
         // If no error info, not fatal (might be transient)
@@ -2699,6 +2741,7 @@ export class BaseAgent {
         const fatalErrorTypes: AIErrorType[] = [
             'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
             'Authentication',          // API key is invalid or missing
+            'NoCredentials',           // No credentials configured for any model-vendor combination
             'InvalidRequest'           // Request format or parameters are wrong
         ];
 
@@ -4004,6 +4047,7 @@ The context is now within limits. Please retry your request with the recovered c
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
+                apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 data: {
                         ...params.data,
                         ...subAgentRequest.templateParameters,

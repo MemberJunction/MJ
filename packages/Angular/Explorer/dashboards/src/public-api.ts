@@ -114,12 +114,10 @@ export { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 export * from './MCP';
 
 // Version History Dashboard Components
-export {
-  VersionHistoryLabelsResourceComponent,
-  VersionHistoryDiffResourceComponent,
-  VersionHistoryRestoreResourceComponent,
-  VersionHistoryGraphResourceComponent
-} from './VersionHistory';
+export * from './VersionHistory';
+
+// Integration Dashboard
+export * from './Integration';
 
 // Module
 export * from './module';

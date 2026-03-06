@@ -305,6 +305,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
             if (this.isNew) {
                 // Create new credential
                 entity = await this._metadata.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+                entity.NewRecord();
             } else {
                 entity = this.credential!;
             }
@@ -419,16 +420,24 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
         }
     }
 
+    private _cachedGroupedTypes: Array<{ category: string; types: MJCredentialTypeEntity[] }> = [];
+    private _lastCredentialTypesRef: MJCredentialTypeEntity[] = [];
+
     public get groupedCredentialTypes(): Array<{ category: string; types: MJCredentialTypeEntity[] }> {
-        const grouped = new Map<string, MJCredentialTypeEntity[]>();
-        for (const type of this.credentialTypes) {
-            const category = type.Category || 'Other';
-            if (!grouped.has(category)) {
-                grouped.set(category, []);
+        // Only rebuild when the input array reference changes
+        if (this.credentialTypes !== this._lastCredentialTypesRef) {
+            this._lastCredentialTypesRef = this.credentialTypes;
+            const grouped = new Map<string, MJCredentialTypeEntity[]>();
+            for (const type of this.credentialTypes) {
+                const category = type.Category || 'Other';
+                if (!grouped.has(category)) {
+                    grouped.set(category, []);
+                }
+                grouped.get(category)!.push(type);
             }
-            grouped.get(category)!.push(type);
+            this._cachedGroupedTypes = Array.from(grouped.entries()).map(([category, types]) => ({ category, types }));
         }
-        return Array.from(grouped.entries()).map(([category, types]) => ({ category, types }));
+        return this._cachedGroupedTypes;
     }
 
     public getTypeIcon(type: MJCredentialTypeEntity): string {
@@ -568,8 +577,8 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
                 errors.push(`${field.title} must be no more than ${field.maxLength} characters`);
             }
 
-            // Numeric range validation (if type is number)
-            if (field.type === 'number') {
+            // Numeric range validation (if type is number or integer)
+            if (field.type === 'number' || field.type === 'integer') {
                 const numValue = Number(value);
                 if (!isNaN(numValue)) {
                     if (field.minimum !== undefined && numValue < field.minimum) {

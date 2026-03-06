@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "SaaS API",
+      "Description": "Cloud-based SaaS application connected via REST/GraphQL API",
+      "DriverClass": "SaaSAPIConnector",
+      "IconClass": "fa-solid fa-cloud",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "23983ED8-15C8-45C6-8AEA-D0EB48E3150D"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T03:02:40.390Z",
+      "checksum": "b5296ba6c406324aa3a23db99aab7812b03770c2948292144bdc4acf8b1cd55e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Relational Database",
+      "Description": "Direct connection to a relational database (SQL Server, PostgreSQL, MySQL, etc.)",
+      "DriverClass": "RelationalDBConnector",
+      "IconClass": "fa-solid fa-database",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "845114FC-48A9-4E19-85C7-F5DB3AC50241"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T03:02:40.405Z",
+      "checksum": "5f294816b35c856673347a208f54c89498544e81806396b6245be13c01ccbc18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Feed",
+      "Description": "File-based data feed (CSV, Excel, JSON, XML)",
+      "DriverClass": "FileFeedConnector",
+      "IconClass": "fa-solid fa-file-csv",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DD05DB3B-25EA-42FE-9043-48E2A22833BC"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T03:02:40.422Z",
+      "checksum": "b1999a78f824896c155b6b7b5c6239c5aa92164adecc89063290feab9193d7d8"
+    }
+  }
+]

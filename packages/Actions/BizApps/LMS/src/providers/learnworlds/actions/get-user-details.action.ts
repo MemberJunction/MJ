@@ -209,7 +209,7 @@ export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
    * Fetch and attach enrollment data to userDetails.
    */
   private async loadEnrollments(userDetails: LearnWorldsUserDetailsFull, userId: string, contextUser: UserInfo): Promise<void> {
-    const enrollmentsResponse = await this.makeLearnWorldsRequest<LWEnrollmentsListResponse>(`users/${userId}/enrollments`, 'GET', undefined, contextUser);
+    const enrollmentsResponse = await this.makeLearnWorldsRequest<LWEnrollmentsListResponse>(`users/${userId}/courses`, 'GET', undefined, contextUser);
 
     if (enrollmentsResponse.data) {
       userDetails.enrollments = enrollmentsResponse.data.map((e) => this.mapEnrollment(e));

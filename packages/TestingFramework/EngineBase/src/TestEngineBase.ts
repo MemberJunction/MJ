@@ -219,7 +219,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * @returns 
      */
     public GetTestsForSuite(suiteId: string): MJTestEntity[] {
-        const suiteTests = this._testSuiteTests.filter(t => t.SuiteID === suiteId);
+        const suiteTests = this._testSuiteTests.filter(t => UUIDsEqual(t.SuiteID, suiteId));
         const tests: MJTestEntity[] = [];
         for (const st of suiteTests) {
             const test = this.GetTestByID(st.TestID);

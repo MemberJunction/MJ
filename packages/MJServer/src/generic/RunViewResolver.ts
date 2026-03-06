@@ -356,8 +356,23 @@ export class RunDynamicViewInput {
 
 @InputType()
 export class RunViewGenericInput {
-  @Field(() => String)
-  EntityName: string;
+  @Field(() => String, {
+    nullable: true,
+    description: 'The ID of a saved User View to run. Provide either ViewID, ViewName, or EntityName.',
+  })
+  ViewID?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'The name of a saved User View to run. Provide either ViewID, ViewName, or EntityName.',
+  })
+  ViewName?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'The entity name for a dynamic view. Provide either ViewID, ViewName, or EntityName.',
+  })
+  EntityName?: string;
 
   @Field(() => String, {
     nullable: true,
@@ -748,8 +763,9 @@ export class RunViewResolver extends ResolverBase {
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const entity = provider.Entities.find((e) => e.Name === input[index].EntityName);
-        const returnData: any[] = this.processRawData(data.Results, entity.ID, entity);
+        // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
+        const entity = input[index].EntityName ? provider.Entities.find((e) => e.Name === input[index].EntityName) : null;
+        const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
         results.push({
           Results: returnData,

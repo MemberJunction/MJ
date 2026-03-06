@@ -3250,4 +3250,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             console.error('❌ Failed to load prompt run:', promptRunId);
         }
     }
+
+    /** Case-insensitive UUID comparison for configuration ID matching in templates. */
+    public IsConfigMatchById(config: MJAIConfigurationEntity, id: string | undefined): boolean {
+        return UUIDsEqual(config.ID, id);
+    }
 }

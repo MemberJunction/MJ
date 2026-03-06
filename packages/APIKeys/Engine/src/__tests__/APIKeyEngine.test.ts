@@ -5,6 +5,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock cosmiconfig — default: no config file found (existing tests unaffected)
+vi.mock('cosmiconfig', () => ({
+    cosmiconfigSync: vi.fn().mockReturnValue({
+        search: vi.fn().mockReturnValue(null),
+    }),
+}));
+
 // Mock the crypto module for key generation
 vi.mock('crypto', async () => {
     const actual = await vi.importActual<typeof import('crypto')>('crypto');
@@ -53,7 +60,16 @@ vi.mock('@memberjunction/api-keys-base', () => ({
     },
 }));
 
-import { APIKeyEngine, GetAPIKeyEngine, ResetAPIKeyEngine } from '../APIKeyEngine';
+import { cosmiconfigSync } from 'cosmiconfig';
+import {
+    APIKeyEngine,
+    GetAPIKeyEngine,
+    ResetAPIKeyEngine,
+    DEFAULT_KEY_PREFIX,
+    DEFAULT_ENTROPY_BYTES,
+    DEFAULT_KEY_ENCODING,
+    DEFAULT_HASH_ALGORITHM
+} from '../APIKeyEngine';
 
 describe('APIKeyEngine', () => {
     let engine: APIKeyEngine;
@@ -206,5 +222,337 @@ describe('GetAPIKeyEngine / ResetAPIKeyEngine', () => {
     it('should accept config on first call', () => {
         const engine = GetAPIKeyEngine({ enforcementEnabled: false });
         expect(engine).toBeDefined();
+    });
+});
+
+describe('configurable key generation', () => {
+    beforeEach(() => {
+        ResetAPIKeyEngine();
+    });
+
+    describe('defaults', () => {
+        it('should export correct default constants', () => {
+            expect(DEFAULT_KEY_PREFIX).toBe('mj_sk_');
+            expect(DEFAULT_ENTROPY_BYTES).toBe(32);
+            expect(DEFAULT_KEY_ENCODING).toBe('hex');
+            expect(DEFAULT_HASH_ALGORITHM).toBe('sha256');
+        });
+
+        it('should use default prefix when no config provided', () => {
+            const engine = new APIKeyEngine();
+            const { Raw } = engine.GenerateAPIKey();
+            expect(Raw.startsWith('mj_sk_')).toBe(true);
+        });
+
+        it('should use default encoding (hex) when no config provided', () => {
+            const engine = new APIKeyEngine();
+            const { Raw } = engine.GenerateAPIKey();
+            // Default: mj_sk_ (6 chars) + 64 hex chars = 70 total
+            expect(Raw).toHaveLength(6 + 64);
+            expect(Raw).toMatch(/^mj_sk_[a-f0-9]{64}$/);
+        });
+
+        it('should expose default KeyGenerationConfig', () => {
+            const engine = new APIKeyEngine();
+            const config = engine.KeyGenerationConfig;
+            expect(config.prefix).toBe('mj_sk_');
+            expect(config.entropyBytes).toBe(32);
+            expect(config.encoding).toBe('hex');
+            expect(config.hashAlgorithm).toBe('sha256');
+        });
+    });
+
+    describe('custom prefix', () => {
+        it('should generate keys with custom prefix', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { prefix: 'skip-' } });
+            const { Raw } = engine.GenerateAPIKey();
+            expect(Raw.startsWith('skip-')).toBe(true);
+        });
+
+        it('should validate keys with custom prefix', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { prefix: 'custom_' } });
+            const { Raw } = engine.GenerateAPIKey();
+            expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        });
+
+        it('should reject default-prefixed keys when custom prefix is configured', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { prefix: 'custom_' } });
+            expect(engine.IsValidAPIKeyFormat('mj_sk_' + 'a'.repeat(64))).toBe(false);
+        });
+
+        it('should expose KeyPrefix getter', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { prefix: 'test_' } });
+            expect(engine.KeyPrefix).toBe('test_');
+        });
+    });
+
+    describe('custom entropy bytes', () => {
+        it('should generate keys with custom entropy size (hex)', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { entropyBytes: 16 } });
+            const { Raw } = engine.GenerateAPIKey();
+            // prefix (6 chars) + 32 hex chars (16 bytes * 2)
+            expect(Raw).toHaveLength(6 + 32);
+            expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        });
+
+        it('should generate longer keys with more entropy', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { entropyBytes: 64 } });
+            const { Raw } = engine.GenerateAPIKey();
+            // prefix (6 chars) + 128 hex chars (64 bytes * 2)
+            expect(Raw).toHaveLength(6 + 128);
+            expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        });
+
+        it('should reject wrong-length keys', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { entropyBytes: 16 } });
+            // Default-length key (64 hex chars) should fail for a 16-byte engine
+            expect(engine.IsValidAPIKeyFormat('mj_sk_' + 'a'.repeat(64))).toBe(false);
+        });
+    });
+
+    describe('base64url encoding', () => {
+        it('should generate keys with base64url encoding', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { encoding: 'base64url' } });
+            const { Raw } = engine.GenerateAPIKey();
+            expect(Raw.startsWith('mj_sk_')).toBe(true);
+            // base64url for 32 bytes = ceil(32 * 4/3) = 43 chars
+            const body = Raw.slice(6);
+            expect(body).toHaveLength(43);
+        });
+
+        it('should produce base64url character set (A-Za-z0-9_-)', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { encoding: 'base64url' } });
+            const { Raw } = engine.GenerateAPIKey();
+            const body = Raw.slice(6);
+            expect(body).toMatch(/^[A-Za-z0-9_-]+$/);
+        });
+
+        it('should validate base64url keys', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { encoding: 'base64url' } });
+            const { Raw } = engine.GenerateAPIKey();
+            expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        });
+
+        it('should reject hex keys when base64url is configured', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { encoding: 'base64url' } });
+            // Hex key has 64 chars but base64url expects 43 chars
+            expect(engine.IsValidAPIKeyFormat('mj_sk_' + 'a'.repeat(64))).toBe(false);
+        });
+
+        it('should reject base64url keys when hex is configured', () => {
+            // Generate a base64url key
+            const b64Engine = new APIKeyEngine({ keyGeneration: { encoding: 'base64url' } });
+            const { Raw: b64Key } = b64Engine.GenerateAPIKey();
+
+            // Default hex engine should reject it
+            const hexEngine = new APIKeyEngine();
+            expect(hexEngine.IsValidAPIKeyFormat(b64Key)).toBe(false);
+        });
+
+        it('should work with custom prefix and base64url', () => {
+            const engine = new APIKeyEngine({
+                keyGeneration: { prefix: 'skip-', entropyBytes: 50, encoding: 'base64url' }
+            });
+            const { Raw } = engine.GenerateAPIKey();
+            expect(Raw.startsWith('skip-')).toBe(true);
+            // base64url for 50 bytes = ceil(50 * 4/3) = 67 chars
+            const body = Raw.slice(5);
+            expect(body).toHaveLength(67);
+            expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        });
+    });
+
+    describe('custom hash algorithm', () => {
+        it('should use sha512 when configured', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { hashAlgorithm: 'sha512' } });
+            const { Hash } = engine.GenerateAPIKey();
+            // SHA-512 produces 128 hex characters
+            expect(Hash).toHaveLength(128);
+            expect(Hash).toMatch(/^[a-f0-9]{128}$/);
+        });
+
+        it('should produce consistent hashes with custom algorithm', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { hashAlgorithm: 'sha512' } });
+            const { Raw, Hash } = engine.GenerateAPIKey();
+            const rehash = engine.HashAPIKey(Raw);
+            expect(rehash).toBe(Hash);
+        });
+
+        it('should produce different hash than sha256 for same input', () => {
+            const sha256Engine = new APIKeyEngine({ keyGeneration: { hashAlgorithm: 'sha256' } });
+            const sha512Engine = new APIKeyEngine({ keyGeneration: { hashAlgorithm: 'sha512' } });
+            const testKey = 'mj_sk_' + 'a'.repeat(64);
+            expect(sha256Engine.HashAPIKey(testKey)).not.toBe(sha512Engine.HashAPIKey(testKey));
+        });
+    });
+
+    describe('KeyGenerationConfig getter', () => {
+        it('should return full resolved config with all overrides', () => {
+            const engine = new APIKeyEngine({
+                keyGeneration: {
+                    prefix: 'test_',
+                    entropyBytes: 16,
+                    encoding: 'base64url',
+                    hashAlgorithm: 'sha512',
+                }
+            });
+            const config = engine.KeyGenerationConfig;
+            expect(config.prefix).toBe('test_');
+            expect(config.entropyBytes).toBe(16);
+            expect(config.encoding).toBe('base64url');
+            expect(config.hashAlgorithm).toBe('sha512');
+        });
+
+        it('should fill defaults for unspecified properties', () => {
+            const engine = new APIKeyEngine({ keyGeneration: { prefix: 'custom_' } });
+            const config = engine.KeyGenerationConfig;
+            expect(config.prefix).toBe('custom_');
+            expect(config.entropyBytes).toBe(32);
+            expect(config.encoding).toBe('hex');
+            expect(config.hashAlgorithm).toBe('sha256');
+        });
+    });
+});
+
+describe('config file loading', () => {
+    const mockedCosmiconfigSync = vi.mocked(cosmiconfigSync);
+
+    beforeEach(() => {
+        ResetAPIKeyEngine();
+        // Reset to default (no config file)
+        mockedCosmiconfigSync.mockReturnValue({
+            search: vi.fn().mockReturnValue(null),
+            load: vi.fn(),
+            clearLoadedSearchPlaces: vi.fn(),
+            clearSearchedDirectories: vi.fn(),
+            clearCaches: vi.fn(),
+        });
+    });
+
+    function mockConfigFile(apiKeyGeneration: Record<string, unknown>): void {
+        mockedCosmiconfigSync.mockReturnValue({
+            search: vi.fn().mockReturnValue({
+                config: { apiKeyGeneration },
+                filepath: '/fake/mj.config.cjs',
+                isEmpty: false,
+            }),
+            load: vi.fn(),
+            clearLoadedSearchPlaces: vi.fn(),
+            clearSearchedDirectories: vi.fn(),
+            clearCaches: vi.fn(),
+        });
+    }
+
+    it('should use file config when no explicit config is provided', () => {
+        mockConfigFile({
+            prefix: 'file_',
+            entropyBytes: 48,
+            encoding: 'base64url',
+            hashAlgorithm: 'sha512',
+        });
+
+        const engine = new APIKeyEngine();
+        const config = engine.KeyGenerationConfig;
+        expect(config.prefix).toBe('file_');
+        expect(config.entropyBytes).toBe(48);
+        expect(config.encoding).toBe('base64url');
+        expect(config.hashAlgorithm).toBe('sha512');
+    });
+
+    it('should prefer explicit config over file config', () => {
+        mockConfigFile({
+            prefix: 'file_',
+            entropyBytes: 48,
+            encoding: 'base64url',
+            hashAlgorithm: 'sha512',
+        });
+
+        const engine = new APIKeyEngine({
+            keyGeneration: { prefix: 'explicit_' }
+        });
+        const config = engine.KeyGenerationConfig;
+        // Explicit overrides file
+        expect(config.prefix).toBe('explicit_');
+        // File values used for the rest
+        expect(config.entropyBytes).toBe(48);
+        expect(config.encoding).toBe('base64url');
+        expect(config.hashAlgorithm).toBe('sha512');
+    });
+
+    it('should fall back to defaults when no file config exists', () => {
+        // Default mock returns null (no config file)
+        const engine = new APIKeyEngine();
+        const config = engine.KeyGenerationConfig;
+        expect(config.prefix).toBe(DEFAULT_KEY_PREFIX);
+        expect(config.entropyBytes).toBe(DEFAULT_ENTROPY_BYTES);
+        expect(config.encoding).toBe(DEFAULT_KEY_ENCODING);
+        expect(config.hashAlgorithm).toBe(DEFAULT_HASH_ALGORITHM);
+    });
+
+    it('should handle file config read errors gracefully', () => {
+        mockedCosmiconfigSync.mockReturnValue({
+            search: vi.fn().mockImplementation(() => {
+                throw new Error('Permission denied');
+            }),
+            load: vi.fn(),
+            clearLoadedSearchPlaces: vi.fn(),
+            clearSearchedDirectories: vi.fn(),
+            clearCaches: vi.fn(),
+        });
+
+        // Should not throw — falls back to defaults
+        const engine = new APIKeyEngine();
+        const config = engine.KeyGenerationConfig;
+        expect(config.prefix).toBe(DEFAULT_KEY_PREFIX);
+        expect(config.entropyBytes).toBe(DEFAULT_ENTROPY_BYTES);
+    });
+
+    it('should handle partial file config', () => {
+        mockConfigFile({ prefix: 'partial_' });
+
+        const engine = new APIKeyEngine();
+        const config = engine.KeyGenerationConfig;
+        expect(config.prefix).toBe('partial_');
+        // Unset fields fall back to defaults
+        expect(config.entropyBytes).toBe(DEFAULT_ENTROPY_BYTES);
+        expect(config.encoding).toBe(DEFAULT_KEY_ENCODING);
+        expect(config.hashAlgorithm).toBe(DEFAULT_HASH_ALGORITHM);
+    });
+
+    it('should ignore config file without apiKeyGeneration section', () => {
+        mockedCosmiconfigSync.mockReturnValue({
+            search: vi.fn().mockReturnValue({
+                config: { dbHost: 'localhost', dbPort: 1433 },
+                filepath: '/fake/mj.config.cjs',
+                isEmpty: false,
+            }),
+            load: vi.fn(),
+            clearLoadedSearchPlaces: vi.fn(),
+            clearSearchedDirectories: vi.fn(),
+            clearCaches: vi.fn(),
+        });
+
+        const engine = new APIKeyEngine();
+        const config = engine.KeyGenerationConfig;
+        expect(config.prefix).toBe(DEFAULT_KEY_PREFIX);
+        expect(config.entropyBytes).toBe(DEFAULT_ENTROPY_BYTES);
+    });
+
+    it('should generate valid keys using file config', () => {
+        mockConfigFile({
+            prefix: 'skip-',
+            entropyBytes: 48,
+            encoding: 'base64url',
+        });
+
+        const engine = new APIKeyEngine();
+        const { Raw, Hash } = engine.GenerateAPIKey();
+
+        expect(Raw.startsWith('skip-')).toBe(true);
+        expect(engine.IsValidAPIKeyFormat(Raw)).toBe(true);
+        // base64url: ceil(48 * 4/3) = 64 chars after prefix
+        const body = Raw.slice('skip-'.length);
+        expect(body).toHaveLength(64);
+        expect(Hash).toMatch(/^[a-f0-9]{64}$/); // SHA-256 hash is always 64 hex chars
     });
 });

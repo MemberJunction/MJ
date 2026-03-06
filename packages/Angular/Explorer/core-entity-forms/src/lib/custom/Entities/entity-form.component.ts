@@ -1029,6 +1029,11 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /**
      * Formats a JSON string for display with proper indentation.
      */
+    /** Case-insensitive UUID check whether an entity field is the currently selected field. */
+    public IsFieldSelected(field: EntityFieldInfo): boolean {
+        return UUIDsEqual(this.selectedField?.ID, field.ID);
+    }
+
     public formatJsonValue(value: string): string {
         if (!value) return '';
         try {

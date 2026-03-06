@@ -336,11 +336,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Input()
   set GridState(value: ViewGridState | null) {
-    if (!!value) {
-      const previousValue = this._gridState;
-      this._gridState = value;
-      if (value !== previousValue) {
+    const previousValue = this._gridState;
+    this._gridState = value;
+    if (value !== previousValue) {
+      if (value) {
         this.onGridStateChanged();
+      } else if (previousValue) {
+        // Grid state was cleared (e.g. switching to entity with no saved view) -
+        // rebuild columns from entity metadata instead of retaining stale columns
+        this.buildAgColumnDefs();
       }
     }
   }
@@ -1731,7 +1735,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       if (sortInfo?.length) {
         this._sortState = sortInfo.map((s, index) => ({
           field: s.field,
-          direction: s.direction?.toLowerCase() === 'desc' ? 'desc' : 'asc',
+          direction: (typeof s.direction === 'string' ? s.direction.toLowerCase() : s.direction === 2 ? 'desc' : 'asc') === 'desc' ? 'desc' : 'asc',
           index
         }));
       }

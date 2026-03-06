@@ -446,7 +446,7 @@
                             <div
                               class="field-item"
                               (click)="selectField(field)"
-                              [class.selected]="selectedField?.ID === field.ID">
+                              [class.selected]="IsFieldSelected(field)">
                               <div class="field-icon">
                                 <i [class]="getFieldTypeIcon(field)"></i>
                               </div>
@@ -527,7 +527,7 @@
                     @for (field of getFilteredFieldsList(); track field; let i = $index) {
                       <div
                         class="list-row"
-                        [class.selected]="selectedField?.ID === field.ID"
+                        [class.selected]="IsFieldSelected(field)"
                         (click)="selectField(field)">
                         <div class="list-col col-seq">
                           <span class="seq-num">{{ field.Sequence }}</span>

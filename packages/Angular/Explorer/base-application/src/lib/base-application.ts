@@ -124,9 +124,13 @@ export class BaseApplication {
         tabRequest.ResourceType = firstItem.ResourceType;
         tabRequest.ResourceRecordId = firstItem.RecordID;
         // Put resourceType in Configuration so it gets stored properly
+        // Include appName and navItemName so buildResourceUrl() can construct
+        // proper /app/:appName/:navItemName URLs without fallback matching
         tabRequest.Configuration = {
           resourceType: firstItem.ResourceType,
           recordId: firstItem.RecordID,
+          appName: this.Name,
+          navItemName: firstItem.Label,
           ...(firstItem.Configuration || {})
         };
 

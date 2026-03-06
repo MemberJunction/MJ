@@ -236,7 +236,7 @@ import { UUIDsEqual } from '@memberjunction/global';
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
-                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                 (click)="onItemClick(item, $event)"
                 (dblclick)="onItemDoubleClick(item, $event)"
                 (contextmenu)="onItemContextMenu(item, $event)">
@@ -370,7 +370,7 @@ import { UUIDsEqual } from '@memberjunction/global';
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
-                    [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                    [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                     (click)="onItemClick(item, $event)"
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
@@ -1334,6 +1334,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   public isSelectMode: boolean = false; // Toggle for selection mode
 
+  IsArtifactActive(item: CollectionViewItem): boolean {
+    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+  }
+
   // Context menu state
   public showContextMenu: boolean = false;
   public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
@@ -1860,6 +1864,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
             await joinRecord.Delete();
           }
           await this.loadArtifacts();
+          this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
         }

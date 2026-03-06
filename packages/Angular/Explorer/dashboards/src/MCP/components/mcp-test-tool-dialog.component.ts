@@ -279,11 +279,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         // Filter connections by selected server
         if (this.ServerID) {
             this.FilteredConnections = this.Connections.filter(
-                c => c.MCPServerID === this.ServerID && c.Status === 'Active'
+                c => UUIDsEqual(c.MCPServerID, this.ServerID) && c.Status === 'Active'
             );
             // Filter tools by selected server
             this.FilteredTools = this.Tools.filter(
-                t => t.MCPServerID === this.ServerID && t.Status === 'Active'
+                t => UUIDsEqual(t.MCPServerID, this.ServerID) && t.Status === 'Active'
             );
 
             // Check if server requires authentication

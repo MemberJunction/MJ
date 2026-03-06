@@ -38,7 +38,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         this.SelectedResources.splice(0, this.SelectedResources.length); // empty the array
 
         this.gridRecordSelection.forEach((item) => {
-            const resourceMatch = this.resources.find((r) => r.ResourceRecordID === item);
+            const resourceMatch = this.resources.find((r) => UUIDsEqual(r.ResourceRecordID, item));
             if (resourceMatch) {
                 this.SelectedResources.push(resourceMatch);
             }

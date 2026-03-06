@@ -61,7 +61,7 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
     queryParams.limit = Math.min(maxResults, 100); // LearnWorlds max is usually 100
 
     // Make the API request
-    const users = await this.makeLearnWorldsPaginatedRequest<LWApiUser>('users', queryParams, contextUser);
+    const users = await this.makeLearnWorldsPaginatedRequest<LWApiUser>('users', queryParams, contextUser, maxResults);
 
     // Map to our interface
     const mappedUsers: LearnWorldsUser[] = users.map((user) => this.mapLearnWorldsUser(user));
