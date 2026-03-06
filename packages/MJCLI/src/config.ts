@@ -80,6 +80,15 @@ const openAppsConfigSchema = z.object({
   clientPackagePath: z.string().optional(),
   /** Package manager to use: 'npm' | 'pnpm' | 'yarn' (default: auto-detected from lockfile) */
   packageManager: z.enum(['npm', 'pnpm', 'yarn']).optional(),
+  /** Version strategy for deps: 'semver' | 'catalog' | 'workspace' | 'auto' (default: 'auto') */
+  versionStrategy: z.enum(['semver', 'catalog', 'workspace', 'auto']).optional(),
+  /** Additional workspace targets beyond the primary server/client pair */
+  additionalTargets: z.array(z.object({
+    Path: z.string(),
+    Role: z.enum(['server', 'client']),
+  })).optional(),
+  /** File subpath within client workspace for bootstrap file */
+  clientBootstrapSubpath: z.string().optional(),
 }).optional();
 
 // Schema for dynamic packages section

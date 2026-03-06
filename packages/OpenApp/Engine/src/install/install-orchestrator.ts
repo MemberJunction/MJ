@@ -16,7 +16,7 @@ import type { InstalledAppMap, DependencyNode, DependencyValue } from '../depend
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -58,6 +58,12 @@ export interface OrchestratorContext {
   ClientPackagePath?: string;
   /** Package manager to use (default: auto-detected from lockfile) */
   PackageManager?: PackageManagerType;
+  /** Version strategy for deps: 'semver' | 'catalog' | 'workspace' | 'auto' (default: 'auto') */
+  VersionStrategy?: VersionStrategy;
+  /** Additional workspace targets beyond the default server/client pair */
+  AdditionalTargets?: WorkspaceTarget[];
+  /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
+  ClientBootstrapSubpath?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,6 +530,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
           ServerPackagePath: context.ServerPackagePath,
           ClientPackagePath: context.ClientPackagePath,
           PackageManager: context.PackageManager,
+          AdditionalTargets: context.AdditionalTargets,
         }),
       ),
     ]);
@@ -791,6 +798,8 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
     ServerPackagePath: context.ServerPackagePath,
     ClientPackagePath: context.ClientPackagePath,
     PackageManager: context.PackageManager,
+    VersionStrategy: context.VersionStrategy,
+    AdditionalTargets: context.AdditionalTargets,
   });
 
   if (!addResult.Success) {
@@ -850,7 +859,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
     }
   }
 
-  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath);
+  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath, context.ClientBootstrapSubpath);
 }
 
 /**

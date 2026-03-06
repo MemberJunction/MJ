@@ -140,6 +140,9 @@ export async function buildOrchestratorContext(
       Database: config.dbDatabase,
       User: config.codeGenLogin,
       Password: config.codeGenPassword,
+      Encrypt: config.dbEncrypt,
+      TrustServerCertificate: config.dbTrustServerCertificate,
+      RequestTimeout: config.dbRequestTimeout,
     },
     GitHubOptions: {
       Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
@@ -149,6 +152,9 @@ export async function buildOrchestratorContext(
     ServerPackagePath: config.openApps?.serverPackagePath,
     ClientPackagePath: config.openApps?.clientPackagePath,
     PackageManager: config.openApps?.packageManager,
+    VersionStrategy: config.openApps?.versionStrategy,
+    AdditionalTargets: config.openApps?.additionalTargets,
+    ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -173,6 +179,9 @@ interface OrchestratorContextShape {
     User: string;
     Password: string;
     TrustedConnection?: boolean;
+    Encrypt?: boolean;
+    TrustServerCertificate?: boolean;
+    RequestTimeout?: number;
   };
   GitHubOptions: {
     Token?: string;
@@ -182,6 +191,9 @@ interface OrchestratorContextShape {
   ServerPackagePath?: string;
   ClientPackagePath?: string;
   PackageManager?: string;
+  VersionStrategy?: string;
+  AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
+  ClientBootstrapSubpath?: string;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;
