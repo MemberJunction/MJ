@@ -64,12 +64,17 @@ export class ResolverBase {
    * @returns The processed data object
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo): Promise<any> {
+    // Return null for empty objects (e.g. when no rows found due to RLS filtering)
+    if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
     // fields, iterate through the dataObject and REPLACE the property that has the field name
     // with the CodeName, because we can't transfer those via GraphQL as they are not
     // valid property names in GraphQL
-    if (dataObject) {
+    {
       const md = new Metadata();
       const entityInfo = md.Entities.find((e) => e.Name === entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
