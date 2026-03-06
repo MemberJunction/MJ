@@ -16,6 +16,7 @@
 import type { Request, Response } from 'express';
 import type * as http from 'http';
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
 import { getAuthMode, isOAuthEnabled } from './OAuthConfig.js';
 import { validateBearerToken, resolveOAuthUser } from './TokenValidator.js';
@@ -85,8 +86,9 @@ export function extractCredentials(request: Request | http.IncomingMessage): Ext
     const token = authHeader.substring(7);
 
     // Determine if this is an API key or OAuth token
-    // API keys start with "mj_sk_" prefix
-    if (token.startsWith('mj_sk_') || token.startsWith('mj_pk_')) {
+    // API keys match the configured format (prefix + encoded entropy)
+    const apiKeyEngine = GetAPIKeyEngine();
+    if (apiKeyEngine.IsValidAPIKeyFormat(token) || token.startsWith('mj_pk_')) {
       // This is an MJ API key
       if (!result.apiKey) {
         result.apiKey = token;
