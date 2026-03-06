@@ -2321,6 +2321,25 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Re-fetches the current record from the database using its existing primary key, replacing all in-memory field values
+     * with the latest data from the database. This is useful when you know (or suspect) the record has been modified externally
+     * (e.g., by a trigger, another user, or a background process) and you want to bring the entity object up to date.
+     *
+     * @remarks
+     * - The entity **must** have been previously loaded or saved (i.e., it must have a valid {@link PrimaryKey}).
+     *   Calling `Refresh()` on a new, unsaved entity will throw because the primary key is not yet valid.
+     * - After a successful refresh, all field dirty flags are reset — the entity will report `Dirty === false`.
+     * - This is equivalent to calling `InnerLoad(this.PrimaryKey)`.
+     * - If you only need to discard unsaved in-memory changes (without a database round-trip), use {@link Revert} instead.
+     *
+     * @returns `true` if the record was successfully reloaded, `false` if the provider returned no data.
+     * @throws If the entity has no provider set, the primary key is invalid, or the user lacks Read permission.
+     */
+    public async Refresh(): Promise<boolean> {
+        return this.InnerLoad(this.PrimaryKey);
+    }
+
+    /**
      * Loads entity data from a plain object, typically from database query results.
      * 
      * This method is meant to be used only in situations where you are sure that the data you are loading 
