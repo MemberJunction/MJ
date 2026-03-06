@@ -62,7 +62,16 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * @memberof UserViewEntitySubclass
      */
     public get ViewEntityInfo(): EntityInfo {
-        return this._ViewEntityInfo
+        if (!this._ViewEntityInfo && this.EntityID) {
+            // Lazily resolve: _ViewEntityInfo may not be set if SetMany() was used
+            // (e.g., during CreateRecord), since SetMany calls SetLocal directly
+            // and bypasses the Set() override that normally updates _ViewEntityInfo.
+            const md = new Metadata();
+            const match = md.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
+            if (match)
+                this._ViewEntityInfo = match;
+        }
+        return this._ViewEntityInfo;
     }
 
     public get ViewSortInfo(): ViewSortInfo[] {
