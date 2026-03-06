@@ -288,7 +288,7 @@ function resolveVersionString(options: PackageManagerOptions): string {
  */
 function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[], versionStr: string): void {
   const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson = JSON.parse(content) as { dependencies?: Record<string, string> };
+  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
 
   if (!pkgJson.dependencies) {
     pkgJson.dependencies = {};
@@ -306,7 +306,7 @@ function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPac
  */
 function RemoveDependenciesFromPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[]): void {
   const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson = JSON.parse(content) as { dependencies?: Record<string, string> };
+  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
 
   if (!pkgJson.dependencies) {
     return;

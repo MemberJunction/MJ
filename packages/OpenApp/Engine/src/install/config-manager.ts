@@ -4,22 +4,15 @@
  * Manages the `dynamicPackages.server` section in the MJ config file,
  * adding/removing/toggling entries for installed app server packages.
  *
- * Config format agnostic: automatically detects mj.config.cjs, mj.config.js,
- * mj.config.mjs, or mj.config.ts and operates on whichever exists.
- *
- * Uses string-based manipulation to preserve formatting and comments.
+ * Operates on the standard mj.config.cjs file using string-based manipulation
+ * to preserve formatting and comments.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
-/** Config file names in priority order (most common first). */
-const CONFIG_FILE_NAMES = [
-    'mj.config.cjs',
-    'mj.config.js',
-    'mj.config.mjs',
-    'mj.config.ts',
-] as const;
+/** Config file name. All MJ projects use mj.config.cjs. */
+const CONFIG_FILE_NAME = 'mj.config.cjs';
 
 /**
  * A single entry in the dynamicPackages.server array.
@@ -58,7 +51,7 @@ export function AddServerDynamicPackages(
 ): ConfigOperationResult {
     const configPath = resolveConfigPath(repoRoot);
     if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected one of: ${CONFIG_FILE_NAMES.join(', ')}` };
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
     const serverPackages = GetServerPackagesFromManifest(manifest);
 
@@ -142,17 +135,12 @@ export function ToggleServerDynamicPackages(
 }
 
 /**
- * Resolves the path to the MJ config file by checking for known filenames.
- * Returns the absolute path to the first match, or undefined if none found.
+ * Resolves the path to the MJ config file.
+ * Returns the absolute path if it exists, or undefined if not found.
  */
 function resolveConfigPath(repoRoot: string): string | undefined {
-    for (const name of CONFIG_FILE_NAMES) {
-        const candidate = resolve(repoRoot, name);
-        if (existsSync(candidate)) {
-            return candidate;
-        }
-    }
-    return undefined;
+    const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
+    return existsSync(candidate) ? candidate : undefined;
 }
 
 /**

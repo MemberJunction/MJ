@@ -153,6 +153,7 @@ export async function buildOrchestratorContext(
     ClientPackagePath: config.openApps?.clientPackagePath,
     PackageManager: config.openApps?.packageManager,
     VersionStrategy: config.openApps?.versionStrategy,
+    // Zod infers object fields as optional; runtime schema validates they're present
     AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
     ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
     Callbacks: {
@@ -211,17 +212,18 @@ function getMJVersion(): string {
   // Try installed @memberjunction/core (works for all project layouts)
   try {
     const corePkgPath = require.resolve('@memberjunction/core/package.json');
-    const pkgJson = JSON.parse(readFileSync(corePkgPath, 'utf-8')) as { version: string };
+    const pkgJson: { version: string } = JSON.parse(readFileSync(corePkgPath, 'utf-8'));
     return pkgJson.version;
-  } catch { /* not found as dependency */ }
+  } catch { /* not found */ }
 
   // Fall back to local monorepo MJGlobal
   try {
-    const pkgJson = JSON.parse(
-      readFileSync(resolve(process.cwd(), 'packages/MJGlobal/package.json'), 'utf-8'),
-    ) as { version: string };
+    const raw: string = readFileSync(resolve(process.cwd(), 'packages/MJGlobal/package.json'), 'utf-8');
+    const pkgJson: { version: string } = JSON.parse(raw);
     return pkgJson.version;
   } catch {
-    return '5.7.0';
+    throw new Error(
+      'Could not determine MJ version. Ensure @memberjunction/core is installed or packages/MJGlobal/package.json exists.'
+    );
   }
 }

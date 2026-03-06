@@ -508,8 +508,8 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     await SetAppStatus(context.ContextUser, existingApp.ID, 'Removing');
 
     // Step 2: Execute preRemove hook
-    removeManifest = JSON.parse(existingApp.ManifestJSON) as MJAppManifest;
-    const manifest = removeManifest;
+    const manifest: MJAppManifest = JSON.parse(existingApp.ManifestJSON);
+    removeManifest = manifest;
     if (manifest.hooks?.preRemove) {
       Callbacks?.OnProgress?.('Hooks', 'Running preRemove hook...');
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
@@ -680,10 +680,13 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
   }
 
+  // Zod infers object variant fields as optional; DependencyValue requires them.
+  // The runtime schema validates they're present, so this narrowing is safe.
+  const dependencies = (manifest.dependencies ?? {}) as Record<string, DependencyValue>;
   const rootNode: DependencyNode = {
     AppName: manifest.name,
     Repository: manifest.repository,
-    Dependencies: manifest.dependencies as Record<string, DependencyValue>,
+    Dependencies: dependencies,
   };
 
   const result = ResolveDependencies(rootNode, installedMap);
@@ -832,7 +835,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
   // Build dependency graph for topological sort
   const appDeps = new Map<string, string[]>();
   for (const app of apps) {
-    const manifest = JSON.parse(app.ManifestJSON) as MJAppManifest;
+    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
     const depNames = manifest.dependencies ? Object.keys(manifest.dependencies) : [];
     appDeps.set(app.Name, depNames);
   }
@@ -846,7 +849,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
   for (const name of sortedNames) {
     const app = appsByName.get(name);
     if (!app) continue;
-    const manifest = JSON.parse(app.ManifestJSON) as MJAppManifest;
+    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
     const clientPkgs = [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])];
 
     for (const pkg of clientPkgs) {
