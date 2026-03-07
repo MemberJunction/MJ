@@ -38,6 +38,8 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -301,7 +303,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log('Server telemetry disabled');
   }
 
-  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
+  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
+  if (process.env.REDIS_URL) {
+    const redisProvider = new RedisLocalStorageProvider({
+      url: process.env.REDIS_URL,
+      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
+      enablePubSub: true,
+      enableLogging: true,
+    });
+    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
+    await redisProvider.StartListening();
+    console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+
+  // Initialize LocalCacheManager with the server-side storage provider
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
   console.log('LocalCacheManager initialized');
 
