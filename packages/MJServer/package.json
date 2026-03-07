@@ -23,7 +23,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@apollo/server": "^4.9.1",
+    "@apollo/server": "^5.0.0",
+    "@as-integrations/express5": "^1.0.0",
     "@graphql-tools/schema": "latest",
     "@graphql-tools/utils": "^11.0.0",
     "@memberjunction/actions": "5.8.0",

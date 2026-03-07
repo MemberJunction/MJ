@@ -25,6 +25,26 @@ export interface DynamicPackageLoad {
 }
 
 /**
+ * Configuration returned by a startup function to declaratively register
+ * middleware, hooks, and plugins with the server startup pipeline.
+ *
+ * This type is intentionally a loose `Record<string, unknown>` because
+ * `@memberjunction/global` has no dependency on Express or Apollo types.
+ * The consuming layer (`@memberjunction/server-bootstrap`) casts this to
+ * `Partial<ServerExtensibilityOptions>` when merging into server options.
+ *
+ * Expected keys (typed by the consumer):
+ * - `ExpressMiddlewareBefore` — Express middleware before auth
+ * - `ExpressMiddlewarePostAuth` — Express middleware after auth
+ * - `ExpressMiddlewareAfter` — Express middleware after routes
+ * - `PreRunViewHooks` — Provider-level pre-RunView hooks
+ * - `PostRunViewHooks` — Provider-level post-RunView hooks
+ * - `PreSaveHooks` — Provider-level pre-Save hooks
+ * - `ApolloPlugins` — Apollo Server plugins
+ */
+export type DynamicPackageResult = Record<string, unknown>;
+
+/**
  * Result of attempting to dynamically load a single package.
  */
 export interface DynamicLoadResult {
@@ -36,6 +56,9 @@ export interface DynamicLoadResult {
 
     /** Error message if the load failed */
     Error?: string;
+
+    /** Configuration returned by the startup function, if any */
+    Result?: DynamicPackageResult;
 }
 
 /**
@@ -52,7 +75,7 @@ export class DynamicPackageLoader {
      * 1. Skips if `Enabled` is false
      * 2. Dynamically imports the package via `await import()`
      * 3. Calls the named `StartupExport` function if it exists
-     * 4. Records success or failure
+     * 4. Records success or failure (including any returned configuration)
      *
      * Errors are isolated per-package — a broken package does not crash the server.
      * All enabled packages are loaded concurrently using Promise.all().
@@ -67,16 +90,25 @@ export class DynamicPackageLoader {
 
     /**
      * Attempts to dynamically import a single package and call its startup export.
+     * If the startup function returns a value, it is captured as `Result` on the
+     * load result. This allows Open Apps to declaratively return middleware, hooks,
+     * and plugins that get merged into the server options.
      */
     private static async LoadSinglePackage(pkg: DynamicPackageLoad): Promise<DynamicLoadResult> {
         try {
             const module: Record<string, unknown> = await import(pkg.PackageName) as Record<string, unknown>;
 
+            let result: DynamicPackageResult | undefined;
+
             if (pkg.StartupExport && typeof module[pkg.StartupExport] === 'function') {
-                (module[pkg.StartupExport] as () => void)();
+                const startupFn = module[pkg.StartupExport] as () => DynamicPackageResult | void | Promise<DynamicPackageResult | void>;
+                const returnValue = await Promise.resolve(startupFn());
+                if (returnValue && typeof returnValue === 'object') {
+                    result = returnValue;
+                }
             }
 
-            return { PackageName: pkg.PackageName, Success: true };
+            return { PackageName: pkg.PackageName, Success: true, Result: result };
         }
         catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);

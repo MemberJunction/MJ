@@ -116,7 +116,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
             const token = await this.authBase.getIdToken();
 
             if (token) {
-              this.handleLogin(token, userInfo);
+              await this.handleLogin(token, userInfo);
             } else {
               console.error('User info available but no token found');
               // Auth state is managed by the provider itself via observables
