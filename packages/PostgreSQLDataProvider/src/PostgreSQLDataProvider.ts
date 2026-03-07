@@ -15,9 +15,7 @@ import {
     DeleteSQLResult,
     LogError,
     TransactionGroupBase,
-    ILocalStorageProvider,
     IMetadataProvider,
-    InMemoryLocalStorageProvider,
     RunQuerySQLFilterManager,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -48,7 +46,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
     private _transaction: pg.PoolClient | null = null;
-    private _localStorageProvider: ILocalStorageProvider = new InMemoryLocalStorageProvider();
 
     // ─── Platform Identity ───────────────────────────────────────────
 
@@ -184,10 +181,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     get MJCoreSchemaName(): string {
         return this._schemaName;
-    }
-
-    get LocalStorageProvider(): ILocalStorageProvider {
-        return this._localStorageProvider;
     }
 
     protected get Metadata(): IMetadataProvider {

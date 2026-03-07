@@ -831,6 +831,19 @@ const result = await rv.RunView({
 });
 ```
 
+#### Storage Provider Implementations
+
+`LocalCacheManager` and `ProviderBase` delegate persistence to an `ILocalStorageProvider`. MemberJunction ships with several implementations:
+
+| Provider | Package | Environment | Persistence |
+|----------|---------|-------------|-------------|
+| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart |
+| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` |
+| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB |
+| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts |
+
+For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
+
 ---
 
 ### DatabaseProviderBase

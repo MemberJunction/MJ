@@ -26,6 +26,8 @@ import {
     EntityDeleteOptions,
     EntityPermissionType,
     ExecuteSQLOptions,
+    ILocalStorageProvider,
+    InMemoryLocalStorageProvider,
     Metadata,
     RunViewParams,
     RunViewResult,
@@ -94,6 +96,68 @@ export interface ExecuteSQLBatchOptions {
  * to inherit these shared behaviors.
  */
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+
+    /**************************************************************************/
+    // Local Storage Provider — Server-Side Cache Backend
+    /**************************************************************************/
+
+    /**
+     * The local storage provider backing server-side caching for metadata,
+     * RunView results, RunQuery results, and datasets.
+     *
+     * Defaults to {@link InMemoryLocalStorageProvider} (data lost on restart, not shared
+     * across instances). To enable persistent, shared caching, replace with a
+     * {@link https://www.npmjs.com/package/@memberjunction/redis-provider | RedisLocalStorageProvider}
+     * or any other {@link ILocalStorageProvider} implementation.
+     *
+     * Subclasses can override this property to supply a custom provider, or call
+     * {@link SetLocalStorageProvider} to swap the provider at runtime (e.g., after
+     * reading configuration).
+     *
+     * @see {@link ILocalStorageProvider} for the interface contract
+     * @see {@link InMemoryLocalStorageProvider} for the default in-memory implementation
+     */
+    private _localStorageProvider: ILocalStorageProvider | undefined;
+
+    /**
+     * Returns the active local storage provider, lazily creating an
+     * {@link InMemoryLocalStorageProvider} if none has been set.
+     *
+     * This fulfills the abstract `LocalStorageProvider` requirement from
+     * {@link ProviderBase} and is shared by all database providers
+     * (SQL Server, PostgreSQL, and any future platforms).
+     */
+    get LocalStorageProvider(): ILocalStorageProvider {
+        if (!this._localStorageProvider) {
+            this._localStorageProvider = new InMemoryLocalStorageProvider();
+        }
+        return this._localStorageProvider;
+    }
+
+    /**
+     * Replaces the active local storage provider at runtime.
+     *
+     * Use this to swap from the default in-memory provider to a Redis-backed
+     * provider (or any other {@link ILocalStorageProvider}) after reading
+     * application configuration.
+     *
+     * @param provider - The new storage provider to use for all caching operations.
+     *
+     * @example
+     * ```typescript
+     * import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+     *
+     * // During server startup, after config is loaded:
+     * const redis = new RedisLocalStorageProvider({
+     *     url: process.env.REDIS_URL,
+     *     defaultTTLSeconds: 300
+     * });
+     * (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redis);
+     * ```
+     */
+    public SetLocalStorageProvider(provider: ILocalStorageProvider): void {
+        this._localStorageProvider = provider;
+    }
 
     /**************************************************************************/
     // SQL Logging — Session Management & Statement Logging
