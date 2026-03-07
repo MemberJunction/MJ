@@ -148,6 +148,13 @@ export async function DropAppSchema(
 /**
  * Drops all objects within a schema before the schema itself can be dropped.
  * SQL Server requires schemas to be empty before they can be dropped.
+ *
+ * Uses QUOTENAME() for all dynamic identifiers in generated SQL to prevent
+ * injection via object names. The schema name is passed as a parameterized
+ * string literal to the catalog queries, and QUOTENAME() wraps all identifiers
+ * in the dynamically-built DROP statements.
+ *
+ * Compatible with both SQL Server and Azure SQL Database.
  */
 async function DropAllSchemaObjects(
   schemaName: string,
@@ -157,59 +164,59 @@ async function DropAllSchemaObjects(
 
   // Drop foreign keys first to avoid dependency issues
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'ALTER TABLE [${escaped}].[' + OBJECT_NAME(parent_object_id) + '] DROP CONSTRAINT [' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'ALTER TABLE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id)) + N' DROP CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.foreign_keys
     WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop views
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP VIEW [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP VIEW ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.views WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop stored procedures
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP PROCEDURE [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP PROCEDURE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.procedures WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop functions
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP FUNCTION [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP FUNCTION ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.objects WHERE type IN ('FN','IF','TF') AND SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop tables
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP TABLE [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP TABLE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.tables WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop user-defined types (must come after tables that may reference them)
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP TYPE [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP TYPE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.types WHERE SCHEMA_NAME(schema_id) = '${escaped}' AND is_user_defined = 1;
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 
   // Drop sequences
   await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = '';
-    SELECT @sql = @sql + 'DROP SEQUENCE [${escaped}].[' + name + '];' + CHAR(10)
+    DECLARE @sql NVARCHAR(MAX) = N'';
+    SELECT @sql = @sql + N'DROP SEQUENCE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
     FROM sys.sequences WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    EXEC sp_executesql @sql;
+    IF @sql <> N'' EXEC sp_executesql @sql;
   `);
 }
 
