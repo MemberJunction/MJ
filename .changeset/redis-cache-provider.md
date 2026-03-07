@@ -2,7 +2,7 @@
 "@memberjunction/global": patch
 "@memberjunction/core": minor
 "@memberjunction/generic-database-provider": minor
-"@memberjunction/redis-provider": major
+"@memberjunction/redis-provider": minor
 "@memberjunction/sqlserver-dataprovider": patch
 "@memberjunction/postgresql-dataprovider": patch
 "@memberjunction/server": minor
