@@ -13,10 +13,23 @@
 
 export type { PreRunViewHook, PostRunViewHook, PreSaveHook, HookName, HookRegistrationOptions } from '@memberjunction/core';
 
-import type { PreRunViewHook, PostRunViewHook, PreSaveHook } from '@memberjunction/core';
+import type { PreRunViewHook, PostRunViewHook, PreSaveHook, HookRegistrationOptions } from '@memberjunction/core';
 import type { RequestHandler, ErrorRequestHandler, Application } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
+
+/**
+ * A hook entry that includes the hook function plus optional registration metadata.
+ * Dynamic packages use this format to declare hooks with priority and namespace.
+ */
+export interface HookWithOptions<T> {
+  hook: T;
+  Priority?: number;
+  Namespace?: string;
+}
+
+/** A hook value is either a plain function or a function with registration options */
+export type HookOrEntry<T> = T | HookWithOptions<T>;
 
 /**
  * Extensibility options that can be passed to `serve()` (via MJServerOptions)
@@ -50,12 +63,15 @@ export interface ServerExtensibilityOptions {
    */
   ExpressMiddlewarePostAuth?: RequestHandler[];
 
-  /** Hooks that modify RunViewParams before query execution (e.g., tenant filter injection) */
-  PreRunViewHooks?: PreRunViewHook[];
+  /** Hooks that modify RunViewParams before query execution (e.g., tenant filter injection).
+   * Each entry can be a plain hook function or a `{ hook, Priority, Namespace }` object. */
+  PreRunViewHooks?: HookOrEntry<PreRunViewHook>[];
 
-  /** Hooks that modify RunViewResult after query execution (e.g., data masking) */
-  PostRunViewHooks?: PostRunViewHook[];
+  /** Hooks that modify RunViewResult after query execution (e.g., data masking).
+   * Each entry can be a plain hook function or a `{ hook, Priority, Namespace }` object. */
+  PostRunViewHooks?: HookOrEntry<PostRunViewHook>[];
 
-  /** Hooks that validate/reject Save operations before they hit the database */
-  PreSaveHooks?: PreSaveHook[];
+  /** Hooks that validate/reject Save operations before they hit the database.
+   * Each entry can be a plain hook function or a `{ hook, Priority, Namespace }` object. */
+  PreSaveHooks?: HookOrEntry<PreSaveHook>[];
 }

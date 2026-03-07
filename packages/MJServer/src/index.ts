@@ -121,10 +121,27 @@ export * from './generated/generated.js';
 export * from './hooks.js';
 export * from './multiTenancy/index.js';
 
-import type { ServerExtensibilityOptions } from './hooks.js';
+import type { ServerExtensibilityOptions, HookWithOptions } from './hooks.js';
 import { HookRegistry } from '@memberjunction/core';
+import type { HookRegistrationOptions } from '@memberjunction/core';
 import type { ApolloServerPlugin } from '@apollo/server';
 import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from './multiTenancy/index.js';
+
+/**
+ * Register a hook that may be a plain function or a `{ hook, Priority, Namespace }` object.
+ * Dynamic packages (e.g., BCSaaS) return hooks in object form to declare registration metadata.
+ */
+function registerHookEntry<T>(hookName: string, entry: T | HookWithOptions<T>): void {
+  if (typeof entry === 'function') {
+    HookRegistry.Register(hookName, entry);
+  } else if (entry && typeof entry === 'object' && 'hook' in entry) {
+    const { hook, Priority, Namespace } = entry as HookWithOptions<T>;
+    const options: HookRegistrationOptions = {};
+    if (Priority != null) options.Priority = Priority;
+    if (Namespace != null) options.Namespace = Namespace;
+    HookRegistry.Register(hookName, hook, options);
+  }
+}
 
 export type MJServerOptions = ServerExtensibilityOptions & {
   onBeforeServe?: () => void | Promise<void>;
@@ -556,20 +573,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   }
 
-  // Register provider-level hooks with the global HookRegistry
+  // Register provider-level hooks with the global HookRegistry.
+  // Each entry can be a plain function or a { hook, Priority, Namespace } object.
   if (options?.PreRunViewHooks) {
-    for (const hook of options.PreRunViewHooks) {
-      HookRegistry.Register('PreRunView', hook);
+    for (const entry of options.PreRunViewHooks) {
+      registerHookEntry('PreRunView', entry);
     }
   }
   if (options?.PostRunViewHooks) {
-    for (const hook of options.PostRunViewHooks) {
-      HookRegistry.Register('PostRunView', hook);
+    for (const entry of options.PostRunViewHooks) {
+      registerHookEntry('PostRunView', entry);
     }
   }
   if (options?.PreSaveHooks) {
-    for (const hook of options.PreSaveHooks) {
-      HookRegistry.Register('PreSave', hook);
+    for (const entry of options.PreSaveHooks) {
+      registerHookEntry('PreSave', entry);
     }
   }
 
