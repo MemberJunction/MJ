@@ -1,1 +1,1 @@
-export * from './generated/entity_subclasses';
+export * from './generated/entity_subclasses.js';
