@@ -8,6 +8,9 @@ import { YMSchemaManager } from './ym-schema-manager';
 /** YourMembership REST API base URL */
 const YM_API_BASE = 'https://ws.yourmembership.com';
 
+/** Delay in ms between paginated API requests to avoid Cloudflare 429 rate limiting */
+const REQUEST_THROTTLE_MS = 350;
+
 /**
  * Orchestrates the YM data sync across all configured endpoints.
  *
@@ -74,28 +77,43 @@ export class YMSyncEngine {
 
     // MJ's TransactionGroup uses rxjs internally. When a SQL error occurs,
     // the error propagates both as a rejected promise (which we catch) AND
-    // as an unsubscribed Observable error, which rxjs fires asynchronously
-    // via reportUnhandledError — crashing the Node.js process.
-    // Install a scoped handler to absorb those leaked errors during sync.
+    // as an unsubscribed Observable error. rxjs fires the leak via
+    // reportUnhandledError which does setTimeout(() => { throw err }),
+    // making it an uncaughtException (NOT an unhandledRejection).
+    // Install scoped handlers for BOTH events to absorb those leaked errors.
     const capturedErrors: string[] = [];
+    const isTransactionError = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg.includes('Transaction rolled back');
+    };
     const rejectHandler = (reason: unknown) => {
-      const msg = reason instanceof Error ? reason.message : String(reason);
-      if (msg.includes('Transaction rolled back')) {
-        capturedErrors.push(msg);
-        this.writeLog(`Caught leaked TransactionGroup rejection: ${msg}`);
+      if (isTransactionError(reason)) {
+        capturedErrors.push(reason instanceof Error ? reason.message : String(reason));
+        this.writeLog(`Caught leaked TransactionGroup rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
+      }
+    };
+    const exceptionHandler = (err: Error) => {
+      if (isTransactionError(err)) {
+        capturedErrors.push(err.message);
+        this.writeLog(`Caught leaked TransactionGroup uncaughtException: ${err.message}`);
+      } else {
+        // Re-throw non-transaction errors — they're real crashes
+        throw err;
       }
     };
     process.on('unhandledRejection', rejectHandler);
+    process.on('uncaughtException', exceptionHandler);
 
     try {
       return await this.runSyncInner(options, startTime);
     } finally {
-      // Allow the microtask queue to drain so any pending rxjs errors fire
-      // before we remove the handler.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Allow the microtask/setTimeout queue to drain so any pending rxjs
+      // errors fire before we remove the handlers.
+      await new Promise((resolve) => setTimeout(resolve, 200));
       process.removeListener('unhandledRejection', rejectHandler);
+      process.removeListener('uncaughtException', exceptionHandler);
       if (capturedErrors.length > 0) {
-        this.writeLog(`Absorbed ${capturedErrors.length} leaked TransactionGroup rejection(s)`);
+        this.writeLog(`Absorbed ${capturedErrors.length} leaked TransactionGroup error(s)`);
       }
     }
   }
@@ -214,7 +232,14 @@ export class YMSyncEngine {
       // Apply date filtering for incremental sync where supported
       const effectiveConfig = await this.applyDateFilter(config, options);
 
-      const records = await this.fetchAllPages(effectiveConfig, options.MaxRecordsPerEndpoint);
+      let records = await this.fetchAllPages(effectiveConfig, options.MaxRecordsPerEndpoint);
+
+      // Apply optional transform (e.g., flatten nested Groups)
+      if (config.TransformData) {
+        records = config.TransformData(records);
+        this.writeLog(`${endpointName}: Transformed to ${records.length} records`);
+      }
+
       recordsFetched = records.length;
       this.writeLog(`${endpointName}: Fetched ${recordsFetched} records`);
 
@@ -285,15 +310,26 @@ export class YMSyncEngine {
         throw new Error(`YM API error for ${config.Path}: ${response.status} ${response.statusText} — ${errorBody}`);
       }
 
-      const json = (await response.json()) as Record<string, unknown>;
+      const rawJson: unknown = await response.json();
 
-      if (this.hasApiError(json)) {
-        const rs = json.ResponseStatus as { Message?: string; ErrorCode?: string };
-        throw new Error(`YM API error for ${config.Path}: ${rs.Message ?? rs.ErrorCode}`);
+      // Some endpoints (e.g. Products) return a raw JSON array instead of an object
+      let page: Record<string, unknown>[];
+      if (Array.isArray(rawJson)) {
+        page = rawJson as Record<string, unknown>[];
+      } else {
+        const json = rawJson as Record<string, unknown>;
+        if (this.hasApiError(json)) {
+          const rs = json.ResponseStatus as { Message?: string; ErrorCode?: string };
+          throw new Error(`YM API error for ${config.Path}: ${rs.Message ?? rs.ErrorCode}`);
+        }
+        page = this.extractDataFromResponse(json, config.ResponseDataKey);
       }
-
-      const page = this.extractDataFromResponse(json, config.ResponseDataKey);
       if (page.length === 0) {
+        const debugKeys = Array.isArray(rawJson) ? '(raw array)' : Object.keys(rawJson as Record<string, unknown>).join(', ');
+        this.writeLog(`${config.Path}: Empty page (keys in response: ${debugKeys})`);
+        if (config.ResponseDataKey && !Array.isArray(rawJson)) {
+          this.writeLog(`${config.Path}: Value for key "${config.ResponseDataKey}": ${JSON.stringify((rawJson as Record<string, unknown>)[config.ResponseDataKey])}`);
+        }
         hasMore = false;
         break;
       }
@@ -304,6 +340,8 @@ export class YMSyncEngine {
         hasMore = false;
       } else {
         pageNumber++;
+        // Throttle between pages to avoid Cloudflare 429 rate limiting
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_THROTTLE_MS));
       }
 
       if (maxRecords > 0 && results.length >= maxRecords) {

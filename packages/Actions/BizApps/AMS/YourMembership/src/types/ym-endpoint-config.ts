@@ -38,6 +38,12 @@ export interface YMEndpointConfig {
      * Only relevant when SupportsDateFilter is true.
      */
     DateFilterParam?: string;
+    /**
+     * Optional transform to flatten or reshape the extracted data array.
+     * Called after extracting via ResponseDataKey, before upsert.
+     * Use for endpoints with nested structures (e.g., Groups nested inside GroupTypes).
+     */
+    TransformData?: (records: Record<string, unknown>[]) => Record<string, unknown>[];
 }
 
 /**
@@ -88,6 +94,7 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
         SupportsPagination: true,
         DefaultPageSize: 100,
         ResponseDataKey: 'StoreOrderDetailsList',
+        DefaultQueryParams: { DateFrom: '2000-01-01' },
         SupportsDateFilter: true,
         DateFilterParam: 'DateFrom',
     },
@@ -98,16 +105,33 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
         PKFields: ['id'],
         SupportsPagination: false,
         DefaultPageSize: 200,
-        ResponseDataKey: 'Products',
+        ResponseDataKey: null, // API returns a raw JSON array (no wrapper key)
     },
     Groups: {
         Path: 'Groups',
         TargetTable: 'YM_Group',
         EntityName: 'YM_ Groups',
-        PKFields: ['GroupID'],
+        PKFields: ['Id'],
         SupportsPagination: false,
         DefaultPageSize: 200,
-        ResponseDataKey: 'Groups',
+        ResponseDataKey: 'GroupTypeList',
+        // Groups are nested: GroupTypeList[].Groups[]. Flatten them out,
+        // carrying the parent GroupType fields onto each group record.
+        TransformData: (groupTypes: Record<string, unknown>[]) => {
+            const flattened: Record<string, unknown>[] = [];
+            for (const gt of groupTypes) {
+                const groups = gt.Groups as Record<string, unknown>[] | undefined;
+                if (!Array.isArray(groups)) continue;
+                for (const group of groups) {
+                    flattened.push({
+                        ...group,
+                        GroupTypeId: gt.Id,
+                        GroupTypeName: gt.TypeName,
+                    });
+                }
+            }
+            return flattened;
+        },
     },
     MemberTypes: {
         Path: 'MemberTypes',
@@ -125,6 +149,6 @@ export const YM_ENDPOINT_REGISTRY: Record<YMEndpointName, YMEndpointConfig> = {
         PKFields: ['Id'],
         SupportsPagination: false,
         DefaultPageSize: 200,
-        ResponseDataKey: 'Memberships',
+        ResponseDataKey: 'Membership',
     },
 };

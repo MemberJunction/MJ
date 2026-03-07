@@ -98,6 +98,24 @@ export class YMSchemaManager {
     const existingMap = await this.loadExistingRecordState(entityName);
     this.writeLog(`Found ${existingMap.size} existing records in ${entityName}`);
 
+    // Safety check: if we fetched records from the API but found 0 existing
+    // records in the DB, verify the table is actually empty before proceeding.
+    // This prevents a full re-insert if loadExistingRecordState silently failed.
+    if (existingMap.size === 0 && deduped.length > 0) {
+      const rv = new RunView();
+      const countResult = await rv.RunView<{ ID: string }>(
+        { EntityName: entityName, ExtraFilter: '', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' },
+        this.contextUser,
+      );
+      if (countResult.Success && countResult.Results.length > 0) {
+        throw new Error(
+          `Safety check failed for ${entityName}: loadExistingRecordState returned 0 records ` +
+          `but the table is not empty. Aborting to prevent duplicate inserts. ` +
+          `Investigate why existing records could not be loaded.`
+        );
+      }
+    }
+
     // Process in batches
     const totalBatches = Math.ceil(deduped.length / TG_BATCH_SIZE);
     this.writeLog(`Upserting ${deduped.length} records into ${entityName} (${totalBatches} batches)`);
@@ -128,6 +146,7 @@ export class YMSchemaManager {
         EntityName: entityName,
         ExtraFilter: '',
         Fields: ['ID'],
+        IgnoreMaxRows: true,
         ResultType: 'entity_object',
       },
       this.contextUser,
@@ -165,30 +184,60 @@ export class YMSchemaManager {
    * Returns a map of SourceRecordID → { ID, SourceJSON }.
    */
   private async loadExistingRecordState(entityName: string): Promise<Map<string, ExistingRecordState>> {
-    const rv = new RunView();
-    const result = await rv.RunView<{ ID: string; SourceRecordID: string; SourceJSON: string }>(
-      {
-        EntityName: entityName,
-        ExtraFilter: '',
-        Fields: ['ID', 'SourceRecordID', 'SourceJSON'],
-        ResultType: 'simple',
-      },
-      this.contextUser,
-    );
-
-    if (!result.Success) {
-      throw new Error(`Failed to load existing records for ${entityName}: ${result.ErrorMessage}`);
-    }
-
     const map = new Map<string, ExistingRecordState>();
-    for (const row of result.Results) {
-      if (row.SourceRecordID) {
-        map.set(row.SourceRecordID, {
-          ID: row.ID,
-          SourceJSON: row.SourceJSON ?? '',
-        });
+
+    // Load in pages to avoid timeouts and memory issues on large tables.
+    // MJ's RunView with IgnoreMaxRows can still fail silently on very large
+    // result sets, so we paginate manually with OrderBy + offset filtering.
+    const PAGE_SIZE = 5000;
+    let lastId = '';
+    let totalLoaded = 0;
+
+    const rv = new RunView();
+    let hasMore = true;
+
+    while (hasMore) {
+      const filter = lastId ? `ID > '${lastId}'` : '';
+      const result = await rv.RunView<{ ID: string; SourceRecordID: string; SourceJSON: string }>(
+        {
+          EntityName: entityName,
+          ExtraFilter: filter,
+          Fields: ['ID', 'SourceRecordID', 'SourceJSON'],
+          OrderBy: 'ID ASC',
+          MaxRows: PAGE_SIZE,
+          ResultType: 'simple',
+        },
+        this.contextUser,
+      );
+
+      if (!result.Success) {
+        throw new Error(`Failed to load existing records for ${entityName}: ${result.ErrorMessage}`);
+      }
+
+      if (result.Results.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const row of result.Results) {
+        if (row.SourceRecordID) {
+          map.set(row.SourceRecordID, {
+            ID: row.ID,
+            SourceJSON: row.SourceJSON ?? '',
+          });
+        }
+        lastId = row.ID;
+      }
+
+      totalLoaded += result.Results.length;
+      this.writeLog(`loadExistingRecordState: Loaded page — ${result.Results.length} rows (${totalLoaded} total so far)`);
+
+      if (result.Results.length < PAGE_SIZE) {
+        hasMore = false;
       }
     }
+
+    this.writeLog(`loadExistingRecordState: Complete — ${map.size} entries from ${totalLoaded} rows`);
     return map;
   }
 
@@ -251,7 +300,8 @@ export class YMSchemaManager {
       updated++;
     }
 
-    // Process inserts
+    // Process inserts — track pending so we only update existingMap after commit
+    const pendingInserts: { sourceId: string; entity: BaseEntity; record: Record<string, unknown> }[] = [];
     for (const { record, sourceId } of toInsert) {
       const md = new Metadata();
       const entity = await md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
@@ -261,10 +311,7 @@ export class YMSchemaManager {
       entity.TransactionGroup = tg;
       await entity.Save();
       inserted++;
-
-      // Add to existingMap so subsequent batches know this sourceId exists
-      const newId = String(entity.Get('ID'));
-      existingMap.set(sourceId, { ID: newId, SourceJSON: JSON.stringify(record) });
+      pendingInserts.push({ sourceId, entity, record });
     }
 
     // TransactionGroup.Submit() can throw AND leak an async rxjs error.
@@ -275,15 +322,107 @@ export class YMSchemaManager {
       success = await tg.Submit();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.writeLog(`Batch transaction error for ${entityName}: ${msg}`);
-      return { Inserted: 0, Updated: 0, Skipped: skipped + toInsert.length + toUpdate.length };
+      this.writeLog(`Batch transaction error for ${entityName}: ${msg} — falling back to individual upserts`);
+      const fallbackResult = await this.upsertRecordsIndividually(entityName, toInsert, pkFields, existingMap);
+      return {
+        Inserted: fallbackResult.Inserted,
+        Updated: updated + fallbackResult.Updated,
+        Skipped: skipped + fallbackResult.Skipped,
+      };
     }
 
     if (!success) {
-      this.writeLog(`Batch transaction returned false for ${entityName}`);
-      return { Inserted: 0, Updated: 0, Skipped: skipped + toInsert.length + toUpdate.length };
+      this.writeLog(`Batch transaction returned false for ${entityName} — falling back to individual upserts`);
+      const fallbackResult = await this.upsertRecordsIndividually(entityName, toInsert, pkFields, existingMap);
+      return {
+        Inserted: fallbackResult.Inserted,
+        Updated: updated + fallbackResult.Updated,
+        Skipped: skipped + fallbackResult.Skipped,
+      };
     }
 
+    // Commit succeeded — now update existingMap so subsequent batches see these records
+    for (const { sourceId, entity, record } of pendingInserts) {
+      const newId = String(entity.Get('ID'));
+      existingMap.set(sourceId, { ID: newId, SourceJSON: JSON.stringify(record) });
+    }
+
+    return { Inserted: inserted, Updated: updated, Skipped: skipped };
+  }
+
+  /**
+   * Fallback: upserts records one at a time when a batch transaction fails.
+   * For each record, checks if SourceRecordID already exists in the DB.
+   * If it does, loads and updates; if not, inserts.
+   */
+  private async upsertRecordsIndividually(
+    entityName: string,
+    records: { record: Record<string, unknown>; sourceId: string }[],
+    pkFields: string[],
+    existingMap: Map<string, ExistingRecordState>,
+  ): Promise<{ Inserted: number; Updated: number; Skipped: number }> {
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const { record, sourceId } of records) {
+      // Skip if another batch already inserted this sourceId
+      if (existingMap.has(sourceId)) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        // Check DB for existing record by SourceRecordID
+        const rv = new RunView();
+        const existing = await rv.RunView<BaseEntity>(
+          {
+            EntityName: entityName,
+            ExtraFilter: `SourceRecordID = '${sourceId.replace(/'/g, "''")}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object',
+          },
+          this.contextUser,
+        );
+
+        const md = new Metadata();
+        let entity: BaseEntity;
+
+        if (existing.Success && existing.Results.length > 0) {
+          // Record exists — update it
+          entity = existing.Results[0];
+          this.setEntityFieldsFromRecord(entity, record, pkFields, sourceId);
+          const saved = await entity.Save();
+          if (saved) {
+            updated++;
+            existingMap.set(sourceId, { ID: String(entity.Get('ID')), SourceJSON: JSON.stringify(record) });
+          } else {
+            this.writeLog(`Individual update failed for ${entityName} sourceId=${sourceId}`);
+            skipped++;
+          }
+        } else {
+          // Record doesn't exist — insert it
+          entity = await md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+          entity.NewRecord();
+          entity.Set('SourceRecordID', sourceId);
+          this.setEntityFieldsFromRecord(entity, record, pkFields, sourceId);
+          const saved = await entity.Save();
+          if (saved) {
+            inserted++;
+            existingMap.set(sourceId, { ID: String(entity.Get('ID')), SourceJSON: JSON.stringify(record) });
+          } else {
+            this.writeLog(`Individual insert failed for ${entityName} sourceId=${sourceId}`);
+            skipped++;
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        this.writeLog(`Individual upsert error for ${entityName} sourceId=${sourceId}: ${msg}`);
+        skipped++;
+      }
+    }
+
+    this.writeLog(`Individual fallback for ${entityName}: ${inserted} inserted, ${updated} updated, ${skipped} skipped`);
     return { Inserted: inserted, Updated: updated, Skipped: skipped };
   }
 
