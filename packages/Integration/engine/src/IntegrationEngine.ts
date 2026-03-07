@@ -1,10 +1,16 @@
-import { CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRecordMapEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
     MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
 } from '@memberjunction/core-entities';
 import type {
     ICompanyIntegrationEntityMap,
@@ -31,10 +37,21 @@ import type { BaseIntegrationConnector, FetchContext } from './BaseIntegrationCo
 const DEFAULT_BATCH_SIZE = 200;
 
 /**
- * Top-level orchestrator that runs an end-to-end integration sync.
- * Coordinates connector, field mapping, match resolution, and entity persistence.
+ * Server-side Integration Engine.
+ *
+ * Wraps IntegrationEngineBase (cached metadata) via composition and provides
+ * the full sync orchestration pipeline: fetch → map → match → validate → apply.
+ *
+ * Pattern mirrors AIEngine wrapping AIEngineBase.
+ *
+ * Usage:
+ *   await IntegrationEngine.Instance.Config(false, contextUser);
+ *   const result = await IntegrationEngine.Instance.RunSync(companyIntegrationID, contextUser);
  */
-export class IntegrationOrchestrator {
+export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
+    public constructor() {
+        super();
+    }
     private readonly fieldMappingEngine = new FieldMappingEngine();
     private readonly matchEngine = new MatchEngine();
     private readonly watermarkService = new WatermarkService();
@@ -65,20 +82,20 @@ export class IntegrationOrchestrator {
         onNotification?: OnNotificationCallback
     ): Promise<SyncResult> {
         const lockKey = companyIntegrationID.toLowerCase();
-        const existing = IntegrationOrchestrator.activeSyncs.get(lockKey);
+        const existing = IntegrationEngine.activeSyncs.get(lockKey);
         if (existing) {
-            console.warn(`[IntegrationOrchestrator] Sync already running for ${lockKey}, waiting...`);
+            console.warn(`[IntegrationEngine] Sync already running for ${lockKey}, waiting...`);
             return existing;
         }
 
         const syncPromise = this.executeSyncInternal(
             companyIntegrationID, contextUser, triggerType, onProgress, onNotification
         );
-        IntegrationOrchestrator.activeSyncs.set(lockKey, syncPromise);
+        IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
         try {
             return await syncPromise;
         } finally {
-            IntegrationOrchestrator.activeSyncs.delete(lockKey);
+            IntegrationEngine.activeSyncs.delete(lockKey);
         }
     }
 
@@ -215,7 +232,7 @@ export class IntegrationOrchestrator {
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? String(entityMap.Get('ID'));
                 const errMsg = err instanceof Error ? err.message : String(err);
-                console.error(`[IntegrationOrchestrator] Entity map '${objName}' failed: ${errMsg}`);
+                console.error(`[IntegrationEngine] Entity map '${objName}' failed: ${errMsg}`);
                 aggregate.RecordsErrored++;
                 aggregate.Errors.push({
                     ExternalID: objName,
@@ -253,7 +270,7 @@ export class IntegrationOrchestrator {
             const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
             if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
                 console.warn(
-                    `[IntegrationOrchestrator] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.Get('ID')}, resetting to full fetch`
+                    `[IntegrationEngine] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.Get('ID')}, resetting to full fetch`
                 );
                 initialWatermark = null;
             }
@@ -289,7 +306,7 @@ export class IntegrationOrchestrator {
             let batchRecords = batch.Records;
             if (batchRecords.length > this.MaxBatchSize) {
                 console.warn(
-                    `[IntegrationOrchestrator] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
+                    `[IntegrationEngine] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
                 );
                 batchRecords = batchRecords.slice(0, this.MaxBatchSize);
             }
@@ -793,8 +810,88 @@ export class IntegrationOrchestrator {
         try {
             callback(notification);
         } catch (notifyErr) {
-            console.warn('[IntegrationOrchestrator] Notification callback threw:', notifyErr);
+            console.warn('[IntegrationEngine] Notification callback threw:', notifyErr);
         }
+    }
+
+    // ── Composition: delegate metadata to IntegrationEngineBase ───────
+
+    protected get Base(): IntegrationEngineBase {
+        return IntegrationEngineBase.Instance;
+    }
+
+    /**
+     * Configures the engine by loading all integration metadata.
+     * Delegates to IntegrationEngineBase.Config().
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await IntegrationEngineBase.Instance.Config(forceRefresh ?? false, contextUser, provider);
+    }
+
+    // ── Metadata Accessors (delegated to Base) ────────────────────────
+
+    public get Integrations(): MJIntegrationEntity[] {
+        return this.Base.Integrations;
+    }
+
+    public get SourceTypes(): MJIntegrationSourceTypeEntity[] {
+        return this.Base.SourceTypes;
+    }
+
+    public get CompanyIntegrations(): MJCompanyIntegrationEntity[] {
+        return this.Base.CompanyIntegrations;
+    }
+
+    public get EntityMaps(): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.EntityMaps;
+    }
+
+    public get FieldMaps(): MJCompanyIntegrationFieldMapEntity[] {
+        return this.Base.FieldMaps;
+    }
+
+    public get Watermarks(): MJCompanyIntegrationSyncWatermarkEntity[] {
+        return this.Base.Watermarks;
+    }
+
+    // ── Convenience Lookups (delegated to Base) ───────────────────────
+
+    public GetIntegrationByID(id: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationByID(id);
+    }
+
+    public GetIntegrationByName(name: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationByName(name);
+    }
+
+    public GetCompanyIntegrationByID(id: string): MJCompanyIntegrationEntity | undefined {
+        return this.Base.GetCompanyIntegrationByID(id);
+    }
+
+    public GetCompanyIntegrationsByIntegrationID(integrationID: string): MJCompanyIntegrationEntity[] {
+        return this.Base.GetCompanyIntegrationsByIntegrationID(integrationID);
+    }
+
+    public GetEntityMapsForCompanyIntegration(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.GetEntityMapsForCompanyIntegration(companyIntegrationID);
+    }
+
+    public GetFieldMapsForEntityMap(entityMapID: string): MJCompanyIntegrationFieldMapEntity[] {
+        return this.Base.GetFieldMapsForEntityMap(entityMapID);
+    }
+
+    public GetEnabledEntityMaps(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.GetEnabledEntityMaps(companyIntegrationID);
+    }
+
+    public GetIntegrationForCompanyIntegration(companyIntegrationID: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationForCompanyIntegration(companyIntegrationID);
+    }
+
+    // ── Singleton ─────────────────────────────────────────────────────
+
+    public static get Instance(): IntegrationEngine {
+        return IntegrationEngine.getInstance<IntegrationEngine>();
     }
 }
 

@@ -119,8 +119,8 @@ async function main() {
 
     // Run the sync
     try {
-        const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
-        const orchestrator = new IntegrationOrchestrator();
+        const { IntegrationEngine } = await import('@memberjunction/integration-engine');
+        const orchestrator = IntegrationEngine.Instance;
 
         const startTime = Date.now();
         let currentObject = '';

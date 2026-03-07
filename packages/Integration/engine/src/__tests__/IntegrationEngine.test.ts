@@ -20,7 +20,8 @@ import type {
     ExternalFieldSchema,
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord, SyncProgress } from '../types.js';
-import { IntegrationOrchestrator } from '../IntegrationOrchestrator.js';
+import { IntegrationEngine } from '../IntegrationEngine.js';
+// Note: IntegrationEngine is a singleton but tests instantiate it directly for isolation
 
 // ---- Mocks ----
 
@@ -138,17 +139,17 @@ function createMockRecords(count: number): ExternalRecord[] {
     }));
 }
 
-describe('IntegrationOrchestrator', () => {
-    let orchestrator: IntegrationOrchestrator;
+describe('IntegrationEngine', () => {
+    let orchestrator: IntegrationEngine;
 
     beforeEach(() => {
-        orchestrator = new IntegrationOrchestrator();
+        orchestrator = new IntegrationEngine();
         mockEntityInstances = new Map();
         mockRunViewFn = vi.fn();
         mockRunViewsFn = vi.fn();
         // Clear static activeSyncs between tests to prevent cross-test interference
         // Access via bracket notation since it's private static
-        (IntegrationOrchestrator as Record<string, unknown>)['activeSyncs'] = new Map();
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
     });
 
     it('should execute a full orchestration flow with records', async () => {

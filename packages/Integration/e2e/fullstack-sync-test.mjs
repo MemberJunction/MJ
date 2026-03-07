@@ -3,7 +3,7 @@
  * Full-Stack Integration Sync Test
  *
  * This script bootstraps the MJ server-side runtime (SQL Server data provider,
- * metadata, entity system) and runs the IntegrationOrchestrator against live
+ * metadata, entity system) and runs the IntegrationEngine against live
  * external APIs (YourMembership, HubSpot) using the real connector code,
  * field mapping engine, match engine, and entity persistence layer.
  *
@@ -79,14 +79,14 @@ async function bootstrapMJRuntime() {
 // ─── Run Sync ───────────────────────────────────────────────────────────
 
 async function runSync(companyIntegrationID, integrationName, contextUser) {
-    const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
+    const { IntegrationEngine } = await import('@memberjunction/integration-engine');
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`SYNCING: ${integrationName}`);
     console.log(`CompanyIntegrationID: ${companyIntegrationID}`);
     console.log(`${'='.repeat(60)}\n`);
 
-    const orchestrator = new IntegrationOrchestrator();
+    const orchestrator = IntegrationEngine.Instance;
     orchestrator.MaxBatchSize = 200;
 
     const startTime = Date.now();

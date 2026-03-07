@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run a full sync for a given integration using the MJ IntegrationOrchestrator.
+ * Run a full sync for a given integration using the MJ IntegrationEngine.
  *
  * Usage:
  *   node packages/Integration/e2e/run-full-sync.mjs ym
@@ -89,8 +89,8 @@ async function main() {
     console.log(`System user: ${systemUser.Name || systemUser.Email}\n`);
 
     // Run the sync
-    const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
-    const orchestrator = new IntegrationOrchestrator();
+    const { IntegrationEngine } = await import('@memberjunction/integration-engine');
+    const orchestrator = IntegrationEngine.Instance;
 
     const startTime = Date.now();
     let currentObject = '';

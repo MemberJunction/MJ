@@ -62,7 +62,7 @@ async function main() {
     }
     console.log('Active integrations:', Object.keys(integrations).join(', '));
 
-    const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
+    const { IntegrationEngine } = await import('@memberjunction/integration-engine');
 
     // 4. Sync YM remaining tables
     if (integrations['yourmembership']) {
@@ -72,7 +72,7 @@ async function main() {
         console.log(`${'='.repeat(60)}`);
 
         for (const table of YM_TABLES) {
-            await syncSingleTable(pool, ymCI, table, systemUser, IntegrationOrchestrator);
+            await syncSingleTable(pool, ymCI, table, systemUser, IntegrationEngine);
         }
     }
 
@@ -84,7 +84,7 @@ async function main() {
         console.log(`${'='.repeat(60)}`);
 
         // Just run the full sync for HubSpot since no tables have been synced yet
-        const orchestrator = new IntegrationOrchestrator();
+        const orchestrator = IntegrationEngine.Instance;
         orchestrator.MaxBatchSize = 200;
         const startTime = Date.now();
 
@@ -138,7 +138,7 @@ async function main() {
     process.exit(0);
 }
 
-async function syncSingleTable(pool, companyIntegrationID, objectName, systemUser, IntegrationOrchestrator) {
+async function syncSingleTable(pool, companyIntegrationID, objectName, systemUser, IntegrationEngine) {
     console.log(`\n--- Syncing: ${objectName} ---`);
 
     // Find all entity maps, disable others temporarily
@@ -164,7 +164,7 @@ async function syncSingleTable(pool, companyIntegrationID, objectName, systemUse
     }
 
     try {
-        const orchestrator = new IntegrationOrchestrator();
+        const orchestrator = IntegrationEngine.Instance;
         orchestrator.MaxBatchSize = 200;
         const startTime = Date.now();
 

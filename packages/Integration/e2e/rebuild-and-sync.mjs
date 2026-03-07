@@ -322,7 +322,7 @@ async function runSync(pool) {
     console.log('\n=== Step 5: Run Integration Sync ===\n');
 
     const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
-    const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
+    const { IntegrationEngine } = await import('@memberjunction/integration-engine');
 
     const systemUser = UserCache.Instance.GetSystemUser();
 
@@ -341,7 +341,7 @@ async function runSync(pool) {
         if (target !== 'all' && !key.startsWith(target)) continue;
 
         console.log(`\n  Syncing: ${row.Name} (${row.ID})`);
-        const orchestrator = new IntegrationOrchestrator();
+        const orchestrator = IntegrationEngine.Instance;
 
         const startTime = Date.now();
         try {

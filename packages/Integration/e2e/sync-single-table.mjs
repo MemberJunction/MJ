@@ -127,8 +127,8 @@ async function main() {
 
     // 6. Run the sync
     try {
-        const { IntegrationOrchestrator } = await import('@memberjunction/integration-engine');
-        const orchestrator = new IntegrationOrchestrator();
+        const { IntegrationEngine } = await import('@memberjunction/integration-engine');
+        const orchestrator = IntegrationEngine.Instance;
         orchestrator.MaxBatchSize = 200;
 
         const startTime = Date.now();
