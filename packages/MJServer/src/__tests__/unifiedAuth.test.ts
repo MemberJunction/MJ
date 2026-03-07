@@ -292,7 +292,12 @@ describe('createUnifiedAuthMiddleware', () => {
 
       expect(next).not.toHaveBeenCalled();
       expect(res._status).toBe(401);
-      expect(res._json).toEqual({ error: 'Token expired', code: 'JWT_EXPIRED' });
+      expect(res._json).toEqual({
+        errors: [{
+          message: 'Token expired',
+          extensions: { code: 'JWT_EXPIRED' }
+        }]
+      });
     });
 
     it('should return 401 when jwt.decode returns null (corrupt token)', async () => {

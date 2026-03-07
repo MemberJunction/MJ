@@ -293,7 +293,12 @@ export function createUnifiedAuthMiddleware(
       next();
     } catch (error) {
       if (error instanceof TokenExpiredError) {
-        res.status(401).json({ error: 'Token expired', code: 'JWT_EXPIRED' });
+        res.status(401).json({
+          errors: [{
+            message: 'Token expired',
+            extensions: { code: 'JWT_EXPIRED' }
+          }]
+        });
         return;
       }
       console.error('Auth error:', error);
