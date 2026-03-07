@@ -1844,7 +1844,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (val == null) continue;
 
             let sqlVal: string;
-            if (field.NeedsQuotes) {
+            if (typeof val === 'boolean') {
+                sqlVal = val ? '1' : '0';
+            } else if (field.NeedsQuotes) {
                 sqlVal = `'${String(val).replace(/'/g, "''")}'`;
             } else {
                 sqlVal = String(val);
