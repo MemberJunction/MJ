@@ -1,6 +1,6 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
-import { EntityDependency, EntityFieldTSType, EntityInfo, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
+import { EntityDependency, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { TransactionItem } from "./transactionGroup";
@@ -1129,6 +1129,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
 
+                // Step 2b: Row-Level Security check
+                if (!bReplay) {
+                    if (bNewRecord) {
+                        const createRLSPass = await this.CheckCreateRLS(entity, user);
+                        if (!createRLSPass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record`;
+                            throw new Error(entityResult.Message);
+                        }
+                    } else {
+                        const updateRLSPass = await this.CheckRecordRLS(entity, user, EntityPermissionType.Update);
+                        if (!updateRLSPass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
+                            throw new Error(entityResult.Message);
+                        }
+                    }
+                }
+
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
                     await this.OnBeforeSaveExecute(entity, user, options);
@@ -1251,6 +1272,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             // Before-delete hooks
             await this.OnBeforeDeleteExecute(entity, user, options);
 
+            // Row-Level Security check for Delete
+            if (!bReplay) {
+                const deleteRLSPass = await this.CheckRecordRLS(entity, user, EntityPermissionType.Delete);
+                if (!deleteRLSPass) {
+                    entityResult.Success = false;
+                    entityResult.EndedAt = new Date();
+                    entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
+                    throw new Error(entityResult.Message);
+                }
+            }
+
             if (entity.TransactionGroup && !bReplay) {
                 // ---- Transaction Group path ----
                 entity.RaiseReadyForTransaction();
@@ -1326,6 +1358,35 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.EndedAt = new Date();
             return false;
         }
+    }
+
+    /**************************************************************************/
+    // Row-Level Security Checks for Save/Delete
+    /**************************************************************************/
+
+    /**
+     * Checks whether an existing record passes RLS for a given permission type (Update or Delete).
+     * Default implementation returns true (no-op for providers without SQL access).
+     * Override in GenericDatabaseProvider with actual SQL-based check.
+     */
+    protected async CheckRecordRLS(
+        entity: BaseEntity,
+        user: UserInfo,
+        type: EntityPermissionType
+    ): Promise<boolean> {
+        return true;
+    }
+
+    /**
+     * Checks whether a new record's field values pass the Create RLS filter.
+     * Default implementation returns true (no-op for providers without SQL access).
+     * Override in GenericDatabaseProvider with actual SQL-based check.
+     */
+    protected async CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        return true;
     }
 
     /**************************************************************************/
