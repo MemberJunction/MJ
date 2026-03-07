@@ -830,6 +830,49 @@ const result = await rv.RunView({
     CacheLocalTTL: 300000  // 5 minutes
 });
 ```
+#### Cross-Server Cache Invalidation
+
+When multiple MJAPI server instances share a Redis-backed `ILocalStorageProvider`, cache invalidation propagates automatically across all instances. The system uses two complementary mechanisms:
+
+**1. BaseEngine path (engine-managed data):**
+When `BaseEntity.Save()` fires, `BaseEngine` catches the MJGlobal event, updates its in-memory arrays, and calls `syncLocalCacheForConfig()` → `LocalCacheManager.UpsertSingleEntity()` → Redis `SetItem()` → pub/sub notification. Other servers receive the notification via `OnExternalCacheChange()` and refresh their engine data.
+
+**2. LocalCacheManager path (all cached data):**
+`LocalCacheManager` independently subscribes to MJGlobal `BaseEntityEvent` events. When any entity is saved or deleted, it finds all cached RunView fingerprints for that entity via a reverse index and either updates them in-place (unfiltered queries) or invalidates them (filtered queries). This ensures that **all** cached data — not just engine-managed data — stays consistent across servers.
+
+```
+MJAPI-A: BaseEntity.Save()
+  → MJGlobal event
+  → LocalCacheManager.HandleBaseEntityEvent()
+  → Find all cached fingerprints for this entity
+  → UpsertSingleEntity() or InvalidateRunViewResult()
+  → Redis SetItem() → PUBLISH on mj:__pubsub__
+  → MJAPI-B receives → DispatchCacheChange()
+  → BaseEngine.OnExternalCacheChange() refreshes arrays
+```
+
+**Registering for change notifications:**
+
+```typescript
+// Engines and components can register callbacks for specific cache fingerprints
+const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params);
+const unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+    fingerprint,
+    (event: CacheChangedEvent) => {
+        console.log(`Cache updated by server ${event.SourceServerId}`);
+        // Refresh local data...
+    }
+);
+
+// Cleanup when no longer needed
+unsubscribe();
+```
+
+**Requirements for cross-server invalidation:**
+- Redis-backed `ILocalStorageProvider` (`@memberjunction/redis-provider`)
+- `enablePubSub: true` in Redis provider config
+- `StartListening()` called after provider creation
+- `OnCacheChanged` wired to `LocalCacheManager.DispatchCacheChange()`
 
 #### Storage Provider Implementations
 

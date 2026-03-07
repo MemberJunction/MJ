@@ -1,7 +1,8 @@
-import { BaseSingleton } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
 import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError } from "./logging";
+import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 
 // ============================================================================
 // TYPES AND INTERFACES
@@ -253,6 +254,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
+    /**
+     * Reverse index from entity name to the set of RunView cache fingerprints
+     * that contain data for that entity. Enables O(1) lookup when a BaseEntity
+     * event fires so we can update all relevant cached results.
+     */
+    private _entityFingerprintIndex: Map<string, Set<string>> = new Map();
+
     protected constructor() {
         super();
     }
@@ -306,6 +314,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         await this.loadRegistry();
         this._initialized = true;
+
+        // Subscribe to BaseEntity events for universal cache invalidation.
+        // When any entity is saved/deleted, update all cached RunView results for that entity.
+        this.subscribeToBaseEntityEvents();
     }
 
     /**
@@ -327,6 +339,164 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public UpdateConfig(config: Partial<LocalCacheManagerConfig>): void {
         this._config = { ...this._config, ...config };
+    }
+
+    // ========================================================================
+    // ENTITY → FINGERPRINT REVERSE INDEX
+    // ========================================================================
+
+    /**
+     * Extracts the entity name from a RunView fingerprint.
+     * Fingerprint format: `EntityName|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash[|Connection]`
+     * @param fingerprint - The RunView cache fingerprint
+     * @returns The entity name, or null if the fingerprint is malformed
+     */
+    protected extractEntityFromFingerprint(fingerprint: string): string | null {
+        const pipeIndex = fingerprint.indexOf('|');
+        return pipeIndex > 0 ? fingerprint.substring(0, pipeIndex) : null;
+    }
+
+    /**
+     * Returns true if the fingerprint includes a non-trivial filter (not just '_' or empty).
+     * Unfiltered fingerprints can safely have records upserted in-place; filtered ones
+     * must be invalidated conservatively since the new data may not match the filter.
+     * @param fingerprint - The RunView cache fingerprint
+     */
+    protected isFilteredFingerprint(fingerprint: string): boolean {
+        const parts = fingerprint.split('|');
+        return parts.length >= 2 && parts[1] !== '_' && parts[1] !== '';
+    }
+
+    /**
+     * Adds a fingerprint to the entity→fingerprint reverse index.
+     * Called when a RunView result is cached.
+     */
+    private addToEntityIndex(fingerprint: string): void {
+        const entity = this.extractEntityFromFingerprint(fingerprint);
+        if (!entity) return;
+        if (!this._entityFingerprintIndex.has(entity)) {
+            this._entityFingerprintIndex.set(entity, new Set());
+        }
+        this._entityFingerprintIndex.get(entity)!.add(fingerprint);
+    }
+
+    /**
+     * Removes a fingerprint from the entity→fingerprint reverse index.
+     * Called when a RunView result is invalidated.
+     */
+    private removeFromEntityIndex(fingerprint: string): void {
+        const entity = this.extractEntityFromFingerprint(fingerprint);
+        if (!entity) return;
+        const set = this._entityFingerprintIndex.get(entity);
+        if (set) {
+            set.delete(fingerprint);
+            if (set.size === 0) {
+                this._entityFingerprintIndex.delete(entity);
+            }
+        }
+    }
+
+    /**
+     * Returns the set of cached fingerprints for a given entity name.
+     * Useful for diagnostics and testing.
+     */
+    public GetFingerprintsForEntity(entityName: string): ReadonlySet<string> {
+        return this._entityFingerprintIndex.get(entityName) ?? new Set();
+    }
+
+    // ========================================================================
+    // UNIVERSAL CACHE INVALIDATION (BaseEntity Events)
+    // ========================================================================
+
+    /**
+     * Subscribes to MJGlobal BaseEntity events to proactively update all cached
+     * RunView results when entities are saved or deleted. This ensures ALL cached
+     * data stays consistent, not just engine-managed data.
+     */
+    private subscribeToBaseEntityEvents(): void {
+        MJGlobal.Instance.GetEventListener(false).subscribe((mjEvent) => {
+            if (mjEvent.event !== MJEventType.ComponentEvent) return;
+            if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
+
+            const entityEvent = mjEvent.args as BaseEntityEvent;
+            if (!entityEvent) return;
+
+            // Only react to completed save and delete events
+            if (entityEvent.type !== 'save' && entityEvent.type !== 'delete') return;
+
+            // Fire-and-forget to avoid blocking the save/delete operation
+            this.HandleBaseEntityEvent(entityEvent).catch((err) => {
+                LogError(`LocalCacheManager.HandleBaseEntityEvent error: ${(err as Error).message}`);
+            });
+        });
+    }
+
+    /**
+     * Handles a BaseEntity event by updating all cached RunView results for the
+     * affected entity. For unfiltered caches, updates the record in-place.
+     * For filtered caches, invalidates the cache entry (conservative approach
+     * since we can't verify filter match without re-querying).
+     *
+     * @param entityEvent - The BaseEntity event payload
+     */
+    protected async HandleBaseEntityEvent(entityEvent: BaseEntityEvent): Promise<void> {
+        const baseEntity = entityEvent.baseEntity;
+        if (!baseEntity?.EntityInfo?.Name) return;
+
+        const entityName = baseEntity.EntityInfo.Name;
+        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        if (!fingerprints || fingerprints.size === 0) return;
+
+        const pkFieldInfo = baseEntity.EntityInfo.PrimaryKeys?.[0];
+        if (!pkFieldInfo?.Name) return;
+
+        const pkValue = baseEntity.Get(pkFieldInfo.Name);
+        if (pkValue == null) return;
+
+        const primaryKeyValue = String(pkValue);
+        const nowISO = new Date().toISOString();
+
+        // Snapshot the fingerprints since we may modify the set during iteration
+        const fingerprintSnapshot = [...fingerprints];
+
+        for (const fingerprint of fingerprintSnapshot) {
+            try {
+                await this.processEntityEventForFingerprint(
+                    entityEvent.type,
+                    fingerprint,
+                    baseEntity,
+                    pkFieldInfo.Name,
+                    primaryKeyValue,
+                    nowISO
+                );
+            } catch (err) {
+                LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
+            }
+        }
+    }
+
+    /**
+     * Processes a single fingerprint for a BaseEntity event.
+     * Decomposed from HandleBaseEntityEvent for clarity and testability.
+     */
+    private async processEntityEventForFingerprint(
+        eventType: BaseEntityEvent['type'],
+        fingerprint: string,
+        baseEntity: BaseEntity,
+        primaryKeyFieldName: string,
+        primaryKeyValue: string,
+        nowISO: string
+    ): Promise<void> {
+        if (eventType === 'delete') {
+            await this.RemoveSingleEntity(fingerprint, primaryKeyValue, primaryKeyFieldName, nowISO);
+        } else if (!this.isFilteredFingerprint(fingerprint)) {
+            // Unfiltered cache: update the record in place
+            const entityData = baseEntity.GetAll() as Record<string, unknown>;
+            await this.UpsertSingleEntity(fingerprint, entityData, primaryKeyFieldName, nowISO);
+        } else {
+            // Filtered cache: conservatively invalidate (can't verify filter match)
+            await this.InvalidateRunViewResult(fingerprint);
+        }
     }
 
     // ========================================================================
@@ -731,6 +901,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 maxUpdatedAt,
                 rowCount: results.length  // Registry still tracks this for display/stats, derived from actual results
             });
+
+            // Maintain entity→fingerprint reverse index for universal cache invalidation
+            this.addToEntityIndex(fingerprint);
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
         }
@@ -782,6 +955,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public async InvalidateRunViewResult(fingerprint: string): Promise<void> {
         if (!this._storageProvider) return;
+
+        // Remove from entity→fingerprint index before removing the cache entry
+        this.removeFromEntityIndex(fingerprint);
 
         try {
             await this._storageProvider.Remove(fingerprint, CacheCategory.RunViewCache);

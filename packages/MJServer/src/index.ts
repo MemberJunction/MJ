@@ -313,6 +313,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     });
     (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
     await redisProvider.StartListening();
+
+    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
+    // so cross-server cache invalidation messages are routed to registered callbacks
+    redisProvider.OnCacheChanged((event) => {
+        LocalCacheManager.Instance.DispatchCacheChange(event);
+    });
+
     console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
 
