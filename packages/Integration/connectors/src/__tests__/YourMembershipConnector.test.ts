@@ -64,7 +64,9 @@ describe('YourMembershipConnector (unit)', () => {
             expect(names).toContain('Products');
             expect(names).toContain('DonationFunds');
             expect(names).toContain('Certifications');
-            expect(objects.length).toBe(8);
+            expect(names).toContain('InvoiceItems');
+            expect(names).toContain('DuesTransactions');
+            expect(objects.length).toBe(10);
 
             for (const obj of objects) {
                 expect(obj.SupportsWrite).toBe(false);

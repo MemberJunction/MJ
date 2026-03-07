@@ -459,24 +459,41 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
         endpoint: string,
         queryParams?: Record<string, string>
     ): Promise<Record<string, unknown>> {
+        const maxRetries = 5;
         const sessionId = await this.GetSession(config);
         const url = this.BuildUrl(config.ClientID, endpoint, queryParams);
 
-        let response = await this.FetchWithSession(url, sessionId);
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            let response = await this.FetchWithSession(url, sessionId);
 
-        if (response.status === 401) {
-            this.InvalidateSession(config.ClientID);
-            const newSessionId = await this.GetSession(config);
-            response = await this.FetchWithSession(url, newSessionId);
+            if (response.status === 401) {
+                this.InvalidateSession(config.ClientID);
+                const newSessionId = await this.GetSession(config);
+                response = await this.FetchWithSession(url, newSessionId);
+            }
+
+            if (response.status === 429) {
+                const retryAfter = parseInt(response.headers.get('Retry-After') ?? '0', 10);
+                const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * Math.pow(2, attempt), 30000);
+                console.warn(`YM rate limited (429) on ${endpoint}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+                await this.Sleep(delayMs);
+                continue;
+            }
+
+            if (!response.ok) {
+                throw new Error(`YM API error for ${endpoint}: ${response.status} ${response.statusText}`);
+            }
+
+            const json = await response.json() as Record<string, unknown>;
+            this.CheckResponseError(json, endpoint);
+            return json;
         }
 
-        if (!response.ok) {
-            throw new Error(`YM API error for ${endpoint}: ${response.status} ${response.statusText}`);
-        }
+        throw new Error(`YM API error for ${endpoint}: 429 Too Many Requests (exceeded ${maxRetries} retries)`);
+    }
 
-        const json = await response.json() as Record<string, unknown>;
-        this.CheckResponseError(json, endpoint);
-        return json;
+    private Sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     private async FetchWithSession(url: string, sessionId: string): Promise<Response> {

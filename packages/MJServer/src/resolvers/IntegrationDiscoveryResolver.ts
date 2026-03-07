@@ -506,12 +506,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 DefaultValue: f.DefaultValue
             }));
 
+            const primaryKeyFields = (sourceObj?.Fields ?? [])
+                .filter(f => f.IsPrimaryKey)
+                .map(f => f.Name.replace(/[^A-Za-z0-9_]/g, '_'));
+
             return {
                 SourceObjectName: obj.SourceObjectName,
                 SchemaName: obj.SchemaName,
                 TableName: obj.TableName,
                 EntityName: obj.EntityName,
                 Columns: columns,
+                PrimaryKeyFields: primaryKeyFields.length > 0 ? primaryKeyFields : ['ID'],
                 SoftForeignKeys: []
             };
         });

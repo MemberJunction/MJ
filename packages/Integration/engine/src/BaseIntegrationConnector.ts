@@ -229,7 +229,14 @@ export abstract class BaseIntegrationConnector {
         const result: SourceSchemaInfo = { Objects: [] };
 
         for (const obj of objects) {
-            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            let fields: ExternalFieldSchema[];
+            try {
+                fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                continue;
+            }
             result.Objects.push({
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,

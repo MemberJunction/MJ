@@ -28,6 +28,7 @@ export type ExplorerSection =
     | 'fields'
     | 'relationships'
     | 'permissions'
+    | 'data'
     | 'lineage'
     | 'history'
     | 'settings';
@@ -157,6 +158,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         { id: 'fields', icon: 'fa-solid fa-table-cells', label: 'Fields' },
         { id: 'relationships', icon: 'fa-solid fa-diagram-project', label: 'Relations' },
         { id: 'permissions', icon: 'fa-solid fa-lock', label: 'Security' },
+        { id: 'data', icon: 'fa-solid fa-table-list', label: 'Data' },
         { id: 'lineage', icon: 'fa-solid fa-code-branch', label: 'Lineage' },
         { id: 'history', icon: 'fa-solid fa-clock-rotate-left', label: 'History' },
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
@@ -711,7 +713,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private getFieldSortValue(field: EntityFieldInfo, column: string): string | number | boolean | null {
         switch (column) {
             case 'Sequence': return field.Sequence;
-            case 'Name': return field.DisplayName || field.Name;
+            case 'Name': return field.Name;
+            case 'DisplayName': return field.DisplayName || field.Name;
             case 'Type': return field.Type;
             case 'Length': return field.Length;
             case 'AllowsNull': return field.AllowsNull;

@@ -39,7 +39,13 @@ export interface TargetTableConfig {
     EntityName: string;
     /** Human-readable description for the table (emitted as sp_addextendedproperty). */
     Description?: string;
-    /** Column configurations. */
+    /**
+     * Primary key field name(s) from the source system.
+     * These columns get a UNIQUE constraint and are registered as soft PKs.
+     * Supports composite PKs (multiple fields). Must be a subset of Columns.
+     */
+    PrimaryKeyFields: string[];
+    /** Column configurations (includes PK fields — they are regular columns). */
     Columns: TargetColumnConfig[];
     /** Soft FK relationships to configure. */
     SoftForeignKeys: SoftFKEntry[];

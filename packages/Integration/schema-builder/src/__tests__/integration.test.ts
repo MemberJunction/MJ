@@ -38,7 +38,9 @@ function MakeTargetConfigs(): TargetTableConfig[] {
             SchemaName: 'hubspot',
             TableName: 'Contact',
             EntityName: 'HubSpot Contact',
+            PrimaryKeyFields: ['ContactID'],
             Columns: [
+                { SourceFieldName: 'id', TargetColumnName: 'ContactID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
                 { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
                 { SourceFieldName: 'first_name', TargetColumnName: 'FirstName', TargetSqlType: 'NVARCHAR(100)', IsNullable: true, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
             ],
@@ -49,7 +51,9 @@ function MakeTargetConfigs(): TargetTableConfig[] {
             SchemaName: 'hubspot',
             TableName: 'Deal',
             EntityName: 'HubSpot Deal',
+            PrimaryKeyFields: ['DealID'],
             Columns: [
+                { SourceFieldName: 'id', TargetColumnName: 'DealID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
                 { SourceFieldName: 'amount', TargetColumnName: 'Amount', TargetSqlType: 'DECIMAL(18,2)', IsNullable: true, MaxLength: null, Precision: 18, Scale: 2, DefaultValue: null },
                 { SourceFieldName: 'contact_id', TargetColumnName: 'ContactID', TargetSqlType: 'NVARCHAR(50)', IsNullable: true, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
             ],
@@ -127,7 +131,9 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: '__mj',
                     TableName: 'Contact',
                     EntityName: 'Contacts',
+                    PrimaryKeyFields: ['ContactID'],
                     Columns: [
+                        { SourceFieldName: 'id', TargetColumnName: 'ContactID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
                         { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
                     ],
                     SoftForeignKeys: [],
@@ -154,6 +160,7 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: '__mj',
                     TableName: 'Contact',
                     EntityName: 'Contacts',
+                    PrimaryKeyFields: [],
                     Columns: [],
                     SoftForeignKeys: [],
                 }],
@@ -175,8 +182,7 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: 'hubspot',
                     TableName: 'Contact',
                     Columns: [
-                        { Name: 'ID', SqlType: 'UNIQUEIDENTIFIER', IsNullable: false, MaxLength: null, Precision: null, Scale: null },
-                        { Name: 'SourceRecordID', SqlType: 'NVARCHAR(255)', IsNullable: false, MaxLength: 255, Precision: null, Scale: null },
+                        { Name: 'ContactID', SqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null },
                         { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
                         // FirstName is missing — should produce ALTER TABLE ADD
                     ],
@@ -186,7 +192,9 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: 'hubspot',
                     TableName: 'Contact',
                     EntityName: 'HubSpot Contact',
+                    PrimaryKeyFields: ['ContactID'],
                     Columns: [
+                        { SourceFieldName: 'id', TargetColumnName: 'ContactID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
                         { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
                         { SourceFieldName: 'first_name', TargetColumnName: 'FirstName', TargetSqlType: 'NVARCHAR(100)', IsNullable: true, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
                     ],
@@ -211,8 +219,7 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: 'hubspot',
                     TableName: 'Contact',
                     Columns: [
-                        { Name: 'ID', SqlType: 'UNIQUEIDENTIFIER', IsNullable: false, MaxLength: null, Precision: null, Scale: null },
-                        { Name: 'SourceRecordID', SqlType: 'NVARCHAR(255)', IsNullable: false, MaxLength: 255, Precision: null, Scale: null },
+                        { Name: 'ContactID', SqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null },
                         { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
                     ],
                 }],
@@ -221,7 +228,9 @@ describe('SchemaBuilder (integration)', () => {
                     SchemaName: 'hubspot',
                     TableName: 'Contact',
                     EntityName: 'HubSpot Contact',
+                    PrimaryKeyFields: ['ContactID'],
                     Columns: [
+                        { SourceFieldName: 'id', TargetColumnName: 'ContactID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
                         { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
                     ],
                     SoftForeignKeys: [],
@@ -246,7 +255,7 @@ describe('SchemaBuilder (integration)', () => {
             const migration = output.MigrationFiles[0];
             expect(migration.Content).toContain('CREATE SCHEMA IF NOT EXISTS "hubspot"');
             expect(migration.Content).toContain('"hubspot"."Contact"');
-            expect(migration.Content).toContain('"ID" UUID NOT NULL DEFAULT gen_random_uuid()');
+            expect(migration.Content).toContain('"__mj_integration_SyncStatus" VARCHAR(50) NOT NULL');
         });
     });
 

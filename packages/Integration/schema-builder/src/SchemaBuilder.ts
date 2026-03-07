@@ -102,11 +102,18 @@ export class SchemaBuilder {
             output.MigrationFiles = [this.MigrationWriter.WrapInMigrationFile(ddlParts.join('\n'), meta, filePath)];
         }
 
-        // Step 5: Generate soft FK config
+        // Step 5: Generate soft PK and FK config
+        const allConfigs = [...newConfigs, ...evolutionConfigs.map(ec => ec.config)];
         const allSoftFKs = this.CollectSoftFKs(input, evolutionConfigs);
-        if (allSoftFKs.length > 0) {
+        // Always emit additionalSchemaInfo — every integration table needs a soft PK
+        if (allConfigs.length > 0) {
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(null); // Caller provides existing content via input
-            const merged = this.SoftFKEmitter.MergeSchemaConfig(existingConfig, allSoftFKs);
+            // First add soft PKs (natural PK field names from source system)
+            const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            // Then merge in soft FKs
+            const merged = allSoftFKs.length > 0
+                ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
+                : withPKs;
             output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );

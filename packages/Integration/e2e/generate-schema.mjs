@@ -42,7 +42,6 @@ function buildTargetConfigs(defaultConfig, sourceSchema) {
         }
 
         const columns = sourceObj.Fields
-            .filter(f => !f.IsPrimaryKey) // PK is tracked in SourceRecordID
             .map(f => ({
                 SourceFieldName: f.Name,
                 TargetColumnName: f.Name,
@@ -55,12 +54,18 @@ function buildTargetConfigs(defaultConfig, sourceSchema) {
                 Description: f.Description ?? f.Label,
             }));
 
+        const primaryKeyFields = (sourceObj.PrimaryKeyFields || []).map(pkName => {
+            const col = columns.find(c => c.SourceFieldName === pkName);
+            return col ? col.TargetColumnName : pkName;
+        });
+
         configs.push({
             SourceObjectName: obj.SourceObjectName,
             SchemaName: defaultConfig.DefaultSchemaName,
             TableName: obj.TargetTableName,
             EntityName: obj.TargetEntityName,
             Description: sourceObj.Description ?? `${obj.TargetEntityName} synced from ${defaultConfig.DefaultSchemaName}`,
+            PrimaryKeyFields: primaryKeyFields,
             Columns: columns,
             SoftForeignKeys: [],
         });
@@ -287,6 +292,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Contacts',
             Description: 'Contact records from HubSpot CRM, representing individual people with their contact details and lifecycle stage',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'email', Label: 'Email', Description: 'Primary email address of the contact', SourceType: 'string', MaxLength: 255 },
                 { Name: 'firstname', Label: 'First Name', Description: 'Contact first name', SourceType: 'string', MaxLength: 200 },
                 { Name: 'lastname', Label: 'Last Name', Description: 'Contact last name', SourceType: 'string', MaxLength: 200 },
@@ -303,7 +309,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the contact was created in HubSpot', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the contact was last modified in HubSpot', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -311,6 +317,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Companies',
             Description: 'Company records from HubSpot CRM, representing organizations with firmographic data',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'name', Label: 'Name', Description: 'Company name', SourceType: 'string', MaxLength: 500 },
                 { Name: 'domain', Label: 'Domain', Description: 'Primary website domain', SourceType: 'string', MaxLength: 500 },
                 { Name: 'industry', Label: 'Industry', Description: 'Industry classification', SourceType: 'string', MaxLength: 200 },
@@ -325,7 +332,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the company was created in HubSpot', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the company was last modified in HubSpot', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -333,6 +340,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Deals',
             Description: 'Deal/opportunity records from HubSpot CRM, tracking revenue pipeline with stages and amounts',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'dealname', Label: 'Deal Name', Description: 'Name of the deal or opportunity', SourceType: 'string', MaxLength: 500 },
                 { Name: 'amount', Label: 'Amount', Description: 'Monetary value of the deal', SourceType: 'decimal', Precision: 18, Scale: 2 },
                 { Name: 'dealstage', Label: 'Deal Stage', Description: 'Current pipeline stage of the deal', SourceType: 'string', MaxLength: 200 },
@@ -343,7 +351,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the deal was created in HubSpot', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the deal was last modified in HubSpot', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -351,6 +359,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Tickets',
             Description: 'Support ticket records from HubSpot Service Hub, tracking customer issues and resolutions',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'subject', Label: 'Subject', Description: 'Subject line of the ticket', SourceType: 'string', MaxLength: 500 },
                 { Name: 'content', Label: 'Content', Description: 'Full description or body of the ticket', SourceType: 'text' },
                 { Name: 'hs_pipeline', Label: 'Pipeline', Description: 'Service pipeline the ticket belongs to', SourceType: 'string', MaxLength: 200 },
@@ -359,7 +368,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the ticket was created in HubSpot', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the ticket was last modified in HubSpot', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -367,6 +376,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Products',
             Description: 'Product catalog from HubSpot CRM, defining items available for deals and quotes',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'name', Label: 'Name', Description: 'Product name', SourceType: 'string', MaxLength: 500 },
                 { Name: 'description', Label: 'Description', Description: 'Product description', SourceType: 'text' },
                 { Name: 'price', Label: 'Price', Description: 'Standard unit price', SourceType: 'string', MaxLength: 100 },
@@ -377,7 +387,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the product was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the product was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -385,6 +395,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Line Items',
             Description: 'Line items from HubSpot deals and quotes, representing individual products or services in a transaction',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'name', Label: 'Name', Description: 'Line item name', SourceType: 'string', MaxLength: 500 },
                 { Name: 'description', Label: 'Description', Description: 'Line item description', SourceType: 'text' },
                 { Name: 'quantity', Label: 'Quantity', Description: 'Number of units', SourceType: 'string', MaxLength: 50 },
@@ -397,7 +408,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the line item was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the line item was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -405,6 +416,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Quotes',
             Description: 'Sales quotes from HubSpot CRM, representing formal price proposals sent to prospects',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_title', Label: 'Title', Description: 'Quote title', SourceType: 'string', MaxLength: 500 },
                 { Name: 'hs_expiration_date', Label: 'Expiration Date', Description: 'Date the quote expires', SourceType: 'string', MaxLength: 100 },
                 { Name: 'hs_status', Label: 'Status', Description: 'Current quote status', SourceType: 'string', MaxLength: 100 },
@@ -417,7 +429,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the quote was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the quote was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -425,6 +437,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Calls',
             Description: 'Call activity logs from HubSpot CRM, tracking phone calls with contacts and companies',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_call_title', Label: 'Title', Description: 'Call title or subject', SourceType: 'string', MaxLength: 500 },
                 { Name: 'hs_call_body', Label: 'Body', Description: 'Call notes or description', SourceType: 'text' },
                 { Name: 'hs_call_status', Label: 'Status', Description: 'Call status (e.g., COMPLETED, BUSY, NO_ANSWER)', SourceType: 'string', MaxLength: 100 },
@@ -438,7 +451,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the record was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the record was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -446,6 +459,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Emails',
             Description: 'Email activity logs from HubSpot CRM, tracking email communications with contacts',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_email_subject', Label: 'Subject', Description: 'Email subject line', SourceType: 'string', MaxLength: 1000 },
                 { Name: 'hs_email_text', Label: 'Text Body', Description: 'Plain text email body', SourceType: 'text' },
                 { Name: 'hs_email_status', Label: 'Status', Description: 'Email delivery status', SourceType: 'string', MaxLength: 100 },
@@ -459,7 +473,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the record was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the record was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -467,6 +481,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Notes',
             Description: 'Notes attached to contacts, companies, and deals in HubSpot CRM',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_note_body', Label: 'Note Body', Description: 'Content of the note', SourceType: 'text' },
                 { Name: 'hs_timestamp', Label: 'Timestamp', Description: 'When the note was created/logged', SourceType: 'string', MaxLength: 100 },
                 { Name: 'hubspot_owner_id', Label: 'Owner ID', Description: 'HubSpot user who created the note', SourceType: 'string', MaxLength: 100 },
@@ -474,7 +489,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the note was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the note was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -482,6 +497,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Tasks',
             Description: 'Task records from HubSpot CRM, tracking to-do items and follow-up activities',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_task_subject', Label: 'Subject', Description: 'Task subject or title', SourceType: 'string', MaxLength: 500 },
                 { Name: 'hs_task_body', Label: 'Body', Description: 'Task description or notes', SourceType: 'text' },
                 { Name: 'hs_task_status', Label: 'Status', Description: 'Task status (e.g., NOT_STARTED, COMPLETED)', SourceType: 'string', MaxLength: 100 },
@@ -493,7 +509,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the task was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the task was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -501,6 +517,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Meetings',
             Description: 'Meeting activity logs from HubSpot CRM, tracking scheduled meetings and their outcomes',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_meeting_title', Label: 'Title', Description: 'Meeting title', SourceType: 'string', MaxLength: 500 },
                 { Name: 'hs_meeting_body', Label: 'Body', Description: 'Meeting description or agenda', SourceType: 'text' },
                 { Name: 'hs_meeting_start_time', Label: 'Start Time', Description: 'Scheduled meeting start time', SourceType: 'string', MaxLength: 100 },
@@ -515,7 +532,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the record was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the record was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
         {
@@ -523,6 +540,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
             ExternalLabel: 'HubSpot Feedback Submissions',
             Description: 'Customer feedback survey submissions from HubSpot Service Hub',
             Fields: [
+                { Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot unique object identifier', SourceType: 'string', IsRequired: true, IsPrimaryKey: true, MaxLength: 50 },
                 { Name: 'hs_survey_id', Label: 'Survey ID', Description: 'ID of the survey', SourceType: 'string', MaxLength: 100 },
                 { Name: 'hs_survey_name', Label: 'Survey Name', Description: 'Name of the survey', SourceType: 'string', MaxLength: 500 },
                 { Name: 'hs_survey_type', Label: 'Survey Type', Description: 'Type of survey (NPS, CSAT, CES)', SourceType: 'string', MaxLength: 50 },
@@ -535,7 +553,7 @@ const HUBSPOT_SOURCE_SCHEMA = {
                 { Name: 'createdate', Label: 'Created Date', Description: 'Date the record was created', SourceType: 'string', MaxLength: 100 },
                 { Name: 'lastmodifieddate', Label: 'Last Modified Date', Description: 'Date the record was last modified', SourceType: 'string', MaxLength: 100 },
             ],
-            PrimaryKeyFields: [],
+            PrimaryKeyFields: ['hs_object_id'],
             Relationships: [],
         },
     ],

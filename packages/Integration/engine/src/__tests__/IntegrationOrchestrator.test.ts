@@ -71,6 +71,12 @@ vi.mock('@memberjunction/core', async () => {
             RunView(...args: unknown[]) { return mockRunViewFn(...args); }
         },
         Metadata: class MockMetadata {
+            get Entities() {
+                return [{
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID' },
+                }];
+            }
             async GetEntityObject(entityName: string) {
                 const entity = createMockEntity({ ID: `new-${entityName}-id` });
                 mockEntityInstances.set(entityName, entity);
