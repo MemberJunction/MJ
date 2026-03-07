@@ -140,12 +140,23 @@ export class UserInfo extends BaseInfo {
      */
     EmployeeSupervisorEmail: string = null
 
+    private _TenantContext?: TenantContext = undefined;
+
     /**
      * Tenant context for multi-tenant data isolation.
      * Set at request time by server middleware when multi-tenancy is enabled.
      * When undefined, no tenant filtering is applied.
+     *
+     * Uses a getter/setter so that `Object.keys()` does not enumerate it —
+     * the GraphQLDataProvider builds CurrentUser queries from `Object.keys(new UserInfo())`,
+     * and TenantContext is not a database/GraphQL field.
      */
-    TenantContext?: TenantContext = undefined
+    public get TenantContext(): TenantContext | undefined {
+        return this._TenantContext;
+    }
+    public set TenantContext(value: TenantContext | undefined) {
+        this._TenantContext = value;
+    }
 
     private _UserRoles: UserRoleInfo[] = []
     /**
