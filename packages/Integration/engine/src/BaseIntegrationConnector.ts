@@ -18,6 +18,8 @@ export interface ExternalObjectSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the object's purpose */
+    Description?: string;
     /** Whether this object supports incremental sync via watermarks */
     SupportsIncrementalSync: boolean;
     /** Whether this object can be created/updated from MJ (push) */
@@ -30,6 +32,8 @@ export interface ExternalFieldSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the field's purpose */
+    Description?: string;
     /** Field data type in the external system */
     DataType: string;
     /** Whether the field is required */
@@ -38,6 +42,10 @@ export interface ExternalFieldSchema {
     IsUniqueKey: boolean;
     /** Whether the field is read-only */
     IsReadOnly: boolean;
+    /** Whether this field is a foreign key */
+    IsForeignKey?: boolean;
+    /** If FK, which source object it references */
+    ForeignKeyTarget?: string | null;
 }
 
 /** Context passed to FetchChanges for incremental data retrieval */
@@ -240,9 +248,11 @@ export abstract class BaseIntegrationConnector {
             result.Objects.push({
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,
+                Description: obj.Description,
                 Fields: fields.map(f => ({
                     Name: f.Name,
                     Label: f.Label,
+                    Description: f.Description,
                     SourceType: f.DataType,
                     IsRequired: f.IsRequired,
                     MaxLength: null,
@@ -250,8 +260,8 @@ export abstract class BaseIntegrationConnector {
                     Scale: null,
                     DefaultValue: null,
                     IsPrimaryKey: f.IsUniqueKey,
-                    IsForeignKey: false,
-                    ForeignKeyTarget: null,
+                    IsForeignKey: f.IsForeignKey ?? false,
+                    ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
                 Relationships: [],

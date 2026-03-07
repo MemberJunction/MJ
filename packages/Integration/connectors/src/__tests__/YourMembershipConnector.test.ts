@@ -56,21 +56,34 @@ describe('YourMembershipConnector (unit)', () => {
             const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
             const names = objects.map(o => o.Name);
 
-            expect(names).toContain('Members');
-            expect(names).toContain('Events');
-            expect(names).toContain('MemberTypes');
-            expect(names).toContain('Memberships');
-            expect(names).toContain('Groups');
-            expect(names).toContain('Products');
-            expect(names).toContain('DonationFunds');
-            expect(names).toContain('Certifications');
-            expect(names).toContain('InvoiceItems');
-            expect(names).toContain('DuesTransactions');
-            expect(objects.length).toBe(10);
+            // Verify a sample of key endpoints
+            const expectedNames = [
+                'Members', 'Events', 'MemberTypes', 'Memberships', 'Groups',
+                'Products', 'DonationFunds', 'Certifications', 'InvoiceItems', 'DuesTransactions',
+                'EventRegistrations', 'EventSessions', 'EventTickets', 'EventCategories',
+                'MemberGroups', 'Connections', 'DonationHistory', 'EngagementScores',
+                'GroupTypes', 'DonationTransactions', 'StoreOrders', 'StoreOrderDetails',
+                'CertificationsJournals', 'CertificationCreditTypes', 'ProductCategories',
+                'CareerOpenings', 'Campaigns', 'GLCodes',
+                'MembersProfiles', 'PeopleIDs', 'MembersGroupsBulk',
+                'FinanceBatches', 'FinanceBatchDetails', 'AllCampaigns', 'CampaignEmailLists',
+                'EventAttendeeTypes', 'EventSessionGroups', 'EventCEUAwards',
+                'EventRegistrationForms', 'EventIDs', 'GroupMembershipLogs',
+                'DuesRules', 'MemberReferrals', 'MemberSubAccounts',
+                'Countries', 'Locations', 'ShippingMethods', 'PaymentProcessors',
+                'CustomTaxLocations', 'QBClasses', 'MembershipModifiers', 'MembershipPromoCodes',
+                'Announcements', 'EmailSuppressionList', 'SponsorRotators',
+                'MemberNetworks', 'MemberFavorites', 'TimeZones',
+            ];
+            for (const name of expectedNames) {
+                expect(names).toContain(name);
+            }
+            expect(objects.length).toBe(58);
 
             for (const obj of objects) {
                 expect(obj.SupportsWrite).toBe(false);
                 expect(obj.Label).toBeTruthy();
+                expect(obj.Description).toBeTruthy();
             }
         });
     });

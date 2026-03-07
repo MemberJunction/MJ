@@ -3,7 +3,7 @@
  * Schema Generation Script
  *
  * Invokes the Integration Schema Builder using the connector's
- * GetDefaultConfiguration() + static field metadata to generate
+ * GetDefaultConfiguration() + IntrospectSchema() to generate
  * Flyway migration files for YM and HubSpot target tables.
  *
  * Usage:
@@ -20,10 +20,19 @@ const target = process.argv[2] || 'all';
 const MJ_VERSION = '5.8';
 const MIGRATIONS_DIR = 'migrations/v5';
 const METADATA_DIR = 'metadata';
-const ADDITIONAL_SCHEMA_INFO_PATH = 'config/additionalSchemaInfo.json';
+const ADDITIONAL_SCHEMA_INFO_PATH = 'metadata/integrations/additionalSchemaInfo.json';
 const PLATFORM = 'sqlserver';
 
 const typeMapper = new TypeMapper();
+
+/**
+ * Creates a mock CompanyIntegration entity for connectors that only need
+ * static schema metadata (no live API calls).
+ */
+function createMockCompanyIntegration(config) {
+    const configJson = JSON.stringify(config);
+    return { Get: (field) => field === 'Configuration' ? configJson : null };
+}
 
 /**
  * Builds TargetTableConfig[] from a connector's default configuration
@@ -142,148 +151,7 @@ function generateSchema(connectorName, defaultConfig, sourceSchema) {
     return output;
 }
 
-// ─── Source Schema Definitions with Descriptions ─────────────────────
-
-const YM_SOURCE_SCHEMA = {
-    Objects: [
-        {
-            ExternalName: 'Members',
-            ExternalLabel: 'YM Members',
-            Description: 'Individual member profiles from the YourMembership AMS, including contact info, membership status, and key dates',
-            Fields: [
-                { Name: 'ProfileID', Label: 'Profile ID', Description: 'Unique member profile identifier in YourMembership', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'FirstName', Label: 'First Name', Description: 'Member first name', SourceType: 'string', MaxLength: 200 },
-                { Name: 'LastName', Label: 'Last Name', Description: 'Member last name', SourceType: 'string', MaxLength: 200 },
-                { Name: 'EmailAddr', Label: 'Email', Description: 'Primary email address', SourceType: 'string', MaxLength: 255 },
-                { Name: 'MemberTypeCode', Label: 'Member Type Code', Description: 'Code identifying the membership type/tier', SourceType: 'string', MaxLength: 200 },
-                { Name: 'Status', Label: 'Status', Description: 'Current membership status (e.g., Active, Expired, Suspended)', SourceType: 'string', MaxLength: 100 },
-                { Name: 'Organization', Label: 'Organization', Description: 'Member organization or employer name', SourceType: 'string', MaxLength: 500 },
-                { Name: 'Phone', Label: 'Phone', Description: 'Primary phone number', SourceType: 'string', MaxLength: 100 },
-                { Name: 'Address1', Label: 'Address Line 1', Description: 'Primary street address line 1', SourceType: 'string', MaxLength: 500 },
-                { Name: 'Address2', Label: 'Address Line 2', Description: 'Primary street address line 2', SourceType: 'string', MaxLength: 500 },
-                { Name: 'City', Label: 'City', Description: 'City for primary address', SourceType: 'string', MaxLength: 200 },
-                { Name: 'State', Label: 'State', Description: 'State/province for primary address', SourceType: 'string', MaxLength: 200 },
-                { Name: 'PostalCode', Label: 'Postal Code', Description: 'ZIP or postal code for primary address', SourceType: 'string', MaxLength: 50 },
-                { Name: 'Country', Label: 'Country', Description: 'Country for primary address', SourceType: 'string', MaxLength: 200 },
-                { Name: 'Title', Label: 'Title', Description: 'Professional title or job title', SourceType: 'string', MaxLength: 300 },
-                { Name: 'JoinDate', Label: 'Join Date', Description: 'Date the member first joined the organization', SourceType: 'string', MaxLength: 100 },
-                { Name: 'RenewalDate', Label: 'Renewal Date', Description: 'Next membership renewal date', SourceType: 'string', MaxLength: 100 },
-                { Name: 'ExpirationDate', Label: 'Expiration Date', Description: 'Date the current membership period expires', SourceType: 'string', MaxLength: 100 },
-                { Name: 'MemberSinceDate', Label: 'Member Since', Description: 'Original date of continuous membership', SourceType: 'string', MaxLength: 100 },
-                { Name: 'WebsiteUrl', Label: 'Website URL', Description: 'Member personal or company website URL', SourceType: 'string', MaxLength: 500 },
-            ],
-            PrimaryKeyFields: ['ProfileID'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'Events',
-            ExternalLabel: 'YM Events',
-            Description: 'Events and meetings managed in YourMembership, including dates, locations, and registration details',
-            Fields: [
-                { Name: 'EventId', Label: 'Event ID', Description: 'Unique event identifier in YourMembership', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'Name', Label: 'Event Name', Description: 'Title of the event', SourceType: 'string', MaxLength: 500 },
-                { Name: 'Active', Label: 'Active', Description: 'Whether the event is currently active and visible', SourceType: 'string', MaxLength: 20 },
-                { Name: 'StartDate', Label: 'Start Date', Description: 'Date the event begins', SourceType: 'string', MaxLength: 100 },
-                { Name: 'EndDate', Label: 'End Date', Description: 'Date the event ends', SourceType: 'string', MaxLength: 100 },
-                { Name: 'StartTime', Label: 'Start Time', Description: 'Time the event begins', SourceType: 'string', MaxLength: 100 },
-                { Name: 'EndTime', Label: 'End Time', Description: 'Time the event ends', SourceType: 'string', MaxLength: 100 },
-                { Name: 'IsVirtual', Label: 'Is Virtual', Description: 'Whether this is a virtual/online event', SourceType: 'string', MaxLength: 20 },
-                { Name: 'VirtualMeetingType', Label: 'Virtual Meeting Type', Description: 'Platform type for virtual events (e.g., Zoom, Teams)', SourceType: 'string', MaxLength: 200 },
-            ],
-            PrimaryKeyFields: ['EventId'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'MemberTypes',
-            ExternalLabel: 'YM Member Types',
-            Description: 'Membership type/tier definitions from YourMembership, used for categorizing members',
-            Fields: [
-                { Name: 'ID', Label: 'Type ID', Description: 'Unique identifier for the membership type', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'TypeCode', Label: 'Type Code', Description: 'Short code for the membership type', SourceType: 'string', MaxLength: 100 },
-                { Name: 'Name', Label: 'Name', Description: 'Display name of the membership type', SourceType: 'string', MaxLength: 255 },
-                { Name: 'IsDefault', Label: 'Is Default', Description: 'Whether this is the default membership type for new members', SourceType: 'string', MaxLength: 20 },
-                { Name: 'PresetType', Label: 'Preset Type', Description: 'System preset category for this type', SourceType: 'string', MaxLength: 100 },
-                { Name: 'SortOrder', Label: 'Sort Order', Description: 'Display order for this membership type', SourceType: 'string', MaxLength: 20 },
-            ],
-            PrimaryKeyFields: ['ID'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'Memberships',
-            ExternalLabel: 'YM Memberships',
-            Description: 'Membership plan definitions from YourMembership, defining dues structures and billing options',
-            Fields: [
-                { Name: 'Id', Label: 'Membership ID', Description: 'Unique identifier for the membership plan', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'Code', Label: 'Code', Description: 'Short code for the membership plan', SourceType: 'string', MaxLength: 100 },
-                { Name: 'Name', Label: 'Name', Description: 'Display name of the membership plan', SourceType: 'string', MaxLength: 255 },
-                { Name: 'DuesAmount', Label: 'Dues Amount', Description: 'Standard dues amount for this membership', SourceType: 'string', MaxLength: 100 },
-                { Name: 'ProRatedDues', Label: 'Pro-Rated Dues', Description: 'Whether dues are pro-rated for mid-term joins', SourceType: 'string', MaxLength: 20 },
-                { Name: 'AllowMultipleOpenInvoices', Label: 'Allow Multiple Invoices', Description: 'Whether multiple open invoices are permitted', SourceType: 'string', MaxLength: 20 },
-            ],
-            PrimaryKeyFields: ['Id'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'Groups',
-            ExternalLabel: 'YM Groups',
-            Description: 'Groups and committees from YourMembership, organized by group type',
-            Fields: [
-                { Name: 'Id', Label: 'Group ID', Description: 'Unique identifier for the group', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'Name', Label: 'Group Name', Description: 'Display name of the group', SourceType: 'string', MaxLength: 500 },
-                { Name: 'GroupTypeName', Label: 'Group Type', Description: 'Name of the parent group type category', SourceType: 'string', MaxLength: 200 },
-                { Name: 'GroupTypeId', Label: 'Group Type ID', Description: 'ID of the parent group type', SourceType: 'string', MaxLength: 50 },
-            ],
-            PrimaryKeyFields: ['Id'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'Products',
-            ExternalLabel: 'YM Products',
-            Description: 'Store products from YourMembership, including pricing and availability details',
-            Fields: [
-                { Name: 'id', Label: 'Product ID', Description: 'Unique identifier for the product', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'description', Label: 'Description', Description: 'Product description', SourceType: 'string', MaxLength: 1000 },
-                { Name: 'amount', Label: 'Amount', Description: 'Product price amount', SourceType: 'string', MaxLength: 100 },
-                { Name: 'weight', Label: 'Weight', Description: 'Product weight for shipping', SourceType: 'string', MaxLength: 50 },
-                { Name: 'taxRate', Label: 'Tax Rate', Description: 'Applicable tax rate', SourceType: 'string', MaxLength: 50 },
-                { Name: 'quantity', Label: 'Quantity', Description: 'Available quantity', SourceType: 'string', MaxLength: 50 },
-                { Name: 'ProductActive', Label: 'Active', Description: 'Whether the product is currently active', SourceType: 'string', MaxLength: 20 },
-                { Name: 'IsFeatured', Label: 'Is Featured', Description: 'Whether the product is featured in the store', SourceType: 'string', MaxLength: 20 },
-                { Name: 'ListInStore', Label: 'List In Store', Description: 'Whether the product is listed in the online store', SourceType: 'string', MaxLength: 20 },
-                { Name: 'taxable', Label: 'Taxable', Description: 'Whether the product is taxable', SourceType: 'string', MaxLength: 20 },
-            ],
-            PrimaryKeyFields: ['id'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'DonationFunds',
-            ExternalLabel: 'YM Donation Funds',
-            Description: 'Donation fund definitions from YourMembership for charitable giving programs',
-            Fields: [
-                { Name: 'fundId', Label: 'Fund ID', Description: 'Unique identifier for the donation fund', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'fundName', Label: 'Fund Name', Description: 'Display name of the donation fund', SourceType: 'string', MaxLength: 500 },
-                { Name: 'fundOptionsCount', Label: 'Options Count', Description: 'Number of giving options available for this fund', SourceType: 'string', MaxLength: 20 },
-            ],
-            PrimaryKeyFields: ['fundId'],
-            Relationships: [],
-        },
-        {
-            ExternalName: 'Certifications',
-            ExternalLabel: 'YM Certifications',
-            Description: 'Professional certification programs from YourMembership with CEU requirements',
-            Fields: [
-                { Name: 'CertificationID', Label: 'Certification ID', Description: 'Unique identifier for the certification', SourceType: 'string', IsRequired: true, IsPrimaryKey: true },
-                { Name: 'ID', Label: 'ID', Description: 'Alternate ID for the certification', SourceType: 'string', MaxLength: 100 },
-                { Name: 'Name', Label: 'Name', Description: 'Name of the certification program', SourceType: 'string', MaxLength: 500 },
-                { Name: 'IsActive', Label: 'Is Active', Description: 'Whether the certification is currently offered', SourceType: 'string', MaxLength: 20 },
-                { Name: 'CEUsRequired', Label: 'CEUs Required', Description: 'Number of continuing education units required', SourceType: 'string', MaxLength: 50 },
-                { Name: 'Code', Label: 'Code', Description: 'Short code for the certification', SourceType: 'string', MaxLength: 100 },
-            ],
-            PrimaryKeyFields: ['CertificationID'],
-            Relationships: [],
-        },
-    ],
-};
+// ─── HubSpot Source Schema (static — HubSpot connector doesn't have full field schemas yet) ───
 
 const HUBSPOT_SOURCE_SCHEMA = {
     Objects: [
@@ -572,14 +440,31 @@ function normalizeFields(fields) {
         Scale: f.Scale ?? null,
         DefaultValue: null,
         IsPrimaryKey: f.IsPrimaryKey ?? false,
-        IsForeignKey: false,
-        ForeignKeyTarget: null,
+        IsForeignKey: f.IsForeignKey ?? false,
+        ForeignKeyTarget: f.ForeignKeyTarget ?? null,
     }));
 }
 
-// Normalize all source schemas
-for (const obj of YM_SOURCE_SCHEMA.Objects) obj.Fields = normalizeFields(obj.Fields);
+// Normalize HubSpot source schema (static)
 for (const obj of HUBSPOT_SOURCE_SCHEMA.Objects) obj.Fields = normalizeFields(obj.Fields);
+
+/**
+ * Build the YM source schema dynamically from the connector's
+ * DiscoverObjects + DiscoverFields (purely static, no API calls needed).
+ */
+async function buildYMSourceSchema() {
+    const connector = new YourMembershipConnector();
+    const mockCI = createMockCompanyIntegration({
+        ClientID: '00000',
+        APIKey: 'schema-gen',
+        APIPassword: 'schema-gen',
+    });
+    const mockUser = {};
+
+    const schema = await connector.IntrospectSchema(mockCI, mockUser);
+    console.log(`  Introspected ${schema.Objects.length} YM objects from connector`);
+    return schema;
+}
 
 // ─── Main ───────────────────────────────────────────────────────────
 
@@ -588,10 +473,26 @@ async function main() {
     console.log(`Target: ${target}`);
     console.log(`Date: ${new Date().toISOString()}`);
 
+    // Tables to exclude from DDL generation (already exist in database)
+    const excludeArg = process.argv.find(a => a.startsWith('--exclude='));
+    const excludeTables = excludeArg
+        ? new Set(excludeArg.replace('--exclude=', '').split(','))
+        : new Set();
+
     if (target === 'ym' || target === 'all') {
         const ymConnector = new YourMembershipConnector();
         const ymDefaults = ymConnector.GetDefaultConfiguration();
-        generateSchema('YourMembership', ymDefaults, YM_SOURCE_SCHEMA);
+
+        // Filter out excluded tables
+        if (excludeTables.size > 0) {
+            ymDefaults.DefaultObjects = ymDefaults.DefaultObjects.filter(
+                o => !excludeTables.has(o.TargetTableName)
+            );
+            console.log(`  Excluded ${excludeTables.size} existing tables, ${ymDefaults.DefaultObjects.length} remaining`);
+        }
+
+        const ymSourceSchema = await buildYMSourceSchema();
+        generateSchema('YourMembership', ymDefaults, ymSourceSchema);
     }
 
     if (target === 'hubspot' || target === 'all') {

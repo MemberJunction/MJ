@@ -207,10 +207,25 @@ export class IntegrationOrchestrator {
 
         for (let i = 0; i < totalMaps; i++) {
             const entityMap = config.entityMaps[i];
-            const mapResult = await this.ProcessSingleEntityMap(
-                config, entityMap, run, contextUser, i, totalMaps, onProgress
-            );
-            this.MergeResult(aggregate, mapResult);
+            try {
+                const mapResult = await this.ProcessSingleEntityMap(
+                    config, entityMap, run, contextUser, i, totalMaps, onProgress
+                );
+                this.MergeResult(aggregate, mapResult);
+            } catch (err) {
+                const objName = entityMap.ExternalObjectName ?? String(entityMap.Get('ID'));
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[IntegrationOrchestrator] Entity map '${objName}' failed: ${errMsg}`);
+                aggregate.RecordsErrored++;
+                aggregate.Errors.push({
+                    ExternalID: objName,
+                    ChangeType: 'Skip',
+                    ErrorMessage: errMsg,
+                    ErrorCode: 'CONNECTOR_ERROR',
+                    Severity: 'Critical',
+                    ExternalRecord: { ExternalID: objName, ObjectType: objName, Fields: {} },
+                });
+            }
         }
 
         return aggregate;
