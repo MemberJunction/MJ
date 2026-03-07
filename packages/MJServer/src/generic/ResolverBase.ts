@@ -1071,7 +1071,7 @@ export class ResolverBase {
           }
         } else {
           // save failed, return null
-          throw new GraphQLError(`Record not found for ${entityName} with key ${JSON.stringify(cKey)}`, {
+          throw new GraphQLError(`Record not found or access denied`, {
             extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
           });
         }
@@ -1305,7 +1305,12 @@ export class ResolverBase {
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
-      await entityObject.InnerLoad(key);
+      const loadSuccess = await entityObject.InnerLoad(key);
+      if (!loadSuccess) {
+        throw new GraphQLError(`Record not found or access denied`, {
+          extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
+        });
+      }
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
