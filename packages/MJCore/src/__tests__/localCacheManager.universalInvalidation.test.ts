@@ -356,4 +356,338 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             expect(newRow.Name).toBe('Charlie');
         });
     });
+/**
+ * Additional tests for LocalCacheManager universal cache invalidation.
+ *
+ * Tests composite PK handling, eviction cleanup, registry rebuild, and edge cases.
+ * Appended to the existing localCacheManager.universalInvalidation.test.ts file.
+ */
+
+    // ========================================================================
+    // Composite Primary Key Handling
+    // ========================================================================
+
+    describe('Composite Primary Key Handling', () => {
+        function createMockEntityEventWithCompositePK(options: {
+            entityName: string;
+            type: 'save' | 'delete';
+            primaryKeys: Array<{ Name: string }>;
+            fields: Record<string, unknown>;
+        }) {
+            return {
+                type: options.type,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: options.entityName,
+                        PrimaryKeys: options.primaryKeys,
+                    },
+                    Get: (fieldName: string) => options.fields[fieldName],
+                    GetAll: () => ({ ...options.fields }),
+                },
+            };
+        }
+
+        it('should invalidate all fingerprints for composite PK entity on save', async () => {
+            // Set up caches for an entity with composite PK
+            const fp1 = 'UserRoles|_|_|simple|-1|0|_';
+            const fp2 = 'UserRoles|Active=1|_|simple|-1|0|_';
+
+            await cacheManager.SetRunViewResult(
+                fp1,
+                { EntityName: 'UserRoles' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ UserID: 'u1', RoleID: 'r1', Active: true }],
+                '2024-01-01T00:00:00Z'
+            );
+            await cacheManager.SetRunViewResult(
+                fp2,
+                { EntityName: 'UserRoles', ExtraFilter: 'Active=1' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ UserID: 'u1', RoleID: 'r1', Active: true }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Composite PK: UserID + RoleID
+            const event = createMockEntityEventWithCompositePK({
+                entityName: 'UserRoles',
+                type: 'save',
+                primaryKeys: [{ Name: 'UserID' }, { Name: 'RoleID' }],
+                fields: { UserID: 'u1', RoleID: 'r1', Active: false },
+            });
+
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            // Both caches should be invalidated (not updated in place)
+            const cached1 = await cacheManager.GetRunViewResult(fp1);
+            const cached2 = await cacheManager.GetRunViewResult(fp2);
+            expect(cached1).toBeNull();
+            expect(cached2).toBeNull();
+        });
+
+        it('should invalidate all fingerprints for composite PK entity on delete', async () => {
+            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'UserRoles' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ UserID: 'u1', RoleID: 'r1' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            const event = createMockEntityEventWithCompositePK({
+                entityName: 'UserRoles',
+                type: 'delete',
+                primaryKeys: [{ Name: 'UserID' }, { Name: 'RoleID' }],
+                fields: { UserID: 'u1', RoleID: 'r1' },
+            });
+
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).toBeNull();
+        });
+
+        it('should handle single PK normally (not invalidate)', async () => {
+            const fp = 'Users|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1', Name: 'Alice' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            const event = {
+                type: 'save' as const,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: 'Users',
+                        PrimaryKeys: [{ Name: 'ID' }],
+                    },
+                    Get: (field: string) => field === 'ID' ? '1' : 'Alice Updated',
+                    GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
+                },
+            };
+
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            // Single PK: should be updated in place, NOT invalidated
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(1);
+            expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Alice Updated');
+        });
+    });
+
+    // ========================================================================
+    // Eviction Entity Index Cleanup
+    // ========================================================================
+
+    describe('Eviction Entity Index Cleanup', () => {
+        it('should remove fingerprints from entity index when entries are evicted', async () => {
+            // Configure a very small cache to force eviction
+            cacheManager.UpdateConfig({ maxEntries: 2, maxSizeBytes: 10_000_000 });
+
+            const fp1 = 'EntityA|_|_|simple|-1|0|_';
+            const fp2 = 'EntityB|_|_|simple|-1|0|_';
+
+            await cacheManager.SetRunViewResult(
+                fp1,
+                { EntityName: 'EntityA' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1' }],
+                '2024-01-01T00:00:00Z'
+            );
+            await cacheManager.SetRunViewResult(
+                fp2,
+                { EntityName: 'EntityB' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '2' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Both should be in the index
+            expect(cacheManager.GetFingerprintsForEntity('EntityA').has(fp1)).toBe(true);
+            expect(cacheManager.GetFingerprintsForEntity('EntityB').has(fp2)).toBe(true);
+
+            // Adding a third entry should trigger eviction of the oldest (fp1)
+            const fp3 = 'EntityC|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp3,
+                { EntityName: 'EntityC' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '3' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            // After eviction, at least one of the original fingerprints should be gone from the index
+            const aFps = cacheManager.GetFingerprintsForEntity('EntityA');
+            const cFps = cacheManager.GetFingerprintsForEntity('EntityC');
+
+            // EntityC should definitely be in the index (just added)
+            expect(cFps.has(fp3)).toBe(true);
+
+            // At least one original entry should have been evicted
+            const totalOriginal = aFps.size + cacheManager.GetFingerprintsForEntity('EntityB').size;
+            expect(totalOriginal).toBeLessThanOrEqual(2);
+        });
+    });
+
+    // ========================================================================
+    // Registry Index Rebuild on Startup
+    // ========================================================================
+
+    describe('Registry Index Rebuild', () => {
+        it('should rebuild entity index from persisted registry on re-initialization', async () => {
+            // Cache some data
+            const fp = 'Products|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'Products' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1', Name: 'Widget' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Verify it's in the index
+            expect(cacheManager.GetFingerprintsForEntity('Products').has(fp)).toBe(true);
+
+            // Wait for debounced registry persist (1s debounce + buffer)
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Simulate server restart: reset singleton but keep the same storage
+            resetLocalCacheManager();
+            const newManager = LocalCacheManager.Instance;
+            await newManager.Initialize(mockStorage);
+
+            // After re-init, the entity index should be rebuilt from the persisted registry
+            const rebuilt = newManager.GetFingerprintsForEntity('Products');
+            expect(rebuilt.has(fp)).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // Edge Cases
+    // ========================================================================
+
+    describe('Edge Cases', () => {
+        it('should handle event with null PK value gracefully', async () => {
+            const fp = 'Users|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1', Name: 'Alice' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            const event = {
+                type: 'save' as const,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: 'Users',
+                        PrimaryKeys: [{ Name: 'ID' }],
+                    },
+                    Get: () => null, // null PK value
+                    GetAll: () => ({ ID: null, Name: 'Ghost' }),
+                },
+            };
+
+            // Should not throw — just skip silently
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            // Cache should be unchanged
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(1);
+        });
+
+        it('should handle event with empty PrimaryKeys array gracefully', async () => {
+            const fp = 'Users|_|_|simple|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            const event = {
+                type: 'save' as const,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: 'Users',
+                        PrimaryKeys: [], // empty array
+                    },
+                    Get: () => '1',
+                    GetAll: () => ({ ID: '1' }),
+                },
+            };
+
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            // Cache should be unchanged
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(1);
+        });
+
+        it('should handle event with undefined PrimaryKeys gracefully', async () => {
+            const event = {
+                type: 'save' as const,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: 'Users',
+                        PrimaryKeys: undefined,
+                    },
+                    Get: () => '1',
+                    GetAll: () => ({ ID: '1' }),
+                },
+            };
+
+            // Should not throw
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+        });
+
+        it('should handle multiple entities independently', async () => {
+            const fpUsers = 'Users|_|_|simple|-1|0|_';
+            const fpProducts = 'Products|_|_|simple|-1|0|_';
+
+            await cacheManager.SetRunViewResult(
+                fpUsers,
+                { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1', Name: 'Alice' }],
+                '2024-01-01T00:00:00Z'
+            );
+            await cacheManager.SetRunViewResult(
+                fpProducts,
+                { EntityName: 'Products' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: 'p1', Name: 'Widget' }],
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Save event for Users only
+            const event = {
+                type: 'save' as const,
+                baseEntity: {
+                    EntityInfo: {
+                        Name: 'Users',
+                        PrimaryKeys: [{ Name: 'ID' }],
+                    },
+                    Get: (f: string) => f === 'ID' ? '1' : 'Alice Updated',
+                    GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
+                },
+            };
+
+            await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+            // Users cache should be updated
+            const usersCache = await cacheManager.GetRunViewResult(fpUsers);
+            expect(usersCache).not.toBeNull();
+            expect((usersCache!.results[0] as Record<string, unknown>).Name).toBe('Alice Updated');
+
+            // Products cache should be untouched
+            const productsCache = await cacheManager.GetRunViewResult(fpProducts);
+            expect(productsCache).not.toBeNull();
+            expect((productsCache!.results[0] as Record<string, unknown>).Name).toBe('Widget');
+        });
+    });
+
 });

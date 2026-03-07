@@ -804,6 +804,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 return;
             }
 
+            if (this._enableLogging) {
+                const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
+                LogStatus(`Redis pub/sub: received ${event.Action} event for key "${event.CacheKey}" from server ${sourceShort}`);
+            }
+
             // Emit to local listeners
             this._eventEmitter.emit('cacheChanged', event);
         } catch (err) {
@@ -843,7 +848,12 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         };
 
         // Publish fire-and-forget — don't await, don't block the caller
-        this._client.publish(this._pubSubChannel, JSON.stringify(event)).catch((err) => {
+        const payload = JSON.stringify(event);
+        this._client.publish(this._pubSubChannel, payload).then(() => {
+            if (this._enableLogging) {
+                LogStatus(`Redis pub/sub: published ${action} event for key "${cacheKey}" on channel "${this._pubSubChannel}"`);
+            }
+        }).catch((err) => {
             if (this._enableLogging) {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
             }

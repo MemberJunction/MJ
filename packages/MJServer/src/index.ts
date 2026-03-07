@@ -317,15 +317,26 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // Connect Redis pub/sub events to LocalCacheManager callback dispatch
     // so cross-server cache invalidation messages are routed to registered callbacks
     redisProvider.OnCacheChanged((event) => {
+        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
+        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
         LocalCacheManager.Instance.DispatchCacheChange(event);
     });
 
     console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
 
-  // Initialize LocalCacheManager with the server-side storage provider
-  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
-  console.log('LocalCacheManager initialized');
+  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
+  // LocalCacheManager may have already been initialized (with in-memory provider)
+  // during engine loading. SetStorageProvider migrates cached data to Redis.
+  if (process.env.REDIS_URL) {
+    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager: storage provider swapped to Redis');
+  }
+  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
+  if (!LocalCacheManager.Instance.IsInitialized) {
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager initialized');
+  }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()

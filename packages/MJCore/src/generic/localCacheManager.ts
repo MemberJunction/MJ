@@ -1,7 +1,7 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
 import { AggregateExpression, RunViewParams } from "../views/runView";
-import { LogError } from "./logging";
+import { LogError, LogStatus } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 
 // ============================================================================
@@ -341,6 +341,49 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         this._config = { ...this._config, ...config };
     }
 
+    /**
+     * Replaces the storage provider after initialization. This is needed when
+     * the initial provider (e.g., in-memory) needs to be swapped for a
+     * persistent provider (e.g., Redis) that becomes available later.
+     *
+     * Migrates the in-memory registry to the new provider and rebuilds
+     * the entity→fingerprint reverse index.
+     *
+     * @param newProvider - The new storage provider to use
+     */
+    public async SetStorageProvider(newProvider: ILocalStorageProvider): Promise<void> {
+        if (!this._initialized) {
+            // Not yet initialized — just set the provider and return
+            this._storageProvider = newProvider;
+            return;
+        }
+
+        const oldProvider = this._storageProvider;
+        this._storageProvider = newProvider;
+
+        // Migrate existing cached data from old provider to new provider
+        const entries = this.GetAllEntries();
+        let migratedCount = 0;
+
+        for (const entry of entries) {
+            try {
+                const category = this.getCategoryForType(entry.type);
+                const data = await oldProvider?.GetItem(entry.key, category);
+                if (data) {
+                    await newProvider.SetItem(entry.key, data, category);
+                    migratedCount++;
+                }
+            } catch (err) {
+                LogError(`LocalCacheManager.SetStorageProvider: Failed to migrate key "${entry.key}": ${(err as Error).message}`);
+            }
+        }
+
+        // Persist the registry to the new provider
+        await this.persistRegistry();
+
+        LogStatus(`LocalCacheManager.SetStorageProvider: Migrated ${migratedCount}/${entries.length} entries to new storage provider`);
+    }
+
     // ========================================================================
     // ENTITY → FINGERPRINT REVERSE INDEX
     // ========================================================================
@@ -414,6 +457,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * data stays consistent, not just engine-managed data.
      */
     private subscribeToBaseEntityEvents(): void {
+        LogStatus('LocalCacheManager: Subscribed to BaseEntity events for universal cache invalidation');
         MJGlobal.Instance.GetEventListener(false).subscribe((mjEvent) => {
             if (mjEvent.event !== MJEventType.ComponentEvent) return;
             if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
@@ -447,7 +491,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
-        const pkFieldInfo = baseEntity.EntityInfo.PrimaryKeys?.[0];
+        const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
+        if (!primaryKeys || primaryKeys.length === 0) return;
+
+        LogStatus(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}", updating ${fingerprints.size} cached fingerprint(s)`);
+
+        // Snapshot the fingerprints since we may modify the set during iteration
+        const fingerprintSnapshot = [...fingerprints];
+
+        // For composite primary keys, we can't safely do in-place upsert/remove
+        // because UpsertSingleEntity/RemoveSingleEntity work with a single PK field.
+        // Fall back to cache invalidation for safety.
+        if (primaryKeys.length > 1) {
+            LogStatus(`LocalCacheManager: Composite PK detected for "${entityName}" (${primaryKeys.length} fields), invalidating all ${fingerprintSnapshot.length} cached fingerprint(s)`);
+            for (const fingerprint of fingerprintSnapshot) {
+                try {
+                    await this.InvalidateRunViewResult(fingerprint);
+                } catch (err) {
+                    LogError(`HandleBaseEntityEvent: failed to invalidate fingerprint "${fingerprint}" (composite PK): ${(err as Error).message}`);
+                }
+            }
+            return;
+        }
+
+        // Single primary key — can do targeted upsert/remove
+        const pkFieldInfo = primaryKeys[0];
         if (!pkFieldInfo?.Name) return;
 
         const pkValue = baseEntity.Get(pkFieldInfo.Name);
@@ -455,9 +523,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const primaryKeyValue = String(pkValue);
         const nowISO = new Date().toISOString();
-
-        // Snapshot the fingerprints since we may modify the set during iteration
-        const fingerprintSnapshot = [...fingerprints];
 
         for (const fingerprint of fingerprintSnapshot) {
             try {
@@ -488,13 +553,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         nowISO: string
     ): Promise<void> {
         if (eventType === 'delete') {
+            LogStatus(`LocalCacheManager: Removing entity ${primaryKeyValue} from cache "${fingerprint.substring(0, 60)}"`);
             await this.RemoveSingleEntity(fingerprint, primaryKeyValue, primaryKeyFieldName, nowISO);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
             // Unfiltered cache: update the record in place
+            LogStatus(`LocalCacheManager: Upserting entity ${primaryKeyValue} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
             await this.UpsertSingleEntity(fingerprint, entityData, primaryKeyFieldName, nowISO);
         } else {
             // Filtered cache: conservatively invalidate (can't verify filter match)
+            LogStatus(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
             await this.InvalidateRunViewResult(fingerprint);
         }
     }
@@ -571,6 +639,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param event - The cache change event to dispatch
      */
     public DispatchCacheChange(event: CacheChangedEvent): void {
+        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
+        LogStatus(`LocalCacheManager: DispatchCacheChange received — action="${event.Action}", key="${event.CacheKey}", source="${sourceShort}"`);
+
         if (event.Action === 'category_cleared') {
             // For category-level clearing, notify ALL registered callbacks
             // since we can't know which fingerprints belong to which category
@@ -904,6 +975,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
             this.addToEntityIndex(fingerprint);
+            LogStatus(`LocalCacheManager.SetRunViewResult: Cached ${results.length} rows for "${fingerprint.substring(0, 60)}" (${sizeBytes} bytes)`);
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
         }
@@ -1092,8 +1164,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (!cached) {
                 // No existing cache - nothing to update
                 // The next RunView call will populate the cache
+                LogStatus(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                 return false;
             }
+            LogStatus(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
 
             // Get the primary key value from the entity
             const pkValue = this.extractPrimaryKeyString(entityData, primaryKeyFieldName);
@@ -1704,6 +1778,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (stored) {
                 const parsed = JSON.parse(stored) as CacheEntryInfo[];
                 this._registry = new Map(parsed.map(e => [e.key, e]));
+
+                // Rebuild entity→fingerprint reverse index from persisted registry
+                // so that BaseEntity events can find cached entries after a server restart
+                for (const entry of this._registry.values()) {
+                    if (entry.fingerprint) {
+                        this.addToEntityIndex(entry.fingerprint);
+                    }
+                }
             }
         } catch (e) {
             this._registry.clear();
@@ -1804,6 +1886,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 await this._storageProvider.Remove(key, category);
                 if (entry?.type === 'dataset') {
                     await this._storageProvider.Remove(key + '_date', category);
+                }
+                // Clean up entity→fingerprint index for evicted entries
+                if (entry?.fingerprint) {
+                    this.removeFromEntityIndex(entry.fingerprint);
                 }
                 this._registry.delete(key);
             } catch (e) {
