@@ -20,3 +20,7 @@
  * ```
  */
 export { RedisLocalStorageProvider, RedisProviderConfig } from './RedisLocalStorageProvider.js';
+
+// Re-export CacheChangedEvent from core for convenience
+// (consumers can also import directly from @memberjunction/core)
+export type { CacheChangedEvent } from '@memberjunction/core';

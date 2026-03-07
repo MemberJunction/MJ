@@ -16,7 +16,10 @@
 
 import Redis from 'ioredis';
 import type { RedisOptions } from 'ioredis';
+import { EventEmitter } from 'events';
 import { ILocalStorageProvider, LogStatus, LogError } from '@memberjunction/core';
+import type { CacheChangedEvent } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 
 /**
  * Configuration options for the Redis local storage provider.
@@ -96,6 +99,20 @@ export interface RedisProviderConfig {
      * @default true
      */
     enableLogging?: boolean;
+
+    /**
+     * Whether to enable Redis pub/sub for cross-server cache invalidation.
+     * When enabled, the provider will:
+     * - **Publish** a {@link CacheChangedEvent} on every `SetItem`, `Remove`, and `ClearCategory` call
+     * - **Subscribe** (via a dedicated second Redis connection) for events from other servers
+     * - **Emit** local events so consumers (like `LocalCacheManager`) can dispatch to registered callbacks
+     *
+     * Pub/sub is **not** started automatically — call {@link RedisLocalStorageProvider.StartListening}
+     * after construction to begin subscribing.
+     *
+     * @default false
+     */
+    enablePubSub?: boolean;
 }
 
 /**
@@ -156,6 +173,14 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _enableLogging: boolean;
     private _connected: boolean = false;
 
+    // Pub/sub fields
+    private _enablePubSub: boolean;
+    private _subscriber: Redis | null = null;
+    private _pubSubChannel: string;
+    private _eventEmitter: EventEmitter = new EventEmitter();
+    private _subscriberConnected: boolean = false;
+    private _config: RedisProviderConfig;
+
     /**
      * Creates a new Redis local storage provider and establishes a connection.
      *
@@ -189,9 +214,12 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     constructor(config: RedisProviderConfig = {}) {
+        this._config = config;
         this._keyPrefix = config.keyPrefix ?? 'mj';
         this._defaultTTLSeconds = config.defaultTTLSeconds;
         this._enableLogging = config.enableLogging ?? true;
+        this._enablePubSub = config.enablePubSub ?? false;
+        this._pubSubChannel = `${this._keyPrefix}:__pubsub__`;
 
         const maxRetries = config.maxRetries ?? 10;
 
@@ -379,6 +407,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             pipeline.sadd(categorySetKey, key);
 
             await pipeline.exec();
+
+            // Publish cache change event for cross-server invalidation
+            this.publishChange(key, cat, 'set', value);
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis SetItem failed for key "${key}": ${(err as Error).message}`);
@@ -407,6 +438,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             pipeline.del(redisKey);
             pipeline.srem(categorySetKey, key);
             await pipeline.exec();
+
+            // Publish cache change event for cross-server invalidation
+            this.publishChange(key, cat, 'removed');
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis Remove failed for key "${key}": ${(err as Error).message}`);
@@ -452,6 +486,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 // Category set might still exist even if empty
                 await this._client.del(categorySetKey);
             }
+
+            // Publish category-level change event
+            this.publishChange(cat, cat, 'category_cleared');
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis ClearCategory failed for "${category}": ${(err as Error).message}`);
@@ -535,6 +572,20 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async Disconnect(): Promise<void> {
+        // Disconnect subscriber first if active
+        if (this._subscriber) {
+            try {
+                await this._subscriber.quit();
+            } catch {
+                this._subscriber.disconnect();
+            }
+            this._subscriber = null;
+            this._subscriberConnected = false;
+        }
+
+        // Remove all event listeners
+        this._eventEmitter.removeAllListeners();
+
         try {
             await this._client.quit();
             this._connected = false;
@@ -632,5 +683,207 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         } catch {
             return false;
         }
+    }
+
+    // ========================================================================
+    // PUB/SUB — Cross-Server Cache Invalidation
+    // ========================================================================
+
+    /**
+     * Starts listening for cache change events from other server instances.
+     * Creates a dedicated Redis connection for pub/sub (required by Redis protocol —
+     * a client in subscribe mode cannot execute other commands).
+     *
+     * Must be called explicitly after construction. No-op if `enablePubSub` is `false`
+     * in the config, or if already listening.
+     *
+     * @example
+     * ```typescript
+     * const provider = new RedisLocalStorageProvider({
+     *     url: 'redis://localhost:6379',
+     *     enablePubSub: true
+     * });
+     * await provider.StartListening();
+     *
+     * // Register for change events
+     * provider.OnCacheChanged((event) => {
+     *     console.log(`Key "${event.CacheKey}" changed by server ${event.SourceServerId}`);
+     * });
+     * ```
+     */
+    public async StartListening(): Promise<void> {
+        if (!this._enablePubSub) {
+            if (this._enableLogging) {
+                LogStatus('Redis pub/sub: not enabled (set enablePubSub: true in config)');
+            }
+            return;
+        }
+
+        if (this._subscriber) {
+            // Already listening
+            return;
+        }
+
+        this._subscriber = this.createSubscriberClient();
+        this.setupSubscriberEventHandlers();
+
+        await this._subscriber.subscribe(this._pubSubChannel);
+        if (this._enableLogging) {
+            LogStatus(`Redis pub/sub: subscribed to channel "${this._pubSubChannel}"`);
+        }
+
+        this._subscriber.on('message', (channel: string, message: string) => {
+            if (channel !== this._pubSubChannel) {
+                return;
+            }
+            this.handlePubSubMessage(message);
+        });
+    }
+
+    /**
+     * Creates the subscriber Redis client, mirroring the main client's connection config.
+     * @internal
+     */
+    private createSubscriberClient(): Redis {
+        const maxRetries = this._config.maxRetries ?? 10;
+
+        if (this._config.url) {
+            return new Redis(this._config.url, {
+                maxRetriesPerRequest: null,
+                retryStrategy: (times: number) => this.retryStrategy(times, maxRetries),
+                lazyConnect: false,
+            });
+        }
+
+        return new Redis({
+            host: 'localhost',
+            port: 6379,
+            maxRetriesPerRequest: null,
+            retryStrategy: (times: number) => this.retryStrategy(times, maxRetries),
+            lazyConnect: false,
+            ...this._config.options,
+        });
+    }
+
+    /**
+     * Sets up event handlers on the subscriber client for logging.
+     * @internal
+     */
+    private setupSubscriberEventHandlers(): void {
+        if (!this._subscriber) return;
+
+        this._subscriber.on('connect', () => {
+            this._subscriberConnected = true;
+            if (this._enableLogging) {
+                LogStatus('Redis pub/sub subscriber: connected');
+            }
+        });
+
+        this._subscriber.on('close', () => {
+            this._subscriberConnected = false;
+        });
+
+        this._subscriber.on('error', (err: Error) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub subscriber: ${err.message}`);
+            }
+        });
+    }
+
+    /**
+     * Handles an incoming pub/sub message. Parses the {@link CacheChangedEvent},
+     * filters out self-originated events, and emits to local listeners.
+     * @internal
+     */
+    private handlePubSubMessage(message: string): void {
+        try {
+            const event: CacheChangedEvent = JSON.parse(message);
+
+            // Skip events from this server instance
+            if (event.SourceServerId === MJGlobal.Instance.ProcessUUID) {
+                return;
+            }
+
+            // Emit to local listeners
+            this._eventEmitter.emit('cacheChanged', event);
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub: failed to parse message: ${(err as Error).message}`);
+            }
+        }
+    }
+
+    /**
+     * Publishes a cache change event to Redis pub/sub. Called internally by
+     * `SetItem`, `Remove`, and `ClearCategory`. No-op if pub/sub is disabled.
+     *
+     * @param cacheKey - The cache key that changed
+     * @param category - The storage category
+     * @param action - What happened ('set', 'removed', 'category_cleared')
+     * @param data - The new value (only for 'set' actions)
+     * @internal
+     */
+    private publishChange(
+        cacheKey: string,
+        category: string,
+        action: CacheChangedEvent['Action'],
+        data?: string
+    ): void {
+        if (!this._enablePubSub) {
+            return;
+        }
+
+        const event: CacheChangedEvent = {
+            CacheKey: cacheKey,
+            Category: category,
+            Action: action,
+            Timestamp: Date.now(),
+            SourceServerId: MJGlobal.Instance.ProcessUUID,
+            Data: data,
+        };
+
+        // Publish fire-and-forget — don't await, don't block the caller
+        this._client.publish(this._pubSubChannel, JSON.stringify(event)).catch((err) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
+            }
+        });
+    }
+
+    /**
+     * Registers a callback for cache change events from other servers.
+     * The callback fires whenever another server instance modifies a cached entry
+     * (via `SetItem`, `Remove`, or `ClearCategory`).
+     *
+     * Events from this server instance (identified by {@link MJGlobal.ProcessUUID})
+     * are automatically filtered out.
+     *
+     * @param callback - Function invoked with the {@link CacheChangedEvent}
+     * @returns A function that, when called, removes this callback registration
+     *
+     * @example
+     * ```typescript
+     * const unsubscribe = provider.OnCacheChanged((event) => {
+     *     // Dispatch to LocalCacheManager for callback routing
+     *     LocalCacheManager.Instance.DispatchCacheChange(event);
+     * });
+     *
+     * // Later, on shutdown:
+     * unsubscribe();
+     * ```
+     */
+    public OnCacheChanged(callback: (event: CacheChangedEvent) => void): () => void {
+        this._eventEmitter.on('cacheChanged', callback);
+
+        return () => {
+            this._eventEmitter.off('cacheChanged', callback);
+        };
+    }
+
+    /**
+     * Whether the pub/sub subscriber connection is currently active.
+     */
+    public get IsSubscriberConnected(): boolean {
+        return this._subscriberConnected;
     }
 }

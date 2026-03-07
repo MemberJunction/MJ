@@ -1155,6 +1155,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             );
         }
 
+        // Register OnDataChanged callback if provided and we have a fingerprint
+        if (params.OnDataChanged && preResult.fingerprint) {
+            result.Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+                preResult.fingerprint,
+                params.OnDataChanged
+            );
+        }
+
         // End telemetry tracking with cache miss info
         if (preResult.telemetryEventId) {
             TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
@@ -1186,8 +1194,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             promises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
 
             // Store in local cache if enabled
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
             if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 promises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -1196,6 +1204,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults // Include aggregate results in cache
                 ));
+            }
+
+            // Register OnDataChanged callback if provided
+            if (params[i].OnDataChanged && fingerprint) {
+                results[i].Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+                    fingerprint,
+                    params[i].OnDataChanged
+                );
             }
         }
         await Promise.all(promises);

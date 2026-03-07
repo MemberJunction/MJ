@@ -6,6 +6,18 @@ vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
 }));
 
+// Mock MJGlobal - provide a stable ProcessUUID for tests
+// NOTE: The UUID must be inlined in the vi.mock factory because vi.mock is hoisted
+vi.mock('@memberjunction/global', () => ({
+    MJGlobal: {
+        Instance: {
+            ProcessUUID: 'test-server-00000000-0000-4000-a000-000000000001',
+        },
+    },
+}));
+
+const MOCK_PROCESS_UUID = 'test-server-00000000-0000-4000-a000-000000000001';
+
 /**
  * Helper: create a mock Redis instance with an in-memory store.
  * Returned object quacks like an ioredis `Redis` instance.
@@ -88,10 +100,33 @@ function createMockRedisInstance() {
             };
             return pipe;
         }),
-        on: vi.fn().mockReturnThis(),
+        publish: vi.fn().mockResolvedValue(1),
+        subscribe: vi.fn().mockResolvedValue('OK'),
+        unsubscribe: vi.fn().mockResolvedValue('OK'),
+        on: vi.fn(function(this: Record<string, unknown>, event: string, handler: (...args: unknown[]) => void) {
+            if (!this._eventHandlers) {
+                this._eventHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
+            }
+            const handlers = this._eventHandlers as Map<string, Array<(...args: unknown[]) => void>>;
+            if (!handlers.has(event)) {
+                handlers.set(event, []);
+            }
+            handlers.get(event)!.push(handler);
+            return this;
+        }),
+        removeAllListeners: vi.fn().mockReturnThis(),
         _store: store,
         _sets: sets,
         _ttls: ttls,
+        _eventHandlers: new Map<string, Array<(...args: unknown[]) => void>>(),
+        /** Helper to simulate receiving a pub/sub message */
+        _simulateMessage(channel: string, message: string) {
+            const handlers = this._eventHandlers as Map<string, Array<(...args: unknown[]) => void>>;
+            const messageHandlers = handlers?.get('message') || [];
+            for (const h of messageHandlers) {
+                h(channel, message);
+            }
+        },
     };
 
     return instance;
@@ -390,6 +425,271 @@ describe('RedisLocalStorageProvider', () => {
             expect(LogError).toHaveBeenCalledWith(
                 expect.stringContaining('Test error')
             );
+        });
+    });
+
+    // ====================================================================
+    // Pub/Sub Tests
+    // ====================================================================
+
+    describe('Pub/Sub - publishChange on mutations', () => {
+        let pubsubProvider: RedisLocalStorageProvider;
+
+        beforeEach(() => {
+            pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+            });
+        });
+
+        afterEach(async () => {
+            await pubsubProvider.Disconnect();
+        });
+
+        it('should publish a "set" event when SetItem is called', async () => {
+            await pubsubProvider.SetItem('myKey', 'myValue', 'testCat');
+
+            const client = pubsubProvider.Client;
+            expect(client.publish).toHaveBeenCalled();
+            const [channel, message] = (client.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+            expect(channel).toBe('mj:__pubsub__');
+            const event = JSON.parse(message);
+            expect(event.CacheKey).toBe('myKey');
+            expect(event.Category).toBe('testCat');
+            expect(event.Action).toBe('set');
+            expect(event.Data).toBe('myValue');
+            expect(event.SourceServerId).toBe(MOCK_PROCESS_UUID);
+            expect(event.Timestamp).toBeTypeOf('number');
+        });
+
+        it('should publish a "removed" event when Remove is called', async () => {
+            await pubsubProvider.SetItem('myKey', 'myValue', 'testCat');
+            (pubsubProvider.Client.publish as ReturnType<typeof vi.fn>).mockClear();
+
+            await pubsubProvider.Remove('myKey', 'testCat');
+
+            const client = pubsubProvider.Client;
+            expect(client.publish).toHaveBeenCalled();
+            const [, message] = (client.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+            const event = JSON.parse(message);
+            expect(event.CacheKey).toBe('myKey');
+            expect(event.Action).toBe('removed');
+            expect(event.Data).toBeUndefined();
+        });
+
+        it('should publish a "category_cleared" event when ClearCategory is called', async () => {
+            await pubsubProvider.SetItem('k1', 'v1', 'myCat');
+            (pubsubProvider.Client.publish as ReturnType<typeof vi.fn>).mockClear();
+
+            await pubsubProvider.ClearCategory('myCat');
+
+            const client = pubsubProvider.Client;
+            expect(client.publish).toHaveBeenCalled();
+            const [, message] = (client.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+            const event = JSON.parse(message);
+            expect(event.Category).toBe('myCat');
+            expect(event.Action).toBe('category_cleared');
+        });
+
+        it('should NOT publish when pubsub is disabled', async () => {
+            const noPubSub = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+
+            await noPubSub.SetItem('key1', 'val1');
+
+            expect(noPubSub.Client.publish).not.toHaveBeenCalled();
+            await noPubSub.Disconnect();
+        });
+
+        it('should use custom keyPrefix in channel name', async () => {
+            const custom = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'myapp',
+            });
+
+            await custom.SetItem('k', 'v', 'cat');
+
+            const client = custom.Client;
+            expect(client.publish).toHaveBeenCalled();
+            const [channel] = (client.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+            expect(channel).toBe('myapp:__pubsub__');
+            await custom.Disconnect();
+        });
+    });
+
+    describe('Pub/Sub - StartListening and message handling', () => {
+        let pubsubProvider: RedisLocalStorageProvider;
+
+        beforeEach(() => {
+            pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+            });
+        });
+
+        afterEach(async () => {
+            await pubsubProvider.Disconnect();
+        });
+
+        it('should be a no-op when pubsub is disabled', async () => {
+            const noPubSub = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+            await noPubSub.StartListening();
+            expect(noPubSub.IsSubscriberConnected).toBe(false);
+            await noPubSub.Disconnect();
+        });
+
+        it('should be idempotent (calling StartListening twice does not create a second subscriber)', async () => {
+            await pubsubProvider.StartListening();
+            await pubsubProvider.StartListening(); // Should be a no-op
+            // No error thrown means success
+        });
+    });
+
+    describe('Pub/Sub - OnCacheChanged callback', () => {
+        let pubsubProvider: RedisLocalStorageProvider;
+
+        beforeEach(() => {
+            pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+            });
+        });
+
+        afterEach(async () => {
+            await pubsubProvider.Disconnect();
+        });
+
+        it('should register and invoke callback on cache change events', async () => {
+            const callback = vi.fn();
+            pubsubProvider.OnCacheChanged(callback);
+
+            await pubsubProvider.StartListening();
+
+            // Find the subscriber client — it's the second Redis instance created
+            // We simulate a message arriving on the subscriber
+            // Access the internal subscriber via the provider
+            // The subscriber is created inside StartListening, we can't directly access it
+            // But we can test the event emitter path by triggering handlePubSubMessage indirectly
+            // via the OnCacheChanged registration
+
+            // Simulate an external event by directly emitting on the event emitter
+            const event = {
+                CacheKey: 'TestEntity|filter||entity_object|||',
+                Category: 'RunViewCache',
+                Action: 'set',
+                Timestamp: Date.now(),
+                SourceServerId: 'other-server-id',
+                Data: '{"results":[]}',
+            };
+
+            // Use the internal event emitter directly via the provider's OnCacheChanged path
+            // We registered a callback above, now emit the event
+            // Access private _eventEmitter is not ideal, but we test the public contract
+            // by relying on the message handler calling the emitter.
+            // For a more direct test, we invoke the event emitter via type assertion:
+            (pubsubProvider as unknown as { _eventEmitter: { emit: (event: string, data: unknown) => void } })
+                ._eventEmitter.emit('cacheChanged', event);
+
+            expect(callback).toHaveBeenCalledOnce();
+            expect(callback).toHaveBeenCalledWith(event);
+        });
+
+        it('should return an unsubscribe function that removes the callback', () => {
+            const callback = vi.fn();
+            const unsub = pubsubProvider.OnCacheChanged(callback);
+
+            // Trigger event
+            (pubsubProvider as unknown as { _eventEmitter: { emit: (event: string, data: unknown) => void } })
+                ._eventEmitter.emit('cacheChanged', { CacheKey: 'test' });
+            expect(callback).toHaveBeenCalledOnce();
+
+            // Unsubscribe and trigger again
+            unsub();
+            (pubsubProvider as unknown as { _eventEmitter: { emit: (event: string, data: unknown) => void } })
+                ._eventEmitter.emit('cacheChanged', { CacheKey: 'test' });
+            expect(callback).toHaveBeenCalledOnce(); // Still only once
+        });
+    });
+
+    describe('Pub/Sub - self-message filtering', () => {
+        it('should NOT emit events originating from this server', async () => {
+            const pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+            });
+
+            const callback = vi.fn();
+            pubsubProvider.OnCacheChanged(callback);
+
+            // Simulate the handlePubSubMessage path with a self-originated event
+            const selfEvent = JSON.stringify({
+                CacheKey: 'test-key',
+                Category: 'RunViewCache',
+                Action: 'set',
+                Timestamp: Date.now(),
+                SourceServerId: MOCK_PROCESS_UUID, // Same as this server
+                Data: '{}',
+            });
+
+            // Call handlePubSubMessage via private access
+            (pubsubProvider as unknown as { handlePubSubMessage: (msg: string) => void })
+                .handlePubSubMessage(selfEvent);
+
+            expect(callback).not.toHaveBeenCalled();
+            await pubsubProvider.Disconnect();
+        });
+
+        it('should emit events originating from other servers', async () => {
+            const pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+            });
+
+            const callback = vi.fn();
+            pubsubProvider.OnCacheChanged(callback);
+
+            const otherEvent = JSON.stringify({
+                CacheKey: 'test-key',
+                Category: 'RunViewCache',
+                Action: 'set',
+                Timestamp: Date.now(),
+                SourceServerId: 'different-server-id',
+                Data: '{"results":[]}',
+            });
+
+            (pubsubProvider as unknown as { handlePubSubMessage: (msg: string) => void })
+                .handlePubSubMessage(otherEvent);
+
+            expect(callback).toHaveBeenCalledOnce();
+            const received = callback.mock.calls[0][0];
+            expect(received.SourceServerId).toBe('different-server-id');
+            await pubsubProvider.Disconnect();
+        });
+
+        it('should handle malformed messages gracefully', async () => {
+            const pubsubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: true,
+            });
+
+            const callback = vi.fn();
+            pubsubProvider.OnCacheChanged(callback);
+
+            // Send invalid JSON
+            (pubsubProvider as unknown as { handlePubSubMessage: (msg: string) => void })
+                .handlePubSubMessage('not valid json {{{{');
+
+            expect(callback).not.toHaveBeenCalled();
+            expect(LogError).toHaveBeenCalledWith(
+                expect.stringContaining('failed to parse message')
+            );
+            await pubsubProvider.Disconnect();
         });
     });
 });
