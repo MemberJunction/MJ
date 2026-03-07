@@ -362,12 +362,29 @@
             </div>
           }
 
+          <!-- Validation warnings -->
+          @if (ActiveEditableFields.length > 0 && !MappingValidation.IsValid) {
+            <div class="validation-banner">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <div class="validation-warnings">
+                @for (warning of MappingValidation.Warnings; track warning) {
+                  <span>{{ warning }}</span>
+                }
+              </div>
+            </div>
+          }
+
           <div class="field-mapping-header">
             <h3 class="panel-title">
               Field Mappings
               <span class="field-count">({{ ActiveEditableFields.length }})</span>
             </h3>
             <div class="field-mapping-actions">
+              <button kendoButton [look]="'outline'" [size]="'small'"
+                      [disabled]="IsLoadingSourceFields"
+                      (click)="RerunAutoMap()" title="Auto-match source and destination fields by name">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
+              </button>
               <button kendoButton [look]="'outline'" [size]="'small'"
                       (click)="AddFieldMapping()">
                 <i class="fa-solid fa-plus"></i> Add Field
@@ -402,7 +419,7 @@
               </thead>
               <tbody>
                 @for (field of ActiveEditableFields; track field; let i = $index) {
-                  <tr>
+                  <tr [class.validation-error]="field.IsRequired && !field.DestinationFieldName">
                     <td>
                       @if (field.IsNew) {
                         <input type="text" [(ngModel)]="field.SourceFieldName"

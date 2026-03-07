@@ -56,5 +56,10 @@ export type {
     ConnectionTestGraphQLResult,
     SchemaPreviewObjectInput,
     SchemaPreviewFile,
-    SchemaPreviewResult
+    SchemaPreviewResult,
+    PreviewRecordResult,
+    PreviewDataResult,
+    DefaultFieldMappingResult,
+    DefaultObjectConfigResult,
+    DefaultConfigResult
 } from './graphQLIntegrationClient';

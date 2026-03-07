@@ -14,7 +14,8 @@ import {
   DiscoveryResult,
   ConnectionTestGraphQLResult,
   SchemaPreviewObjectInput,
-  SchemaPreviewResult
+  SchemaPreviewResult,
+  DefaultConfigResult
 } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -110,6 +111,7 @@ export interface IntegrationDefinitionRow {
   BatchMaxRequestCount: number;
   BatchRequestWaitTime: number;
   CredentialTypeID: string | null;
+  SourceTypeID: string | null;
 }
 
 /** Aggregated summary for a single integration, used by the Control Tower UI */
@@ -160,7 +162,7 @@ export class IntegrationDataService {
 
   async LoadIntegrationSummaries(provider?: IRunViewProvider | null): Promise<IntegrationSummary[]> {
     const rv = this.createRunView(provider);
-    const [integrationsResult, runsResult] = await rv.RunViews([
+    const [integrationsResult, runsResult, sourceTypesResult, defsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Company Integrations',
         ExtraFilter: '',
@@ -177,13 +179,31 @@ export class IntegrationDataService {
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: Integration Source Types',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        Fields: ['ID', 'Name', 'Description', 'DriverClass', 'IconClass', 'Status'],
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: Integrations',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
+                 'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
+                 'CredentialTypeID', 'SourceTypeID'],
+        ResultType: 'simple'
       }
     ]);
 
     const integrations = integrationsResult.Results as IntegrationRow[];
     const runs = runsResult.Results as IntegrationRunRow[];
+    const sourceTypes = sourceTypesResult.Results as SourceTypeRow[];
+    const defs = defsResult.Results as IntegrationDefinitionRow[];
 
-    return integrations.map(integration => this.buildSummary(integration, runs));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, defs));
   }
 
   async LoadEntityMaps(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<EntityMapRow[]> {
@@ -251,7 +271,7 @@ export class IntegrationDataService {
       OrderBy: 'Name',
       Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
                'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
-               'CredentialTypeID'],
+               'CredentialTypeID', 'SourceTypeID'],
       ResultType: 'simple'
     });
     return result.Results;
@@ -504,23 +524,37 @@ export class IntegrationDataService {
     return client.SchemaPreview(companyIntegrationID, objects, platform);
   }
 
+  /** Get the connector's default configuration for quick setup */
+  async GetDefaultConfig(companyIntegrationID: string): Promise<DefaultConfigResult> {
+    const client = this.getIntegrationClient();
+    return client.GetDefaultConfig(companyIntegrationID);
+  }
+
   /** Test connection to the external system */
   async TestConnection(companyIntegrationID: string): Promise<ConnectionTestGraphQLResult> {
     const client = this.getIntegrationClient();
     return client.TestConnection(companyIntegrationID);
   }
 
-  /** Preview source data from the external system (stub — requires server-side connector support) */
+  /** Preview source data from the external system via connector's FetchChanges */
   async PreviewSourceData(
     companyIntegrationID: string,
     objectName: string,
     limit: number = 5
   ): Promise<Array<Record<string, string | number | boolean | null>>> {
-    // Source preview requires a server-side resolver that calls the connector's read method.
-    // For now, return an empty array. When the server-side endpoint is available,
-    // this will call the GraphQL integration client.
-    console.warn('[IntegrationDataService] PreviewSourceData not yet implemented server-side');
-    return [];
+    const client = this.getIntegrationClient();
+    const result = await client.PreviewData(companyIntegrationID, objectName, limit);
+    if (!result.Success || !result.Records) {
+      console.warn('[IntegrationDataService] PreviewSourceData failed:', result.Message);
+      return [];
+    }
+    return result.Records.map(r => {
+      try {
+        return JSON.parse(r.Data) as Record<string, string | number | boolean | null>;
+      } catch {
+        return { _raw: r.Data } as Record<string, string | number | boolean | null>;
+      }
+    });
   }
 
   /** Preview destination data by loading a few records from the target entity */
@@ -572,7 +606,7 @@ export class IntegrationDataService {
   private async lookupActionID(actionName: string): Promise<string | null> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string }>({
-      EntityName: 'Actions',
+      EntityName: 'MJ: Actions',
       ExtraFilter: `Name='${actionName}'`,
       Fields: ['ID'],
       MaxRows: 1,
@@ -592,7 +626,9 @@ export class IntegrationDataService {
 
   private buildSummary(
     integration: IntegrationRow,
-    allRuns: IntegrationRunRow[]
+    allRuns: IntegrationRunRow[],
+    sourceTypes: SourceTypeRow[],
+    defs: IntegrationDefinitionRow[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
@@ -602,10 +638,11 @@ export class IntegrationDataService {
     const totalRecordsSyncedToday = this.computeRecordsSyncedToday(integrationRuns);
     const totalErrors = integrationRuns.filter(r => r.Status === 'Failed').length;
     const durationMs = this.computeDuration(latestRun);
+    const sourceType = this.resolveSourceType(integration, defs, sourceTypes);
 
     return {
       Integration: integration,
-      SourceType: null,
+      SourceType: sourceType,
       LatestRun: latestRun,
       RecentRuns: recentRuns,
       StatusColor: statusColor,
@@ -614,6 +651,17 @@ export class IntegrationDataService {
       TotalErrors: totalErrors,
       DurationMs: durationMs
     };
+  }
+
+  private resolveSourceType(
+    integration: IntegrationRow,
+    defs: IntegrationDefinitionRow[],
+    sourceTypes: SourceTypeRow[]
+  ): SourceTypeRow | null {
+    // Match CompanyIntegration.Integration (name) to Integration definition, then look up SourceTypeID
+    const def = defs.find(d => d.Name === integration.Integration);
+    if (!def?.SourceTypeID) return null;
+    return sourceTypes.find(st => UUIDsEqual(st.ID, def.SourceTypeID)) ?? null;
   }
 
   private buildActivityFeedItem(run: IntegrationRunRow): ActivityFeedItem {

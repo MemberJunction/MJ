@@ -111,6 +111,7 @@ describe('ConnectionStudio step validation logic', () => {
       ClassName: 'HubSpotConnector', ImportPath: null,
       NavigationBaseURL: null, BatchMaxRequestCount: -1, BatchRequestWaitTime: -1,
       CredentialTypeID: null,
+      SourceTypeID: null,
       ...overrides
     };
   }

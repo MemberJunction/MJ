@@ -328,6 +328,23 @@
 .mini-val.has-errors { color: #c62828; }
 .mini-label { font-size: 10px; color: #888; }
 
+/* ===== Validation ===== */
+.validation-banner {
+  background: #fff3e0; border: 1px solid #ffe082; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: #e65100;
+}
+.validation-banner > i { margin-top: 2px; }
+.validation-warnings { display: flex; flex-direction: column; gap: 2px; }
+
+.field-map-table tr.validation-error td {
+  background: #fff8f0;
+}
+.field-map-table tr.validation-error td:first-child {
+  border-left: 3px solid #e65100;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 1100px) { .right-panel { display: none; } }
 @media (max-width: 800px) { .left-panel { width: 260px; } }

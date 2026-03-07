@@ -50,6 +50,43 @@ export interface SchemaPreviewResult {
     Warnings: string[];
 }
 
+/** A single preview record from the external system */
+export interface PreviewRecordResult {
+    /** JSON-serialized record fields */
+    Data: string;
+}
+
+/** Result of a data preview operation */
+export interface PreviewDataResult {
+    Success: boolean;
+    Message: string;
+    Records: PreviewRecordResult[];
+}
+
+/** A default field mapping from the connector's default configuration */
+export interface DefaultFieldMappingResult {
+    SourceFieldName: string;
+    DestinationFieldName: string;
+    IsKeyField?: boolean;
+}
+
+/** A default object configuration from the connector */
+export interface DefaultObjectConfigResult {
+    SourceObjectName: string;
+    TargetTableName: string;
+    TargetEntityName: string;
+    SyncEnabled: boolean;
+    FieldMappings: DefaultFieldMappingResult[];
+}
+
+/** Result of getting a connector's default configuration */
+export interface DefaultConfigResult {
+    Success: boolean;
+    Message: string;
+    DefaultSchemaName?: string;
+    DefaultObjects?: DefaultObjectConfigResult[];
+}
+
 /** Result of a connection test */
 export interface ConnectionTestGraphQLResult {
     Success: boolean;
@@ -267,6 +304,117 @@ export class GraphQLIntegrationClient {
                 Message: `Error: ${error.message}`,
                 Files: [],
                 Warnings: []
+            };
+        }
+    }
+
+    /**
+     * Fetches a small sample of records from an external object for preview.
+     * @param companyIntegrationID - ID of the CompanyIntegration record
+     * @param objectName - Name of the external object to preview
+     * @param limit - Maximum number of records to fetch (default 5, max 10)
+     * @returns Preview data result containing parsed record objects
+     */
+    public async PreviewData(
+        companyIntegrationID: string,
+        objectName: string,
+        limit: number = 5
+    ): Promise<PreviewDataResult> {
+        try {
+            const query = gql`
+                query IntegrationPreviewData(
+                    $companyIntegrationID: String!,
+                    $objectName: String!,
+                    $limit: Float!
+                ) {
+                    IntegrationPreviewData(
+                        companyIntegrationID: $companyIntegrationID,
+                        objectName: $objectName,
+                        limit: $limit
+                    ) {
+                        Success
+                        Message
+                        Records {
+                            Data
+                        }
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(query, {
+                companyIntegrationID,
+                objectName,
+                limit
+            });
+            const response = result?.IntegrationPreviewData;
+            if (!response) {
+                throw new Error("Invalid response from server");
+            }
+
+            return {
+                Success: response.Success,
+                Message: response.Message,
+                Records: response.Records ?? []
+            };
+        } catch (e) {
+            const error = e as Error;
+            LogError(`Error previewing integration data: ${error}`);
+            return {
+                Success: false,
+                Message: `Error: ${error.message}`,
+                Records: []
+            };
+        }
+    }
+
+    /**
+     * Gets the connector's default configuration for quick setup.
+     * @param companyIntegrationID - ID of the CompanyIntegration record
+     * @returns Default configuration with proposed schema, objects, and field mappings
+     */
+    public async GetDefaultConfig(
+        companyIntegrationID: string
+    ): Promise<DefaultConfigResult> {
+        try {
+            const query = gql`
+                query IntegrationGetDefaultConfig($companyIntegrationID: String!) {
+                    IntegrationGetDefaultConfig(companyIntegrationID: $companyIntegrationID) {
+                        Success
+                        Message
+                        DefaultSchemaName
+                        DefaultObjects {
+                            SourceObjectName
+                            TargetTableName
+                            TargetEntityName
+                            SyncEnabled
+                            FieldMappings {
+                                SourceFieldName
+                                DestinationFieldName
+                                IsKeyField
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            const response = result?.IntegrationGetDefaultConfig;
+            if (!response) {
+                throw new Error("Invalid response from server");
+            }
+
+            return {
+                Success: response.Success,
+                Message: response.Message,
+                DefaultSchemaName: response.DefaultSchemaName,
+                DefaultObjects: response.DefaultObjects ?? []
+            };
+        } catch (e) {
+            const error = e as Error;
+            LogError(`Error getting default config: ${error}`);
+            return {
+                Success: false,
+                Message: `Error: ${error.message}`
             };
         }
     }

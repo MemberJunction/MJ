@@ -67,6 +67,8 @@ export type {
     FetchContext,
     FetchBatchResult,
     OperationTimeouts,
+    DefaultIntegrationConfig,
+    DefaultObjectConfig,
 } from './BaseIntegrationConnector.js';
 
 // Factory

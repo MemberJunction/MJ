@@ -245,6 +245,81 @@
           <p class="step-description">
             <strong>{{ ConnectionName }}</strong> has been created and is ready for use.
           </p>
+
+          <!-- Quick Setup section -->
+          @if (!ShowQuickSetup) {
+            <div class="quick-setup-prompt">
+              <button kendoButton [look]="'outline'" (click)="LoadQuickSetup()">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Quick Setup
+              </button>
+              <span class="quick-setup-hint">Auto-configure object mappings from the connector's defaults</span>
+            </div>
+          } @else {
+            <div class="quick-setup-panel">
+              <div class="quick-setup-header">
+                <h4><i class="fa-solid fa-wand-magic-sparkles"></i> Quick Setup</h4>
+                <button kendoButton [look]="'flat'" (click)="CloseQuickSetup()" title="Close">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+
+              @if (IsLoadingQuickSetup) {
+                <mj-loading text="Loading default configuration..." size="small"></mj-loading>
+              } @else if (QuickSetupError) {
+                <div class="test-result failed">
+                  <i class="fa-solid fa-circle-xmark"></i> {{ QuickSetupError }}
+                </div>
+              } @else if (QuickSetupApplied) {
+                <div class="test-result success">
+                  <i class="fa-solid fa-circle-check"></i>
+                  Applied {{ QuickSetupAppliedCount }} object mapping(s). Go to the Mapping Workspace to review and customize.
+                </div>
+              } @else {
+                @if (QuickSetupSchemaName) {
+                  <div class="quick-setup-schema">
+                    <span class="label">Target Schema:</span>
+                    <span class="value"><strong>{{ QuickSetupSchemaName }}</strong></span>
+                  </div>
+                }
+
+                <div class="quick-setup-objects">
+                  @for (obj of QuickSetupObjects; track obj.SourceObjectName) {
+                    <div class="quick-setup-object" [class.disabled]="!obj.SyncEnabled">
+                      <label class="quick-setup-toggle">
+                        <input type="checkbox" [checked]="obj.SyncEnabled"
+                               (change)="ToggleQuickSetupObject(obj)" />
+                        <div class="quick-setup-object-info">
+                          <span class="quick-setup-source">{{ obj.SourceObjectName }}</span>
+                          <i class="fa-solid fa-arrow-right quick-setup-arrow"></i>
+                          <span class="quick-setup-target">{{ obj.TargetEntityName }}</span>
+                        </div>
+                        <span class="quick-setup-field-count">{{ obj.FieldMappings.length }} fields</span>
+                      </label>
+                    </div>
+                  }
+                </div>
+
+                @if (QuickSetupApplyError) {
+                  <div class="test-result failed" style="margin-top: 12px;">
+                    <i class="fa-solid fa-circle-xmark"></i> {{ QuickSetupApplyError }}
+                  </div>
+                }
+
+                <div class="quick-setup-actions">
+                  <button kendoButton [themeColor]="'primary'"
+                          [disabled]="QuickSetupApplying || QuickSetupEnabledCount === 0"
+                          (click)="ApplyQuickSetup()">
+                    @if (QuickSetupApplying) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Applying ({{ QuickSetupAppliedCount }}/{{ QuickSetupEnabledCount }})...
+                    } @else {
+                      <i class="fa-solid fa-bolt"></i> Apply {{ QuickSetupEnabledCount }} Mapping(s)
+                    }
+                  </button>
+                </div>
+              }
+            </div>
+          }
+
           <div class="step-actions" style="justify-content: center;">
             <button kendoButton [themeColor]="'primary'" (click)="ResetWizard()">
               <i class="fa-solid fa-plus"></i> Create Another Connection
@@ -313,6 +388,115 @@
             </div>
           }
         </div>
+
+        <!-- Discovery Browser (after successful test) -->
+        @if (TestStatus === 'success' && HasSavedCompanyIntegration) {
+          <div class="discovery-section">
+            <button kendoButton [look]="'flat'" class="discovery-toggle" (click)="ToggleDiscovery()">
+              <i class="fa-solid" [class.fa-chevron-right]="!ShowDiscovery" [class.fa-chevron-down]="ShowDiscovery"></i>
+              <i class="fa-solid fa-binoculars"></i>
+              Browse Available Data
+              @if (DiscoveredObjects.length > 0) {
+                <span class="discovery-count">{{ DiscoveredObjects.length }} objects</span>
+              }
+            </button>
+
+            @if (ShowDiscovery) {
+              <div class="discovery-body">
+                @if (IsDiscoveringObjects) {
+                  <mj-loading text="Discovering objects..." size="small"></mj-loading>
+                } @else if (DiscoveryError) {
+                  <div class="test-result failed">
+                    <i class="fa-solid fa-circle-xmark"></i> {{ DiscoveryError }}
+                  </div>
+                } @else {
+                  <div class="discovery-objects">
+                    @for (obj of DiscoveredObjects; track obj.Name) {
+                      <div class="discovery-object"
+                           [class.selected]="IsSelectedDiscoveryObject(obj.Name)"
+                           (click)="SelectDiscoveryObject(obj)">
+                        <div class="discovery-object-header">
+                          <i class="fa-solid fa-table"></i>
+                          <div class="discovery-object-info">
+                            <span class="discovery-object-name">{{ obj.Label || obj.Name }}</span>
+                            @if (obj.Label && obj.Label !== obj.Name) {
+                              <span class="discovery-object-tech">{{ obj.Name }}</span>
+                            }
+                          </div>
+                          <div class="discovery-object-badges">
+                            @if (obj.SupportsIncrementalSync) {
+                              <span class="discovery-badge incremental" title="Supports incremental sync">
+                                <i class="fa-solid fa-bolt"></i> Incremental
+                              </span>
+                            }
+                            @if (obj.SupportsWrite) {
+                              <span class="discovery-badge writable" title="Supports write-back">
+                                <i class="fa-solid fa-pen"></i> Writable
+                              </span>
+                            }
+                          </div>
+                          <i class="fa-solid discovery-object-arrow"
+                             [class.fa-chevron-right]="!IsSelectedDiscoveryObject(obj.Name)"
+                             [class.fa-chevron-down]="IsSelectedDiscoveryObject(obj.Name)"></i>
+                        </div>
+
+                        <!-- Field detail panel -->
+                        @if (IsSelectedDiscoveryObject(obj.Name)) {
+                          <div class="discovery-fields" (click)="$event.stopPropagation()">
+                            @if (IsDiscoveringFields) {
+                              <mj-loading text="Loading fields..." size="small"></mj-loading>
+                            } @else if (FieldDiscoveryError) {
+                              <div class="test-result failed" style="margin: 8px 0;">
+                                <i class="fa-solid fa-circle-xmark"></i> {{ FieldDiscoveryError }}
+                              </div>
+                            } @else {
+                              <table class="discovery-field-table">
+                                <thead>
+                                  <tr>
+                                    <th>Field</th>
+                                    <th>Type</th>
+                                    <th class="center-col">Required</th>
+                                    <th class="center-col">Key</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (field of DiscoveredFields; track field.Name) {
+                                    <tr>
+                                      <td>
+                                        <span class="field-name">{{ field.Label || field.Name }}</span>
+                                        @if (field.Label && field.Label !== field.Name) {
+                                          <span class="field-tech-name">{{ field.Name }}</span>
+                                        }
+                                      </td>
+                                      <td><span class="field-type">{{ field.DataType }}</span></td>
+                                      <td class="center-col">
+                                        @if (field.IsRequired) {
+                                          <i class="fa-solid fa-circle-check field-required"></i>
+                                        }
+                                      </td>
+                                      <td class="center-col">
+                                        @if (field.IsUniqueKey) {
+                                          <i class="fa-solid fa-key field-key"></i>
+                                        }
+                                      </td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                              <div class="discovery-field-count">
+                                {{ DiscoveredFields.length }} fields
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
 
         @if (SaveError) {
           <div class="test-result failed" style="margin-bottom: 16px;">

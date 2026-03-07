@@ -12,6 +12,7 @@ import {
 } from '../../services/integration-data.service';
 
 type StatusFilter = 'All' | 'Success' | 'Failed' | 'In Progress' | 'Pending';
+type DateRange = 'all' | 'today' | '7d' | '30d' | '90d';
 
 interface WatermarkRow {
   ID: string;
@@ -39,6 +40,7 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
 
   SelectedIntegrationID = '';
   SelectedStatusFilter: StatusFilter = 'All';
+  SelectedDateRange: DateRange = 'all';
   SelectedRunID: string | null = null;
   ActiveDetailsTab: 'entities' | 'watermarks' = 'entities';
 
@@ -49,6 +51,13 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
   ShowErrorLog = false;
 
   StatusOptions: StatusFilter[] = ['All', 'Success', 'Failed', 'In Progress', 'Pending'];
+  DateRangeOptions: { Value: DateRange; Label: string }[] = [
+    { Value: 'all', Label: 'All Time' },
+    { Value: 'today', Label: 'Today' },
+    { Value: '7d', Label: 'Last 7 Days' },
+    { Value: '30d', Label: 'Last 30 Days' },
+    { Value: '90d', Label: 'Last 90 Days' }
+  ];
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
@@ -93,7 +102,7 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
       } else {
         this.Runs = await this.loadAllRuns();
       }
-      this.applyStatusFilter();
+      this.applyFilters();
     } catch (err) {
       console.error('[SyncActivity] Failed to load runs:', err);
     } finally {
@@ -117,15 +126,42 @@ export class SyncActivityComponent extends BaseResourceComponent implements OnIn
   }
 
   OnStatusFilterChange(): void {
-    this.applyStatusFilter();
+    this.applyFilters();
   }
 
-  private applyStatusFilter(): void {
-    if (this.SelectedStatusFilter === 'All') {
-      this.FilteredRuns = this.Runs;
-    } else {
-      this.FilteredRuns = this.Runs.filter(r => r.Status === this.SelectedStatusFilter);
+  OnDateRangeChange(): void {
+    this.applyFilters();
+  }
+
+  private applyFilters(): void {
+    let filtered = this.Runs;
+
+    // Apply status filter
+    if (this.SelectedStatusFilter !== 'All') {
+      filtered = filtered.filter(r => r.Status === this.SelectedStatusFilter);
     }
+
+    // Apply date range filter
+    const cutoff = this.getDateRangeCutoff(this.SelectedDateRange);
+    if (cutoff) {
+      filtered = filtered.filter(r => r.StartedAt && new Date(r.StartedAt) >= cutoff);
+    }
+
+    this.FilteredRuns = filtered;
+  }
+
+  private getDateRangeCutoff(range: DateRange): Date | null {
+    if (range === 'all') return null;
+    const now = new Date();
+    if (range === 'today') {
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      return today;
+    }
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - days);
+    return cutoff;
   }
 
   async OnRunClick(run: IntegrationRunRow): Promise<void> {

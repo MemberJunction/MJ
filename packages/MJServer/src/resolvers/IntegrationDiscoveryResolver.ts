@@ -93,6 +93,26 @@ class ConnectionTestOutput {
     ServerVersion?: string;
 }
 
+// --- Preview Data Types ---
+
+@ObjectType()
+class PreviewRecordOutput {
+    @Field(() => String)
+    Data: string; // JSON-serialized record fields
+}
+
+@ObjectType()
+class PreviewDataOutput {
+    @Field()
+    Success: boolean;
+
+    @Field()
+    Message: string;
+
+    @Field(() => [PreviewRecordOutput], { nullable: true })
+    Records?: PreviewRecordOutput[];
+}
+
 // --- Schema Preview Types ---
 
 @InputType()
@@ -135,6 +155,53 @@ class SchemaPreviewOutput {
 
     @Field(() => [String], { nullable: true })
     Warnings?: string[];
+}
+
+// --- Default Configuration Types ---
+
+@ObjectType()
+class DefaultFieldMappingOutput {
+    @Field()
+    SourceFieldName: string;
+
+    @Field()
+    DestinationFieldName: string;
+
+    @Field({ nullable: true })
+    IsKeyField?: boolean;
+}
+
+@ObjectType()
+class DefaultObjectConfigOutput {
+    @Field()
+    SourceObjectName: string;
+
+    @Field()
+    TargetTableName: string;
+
+    @Field()
+    TargetEntityName: string;
+
+    @Field()
+    SyncEnabled: boolean;
+
+    @Field(() => [DefaultFieldMappingOutput])
+    FieldMappings: DefaultFieldMappingOutput[];
+}
+
+@ObjectType()
+class DefaultConfigOutput {
+    @Field()
+    Success: boolean;
+
+    @Field()
+    Message: string;
+
+    @Field({ nullable: true })
+    DefaultSchemaName?: string;
+
+    @Field(() => [DefaultObjectConfigOutput], { nullable: true })
+    DefaultObjects?: DefaultObjectConfigOutput[];
 }
 
 // --- Resolver ---
@@ -248,6 +315,53 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Returns the connector's default configuration for quick setup.
+     * Not all connectors provide defaults — returns Success: false if unavailable.
+     */
+    @Query(() => DefaultConfigOutput)
+    async IntegrationGetDefaultConfig(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<DefaultConfigOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const { connector } = await this.resolveConnector(companyIntegrationID, user);
+
+            const config = connector.GetDefaultConfiguration();
+            if (!config) {
+                return {
+                    Success: false,
+                    Message: 'This connector does not provide a default configuration'
+                };
+            }
+
+            return {
+                Success: true,
+                Message: `Default configuration with ${config.DefaultObjects.length} objects`,
+                DefaultSchemaName: config.DefaultSchemaName,
+                DefaultObjects: config.DefaultObjects.map(o => ({
+                    SourceObjectName: o.SourceObjectName,
+                    TargetTableName: o.TargetTableName,
+                    TargetEntityName: o.TargetEntityName,
+                    SyncEnabled: o.SyncEnabled,
+                    FieldMappings: o.FieldMappings.map(f => ({
+                        SourceFieldName: f.SourceFieldName,
+                        DestinationFieldName: f.DestinationFieldName,
+                        IsKeyField: f.IsKeyField
+                    }))
+                }))
+            };
+        } catch (e) {
+            const error = e as Error;
+            LogError(`IntegrationGetDefaultConfig error: ${error}`);
+            return {
+                Success: false,
+                Message: `Error: ${error.message}`
+            };
+        }
+    }
+
+    /**
      * Generates a DDL preview for creating tables from discovered external objects.
      * Introspects the source schema and runs SchemaBuilder to produce migration SQL.
      */
@@ -320,6 +434,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             const error = e as Error;
             LogError(`IntegrationSchemaPreview error: ${error}`);
+            return {
+                Success: false,
+                Message: `Error: ${error.message}`
+            };
+        }
+    }
+
+    /**
+     * Fetches a small sample of records from an external object for preview purposes.
+     * Uses the connector's FetchChanges with a small batch size and no watermark.
+     */
+    @Query(() => PreviewDataOutput)
+    async IntegrationPreviewData(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("objectName") objectName: string,
+        @Arg("limit", { defaultValue: 5 }) limit: number,
+        @Ctx() ctx: AppContext
+    ): Promise<PreviewDataOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+
+            const fetchChanges = connector.FetchChanges.bind(connector) as
+                (ctx: unknown) => Promise<{ Records: Array<{ ExternalID: string; ObjectType: string; Fields: Record<string, unknown> }>; HasMore: boolean }>;
+
+            const result = await fetchChanges({
+                CompanyIntegration: companyIntegration,
+                ObjectName: objectName,
+                WatermarkValue: null,
+                BatchSize: Math.min(limit, 10),
+                ContextUser: user
+            });
+
+            return {
+                Success: true,
+                Message: `Fetched ${result.Records.length} preview records`,
+                Records: result.Records.map(r => ({
+                    Data: JSON.stringify({ ExternalID: r.ExternalID, ...r.Fields })
+                }))
+            };
+        } catch (e) {
+            const error = e as Error;
+            LogError(`IntegrationPreviewData error: ${error}`);
             return {
                 Success: false,
                 Message: `Error: ${error.message}`

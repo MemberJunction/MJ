@@ -22,6 +22,12 @@
         }
       </select>
 
+      <select class="filter-select" [(ngModel)]="SelectedDateRange" (change)="OnDateRangeChange()">
+        @for (opt of DateRangeOptions; track opt.Value) {
+          <option [value]="opt.Value">{{ opt.Label }}</option>
+        }
+      </select>
+
       <button class="refresh-btn" (click)="LoadRuns()" title="Refresh">
         <i class="fa-solid fa-rotate"></i>
       </button>

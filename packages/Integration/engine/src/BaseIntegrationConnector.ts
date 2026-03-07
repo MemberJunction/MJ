@@ -117,6 +117,28 @@ export async function WithTimeout<T>(
     }
 }
 
+/** Proposed default configuration for a quick-start setup */
+export interface DefaultObjectConfig {
+    /** Source object name in the external system */
+    SourceObjectName: string;
+    /** Proposed target table name in the MJ database */
+    TargetTableName: string;
+    /** Proposed MJ entity name */
+    TargetEntityName: string;
+    /** Whether to enable sync by default */
+    SyncEnabled: boolean;
+    /** Proposed field mappings */
+    FieldMappings: DefaultFieldMapping[];
+}
+
+/** Full default configuration returned by a connector for quick setup */
+export interface DefaultIntegrationConfig {
+    /** Proposed DB schema name for new tables (e.g., "YourMembership", "HubSpot") */
+    DefaultSchemaName: string;
+    /** Objects to sync by default with proposed table/entity names */
+    DefaultObjects: DefaultObjectConfig[];
+}
+
 /**
  * Abstract base class for integration connectors.
  * Each external system (HubSpot, Salesforce, etc.) implements this class
@@ -175,6 +197,16 @@ export abstract class BaseIntegrationConnector {
      */
     public GetDefaultFieldMappings(_objectName: string, _entityName: string): DefaultFieldMapping[] {
         return [];
+    }
+
+    /**
+     * Returns a proposed default configuration for quick setup.
+     * Override in subclasses to provide connector-specific defaults
+     * including schema name, objects to sync, and field mappings.
+     * Returns null by default (no quick setup available).
+     */
+    public GetDefaultConfiguration(): DefaultIntegrationConfig | null {
+        return null;
     }
 
     /**

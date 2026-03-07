@@ -714,6 +714,36 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     return matches;
   }
 
+  /** Validation: count fields missing destination mapping */
+  get UnmappedRequiredCount(): number {
+    return this.EditableFields.filter(
+      f => f.Status === 'Active' && f.IsRequired && !f.DestinationFieldName
+    ).length;
+  }
+
+  /** Validation: check if at least one key field is configured */
+  get HasKeyField(): boolean {
+    return this.EditableFields.some(f => f.Status === 'Active' && f.IsKeyField);
+  }
+
+  /** Validation: overall mapping readiness */
+  get MappingValidation(): { IsValid: boolean; Warnings: string[] } {
+    const warnings: string[] = [];
+    if (this.UnmappedRequiredCount > 0) {
+      warnings.push(`${this.UnmappedRequiredCount} required field(s) missing destination mapping`);
+    }
+    if (!this.HasKeyField && this.ActiveEditableFields.length > 0) {
+      warnings.push('No key field configured — sync may create duplicates');
+    }
+    return { IsValid: warnings.length === 0, Warnings: warnings };
+  }
+
+  /** Re-run auto-mapping for the currently selected entity map */
+  async RerunAutoMap(): Promise<void> {
+    if (!this.SelectedEntityMap) return;
+    await this.AutoGenerateFieldMappings(this.SelectedEntityMap);
+  }
+
   OnFieldChanged(field: EditableFieldMap): void {
     field.IsDirty = true;
   }

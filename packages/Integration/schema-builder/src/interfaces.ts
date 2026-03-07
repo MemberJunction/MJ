@@ -37,6 +37,8 @@ export interface TargetTableConfig {
     TableName: string;
     /** MJ entity display name (e.g., "HubSpot Deal", "YM Member"). */
     EntityName: string;
+    /** Human-readable description for the table (emitted as sp_addextendedproperty). */
+    Description?: string;
     /** Column configurations. */
     Columns: TargetColumnConfig[];
     /** Soft FK relationships to configure. */
@@ -61,6 +63,8 @@ export interface TargetColumnConfig {
     Scale: number | null;
     /** Default value SQL expression (null if none). */
     DefaultValue: string | null;
+    /** Human-readable description for the column (emitted as sp_addextendedproperty). */
+    Description?: string;
 }
 
 // ─── Soft Foreign Keys ──────────────────────────────────────────────

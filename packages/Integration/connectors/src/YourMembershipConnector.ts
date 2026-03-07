@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import type { UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { Metadata, type UserInfo } from '@memberjunction/core';
+import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
     type ConnectionTestResult,
@@ -10,6 +10,9 @@ import {
     type FetchBatchResult,
     type ExternalRecord,
     type DefaultFieldMapping,
+    type DefaultIntegrationConfig,
+    type SourceSchemaInfo,
+    type SourceRelationshipInfo,
 } from '@memberjunction/integration-engine';
 
 // ─── Configuration & Session Types ──────────────────────────────
@@ -56,6 +59,23 @@ interface YMObjectConfig {
     DefaultQueryParams?: Record<string, string>;
     /** Whether the endpoint supports incremental date filtering */
     SupportsIncrementalSync: boolean;
+    /**
+     * Detail endpoint path template for fetching full record data.
+     * Use `{PK}` as placeholder for the record's primary key value.
+     * When set, the connector will call this endpoint per-record to enrich
+     * the sparse list data with full field values.
+     */
+    DetailPath?: string;
+    /** JSON key containing the detail record in the detail endpoint response. Null for root-level. */
+    DetailResponseKey?: string | null;
+    /**
+     * Whether this endpoint uses OffSet-based pagination instead of PageNumber.
+     * When true, the watermark tracks the current offset position.
+     * Max PageSize for OffSet endpoints is 100.
+     */
+    UsesOffSetPagination?: boolean;
+    /** Foreign key relationships to other YM objects */
+    Relationships?: SourceRelationshipInfo[];
 }
 
 /** All supported YM objects */
@@ -76,6 +96,8 @@ const YM_OBJECTS: Record<string, YMObjectConfig> = {
             ].join(','),
         },
         SupportsIncrementalSync: false,
+        DetailPath: 'Members/{PK}',
+        DetailResponseKey: null,
     },
     Events: {
         Path: 'Events',
@@ -140,6 +162,34 @@ const YM_OBJECTS: Record<string, YMObjectConfig> = {
         SupportsPagination: true,
         DefaultPageSize: 100,
         SupportsIncrementalSync: false,
+    },
+    InvoiceItems: {
+        Path: 'InvoiceItems',
+        Label: 'Invoice Items',
+        ResponseDataKey: 'InvoiceItemsList',
+        PKFields: ['LineItemID'],
+        SupportsPagination: true,
+        DefaultPageSize: 100,
+        DefaultQueryParams: { DateFrom: '2000-01-01', InvoiceItemType: 'All', OffSet: '0' },
+        SupportsIncrementalSync: true,
+        UsesOffSetPagination: true,
+        Relationships: [
+            { FieldName: 'WebSiteMemberID', TargetObject: 'Members', TargetField: 'ProfileID' },
+        ],
+    },
+    DuesTransactions: {
+        Path: 'DuesTransactions',
+        Label: 'Dues Transactions',
+        ResponseDataKey: 'DuesTransactionsList',
+        PKFields: ['TransactionID'],
+        SupportsPagination: true,
+        DefaultPageSize: 100,
+        DefaultQueryParams: { DateFrom: '2000-01-01', OffSet: '0' },
+        SupportsIncrementalSync: true,
+        UsesOffSetPagination: true,
+        Relationships: [
+            { FieldName: 'WebsiteMemberID', TargetObject: 'Members', TargetField: 'ProfileID' },
+        ],
     },
 };
 
@@ -225,6 +275,52 @@ const YM_FIELD_SCHEMAS: Record<string, ExternalFieldSchema[]> = {
         { Name: 'CEUsRequired', Label: 'CEUs Required', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: false },
         { Name: 'Code', Label: 'Code', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: false },
     ],
+    InvoiceItems: [
+        { Name: 'LineItemID', Label: 'Line Item ID', DataType: 'integer', IsRequired: true, IsUniqueKey: true, IsReadOnly: true },
+        { Name: 'InvoiceNo', Label: 'Invoice Number', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'InvoiceType', Label: 'Invoice Type', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'WebSiteMemberID', Label: 'Member ID', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'ConstituentID', Label: 'Constituent ID', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'InvoiceNameFirst', Label: 'First Name', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'InvoiceNameLast', Label: 'Last Name', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'Organization', Label: 'Organization', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'EmailAddress', Label: 'Email', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemType', Label: 'Line Item Type', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemDescription', Label: 'Description', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemDate', Label: 'Date', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemDateEntered', Label: 'Date Entered', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemAmount', Label: 'Amount', DataType: 'decimal', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineItemQuantity', Label: 'Quantity', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LineTotal', Label: 'Line Total', DataType: 'decimal', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'OutstandingBalance', Label: 'Outstanding Balance', DataType: 'decimal', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'PaymentTerms', Label: 'Payment Terms', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'GLCodeItemName', Label: 'GL Code', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'QBClassItemName', Label: 'QB Class', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'PaymentOption', Label: 'Payment Option', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+    ],
+    DuesTransactions: [
+        { Name: 'TransactionID', Label: 'Transaction ID', DataType: 'integer', IsRequired: true, IsUniqueKey: true, IsReadOnly: true },
+        { Name: 'InvoiceNumber', Label: 'Invoice Number', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'Status', Label: 'Status', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'WebsiteMemberID', Label: 'Member ID', DataType: 'integer', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'ConstituentID', Label: 'Constituent ID', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'FirstName', Label: 'First Name', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'LastName', Label: 'Last Name', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'Email', Label: 'Email', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'Organization', Label: 'Organization', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'Amount', Label: 'Amount', DataType: 'decimal', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'BalanceDue', Label: 'Balance Due', DataType: 'decimal', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'PaymentType', Label: 'Payment Type', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'DateSubmitted', Label: 'Date Submitted', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'DateProcessed', Label: 'Date Processed', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'MembershipRequested', Label: 'Membership Requested', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'CurrentMembership', Label: 'Current Membership', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'CurrentMembershipExpDate', Label: 'Membership Expiration', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'MemberType', Label: 'Member Type', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'DateMemberSignup', Label: 'Member Signup Date', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'InvoiceDate', Label: 'Invoice Date', DataType: 'datetime', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+        { Name: 'ClosedBy', Label: 'Closed By', DataType: 'string', IsRequired: false, IsUniqueKey: false, IsReadOnly: true },
+    ],
 };
 
 // ─── Connector Implementation ───────────────────────────────────
@@ -247,24 +343,54 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
     // ─── Configuration parsing ───────────────────────────────────
 
     /**
-     * Parses the Configuration JSON from a CompanyIntegration entity.
+     * Parses credentials from CompanyIntegration.CredentialID (preferred) or
+     * falls back to CompanyIntegration.Configuration JSON for backwards compat.
      */
-    protected ParseConfig(companyIntegration: MJCompanyIntegrationEntity): YMConnectionConfig {
-        const configJson = companyIntegration.Get('Configuration') as string | null;
-        if (!configJson) {
-            throw new Error('CompanyIntegration.Configuration is null or empty');
+    protected async ParseConfig(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser?: UserInfo
+    ): Promise<YMConnectionConfig> {
+        // Try loading from linked Credential entity first
+        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        if (credentialID && contextUser) {
+            const config = await this.loadFromCredential(credentialID, contextUser);
+            if (config) return config;
         }
 
-        const parsed = JSON.parse(configJson) as Record<string, string>;
-        const clientId = parsed['ClientID'];
-        const apiKey = parsed['APIKey'];
-        const apiPassword = parsed['APIPassword'];
+        // Fallback: read from CompanyIntegration Configuration JSON
+        const configJson = companyIntegration.Get('Configuration') as string | null;
+        if (configJson) {
+            return this.parseConfigJson(configJson);
+        }
+
+        throw new Error('No YM credentials found. Attach a credential with ClientID, APIKey, and APIPassword, or set Configuration JSON on the CompanyIntegration.');
+    }
+
+    private async loadFromCredential(credentialID: string, contextUser: UserInfo): Promise<YMConnectionConfig | null> {
+        const md = new Metadata();
+        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+        const loaded = await credential.Load(credentialID);
+        if (!loaded || !credential.Values) return null;
+
+        try {
+            return this.parseConfigJson(credential.Values);
+        } catch {
+            return null; // Credential values don't match expected format
+        }
+    }
+
+    private parseConfigJson(json: string): YMConnectionConfig {
+        const parsed = JSON.parse(json) as Record<string, string>;
+        // Support both PascalCase (Configuration JSON) and camelCase (Credential entity schema)
+        const clientId = parsed['ClientID'] || parsed['clientId'] || parsed['ClientId'];
+        const apiKey = parsed['APIKey'] || parsed['apiKey'] || parsed['ApiKey'];
+        const apiPassword = parsed['APIPassword'] || parsed['apiPassword'] || parsed['ApiPassword'];
 
         if (!clientId || !apiKey || !apiPassword) {
-            throw new Error('Configuration JSON must contain ClientID, APIKey, and APIPassword');
+            throw new Error('Configuration JSON must contain ClientID, APIKey, and APIPassword (any casing)');
         }
 
-        return { ClientID: clientId, APIKey: apiKey, APIPassword: apiPassword };
+        return { ClientID: String(clientId), APIKey: apiKey, APIPassword: apiPassword };
     }
 
     // ─── Session management ──────────────────────────────────────
@@ -381,10 +507,10 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
     /** Tests connectivity by authenticating and fetching ClientConfig. */
     public async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const config = this.ParseConfig(companyIntegration);
+            const config = await this.ParseConfig(companyIntegration, contextUser);
             await this.GetSession(config);
             const clientConfig = await this.MakeRequest(config, 'ClientConfig');
             const siteUrl = (clientConfig['SiteUrl'] as string) ?? 'Unknown';
@@ -413,6 +539,35 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
         }));
     }
 
+    /**
+     * Override IntrospectSchema to populate Relationships from YM_OBJECTS config.
+     * This enables the Schema Builder to generate soft FK entries in additionalSchemaInfo.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<SourceSchemaInfo> {
+        const schema = await super.IntrospectSchema(companyIntegration, contextUser);
+
+        // Inject relationships from our object registry
+        for (const obj of schema.Objects) {
+            const config = YM_OBJECTS[obj.ExternalName];
+            if (config?.Relationships) {
+                obj.Relationships = config.Relationships;
+                // Also mark FK fields on the field list
+                for (const rel of config.Relationships) {
+                    const field = obj.Fields.find(f => f.Name === rel.FieldName);
+                    if (field) {
+                        field.IsForeignKey = true;
+                        field.ForeignKeyTarget = rel.TargetObject;
+                    }
+                }
+            }
+        }
+
+        return schema;
+    }
+
     /** Returns the known field schema for a YM object. */
     public async DiscoverFields(
         _companyIntegration: MJCompanyIntegrationEntity,
@@ -433,7 +588,7 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
      * fetches all data in one call.
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const config = this.ParseConfig(ctx.CompanyIntegration);
+        const config = await this.ParseConfig(ctx.CompanyIntegration, ctx.ContextUser);
         const objectConfig = YM_OBJECTS[ctx.ObjectName];
 
         if (!objectConfig) {
@@ -446,6 +601,10 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
 
         if (objectConfig.ResponseDataKey === null) {
             return this.FetchRawArray(config, ctx, objectConfig);
+        }
+
+        if (objectConfig.UsesOffSetPagination) {
+            return this.FetchWithOffSet(config, ctx, objectConfig);
         }
 
         if (objectConfig.SupportsPagination) {
@@ -477,9 +636,12 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
             return { Records: [], HasMore: false };
         }
 
-        const records = dataArray.map((item: Record<string, unknown>) =>
+        let records = dataArray.map((item: Record<string, unknown>) =>
             this.BuildRecord(item, objectConfig.PKFields, ctx.ObjectName)
         );
+
+        // Enrich with detail endpoint if available
+        records = await this.EnrichRecordsWithDetails(config, records, objectConfig);
 
         const hasMore = records.length >= pageSize;
         const newWatermark = hasMore ? String(pageNumber + 1) : undefined;
@@ -500,11 +662,51 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
             return { Records: [], HasMore: false };
         }
 
+        let records = dataArray.map((item: Record<string, unknown>) =>
+            this.BuildRecord(item, objectConfig.PKFields, ctx.ObjectName)
+        );
+
+        // Enrich with detail endpoint if available
+        records = await this.EnrichRecordsWithDetails(config, records, objectConfig);
+
+        return { Records: records, HasMore: false };
+    }
+
+    /**
+     * Fetches data using OffSet-based pagination (InvoiceItems, DuesTransactions).
+     * These YM endpoints use OffSet instead of PageNumber, with max PageSize of 100.
+     * Watermark tracks the current offset position.
+     */
+    private async FetchWithOffSet(
+        config: YMConnectionConfig,
+        ctx: FetchContext,
+        objectConfig: YMObjectConfig
+    ): Promise<FetchBatchResult> {
+        const offset = ctx.WatermarkValue ? Number(ctx.WatermarkValue) : 0;
+        const pageSize = Math.min(ctx.BatchSize, objectConfig.DefaultPageSize, 100);
+
+        const queryParams: Record<string, string> = {
+            ...(objectConfig.DefaultQueryParams ?? {}),
+            PageSize: String(pageSize),
+            PageNumber: '1',
+            OffSet: String(offset),
+        };
+
+        const json = await this.MakeRequest(config, objectConfig.Path, queryParams);
+        const dataArray = json[objectConfig.ResponseDataKey!];
+
+        if (!dataArray || !Array.isArray(dataArray)) {
+            return { Records: [], HasMore: false };
+        }
+
         const records = dataArray.map((item: Record<string, unknown>) =>
             this.BuildRecord(item, objectConfig.PKFields, ctx.ObjectName)
         );
 
-        return { Records: records, HasMore: false };
+        const hasMore = records.length >= pageSize;
+        const newWatermark = hasMore ? String(offset + records.length) : undefined;
+
+        return { Records: records, HasMore: hasMore, NewWatermarkValue: newWatermark };
     }
 
     /** Fetches endpoints that return a raw JSON array (e.g., Products). */
@@ -526,9 +728,12 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
             return { Records: [], HasMore: false };
         }
 
-        const records = (data as Record<string, unknown>[]).map((item) =>
+        let records = (data as Record<string, unknown>[]).map((item) =>
             this.BuildRecord(item, objectConfig.PKFields, ctx.ObjectName)
         );
+
+        // Enrich with detail endpoint if available
+        records = await this.EnrichRecordsWithDetails(config, records, objectConfig);
 
         return { Records: records, HasMore: false };
     }
@@ -566,6 +771,19 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
     // ─── Default field mappings ──────────────────────────────────
 
     /** Returns suggested default field mappings for YM objects to MJ entities. */
+    public override GetDefaultConfiguration(): DefaultIntegrationConfig {
+        return {
+            DefaultSchemaName: 'YourMembership',
+            DefaultObjects: Object.entries(YM_OBJECTS).map(([name, cfg]) => ({
+                SourceObjectName: name,
+                TargetTableName: cfg.Label.replace(/\s+/g, ''),
+                TargetEntityName: `YM ${cfg.Label}`,
+                SyncEnabled: true,
+                FieldMappings: this.GetDefaultFieldMappings(name, cfg.Label),
+            })),
+        };
+    }
+
     public override GetDefaultFieldMappings(
         objectName: string,
         _entityName: string
@@ -587,6 +805,25 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
                     { SourceFieldName: 'StartDate', DestinationFieldName: 'StartDate' },
                     { SourceFieldName: 'EndDate', DestinationFieldName: 'EndDate' },
                 ];
+            case 'InvoiceItems':
+                return [
+                    { SourceFieldName: 'LineItemID', DestinationFieldName: 'LineItemID', IsKeyField: true },
+                    { SourceFieldName: 'InvoiceNo', DestinationFieldName: 'InvoiceNo' },
+                    { SourceFieldName: 'InvoiceType', DestinationFieldName: 'InvoiceType' },
+                    { SourceFieldName: 'WebSiteMemberID', DestinationFieldName: 'WebSiteMemberID' },
+                    { SourceFieldName: 'LineItemDescription', DestinationFieldName: 'Description' },
+                    { SourceFieldName: 'LineItemAmount', DestinationFieldName: 'Amount' },
+                    { SourceFieldName: 'LineItemDate', DestinationFieldName: 'Date' },
+                ];
+            case 'DuesTransactions':
+                return [
+                    { SourceFieldName: 'TransactionID', DestinationFieldName: 'TransactionID', IsKeyField: true },
+                    { SourceFieldName: 'WebsiteMemberID', DestinationFieldName: 'WebsiteMemberID' },
+                    { SourceFieldName: 'Status', DestinationFieldName: 'Status' },
+                    { SourceFieldName: 'Amount', DestinationFieldName: 'Amount' },
+                    { SourceFieldName: 'MembershipRequested', DestinationFieldName: 'MembershipRequested' },
+                    { SourceFieldName: 'DateSubmitted', DestinationFieldName: 'DateSubmitted' },
+                ];
             default:
                 return [];
         }
@@ -605,6 +842,154 @@ export class YourMembershipConnector extends BaseIntegrationConnector {
             ObjectType: objectType,
             Fields: { ...item },
         };
+    }
+
+    // ─── Detail enrichment ───────────────────────────────────────
+
+    /**
+     * Enriches a batch of records by fetching full detail data for each record
+     * via the object's detail endpoint. List endpoints often return sparse data;
+     * detail endpoints return all available fields for a record.
+     *
+     * Records are enriched in parallel with a concurrency limit to avoid
+     * overwhelming the API.
+     */
+    private async EnrichRecordsWithDetails(
+        config: YMConnectionConfig,
+        records: ExternalRecord[],
+        objectConfig: YMObjectConfig
+    ): Promise<ExternalRecord[]> {
+        if (!objectConfig.DetailPath || records.length === 0) {
+            return records;
+        }
+
+        const concurrency = 10;
+        const enriched: ExternalRecord[] = [];
+
+        for (let i = 0; i < records.length; i += concurrency) {
+            const batch = records.slice(i, i + concurrency);
+            const results = await Promise.all(
+                batch.map(record => this.EnrichSingleRecord(config, record, objectConfig))
+            );
+            enriched.push(...results);
+        }
+
+        return enriched;
+    }
+
+    /**
+     * Fetches full detail data for a single record and merges it with
+     * the existing list data. Detail fields override list fields.
+     */
+    private async EnrichSingleRecord(
+        config: YMConnectionConfig,
+        record: ExternalRecord,
+        objectConfig: YMObjectConfig
+    ): Promise<ExternalRecord> {
+        try {
+            const detailPath = objectConfig.DetailPath!.replace('{PK}', record.ExternalID);
+            const json = await this.MakeRequest(config, detailPath);
+
+            const detailData = objectConfig.DetailResponseKey != null
+                ? json[objectConfig.DetailResponseKey] as Record<string, unknown> | undefined
+                : json;
+
+            if (detailData && typeof detailData === 'object') {
+                const normalized = this.NormalizeDetailFields(detailData, objectConfig);
+                record.Fields = { ...record.Fields, ...normalized };
+            }
+        } catch {
+            // If detail fetch fails for one record, keep the list data
+            // and continue — don't fail the entire batch
+        }
+
+        return record;
+    }
+
+    /**
+     * Normalizes detail response fields to match our expected field names.
+     * The YM detail endpoints use camelCase and nested objects,
+     * while our schema uses PascalCase and flat structure.
+     */
+    private NormalizeDetailFields(
+        detail: Record<string, unknown>,
+        objectConfig: YMObjectConfig
+    ): Record<string, unknown> {
+        if (objectConfig.Path === 'MemberList') {
+            return this.NormalizeMemberDetail(detail);
+        }
+        // For other object types, just filter out metadata keys
+        return this.FilterMetadataKeys(detail);
+    }
+
+    /**
+     * Maps the Members detail endpoint response to our flat PascalCase schema.
+     * Detail endpoint returns: { firstName, lastName, emailAddress, primaryAddress: { ... } }
+     * We need:                 { FirstName, LastName, EmailAddr, Phone, Address1, ... }
+     */
+    private NormalizeMemberDetail(detail: Record<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+        const addr = detail['primaryAddress'] as Record<string, unknown> | undefined;
+
+        // Direct field mappings (detail camelCase → our PascalCase)
+        const fieldMap: Record<string, string> = {
+            'id': 'ProfileID',
+            'firstName': 'FirstName',
+            'lastName': 'LastName',
+            'emailAddress': 'EmailAddr',
+            'organization': 'Organization',
+            'typeCode': 'MemberTypeCode',
+            'expirationDate': 'ExpirationDate',
+            'isMember': 'Status',
+        };
+
+        for (const [detailKey, ourKey] of Object.entries(fieldMap)) {
+            const value = detail[detailKey];
+            if (value !== undefined && value !== null && value !== '') {
+                if (detailKey === 'isMember') {
+                    result[ourKey] = value ? 'Active' : 'Inactive';
+                } else {
+                    result[ourKey] = value;
+                }
+            }
+        }
+
+        // Address fields (nested → flat)
+        if (addr) {
+            const addrMap: Record<string, string> = {
+                'address1': 'Address1',
+                'address2': 'Address2',
+                'city': 'City',
+                'location': 'State',
+                'postalCode': 'PostalCode',
+                'countryName': 'Country',
+                'phone': 'Phone',
+            };
+
+            for (const [addrKey, ourKey] of Object.entries(addrMap)) {
+                const value = addr[addrKey];
+                if (value !== undefined && value !== null && value !== '') {
+                    result[ourKey] = value;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /** Filters out YM API metadata keys that shouldn't be stored as field data. */
+    private FilterMetadataKeys(data: Record<string, unknown>): Record<string, unknown> {
+        const metadataKeys = new Set([
+            'ResponseStatus', 'UsingRedis', 'AppInitTime', 'ServerID',
+            'ClientID', 'BypassCache', 'DateCached', 'Device',
+        ]);
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (!metadataKeys.has(key)) {
+                result[key] = value;
+            }
+        }
+        return result;
     }
 }
 

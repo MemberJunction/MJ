@@ -52,7 +52,74 @@ export class DDLGenerator {
         lines.push(`    CONSTRAINT ${q(uqName)} UNIQUE (${q('SourceRecordID')})`);
 
         const body = lines.join(',\n');
-        return `CREATE TABLE ${fullTable} (\n${body}\n);`;
+        const createTable = `CREATE TABLE ${fullTable} (\n${body}\n);`;
+
+        // Generate extended properties for descriptions (SQL Server only)
+        if (platform === 'sqlserver') {
+            const extProps = this.GenerateExtendedProperties(config);
+            if (extProps.length > 0) {
+                return createTable + '\n\n' + extProps.join('\n\n');
+            }
+        }
+
+        return createTable;
+    }
+
+    /**
+     * Generate sp_addextendedproperty calls for table and column descriptions.
+     */
+    GenerateExtendedProperties(config: TargetTableConfig): string[] {
+        const props: string[] = [];
+
+        // Table-level description
+        if (config.Description) {
+            const escaped = EscapeSqlString(config.Description);
+            props.push(
+                `EXEC sp_addextendedproperty\n` +
+                `    @name = N'MS_Description',\n` +
+                `    @value = N'${escaped}',\n` +
+                `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
+                `    @level1type = N'TABLE', @level1name = '${config.TableName}';`
+            );
+        }
+
+        // Standard column descriptions
+        const standardDescriptions: Record<string, string> = {
+            'ID': 'Primary key, auto-generated UUID',
+            'SourceRecordID': 'Unique identifier from the external source system',
+            'SourceJSON': 'Raw JSON payload from the source system for this record',
+            'SyncStatus': 'Current sync status: Active, Archived, or Error',
+            'LastSyncedAt': 'Timestamp of the last successful sync for this record',
+        };
+
+        for (const [colName, desc] of Object.entries(standardDescriptions)) {
+            props.push(this.MakeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
+        }
+
+        // User-configured column descriptions
+        for (const col of config.Columns) {
+            if (col.Description) {
+                props.push(this.MakeColumnExtendedProperty(
+                    config.SchemaName, config.TableName, col.TargetColumnName, col.Description
+                ));
+            }
+        }
+
+        return props;
+    }
+
+    private MakeColumnExtendedProperty(
+        schemaName: string, tableName: string, columnName: string, description: string
+    ): string {
+        const escaped = EscapeSqlString(description);
+        return (
+            `EXEC sp_addextendedproperty\n` +
+            `    @name = N'MS_Description',\n` +
+            `    @value = N'${escaped}',\n` +
+            `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
+            `    @level1type = N'TABLE', @level1name = '${tableName}',\n` +
+            `    @level2type = N'COLUMN', @level2name = '${columnName}';`
+        );
     }
 
     /**
@@ -138,4 +205,9 @@ export function ValidateIdentifier(name: string, kind: string): void {
     if (!IDENTIFIER_RE.test(name)) {
         throw new Error(`Invalid ${kind} name "${name}": must match ${IDENTIFIER_RE.source}`);
     }
+}
+
+/** Escapes single quotes in a string for use in SQL string literals. */
+function EscapeSqlString(value: string): string {
+    return value.replace(/'/g, "''");
 }

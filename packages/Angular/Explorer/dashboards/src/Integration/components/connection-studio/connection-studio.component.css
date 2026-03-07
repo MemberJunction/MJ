@@ -439,3 +439,263 @@
   font-size: 22px;
   color: #1b7a3d;
 }
+
+/* --- Discovery browser --- */
+.discovery-section {
+  margin: 16px 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.discovery-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.discovery-count {
+  font-weight: 400;
+  color: #888;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.discovery-body {
+  padding: 0 16px 16px 16px;
+}
+
+.discovery-objects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discovery-object {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.discovery-object:hover { border-color: #4a6cf7; }
+.discovery-object.selected { border-color: #4a6cf7; background: #fafbff; }
+
+.discovery-object-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.discovery-object-header > i:first-child {
+  font-size: 14px;
+  color: #4a6cf7;
+}
+
+.discovery-object-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.discovery-object-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.discovery-object-tech {
+  font-size: 11px;
+  color: #888;
+  margin-left: 6px;
+}
+
+.discovery-object-badges {
+  display: flex;
+  gap: 6px;
+}
+
+.discovery-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.discovery-badge.incremental { background: #e8f5e9; color: #2e7d32; }
+.discovery-badge.writable { background: #e3f2fd; color: #1565c0; }
+
+.discovery-object-arrow {
+  font-size: 11px;
+  color: #aaa;
+}
+
+/* --- Discovery field table --- */
+.discovery-fields {
+  padding: 8px 12px 12px 36px;
+  border-top: 1px solid #eee;
+}
+
+.discovery-field-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.discovery-field-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #666;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.discovery-field-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.discovery-field-table .center-col {
+  text-align: center;
+  width: 60px;
+}
+
+.field-name { font-weight: 500; }
+.field-tech-name { font-size: 10px; color: #888; display: block; }
+.field-type { color: #6a1b9a; font-family: monospace; font-size: 11px; }
+.field-required { color: #e65100; font-size: 12px; }
+.field-key { color: #f9a825; font-size: 12px; }
+
+.discovery-field-count {
+  text-align: right;
+  font-size: 11px;
+  color: #888;
+  padding-top: 6px;
+}
+
+/* --- Quick Setup --- */
+.quick-setup-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.quick-setup-hint {
+  font-size: 12px;
+  color: #888;
+}
+
+.quick-setup-panel {
+  text-align: left;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.quick-setup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.quick-setup-header h4 {
+  margin: 0;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-setup-header h4 i {
+  color: #4a6cf7;
+}
+
+.quick-setup-schema {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.quick-setup-schema .label {
+  color: #666;
+  margin-right: 6px;
+}
+
+.quick-setup-objects {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quick-setup-object {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff;
+  transition: all 0.15s;
+}
+
+.quick-setup-object.disabled {
+  opacity: 0.5;
+}
+
+.quick-setup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.quick-setup-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4a6cf7;
+}
+
+.quick-setup-object-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.quick-setup-source {
+  font-weight: 600;
+}
+
+.quick-setup-arrow {
+  color: #aaa;
+  font-size: 11px;
+}
+
+.quick-setup-target {
+  color: #666;
+}
+
+.quick-setup-field-count {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.quick-setup-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}

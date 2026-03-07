@@ -9,6 +9,11 @@ import {
   IntegrationDefinitionRow,
   SourceTypeRow
 } from '../../services/integration-data.service';
+import {
+  DiscoveredObjectResult,
+  DiscoveredFieldResult,
+  DefaultObjectConfigResult
+} from '@memberjunction/graphql-dataprovider';
 
 interface StepDef {
   Index: number;
@@ -84,6 +89,27 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   SaveCompleted = false;
   SaveError = '';
 
+  // Discovery browser (shown after successful test)
+  ShowDiscovery = false;
+  IsDiscoveringObjects = false;
+  DiscoveredObjects: DiscoveredObjectResult[] = [];
+  DiscoveryError = '';
+  SelectedDiscoveryObject: DiscoveredObjectResult | null = null;
+  IsDiscoveringFields = false;
+  DiscoveredFields: DiscoveredFieldResult[] = [];
+  FieldDiscoveryError = '';
+
+  // Quick Setup (shown after save completes)
+  ShowQuickSetup = false;
+  IsLoadingQuickSetup = false;
+  QuickSetupObjects: DefaultObjectConfigResult[] = [];
+  QuickSetupSchemaName = '';
+  QuickSetupError = '';
+  QuickSetupApplying = false;
+  QuickSetupApplied = false;
+  QuickSetupApplyError = '';
+  QuickSetupAppliedCount = 0;
+
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
 
@@ -119,6 +145,10 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
   get IsStep1Valid(): boolean {
     if (this.UseCustomMode) return !!this.CustomSourceTypeID;
     return !!this.SelectedIntegrationID;
+  }
+
+  get HasSavedCompanyIntegration(): boolean {
+    return !!this.SavedCompanyIntegrationID;
   }
 
   get IsStep2Valid(): boolean {
@@ -300,22 +330,62 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
 
   // --- Step 3: Test & Save ---
 
-  TestConnection(): void {
+  async TestConnection(): Promise<void> {
     this.TestStatus = 'testing';
     this.TestMessage = '';
     this.cdr.detectChanges();
 
-    // TODO: Wire up to actual connector.TestConnection() via GraphQL
-    console.log('[ConnectionStudio] Testing connection:', {
-      integration: this.SelectedIntegrationName,
-      credentialId: this.SelectedCredential?.ID
-    });
+    try {
+      // Save a temporary CompanyIntegration to test with, or use existing if already saved
+      const companyIntegrationID = await this.EnsureSavedForTest();
+      if (!companyIntegrationID) {
+        this.TestStatus = 'failed';
+        this.TestMessage = 'Could not save integration to test. Please check your configuration.';
+        this.cdr.detectChanges();
+        return;
+      }
 
-    setTimeout(() => {
-      this.TestStatus = 'success';
-      this.TestMessage = 'Connection verified successfully.';
-      this.cdr.detectChanges();
-    }, 1500);
+      const result = await this.dataService.TestConnection(companyIntegrationID);
+      this.TestStatus = result.Success ? 'success' : 'failed';
+      this.TestMessage = result.Message;
+      if (result.Success && result.ServerVersion) {
+        this.TestMessage += ` (${result.ServerVersion})`;
+      }
+    } catch (err: unknown) {
+      this.TestStatus = 'failed';
+      const message = err instanceof Error ? err.message : String(err);
+      this.TestMessage = `Connection test failed: ${message}`;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Saves the CompanyIntegration if not yet saved, so we have an ID for TestConnection */
+  private SavedCompanyIntegrationID: string | null = null;
+
+  private async EnsureSavedForTest(): Promise<string | null> {
+    if (this.SavedCompanyIntegrationID) return this.SavedCompanyIntegrationID;
+
+    if (!this.SelectedCompanyID) return null;
+
+    const md = new Metadata();
+    const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+    ci.NewRecord();
+    ci.CompanyID = this.SelectedCompanyID;
+    if (this.SelectedIntegration) {
+      ci.IntegrationID = this.SelectedIntegration.ID;
+    }
+    ci.Name = this.ConnectionName || 'Test Connection';
+    ci.IsActive = false; // Start inactive until explicitly saved
+    if (this.SelectedCredential) {
+      ci.CredentialID = this.SelectedCredential.ID;
+    }
+
+    const saved = await ci.Save();
+    if (saved) {
+      this.SavedCompanyIntegrationID = ci.ID;
+      return ci.ID;
+    }
+    return null;
   }
 
   async SaveIntegration(): Promise<void> {
@@ -328,30 +398,216 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
     this.SaveError = '';
     this.cdr.detectChanges();
 
-    const md = new Metadata();
-    const companyIntegration = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
-    companyIntegration.NewRecord();
+    try {
+      const md = new Metadata();
 
-    companyIntegration.CompanyID = this.SelectedCompanyID;
-    if (this.SelectedIntegration) {
-      companyIntegration.IntegrationID = this.SelectedIntegration.ID;
+      if (this.SavedCompanyIntegrationID) {
+        // Already saved from TestConnection — just activate and update
+        const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+        await ci.Load(this.SavedCompanyIntegrationID);
+        ci.Name = this.ConnectionName;
+        ci.IsActive = true;
+        if (this.SelectedCredential) {
+          ci.CredentialID = this.SelectedCredential.ID;
+        }
+        const saved = await ci.Save();
+        if (saved) {
+          this.SaveCompleted = true;
+        } else {
+          this.SaveError = ci.LatestResult?.CompleteMessage || ci.LatestResult?.Message || 'Unknown error';
+        }
+      } else {
+        // New save — create record
+        const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+        ci.NewRecord();
+        ci.CompanyID = this.SelectedCompanyID;
+        if (this.SelectedIntegration) {
+          ci.IntegrationID = this.SelectedIntegration.ID;
+        }
+        ci.Name = this.ConnectionName;
+        ci.IsActive = true;
+        if (this.SelectedCredential) {
+          ci.CredentialID = this.SelectedCredential.ID;
+        }
+        const saved = await ci.Save();
+        if (saved) {
+          this.SavedCompanyIntegrationID = ci.ID;
+          this.SaveCompleted = true;
+        } else {
+          this.SaveError = ci.LatestResult?.CompleteMessage || ci.LatestResult?.Message || 'Unknown error';
+        }
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.SaveError = `Unexpected error: ${message}`;
     }
-    companyIntegration.Name = this.ConnectionName;
-    companyIntegration.IsActive = true;
 
-    if (this.SelectedCredential) {
-      companyIntegration.CredentialID = this.SelectedCredential.ID;
-    }
-
-    const saved = await companyIntegration.Save();
     this.IsSaving = false;
+    this.cdr.detectChanges();
+  }
 
-    if (saved) {
-      this.SaveCompleted = true;
-    } else {
-      this.SaveError = companyIntegration.LatestResult?.CompleteMessage || companyIntegration.LatestResult?.Message || 'Unknown error';
-      console.error('[ConnectionStudio] Failed to save:', this.SaveError);
+  // --- Discovery browser ---
+
+  async ToggleDiscovery(): Promise<void> {
+    if (this.ShowDiscovery) {
+      this.ShowDiscovery = false;
+      return;
     }
+    this.ShowDiscovery = true;
+    if (this.DiscoveredObjects.length === 0) {
+      await this.DiscoverObjects();
+    }
+  }
+
+  async DiscoverObjects(): Promise<void> {
+    if (!this.SavedCompanyIntegrationID) return;
+    this.IsDiscoveringObjects = true;
+    this.DiscoveryError = '';
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.DiscoverObjects(this.SavedCompanyIntegrationID);
+      if (result.Success) {
+        this.DiscoveredObjects = result.Data ?? [];
+      } else {
+        this.DiscoveryError = result.Message;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.DiscoveryError = `Discovery failed: ${message}`;
+    }
+    this.IsDiscoveringObjects = false;
+    this.cdr.detectChanges();
+  }
+
+  async SelectDiscoveryObject(obj: DiscoveredObjectResult): Promise<void> {
+    if (this.SelectedDiscoveryObject?.Name === obj.Name) {
+      this.SelectedDiscoveryObject = null;
+      this.DiscoveredFields = [];
+      return;
+    }
+    this.SelectedDiscoveryObject = obj;
+    this.IsDiscoveringFields = true;
+    this.FieldDiscoveryError = '';
+    this.DiscoveredFields = [];
+    this.cdr.detectChanges();
+
+    if (!this.SavedCompanyIntegrationID) return;
+    try {
+      const result = await this.dataService.DiscoverFields(this.SavedCompanyIntegrationID, obj.Name);
+      if (result.Success) {
+        this.DiscoveredFields = result.Data ?? [];
+      } else {
+        this.FieldDiscoveryError = result.Message;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.FieldDiscoveryError = `Field discovery failed: ${message}`;
+    }
+    this.IsDiscoveringFields = false;
+    this.cdr.detectChanges();
+  }
+
+  IsSelectedDiscoveryObject(name: string): boolean {
+    return this.SelectedDiscoveryObject?.Name === name;
+  }
+
+  // --- Quick Setup ---
+
+  async LoadQuickSetup(): Promise<void> {
+    if (!this.SavedCompanyIntegrationID) return;
+    this.ShowQuickSetup = true;
+    this.IsLoadingQuickSetup = true;
+    this.QuickSetupError = '';
+    this.QuickSetupApplied = false;
+    this.QuickSetupApplyError = '';
+    this.cdr.detectChanges();
+
+    try {
+      const config = await this.dataService.GetDefaultConfig(this.SavedCompanyIntegrationID);
+      if (config.Success && config.DefaultObjects) {
+        this.QuickSetupObjects = config.DefaultObjects;
+        this.QuickSetupSchemaName = config.DefaultSchemaName ?? '';
+      } else {
+        this.QuickSetupError = config.Message || 'No default configuration available for this connector.';
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.QuickSetupError = `Failed to load defaults: ${message}`;
+    }
+    this.IsLoadingQuickSetup = false;
+    this.cdr.detectChanges();
+  }
+
+  CloseQuickSetup(): void {
+    this.ShowQuickSetup = false;
+  }
+
+  ToggleQuickSetupObject(obj: DefaultObjectConfigResult): void {
+    obj.SyncEnabled = !obj.SyncEnabled;
+  }
+
+  get QuickSetupEnabledCount(): number {
+    return this.QuickSetupObjects.filter(o => o.SyncEnabled).length;
+  }
+
+  async ApplyQuickSetup(): Promise<void> {
+    if (!this.SavedCompanyIntegrationID) return;
+    const enabledObjects = this.QuickSetupObjects.filter(o => o.SyncEnabled);
+    if (enabledObjects.length === 0) return;
+
+    this.QuickSetupApplying = true;
+    this.QuickSetupApplyError = '';
+    this.QuickSetupAppliedCount = 0;
+    this.cdr.detectChanges();
+
+    try {
+      // Load MJ entities to find matching target entities
+      const mjEntities = await this.dataService.LoadMJEntities();
+
+      for (const obj of enabledObjects) {
+        // Find matching MJ entity by name
+        const targetEntity = mjEntities.find(e =>
+          e.Name.toLowerCase() === obj.TargetEntityName.toLowerCase()
+        );
+
+        if (!targetEntity) {
+          // Entity doesn't exist yet — skip (user will need to create it first via mapping workspace)
+          continue;
+        }
+
+        // Create entity map
+        const entityMap = await this.dataService.CreateEntityMap({
+          CompanyIntegrationID: this.SavedCompanyIntegrationID!,
+          ExternalObjectName: obj.SourceObjectName,
+          ExternalObjectLabel: obj.SourceObjectName,
+          EntityID: targetEntity.ID,
+          SyncDirection: 'Pull'
+        });
+
+        if (entityMap && obj.FieldMappings.length > 0) {
+          // Create field maps
+          for (const fm of obj.FieldMappings) {
+            await this.dataService.CreateFieldMap({
+              EntityMapID: entityMap.ID,
+              SourceFieldName: fm.SourceFieldName,
+              DestinationFieldName: fm.DestinationFieldName,
+              IsKeyField: fm.IsKeyField ?? false,
+              Direction: 'SourceToDest'
+            });
+          }
+        }
+
+        this.QuickSetupAppliedCount++;
+        this.cdr.detectChanges();
+      }
+
+      this.QuickSetupApplied = true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.QuickSetupApplyError = `Error applying configuration: ${message}`;
+    }
+    this.QuickSetupApplying = false;
     this.cdr.detectChanges();
   }
 
@@ -370,6 +626,24 @@ export class ConnectionStudioComponent extends BaseResourceComponent implements 
     this.IsSaving = false;
     this.SaveCompleted = false;
     this.SaveError = '';
+    this.SavedCompanyIntegrationID = null;
+    this.ShowDiscovery = false;
+    this.IsDiscoveringObjects = false;
+    this.DiscoveredObjects = [];
+    this.DiscoveryError = '';
+    this.SelectedDiscoveryObject = null;
+    this.IsDiscoveringFields = false;
+    this.DiscoveredFields = [];
+    this.FieldDiscoveryError = '';
+    this.ShowQuickSetup = false;
+    this.IsLoadingQuickSetup = false;
+    this.QuickSetupObjects = [];
+    this.QuickSetupSchemaName = '';
+    this.QuickSetupError = '';
+    this.QuickSetupApplying = false;
+    this.QuickSetupApplied = false;
+    this.QuickSetupApplyError = '';
+    this.QuickSetupAppliedCount = 0;
   }
 
   // --- Resource interface ---

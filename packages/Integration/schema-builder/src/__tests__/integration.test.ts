@@ -78,27 +78,25 @@ describe('SchemaBuilder (integration)', () => {
     const builder = new SchemaBuilder();
 
     describe('new table creation', () => {
-        it('should produce schema + table migration files for new tables', () => {
+        it('should produce a single consolidated migration file for new tables', () => {
             const output = builder.BuildSchema(MakeInput());
 
-            // 1 schema creation + 2 table creations = 3 migrations
-            expect(output.MigrationFiles).toHaveLength(3);
+            // One consolidated migration per integration
+            expect(output.MigrationFiles).toHaveLength(1);
             expect(output.Errors).toHaveLength(0);
 
-            // First should be CREATE SCHEMA
-            expect(output.MigrationFiles[0].Content).toContain('CREATE SCHEMA');
-            expect(output.MigrationFiles[0].Content).toContain('hubspot');
+            const migration = output.MigrationFiles[0];
 
-            // Second and third should be CREATE TABLE
-            const contactMigration = output.MigrationFiles[1];
-            expect(contactMigration.Content).toContain('CREATE TABLE');
-            expect(contactMigration.Content).toContain('[hubspot].[Contact]');
-            expect(contactMigration.Content).toContain('[Email]');
+            // Should contain CREATE SCHEMA
+            expect(migration.Content).toContain('CREATE SCHEMA');
+            expect(migration.Content).toContain('hubspot');
 
-            const dealMigration = output.MigrationFiles[2];
-            expect(dealMigration.Content).toContain('CREATE TABLE');
-            expect(dealMigration.Content).toContain('[hubspot].[Deal]');
-            expect(dealMigration.Content).toContain('[Amount]');
+            // Should contain both CREATE TABLE statements
+            expect(migration.Content).toContain('CREATE TABLE');
+            expect(migration.Content).toContain('[hubspot].[Contact]');
+            expect(migration.Content).toContain('[Email]');
+            expect(migration.Content).toContain('[hubspot].[Deal]');
+            expect(migration.Content).toContain('[Amount]');
         });
 
         it('should produce soft FK entries from source relationships', () => {
@@ -243,11 +241,12 @@ describe('SchemaBuilder (integration)', () => {
             const output = builder.BuildSchema(input);
 
             expect(output.Errors).toHaveLength(0);
-            expect(output.MigrationFiles[0].Content).toContain('CREATE SCHEMA IF NOT EXISTS "hubspot"');
+            expect(output.MigrationFiles).toHaveLength(1);
 
-            const contactMigration = output.MigrationFiles[1];
-            expect(contactMigration.Content).toContain('"hubspot"."Contact"');
-            expect(contactMigration.Content).toContain('"ID" UUID NOT NULL DEFAULT gen_random_uuid()');
+            const migration = output.MigrationFiles[0];
+            expect(migration.Content).toContain('CREATE SCHEMA IF NOT EXISTS "hubspot"');
+            expect(migration.Content).toContain('"hubspot"."Contact"');
+            expect(migration.Content).toContain('"ID" UUID NOT NULL DEFAULT gen_random_uuid()');
         });
     });
 
@@ -267,11 +266,9 @@ describe('SchemaBuilder (integration)', () => {
     });
 
     describe('migration file naming', () => {
-        it('should produce unique sequential file paths', () => {
+        it('should produce a single migration file', () => {
             const output = builder.BuildSchema(MakeInput());
-            const paths = output.MigrationFiles.map(f => f.FilePath);
-            const uniquePaths = new Set(paths);
-            expect(uniquePaths.size).toBe(paths.length);
+            expect(output.MigrationFiles).toHaveLength(1);
         });
 
         it('should use Flyway naming convention', () => {
