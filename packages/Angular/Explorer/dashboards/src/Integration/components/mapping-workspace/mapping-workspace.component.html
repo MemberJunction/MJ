@@ -407,82 +407,281 @@
               <a href="javascript:void(0)" (click)="AddFieldMapping()" style="color: #4a6cf7;">Add one</a>
             </p>
           } @else {
-            <table class="field-map-table">
-              <thead>
-                <tr>
-                  <th class="col-src">Source Field</th>
-                  <th class="col-dst">Destination Field</th>
-                  <th class="col-type">Type</th>
-                  <th class="col-flags">Key / Req</th>
-                  <th class="col-action"></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (field of ActiveEditableFields; track field; let i = $index) {
-                  <tr [class.validation-error]="field.IsRequired && !field.DestinationFieldName">
-                    <td>
+            <div class="field-map-cards">
+              @for (field of ActiveEditableFields; track field; let i = $index) {
+                <div class="field-map-card" [class.validation-error]="field.IsRequired && !field.DestinationFieldName"
+                     [class.has-transform]="field.TransformPipeline.length > 0">
+
+                  <!-- Main mapping row -->
+                  <div class="fmc-row">
+                    <!-- Source column -->
+                    <div class="fmc-source">
                       @if (field.IsNew) {
-                        <input type="text" [(ngModel)]="field.SourceFieldName"
-                               (ngModelChange)="OnFieldChanged(field)"
-                               placeholder="Source field name" />
+                        <input type="text" class="fmc-input" [(ngModel)]="field.SourceFieldName"
+                               (ngModelChange)="OnFieldChanged(field)" placeholder="Source field name" />
                       } @else {
-                        <div class="source-field">
-                          {{ field.SourceFieldName }}
+                        <div class="fmc-field-name">{{ field.SourceFieldName }}</div>
+                        <div class="fmc-badges">
                           @if (field.SourceFieldType) {
-                            <span class="type-tag">{{ field.SourceFieldType }}</span>
+                            <span class="fmc-badge badge-type">{{ field.SourceFieldType }}</span>
+                          }
+                          @if (field.IsSourcePK) {
+                            <span class="fmc-badge badge-pk" title="Primary Key"><i class="fa-solid fa-key"></i> PK</span>
+                          }
+                          @if (field.IsSourceRequired) {
+                            <span class="fmc-badge badge-req" title="Required">REQ</span>
+                          }
+                          @if (field.IsSourceReadOnly) {
+                            <span class="fmc-badge badge-ro" title="Read-Only">RO</span>
                           }
                         </div>
                       }
-                    </td>
-                    <td>
+                    </div>
+
+                    <!-- Transform indicator -->
+                    <div class="fmc-transform-zone">
+                      @if (field.TransformPipeline.length > 1) {
+                        <button class="fmc-transform-pill" (click)="ToggleTransformEditor(field)"
+                                [title]="field.TransformPipeline.length + ' transform step(s)'">
+                          <i [class]="GetTransformIcon(field.TransformPipeline[0].Type)"></i>
+                          <span>{{ GetTransformLabel(field.TransformPipeline[0].Type) }}</span>
+                          <span class="fmc-step-count">+{{ field.TransformPipeline.length - 1 }}</span>
+                        </button>
+                      } @else {
+                        <button class="fmc-transform-pill fmc-transform-direct" (click)="ToggleTransformEditor(field)"
+                                title="Click to change transform type">
+                          <i class="fa-solid fa-arrow-right"></i>
+                          <span>{{ field.TransformPipeline.length > 0 ? GetTransformLabel(field.TransformPipeline[0].Type) : 'Direct' }}</span>
+                        </button>
+                      }
+                    </div>
+
+                    <!-- Destination column -->
+                    <div class="fmc-dest">
                       @if (DestinationFields.length > 0) {
-                        <select class="dest-field-select"
-                                [(ngModel)]="field.DestinationFieldName"
+                        <select class="fmc-select" [(ngModel)]="field.DestinationFieldName"
                                 (ngModelChange)="OnFieldChanged(field)">
-                          <option value="">-- Select --</option>
+                          <option value="">-- Select destination --</option>
                           @for (df of DestinationFields; track df.ID) {
                             <option [value]="df.Name">{{ df.Name }}</option>
                           }
                         </select>
                       } @else {
-                        <input type="text" [(ngModel)]="field.DestinationFieldName"
-                               (ngModelChange)="OnFieldChanged(field)"
-                               placeholder="Destination field" />
+                        <input type="text" class="fmc-input" [(ngModel)]="field.DestinationFieldName"
+                               (ngModelChange)="OnFieldChanged(field)" placeholder="Destination field" />
                       }
-                    </td>
-                    <td>
-                      @if (field.IsNew) {
-                        <input type="text" [(ngModel)]="field.SourceFieldType"
-                               (ngModelChange)="OnFieldChanged(field)"
-                               placeholder="string" style="width: 80px;" />
-                      } @else {
-                        <span class="type-tag">{{ field.SourceFieldType || '--' }}</span>
-                      }
-                    </td>
-                    <td style="text-align: center;">
-                      <div class="flag-checks">
-                        <label>
-                          <input type="checkbox" [(ngModel)]="field.IsKeyField"
-                                 (ngModelChange)="OnFieldChanged(field)" />
-                          <i class="fa-solid fa-key" style="font-size: 10px;"></i>
-                        </label>
-                        <label>
-                          <input type="checkbox" [(ngModel)]="field.IsRequired"
-                                 (ngModelChange)="OnFieldChanged(field)" />
-                          *
-                        </label>
+                    </div>
+
+                    <!-- Sync flags -->
+                    <div class="fmc-flags">
+                      <label class="fmc-flag" title="Key field for matching">
+                        <input type="checkbox" [(ngModel)]="field.IsKeyField"
+                               (ngModelChange)="OnFieldChanged(field)" />
+                        <i class="fa-solid fa-key"></i>
+                      </label>
+                      <label class="fmc-flag" title="Required field">
+                        <input type="checkbox" [(ngModel)]="field.IsRequired"
+                               (ngModelChange)="OnFieldChanged(field)" />
+                        <span class="fmc-req-star">*</span>
+                      </label>
+                    </div>
+
+                    <!-- Remove button -->
+                    <button class="fmc-remove" title="Remove mapping" (click)="RemoveFieldMapping(i)">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+
+                  <!-- Transform pipeline editor (expandable) -->
+                  @if (field.ShowTransformEditor && field.TransformPipeline.length > 0) {
+                    <div class="fmc-transform-editor">
+                      <div class="fmc-te-header">
+                        <span class="fmc-te-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Transform Pipeline</span>
+                        <button class="fmc-te-add" (click)="AddTransformStep(field)" title="Add another step">
+                          <i class="fa-solid fa-plus"></i> Add Step
+                        </button>
                       </div>
-                    </td>
-                    <td>
-                      <button class="field-row-remove" title="Remove"
-                              (click)="RemoveFieldMapping(i)">
-                        <i class="fa-solid fa-times"></i>
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+                      @for (step of field.TransformPipeline; track $index; let si = $index) {
+                        <div class="fmc-te-step">
+                          <div class="fmc-te-step-header">
+                            <span class="fmc-te-step-num">{{ si + 1 }}</span>
+                            <select class="fmc-te-type-select" [ngModel]="step.Type"
+                                    (ngModelChange)="OnTransformTypeChange(field, step, $event)">
+                              @for (tt of TransformTypes; track tt.Value) {
+                                <option [value]="tt.Value">{{ tt.Label }}</option>
+                              }
+                            </select>
+                            <select class="fmc-te-error-select" [(ngModel)]="step.OnError"
+                                    (ngModelChange)="OnTransformConfigChange(field)" title="On error">
+                              <option value="Fail">Fail</option>
+                              <option value="Skip">Skip row</option>
+                              <option value="Null">Set null</option>
+                            </select>
+                            <button class="fmc-te-remove-step" (click)="RemoveTransformStep(field, si)" title="Remove step">
+                              <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+
+                          <!-- Config editors per type -->
+                          <div class="fmc-te-config">
+                            @switch (step.Type) {
+                              @case ('direct') {
+                                <div class="fmc-te-field">
+                                  <label>Default value (when source is null)</label>
+                                  <input type="text" class="fmc-input" [ngModel]="step.Config['DefaultValue'] ?? ''"
+                                         (ngModelChange)="step.Config['DefaultValue'] = $event; OnTransformConfigChange(field)"
+                                         placeholder="Leave empty for no default" />
+                                </div>
+                              }
+                              @case ('regex') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field">
+                                    <label>Pattern</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Pattern'] ?? ''"
+                                           (ngModelChange)="step.Config['Pattern'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="e.g. (\d{3})-(\d{4})" />
+                                  </div>
+                                  <div class="fmc-te-field">
+                                    <label>Replacement</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Replacement'] ?? ''"
+                                           (ngModelChange)="step.Config['Replacement'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="e.g. $1$2" />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Flags</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Flags'] ?? 'g'"
+                                           (ngModelChange)="step.Config['Flags'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="gi" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('split') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field">
+                                    <label>Delimiter</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Delimiter'] ?? ','"
+                                           (ngModelChange)="step.Config['Delimiter'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="," />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Part index (0-based)</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Index'] ?? 0"
+                                           (ngModelChange)="step.Config['Index'] = +$event; OnTransformConfigChange(field)"
+                                           min="0" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('combine') {
+                                <div class="fmc-te-field">
+                                  <label>Source fields to combine</label>
+                                  <div class="fmc-combine-chips">
+                                    @for (sf of GetAvailableSourceFields(); track sf) {
+                                      <button class="fmc-chip" [class.selected]="IsCombineFieldSelected(step.Config, sf)"
+                                              (click)="ToggleCombineField(step.Config, sf); OnTransformConfigChange(field)">
+                                        {{ sf }}
+                                      </button>
+                                    }
+                                  </div>
+                                </div>
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Separator</label>
+                                  <input type="text" class="fmc-input mono" [ngModel]="step.Config['Separator'] ?? ' '"
+                                         (ngModelChange)="step.Config['Separator'] = $event; OnTransformConfigChange(field)"
+                                         placeholder=" " />
+                                </div>
+                              }
+                              @case ('lookup') {
+                                <div class="fmc-te-field">
+                                  <label>Value mapping</label>
+                                  <div class="fmc-lookup-table">
+                                    @for (entry of GetLookupEntries(step.Config); track $index) {
+                                      <div class="fmc-lookup-row">
+                                        <input type="text" class="fmc-input" [value]="entry.key" placeholder="Source value"
+                                               (change)="UpdateLookupEntry(step.Config, entry.key, $any($event.target).value, entry.value); OnTransformConfigChange(field)" />
+                                        <i class="fa-solid fa-arrow-right fmc-lookup-arrow"></i>
+                                        <input type="text" class="fmc-input" [value]="entry.value" placeholder="Mapped value"
+                                               (change)="UpdateLookupEntry(step.Config, entry.key, entry.key, $any($event.target).value); OnTransformConfigChange(field)" />
+                                        <button class="fmc-lookup-del" (click)="RemoveLookupEntry(step.Config, entry.key); OnTransformConfigChange(field)">
+                                          <i class="fa-solid fa-times"></i>
+                                        </button>
+                                      </div>
+                                    }
+                                    <button class="fmc-lookup-add" (click)="AddLookupEntry(step.Config); OnTransformConfigChange(field)">
+                                      <i class="fa-solid fa-plus"></i> Add mapping
+                                    </button>
+                                  </div>
+                                </div>
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Default (when no match)</label>
+                                  <input type="text" class="fmc-input" [ngModel]="step.Config['Default'] ?? ''"
+                                         (ngModelChange)="step.Config['Default'] = $event; OnTransformConfigChange(field)"
+                                         placeholder="null" />
+                                </div>
+                              }
+                              @case ('format') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Format type</label>
+                                    <select class="fmc-select" [ngModel]="step.Config['FormatType'] ?? 'date'"
+                                            (ngModelChange)="step.Config['FormatType'] = $event; OnTransformConfigChange(field)">
+                                      <option value="date">Date</option>
+                                      <option value="number">Number</option>
+                                      <option value="string">String</option>
+                                    </select>
+                                  </div>
+                                  <div class="fmc-te-field">
+                                    <label>Format string</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['FormatString'] ?? 'ISO'"
+                                           (ngModelChange)="step.Config['FormatString'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="ISO or decimal places" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('coerce') {
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Target type</label>
+                                  <select class="fmc-select" [ngModel]="step.Config['TargetType'] ?? 'string'"
+                                          (ngModelChange)="step.Config['TargetType'] = $event; OnTransformConfigChange(field)">
+                                    <option value="string">String</option>
+                                    <option value="number">Number</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="date">Date</option>
+                                  </select>
+                                </div>
+                              }
+                              @case ('substring') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Start index</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Start'] ?? 0"
+                                           (ngModelChange)="step.Config['Start'] = +$event; OnTransformConfigChange(field)"
+                                           min="0" />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Length (blank = to end)</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Length'] ?? ''"
+                                           (ngModelChange)="step.Config['Length'] = $event ? +$event : undefined; OnTransformConfigChange(field)"
+                                           min="1" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('custom') {
+                                <div class="fmc-te-field">
+                                  <label>JavaScript expression <span class="fmc-te-hint">(use <code>value</code> and <code>fields</code>)</span></label>
+                                  <textarea class="fmc-input mono fmc-textarea" [ngModel]="step.Config['Expression'] ?? 'value'"
+                                            (ngModelChange)="step.Config['Expression'] = $event; OnTransformConfigChange(field)"
+                                            placeholder="value.toUpperCase()" rows="2"></textarea>
+                                </div>
+                              }
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
           }
 
           <!-- Data Preview Section -->

@@ -316,9 +316,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-        // Open the entity record using navigation service
-        // Convert the recordId string to a CompositeKey (assumes single-field primary key)
-        const compositeKey = CompositeKey.FromID(event.recordId);
+        // Look up the entity's actual primary key field name from metadata
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.Name === event.entityName);
+        const pkField = entity?.FirstPrimaryKey;
+        const pkFieldName = pkField?.Name || 'ID';
+
+        const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
         this.navigationService.OpenEntityRecord(event.entityName, compositeKey);
     }
 

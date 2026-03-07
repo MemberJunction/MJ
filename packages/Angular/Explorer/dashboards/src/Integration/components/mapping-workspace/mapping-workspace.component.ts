@@ -39,6 +39,16 @@ interface MJFieldOption {
   IsRequired: boolean;
 }
 
+/** Transform type for the pipeline builder */
+type TransformType = 'direct' | 'regex' | 'split' | 'combine' | 'lookup' | 'format' | 'coerce' | 'substring' | 'custom';
+
+/** A single step in a transform pipeline */
+interface TransformStepUI {
+  Type: TransformType;
+  Config: Record<string, unknown>;
+  OnError: 'Skip' | 'Null' | 'Fail';
+}
+
 /** Editable field map row used in the center panel */
 interface EditableFieldMap {
   ID: string | null;
@@ -53,6 +63,13 @@ interface EditableFieldMap {
   Status: 'Active' | 'Inactive';
   IsNew: boolean;
   IsDirty: boolean;
+  // Source metadata (from connector discovery)
+  IsSourcePK: boolean;
+  IsSourceRequired: boolean;
+  IsSourceReadOnly: boolean;
+  // Transform pipeline
+  TransformPipeline: TransformStepUI[];
+  ShowTransformEditor: boolean;
 }
 
 /** Pending entity map — entity hasn't been created yet */
@@ -376,13 +393,20 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       return;
     }
 
-    // Real entity map — load field maps
+    // Real entity map — load field maps + source fields in parallel
     this.IsLoadingFieldMaps = true;
     this.cdr.detectChanges();
     try {
-      this.FieldMaps = await this.dataService.LoadFieldMaps(item.ID, this.RunViewToUse);
+      const [, sourceResult] = await Promise.all([
+        this.dataService.LoadFieldMaps(item.ID, this.RunViewToUse).then(fms => { this.FieldMaps = fms; }),
+        this.dataService.DiscoverFields(this.SelectedIntegrationID, item.RealMap!.ExternalObjectName)
+          .catch(() => ({ Success: false, Message: '', Data: [] as DiscoveredFieldResult[] })),
+        this.LoadDestinationFields(item.RealMap!.EntityID)
+      ]);
+      if (sourceResult.Success) {
+        this.SourceFields = sourceResult.Data;
+      }
       this.EditableFields = this.FieldMaps.map(fm => this.ToEditableField(fm));
-      await this.LoadDestinationFields(item.RealMap!.EntityID);
     } finally {
       this.IsLoadingFieldMaps = false;
       this.cdr.detectChanges();
@@ -624,11 +648,15 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   // =====================================================================
 
   private ToEditableField(fm: FieldMapRow): EditableFieldMap {
+    // Look up source metadata from discovered fields
+    const srcMeta = this.SourceFields.find(
+      sf => sf.Name.toLowerCase() === fm.SourceFieldName.toLowerCase()
+    );
     return {
       ID: fm.ID,
       SourceFieldName: fm.SourceFieldName,
       SourceFieldLabel: fm.SourceFieldLabel ?? '',
-      SourceFieldType: '',
+      SourceFieldType: srcMeta?.DataType ?? '',
       DestinationFieldName: fm.DestinationFieldName,
       DestinationFieldLabel: fm.DestinationFieldLabel ?? '',
       IsKeyField: fm.IsKeyField,
@@ -636,8 +664,33 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       Direction: fm.Direction,
       Status: fm.Status as 'Active' | 'Inactive',
       IsNew: false,
-      IsDirty: false
+      IsDirty: false,
+      IsSourcePK: srcMeta?.IsUniqueKey ?? false,
+      IsSourceRequired: srcMeta?.IsRequired ?? false,
+      IsSourceReadOnly: srcMeta?.IsReadOnly ?? false,
+      TransformPipeline: this.ParseTransformPipeline(fm.TransformPipeline),
+      ShowTransformEditor: false
     };
+  }
+
+  private ParseTransformPipeline(json: string | null): TransformStepUI[] {
+    if (!json || json.trim() === '') return [];
+    try {
+      const parsed: unknown = JSON.parse(json);
+      if (!Array.isArray(parsed)) return [];
+      return (parsed as TransformStepUI[]).map(step => ({
+        Type: step.Type ?? 'direct',
+        Config: (step.Config as Record<string, unknown>) ?? {},
+        OnError: step.OnError ?? 'Fail'
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  SerializeTransformPipeline(steps: TransformStepUI[]): string | null {
+    if (steps.length === 0) return null;
+    return JSON.stringify(steps.map(s => ({ Type: s.Type, Config: s.Config, OnError: s.OnError })));
   }
 
   private async LoadDestinationFields(entityID: string): Promise<void> {
@@ -673,8 +726,9 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       this.AutoMapCount = matchedFields.length;
       this.ShowAutoMapBanner = this.AutoMapCount > 0;
 
-      // Create field maps for matches
-      for (const match of matchedFields) {
+      // Create field maps for matches, preserving source field order via Priority
+      for (let idx = 0; idx < matchedFields.length; idx++) {
+        const match = matchedFields[idx];
         await this.dataService.CreateFieldMap({
           EntityMapID: entityMap.ID,
           SourceFieldName: match.sourceField.Name,
@@ -682,7 +736,9 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
           DestinationFieldName: match.destField.Name,
           IsKeyField: match.sourceField.IsUniqueKey,
           IsRequired: match.sourceField.IsRequired,
-          Direction: 'SourceToDest'
+          Direction: 'SourceToDest',
+          TransformPipeline: JSON.stringify([{ Type: 'direct', Config: {}, OnError: 'Fail' }]),
+          Priority: match.sourceIndex
         });
       }
 
@@ -698,17 +754,18 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   private MatchFieldsByName(
     sourceFields: DiscoveredFieldResult[],
     destFields: MJFieldOption[]
-  ): Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption }> {
-    const matches: Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption }> = [];
+  ): Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption; sourceIndex: number }> {
+    const matches: Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption; sourceIndex: number }> = [];
     const destFieldMap = new Map<string, MJFieldOption>();
     for (const df of destFields) {
       destFieldMap.set(df.Name.toLowerCase(), df);
     }
 
-    for (const sf of sourceFields) {
+    for (let i = 0; i < sourceFields.length; i++) {
+      const sf = sourceFields[i];
       const destMatch = destFieldMap.get(sf.Name.toLowerCase());
       if (destMatch) {
-        matches.push({ sourceField: sf, destField: destMatch });
+        matches.push({ sourceField: sf, destField: destMatch, sourceIndex: i });
       }
     }
     return matches;
@@ -761,7 +818,12 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       Direction: 'SourceToDest',
       Status: 'Active',
       IsNew: true,
-      IsDirty: true
+      IsDirty: true,
+      IsSourcePK: false,
+      IsSourceRequired: false,
+      IsSourceReadOnly: false,
+      TransformPipeline: [],
+      ShowTransformEditor: false
     });
     this.cdr.detectChanges();
   }
@@ -795,7 +857,8 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
             DestinationFieldLabel: field.DestinationFieldLabel || undefined,
             IsKeyField: field.IsKeyField,
             IsRequired: field.IsRequired,
-            Direction: field.Direction
+            Direction: field.Direction,
+            TransformPipeline: this.SerializeTransformPipeline(field.TransformPipeline)
           });
         } else if (field.ID && field.Status === 'Inactive') {
           await this.dataService.DeleteFieldMap(field.ID);
@@ -806,7 +869,8 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
             IsKeyField: field.IsKeyField,
             IsRequired: field.IsRequired,
             Direction: field.Direction,
-            Status: field.Status
+            Status: field.Status,
+            TransformPipeline: this.SerializeTransformPipeline(field.TransformPipeline)
           });
         }
       }
@@ -822,6 +886,132 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   DismissAutoMapBanner(): void {
     this.ShowAutoMapBanner = false;
+  }
+
+  // =====================================================================
+  // Transform Pipeline
+  // =====================================================================
+
+  /** Available transform types with display metadata */
+  readonly TransformTypes: Array<{ Value: TransformType; Label: string; Icon: string; Description: string }> = [
+    { Value: 'direct', Label: 'Direct', Icon: 'fa-solid fa-arrow-right', Description: 'Pass through as-is (with optional default)' },
+    { Value: 'regex', Label: 'Regex', Icon: 'fa-solid fa-code', Description: 'Apply regex pattern replacement' },
+    { Value: 'split', Label: 'Split', Icon: 'fa-solid fa-scissors', Description: 'Split text and extract a segment' },
+    { Value: 'combine', Label: 'Combine', Icon: 'fa-solid fa-object-group', Description: 'Merge multiple source fields' },
+    { Value: 'lookup', Label: 'Lookup', Icon: 'fa-solid fa-book', Description: 'Map values using a lookup table' },
+    { Value: 'format', Label: 'Format', Icon: 'fa-solid fa-font', Description: 'Format dates, numbers, or strings' },
+    { Value: 'coerce', Label: 'Coerce', Icon: 'fa-solid fa-exchange-alt', Description: 'Convert to a different data type' },
+    { Value: 'substring', Label: 'Substring', Icon: 'fa-solid fa-text-width', Description: 'Extract a portion of text' },
+    { Value: 'custom', Label: 'Custom', Icon: 'fa-solid fa-wand-magic-sparkles', Description: 'Custom JavaScript expression' }
+  ];
+
+  ToggleTransformEditor(field: EditableFieldMap): void {
+    // Auto-add a direct step if none exist so the editor has something to show
+    if (field.TransformPipeline.length === 0) {
+      field.TransformPipeline.push({ Type: 'direct', Config: {}, OnError: 'Fail' });
+      field.IsDirty = true;
+    }
+    field.ShowTransformEditor = !field.ShowTransformEditor;
+    this.cdr.detectChanges();
+  }
+
+  AddTransformStep(field: EditableFieldMap): void {
+    field.TransformPipeline.push({
+      Type: 'direct',
+      Config: {},
+      OnError: 'Fail'
+    });
+    field.IsDirty = true;
+    field.ShowTransformEditor = true;
+    this.cdr.detectChanges();
+  }
+
+  RemoveTransformStep(field: EditableFieldMap, stepIndex: number): void {
+    field.TransformPipeline.splice(stepIndex, 1);
+    field.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  OnTransformTypeChange(field: EditableFieldMap, step: TransformStepUI, newType: TransformType): void {
+    step.Type = newType;
+    step.Config = this.GetDefaultConfigForType(newType);
+    field.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  OnTransformConfigChange(field: EditableFieldMap): void {
+    field.IsDirty = true;
+  }
+
+  private GetDefaultConfigForType(type: TransformType): Record<string, unknown> {
+    switch (type) {
+      case 'direct': return {};
+      case 'regex': return { Pattern: '', Replacement: '', Flags: 'g' };
+      case 'split': return { Delimiter: ',', Index: 0 };
+      case 'combine': return { SourceFields: [], Separator: ' ' };
+      case 'lookup': return { Map: {}, Default: null };
+      case 'format': return { FormatString: 'ISO', FormatType: 'date' };
+      case 'coerce': return { TargetType: 'string' };
+      case 'substring': return { Start: 0, Length: 10 };
+      case 'custom': return { Expression: 'value' };
+    }
+  }
+
+  GetTransformLabel(type: TransformType): string {
+    return this.TransformTypes.find(t => t.Value === type)?.Label ?? type;
+  }
+
+  GetTransformIcon(type: TransformType): string {
+    return this.TransformTypes.find(t => t.Value === type)?.Icon ?? 'fa-solid fa-arrow-right';
+  }
+
+  /** For combine transforms: get available source field names */
+  GetAvailableSourceFields(): string[] {
+    return this.SourceFields.map(sf => sf.Name);
+  }
+
+  /** For lookup transforms: add a new key-value pair */
+  AddLookupEntry(config: Record<string, unknown>): void {
+    const map = (config['Map'] as Record<string, string>) ?? {};
+    map[''] = '';
+    config['Map'] = map;
+  }
+
+  GetLookupEntries(config: Record<string, unknown>): Array<{ key: string; value: string }> {
+    const map = (config['Map'] as Record<string, string>) ?? {};
+    return Object.entries(map).map(([key, value]) => ({ key, value: String(value) }));
+  }
+
+  UpdateLookupEntry(config: Record<string, unknown>, oldKey: string, newKey: string, newValue: string): void {
+    const map = (config['Map'] as Record<string, string>) ?? {};
+    if (oldKey !== newKey) {
+      delete map[oldKey];
+    }
+    map[newKey] = newValue;
+    config['Map'] = { ...map };
+  }
+
+  RemoveLookupEntry(config: Record<string, unknown>, key: string): void {
+    const map = (config['Map'] as Record<string, string>) ?? {};
+    delete map[key];
+    config['Map'] = { ...map };
+  }
+
+  /** For combine transforms: toggle a source field */
+  ToggleCombineField(config: Record<string, unknown>, fieldName: string): void {
+    const fields = (config['SourceFields'] as string[]) ?? [];
+    const idx = fields.indexOf(fieldName);
+    if (idx >= 0) {
+      fields.splice(idx, 1);
+    } else {
+      fields.push(fieldName);
+    }
+    config['SourceFields'] = [...fields];
+  }
+
+  IsCombineFieldSelected(config: Record<string, unknown>, fieldName: string): boolean {
+    const fields = (config['SourceFields'] as string[]) ?? [];
+    return fields.includes(fieldName);
   }
 
   // =====================================================================

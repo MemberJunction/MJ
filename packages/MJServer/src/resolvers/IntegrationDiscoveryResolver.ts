@@ -471,7 +471,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Success: true,
                 Message: `Fetched ${result.Records.length} preview records`,
                 Records: result.Records.map(r => ({
-                    Data: JSON.stringify({ ExternalID: r.ExternalID, ...r.Fields })
+                    Data: JSON.stringify(r.Fields)
                 }))
             };
         } catch (e) {

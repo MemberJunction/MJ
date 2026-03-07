@@ -424,6 +424,8 @@ export class IntegrationDataService {
     IsKeyField?: boolean;
     IsRequired?: boolean;
     Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
+    TransformPipeline?: string | null;
+    Priority?: number;
   }): Promise<MJCompanyIntegrationFieldMapEntity | null> {
     const md = new Metadata();
     const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
@@ -436,8 +438,9 @@ export class IntegrationDataService {
     fm.IsKeyField = params.IsKeyField ?? false;
     fm.IsRequired = params.IsRequired ?? false;
     fm.Direction = params.Direction ?? 'SourceToDest';
+    if (params.TransformPipeline !== undefined) fm.TransformPipeline = params.TransformPipeline;
     fm.Status = 'Active';
-    fm.Priority = 0;
+    fm.Priority = params.Priority ?? 0;
 
     const saved = await fm.Save();
     if (!saved) {
@@ -461,6 +464,7 @@ export class IntegrationDataService {
     IsRequired?: boolean;
     Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
     Status?: 'Active' | 'Inactive';
+    TransformPipeline?: string | null;
   }): Promise<boolean> {
     const md = new Metadata();
     const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
@@ -471,6 +475,7 @@ export class IntegrationDataService {
     if (updates.IsRequired !== undefined) fm.IsRequired = updates.IsRequired;
     if (updates.Direction !== undefined) fm.Direction = updates.Direction;
     if (updates.Status !== undefined) fm.Status = updates.Status;
+    if (updates.TransformPipeline !== undefined) fm.TransformPipeline = updates.TransformPipeline;
     return fm.Save();
   }
 

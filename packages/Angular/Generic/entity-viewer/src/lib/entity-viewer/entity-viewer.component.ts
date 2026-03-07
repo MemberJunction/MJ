@@ -1319,8 +1319,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Create composite key from the FK value using the static factory method
-    const compositeKey = CompositeKey.FromID(event.recordId);
+    // Create composite key using the target entity's actual primary key field name
+    const pkFieldName = relatedEntity.FirstPrimaryKey?.Name || 'ID';
+    const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
 
     // Emit recordOpened for the related entity (record is undefined since it's not loaded)
     this.recordOpened.emit({
