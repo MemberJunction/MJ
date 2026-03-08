@@ -12,7 +12,7 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
     MessagingAdapterSettings,
@@ -58,29 +58,30 @@ import {
  */
 export abstract class BaseMessagingAdapter {
     /** Extension settings from `mj.config.cjs`. */
-    protected Settings: MessagingAdapterSettings;
+    protected settings: MessagingAdapterSettings;
 
     /** Fallback context user (service account) loaded from config email. */
-    protected FallbackContextUser: UserInfo | null = null;
+    protected fallbackContextUser: UserInfo | null = null;
 
-    /** Default agent loaded from config AgentID. */
-    protected DefaultAgent: MJAIAgentEntityExtended | null = null;
+    /** Default agent loaded from config DefaultAgentName. */
+    protected defaultAgent: MJAIAgentEntityExtended | null = null;
 
     constructor(settings: MessagingAdapterSettings) {
-        this.Settings = settings;
+        this.settings = settings;
     }
 
     /**
-     * Initialize the adapter: load the default MJ agent and resolve the fallback context user.
+     * Initialize the adapter: resolve the fallback context user, load the default
+     * MJ agent (using the fallback user as contextUser), then run platform init.
      * Must be called before handling any messages.
      *
      * @throws Error if the configured agent or fallback user cannot be found.
      */
     public async Initialize(): Promise<void> {
-        await this.loadDefaultAgent();
         await this.loadFallbackContextUser();
+        await this.loadDefaultAgent();
         await this.onInitialize();
-        LogStatus(`Messaging adapter initialized: agent='${this.DefaultAgent?.Name}', fallbackUser='${this.Settings.ContextUserEmail}'`);
+        LogStatus(`Messaging adapter initialized: agent='${this.defaultAgent?.Name}', fallbackUser='${this.settings.ContextUserEmail}'`);
     }
 
     /**
@@ -102,12 +103,12 @@ export abstract class BaseMessagingAdapter {
         const contextUser = await this.resolveContextUser(message);
 
         // 3. Show typing indicator
-        if (this.Settings.ShowTypingIndicator !== false) {
+        if (this.settings.ShowTypingIndicator !== false) {
             await this.safeShowTypingIndicator(message);
         }
 
         // 4. Determine which agent to use
-        const { agent, multiAgentNote } = await this.resolveAgent(message);
+        const { agent, multiAgentNote } = await this.resolveAgent(message, contextUser);
 
         // 5. Fetch thread history and build conversation messages
         const threadHistory = await this.safeGetThreadHistory(message);
@@ -216,7 +217,7 @@ export abstract class BaseMessagingAdapter {
      * 3. Fall back to the configured service account
      */
     protected async resolveContextUser(message: IncomingMessage): Promise<UserInfo> {
-        let email = message.SenderEmail;
+        let email: string | undefined = message.SenderEmail;
 
         if (!email) {
             try {
@@ -237,7 +238,7 @@ export abstract class BaseMessagingAdapter {
         }
 
         // Fall back to service account
-        return this.FallbackContextUser!;
+        return this.fallbackContextUser!;
     }
 
     /**
@@ -248,22 +249,23 @@ export abstract class BaseMessagingAdapter {
      * Falls back to the default agent from config.
      */
     protected async resolveAgent(
-        message: IncomingMessage
+        message: IncomingMessage,
+        contextUser: UserInfo
     ): Promise<{ agent: MJAIAgentEntityExtended; multiAgentNote: string | null }> {
         const mentionedNames = message.MentionedAgentNames ?? [];
 
         if (mentionedNames.length === 0) {
-            return { agent: this.DefaultAgent!, multiAgentNote: null };
+            return { agent: this.defaultAgent!, multiAgentNote: null };
         }
 
         // Look up the first mentioned agent
         const firstAgentName = mentionedNames[0];
         const rv = new RunView();
         const result = await rv.RunView<MJAIAgentEntityExtended>({
-            EntityName: 'AI Agents',
+            EntityName: 'MJ: AI Agents',
             ExtraFilter: `Name='${firstAgentName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
-        });
+        }, contextUser);
 
         if (result.Success && result.Results.length > 0) {
             const agent = result.Results[0];
@@ -278,7 +280,7 @@ export abstract class BaseMessagingAdapter {
 
         // Agent not found by name — fall back to default
         LogStatus(`Agent '${firstAgentName}' not found, using default agent`);
-        return { agent: this.DefaultAgent!, multiAgentNote: null };
+        return { agent: this.defaultAgent!, multiAgentNote: null };
     }
 
     /**
@@ -294,7 +296,7 @@ export abstract class BaseMessagingAdapter {
         const runner = new AgentRunner();
         let streamBuffer = '';
         let lastUpdateTime = 0;
-        const updateInterval = this.Settings.StreamingUpdateIntervalMs ?? 1000;
+        const updateInterval = this.settings.StreamingUpdateIntervalMs ?? 1000;
         let progressMessageId: string | null = null;
 
         try {
@@ -313,9 +315,8 @@ export abstract class BaseMessagingAdapter {
                             message, streamBuffer, progressMessageId
                         ).then(msgId => {
                             progressMessageId = msgId;
-                        }).catch(() => {
-                            // Silently skip streaming update failures (rate limiting, etc.)
-                            // The final message will still be sent
+                        }).catch((err) => {
+                            LogError('Streaming update failed:', undefined, err);
                         });
                     }
                 }
@@ -372,20 +373,67 @@ export abstract class BaseMessagingAdapter {
         for (let i = steps.length - 1; i >= 0; i--) {
             const step = steps[i];
             if (step.OutputData) {
-                return step.OutputData;
+                return this.parseOutputData(step.OutputData);
             }
         }
 
         // Fall back to payload
         if (typeof result.payload === 'string') {
-            return result.payload;
+            return this.parseOutputData(result.payload);
         }
 
         if (result.payload != null && typeof result.payload === 'object') {
-            return JSON.stringify(result.payload, null, 2);
+            return this.extractMessageFromObject(result.payload as Record<string, unknown>);
         }
 
         return "I processed your request but have no response to show.";
+    }
+
+    /**
+     * Parse output data that may be JSON with a message field, or plain text.
+     * Agent responses (e.g., from Sage/Loop agents) often return structured JSON
+     * like `{ nextStep: { message: "..." } }` — we extract the human-readable message.
+     */
+    private parseOutputData(data: string): string {
+        try {
+            const parsed = JSON.parse(data) as Record<string, unknown>;
+            return this.extractMessageFromObject(parsed);
+        } catch {
+            // Not JSON — return as plain text
+            return data;
+        }
+    }
+
+    /**
+     * Extract the human-readable message from a structured agent response object.
+     * Checks common patterns: nextStep.message, message, output, result.
+     */
+    private extractMessageFromObject(obj: Record<string, unknown>): string {
+        // Pattern: { nextStep: { message: "..." } } (Sage/Loop agents)
+        if (obj.nextStep != null && typeof obj.nextStep === 'object') {
+            const nextStep = obj.nextStep as Record<string, unknown>;
+            if (typeof nextStep.message === 'string' && nextStep.message.trim()) {
+                return nextStep.message;
+            }
+        }
+
+        // Pattern: { message: "..." }
+        if (typeof obj.message === 'string' && obj.message.trim()) {
+            return obj.message;
+        }
+
+        // Pattern: { output: "..." }
+        if (typeof obj.output === 'string' && obj.output.trim()) {
+            return obj.output;
+        }
+
+        // Pattern: { result: "..." }
+        if (typeof obj.result === 'string' && obj.result.trim()) {
+            return obj.result;
+        }
+
+        // Fallback: stringify
+        return JSON.stringify(obj, null, 2);
     }
 
     /**
@@ -396,7 +444,7 @@ export abstract class BaseMessagingAdapter {
             return []; // Top-level message, no prior history
         }
         try {
-            const maxMessages = this.Settings.MaxThreadMessages ?? 50;
+            const maxMessages = this.settings.MaxThreadMessages ?? 50;
             const history = await this.fetchThreadHistory(message.ChannelID, message.ThreadID);
             // Exclude the current message and limit
             return history
@@ -453,20 +501,22 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Load the default MJ agent entity from database.
-     * @throws Error if the configured agent ID cannot be found.
+     * Load the default MJ agent entity from database by name.
+     * Matches the pattern used by the conversation UI (ConversationAgentService).
+     * @throws Error if the configured agent name cannot be found.
      */
     private async loadDefaultAgent(): Promise<void> {
+        const agentName = this.settings.DefaultAgentName;
         const rv = new RunView();
         const result = await rv.RunView<MJAIAgentEntityExtended>({
-            EntityName: 'AI Agents',
-            ExtraFilter: `ID='${this.Settings.AgentID}'`,
+            EntityName: 'MJ: AI Agents',
+            ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
             ResultType: 'entity_object'
-        });
+        }, this.fallbackContextUser!);
         if (!result.Success || result.Results.length === 0) {
-            throw new Error(`Default agent not found: ${this.Settings.AgentID}`);
+            throw new Error(`Default agent '${agentName}' not found. Verify the DefaultAgentName in your messaging adapter config.`);
         }
-        this.DefaultAgent = result.Results[0];
+        this.defaultAgent = result.Results[0];
     }
 
     /**
@@ -476,13 +526,13 @@ export abstract class BaseMessagingAdapter {
     private async loadFallbackContextUser(): Promise<void> {
         const userCache = new UserCache();
         const user = userCache.Users.find(
-            (u: UserInfo) => u.Email?.toLowerCase() === this.Settings.ContextUserEmail.toLowerCase()
+            (u: UserInfo) => u.Email?.toLowerCase() === this.settings.ContextUserEmail.toLowerCase()
         );
 
         if (!user) {
-            throw new Error(`Fallback context user not found: ${this.Settings.ContextUserEmail}`);
+            throw new Error(`Fallback context user not found: ${this.settings.ContextUserEmail}`);
         }
 
-        this.FallbackContextUser = user;
+        this.fallbackContextUser = user;
     }
 }

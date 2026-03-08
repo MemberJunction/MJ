@@ -16,6 +16,10 @@ import '@memberjunction/server-bootstrap/mj-class-registrations';
 // Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
 import './generated/class-registrations-manifest.js';
 
+// Import messaging adapters to trigger @RegisterClass decorators for SlackMessagingExtension/TeamsMessagingExtension
+import { LoadMessagingAdapters } from '@memberjunction/messaging-adapters';
+LoadMessagingAdapters();
+
 // Optional: Import communication providers if needed
 // import '@memberjunction/communication-sendgrid';
 // import '@memberjunction/communication-teams';

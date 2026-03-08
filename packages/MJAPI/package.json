@@ -10,7 +10,7 @@
     "test": "vitest run",
     "check-types": "tsc -noEmit",
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
-    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "tsc && tsc-alias -f"
   },
@@ -29,6 +29,7 @@
     "@memberjunction/core": "5.4.1",
     "@memberjunction/global": "5.4.1",
     "@memberjunction/server": "5.4.1",
+    "@memberjunction/messaging-adapters": "5.4.1",
     "@memberjunction/server-bootstrap": "5.4.1",
     "@memberjunction/sqlserver-dataprovider": "5.4.1",
     "@memberjunction/templates": "5.4.1",

@@ -35,14 +35,17 @@ import { markdownToBlocks } from './slack-formatter.js';
  */
 export class SlackAdapter extends BaseMessagingAdapter {
     /** Slack Web API client. */
-    private Client: WebClient;
+    private client: WebClient;
 
     /** The bot's own Slack user ID (e.g., `U0123456`). */
-    private BotUserID: string = '';
+    private botUserID: string = '';
+
+    /** Message ID of the "Thinking..." indicator, reused by the first streaming update. */
+    private thinkingMessageId: string | null = null;
 
     constructor(settings: MessagingAdapterSettings) {
         super(settings);
-        this.Client = new WebClient(settings.BotToken);
+        this.client = new WebClient(settings.BotToken);
     }
 
     /**
@@ -54,18 +57,49 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * @returns Normalized incoming message.
      */
     public MapSlackEvent(event: Record<string, unknown>): IncomingMessage {
+        const text = (event.text as string) ?? '';
         return {
             MessageID: event.ts as string,
-            Text: (event.text as string) ?? '',
+            Text: text,
             SenderID: (event.user as string) ?? (event.bot_id as string) ?? '',
             SenderName: (event.username as string) ?? '',
             ChannelID: event.channel as string,
             ThreadID: (event.thread_ts as string) ?? null,
             IsDirectMessage: event.channel_type === 'im',
             IsBotMention: event.type === 'app_mention',
+            MentionedAgentNames: this.parseAgentMentions(text),
             Timestamp: new Date(parseFloat(event.ts as string) * 1000),
             RawEvent: event
         };
+    }
+
+    /**
+     * Parse potential agent names from the message text.
+     *
+     * After stripping the bot's own `<@UBOTID>` mention, looks for `@Name`
+     * patterns (e.g., `@Sage`, `@ResearchBot`). These are matched against
+     * MJ agent records by `BaseMessagingAdapter.resolveAgent()`.
+     *
+     * @returns Array of potential agent names (may be empty).
+     */
+    private parseAgentMentions(text: string): string[] {
+        // Strip the bot's own Slack mention
+        const withoutBot = this.botUserID
+            ? text.replace(new RegExp(`<@${this.botUserID}>`, 'g'), '')
+            : text;
+
+        // Match @AgentName patterns (single word, alphanumeric + hyphens/underscores)
+        // Slack user mentions are <@U...> so plain @Word is an agent reference
+        const agentMentionPattern = /(?<!\<)@(\w+)/g;
+        const names: string[] = [];
+        let match: RegExpExecArray | null;
+        while ((match = agentMentionPattern.exec(withoutBot)) !== null) {
+            const name = match[1].trim();
+            if (name) {
+                names.push(name);
+            }
+        }
+        return names;
     }
 
     /**
@@ -73,31 +107,37 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * This is needed to identify bot messages in thread history.
      */
     protected async onInitialize(): Promise<void> {
-        const authResult = await this.Client.auth.test();
-        this.BotUserID = authResult.user_id as string;
+        const authResult = await this.client.auth.test();
+        this.botUserID = authResult.user_id as string;
     }
 
     protected getBotUserId(): string {
-        return this.BotUserID;
+        return this.botUserID;
     }
 
     /**
-     * Slack doesn't have a persistent typing indicator API for bots.
-     * The first streaming update serves as the "thinking" indicator.
+     * Post a "Thinking..." message as the typing indicator.
+     * This message gets replaced in-place by the first streaming update,
+     * giving the user immediate visual feedback.
      */
-    protected async showTypingIndicator(_message: IncomingMessage): Promise<void> {
-        // No-op: Slack bot typing indicators are not persistent.
-        // The first streaming message update acts as the visual indicator.
+    protected async showTypingIndicator(message: IncomingMessage): Promise<void> {
+        const threadTs = message.ThreadID ?? message.MessageID;
+        const result = await this.client.chat.postMessage({
+            channel: message.ChannelID,
+            thread_ts: threadTs,
+            text: '_Thinking..._'
+        });
+        this.thinkingMessageId = result.ts ?? null;
     }
 
     /**
      * Fetch all messages in a Slack thread using `conversations.replies`.
      */
     protected async fetchThreadHistory(channelId: string, threadId: string): Promise<IncomingMessage[]> {
-        const result = await this.Client.conversations.replies({
+        const result = await this.client.conversations.replies({
             channel: channelId,
             ts: threadId,
-            limit: this.Settings.MaxThreadMessages ?? 50
+            limit: this.settings.MaxThreadMessages ?? 50
         });
 
         return (result.messages ?? []).map(msg => ({
@@ -123,17 +163,20 @@ export class SlackAdapter extends BaseMessagingAdapter {
         currentContent: string,
         existingMessageId: string | null
     ): Promise<string> {
-        const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+        // Reuse the "Thinking..." message for the first streaming update
+        const messageToUpdate = existingMessageId ?? this.thinkingMessageId;
 
-        if (existingMessageId) {
-            await this.Client.chat.update({
+        if (messageToUpdate) {
+            this.thinkingMessageId = null; // Consumed
+            await this.client.chat.update({
                 channel: originalMessage.ChannelID,
-                ts: existingMessageId,
+                ts: messageToUpdate,
                 text: currentContent + ' ...'
             });
-            return existingMessageId;
+            return messageToUpdate;
         } else {
-            const result = await this.Client.chat.postMessage({
+            const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+            const result = await this.client.chat.postMessage({
                 channel: originalMessage.ChannelID,
                 thread_ts: threadTs,
                 text: currentContent + ' ...'
@@ -143,11 +186,17 @@ export class SlackAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Send the final formatted response as a new message in the thread.
+     * Send the final formatted response. If a "Thinking..." message exists
+     * (no streaming occurred), update it in-place instead of posting a new message.
      */
     protected async sendFinalMessage(originalMessage: IncomingMessage, response: FormattedResponse): Promise<void> {
+        if (this.thinkingMessageId) {
+            await this.updateFinalMessage(originalMessage, this.thinkingMessageId, response);
+            this.thinkingMessageId = null;
+            return;
+        }
         const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
-        await this.Client.chat.postMessage({
+        await this.client.chat.postMessage({
             channel: originalMessage.ChannelID,
             thread_ts: threadTs,
             text: response.PlainText,
@@ -163,7 +212,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         messageId: string,
         response: FormattedResponse
     ): Promise<void> {
-        await this.Client.chat.update({
+        await this.client.chat.update({
             channel: originalMessage.ChannelID,
             ts: messageId,
             text: response.PlainText,
@@ -186,7 +235,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * Slack @mentions use the format `<@U0123456>`.
      */
     protected stripBotMention(text: string): string {
-        return text.replace(new RegExp(`<@${this.BotUserID}>`, 'g'), '').trim();
+        return text.replace(new RegExp(`<@${this.botUserID}>`, 'g'), '').trim();
     }
 
     /**
@@ -199,7 +248,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
      */
     protected async lookupUserEmail(platformUserId: string): Promise<string | null> {
         try {
-            const result = await this.Client.users.info({ user: platformUserId });
+            const result = await this.client.users.info({ user: platformUserId });
             return result.user?.profile?.email ?? null;
         } catch {
             return null;
