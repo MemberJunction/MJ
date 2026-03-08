@@ -6358,7 +6358,7 @@
           "fields": {
             "Name": "FinanceBatches",
             "DisplayName": "Finance Batches",
-            "Description": "Financial processing batches grouping transactions by commerce type and close date",
+            "Description": "Financial processing batches grouping transactions by commerce type and close date. DISABLED: YM API pagination is broken for this endpoint — returns the same full result set on every page regardless of PageNumber, causing infinite loops.",
             "Category": "Finance",
             "APIPath": "FinanceBatches",
             "ResponseDataKey": "FinanceBatchList",
@@ -6373,7 +6373,7 @@
               "PageNumber": "1"
             },
             "Sequence": 32,
-            "Status": "Active",
+            "Status": "Disabled",
             "IntegrationID": "@parent:ID"
           },
           "relatedEntities": {
