@@ -302,8 +302,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         headerHeight: 40,
         suppressCellFocus: false,
         enableCellTextSelection: true,
-        ensureDomOrder: true,
-        suppressRowClickSelection: false
+        ensureDomOrder: true
     };
 
     /** Default column settings - enables sorting, resizing */

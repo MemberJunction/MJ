@@ -1,13 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as crypto from 'crypto';
 
+// Shared singleton store used by both BaseSingleton and FakeEncryptionEngineBase
+const singletonStore: Record<string, unknown> = {};
+
 // Mock all external MJ dependencies
 vi.mock('@memberjunction/global', () => {
     const ENCRYPTION_MARKER = '$ENC$';
     const ENCRYPTED_SENTINEL = '[!ENCRYPTED$]';
+
+    // Minimal BaseSingleton that EncryptionEngine extends
+    class BaseSingleton<T> {
+        protected static getInstance<T>(this: new () => T): T {
+            const key = this.name;
+            if (!singletonStore[key]) {
+                singletonStore[key] = new this();
+            }
+            return singletonStore[key] as T;
+        }
+    }
+
     return {
         ENCRYPTION_MARKER,
         ENCRYPTED_SENTINEL,
+        BaseSingleton,
         IsValueEncrypted: (value: string | null | undefined, marker?: string): boolean => {
             if (!value || typeof value !== 'string') return false;
             if (value === ENCRYPTED_SENTINEL) return true;
@@ -28,32 +44,20 @@ vi.mock('@memberjunction/core', () => ({
     IMetadataProvider: {},
     LogError: vi.fn(),
     UserInfo: class {},
-    BaseEngine: class {
-        static getInstance<T>(): T {
-            return (BaseEngine as Record<string, unknown>)._instance as T;
-        }
-        static _instance: unknown;
-        _loaded = false;
-        get Loaded() { return this._loaded; }
-        async Load() { this._loaded = true; }
-        async RefreshAllItems() {}
-    },
     RegisterForStartup: () => (target: Function) => target
 }));
 
 vi.mock('@memberjunction/core-entities', () => {
+    // Standalone fake that EncryptionEngine accesses via .Instance
     class FakeEncryptionEngineBase {
         static _singleton: FakeEncryptionEngineBase | null = null;
         _loaded = false;
 
-        static getInstance<T>(): T {
+        static get Instance(): FakeEncryptionEngineBase {
             if (!FakeEncryptionEngineBase._singleton) {
-                // Use `this` so the actual calling subclass (EncryptionEngine) is
-                // instantiated, mirroring how BaseEngine.getInstance() works.
-                const Ctor = this as { new(): FakeEncryptionEngineBase };
-                FakeEncryptionEngineBase._singleton = new Ctor();
+                FakeEncryptionEngineBase._singleton = new FakeEncryptionEngineBase();
             }
-            return FakeEncryptionEngineBase._singleton as T;
+            return FakeEncryptionEngineBase._singleton;
         }
 
         get Loaded() { return this._loaded; }
@@ -62,24 +66,34 @@ vi.mock('@memberjunction/core-entities', () => {
             this._loaded = true;
         }
 
-        async Load() {
-            this._loaded = true;
-        }
-
         async RefreshAllItems() {}
 
-        // Mock GetKeyConfiguration to return a valid configuration
-        GetKeyConfiguration(keyId: string): {
-            key: Record<string, unknown>;
-            algorithm: Record<string, unknown>;
-            source: Record<string, unknown>;
-        } | undefined {
+        GetKeyConfiguration(_keyId: string): Record<string, unknown> | undefined {
             return undefined; // Default - tests will override
         }
+
+        // Delegated property stubs
+        get EncryptionKeys() { return []; }
+        get ActiveEncryptionKeys() { return []; }
+        get EncryptionAlgorithms() { return []; }
+        get ActiveEncryptionAlgorithms() { return []; }
+        get EncryptionKeySources() { return []; }
+        get ActiveEncryptionKeySources() { return []; }
+        GetKeyByID() { return undefined; }
+        GetKeyByName() { return undefined; }
+        GetAlgorithmByID() { return undefined; }
+        GetAlgorithmByName() { return undefined; }
+        GetKeySourceByID() { return undefined; }
+        GetKeySourceByDriverClass() { return undefined; }
+        ValidateKey() { return { isValid: true }; }
+        GetKeyMarker() { return '$ENC$'; }
     }
 
     return {
-        EncryptionEngineBase: FakeEncryptionEngineBase
+        EncryptionEngineBase: FakeEncryptionEngineBase,
+        MJEncryptionKeyEntity: class {},
+        MJEncryptionAlgorithmEntity: class {},
+        MJEncryptionKeySourceEntity: class {}
     };
 });
 

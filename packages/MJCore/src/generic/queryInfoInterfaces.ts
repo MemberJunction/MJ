@@ -196,7 +196,7 @@ export interface IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */

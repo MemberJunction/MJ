@@ -11,6 +11,7 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { MJEntityActionFormComponentExtended } from "./EntityActions/entityaction.form.component";
@@ -149,7 +150,8 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         EntityRelationshipDiagramModule,
         ListManagementModule,
         ActionsModule,
-        AgentsModule
+        AgentsModule,
+        EntityViewerModule
     ],
     exports: [
         MJEntityFormComponentExtended,
