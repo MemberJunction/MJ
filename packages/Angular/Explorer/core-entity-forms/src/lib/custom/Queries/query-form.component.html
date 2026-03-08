@@ -31,7 +31,7 @@
                 <button kendoButton
                   [themeColor]="'primary'"
                   [size]="'large'"
-                  [disabled]="EditMode || record.Status !== 'Approved' || !record.SQL || record.SQL.trim().length === 0"
+                  [disabled]="EditMode || !record.SQL || record.SQL.trim().length === 0"
                   (click)="runQuery()"
                   title="Run Query">
                   <i class="fa-solid fa-play"></i> Run
@@ -78,15 +78,7 @@
                 <span class="badge"
                   [style.background]="getStatusBadgeColor()"
                   style="color: white; padding: 6px 12px; border-radius: 12px; font-size: 0.85em;">
-                  @if (record.Status === 'Approved') {
-                    <i class="fa-solid fa-check-circle"></i>
-                  }
-                  @if (record.Status === 'Pending') {
-                    <i class="fa-solid fa-clock"></i>
-                  }
-                  @if (record.Status === 'Rejected') {
-                    <i class="fa-solid fa-times-circle"></i>
-                  }
+                  <i class="fa-solid" [class]="getStatusBannerIcon()"></i>
                   {{ record.Status || 'Unknown' }}
                 </span>
               }
@@ -110,6 +102,17 @@
           }
         </div>
       </div>
+
+      <!-- Status Warning Banner for Non-Approved Queries -->
+      @if (record.Status && record.Status !== 'Approved' && !EditMode) {
+        <div class="status-warning-banner" [style.border-left-color]="getStatusBadgeColor()">
+          <i class="fa-solid" [class]="getStatusBannerIcon()"
+            [style.color]="getStatusBadgeColor()"></i>
+          <span>
+            This query has status <strong>{{ record.Status }}</strong>. {{ getStatusBannerMessage() }}
+          </span>
+        </div>
+      }
 
       <!-- Main Content Area with Expansion Panels -->
       <div class="query-content" style="flex: 1; min-height: 0; padding: 20px; overflow-y: auto; background: #f5f7fa;">

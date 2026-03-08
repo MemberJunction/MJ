@@ -51,7 +51,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public categories: MJQueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
     
-    // Status options
+    // Status options — matches MJQueryEntity.Status type from database CHECK constraint
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
         { text: 'Approved', value: 'Approved' },
@@ -73,16 +73,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         // Load categories first to ensure they're available for the dropdown
         await this.loadCategories();
         
-        // Then load other data in parallel
+        // Then load other data in parallel — each method calls detectChanges on completion
         await Promise.all([
             this.loadQueryParameters(),
             this.loadQueryFields(),
             this.loadQueryEntities(),
             this.loadQueryPermissions()
         ]);
-        
-        // Ensure form is properly initialized after all data is loaded
-        this.cdr.detectChanges();
     }
 
     ngOnDestroy() {
@@ -164,6 +161,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query parameters:', error);
             } finally {
                 this.isLoadingParameters = false;
+                this.cdr.detectChanges();
             }
         }
     }
@@ -187,6 +185,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query fields:', error);
             } finally {
                 this.isLoadingFields = false;
+                this.cdr.detectChanges();
             }
         }
     }
@@ -211,6 +210,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query entities:', error);
             } finally {
                 this.isLoadingEntities = false;
+                this.cdr.detectChanges();
             }
         }
     }
@@ -234,6 +234,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query permissions:', error);
             } finally {
                 this.isLoadingPermissions = false;
+                this.cdr.detectChanges();
             }
         }
     }
@@ -429,12 +430,17 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             }
         }
 
+        // Warn if query is not approved
+        if (this.record.Status !== 'Approved') {
+            console.warn(`Executing query '${this.record.Name}' with status '${this.record.Status}'. Query has not been approved.`);
+        }
+
         // Reload parameters in case they were updated
         await this.loadQueryParameters();
-        this.cdr.detectChanges();
 
-        // Show the run dialog
+        // Show the run dialog — set before detectChanges to avoid NG0100
         this.showRunDialog = true;
+        this.cdr.detectChanges();
     }
 
     /**
@@ -632,14 +638,29 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Approved':
-                return '#28a745';
-            case 'Pending':
-                return '#ffc107';
-            case 'Rejected':
-                return '#dc3545';
-            default:
-                return '#6c757d';
+            case 'Approved':  return '#28a745';
+            case 'Pending':   return '#f59e0b';
+            case 'Rejected':  return '#dc3545';
+            case 'Expired':   return '#6c757d';
+            default:          return '#6c757d';
+        }
+    }
+
+    getStatusBannerIcon(): string {
+        switch (this.record?.Status) {
+            case 'Pending':   return 'fa-clock';
+            case 'Rejected':  return 'fa-times-circle';
+            case 'Expired':   return 'fa-archive';
+            default:          return 'fa-info-circle';
+        }
+    }
+
+    getStatusBannerMessage(): string {
+        switch (this.record?.Status) {
+            case 'Pending':   return 'It can be executed for testing but has not yet been approved.';
+            case 'Rejected':  return 'It was rejected and may need revision before approval.';
+            case 'Expired':   return 'It has expired and is no longer in active use.';
+            default:          return '';
         }
     }
 

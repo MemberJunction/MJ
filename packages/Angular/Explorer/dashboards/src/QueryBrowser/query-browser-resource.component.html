@@ -39,6 +39,23 @@
       </div>
     </div>
 
+    <!-- Status Filters -->
+    <div class="status-filter-bar">
+      @for (status of AllStatuses; track status) {
+        @if (getStatusCount(status) > 0) {
+          <button class="status-filter-chip"
+            [class.active]="StatusFilters[status]"
+            [style.--chip-color]="getStatusColor(status)"
+            (click)="toggleStatusFilter(status)"
+            [title]="(StatusFilters[status] ? 'Hide' : 'Show') + ' ' + status + ' queries'">
+            <i class="fa-solid" [class]="getStatusIcon(status)"></i>
+            <span>{{ status }}</span>
+            <span class="chip-count">{{ getStatusCount(status) }}</span>
+          </button>
+        }
+      }
+    </div>
+
     <!-- Tree Content -->
     <div class="tree-content">
       <!-- Loading -->
@@ -95,6 +112,26 @@
 
     <!-- Query Viewer -->
     @if (selectedQuery) {
+      <!-- Query Header with Status -->
+      <div class="query-viewer-header">
+        <div class="query-viewer-title">
+          <i class="fa-solid fa-file-code"></i>
+          <span>{{ selectedQuery.Name }}</span>
+        </div>
+        @if (selectedQuery.Status !== 'Approved') {
+          <span class="query-viewer-status-pill"
+            [style.background]="getStatusColor(selectedQuery.Status)">
+            <i class="fa-solid" [class]="getStatusIcon(selectedQuery.Status)"></i>
+            {{ selectedQuery.Status }}
+          </span>
+        } @else {
+          <span class="query-viewer-status-pill approved"
+            [style.background]="getStatusColor('Approved')">
+            <i class="fa-solid fa-check-circle"></i>
+            Approved
+          </span>
+        }
+      </div>
       <mj-query-viewer
         [QueryId]="selectedQuery.ID"
         [AutoRun]="true"
@@ -130,6 +167,9 @@
               [class.selected]="IsQuerySelected(query)"
               [class.hidden]="!isQueryVisible(query)"
               (click)="selectQuery(query, $event)">
+              <span class="status-dot"
+                [style.background]="getStatusColor(query.Status)"
+                [title]="query.Status"></span>
               <i class="fa-solid fa-file-code query-icon"></i>
               <div class="query-info">
                 <span class="query-name">{{ query.Name }}</span>
@@ -139,6 +179,13 @@
               </div>
               @if (query.UsesTemplate) {
                 <i class="fa-solid fa-sliders param-icon" title="Has parameters"></i>
+              }
+              @if (query.Status !== 'Approved') {
+                <span class="query-status-badge"
+                  [style.background]="getStatusColor(query.Status)"
+                  [title]="query.Status">
+                  {{ query.Status }}
+                </span>
               }
             </div>
           }
