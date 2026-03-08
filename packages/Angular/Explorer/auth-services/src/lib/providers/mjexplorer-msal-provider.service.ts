@@ -128,14 +128,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         const userInfo = this.mapMSALAccountToStandard(accounts[0]);
         this.updateUserInfo(userInfo);
 
-        // Proactively refresh tokens to extend the interaction-free period
-        // This uses refreshTokenExpirationOffsetSeconds to ensure tokens remain valid
-        // for at least 2 hours without requiring user interaction
-        this.performProactiveRefresh(accounts[0]).catch((err: unknown) => {
-          // Log but don't fail initialization - cached tokens may still be valid
-          console.warn('[MSAL] Proactive token refresh failed during init:', err);
-        });
-
         this._initializationCompleted$.next(true);
         console.log('[MSAL] Initialization completed (cached session restored)');
       } else {
@@ -223,7 +215,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // First try to get cached token from account
       // This avoids unnecessary iframe calls that can timeout
       if (account.idToken) {
-        return account.idToken;
+        // Check if token is expired or about to expire (within 5-minute buffer)
+        // This prevents the race condition where proactive refresh hasn't completed
+        // but the cached token is already expired
+        if (this.isTokenValid(account.idToken, 300)) {
+          return account.idToken;
+        }
+
+        // Token expired or near-expiry — force a silent refresh
+        console.log('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
+        try {
+          const response = await this.auth.instance.acquireTokenSilent({
+            scopes: ['User.Read', 'email', 'profile'],
+            account: account,
+            forceRefresh: true
+          });
+          return response.idToken || null;
+        } catch (refreshError) {
+          console.warn('[MSAL] Silent refresh failed, returning expired cached token:', refreshError);
+          // Fall through to existing cache-only acquisition below
+        }
       }
 
       // If not in account, try silent token acquisition from cache only
@@ -513,35 +524,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
 
   /**
-   * Proactively refresh tokens to extend the interaction-free period
+   * Check if a JWT token is still valid with an optional buffer period.
+   * Decodes the payload to read the `exp` claim without cryptographic verification
+   * (expiry is a timing check, not an authenticity check).
    *
-   * MSAL 5.x Best Practice: Use refreshTokenExpirationOffsetSeconds to get tokens
-   * that will remain valid for a specified duration. This is called:
-   * - On initialization (to ensure fresh tokens at app startup)
-   * - Can be called manually before important operations
-   *
-   * @param account - The account to refresh tokens for
-   * @param offsetSeconds - How long tokens should remain valid (default: 2 hours)
+   * @param token - The JWT string to check
+   * @param bufferSeconds - Number of seconds before actual expiry to consider the token invalid (default: 0)
+   * @returns true if the token's exp claim is beyond (now + buffer), false otherwise
    */
-  private async performProactiveRefresh(account: AccountInfo, offsetSeconds: number = 7200): Promise<void> {
+  private isTokenValid(token: string, bufferSeconds: number = 0): boolean {
     try {
-      console.log(`[MSAL] Performing proactive token refresh (offset: ${offsetSeconds}s)...`);
-
-      // Use forceRefresh with refreshTokenExpirationOffsetSeconds to get fresh tokens
-      // that will be valid for at least the specified offset period
-      await this.auth.instance.acquireTokenSilent({
-        scopes: ['User.Read', 'email', 'profile'],
-        account: account,
-        forceRefresh: true,
-        refreshTokenExpirationOffsetSeconds: offsetSeconds
-      });
-
-      console.log('[MSAL] Proactive token refresh successful');
-    } catch (error) {
-      // Don't treat proactive refresh failures as critical - the app can still
-      // function with existing cached tokens until they expire
-      console.warn('[MSAL] Proactive token refresh failed (will use cached tokens):', error);
-      throw error; // Re-throw so caller can decide how to handle
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return false;
+      }
+      const payload = JSON.parse(atob(parts[1])) as { exp?: number };
+      const expiresAtMs = (payload.exp ?? 0) * 1000;
+      return expiresAtMs > Date.now() + (bufferSeconds * 1000);
+    } catch {
+      // If we can't decode the token, treat it as invalid
+      return false;
     }
   }
 

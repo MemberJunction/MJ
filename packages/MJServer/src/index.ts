@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config({ quiet: true });
 
-import { expressMiddleware } from '@apollo/server/express4';
+import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -25,7 +25,7 @@ import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
-import { contextFunction, getUserPayload } from './context.js';
+import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -125,9 +125,32 @@ export * from './resolvers/VersionHistoryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
+export * from './hooks.js';
+export * from './multiTenancy/index.js';
 
+import type { ServerExtensibilityOptions, HookWithOptions } from './hooks.js';
+import { HookRegistry } from '@memberjunction/core';
+import type { HookRegistrationOptions } from '@memberjunction/core';
+import type { ApolloServerPlugin } from '@apollo/server';
+import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from './multiTenancy/index.js';
 
-export type MJServerOptions = {
+/**
+ * Register a hook that may be a plain function or a `{ hook, Priority, Namespace }` object.
+ * Dynamic packages (e.g., BCSaaS) return hooks in object form to declare registration metadata.
+ */
+function registerHookEntry<T>(hookName: string, entry: T | HookWithOptions<T>): void {
+  if (typeof entry === 'function') {
+    HookRegistry.Register(hookName, entry);
+  } else if (entry && typeof entry === 'object' && 'hook' in entry) {
+    const { hook, Priority, Namespace } = entry as HookWithOptions<T>;
+    const options: HookRegistrationOptions = {};
+    if (Priority != null) options.Priority = Priority;
+    if (Namespace != null) options.Namespace = Namespace;
+    HookRegistry.Register(hookName, hook, options);
+  }
+}
+
+export type MJServerOptions = ServerExtensibilityOptions & {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
 };
@@ -417,6 +440,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
+  // Apply user-provided schema transformers (after built-in directive transformers)
+  if (options?.SchemaTransformers) {
+    for (const transformer of options.SchemaTransformers) {
+      schema = transformer(schema);
+    }
+  }
+
   const httpServer = createServer(app);
 
   const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
@@ -446,7 +476,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     webSocketServer
   );
 
-  const apolloServer = buildApolloServer({ schema }, { httpServer, serverCleanup });
+  const apolloServer = buildApolloServer(
+    { schema },
+    { httpServer, serverCleanup },
+    options?.ApolloPlugins
+  );
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
@@ -470,72 +504,81 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  // Setup REST API endpoints BEFORE GraphQL (since graphqlRootPath may be '/' which catches all routes)
-  const authMiddleware = async (req, res, next) => {
-    try {
-      const sessionIdRaw = req.headers['x-session-id'];
-      const requestDomain = new URL(req.headers.origin || '').hostname;
-      const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
-      const bearerToken = req.headers.authorization ?? '';
-      const apiKey = String(req.headers['x-mj-api-key']);
-
-      const userPayload = await getUserPayload(bearerToken, sessionId, dataSources, requestDomain, apiKey);
-      if (!userPayload) {
-        return res.status(401).json({ error: 'Invalid token' });
-      }
-
-      // Set both req.user (standard Express convention) and req['mjUser'] (MJ REST convention)
-      // Note: userPayload contains { userRecord: UserInfo, email, sessionId }
-      // The mjUser property expects the UserInfo directly (userRecord)
-      req.user = userPayload;
-      req['mjUser'] = userPayload.userRecord;
-      next();
-    } catch (error) {
-      console.error('Auth error:', error);
-      return res.status(401).json({ error: 'Authentication failed' });
+  // Apply user-provided Express middleware (after compression, before routes)
+  if (options?.ExpressMiddlewareBefore) {
+    for (const mw of options.ExpressMiddlewareBefore) {
+      app.use(mw);
     }
-  };
+  }
 
-  // Build public URL for OAuth callbacks
+  // Escape hatch for advanced Express app configuration
+  if (options?.ConfigureExpressApp) {
+    await Promise.resolve(options.ConfigureExpressApp(app));
+  }
+
+  // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
   const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
   console.log(`[OAuth] publicUrl: ${oauthPublicUrl}`);
 
-  // Set up OAuth callback routes at /oauth (independent of REST API)
-  // These must be registered BEFORE GraphQL middleware since graphqlRootPath may be '/'
+  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
   if (oauthPublicUrl) {
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
-      // TODO: These should be configurable to point to the MJ Explorer UI
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
       errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
     });
+    oauthAuthenticatedRouter = authenticatedRouter;
 
-    // Create CORS middleware for OAuth routes (needed for cross-origin requests from frontend)
     const oauthCors = cors<cors.CorsRequest>();
 
     // OAuth callback is unauthenticated (called by external auth server)
     app.use('/oauth', oauthCors, callbackRouter);
     console.log('[OAuth] Callback route registered at /oauth/callback');
+  }
 
-    // OAuth status, initiate, and exchange endpoints require authentication
-    // Must also have CORS for frontend requests and JSON body parsing
-    app.use('/oauth', oauthCors, BodyParser.json(), authMiddleware, authenticatedRouter);
+  // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
+  // Without this, the browser blocks 401 responses from the auth middleware
+  // because they lack Access-Control-Allow-Origin headers, preventing the
+  // client from reading the error code and triggering token refresh.
+  app.use(cors<cors.CorsRequest>());
+
+  // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
+  app.use(createUnifiedAuthMiddleware(dataSources));
+
+  // ─── Built-in post-auth middleware (multi-tenancy) ─────
+  // Config-driven multi-tenancy middleware runs after auth so it can read req.userPayload.
+  if (configInfo.multiTenancy?.enabled) {
+    const tenantMiddleware = createTenantMiddleware(configInfo.multiTenancy);
+    app.use(tenantMiddleware);
+  }
+
+  // ─── Post-auth middleware from plugins ─────
+  // Middleware here has access to the authenticated user via req.userPayload.
+  // Use this for tenant context resolution, org membership loading, etc.
+  if (options?.ExpressMiddlewarePostAuth) {
+    for (const mw of options.ExpressMiddlewarePostAuth) {
+      app.use(mw);
+    }
+  }
+
+  // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
+  if (oauthAuthenticatedRouter) {
+    const oauthCors = cors<cors.CorsRequest>();
+    app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
     console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
   }
 
-  // Get REST API configuration
+  // ─── REST API endpoints (auth already handled by unified middleware) ─────
   const restApiConfig = {
     enabled: configInfo.restApiOptions?.enabled ?? false,
     includeEntities: configInfo.restApiOptions?.includeEntities,
     excludeEntities: configInfo.restApiOptions?.excludeEntities,
   };
 
-  // Apply options from server options if provided (these override the config file)
   if (options?.restApiOptions) {
     Object.assign(restApiConfig, options.restApiOptions);
   }
 
-  // Get REST API configuration from environment variables if present (env vars override everything)
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
     if (restApiConfig.enabled) {
@@ -551,12 +594,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
 
-  // Set up REST endpoints with the configured options and auth middleware
-  setupRESTEndpoints(app, restApiConfig, authMiddleware);
+  // No per-route authMiddleware needed — unified auth middleware already ran
+  setupRESTEndpoints(app, restApiConfig);
 
-  // GraphQL middleware (after REST so /api/v1/* routes are handled first)
-  // Note: Type assertion needed due to @apollo/server bundling older @types/express types
-  // that are incompatible with Express 5.x types (missing 'param' property)
+  // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
@@ -570,8 +611,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
                                  dataSource: extendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
                                  dataSources // all data source
                                }),
-    }) as unknown as express.RequestHandler
+    })
   );
+
+  // ─── Post-route middleware (error handlers, catch-alls) ─────
+  if (options?.ExpressMiddlewareAfter) {
+    for (const mw of options.ExpressMiddlewareAfter) {
+      app.use(mw);
+    }
+  }
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -584,6 +632,46 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       console.error('❌ Failed to start scheduled jobs service:', error);
       // Don't throw - allow server to start even if scheduled jobs fail
     }
+  }
+
+  // Register provider-level hooks with the global HookRegistry.
+  // Each entry can be a plain function or a { hook, Priority, Namespace } object.
+  if (options?.PreRunViewHooks) {
+    for (const entry of options.PreRunViewHooks) {
+      registerHookEntry('PreRunView', entry);
+    }
+  }
+  if (options?.PostRunViewHooks) {
+    for (const entry of options.PostRunViewHooks) {
+      registerHookEntry('PostRunView', entry);
+    }
+  }
+  if (options?.PreSaveHooks) {
+    for (const entry of options.PreSaveHooks) {
+      registerHookEntry('PreSave', entry);
+    }
+  }
+
+  // Auto-register multi-tenancy hooks when enabled in config
+  // (The tenant Express middleware was already registered above in the post-auth slot)
+  if (configInfo.multiTenancy?.enabled) {
+    console.log('[MultiTenancy] Enabled — registering tenant isolation hooks');
+    const tenantConfig = configInfo.multiTenancy;
+
+    // Register tenant PreRunView hook (injects WHERE clauses)
+    // Priority 50 + namespace allows middle layers to replace with their own implementation
+    HookRegistry.Register('PreRunView', createTenantPreRunViewHook(tenantConfig), {
+      Priority: 50,
+      Namespace: 'mj:tenantFilter',
+    });
+
+    // Register tenant PreSave hook (validates tenant column on writes)
+    HookRegistry.Register('PreSave', createTenantPreSaveHook(tenantConfig), {
+      Priority: 50,
+      Namespace: 'mj:tenantSave',
+    });
+
+    console.log(`[MultiTenancy] Context source: ${tenantConfig.contextSource}, scoping: ${tenantConfig.scopingStrategy}, write protection: ${tenantConfig.writeProtection}`);
   }
 
   if (options?.onBeforeServe) {

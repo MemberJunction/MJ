@@ -1,4 +1,5 @@
 import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { HookRegistry, PreSaveHook } from './hookRegistry';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -1992,6 +1993,9 @@ export abstract class BaseEntity<T = unknown> {
                         }
                     }
                     if (valResult.Success) {
+                        // Run registered PreSave hooks (e.g., tenant validation)
+                        await this.RunPreSaveHooks();
+
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
@@ -2051,6 +2055,23 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Runs all registered PreSave hooks. If any hook returns false or a string
+     * (error message), the save is rejected by throwing an Error.
+     */
+    private async RunPreSaveHooks(): Promise<void> {
+        const preSaveHooks = HookRegistry.GetHooks<PreSaveHook>('PreSave');
+        for (const hook of preSaveHooks) {
+            const hookResult = await hook(this, this.ActiveUser);
+            if (hookResult === false) {
+                throw new Error('Save rejected by pre-save hook');
+            }
+            if (typeof hookResult === 'string') {
+                throw new Error(hookResult);
+            }
         }
     }
 

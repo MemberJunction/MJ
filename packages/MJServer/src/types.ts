@@ -5,6 +5,16 @@ import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
+/**
+ * Augment Express Request to include MJ auth properties set by the unified auth middleware.
+ */
+declare module 'express' {
+  interface Request {
+    /** Set by the unified auth middleware after successful authentication */
+    userPayload?: UserPayload;
+  }
+}
+
 export type UserPayload = {
   email: string;
   userRecord: any;
