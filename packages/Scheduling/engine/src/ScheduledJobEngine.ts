@@ -151,8 +151,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (!this.hasInitialized) {
                 await this.initializeNextRunTimes(contextUser);
                 await this.cleanupStaleLocks(contextUser);
-                // Force reload after cleaning locks to ensure we have fresh data
-                await this.Config(true, contextUser);
+                // No need to force-reload: initializeNextRunTimes and cleanupStaleLocks
+                // modify and save the in-memory entity objects directly, so the cache
+                // already reflects the current DB state.
                 this.hasInitialized = true;
 
                 // Check if there are no jobs after initialization
