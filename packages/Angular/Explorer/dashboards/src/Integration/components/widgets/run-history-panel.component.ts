@@ -73,7 +73,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
                           </tr>
                         </thead>
                         <tbody>
-                          @for (detail of RunDetails; track detail.ID) {
+                          @for (detail of RunDetails; track detail.EntityID) {
                             <tr>
                               <td>{{ detail.Entity }}</td>
                               <td>{{ detail.RecordsProcessed | number }}</td>

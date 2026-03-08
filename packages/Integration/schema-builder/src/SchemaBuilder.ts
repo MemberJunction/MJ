@@ -56,38 +56,24 @@ export class SchemaBuilder {
         // Step 3: Separate new tables vs evolution
         const { newConfigs, evolutionConfigs } = this.ClassifyConfigs(input);
 
-        // Step 4: Generate DDL migrations
+        // Step 4: Generate DDL — one migration file per integration
         const now = new Date();
-        const allMigrations: EmittedFile[] = [];
+        const ddlParts: string[] = [];
 
-        // Schema creation migrations (deduplicate by schema name)
+        // Schema creation statements (deduplicate by schema name)
         const schemasToCreate = this.GetUniqueSchemas(newConfigs);
-        const timestamps = this.MigrationWriter.GenerateTimestampSequence(
-            schemasToCreate.length + newConfigs.length + evolutionConfigs.length,
-            now
-        );
-        let tsIdx = 0;
-
         for (const schemaName of schemasToCreate) {
-            const ddl = this.DDL.GenerateCreateSchema(schemaName, input.Platform);
-            const meta = this.MakeMigrationMeta(input, 'CreateSchema', schemaName);
-            const filePath = this.MigrationWriter.GenerateMigrationFileName(
-                input.SourceType, `CreateSchema_${schemaName}`, input.MJVersion, input.MigrationsDir, timestamps[tsIdx++]
-            );
-            allMigrations.push(this.MigrationWriter.WrapInMigrationFile(ddl, meta, filePath));
+            ddlParts.push(this.DDL.GenerateCreateSchema(schemaName, input.Platform));
+            ddlParts.push(''); // blank line separator
         }
 
-        // Table creation migrations
+        // Table creation statements
         for (const config of newConfigs) {
-            const ddl = this.DDL.GenerateCreateTable(config, input.Platform);
-            const meta = this.MakeMigrationMeta(input, `Create${config.TableName}Table`, config.TableName);
-            const filePath = this.MigrationWriter.GenerateMigrationFileName(
-                input.SourceType, `Create${config.TableName}Table`, input.MJVersion, input.MigrationsDir, timestamps[tsIdx++]
-            );
-            allMigrations.push(this.MigrationWriter.WrapInMigrationFile(ddl, meta, filePath));
+            ddlParts.push(this.DDL.GenerateCreateTable(config, input.Platform));
+            ddlParts.push(''); // blank line separator
         }
 
-        // Evolution migrations (ALTER TABLE)
+        // Evolution statements (ALTER TABLE)
         for (const { config, existing } of evolutionConfigs) {
             const sourceObj = input.SourceSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
             if (!sourceObj) continue;
@@ -97,21 +83,37 @@ export class SchemaBuilder {
                 continue; // No changes
             }
 
-            const ddl = this.Evolution.GenerateEvolutionMigration(diff, config.SchemaName, config.TableName, input.Platform);
-            const meta = this.MakeMigrationMeta(input, `Alter${config.TableName}`, config.TableName);
-            const filePath = this.MigrationWriter.GenerateMigrationFileName(
-                input.SourceType, `Alter${config.TableName}`, input.MJVersion, input.MigrationsDir, timestamps[tsIdx++]
-            );
-            allMigrations.push(this.MigrationWriter.WrapInMigrationFile(ddl, meta, filePath));
+            ddlParts.push(this.Evolution.GenerateEvolutionMigration(diff, config.SchemaName, config.TableName, input.Platform));
+            ddlParts.push(''); // blank line separator
         }
 
-        output.MigrationFiles = allMigrations;
+        // Emit a single migration file if there's any DDL
+        if (ddlParts.some(p => p.trim().length > 0)) {
+            const tableNames = [
+                ...newConfigs.map(c => c.TableName),
+                ...evolutionConfigs.map(({ config }) => config.TableName),
+            ];
+            const action = newConfigs.length > 0 ? 'CreateTables' : 'AlterTables';
+            const meta = this.MakeMigrationMeta(input, action, tableNames.join(', '));
+            const timestamps = this.MigrationWriter.GenerateTimestampSequence(1, now);
+            const filePath = this.MigrationWriter.GenerateMigrationFileName(
+                input.SourceType, action, input.MJVersion, input.MigrationsDir, timestamps[0]
+            );
+            output.MigrationFiles = [this.MigrationWriter.WrapInMigrationFile(ddlParts.join('\n'), meta, filePath)];
+        }
 
-        // Step 5: Generate soft FK config
+        // Step 5: Generate soft PK and FK config
+        const allConfigs = [...newConfigs, ...evolutionConfigs.map(ec => ec.config)];
         const allSoftFKs = this.CollectSoftFKs(input, evolutionConfigs);
-        if (allSoftFKs.length > 0) {
+        // Always emit additionalSchemaInfo — every integration table needs a soft PK
+        if (allConfigs.length > 0) {
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(null); // Caller provides existing content via input
-            const merged = this.SoftFKEmitter.MergeSchemaConfig(existingConfig, allSoftFKs);
+            // First add soft PKs (natural PK field names from source system)
+            const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            // Then merge in soft FKs
+            const merged = allSoftFKs.length > 0
+                ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
+                : withPKs;
             output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );

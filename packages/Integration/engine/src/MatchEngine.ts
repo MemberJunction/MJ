@@ -1,4 +1,4 @@
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 
@@ -126,6 +126,7 @@ export class MatchEngine {
 
     /**
      * Searches for an existing MJ record using key field values.
+     * Returns the value of the entity's primary key field (natural PK from source system).
      */
     private async FindByKeyFields(
         record: MappedRecord,
@@ -135,17 +136,22 @@ export class MatchEngine {
         const filterClauses = this.BuildKeyFieldFilter(record, keyFields);
         if (filterClauses.length === 0) return null;
 
+        // Look up the entity's PK field name from metadata
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+
         const rv = new RunView();
-        const result = await rv.RunView<{ ID: string }>({
+        const result = await rv.RunView<Record<string, string>>({
             EntityName: record.MJEntityName,
             ExtraFilter: filterClauses.join(' AND '),
-            Fields: ['ID'],
+            Fields: [pkFieldName],
             MaxRows: 1,
             ResultType: 'simple',
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
-        return result.Results[0].ID;
+        return result.Results[0][pkFieldName];
     }
 
     /**

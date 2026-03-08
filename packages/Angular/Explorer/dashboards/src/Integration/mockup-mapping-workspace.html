@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapping Workspace - Redesigned Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #333; }
+
+  /* ===== Layout ===== */
+  .mapping-workspace { display: flex; flex-direction: column; height: 100vh; padding: 20px; }
+  .workspace-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .workspace-header h2 { font-size: 20px; font-weight: 600; }
+  .workspace-header h2 i { margin-right: 8px; color: #4a6cf7; }
+
+  .workspace-body { display: flex; flex: 1; gap: 1px; background: #ddd; border-radius: 10px; overflow: hidden; min-height: 0; }
+
+  .left-panel   { width: 320px; min-width: 280px; background: #fff; padding: 16px; overflow-y: auto; flex-shrink: 0; }
+  .center-panel { flex: 1; background: #fff; padding: 20px; overflow-y: auto; }
+  .right-panel  { width: 280px; min-width: 240px; background: #fff; padding: 16px; overflow-y: auto; flex-shrink: 0; }
+
+  /* ===== Shared ===== */
+  .panel-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; display: block; }
+  .panel-title { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+  .panel-title .count { color: #999; font-weight: 400; font-size: 13px; }
+  .empty-hint { color: #aaa; font-size: 13px; font-style: italic; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
+  }
+  .btn i { font-size: 11px; }
+  .btn-primary { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+  .btn-primary:hover { background: #3b5de7; }
+  .btn-primary:disabled { background: #b0bef9; cursor: not-allowed; }
+  .btn-outline { background: #fff; color: #4a6cf7; border-color: #4a6cf7; }
+  .btn-outline:hover { background: #f0f4ff; }
+  .btn-flat { background: none; color: #666; border: none; padding: 6px 8px; }
+  .btn-flat:hover { color: #333; background: #f0f0f0; }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+  .btn-danger { background: none; color: #c62828; border: none; padding: 4px 6px; }
+  .btn-danger:hover { background: #fde8e8; }
+
+  .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .form-group label { font-size: 12px; font-weight: 600; color: #555; }
+  .form-input, .form-select {
+    padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; outline: none; transition: border 0.15s;
+  }
+  .form-input:focus, .form-select:focus { border-color: #4a6cf7; box-shadow: 0 0 0 2px rgba(74,108,247,0.12); }
+  .form-select { background: #fff; cursor: pointer; }
+
+  /* ===== Integration Selector ===== */
+  .integration-selector { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+
+  /* ===== Entity Map Header ===== */
+  .entity-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .header-actions { display: flex; gap: 4px; }
+
+  /* ===== Add Map Flow ===== */
+  .add-map-panel {
+    background: #f8f9fb; border: 1px solid #e0e4ea; border-radius: 10px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .add-panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .add-panel-top h5 { font-size: 14px; font-weight: 600; margin: 0; }
+  .add-panel-close { background: none; border: none; cursor: pointer; color: #999; font-size: 14px; }
+  .add-panel-close:hover { color: #333; }
+
+  /* Source object dropdown */
+  .source-object-select {
+    position: relative;
+  }
+  .source-object-select .form-select {
+    width: 100%; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23666' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .source-loading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; padding: 6px 0; }
+  .source-loading i { color: #4a6cf7; }
+
+  /* Target mode toggle */
+  .target-mode-toggle {
+    display: flex; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .target-mode-btn {
+    flex: 1; padding: 8px 12px; font-size: 12px; font-weight: 600;
+    text-align: center; cursor: pointer; background: #fff; border: none;
+    color: #666; transition: all 0.15s;
+  }
+  .target-mode-btn:first-child { border-right: 1px solid #ddd; }
+  .target-mode-btn.active { background: #4a6cf7; color: #fff; }
+  .target-mode-btn:not(.active):hover { background: #f0f4ff; color: #4a6cf7; }
+  .target-mode-btn i { margin-right: 4px; }
+
+  /* New entity form */
+  .new-entity-form {
+    background: #fff; border: 1px solid #e0e4ea; border-radius: 8px;
+    padding: 14px; margin-bottom: 12px;
+  }
+  .new-entity-form .section-label {
+    font-size: 11px; font-weight: 700; color: #4a6cf7;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+  }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+
+  /* Auto-suggest hint */
+  .auto-hint { font-size: 10px; color: #999; font-style: italic; }
+
+  /* ===== Entity Map List ===== */
+  .entity-map-list { display: flex; flex-direction: column; gap: 4px; }
+  .entity-map-item {
+    padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; border: 1px solid #eee; transition: all 0.15s;
+  }
+  .entity-map-item:hover { background: #f8f9fa; }
+  .entity-map-item.selected { background: #f0f4ff; border-color: #4a6cf7; }
+  .entity-map-item.pending { border-left: 3px solid #f0a30a; }
+  .em-top-row { display: flex; align-items: center; gap: 4px; font-size: 13px; margin-bottom: 4px; }
+  .em-name { font-weight: 600; }
+  .em-arrow { color: #999; font-size: 11px; }
+  .em-entity { color: #555; }
+  .em-bottom-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #888; }
+  .em-badges { display: flex; gap: 4px; align-items: center; }
+  .badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600;
+  }
+  .badge-direction { background: #f0f0f0; color: #555; }
+  .badge-pending { background: #fff3e0; color: #e65100; }
+  .badge-ready { background: #e6f9ed; color: #1b7a3d; }
+  .em-actions { display: flex; align-items: center; gap: 4px; }
+  .em-delete { opacity: 0; transition: opacity 0.15s; cursor: pointer; color: #c62828; background: none; border: none; padding: 2px 4px; font-size: 12px; }
+  .entity-map-item:hover .em-delete { opacity: 1; }
+
+  /* Toggle switch mock */
+  .toggle-switch {
+    width: 32px; height: 18px; border-radius: 9px; background: #ccc;
+    position: relative; cursor: pointer; transition: background 0.2s;
+  }
+  .toggle-switch.on { background: #4a6cf7; }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    transition: transform 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .toggle-switch.on::after { transform: translateX(14px); }
+
+  /* ===== Center: Field Mapping Table ===== */
+  .field-mapping-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .field-actions { display: flex; gap: 6px; }
+
+  .field-map-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .field-map-table th {
+    text-align: left; padding: 8px 10px;
+    background: #f5f6f8; font-weight: 700; font-size: 11px;
+    text-transform: uppercase; color: #888; letter-spacing: 0.4px;
+    border-bottom: 2px solid #e0e0e0;
+  }
+  .field-map-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  .field-map-table tr:hover { background: #fafbff; }
+  .field-map-table .col-src { width: 30%; }
+  .field-map-table .col-dst { width: 30%; }
+  .field-map-table .col-type { width: 15%; }
+  .field-map-table .col-flags { width: 15%; text-align: center; }
+  .field-map-table .col-action { width: 36px; }
+
+  .source-field { display: flex; align-items: center; gap: 6px; }
+  .source-field .type-tag { font-size: 10px; color: #999; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+  .dest-field-select { width: 100%; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+  .flag-checks { display: flex; gap: 8px; justify-content: center; }
+  .flag-checks input { cursor: pointer; }
+  .flag-checks label { font-size: 11px; color: #888; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+
+  .field-row-remove { background: none; border: none; cursor: pointer; color: #ddd; font-size: 13px; padding: 2px; }
+  .field-row-remove:hover { color: #c62828; }
+
+  /* Auto-map banner */
+  .auto-map-banner {
+    background: #f0f4ff; border: 1px solid #d0dcff; border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .auto-map-banner i { color: #4a6cf7; font-size: 18px; }
+  .auto-map-banner .banner-text { flex: 1; }
+  .auto-map-banner .banner-text p { font-size: 13px; color: #555; margin: 0; }
+  .auto-map-banner .banner-text strong { color: #333; }
+
+  /* ===== Center: Pending Entity Panel ===== */
+  .pending-entity-panel {
+    background: #fffcf0; border: 1px solid #f0dca0; border-radius: 10px;
+    padding: 20px; text-align: center;
+  }
+  .pending-icon { font-size: 40px; color: #f0a30a; margin-bottom: 12px; }
+  .pending-entity-panel h3 { font-size: 16px; margin-bottom: 8px; }
+  .pending-entity-panel p { font-size: 13px; color: #888; margin-bottom: 16px; line-height: 1.5; }
+
+  .pending-steps {
+    display: flex; gap: 0; margin: 20px 0; justify-content: center; align-items: center;
+  }
+  .step {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 0 16px; position: relative;
+  }
+  .step-circle {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+  }
+  .step-circle.done { background: #e6f9ed; color: #1b7a3d; }
+  .step-circle.current { background: #4a6cf7; color: #fff; }
+  .step-circle.future { background: #f0f0f0; color: #999; }
+  .step-label { font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; white-space: nowrap; }
+  .step-connector { width: 32px; height: 2px; background: #ddd; align-self: center; margin-bottom: 18px; }
+  .step-connector.done { background: #1b7a3d; }
+
+  .ddl-preview-inline {
+    margin-top: 16px; text-align: left;
+  }
+  .ddl-preview-inline pre {
+    background: #1e1e1e; color: #d4d4d4; padding: 12px;
+    border-radius: 6px; font-size: 12px; line-height: 1.5;
+    max-height: 250px; overflow: auto; white-space: pre-wrap;
+  }
+  .ddl-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
+
+  /* ===== Right Panel ===== */
+  .run-summary-card { background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .run-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .run-row .label { color: #777; font-weight: 500; }
+  .run-status { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: #e6f9ed; color: #1b7a3d; }
+
+  .entity-stat { background: #f8f9fa; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+  .entity-stat-name { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .stat-grid { display: flex; gap: 12px; }
+  .mini-stat { text-align: center; }
+  .mini-val { display: block; font-size: 16px; font-weight: 600; }
+  .mini-val.error { color: #c62828; }
+  .mini-label { font-size: 10px; color: #888; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 1100px) { .right-panel { display: none; } }
+  @media (max-width: 800px) { .left-panel { width: 260px; } }
+
+  /* ===== Scenario Tabs for mockup ===== */
+  .mockup-tabs {
+    display: flex; gap: 0; margin-bottom: 0; background: #333; padding: 8px 16px 0;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .mockup-tab {
+    padding: 8px 16px; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: #aaa; background: #444; border-radius: 6px 6px 0 0;
+    border: none; margin-right: 2px;
+  }
+  .mockup-tab.active { background: #f5f6f8; color: #333; }
+  .mockup-tab:hover:not(.active) { color: #fff; }
+  .scenario { display: none; }
+  .scenario.active { display: flex; flex-direction: column; height: calc(100vh - 40px); }
+</style>
+</head>
+<body>
+
+<!-- Scenario Tabs -->
+<div class="mockup-tabs">
+  <button class="mockup-tab active" onclick="showScenario('s1')">1: Add Map (Existing Entity)</button>
+  <button class="mockup-tab" onclick="showScenario('s2')">2: Add Map (New Entity)</button>
+  <button class="mockup-tab" onclick="showScenario('s3')">3: Pending Entity View</button>
+  <button class="mockup-tab" onclick="showScenario('s4')">4: Field Mapping (Active)</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCENARIO 1: Add Map to Existing Entity -->
+<!-- ============================================================ -->
+<div class="scenario active" id="s1">
+  <div class="mapping-workspace">
+    <div class="workspace-header">
+      <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+    </div>
+    <div class="workspace-body">
+
+      <!-- LEFT PANEL -->
+      <div class="left-panel">
+        <div class="integration-selector">
+          <label class="panel-label">Integration</label>
+          <select class="form-select" style="width:100%;">
+            <option>YourMembership</option>
+            <option>HubSpot</option>
+          </select>
+        </div>
+
+        <div class="entity-map-header">
+          <span class="panel-label" style="margin:0;">Entity Maps</span>
+          <div class="header-actions">
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Map</button>
+          </div>
+        </div>
+
+        <!-- ADD MAP PANEL - EXISTING ENTITY MODE -->
+        <div class="add-map-panel">
+          <div class="add-panel-top">
+            <h5><i class="fa-solid fa-plus" style="color:#4a6cf7;margin-right:4px;"></i> Add Entity Map</h5>
+            <button class="add-panel-close"><i class="fa-solid fa-times"></i></button>
+          </div>
+
+          <!-- Step 1: Source Object (auto-discovered dropdown) -->
+          <div class="form-group">
+            <label><i class="fa-solid fa-cloud-arrow-down" style="color:#4a6cf7;margin-right:4px;"></i> Source Object</label>
+            <select class="form-select" style="width:100%;">
+              <option value="">-- Select external object --</option>
+              <option selected>Sa.Members</option>
+              <option>Sa.Events</option>
+              <option>Sa.EventRegistrations</option>
+              <option>Sa.Groups</option>
+              <option>Sa.GroupMembers</option>
+              <option>Sa.Invoices</option>
+              <option>Sa.Products</option>
+              <option>Sa.Orders</option>
+              <option>Sa.Certifications</option>
+              <option>Sa.CustomFields</option>
+            </select>
+            <span class="auto-hint">10 objects discovered from YourMembership</span>
+          </div>
+
+          <!-- Step 2: Target Mode Toggle -->
+          <div class="form-group">
+            <label>Target</label>
+            <div class="target-mode-toggle">
+              <button class="target-mode-btn active">
+                <i class="fa-solid fa-database"></i> Existing Entity
+              </button>
+              <button class="target-mode-btn">
+                <i class="fa-solid fa-circle-plus"></i> New Entity
+              </button>
+            </div>
+          </div>
+
+          <!-- Existing entity dropdown -->
+          <div class="form-group">
+            <label>MJ Entity</label>
+            <select class="form-select" style="width:100%;">
+              <option value="">Search entities...</option>
+              <option>Contacts</option>
+              <option selected>Members</option>
+              <option>Persons</option>
+              <option>Users</option>
+            </select>
+          </div>
+
+          <!-- Sync Direction -->
+          <div class="form-group">
+            <label>Sync Direction</label>
+            <select class="form-select" style="width:100%;">
+              <option selected>Pull</option>
+              <option>Push</option>
+              <option>Bidirectional</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button class="btn btn-primary"><i class="fa-solid fa-check"></i> Add Map</button>
+            <button class="btn btn-flat">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Existing maps -->
+        <div class="entity-map-list" style="margin-top:8px;">
+          <div class="entity-map-item selected">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Events</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Events</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+          <div class="entity-map-item">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Invoices</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Invoices</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER PANEL -->
+      <div class="center-panel">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#bbb;">
+          <i class="fa-solid fa-hand-pointer" style="font-size:36px;margin-bottom:12px;"></i>
+          <p style="text-align:center;font-size:14px;">Select an entity map to view field mappings,<br>or add a new map using the panel on the left.</p>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="right-panel">
+        <span class="panel-label">Last Run Details</span>
+        <div class="run-summary-card">
+          <div class="run-row"><span class="label">Status</span><span class="run-status">Success</span></div>
+          <div class="run-row"><span class="label">Started</span><span>2 hours ago</span></div>
+          <div class="run-row"><span class="label">Records</span><span>1,247</span></div>
+          <div class="run-row"><span class="label">Run By</span><span>admin@co.com</span></div>
+        </div>
+        <span class="panel-label" style="margin-top:8px;">Per-Entity Stats</span>
+        <div class="entity-stat">
+          <div class="entity-stat-name">Events</div>
+          <div class="stat-grid">
+            <div class="mini-stat"><span class="mini-val">42</span><span class="mini-label">Created</span></div>
+            <div class="mini-stat"><span class="mini-val">189</span><span class="mini-label">Updated</span></div>
+            <div class="mini-stat"><span class="mini-val error">3</span><span class="mini-label">Errors</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCENARIO 2: Add Map with New Entity -->
+<!-- ============================================================ -->
+<div class="scenario" id="s2">
+  <div class="mapping-workspace">
+    <div class="workspace-header">
+      <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+    </div>
+    <div class="workspace-body">
+      <div class="left-panel">
+        <div class="integration-selector">
+          <label class="panel-label">Integration</label>
+          <select class="form-select" style="width:100%;"><option>YourMembership</option></select>
+        </div>
+
+        <div class="entity-map-header">
+          <span class="panel-label" style="margin:0;">Entity Maps</span>
+          <div class="header-actions">
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Map</button>
+          </div>
+        </div>
+
+        <!-- ADD MAP PANEL - NEW ENTITY MODE -->
+        <div class="add-map-panel">
+          <div class="add-panel-top">
+            <h5><i class="fa-solid fa-plus" style="color:#4a6cf7;margin-right:4px;"></i> Add Entity Map</h5>
+            <button class="add-panel-close"><i class="fa-solid fa-times"></i></button>
+          </div>
+
+          <!-- Source Object -->
+          <div class="form-group">
+            <label><i class="fa-solid fa-cloud-arrow-down" style="color:#4a6cf7;margin-right:4px;"></i> Source Object</label>
+            <select class="form-select" style="width:100%;">
+              <option selected>Sa.Certifications</option>
+            </select>
+            <span class="auto-hint">10 objects discovered from YourMembership</span>
+          </div>
+
+          <!-- Target Mode Toggle (New Entity selected) -->
+          <div class="form-group">
+            <label>Target</label>
+            <div class="target-mode-toggle">
+              <button class="target-mode-btn">
+                <i class="fa-solid fa-database"></i> Existing Entity
+              </button>
+              <button class="target-mode-btn active">
+                <i class="fa-solid fa-circle-plus"></i> New Entity
+              </button>
+            </div>
+          </div>
+
+          <!-- New Entity Definition -->
+          <div class="new-entity-form">
+            <div class="section-label"><i class="fa-solid fa-wand-magic-sparkles" style="margin-right:4px;"></i> New Entity Definition</div>
+
+            <div class="form-group">
+              <label>DB Schema</label>
+              <select class="form-select" style="width:100%;">
+                <option>__mj</option>
+                <option selected>ym</option>
+                <option>dbo</option>
+                <option value="__new__" style="color:#4a6cf7;">+ New Schema...</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Table Name</label>
+                <input class="form-input" value="Certification" />
+                <span class="auto-hint">Auto-generated from source object</span>
+              </div>
+              <div class="form-group">
+                <label>Entity Name</label>
+                <input class="form-input" value="YM Certifications" />
+                <span class="auto-hint">Auto-generated, editable</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sync Direction -->
+          <div class="form-group">
+            <label>Sync Direction</label>
+            <select class="form-select" style="width:100%;"><option selected>Pull</option></select>
+          </div>
+
+          <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+            <button class="btn btn-primary"><i class="fa-solid fa-check"></i> Add Map</button>
+            <button class="btn btn-outline"><i class="fa-solid fa-database"></i> Preview DDL</button>
+            <button class="btn btn-flat">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Existing maps -->
+        <div class="entity-map-list" style="margin-top:8px;">
+          <div class="entity-map-item">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Events</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Events</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: DDL Preview -->
+      <div class="center-panel">
+        <div class="field-mapping-header">
+          <h3 class="panel-title"><i class="fa-solid fa-database" style="color:#4a6cf7;margin-right:6px;"></i> DDL Preview</h3>
+          <div class="field-actions">
+            <button class="btn btn-outline btn-sm"><i class="fa-solid fa-copy"></i> Copy SQL</button>
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-rocket"></i> Queue for Deployment</button>
+          </div>
+        </div>
+
+        <div style="background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;font-family:monospace;font-size:13px;line-height:1.6;overflow:auto;max-height:400px;">
+<span style="color:#569cd6;">CREATE SCHEMA</span> <span style="color:#ce9178;">ym</span>;
+<span style="color:#6a9955;">GO</span>
+
+<span style="color:#569cd6;">CREATE TABLE</span> [<span style="color:#ce9178;">ym</span>].[<span style="color:#ce9178;">Certification</span>] (
+    [<span style="color:#9cdcfe;">ID</span>]                <span style="color:#4ec9b0;">UNIQUEIDENTIFIER</span> <span style="color:#569cd6;">NOT NULL DEFAULT</span> NEWSEQUENTIALID(),
+    [<span style="color:#9cdcfe;">CertificationID</span>]  <span style="color:#4ec9b0;">NVARCHAR</span>(50) <span style="color:#569cd6;">NOT NULL</span>,
+    [<span style="color:#9cdcfe;">Name</span>]              <span style="color:#4ec9b0;">NVARCHAR</span>(200) <span style="color:#569cd6;">NOT NULL</span>,
+    [<span style="color:#9cdcfe;">Description</span>]       <span style="color:#4ec9b0;">NVARCHAR</span>(MAX) <span style="color:#569cd6;">NULL</span>,
+    [<span style="color:#9cdcfe;">Category</span>]          <span style="color:#4ec9b0;">NVARCHAR</span>(100) <span style="color:#569cd6;">NULL</span>,
+    [<span style="color:#9cdcfe;">Status</span>]            <span style="color:#4ec9b0;">NVARCHAR</span>(50) <span style="color:#569cd6;">NULL</span>,
+    [<span style="color:#9cdcfe;">ExpirationMonths</span>]  <span style="color:#4ec9b0;">INT</span> <span style="color:#569cd6;">NULL</span>,
+    [<span style="color:#9cdcfe;">CreatedDate</span>]       <span style="color:#4ec9b0;">DATETIMEOFFSET</span> <span style="color:#569cd6;">NULL</span>,
+    [<span style="color:#9cdcfe;">ModifiedDate</span>]      <span style="color:#4ec9b0;">DATETIMEOFFSET</span> <span style="color:#569cd6;">NULL</span>,
+    <span style="color:#569cd6;">CONSTRAINT</span> PK_Certification <span style="color:#569cd6;">PRIMARY KEY</span> ([ID])
+);
+<span style="color:#6a9955;">GO</span>
+        </div>
+
+        <div style="margin-top:16px;padding:12px;background:#f0f4ff;border-radius:8px;border:1px solid #d0dcff;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;">
+            <i class="fa-solid fa-circle-info" style="color:#4a6cf7;"></i>
+            <div>
+              <strong>What happens next:</strong> The migration SQL will be queued for CI/CD.
+              After it runs, CodeGen will create the entity metadata. Then this map becomes active and ready to sync.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <span class="panel-label">Discovered Fields</span>
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">
+          Fields from <strong>Sa.Certifications</strong> that will become columns:
+        </p>
+        <div style="font-size:12px;">
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">CertificationID</span>
+            <span style="color:#999;">nvarchar(50)</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">Name</span>
+            <span style="color:#999;">nvarchar(200)</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">Description</span>
+            <span style="color:#999;">nvarchar(max)</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">Category</span>
+            <span style="color:#999;">nvarchar(100)</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">Status</span>
+            <span style="color:#999;">nvarchar(50)</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">ExpirationMonths</span>
+            <span style="color:#999;">int</span>
+          </div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">CreatedDate</span>
+            <span style="color:#999;">datetimeoffset</span>
+          </div>
+          <div style="padding:4px 0;display:flex;justify-content:space-between;">
+            <span style="font-weight:600;">ModifiedDate</span>
+            <span style="color:#999;">datetimeoffset</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCENARIO 3: Pending Entity (waiting for CI/CD) -->
+<!-- ============================================================ -->
+<div class="scenario" id="s3">
+  <div class="mapping-workspace">
+    <div class="workspace-header">
+      <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+    </div>
+    <div class="workspace-body">
+      <div class="left-panel">
+        <div class="integration-selector">
+          <label class="panel-label">Integration</label>
+          <select class="form-select" style="width:100%;"><option>YourMembership</option></select>
+        </div>
+        <div class="entity-map-header">
+          <span class="panel-label" style="margin:0;">Entity Maps</span>
+          <div class="header-actions">
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Map</button>
+          </div>
+        </div>
+        <div class="entity-map-list">
+          <div class="entity-map-item">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Events</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Events</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+          <div class="entity-map-item">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Invoices</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Invoices</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+          <!-- PENDING MAP -->
+          <div class="entity-map-item pending selected">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Certifications</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity" style="color:#e65100;">ym.Certification</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-pending"><i class="fa-solid fa-clock" style="margin-right:2px;"></i> Pending</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+            </div>
+          </div>
+          <!-- ANOTHER PENDING MAP -->
+          <div class="entity-map-item pending">
+            <div class="em-top-row">
+              <span class="em-name">Sa.GroupMembers</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity" style="color:#e65100;">ym.GroupMember</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-pending"><i class="fa-solid fa-clock" style="margin-right:2px;"></i> Pending</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: Pending Entity Status -->
+      <div class="center-panel" style="display:flex;align-items:center;justify-content:center;">
+        <div class="pending-entity-panel" style="max-width:550px;width:100%;">
+          <div class="pending-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+          <h3>Entity Pending Creation</h3>
+          <p>
+            <strong>Sa.Certifications</strong> is mapped to <strong>ym.Certification</strong>,
+            but this entity doesn't exist yet. The table must be created via CI/CD and CodeGen before syncing.
+          </p>
+
+          <!-- Progress Steps -->
+          <div class="pending-steps">
+            <div class="step">
+              <div class="step-circle done"><i class="fa-solid fa-check"></i></div>
+              <div class="step-label">Map Created</div>
+            </div>
+            <div class="step-connector done"></div>
+            <div class="step">
+              <div class="step-circle done"><i class="fa-solid fa-check"></i></div>
+              <div class="step-label">DDL Generated</div>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step">
+              <div class="step-circle current">3</div>
+              <div class="step-label">Deploy & CodeGen</div>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step">
+              <div class="step-circle future">4</div>
+              <div class="step-label">Ready to Sync</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <table style="width:100%;font-size:13px;text-align:left;border-collapse:collapse;">
+              <tr style="border-bottom:1px solid #f0dca0;">
+                <td style="padding:6px 8px;font-weight:600;color:#888;width:130px;">Schema</td>
+                <td style="padding:6px 8px;">ym</td>
+              </tr>
+              <tr style="border-bottom:1px solid #f0dca0;">
+                <td style="padding:6px 8px;font-weight:600;color:#888;">Table Name</td>
+                <td style="padding:6px 8px;">Certification</td>
+              </tr>
+              <tr style="border-bottom:1px solid #f0dca0;">
+                <td style="padding:6px 8px;font-weight:600;color:#888;">Entity Name</td>
+                <td style="padding:6px 8px;">YM Certifications</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 8px;font-weight:600;color:#888;">Source Fields</td>
+                <td style="padding:6px 8px;">8 fields</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="ddl-actions">
+            <button class="btn btn-outline"><i class="fa-solid fa-eye"></i> View DDL</button>
+            <button class="btn btn-outline"><i class="fa-solid fa-copy"></i> Copy DDL</button>
+            <button class="btn btn-primary"><i class="fa-solid fa-arrows-rotate"></i> Check Status</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <span class="panel-label">Pending Entity Info</span>
+        <div class="run-summary-card">
+          <div class="run-row"><span class="label">Source</span><span>Sa.Certifications</span></div>
+          <div class="run-row"><span class="label">Target Table</span><span>ym.Certification</span></div>
+          <div class="run-row"><span class="label">Entity Name</span><span>YM Certifications</span></div>
+          <div class="run-row"><span class="label">Status</span><span style="color:#e65100;font-weight:600;">Awaiting Deployment</span></div>
+          <div class="run-row"><span class="label">Created</span><span>5 min ago</span></div>
+        </div>
+
+        <span class="panel-label" style="margin-top:8px;">Planned Fields (8)</span>
+        <div style="font-size:12px;">
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">CertificationID</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">Name</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">Description</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">Category</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">Status</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">ExpirationMonths</div>
+          <div style="padding:4px 0;border-bottom:1px solid #f0f0f0;">CreatedDate</div>
+          <div style="padding:4px 0;">ModifiedDate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCENARIO 4: Active Field Mapping (with auto-map) -->
+<!-- ============================================================ -->
+<div class="scenario" id="s4">
+  <div class="mapping-workspace">
+    <div class="workspace-header">
+      <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+    </div>
+    <div class="workspace-body">
+      <div class="left-panel">
+        <div class="integration-selector">
+          <label class="panel-label">Integration</label>
+          <select class="form-select" style="width:100%;"><option>YourMembership</option></select>
+        </div>
+        <div class="entity-map-header">
+          <span class="panel-label" style="margin:0;">Entity Maps</span>
+          <div class="header-actions">
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Map</button>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <input class="form-input" placeholder="Search entity maps..." style="width:100%;" />
+        </div>
+        <div class="entity-map-list">
+          <div class="entity-map-item selected">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Members</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Members</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+          <div class="entity-map-item">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Events</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity">Events</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-ready">Active</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="toggle-switch on"></div>
+              </div>
+            </div>
+          </div>
+          <div class="entity-map-item pending">
+            <div class="em-top-row">
+              <span class="em-name">Sa.Certifications</span>
+              <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+              <span class="em-entity" style="color:#e65100;">ym.Certification</span>
+            </div>
+            <div class="em-bottom-row">
+              <div class="em-badges">
+                <span class="badge badge-direction">Pull</span>
+                <span class="badge badge-pending"><i class="fa-solid fa-clock" style="margin-right:2px;"></i> Pending</span>
+              </div>
+              <div class="em-actions">
+                <button class="em-delete"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: Field Mapping Table -->
+      <div class="center-panel">
+        <!-- Auto-map suggestion banner -->
+        <div class="auto-map-banner">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <div class="banner-text">
+            <p><strong>Auto-mapped 12 of 15 fields</strong> by matching source field names to entity columns. Review and adjust below.</p>
+          </div>
+          <button class="btn btn-outline btn-sm"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+        </div>
+
+        <div class="field-mapping-header">
+          <h3 class="panel-title">
+            Sa.Members <i class="fa-solid fa-arrow-right" style="color:#999;font-size:12px;margin:0 6px;"></i> Members
+            <span class="count">(15 fields)</span>
+          </h3>
+          <div class="field-actions">
+            <button class="btn btn-outline btn-sm"><i class="fa-solid fa-plus"></i> Add Field</button>
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+
+        <table class="field-map-table">
+          <thead>
+            <tr>
+              <th class="col-src">Source Field</th>
+              <th class="col-dst">Destination Field</th>
+              <th class="col-type">Type</th>
+              <th class="col-flags">Key / Req</th>
+              <th class="col-action"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="source-field"><span>MemberID</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>ExternalID</option><option>ID</option></select></td>
+              <td><span class="type-tag">nvarchar(50)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox" checked> Key</label>
+                  <label><input type="checkbox" checked> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>FirstName</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>FirstName</option></select></td>
+              <td><span class="type-tag">nvarchar(100)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox" checked> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>LastName</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>LastName</option></select></td>
+              <td><span class="type-tag">nvarchar(100)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox" checked> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>Email</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>Email</option></select></td>
+              <td><span class="type-tag">nvarchar(255)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox" checked> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>Phone</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>Phone</option><option>MobilePhone</option></select></td>
+              <td><span class="type-tag">nvarchar(50)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox"> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>JoinDate</span><span class="type-tag">datetime</span></div></td>
+              <td><select class="dest-field-select"><option selected>JoinDate</option><option>CreatedAt</option></select></td>
+              <td><span class="type-tag">datetimeoffset</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox"> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr>
+              <td><div class="source-field"><span>MemberType</span><span class="type-tag">string</span></div></td>
+              <td><select class="dest-field-select"><option selected>MembershipType</option></select></td>
+              <td><span class="type-tag">nvarchar(100)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox"> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+            <tr style="background:#fff8f0;">
+              <td><div class="source-field"><span style="color:#e65100;">CustomField1</span><span class="type-tag">string</span></div></td>
+              <td>
+                <select class="dest-field-select" style="border-color:#f0a30a;">
+                  <option value="" selected>-- Unmapped --</option>
+                  <option>Notes</option>
+                  <option>Description</option>
+                </select>
+              </td>
+              <td><span class="type-tag">nvarchar(500)</span></td>
+              <td>
+                <div class="flag-checks">
+                  <label><input type="checkbox"> Key</label>
+                  <label><input type="checkbox"> Req</label>
+                </div>
+              </td>
+              <td><button class="field-row-remove"><i class="fa-solid fa-times"></i></button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="right-panel">
+        <span class="panel-label">Last Run Details</span>
+        <div class="run-summary-card">
+          <div class="run-row"><span class="label">Status</span><span class="run-status">Success</span></div>
+          <div class="run-row"><span class="label">Started</span><span>2 hours ago</span></div>
+          <div class="run-row"><span class="label">Records</span><span>3,842</span></div>
+          <div class="run-row"><span class="label">Run By</span><span>admin@co.com</span></div>
+        </div>
+        <span class="panel-label" style="margin-top:12px;">Members Stats</span>
+        <div class="entity-stat">
+          <div class="stat-grid">
+            <div class="mini-stat"><span class="mini-val">156</span><span class="mini-label">Created</span></div>
+            <div class="mini-stat"><span class="mini-val">3,680</span><span class="mini-label">Updated</span></div>
+            <div class="mini-stat"><span class="mini-val">6</span><span class="mini-label">Skipped</span></div>
+            <div class="mini-stat"><span class="mini-val error">0</span><span class="mini-label">Errors</span></div>
+          </div>
+        </div>
+
+        <span class="panel-label" style="margin-top:16px;">Source Field Info</span>
+        <p style="font-size:12px;color:#888;">Click a source field to see details about it from the external system.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showScenario(id) {
+  document.querySelectorAll('.scenario').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.mockup-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

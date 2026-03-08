@@ -746,6 +746,23 @@ export type RunViewResult<T = any> = {
      * Only present if Aggregates were requested.
      */
     AggregateExecutionTime?: number;
+
+    /**
+     * If an `OnDataChanged` callback was provided in {@link RunViewParams}, this function
+     * unregisters that callback. Call this during cleanup (e.g., Angular `ngOnDestroy`,
+     * React effect cleanup) to prevent memory leaks.
+     *
+     * For long-lived callers like engines, this is typically not needed — the callback
+     * persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView({ EntityName: 'Users', OnDataChanged: (e) => { ... } });
+     * // Later:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    Unsubscribe?: () => void;
 }
 
 /**

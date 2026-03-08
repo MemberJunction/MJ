@@ -726,9 +726,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // Navigate to entity record
                 const compositeKey = new CompositeKey();
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
-                // If simple load didn't work (single ID without field name), create from ID field
+                // If simple load didn't work (single ID without field name), look up actual PK field
                 if (compositeKey.KeyValuePairs.length === 0) {
-                    compositeKey.LoadFromSingleKeyValuePair('ID', request.recordId);
+                    const md = new Metadata();
+                    const entity = md.Entities.find(e => e.Name === request.entityName);
+                    const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+                    compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
                 }
                 this.navigationService.OpenEntityRecord(
                     request.entityName,
