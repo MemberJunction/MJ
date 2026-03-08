@@ -29,7 +29,6 @@ import {
   ProviderType,
   UserInfo,
   RecordChange,
-  ILocalStorageProvider,
   IFileSystemProvider,
   TransactionGroupBase,
   TransactionItem,
@@ -59,7 +58,6 @@ import {
   RunQueryWithCacheCheckParams,
   RunQueriesWithCacheCheckResponse,
   RunQueryWithCacheCheckResult,
-  InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
@@ -296,7 +294,6 @@ export class SQLServerDataProvider
   private queryCache = new QueryCache();
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
-  private _localStorageProvider: ILocalStorageProvider;
   private _fileSystemProvider: IFileSystemProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
@@ -693,15 +690,9 @@ export class SQLServerDataProvider
       throw new Error(errorDetails);
     }
     
-    // Check permissions and status
-    if (!query.UserCanRun(contextUser)) {
-      if (!query.UserHasRunPermissions(contextUser)) {
-        throw new Error('User does not have permission to run this query');
-      } else {
-        throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
-      }
-    }
-    
+    // Validate permissions and status via shared base class method
+    this.ValidateQueryForExecution(query, contextUser);
+
     return query;
   }
 
@@ -2612,12 +2603,6 @@ IF ${varName} IS NOT NULL
     }
     
     LogStatus(`Completed processing deferred tasks`);
-  }
-
-  get LocalStorageProvider(): ILocalStorageProvider {
-    if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
-
-    return this._localStorageProvider;
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

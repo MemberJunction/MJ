@@ -16,7 +16,7 @@ import type { InstalledAppMap, DependencyNode, DependencyValue } from '../depend
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunNpmInstall } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -52,6 +52,18 @@ export interface OrchestratorContext {
   MJVersion: string;
   /** Progress callbacks */
   Callbacks?: AppInstallCallbacks;
+  /** Path to server workspace relative to RepoRoot (default: 'packages/MJAPI') */
+  ServerPackagePath?: string;
+  /** Path to client workspace relative to RepoRoot (default: 'packages/MJExplorer') */
+  ClientPackagePath?: string;
+  /** Package manager to use (default: auto-detected from lockfile) */
+  PackageManager?: PackageManagerType;
+  /** Version strategy for deps: 'semver' | 'catalog' | 'workspace' | 'auto' (default: 'auto') */
+  VersionStrategy?: VersionStrategy;
+  /** Additional workspace targets beyond the default server/client pair */
+  AdditionalTargets?: WorkspaceTarget[];
+  /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
+  ClientBootstrapSubpath?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -496,8 +508,8 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     await SetAppStatus(context.ContextUser, existingApp.ID, 'Removing');
 
     // Step 2: Execute preRemove hook
-    removeManifest = JSON.parse(existingApp.ManifestJSON) as MJAppManifest;
-    const manifest = removeManifest;
+    const manifest: MJAppManifest = JSON.parse(existingApp.ManifestJSON);
+    removeManifest = manifest;
     if (manifest.hooks?.preRemove) {
       Callbacks?.OnProgress?.('Hooks', 'Running preRemove hook...');
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
@@ -515,15 +527,19 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
           ClientPackages: manifest.packages?.client ?? [],
           SharedPackages: manifest.packages?.shared ?? [],
           Version: existingApp.Version,
+          ServerPackagePath: context.ServerPackagePath,
+          ClientPackagePath: context.ClientPackagePath,
+          PackageManager: context.PackageManager,
+          AdditionalTargets: context.AdditionalTargets,
         }),
       ),
     ]);
 
-    // npm install must run after package.json changes are written
-    Callbacks?.OnProgress?.('Packages', 'Running npm install...');
-    const npmResult = RunNpmInstall(context.RepoRoot, options.Verbose);
-    if (!npmResult.Success) {
-      Callbacks?.OnWarn?.('Packages', `npm install warning during removal: ${npmResult.ErrorMessage}`);
+    // Package install must run after package.json changes are written
+    Callbacks?.OnProgress?.('Packages', 'Running package install...');
+    const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
+    if (!installResult.Success) {
+      Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
     }
 
     // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
@@ -664,10 +680,13 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     installedMap[app.Name] = { Version: app.Version, Repository: app.RepositoryURL };
   }
 
+  // Zod infers object variant fields as optional; DependencyValue requires them.
+  // The runtime schema validates they're present, so this narrowing is safe.
+  const dependencies = (manifest.dependencies ?? {}) as Record<string, DependencyValue>;
   const rootNode: DependencyNode = {
     AppName: manifest.name,
     Repository: manifest.repository,
-    Dependencies: manifest.dependencies as Record<string, DependencyValue>,
+    Dependencies: dependencies,
   };
 
   const result = ResolveDependencies(rootNode, installedMap);
@@ -772,21 +791,26 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
     return { Success: true };
   }
 
-  context.Callbacks?.OnProgress?.('Packages', 'Adding npm packages...');
+  context.Callbacks?.OnProgress?.('Packages', 'Adding packages...');
   const addResult = AddAppPackages({
     RepoRoot: context.RepoRoot,
     ServerPackages: manifest.packages.server ?? [],
     ClientPackages: manifest.packages.client ?? [],
     SharedPackages: manifest.packages.shared ?? [],
     Version: manifest.version,
+    ServerPackagePath: context.ServerPackagePath,
+    ClientPackagePath: context.ClientPackagePath,
+    PackageManager: context.PackageManager,
+    VersionStrategy: context.VersionStrategy,
+    AdditionalTargets: context.AdditionalTargets,
   });
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
   }
 
-  context.Callbacks?.OnProgress?.('Packages', 'Running npm install...');
-  const installResult = RunNpmInstall(context.RepoRoot, undefined, manifest.packages.registry);
+  context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
+  const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
   return { Success: installResult.Success, ErrorMessage: installResult.ErrorMessage };
 }
 
@@ -811,7 +835,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
   // Build dependency graph for topological sort
   const appDeps = new Map<string, string[]>();
   for (const app of apps) {
-    const manifest = JSON.parse(app.ManifestJSON) as MJAppManifest;
+    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
     const depNames = manifest.dependencies ? Object.keys(manifest.dependencies) : [];
     appDeps.set(app.Name, depNames);
   }
@@ -825,7 +849,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
   for (const name of sortedNames) {
     const app = appsByName.get(name);
     if (!app) continue;
-    const manifest = JSON.parse(app.ManifestJSON) as MJAppManifest;
+    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
     const clientPkgs = [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])];
 
     for (const pkg of clientPkgs) {
@@ -838,7 +862,7 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
     }
   }
 
-  RegenerateClientBootstrap(context.RepoRoot, entries);
+  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath, context.ClientBootstrapSubpath);
 }
 
 /**

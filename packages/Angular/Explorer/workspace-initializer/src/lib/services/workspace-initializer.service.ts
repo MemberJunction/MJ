@@ -8,7 +8,7 @@
 
 import { Injectable } from '@angular/core';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ThemeService } from '@memberjunction/ng-shared';
@@ -66,6 +66,13 @@ export class WorkspaceInitializerService {
       await setupGraphQLClient(config);
       const end = Date.now();
       console.log(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
+
+      // Subscribe to cross-server cache invalidation events via GraphQL WebSocket
+      // This enables real-time data refresh when other servers modify entities
+      if (GraphQLDataProvider.Instance) {
+          GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
+          console.log('✓ Cache invalidation subscription active');
+      }
 
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);

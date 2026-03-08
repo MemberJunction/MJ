@@ -18,6 +18,8 @@ export interface ExternalObjectSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the object's purpose */
+    Description?: string;
     /** Whether this object supports incremental sync via watermarks */
     SupportsIncrementalSync: boolean;
     /** Whether this object can be created/updated from MJ (push) */
@@ -30,6 +32,8 @@ export interface ExternalFieldSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the field's purpose */
+    Description?: string;
     /** Field data type in the external system */
     DataType: string;
     /** Whether the field is required */
@@ -38,6 +42,10 @@ export interface ExternalFieldSchema {
     IsUniqueKey: boolean;
     /** Whether the field is read-only */
     IsReadOnly: boolean;
+    /** Whether this field is a foreign key */
+    IsForeignKey?: boolean;
+    /** If FK, which source object it references */
+    ForeignKeyTarget?: string | null;
 }
 
 /** Context passed to FetchChanges for incremental data retrieval */
@@ -117,6 +125,28 @@ export async function WithTimeout<T>(
     }
 }
 
+/** Proposed default configuration for a quick-start setup */
+export interface DefaultObjectConfig {
+    /** Source object name in the external system */
+    SourceObjectName: string;
+    /** Proposed target table name in the MJ database */
+    TargetTableName: string;
+    /** Proposed MJ entity name */
+    TargetEntityName: string;
+    /** Whether to enable sync by default */
+    SyncEnabled: boolean;
+    /** Proposed field mappings */
+    FieldMappings: DefaultFieldMapping[];
+}
+
+/** Full default configuration returned by a connector for quick setup */
+export interface DefaultIntegrationConfig {
+    /** Proposed DB schema name for new tables (e.g., "YourMembership", "HubSpot") */
+    DefaultSchemaName: string;
+    /** Objects to sync by default with proposed table/entity names */
+    DefaultObjects: DefaultObjectConfig[];
+}
+
 /**
  * Abstract base class for integration connectors.
  * Each external system (HubSpot, Salesforce, etc.) implements this class
@@ -178,6 +208,16 @@ export abstract class BaseIntegrationConnector {
     }
 
     /**
+     * Returns a proposed default configuration for quick setup.
+     * Override in subclasses to provide connector-specific defaults
+     * including schema name, objects to sync, and field mappings.
+     * Returns null by default (no quick setup available).
+     */
+    public GetDefaultConfiguration(): DefaultIntegrationConfig | null {
+        return null;
+    }
+
+    /**
      * Introspects the source system's schema — returns metadata about available
      * objects, their fields, primary keys, and foreign key relationships.
      * Used by the Schema Builder to generate local DDL.
@@ -197,13 +237,22 @@ export abstract class BaseIntegrationConnector {
         const result: SourceSchemaInfo = { Objects: [] };
 
         for (const obj of objects) {
-            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            let fields: ExternalFieldSchema[];
+            try {
+                fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                continue;
+            }
             result.Objects.push({
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,
+                Description: obj.Description,
                 Fields: fields.map(f => ({
                     Name: f.Name,
                     Label: f.Label,
+                    Description: f.Description,
                     SourceType: f.DataType,
                     IsRequired: f.IsRequired,
                     MaxLength: null,
@@ -211,8 +260,8 @@ export abstract class BaseIntegrationConnector {
                     Scale: null,
                     DefaultValue: null,
                     IsPrimaryKey: f.IsUniqueKey,
-                    IsForeignKey: false,
-                    ForeignKeyTarget: null,
+                    IsForeignKey: f.IsForeignKey ?? false,
+                    ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
                 Relationships: [],

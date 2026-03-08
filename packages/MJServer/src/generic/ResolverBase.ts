@@ -31,6 +31,8 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
+import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
@@ -126,6 +128,31 @@ export class ResolverBase {
       }
     }
     return dataObject;
+  }
+
+  /**
+   * Reverse-maps GraphQL-safe field names back to entity CodeNames in a mutation input object.
+   * For example, `_mj__integration_SyncStatus` is mapped back to `__mj_integration_SyncStatus`.
+   * Also reverse-maps keys inside the `OldValues___` array if present.
+   * This is the inverse of MapFieldNamesToCodeNames and must be called before passing
+   * GraphQL input to entity SetMany() or field lookups.
+   */
+  protected ReverseMapInputFieldNames(input: Record<string, unknown>): Record<string, unknown> {
+    const mapper = new FieldMapper();
+    const mapped: Record<string, unknown> = {};
+    for (const key of Object.keys(input)) {
+      if (key === 'OldValues___') {
+        // Reverse-map the Key property inside each OldValues entry
+        const oldValues = input[key] as Array<{ Key: string; Value: unknown }>;
+        mapped[key] = oldValues.map((item) => ({
+          Key: mapper.ReverseMapFieldName(item.Key),
+          Value: item.Value,
+        }));
+      } else {
+        mapped[mapper.ReverseMapFieldName(key)] = input[key];
+      }
+    }
+    return mapped;
   }
 
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
@@ -947,6 +974,23 @@ export class ResolverBase {
     return Metadata.Provider.ConfigData.MJCoreSchemaName;
   }
 
+  /**
+   * Publishes a CACHE_INVALIDATION event to connected browser clients after a successful
+   * entity save or delete. Includes the originSessionId so the originating browser can
+   * skip redundant re-fetches (it already handled the event locally).
+   */
+  protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
+    PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+      entityName: entityObject.EntityInfo.Name,
+      primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
+      action,
+      sourceServerId: MJGlobal.Instance.ProcessUUID,
+      timestamp: new Date(),
+      originSessionId: userPayload?.sessionId || null,
+      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
+    });
+  }
+
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
@@ -997,6 +1041,9 @@ export class ResolverBase {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
 
+    // Reverse-map GraphQL field names (e.g. _mj__*) back to entity CodeNames (e.g. __mj_*)
+    input = this.ReverseMapInputFieldNames(input);
+
     if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -1009,6 +1056,7 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire the AfterCreate event and then return all the data
         await this.AfterCreate(provider, input); // fire event
+        this.PublishCacheInvalidation(entityObject, 'save', userPayload);
         const contextUser = this.GetUserFromPayload(userPayload);
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
@@ -1031,6 +1079,9 @@ export class ResolverBase {
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     // Check API key scope authorization for entity update operations
     await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
+
+    // Reverse-map GraphQL field names (e.g. _mj__*) back to entity CodeNames (e.g. __mj_*)
+    input = this.ReverseMapInputFieldNames(input);
 
     if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
@@ -1088,6 +1139,7 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
+        this.PublishCacheInvalidation(entityObject, 'save', userPayload);
 
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
@@ -1307,6 +1359,7 @@ export class ResolverBase {
       
       if (await entityObject.Delete(options)) {
         await this.AfterDelete(provider, key); // fire event
+        this.PublishCacheInvalidation(entityObject, 'delete', userPayload);
         return returnValue;
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {

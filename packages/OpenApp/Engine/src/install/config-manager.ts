@@ -1,15 +1,18 @@
 /**
  * Configuration manager for MJ Open Apps.
  *
- * Manages the `dynamicPackages.server` section in `mj.config.cjs`,
+ * Manages the `dynamicPackages.server` section in the MJ config file,
  * adding/removing/toggling entries for installed app server packages.
  *
- * Uses string-based manipulation of the config file to preserve formatting
- * and comments as much as possible.
+ * Operates on the standard mj.config.cjs file using string-based manipulation
+ * to preserve formatting and comments.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+
+/** Config file name. All MJ projects use mj.config.cjs. */
+const CONFIG_FILE_NAME = 'mj.config.cjs';
 
 /**
  * A single entry in the dynamicPackages.server array.
@@ -46,7 +49,10 @@ export function AddServerDynamicPackages(
     repoRoot: string,
     manifest: MJAppManifest
 ): ConfigOperationResult {
-    const configPath = resolve(repoRoot, 'mj.config.cjs');
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
     const serverPackages = GetServerPackagesFromManifest(manifest);
 
     if (serverPackages.length === 0) {
@@ -81,7 +87,10 @@ export function RemoveServerDynamicPackages(
     repoRoot: string,
     appName: string
 ): ConfigOperationResult {
-    const configPath = resolve(repoRoot, 'mj.config.cjs');
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
+    }
 
     try {
         let content = readFileSync(configPath, 'utf-8');
@@ -108,7 +117,10 @@ export function ToggleServerDynamicPackages(
     appName: string,
     enabled: boolean
 ): ConfigOperationResult {
-    const configPath = resolve(repoRoot, 'mj.config.cjs');
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
+    }
 
     try {
         let content = readFileSync(configPath, 'utf-8');
@@ -120,6 +132,15 @@ export function ToggleServerDynamicPackages(
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
     }
+}
+
+/**
+ * Resolves the path to the MJ config file.
+ * Returns the absolute path if it exists, or undefined if not found.
+ */
+function resolveConfigPath(repoRoot: string): string | undefined {
+    const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
+    return existsSync(candidate) ? candidate : undefined;
 }
 
 /**

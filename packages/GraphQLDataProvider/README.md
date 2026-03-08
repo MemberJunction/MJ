@@ -665,6 +665,10 @@ For comprehensive information about IS-A relationships in MemberJunction:
 - `ExecuteSimplePrompt(params: ExecuteSimplePromptParams)` - Execute ad-hoc prompts without stored configuration
 - `EmbedText(params: EmbedTextParams)` - Generate text embeddings using local models
 
+## Caching & Real-Time Sync
+
+This package provides browser-side storage providers (`BrowserIndexedDBStorageProvider`, `BrowserLocalStorageProvider`) for `LocalCacheManager`, and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities. For the full architecture — including differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/core` - Core MemberJunction functionality
