@@ -8,6 +8,7 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 import { OverviewComponent } from './components/overview/overview.component';
 import { PipelinesComponent } from './components/pipelines/pipelines.component';
@@ -41,7 +42,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     GridModule,
     LayoutModule,
     SharedGenericModule,
-    CredentialsModule
+    CredentialsModule,
+    NgTreesModule
   ],
   providers: [
     IntegrationDataService

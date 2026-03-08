@@ -1,9 +1,12 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject, ViewChild } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
+import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeDropdownComponent } from '@memberjunction/ng-trees';
+import { SchemaPreviewObjectInput, SchemaPreviewResult } from '@memberjunction/graphql-dataprovider';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -129,6 +132,45 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   // Entity map editor state (field mapping detail view)
   EditorEntityMap: EntityMapRow | null = null;
+
+  // Add entity map state
+  ShowAddMapPanel = false;
+  AvailableSourceObjects: Array<{ Name: string; Label: string }> = [];
+  IsLoadingSourceObjects = false;
+  AddMapSourceObjectName = '';
+  AddMapEntityID = '';
+  AddMapDirection: 'Pull' | 'Push' | 'Bidirectional' = 'Pull';
+  IsSavingAddMap = false;
+
+  // Tree dropdown config for MJ Entity picker (schema → entities)
+  @ViewChild('entityTreeDropdown') entityTreeDropdown: TreeDropdownComponent | undefined;
+
+  EntityBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: Schema Info',
+    DisplayField: 'SchemaName',
+    IDField: 'SchemaName',
+    ParentIDField: '', // flat list of schemas, no nesting
+    DefaultIcon: 'fa-solid fa-database',
+    OrderBy: 'SchemaName ASC'
+  };
+
+  EntityLeafConfig: TreeLeafConfig = {
+    EntityName: 'MJ: Entities',
+    DisplayField: 'Name',
+    IDField: 'ID',
+    ParentField: 'SchemaName',
+    DefaultIcon: 'fa-solid fa-table',
+    OrderBy: 'Name ASC'
+  };
+
+  // Create New Entity state
+  ShowCreateEntity = false;
+  NewEntitySchema = '';
+  NewEntityTable = '';
+  DDLPreview: string | null = null;
+  DDLPreviewWarnings: string[] = [];
+  IsGeneratingDDL = false;
+  IsCreatingEntity = false;
 
   // Delete confirmation state
   DeleteConfirmID: string | null = null;
@@ -558,6 +600,199 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   CloseEntityMapEditor(): void {
     this.EditorEntityMap = null;
     this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Add entity map
+  // ---------------------------------------------------------------------------
+
+  async ToggleAddMapPanel(): Promise<void> {
+    this.ShowAddMapPanel = !this.ShowAddMapPanel;
+    if (this.ShowAddMapPanel) {
+      this.resetAddMapState();
+      await this.loadAddMapData();
+    }
+    this.cdr.detectChanges();
+  }
+
+  CloseAddMapPanel(): void {
+    this.ShowAddMapPanel = false;
+    this.cdr.detectChanges();
+  }
+
+  get CanSaveAddMap(): boolean {
+    return !!this.AddMapSourceObjectName && !!this.AddMapEntityID;
+  }
+
+  get AddMapEntityIDAsKey(): CompositeKey | null {
+    return this.AddMapEntityID ? CompositeKey.FromID(this.AddMapEntityID) : null;
+  }
+
+  OnEntityTreeSelection(node: TreeNode | TreeNode[] | null): void {
+    if (!node || Array.isArray(node)) return;
+    if (node.Type === 'leaf') {
+      this.AddMapEntityID = node.ID;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // New Entity dialog (generates SQL migration for a new table)
+  // ---------------------------------------------------------------------------
+
+  OpenNewEntityDialog(): void {
+    this.ShowCreateEntity = true;
+    this.NewEntitySchema = '';
+    this.NewEntityTable = '';
+    this.DDLPreview = null;
+    this.DDLPreviewWarnings = [];
+    this.DDLCopied = false;
+    this.cdr.detectChanges();
+  }
+
+  CloseNewEntityDialog(): void {
+    this.ShowCreateEntity = false;
+    this.DDLPreview = null;
+    this.DDLPreviewWarnings = [];
+    this.DDLCopied = false;
+    this.cdr.detectChanges();
+  }
+
+  DDLCopied = false;
+
+  async CopyDDLToClipboard(): Promise<void> {
+    if (!this.DDLPreview) return;
+    try {
+      await navigator.clipboard.writeText(this.DDLPreview);
+      this.DDLCopied = true;
+      this.cdr.detectChanges();
+      setTimeout(() => {
+        this.DDLCopied = false;
+        this.cdr.detectChanges();
+      }, 2000);
+    } catch {
+      // Fallback: select text in the pre block
+      console.warn('[IntegrationConnections] Clipboard API not available');
+    }
+  }
+
+  get CanGenerateSQL(): boolean {
+    return !!this.NewEntitySchema.trim()
+      && !!this.NewEntityTable.trim()
+      && !!this.AddMapSourceObjectName;
+  }
+
+  get NewEntityName(): string {
+    if (!this.NewEntityTable.trim()) return '';
+    return this.NewEntityTable.trim()
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ');
+  }
+
+  async PreviewDDL(): Promise<void> {
+    if (!this.CanGenerateSQL || !this.SelectedSummary) return;
+    this.IsGeneratingDDL = true;
+    this.DDLPreview = null;
+    this.DDLPreviewWarnings = [];
+    this.cdr.detectChanges();
+
+    try {
+      const objects: SchemaPreviewObjectInput[] = [{
+        SourceObjectName: this.AddMapSourceObjectName,
+        SchemaName: this.NewEntitySchema.trim(),
+        TableName: this.NewEntityTable.trim(),
+        EntityName: this.NewEntityName
+      }];
+
+      const result: SchemaPreviewResult = await this.dataService.SchemaPreview(
+        this.SelectedSummary.Integration.ID,
+        objects
+      );
+
+      if (result.Success) {
+        this.DDLPreview = result.Files.map(f => f.Content).join('\n\n');
+        this.DDLPreviewWarnings = result.Warnings ?? [];
+      } else {
+        this.DDLPreview = `-- Error: ${result.Message}`;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.DDLPreview = `-- Failed to generate DDL: ${msg}`;
+    } finally {
+      this.IsGeneratingDDL = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async SaveAddMap(): Promise<void> {
+    if (!this.CanSaveAddMap || !this.SelectedSummary) return;
+    this.IsSavingAddMap = true;
+    this.cdr.detectChanges();
+
+    try {
+      const sourceObj = this.AvailableSourceObjects.find(o => o.Name === this.AddMapSourceObjectName);
+      const result = await this.dataService.CreateEntityMap({
+        CompanyIntegrationID: this.SelectedSummary.Integration.ID,
+        ExternalObjectName: this.AddMapSourceObjectName,
+        ExternalObjectLabel: sourceObj?.Label !== sourceObj?.Name ? sourceObj?.Label : undefined,
+        EntityID: this.AddMapEntityID,
+        SyncDirection: this.AddMapDirection
+      });
+
+      if (result) {
+        this.ShowAddMapPanel = false;
+        const maps = await this.loadEntityMapsForIntegration(this.SelectedSummary.Integration.ID);
+        this.DetailEntityMaps = maps;
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        // Update entity map count
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to create entity map:', err);
+    } finally {
+      this.IsSavingAddMap = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private resetAddMapState(): void {
+    this.AddMapSourceObjectName = '';
+    this.AddMapEntityID = '';
+    this.AddMapDirection = 'Pull';
+    this.AvailableSourceObjects = [];
+    this.ShowCreateEntity = false;
+    this.NewEntitySchema = '';
+    this.NewEntityTable = '';
+    this.DDLPreview = null;
+    this.DDLPreviewWarnings = [];
+  }
+
+  private async loadAddMapData(): Promise<void> {
+    if (!this.SelectedSummary) return;
+
+    this.IsLoadingSourceObjects = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Load source objects from IntegrationEngineBase metadata
+      const engine = IntegrationEngineBase.Instance;
+      const integration = engine.GetIntegrationForCompanyIntegration(this.SelectedSummary.Integration.ID);
+      if (integration) {
+        const objects = engine.GetActiveIntegrationObjects(integration.ID);
+        // Filter out objects that already have entity maps
+        const existingNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+        this.AvailableSourceObjects = objects
+          .filter(o => !existingNames.has(o.Name))
+          .map(o => ({
+            Name: o.Name,
+            Label: o.DisplayName || o.Name
+          }));
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to load source objects:', err);
+    } finally {
+      this.IsLoadingSourceObjects = false;
+      this.cdr.detectChanges();
+    }
   }
 
   private async loadEntityMapsForIntegration(companyIntegrationID: string): Promise<EntityMapRow[]> {

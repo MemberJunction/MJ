@@ -231,21 +231,100 @@
                      [value]="DetailSearchTerm"
                      (input)="OnDetailSearch($event)" />
             </div>
+            <button class="add-map-btn" (click)="ToggleAddMapPanel()" [class.active]="ShowAddMapPanel">
+              <i class="fa-solid fa-plus"></i> Add Map
+            </button>
           </div>
         </div>
+
+        <!-- Add Entity Map inline form -->
+        @if (ShowAddMapPanel) {
+          <div class="add-map-panel">
+            <div class="add-map-row">
+              <div class="add-map-field">
+                <label class="add-map-label">Source Object</label>
+                @if (IsLoadingSourceObjects) {
+                  <div class="add-map-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
+                } @else if (AvailableSourceObjects.length === 0) {
+                  <div class="add-map-hint">No source objects found in metadata</div>
+                } @else {
+                  <select class="add-map-select" [(ngModel)]="AddMapSourceObjectName">
+                    <option [ngValue]="''" disabled>Select source object...</option>
+                    @for (obj of AvailableSourceObjects; track obj.Name) {
+                      <option [value]="obj.Name">{{ obj.Label || obj.Name }}</option>
+                    }
+                  </select>
+                }
+              </div>
+
+              <div class="add-map-direction-col">
+                <label class="add-map-label">Direction</label>
+                <div class="add-map-direction-btns">
+                  <button [class.active]="AddMapDirection === 'Pull'" (click)="AddMapDirection = 'Pull'" title="Pull from source">
+                    <i class="fa-solid fa-arrow-right"></i>
+                  </button>
+                  <button [class.active]="AddMapDirection === 'Bidirectional'" (click)="AddMapDirection = 'Bidirectional'" title="Bidirectional sync">
+                    <i class="fa-solid fa-right-left"></i>
+                  </button>
+                  <button [class.active]="AddMapDirection === 'Push'" (click)="AddMapDirection = 'Push'" title="Push to source">
+                    <i class="fa-solid fa-arrow-left"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="add-map-field add-map-entity-field">
+                <label class="add-map-label">MJ Entity</label>
+                <div class="entity-picker-row">
+                  <mj-tree-dropdown
+                    #entityTreeDropdown
+                    [BranchConfig]="EntityBranchConfig"
+                    [LeafConfig]="EntityLeafConfig"
+                    [Value]="AddMapEntityIDAsKey"
+                    [SelectableTypes]="'leaf'"
+                    [SelectionMode]="'single'"
+                    [Placeholder]="'Search entities by schema...'"
+                    [EnableSearch]="true"
+                    (SelectionChange)="OnEntityTreeSelection($event)">
+                  </mj-tree-dropdown>
+                  <button class="new-entity-btn" (click)="OpenNewEntityDialog()" title="Create new entity table">
+                    <i class="fa-solid fa-plus"></i> New
+                  </button>
+                </div>
+              </div>
+
+              <div class="add-map-actions">
+                <button class="add-map-save-btn"
+                        [disabled]="!CanSaveAddMap || IsSavingAddMap"
+                        (click)="SaveAddMap()">
+                  @if (IsSavingAddMap) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                  } @else {
+                    <i class="fa-solid fa-check"></i> Add
+                  }
+                </button>
+                <button class="add-map-cancel-btn" (click)="CloseAddMapPanel()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        }
 
         <!-- Entity maps table -->
         @if (IsDetailLoading) {
           <div class="loading-container">
             <mj-loading text="Loading entity maps..."></mj-loading>
           </div>
-        } @else if (DetailEntityMaps.length === 0) {
+        } @else if (DetailEntityMaps.length === 0 && !ShowAddMapPanel) {
           <div class="detail-empty">
             <i class="fa-solid fa-cube"></i>
             <h3>No entity maps configured</h3>
-            <p>Entity maps define how external objects sync to MJ entities. Configure them to start syncing data.</p>
+            <p>Entity maps define how external objects sync to MJ entities.</p>
+            <button class="add-map-btn add-map-btn-lg" (click)="ToggleAddMapPanel()">
+              <i class="fa-solid fa-plus"></i> Add Your First Entity Map
+            </button>
           </div>
-        } @else {
+        } @else if (DetailEntityMaps.length > 0) {
           <!-- Table header -->
           <div class="detail-table-head">
             <span class="dt-col-toggle">Sync</span>
@@ -670,4 +749,105 @@
     [PreselectedTypeId]="PreselectedCredentialTypeId"
     (close)="EditPanelOpen ? OnEditCredentialDialogClose($event) : OnCredentialDialogClose($event)">
   </mj-credential-dialog>
+}
+
+<!-- New Entity dialog -->
+@if (ShowCreateEntity) {
+  <div class="new-entity-backdrop" (click)="CloseNewEntityDialog()"></div>
+  <div class="new-entity-dialog">
+    <div class="new-entity-dialog-header">
+      <h3>Create New Entity Table</h3>
+      <button class="new-entity-dialog-close" (click)="CloseNewEntityDialog()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="new-entity-dialog-body">
+      <p class="new-entity-dialog-desc">
+        Generate a SQL migration to create a new database table for this integration's data.
+        After running the migration and CodeGen, the new entity will appear in the entity picker.
+      </p>
+
+      <div class="new-entity-dialog-form">
+        <div class="new-entity-dialog-row">
+          <div class="new-entity-dialog-field">
+            <label class="new-entity-dialog-label">Source Object</label>
+            <div class="new-entity-dialog-value">
+              @if (AddMapSourceObjectName) {
+                {{ AddMapSourceObjectName }}
+              } @else {
+                <span class="new-entity-dialog-hint">Select a source object in the Add Map form first</span>
+              }
+            </div>
+          </div>
+        </div>
+        <div class="new-entity-dialog-row">
+          <div class="new-entity-dialog-field">
+            <label class="new-entity-dialog-label">Schema</label>
+            <input type="text"
+                   class="new-entity-dialog-input"
+                   placeholder="e.g. hubspot"
+                   [(ngModel)]="NewEntitySchema" />
+          </div>
+          <span class="new-entity-dialog-dot">.</span>
+          <div class="new-entity-dialog-field new-entity-dialog-field-wide">
+            <label class="new-entity-dialog-label">Table Name</label>
+            <input type="text"
+                   class="new-entity-dialog-input"
+                   placeholder="e.g. Contact"
+                   [(ngModel)]="NewEntityTable" />
+          </div>
+        </div>
+      </div>
+
+      @if (DDLPreviewWarnings.length > 0) {
+        <div class="ddl-warnings">
+          @for (warn of DDLPreviewWarnings; track warn) {
+            <div class="ddl-warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ warn }}</div>
+          }
+        </div>
+      }
+
+      @if (DDLPreview) {
+        <div class="ddl-preview-block">
+          <div class="ddl-preview-header">
+            <span>SQL Preview</span>
+            <button class="ddl-copy-btn" (click)="CopyDDLToClipboard()" title="Copy to clipboard">
+              @if (DDLCopied) {
+                <i class="fa-solid fa-check"></i> Copied
+              } @else {
+                <i class="fa-regular fa-copy"></i> Copy
+              }
+            </button>
+          </div>
+          <pre class="ddl-preview-code">{{ DDLPreview }}</pre>
+        </div>
+      }
+
+      @if (DDLPreview) {
+        <div class="new-entity-next-steps">
+          <h4><i class="fa-solid fa-list-check"></i> Next Steps</h4>
+          <ol>
+            <li>Copy the SQL above and save it as a migration file</li>
+            <li>Run the migration against your database</li>
+            <li>Run CodeGen to register the new entity in MemberJunction</li>
+            <li>Refresh the page &mdash; the new entity will appear in the entity picker</li>
+          </ol>
+        </div>
+      }
+    </div>
+    <div class="new-entity-dialog-footer">
+      <button class="new-entity-preview-btn"
+              [disabled]="!CanGenerateSQL || IsGeneratingDDL"
+              (click)="PreviewDDL()">
+        @if (IsGeneratingDDL) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+        } @else {
+          <i class="fa-solid fa-code"></i> Generate SQL
+        }
+      </button>
+      <button class="new-entity-dialog-done-btn" (click)="CloseNewEntityDialog()">
+        Done
+      </button>
+    </div>
+  </div>
 }
