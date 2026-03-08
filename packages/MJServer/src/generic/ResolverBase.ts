@@ -128,6 +128,31 @@ export class ResolverBase {
     return dataObject;
   }
 
+  /**
+   * Reverse-maps GraphQL-safe field names back to entity CodeNames in a mutation input object.
+   * For example, `_mj__integration_SyncStatus` is mapped back to `__mj_integration_SyncStatus`.
+   * Also reverse-maps keys inside the `OldValues___` array if present.
+   * This is the inverse of MapFieldNamesToCodeNames and must be called before passing
+   * GraphQL input to entity SetMany() or field lookups.
+   */
+  protected ReverseMapInputFieldNames(input: Record<string, unknown>): Record<string, unknown> {
+    const mapper = new FieldMapper();
+    const mapped: Record<string, unknown> = {};
+    for (const key of Object.keys(input)) {
+      if (key === 'OldValues___') {
+        // Reverse-map the Key property inside each OldValues entry
+        const oldValues = input[key] as Array<{ Key: string; Value: unknown }>;
+        mapped[key] = oldValues.map((item) => ({
+          Key: mapper.ReverseMapFieldName(item.Key),
+          Value: item.Value,
+        }));
+      } else {
+        mapped[mapper.ReverseMapFieldName(key)] = input[key];
+      }
+    }
+    return mapped;
+  }
+
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
     // iterate through the array and call MapFieldNamesToCodeNames for each element
     if (dataObjectArray && dataObjectArray.length > 0) {
@@ -997,6 +1022,9 @@ export class ResolverBase {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
 
+    // Reverse-map GraphQL field names (e.g. _mj__*) back to entity CodeNames (e.g. __mj_*)
+    input = this.ReverseMapInputFieldNames(input);
+
     if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -1031,6 +1059,9 @@ export class ResolverBase {
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     // Check API key scope authorization for entity update operations
     await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
+
+    // Reverse-map GraphQL field names (e.g. _mj__*) back to entity CodeNames (e.g. __mj_*)
+    input = this.ReverseMapInputFieldNames(input);
 
     if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
