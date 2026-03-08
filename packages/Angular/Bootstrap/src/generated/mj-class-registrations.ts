@@ -378,11 +378,12 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (56 classes)
+// @memberjunction/ng-dashboards (58 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
     ActionsOverviewComponent,
+    ActivityComponent,
     AgentConfigurationComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
@@ -392,8 +393,7 @@ import {
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     ComponentStudioDashboardComponent,
-    ConnectionStudioComponent,
-    ControlTowerComponent,
+    ConnectionsComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsDashboardComponent,
@@ -415,15 +415,17 @@ import {
     MCPDashboardComponent,
     MappingWorkspaceComponent,
     ModelManagementComponent,
+    OverviewComponent,
+    PipelinesComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     ScheduledActionsComponent,
+    SchedulesComponent,
     SchedulingActivityResourceComponent,
     SchedulingDashboardComponent,
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
-    SyncActivityComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TestingAnalyticsResourceComponent,
@@ -801,6 +803,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     APIKeysResourceComponent,
     ActionExplorerComponent,
     ActionsOverviewComponent,
+    ActivityComponent,
     AgentConfigurationComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
@@ -810,8 +813,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     ComponentStudioDashboardComponent,
-    ConnectionStudioComponent,
-    ControlTowerComponent,
+    ConnectionsComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
     CredentialsDashboardComponent,
@@ -833,15 +835,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     MCPDashboardComponent,
     MappingWorkspaceComponent,
     ModelManagementComponent,
+    OverviewComponent,
+    PipelinesComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     ScheduledActionsComponent,
+    SchedulesComponent,
     SchedulingActivityResourceComponent,
     SchedulingDashboardComponent,
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
-    SyncActivityComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TestingAnalyticsResourceComponent,
@@ -875,7 +879,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 398;
+export const CLASS_REGISTRATIONS_COUNT = 400;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,0 +1,243 @@
+<div class="overview">
+  <!-- Notification Banner -->
+  @if (Notification) {
+    <div class="notification" [class.notification-success]="Notification.Type === 'success'"
+         [class.notification-error]="Notification.Type === 'error'">
+      @if (Notification.Type === 'success') {
+        <i class="fa-solid fa-circle-check"></i>
+      } @else {
+        <i class="fa-solid fa-circle-xmark"></i>
+      }
+      <span class="notification-message">{{ Notification.Message }}</span>
+      <button class="notification-dismiss" (click)="DismissNotification()">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+  }
+
+  @if (IsLoading) {
+    <mj-loading text="Loading integrations..." size="medium"></mj-loading>
+  } @else if (Summaries.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-plug-circle-xmark"></i>
+      <h3>No Integrations Configured</h3>
+      <p>Set up your first integration using the Connection Studio to start syncing data.</p>
+    </div>
+  } @else {
+    <!-- ====================================================================
+         SECTION 1: Metric Strip
+         ==================================================================== -->
+    <div class="metric-strip">
+      <!-- Total Pipelines -->
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-blue">
+          <i class="fa-solid fa-diagram-project"></i>
+        </div>
+        <div class="metric-body">
+          <span class="metric-value">{{ KPIs.TotalIntegrations }}</span>
+          <span class="metric-label">Total Pipelines</span>
+        </div>
+      </div>
+
+      <!-- Records Today -->
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-green">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="metric-body">
+          <span class="metric-value">{{ FormatNumber(KPIs.RecordsSyncedToday) }}</span>
+          <span class="metric-label">Records Today</span>
+        </div>
+      </div>
+
+      <!-- Success Rate (with conic gradient ring) -->
+      <div class="metric-card">
+        <div class="metric-ring" [style.background]="SuccessRateGradient">
+          <div class="metric-ring-inner">
+            <span class="metric-ring-value">{{ SuccessRate }}%</span>
+          </div>
+        </div>
+        <div class="metric-body">
+          <span class="metric-value metric-value-indigo">{{ SuccessRate }}%</span>
+          <span class="metric-label">Success Rate</span>
+        </div>
+      </div>
+
+      <!-- Active Now -->
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-emerald">
+          <i class="fa-solid fa-bolt"></i>
+          @if (ActiveCount > 0) {
+            <span class="pulse-dot"></span>
+          }
+        </div>
+        <div class="metric-body">
+          <span class="metric-value">{{ ActiveCount }}</span>
+          <span class="metric-label">Active Now</span>
+        </div>
+      </div>
+
+      <!-- Avg Duration -->
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-orange">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="metric-body">
+          <span class="metric-value">{{ FormatDuration(KPIs.AverageSyncDurationMs) }}</span>
+          <span class="metric-label">Avg Duration</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         SECTION 2: Pipeline Health Grid
+         ==================================================================== -->
+    <div class="section-heading">
+      <h3><i class="fa-solid fa-heart-pulse"></i> Pipeline Health</h3>
+      <button class="refresh-btn" (click)="Refresh()">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+      </button>
+    </div>
+
+    <div class="pipeline-grid">
+      @for (summary of Summaries; track summary.Integration.ID) {
+        <div [class]="GetCardBorderClass(summary.StatusColor)">
+          <!-- Card Header -->
+          <div class="card-header">
+            <div class="card-header-left">
+              <div class="card-icon-wrap">
+                <i [class]="GetIntegrationIcon(summary)"></i>
+              </div>
+              <div class="card-title-wrap">
+                <span class="card-title">{{ summary.Integration.Name }}</span>
+                <span class="card-subtitle">{{ summary.SourceType?.Name ?? 'Custom' }}</span>
+              </div>
+            </div>
+            <div [class]="GetStatusDotClass(summary.StatusColor)"
+                 [title]="GetStatusLabel(summary.StatusColor)">
+              @if (summary.LatestRun?.Status === 'In Progress') {
+                <span class="dot-pulse"></span>
+              }
+            </div>
+          </div>
+
+          <!-- Pipeline Flow Visual -->
+          <div class="pipeline-flow">
+            <div class="flow-node">
+              <i [class]="GetIntegrationIcon(summary)"></i>
+            </div>
+            <div class="flow-arrow">
+              <div class="flow-line"></div>
+              <span class="flow-count">{{ GetEntityMapCount(summary.Integration.ID) }} maps</span>
+              <div class="flow-line"></div>
+            </div>
+            <div class="flow-node flow-node-mj">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+          </div>
+
+          <!-- Stats Row -->
+          <div class="card-stats">
+            <div class="stat-item">
+              <span class="stat-label">Last sync</span>
+              <span class="stat-value">{{ summary.RelativeTime }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Records</span>
+              <span class="stat-value">{{ FormatNumber(summary.LatestRun?.TotalRecords ?? 0) }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value">{{ FormatDuration(summary.DurationMs) }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Errors</span>
+              <span class="stat-value" [class.stat-error]="summary.TotalErrors > 0">
+                {{ summary.TotalErrors }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Sparkline (last 5 runs) -->
+          <div class="sparkline-row">
+            <span class="sparkline-label">Recent runs</span>
+            <div class="sparkline-dots">
+              @for (run of summary.RecentRuns; track run.ID) {
+                <span [class]="GetSparklineDotClass(run)"
+                      [title]="run.Status + ' - ' + (run.StartedAt ?? 'N/A')"></span>
+              }
+              @if (summary.RecentRuns.length === 0) {
+                <span class="sparkline-none">No runs</span>
+              }
+            </div>
+          </div>
+
+          <!-- Card Footer -->
+          <div class="card-footer">
+            @if (IsRunning(summary.Integration.ID)) {
+              <button class="btn-sync btn-sync-disabled" disabled>
+                <i class="fa-solid fa-spinner fa-spin"></i> Running...
+              </button>
+            } @else {
+              <button class="btn-sync"
+                      (click)="RunSync(summary.Integration.ID)"
+                      [disabled]="!summary.Integration.IsActive || RunningIntegrationID !== null">
+                <i class="fa-solid fa-play"></i> Sync Now
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- ====================================================================
+         SECTION 3: Bottom - Bar Chart & Activity Feed
+         ==================================================================== -->
+    <div class="bottom-split">
+      <!-- Bar Chart (left, 60%) -->
+      <div class="chart-panel">
+        <h3 class="panel-title"><i class="fa-solid fa-chart-bar"></i> Records Synced (7 days)</h3>
+        @if (DailyCounts.length === 0) {
+          <p class="empty-hint">No data available.</p>
+        } @else {
+          <div class="bar-chart">
+            @for (day of DailyCounts; track day.Date) {
+              <div class="bar-column">
+                <div class="bar-count">{{ FormatNumber(day.Records) }}</div>
+                <div class="bar-fill" [style.height.%]="BarHeight(day.Records)"></div>
+                <div class="bar-day">{{ day.Label }}</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Activity Feed (right, 40%) -->
+      <div class="feed-panel">
+        <h3 class="panel-title"><i class="fa-solid fa-stream"></i> Recent Activity</h3>
+        @if (ActivityFeed.length === 0) {
+          <p class="empty-hint">No recent activity.</p>
+        } @else {
+          <div class="feed-list">
+            @for (item of ActivityFeed; track item.RunID) {
+              <div class="feed-item">
+                <i [class]="ActivityStatusIcon(item.Status)"
+                   [class.feed-icon-green]="item.StatusColor === 'green'"
+                   [class.feed-icon-red]="item.StatusColor === 'red'"
+                   [class.feed-icon-amber]="item.StatusColor === 'amber'">
+                </i>
+                <div class="feed-details">
+                  <span class="feed-name">{{ item.IntegrationName }}</span>
+                  <span class="feed-meta">{{ item.TotalRecords | number }} records &middot; {{ item.RelativeTime }}</span>
+                </div>
+                <span class="feed-badge" [class]="'feed-badge-' + item.StatusColor">
+                  {{ item.Status }}
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

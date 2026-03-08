@@ -9,20 +9,24 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 
-import { ControlTowerComponent } from './components/control-tower/control-tower.component';
-import { ConnectionStudioComponent } from './components/connection-studio/connection-studio.component';
+import { OverviewComponent } from './components/overview/overview.component';
+import { PipelinesComponent } from './components/pipelines/pipelines.component';
+import { ConnectionsComponent } from './components/connections/connections.component';
 import { MappingWorkspaceComponent } from './components/mapping-workspace/mapping-workspace.component';
-import { SyncActivityComponent } from './components/sync-activity/sync-activity.component';
+import { ActivityComponent } from './components/activity/activity.component';
+import { SchedulesComponent } from './components/schedules/schedules.component';
 import { IntegrationCardComponent } from './components/widgets/integration-card.component';
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { IntegrationDataService } from './services/integration-data.service';
 
 @NgModule({
   declarations: [
-    ControlTowerComponent,
-    ConnectionStudioComponent,
+    OverviewComponent,
+    PipelinesComponent,
+    ConnectionsComponent,
     MappingWorkspaceComponent,
-    SyncActivityComponent,
+    ActivityComponent,
+    SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent
   ],
@@ -41,10 +45,12 @@ import { IntegrationDataService } from './services/integration-data.service';
     IntegrationDataService
   ],
   exports: [
-    ControlTowerComponent,
-    ConnectionStudioComponent,
+    OverviewComponent,
+    PipelinesComponent,
+    ConnectionsComponent,
     MappingWorkspaceComponent,
-    SyncActivityComponent,
+    ActivityComponent,
+    SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent
   ]

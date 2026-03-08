@@ -155,6 +155,61 @@ export interface DailyRecordCount {
   Records: number;
 }
 
+/** Schedule row for the Schedules component (includes new scheduling fields) */
+export interface ScheduleRow {
+  ID: string;
+  Name: string;
+  Integration: string;
+  Company: string;
+  IsActive: boolean | null;
+  ScheduleEnabled: boolean;
+  ScheduleType: 'Manual' | 'Interval' | 'Cron';
+  ScheduleIntervalMinutes: number | null;
+  CronExpression: string | null;
+  NextScheduledRunAt: string | null;
+  LastScheduledRunAt: string | null;
+  IsLocked: boolean;
+  LockedAt: string | null;
+}
+
+/** Watermark row for the Activity detail panel */
+export interface WatermarkRow {
+  ID: string;
+  EntityMapID: string;
+  WatermarkType: string;
+  WatermarkValue: string | null;
+  Direction: 'Pull' | 'Push';
+  EntityMap: string;
+}
+
+/** Shared icon resolution map for integration names to Font Awesome icon classes */
+const INTEGRATION_ICON_MAP: Array<{ Pattern: RegExp; Icon: string }> = [
+  { Pattern: /hubspot/i, Icon: 'fa-brands fa-hubspot' },
+  { Pattern: /salesforce/i, Icon: 'fa-brands fa-salesforce' },
+  { Pattern: /google/i, Icon: 'fa-brands fa-google' },
+  { Pattern: /microsoft|dynamics|azure/i, Icon: 'fa-brands fa-microsoft' },
+  { Pattern: /slack/i, Icon: 'fa-brands fa-slack' },
+  { Pattern: /jira|atlassian/i, Icon: 'fa-brands fa-atlassian' },
+  { Pattern: /github/i, Icon: 'fa-brands fa-github' },
+  { Pattern: /stripe/i, Icon: 'fa-brands fa-stripe' },
+  { Pattern: /shopify/i, Icon: 'fa-brands fa-shopify' },
+  { Pattern: /mailchimp/i, Icon: 'fa-brands fa-mailchimp' },
+  { Pattern: /wordpress/i, Icon: 'fa-brands fa-wordpress' },
+  { Pattern: /dropbox/i, Icon: 'fa-brands fa-dropbox' },
+  { Pattern: /csv|file|import/i, Icon: 'fa-solid fa-file-csv' },
+  { Pattern: /postgres|mysql|sql|database|db/i, Icon: 'fa-solid fa-database' },
+  { Pattern: /api|rest|graphql/i, Icon: 'fa-solid fa-code' },
+  { Pattern: /member|membership/i, Icon: 'fa-solid fa-users' },
+  { Pattern: /email|mail/i, Icon: 'fa-solid fa-envelope' },
+  { Pattern: /calendar|event/i, Icon: 'fa-solid fa-calendar' }
+];
+
+/** Resolve an integration name to a Font Awesome icon class */
+export function ResolveIntegrationIcon(name: string): string {
+  const match = INTEGRATION_ICON_MAP.find(m => m.Pattern.test(name));
+  return match ? match.Icon : 'fa-solid fa-plug';
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -606,6 +661,57 @@ export class IntegrationDataService {
       { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' }
     ]);
     return { Success: result.Success, Message: result.Message ?? '' };
+  }
+
+  /** Load schedule data for all company integrations (includes new scheduling fields) */
+  async LoadSchedules(provider?: IRunViewProvider | null): Promise<ScheduleRow[]> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<ScheduleRow>({
+      EntityName: 'MJ: Company Integrations',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      Fields: ['ID', 'Name', 'Integration', 'Company', 'IsActive',
+               'ScheduleEnabled', 'ScheduleType', 'ScheduleIntervalMinutes',
+               'CronExpression', 'NextScheduledRunAt', 'LastScheduledRunAt',
+               'IsLocked', 'LockedAt'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load sync watermarks for a specific company integration's entity maps */
+  async LoadWatermarks(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<WatermarkRow[]> {
+    const rv = this.createRunView(provider);
+    // First get entity maps for this integration, then load their watermarks
+    const entityMaps = await this.LoadEntityMaps(companyIntegrationID, provider);
+    if (entityMaps.length === 0) return [];
+
+    const mapIDs = entityMaps.map(em => `'${em.ID}'`).join(',');
+    const result = await rv.RunView<WatermarkRow>({
+      EntityName: 'MJ: Company Integration Sync Watermarks',
+      ExtraFilter: `EntityMapID IN (${mapIDs})`,
+      OrderBy: 'EntityMap',
+      Fields: ['ID', 'EntityMapID', 'WatermarkType', 'WatermarkValue', 'Direction', 'EntityMap'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load entity map count per company integration (used by Overview cards) */
+  async LoadEntityMapCounts(provider?: IRunViewProvider | null): Promise<Map<string, number>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ CompanyIntegrationID: string }>({
+      EntityName: 'MJ: Company Integration Entity Maps',
+      ExtraFilter: 'SyncEnabled=1',
+      Fields: ['CompanyIntegrationID'],
+      ResultType: 'simple'
+    });
+    const counts = new Map<string, number>();
+    for (const row of result.Results) {
+      const key = row.CompanyIntegrationID.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
   }
 
   private async lookupActionID(actionName: string): Promise<string | null> {

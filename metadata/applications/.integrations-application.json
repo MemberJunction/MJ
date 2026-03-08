@@ -8,29 +8,35 @@
     "DefaultSequence": 1006,
     "DefaultNavItems": [
       {
-        "Label": "Control Tower",
-        "Icon": "fa-solid fa-tower-broadcast",
+        "Label": "Overview",
+        "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "IntegrationControlTower",
+        "DriverClass": "IntegrationOverview",
         "isDefault": true
       },
       {
-        "Label": "Connections",
-        "Icon": "fa-solid fa-network-wired",
-        "ResourceType": "Custom",
-        "DriverClass": "IntegrationConnectionStudio"
-      },
-      {
-        "Label": "Entity Mapping",
+        "Label": "Pipelines",
         "Icon": "fa-solid fa-diagram-project",
         "ResourceType": "Custom",
-        "DriverClass": "IntegrationMappingWorkspace"
+        "DriverClass": "IntegrationPipelines"
       },
       {
-        "Label": "Sync Activity",
+        "Label": "Connections",
+        "Icon": "fa-solid fa-plug",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationConnections"
+      },
+      {
+        "Label": "Activity",
         "Icon": "fa-solid fa-clock-rotate-left",
         "ResourceType": "Custom",
-        "DriverClass": "IntegrationSyncActivity"
+        "DriverClass": "IntegrationActivity"
+      },
+      {
+        "Label": "Schedules",
+        "Icon": "fa-solid fa-calendar-check",
+        "ResourceType": "Custom",
+        "DriverClass": "IntegrationSchedules"
       }
     ]
   },
@@ -222,7 +228,7 @@
     "ID": "1AE7EDAE-A057-497A-87CD-5DF72D0877CC"
   },
   "sync": {
-    "lastModified": "2026-03-05T15:33:44.304Z",
-    "checksum": "697c7e70cfa1c3ceba97de4f0187ac5b8582075fed42a7290f1b35da78cbd59d"
+    "lastModified": "2026-03-08T02:27:46.528Z",
+    "checksum": "860a633a0c39b6e4dd686455abb9f0b41d4d266b9f3b9fec0542d244cd4af7a3"
   }
 }

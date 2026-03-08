@@ -1,0 +1,263 @@
+<div class="pipelines-container">
+
+  <!-- Toolbar -->
+  <div class="pipelines-toolbar">
+    <div class="toolbar-left">
+      <h2 class="toolbar-title">
+        <i class="fa-solid fa-diagram-project"></i>
+        Pipelines
+      </h2>
+      <span class="integration-count-badge">{{ IntegrationCount }}</span>
+    </div>
+    <div class="toolbar-right">
+      <button class="toolbar-btn" (click)="ZoomOut()" title="Zoom Out">
+        <i class="fa-solid fa-magnifying-glass-minus"></i>
+      </button>
+      <span class="zoom-label">{{ ZoomPercent }}%</span>
+      <button class="toolbar-btn" (click)="ZoomIn()" title="Zoom In">
+        <i class="fa-solid fa-magnifying-glass-plus"></i>
+      </button>
+      <button class="toolbar-btn" (click)="FitView()" title="Fit to View">
+        <i class="fa-solid fa-expand"></i>
+      </button>
+      <div class="toolbar-divider"></div>
+      <button class="toolbar-btn" (click)="LoadData()" title="Refresh">
+        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Canvas area -->
+  <div class="canvas-area">
+    @if (IsLoading && PipelineGroups.length === 0) {
+      <div class="canvas-loading">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <span>Loading pipelines...</span>
+      </div>
+    } @else if (PipelineGroups.length === 0) {
+      <div class="canvas-empty">
+        <i class="fa-solid fa-diagram-project empty-icon"></i>
+        <h3>No Integration Pipelines</h3>
+        <p>Configure integrations to see data flow pipelines here.</p>
+      </div>
+    } @else {
+      <div class="canvas-scroll">
+        <div class="canvas-wrapper" [style.transform]="'scale(' + ZoomLevel + ')'"
+             [style.transformOrigin]="'top left'">
+          <svg [attr.viewBox]="ViewBox" class="pipeline-canvas" xmlns="http://www.w3.org/2000/svg">
+
+            <!-- Connection paths (render behind nodes) -->
+            @for (group of PipelineGroups; track group.IntegrationID) {
+              @for (conn of group.Connections; track $index) {
+                <!-- Path stroke -->
+                <path [attr.d]="conn.Path"
+                      fill="none"
+                      [attr.stroke]="conn.StatusColor"
+                      stroke-width="2"
+                      stroke-opacity="0.3" />
+                <!-- Animated flow dot -->
+                <circle r="3.5" [attr.fill]="conn.StatusColor" opacity="0.8">
+                  <animateMotion [attr.dur]="'3s'"
+                                 repeatCount="indefinite"
+                                 [attr.path]="conn.Path"
+                                 [attr.begin]="conn.AnimationDelay + 's'" />
+                </circle>
+              }
+            }
+
+            <!-- Nodes via foreignObject -->
+            @for (group of PipelineGroups; track group.IntegrationID) {
+
+              <!-- Group label -->
+              <text [attr.x]="group.SourceNode.X"
+                    [attr.y]="group.Y + 12"
+                    class="group-label">
+                {{ group.IntegrationName }}
+              </text>
+
+              <!-- Source node -->
+              <foreignObject [attr.x]="group.SourceNode.X"
+                             [attr.y]="group.SourceNode.Y"
+                             [attr.width]="group.SourceNode.Width"
+                             [attr.height]="group.SourceNode.Height">
+                <div xmlns="http://www.w3.org/1999/xhtml"
+                     class="pipeline-node source-node">
+                  <div class="node-status-dot" [style.backgroundColor]="group.SourceNode.StatusColor"></div>
+                  <i [class]="group.SourceNode.Icon + ' node-icon source-icon'"></i>
+                  <div class="node-text">
+                    <span class="node-label">{{ group.SourceNode.Label }}</span>
+                    <span class="node-sublabel">{{ group.SourceNode.SubLabel }}</span>
+                  </div>
+                </div>
+              </foreignObject>
+
+              <!-- Entity map nodes -->
+              @for (emNode of group.EntityMapNodes; track emNode.ID) {
+                <foreignObject [attr.x]="emNode.X"
+                               [attr.y]="emNode.Y"
+                               [attr.width]="emNode.Width"
+                               [attr.height]="emNode.Height">
+                  <div xmlns="http://www.w3.org/1999/xhtml"
+                       class="pipeline-node entitymap-node"
+                       [class.selected]="IsNodeSelected(emNode)"
+                       (click)="OnNodeClick(emNode)">
+                    <div class="node-status-dot" [style.backgroundColor]="emNode.StatusColor"></div>
+                    <div class="node-text entitymap-text">
+                      <span class="node-label entitymap-label">
+                        {{ emNode.Label }}
+                        <span [class]="DirectionBadgeClass(emNode.EntityMap?.SyncDirection ?? '')">
+                          {{ DirectionLabel(emNode.EntityMap?.SyncDirection ?? '') }}
+                        </span>
+                      </span>
+                      <span class="node-sublabel">{{ emNode.SubLabel }}</span>
+                    </div>
+                  </div>
+                </foreignObject>
+              }
+
+              <!-- Destination node -->
+              <foreignObject [attr.x]="group.DestinationNode.X"
+                             [attr.y]="group.DestinationNode.Y"
+                             [attr.width]="group.DestinationNode.Width"
+                             [attr.height]="group.DestinationNode.Height">
+                <div xmlns="http://www.w3.org/1999/xhtml"
+                     class="pipeline-node destination-node">
+                  <i [class]="group.DestinationNode.Icon + ' node-icon dest-icon'"></i>
+                  <div class="node-text">
+                    <span class="node-label">{{ group.DestinationNode.Label }}</span>
+                    <span class="node-sublabel">{{ group.DestinationNode.SubLabel }}</span>
+                  </div>
+                </div>
+              </foreignObject>
+            }
+          </svg>
+        </div>
+      </div>
+    }
+
+    <!-- Detail panel (slide-in) -->
+    <div class="detail-panel-backdrop"
+         [class.open]="DetailPanelOpen"
+         (click)="CloseDetailPanel()"></div>
+    <div class="detail-panel" [class.open]="DetailPanelOpen">
+      @if (SelectedNode && SelectedEntityMap) {
+        <!-- Header -->
+        <div class="detail-header">
+          <div class="detail-header-title">
+            <span class="detail-source-name">{{ SelectedNode.Label }}</span>
+            <span [class]="DirectionBadgeClass(SelectedEntityMap.SyncDirection)">
+              {{ DirectionLabel(SelectedEntityMap.SyncDirection) }}
+            </span>
+            <span class="detail-dest-name">{{ SelectedEntityMap.Entity }}</span>
+          </div>
+          <button class="detail-close-btn" (click)="CloseDetailPanel()" title="Close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Stats strip -->
+        <div class="detail-stats">
+          <div class="detail-stat">
+            <span class="stat-value">{{ ActiveFieldMaps.length }}</span>
+            <span class="stat-label">Fields</span>
+          </div>
+          <div class="detail-stat">
+            <span class="stat-value">{{ KeyFieldCount }}</span>
+            <span class="stat-label">Key Fields</span>
+          </div>
+          <div class="detail-stat">
+            <span class="stat-value">{{ RequiredFieldCount }}</span>
+            <span class="stat-label">Required</span>
+          </div>
+          <div class="detail-stat">
+            <span class="stat-value status-dot-inline"
+                  [style.color]="SelectedEntityMap.SyncEnabled ? '#059669' : '#9ca3af'">
+              {{ SelectedEntityMap.SyncEnabled ? 'Active' : 'Inactive' }}
+            </span>
+            <span class="stat-label">Status</span>
+          </div>
+        </div>
+
+        <!-- Mapping config badges -->
+        <div class="detail-config-row">
+          <span class="config-badge">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            {{ SelectedEntityMap.ConflictResolution }}
+          </span>
+          <span class="config-badge">
+            <i class="fa-solid fa-trash-can"></i>
+            {{ SelectedEntityMap.DeleteBehavior }}
+          </span>
+          @if (SelectedEntityMap.MatchStrategy) {
+            <span class="config-badge">
+              <i class="fa-solid fa-link"></i>
+              {{ SelectedEntityMap.MatchStrategy }}
+            </span>
+          }
+        </div>
+
+        <!-- Field mapping table -->
+        <div class="detail-field-list">
+          <div class="field-list-header">
+            <span>Field Mappings</span>
+          </div>
+
+          @if (FieldMapsLoading) {
+            <div class="field-loading">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Loading field maps...
+            </div>
+          } @else if (ActiveFieldMaps.length === 0) {
+            <div class="field-empty">
+              <i class="fa-solid fa-link-slash"></i>
+              No field mappings configured.
+            </div>
+          } @else {
+            <div class="field-table">
+              <div class="field-table-head">
+                <span class="field-col-source">Source Field</span>
+                <span class="field-col-arrow"></span>
+                <span class="field-col-dest">Destination Field</span>
+                <span class="field-col-meta"></span>
+              </div>
+              @for (fm of ActiveFieldMaps; track fm.ID) {
+                <div class="field-row" [class.key-field]="fm.IsKeyField">
+                  <span class="field-col-source" [title]="fm.SourceFieldName">
+                    {{ fm.SourceFieldLabel ?? fm.SourceFieldName }}
+                  </span>
+                  <span class="field-col-arrow">
+                    <span class="field-direction">{{ FieldDirectionLabel(fm.Direction) }}</span>
+                  </span>
+                  <span class="field-col-dest" [title]="fm.DestinationFieldName">
+                    {{ fm.DestinationFieldLabel ?? fm.DestinationFieldName }}
+                  </span>
+                  <span class="field-col-meta">
+                    @if (fm.IsKeyField) {
+                      <span class="meta-badge key-badge" title="Key Field">K</span>
+                    }
+                    @if (fm.IsRequired) {
+                      <span class="meta-badge required-badge" title="Required">*</span>
+                    }
+                    @if (fm.TransformPipeline) {
+                      <span class="meta-badge transform-badge" [title]="fm.TransformPipeline">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                      </span>
+                    }
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Footer link -->
+        <div class="detail-footer">
+          <span class="edit-link">
+            <i class="fa-solid fa-pen-to-square"></i>
+            Edit Mapping
+          </span>
+        </div>
+      }
+    </div>
+  </div>
+</div>
