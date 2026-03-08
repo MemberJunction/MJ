@@ -1,7 +1,5 @@
 ---
 "@memberjunction/core-actions": patch
-"mj_generatedactions": patch
-"mj_generatedentities": patch
 "@memberjunction/core-entities": patch
 ---
 
