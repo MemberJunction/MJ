@@ -3,7 +3,7 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView, IRunViewProvider } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { DiscoveredFieldResult } from '@memberjunction/graphql-dataprovider';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -545,26 +545,22 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     this.cdr.detectChanges();
 
     const entityMap = this.EditorEntityMap;
-    const companyIntegrationID = this.EditorCard.IntegrationID;
 
     try {
-      // Load field maps, source fields, and dest fields in parallel
-      const [fieldMaps, sourceResult, destFields] = await Promise.all([
+      // Load field maps and dest fields in parallel
+      const [fieldMaps, destFields] = await Promise.all([
         this.dataService.LoadFieldMaps(entityMap.ID, this.RunViewToUse),
-        this.dataService.DiscoverFields(companyIntegrationID, entityMap.ExternalObjectName)
-          .catch(() => ({ Success: false, Message: '', Data: [] as DiscoveredFieldResult[] })),
         this.dataService.LoadEntityFields(entityMap.EntityID, this.RunViewToUse)
       ]);
 
-      // Build source fields
-      if (sourceResult.Success && sourceResult.Data.length > 0) {
-        this.EditorSourceFields = sourceResult.Data.map(f => ({
-          Name: f.Name,
-          Label: f.Label || f.Name,
-          Type: f.DataType,
-          IsRequired: f.IsRequired,
-          IsPrimaryKey: f.IsUniqueKey
-        }));
+      // Build source fields from IntegrationObjectField metadata
+      const sourceFields = this.resolveSourceFieldsFromMetadata(
+        this.EditorCard.IntegrationID,
+        entityMap.ExternalObjectName
+      );
+
+      if (sourceFields.length > 0) {
+        this.EditorSourceFields = sourceFields;
       } else {
         // Fallback: derive source fields from existing field maps
         this.EditorSourceFields = fieldMaps.map(fm => ({
@@ -1018,6 +1014,34 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
       case 'substring': return { Start: 0, Length: 10 };
       case 'custom': return { Expression: 'value' };
     }
+  }
+
+  /**
+   * Resolve source fields from IntegrationObjectField metadata via IntegrationEngineBase.
+   * CompanyIntegrationID → Integration → IntegrationObject → IntegrationObjectFields.
+   */
+  private resolveSourceFieldsFromMetadata(
+    companyIntegrationID: string,
+    externalObjectName: string
+  ): VisualSourceField[] {
+    const engine = IntegrationEngineBase.Instance;
+    const integration = engine.GetIntegrationForCompanyIntegration(companyIntegrationID);
+    if (!integration) return [];
+
+    const obj = engine.GetIntegrationObject(integration.ID, externalObjectName);
+    if (!obj) return [];
+
+    const fields = engine.GetIntegrationObjectFields(obj.ID);
+    return fields
+      .filter(f => f.Status === 'Active')
+      .sort((a, b) => a.Sequence - b.Sequence)
+      .map(f => ({
+        Name: f.Name,
+        Label: f.DisplayName || f.Name,
+        Type: f.Type,
+        IsRequired: f.IsRequired,
+        IsPrimaryKey: f.IsPrimaryKey
+      }));
   }
 
   private applyMapFilter(card: PipelineCard): EntityMapRow[] {

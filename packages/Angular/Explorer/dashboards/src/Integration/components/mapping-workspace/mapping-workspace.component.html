@@ -331,8 +331,8 @@
                   @for (field of SelectedPendingMap.SourceFields; track field.Name) {
                     <div class="pending-field-item">
                       <span class="pending-field-name">{{ field.Name }}</span>
-                      <span class="pending-field-type">{{ field.DataType }}</span>
-                      @if (field.IsUniqueKey) {
+                      <span class="pending-field-type">{{ field.Type }}</span>
+                      @if (field.IsPrimaryKey) {
                         <i class="fa-solid fa-key key-icon" title="Key field"></i>
                       }
                       @if (field.IsRequired) {

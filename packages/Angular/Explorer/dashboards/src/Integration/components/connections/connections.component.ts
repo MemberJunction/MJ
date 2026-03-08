@@ -4,6 +4,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -52,6 +53,8 @@ interface CompanyRow {
 
 interface DiscoveredObject {
   Name: string;
+  DisplayName: string;
+  Category: string;
   Selected: boolean;
   RecordCount: number | null;
 }
@@ -670,11 +673,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       ci.Name = this.ConnectionName;
       await ci.Save();
 
-      // Discover objects
-      const discovery = await this.dataService.DiscoverObjects(this.SavedIntegrationID);
-      if (discovery.Success && discovery.Data) {
-        this.DiscoveredObjects = discovery.Data.map(obj => ({
+      // Load objects from IntegrationObject metadata via engine
+      const engine = IntegrationEngineBase.Instance;
+      const integration = engine.GetIntegrationForCompanyIntegration(this.SavedIntegrationID);
+      if (integration) {
+        const objects = engine.GetActiveIntegrationObjects(integration.ID);
+        this.DiscoveredObjects = objects.map(obj => ({
           Name: obj.Name,
+          DisplayName: obj.DisplayName || obj.Name,
+          Category: obj.Category || 'Uncategorized',
           Selected: false,
           RecordCount: null
         }));
@@ -693,6 +700,36 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   get SelectedDiscoveredCount(): number {
     return this.DiscoveredObjects.filter(o => o.Selected).length;
+  }
+
+  /** Group discovered objects by Category for wizard Step 4 display */
+  get DiscoveredObjectsByCategory(): Array<{ Category: string; Objects: DiscoveredObject[] }> {
+    const categoryMap = new Map<string, DiscoveredObject[]>();
+    for (const obj of this.DiscoveredObjects) {
+      const cat = obj.Category || 'Uncategorized';
+      if (!categoryMap.has(cat)) {
+        categoryMap.set(cat, []);
+      }
+      categoryMap.get(cat)!.push(obj);
+    }
+    return Array.from(categoryMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([Category, Objects]) => ({ Category, Objects }));
+  }
+
+  ToggleCategoryAll(category: string, selected: boolean): void {
+    for (const obj of this.DiscoveredObjects) {
+      if ((obj.Category || 'Uncategorized') === category) {
+        obj.Selected = selected;
+      }
+    }
+  }
+
+  IsCategoryFullySelected(category: string): boolean {
+    const inCategory = this.DiscoveredObjects.filter(
+      o => (o.Category || 'Uncategorized') === category
+    );
+    return inCategory.length > 0 && inCategory.every(o => o.Selected);
   }
 
   async ApplyQuickSetup(): Promise<void> {
@@ -715,7 +752,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
         await this.dataService.CreateEntityMap({
           CompanyIntegrationID: this.SavedIntegrationID,
           ExternalObjectName: obj.Name,
-          ExternalObjectLabel: obj.Name,
+          ExternalObjectLabel: obj.DisplayName !== obj.Name ? obj.DisplayName : undefined,
           EntityID: targetEntity.ID,
           SyncDirection: 'Pull'
         });

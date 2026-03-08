@@ -390,18 +390,33 @@
 
             @if (!IsDiscovering && DiscoveredObjects.length > 0) {
               <div class="discovered-list">
-                @for (obj of DiscoveredObjects; track obj.Name) {
-                  <div class="discovered-item">
-                    <div class="discovered-info">
-                      <span class="discovered-name">{{ obj.Name }}</span>
-                      @if (obj.RecordCount != null) {
-                        <span class="discovered-count">~{{ obj.RecordCount }} records</span>
-                      }
+                @for (group of DiscoveredObjectsByCategory; track group.Category) {
+                  <div class="discovered-category">
+                    <div class="discovered-category-header">
+                      <span class="discovered-category-name">{{ group.Category }}</span>
+                      <span class="discovered-category-count">{{ group.Objects.length }}</span>
+                      <label class="toggle-switch toggle-switch-sm"
+                             title="Select/deselect all in this category">
+                        <input type="checkbox"
+                               [checked]="IsCategoryFullySelected(group.Category)"
+                               (change)="ToggleCategoryAll(group.Category, !IsCategoryFullySelected(group.Category))" />
+                        <span class="toggle-slider"></span>
+                      </label>
                     </div>
-                    <label class="toggle-switch">
-                      <input type="checkbox" [checked]="obj.Selected" (change)="ToggleDiscoveredObject(obj)" />
-                      <span class="toggle-slider"></span>
-                    </label>
+                    @for (obj of group.Objects; track obj.Name) {
+                      <div class="discovered-item">
+                        <div class="discovered-info">
+                          <span class="discovered-name">{{ obj.DisplayName }}</span>
+                          @if (obj.DisplayName !== obj.Name) {
+                            <span class="discovered-api-name">{{ obj.Name }}</span>
+                          }
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" [checked]="obj.Selected" (change)="ToggleDiscoveredObject(obj)" />
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                    }
                   </div>
                 }
               </div>

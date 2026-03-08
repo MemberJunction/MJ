@@ -2,8 +2,8 @@ import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { DiscoveredFieldResult } from '@memberjunction/graphql-dataprovider';
+import { ResourceData, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   IntegrationDataService,
   IntegrationRow,
@@ -17,10 +17,12 @@ import {
 // Interfaces
 // ---------------------------------------------------------------------------
 
-/** Source object discovered from the external system */
+/** Source object from integration metadata */
 interface DiscoveredObject {
   Name: string;
   Label: string;
+  Category: string;
+  Description: string;
   SupportsIncrementalSync: boolean;
   SupportsWrite: boolean;
 }
@@ -81,7 +83,7 @@ interface PendingMapEntry {
   TableName: string;
   EntityName: string;
   SyncDirection: 'Bidirectional' | 'Pull' | 'Push';
-  SourceFields: DiscoveredFieldResult[];
+  SourceFields: MJIntegrationObjectFieldEntity[];
   DDLContent: string;
   CreatedAt: Date;
 }
@@ -176,7 +178,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   ShowAutoMapBanner = false;
 
   // --- Source fields for auto-mapping ---
-  SourceFields: DiscoveredFieldResult[] = [];
+  SourceFields: MJIntegrationObjectFieldEntity[] = [];
   IsLoadingSourceFields = false;
 
   // --- Data preview ---
@@ -344,11 +346,11 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     }
   }
 
-  /** Auto-discover source objects from the external system (cached per integration) */
-  private async DiscoverSourceObjects(integrationID: string): Promise<void> {
+  /** Load source objects from IntegrationObject metadata via engine (cached per integration) */
+  private DiscoverSourceObjects(integrationID: string): Promise<void> {
     if (this.discoverCache.has(integrationID)) {
       this.DiscoveredObjects = this.discoverCache.get(integrationID)!;
-      return;
+      return Promise.resolve();
     }
 
     this.IsDiscoveringObjects = true;
@@ -357,24 +359,30 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.cdr.detectChanges();
 
     try {
-      const result = await this.dataService.DiscoverObjects(integrationID);
-      if (result.Success) {
-        this.DiscoveredObjects = result.Data.map(o => ({
-          Name: o.Name,
-          Label: o.Label || o.Name,
-          SupportsIncrementalSync: o.SupportsIncrementalSync,
-          SupportsWrite: o.SupportsWrite
-        }));
-        this.discoverCache.set(integrationID, this.DiscoveredObjects);
-      } else {
-        this.DiscoverError = result.Message;
+      const engine = IntegrationEngineBase.Instance;
+      const integration = engine.GetIntegrationForCompanyIntegration(integrationID);
+      if (!integration) {
+        this.DiscoverError = 'Integration not found in metadata';
+        return Promise.resolve();
       }
+
+      const objects = engine.GetActiveIntegrationObjects(integration.ID);
+      this.DiscoveredObjects = objects.map(o => ({
+        Name: o.Name,
+        Label: o.DisplayName || o.Name,
+        Category: o.Category || 'Uncategorized',
+        Description: o.Description || '',
+        SupportsIncrementalSync: o.SupportsIncrementalSync,
+        SupportsWrite: o.SupportsWrite
+      }));
+      this.discoverCache.set(integrationID, this.DiscoveredObjects);
     } catch (e) {
-      this.DiscoverError = `Discovery failed: ${(e as Error).message}`;
+      this.DiscoverError = `Failed to load objects: ${(e as Error).message}`;
     } finally {
       this.IsDiscoveringObjects = false;
       this.cdr.detectChanges();
     }
+    return Promise.resolve();
   }
 
   // =====================================================================
@@ -393,19 +401,21 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       return;
     }
 
-    // Real entity map — load field maps + source fields in parallel
+    // Real entity map — load field maps + dest fields, resolve source from metadata
     this.IsLoadingFieldMaps = true;
     this.cdr.detectChanges();
     try {
-      const [, sourceResult] = await Promise.all([
+      await Promise.all([
         this.dataService.LoadFieldMaps(item.ID, this.RunViewToUse).then(fms => { this.FieldMaps = fms; }),
-        this.dataService.DiscoverFields(this.SelectedIntegrationID, item.RealMap!.ExternalObjectName)
-          .catch(() => ({ Success: false, Message: '', Data: [] as DiscoveredFieldResult[] })),
         this.LoadDestinationFields(item.RealMap!.EntityID)
       ]);
-      if (sourceResult.Success) {
-        this.SourceFields = sourceResult.Data;
-      }
+
+      // Resolve source fields from IntegrationObject metadata
+      this.SourceFields = this.resolveSourceFieldsFromMetadata(
+        this.SelectedIntegrationID,
+        item.RealMap!.ExternalObjectName
+      );
+
       this.EditableFields = this.FieldMaps.map(fm => this.ToEditableField(fm));
     } finally {
       this.IsLoadingFieldMaps = false;
@@ -519,19 +529,11 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   }
 
   private async SaveNewEntityMap(): Promise<void> {
-    // Discover source fields for this object
-    let sourceFields: DiscoveredFieldResult[] = [];
-    try {
-      const fieldResult = await this.dataService.DiscoverFields(
-        this.SelectedIntegrationID,
-        this.SelectedSourceObjectName
-      );
-      if (fieldResult.Success) {
-        sourceFields = fieldResult.Data;
-      }
-    } catch {
-      // Fields will be empty, user can still proceed
-    }
+    // Resolve source fields from IntegrationObject metadata
+    const sourceFields = this.resolveSourceFieldsFromMetadata(
+      this.SelectedIntegrationID,
+      this.SelectedSourceObjectName
+    );
 
     // Generate DDL preview
     let ddlContent = '';
@@ -648,7 +650,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   // =====================================================================
 
   private ToEditableField(fm: FieldMapRow): EditableFieldMap {
-    // Look up source metadata from discovered fields
+    // Look up source metadata from IntegrationObjectField entities
     const srcMeta = this.SourceFields.find(
       sf => sf.Name.toLowerCase() === fm.SourceFieldName.toLowerCase()
     );
@@ -656,7 +658,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       ID: fm.ID,
       SourceFieldName: fm.SourceFieldName,
       SourceFieldLabel: fm.SourceFieldLabel ?? '',
-      SourceFieldType: srcMeta?.DataType ?? '',
+      SourceFieldType: srcMeta?.Type ?? '',
       DestinationFieldName: fm.DestinationFieldName,
       DestinationFieldLabel: fm.DestinationFieldLabel ?? '',
       IsKeyField: fm.IsKeyField,
@@ -665,7 +667,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       Status: fm.Status as 'Active' | 'Inactive',
       IsNew: false,
       IsDirty: false,
-      IsSourcePK: srcMeta?.IsUniqueKey ?? false,
+      IsSourcePK: srcMeta?.IsPrimaryKey ?? false,
       IsSourceRequired: srcMeta?.IsRequired ?? false,
       IsSourceReadOnly: srcMeta?.IsReadOnly ?? false,
       TransformPipeline: this.ParseTransformPipeline(fm.TransformPipeline),
@@ -706,17 +708,16 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   /** Auto-generate field mappings by matching source fields to destination by name */
   async AutoGenerateFieldMappings(entityMap: EntityMapRow): Promise<void> {
-    // Discover source fields
+    // Resolve source fields from IntegrationObject metadata
     this.IsLoadingSourceFields = true;
     this.cdr.detectChanges();
     try {
-      const fieldResult = await this.dataService.DiscoverFields(
+      this.SourceFields = this.resolveSourceFieldsFromMetadata(
         this.SelectedIntegrationID,
         entityMap.ExternalObjectName
       );
 
-      if (!fieldResult.Success) return;
-      this.SourceFields = fieldResult.Data;
+      if (this.SourceFields.length === 0) return;
 
       // Load destination fields
       await this.LoadDestinationFields(entityMap.EntityID);
@@ -729,12 +730,13 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       // Create field maps for matches, preserving source field order via Priority
       for (let idx = 0; idx < matchedFields.length; idx++) {
         const match = matchedFields[idx];
+        const displayName = match.sourceField.DisplayName || match.sourceField.Name;
         await this.dataService.CreateFieldMap({
           EntityMapID: entityMap.ID,
           SourceFieldName: match.sourceField.Name,
-          SourceFieldLabel: match.sourceField.Label !== match.sourceField.Name ? match.sourceField.Label : undefined,
+          SourceFieldLabel: displayName !== match.sourceField.Name ? displayName : undefined,
           DestinationFieldName: match.destField.Name,
-          IsKeyField: match.sourceField.IsUniqueKey,
+          IsKeyField: match.sourceField.IsPrimaryKey,
           IsRequired: match.sourceField.IsRequired,
           Direction: 'SourceToDest',
           TransformPipeline: JSON.stringify([{ Type: 'direct', Config: {}, OnError: 'Fail' }]),
@@ -752,10 +754,10 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   }
 
   private MatchFieldsByName(
-    sourceFields: DiscoveredFieldResult[],
+    sourceFields: MJIntegrationObjectFieldEntity[],
     destFields: MJFieldOption[]
-  ): Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption; sourceIndex: number }> {
-    const matches: Array<{ sourceField: DiscoveredFieldResult; destField: MJFieldOption; sourceIndex: number }> = [];
+  ): Array<{ sourceField: MJIntegrationObjectFieldEntity; destField: MJFieldOption; sourceIndex: number }> {
+    const matches: Array<{ sourceField: MJIntegrationObjectFieldEntity; destField: MJFieldOption; sourceIndex: number }> = [];
     const destFieldMap = new Map<string, MJFieldOption>();
     for (const df of destFields) {
       destFieldMap.set(df.Name.toLowerCase(), df);
@@ -968,6 +970,26 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   /** For combine transforms: get available source field names */
   GetAvailableSourceFields(): string[] {
     return this.SourceFields.map(sf => sf.Name);
+  }
+
+  /**
+   * Resolve source fields from IntegrationObjectField metadata via IntegrationEngineBase.
+   * CompanyIntegrationID → Integration → IntegrationObject → IntegrationObjectFields.
+   */
+  private resolveSourceFieldsFromMetadata(
+    companyIntegrationID: string,
+    externalObjectName: string
+  ): MJIntegrationObjectFieldEntity[] {
+    const engine = IntegrationEngineBase.Instance;
+    const integration = engine.GetIntegrationForCompanyIntegration(companyIntegrationID);
+    if (!integration) return [];
+
+    const obj = engine.GetIntegrationObject(integration.ID, externalObjectName);
+    if (!obj) return [];
+
+    return engine.GetIntegrationObjectFields(obj.ID)
+      .filter(f => f.Status === 'Active')
+      .sort((a, b) => a.Sequence - b.Sequence);
   }
 
   /** For lookup transforms: add a new key-value pair */
