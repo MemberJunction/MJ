@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
-import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
+import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
+import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
@@ -38,6 +39,10 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { PubSubManager } from './generic/PubSubManager.js';
+import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -72,6 +77,8 @@ export {
 export * from './auth/APIKeyScopeAuth.js';
 
 export * from './generic/PushStatusResolver.js';
+export * from './generic/PubSubManager.js';
+export * from './generic/CacheInvalidationResolver.js';
 export * from './generic/ResolverBase.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
@@ -301,9 +308,53 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log('Server telemetry disabled');
   }
 
-  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
-  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
-  console.log('LocalCacheManager initialized');
+  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
+  if (process.env.REDIS_URL) {
+    const redisProvider = new RedisLocalStorageProvider({
+      url: process.env.REDIS_URL,
+      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
+      enablePubSub: true,
+      enableLogging: true,
+    });
+    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
+    await redisProvider.StartListening();
+
+    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
+    // so cross-server cache invalidation messages are routed to registered callbacks
+    redisProvider.OnCacheChanged((event) => {
+        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
+        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
+        LocalCacheManager.Instance.DispatchCacheChange(event);
+
+        // Also broadcast to connected browser clients via GraphQL subscription
+        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
+        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
+        if (entityName) {
+            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+                entityName,
+                primaryKeyValues: null, // entity-level invalidation
+                action: event.Action || 'save',
+                sourceServerId: event.SourceServerId || 'unknown',
+                timestamp: new Date(),
+            });
+        }
+    });
+
+    console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+
+  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
+  // LocalCacheManager may have already been initialized (with in-memory provider)
+  // during engine loading. SetStorageProvider migrates cached data to Redis.
+  if (process.env.REDIS_URL) {
+    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager: storage provider swapped to Redis');
+  }
+  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
+  if (!LocalCacheManager.Instance.IsInitialized) {
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager initialized');
+  }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
@@ -342,6 +393,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
 
+  // Create an explicit PubSub instance so we can reference it outside of resolvers
+  // graphql-subscriptions v3 renamed asyncIterator→asyncIterableIterator, but
+  // type-graphql still calls asyncIterator. Shim for compatibility.
+  const pubSub = new PubSub() as unknown as Record<string, unknown>;
+  if (!pubSub.asyncIterator && typeof pubSub.asyncIterableIterator === 'function') {
+    pubSub.asyncIterator = pubSub.asyncIterableIterator;
+  }
+  PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
@@ -349,6 +409,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         validate: false,
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
+        pubSub,
       }),
     ],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],

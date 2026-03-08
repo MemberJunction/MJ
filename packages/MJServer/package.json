@@ -70,6 +70,7 @@
     "@memberjunction/computer-use-engine": "5.8.0",
     "@memberjunction/notifications": "5.8.0",
     "@memberjunction/queue": "5.8.0",
+    "@memberjunction/redis-provider": "5.8.0",
     "@memberjunction/scheduling-actions": "5.8.0",
     "@memberjunction/scheduling-base-types": "5.8.0",
     "@memberjunction/scheduling-engine": "5.8.0",

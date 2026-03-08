@@ -578,8 +578,9 @@ export class BaseEntityEvent {
      * - `save`, `delete`, `load_complete`: Raised when an operation completes successfully
      * - `new_record`: Raised when NewRecord() is called
      * - `transaction_ready`: Used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
+     * - `remote-invalidate`: Raised when a remote server (via Redis pub/sub → GraphQL subscription) notifies this client that cached data for an entity has changed. Used to trigger BaseEngine re-fetch from server.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'other';
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
@@ -589,12 +590,19 @@ export class BaseEntityEvent {
     /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
-    payload: any;
+    payload: unknown;
 
     /**
      * The BaseEntity object that is raising the event.
+     * Null for remote-invalidate events where no local BaseEntity instance is available.
      */
-    baseEntity: BaseEntity;
+    baseEntity: BaseEntity | null;
+
+    /**
+     * The entity name for the event. Used primarily for remote-invalidate events
+     * where baseEntity is null but the entity name is known from the remote notification.
+     */
+    entityName?: string;
 }
 
 /**
