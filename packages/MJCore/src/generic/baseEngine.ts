@@ -466,6 +466,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
+            if (event.type === 'remote-invalidate') {
+                return await this.HandleRemoteInvalidateEvent(event);
+            }
+
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
                 const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
@@ -489,6 +493,47 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // At least one config requires full refresh, use debouncing
                     return this.DebounceIndividualBaseEntityEvent(event);
                 }
+            }
+
+            return true;
+        }
+        catch (e) {
+            LogError(e);
+            return false;
+        }
+    }
+
+    /**
+     * Handles remote-invalidate events from cross-server cache invalidation.
+     * These events are fired by GraphQLDataProvider when it receives a cache invalidation
+     * notification via GraphQL subscription (originating from Redis pub/sub on another server).
+     *
+     * For each matching config, we re-fetch the data from the server via LoadSingleConfig,
+     * then call AdditionalLoading if any refreshes occurred.
+     */
+    protected async HandleRemoteInvalidateEvent(event: BaseEntityEvent): Promise<boolean> {
+        try {
+            const entityName = event.entityName?.toLowerCase().trim();
+            if (!entityName) {
+                return true; // No entity name, nothing to do
+            }
+
+            const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
+            });
+
+            if (matchingConfigs.length === 0) {
+                return true;
+            }
+
+            let refreshCount = 0;
+            for (const config of matchingConfigs) {
+                await this.LoadSingleConfig(config, this._contextUser);
+                refreshCount++;
+            }
+
+            if (refreshCount > 0) {
+                await this.AdditionalLoading(this._contextUser);
             }
 
             return true;
