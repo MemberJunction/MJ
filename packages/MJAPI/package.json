@@ -9,7 +9,7 @@
     "start": "node --experimental-specifier-resolution=node --import ./register.js -r dotenv/config ./src/index.ts",
     "check-types": "tsc -noEmit",
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json",
-    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts",
+    "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
     "build": "tsc && tsc-alias -f"
   },
@@ -27,6 +27,7 @@
     "@memberjunction/communication-sendgrid": "5.14.0",
     "@memberjunction/core": "5.14.0",
     "@memberjunction/global": "5.14.0",
+    "@memberjunction/messaging-adapters": "5.14.0",
     "@memberjunction/server": "5.14.0",
     "@memberjunction/server-bootstrap": "5.14.0",
     "@memberjunction/sqlserver-dataprovider": "5.14.0",

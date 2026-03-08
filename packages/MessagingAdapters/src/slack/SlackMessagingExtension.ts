@@ -25,7 +25,7 @@
  *     DriverClass: 'SlackMessagingExtension',
  *     RootPath: '/webhook/slack',
  *     Settings: {
- *         AgentID: 'your-agent-guid',
+ *         DefaultAgentName: 'Sage',
  *         ContextUserEmail: 'bot@company.com',
  *         BotToken: process.env.SLACK_BOT_TOKEN,
  *         SigningSecret: process.env.SLACK_SIGNING_SECRET,
@@ -37,9 +37,10 @@
  * ```
  */
 
-import { Application, Request, Response, Router } from 'express';
+import express, { Application, Request, Response, Router } from 'express';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SocketModeClient } from '@slack/socket-mode';
 import {
     BaseServerExtension,
     ServerExtensionConfig,
@@ -47,7 +48,7 @@ import {
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
 import { SlackAdapter } from './SlackAdapter.js';
-import { MessagingAdapterSettings } from '../base/types.js';
+import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
 import { verifySlackSignature } from './slack-routes.js';
 
 /**
@@ -68,41 +69,39 @@ import { verifySlackSignature } from './slack-routes.js';
 @RegisterClass(BaseServerExtension, 'SlackMessagingExtension')
 export class SlackMessagingExtension extends BaseServerExtension {
     /** The Slack adapter handling message processing. */
-    private Adapter: SlackAdapter | null = null;
+    private adapter: SlackAdapter | null = null;
 
     /** The signing secret for webhook verification. */
-    private SigningSecret: string = '';
+    private signingSecret: string = '';
+
+    /** Socket Mode client (only used when ConnectionMode is 'socket'). */
+    private socketModeClient: SocketModeClient | null = null;
+
+    /** The active connection mode for health reporting. */
+    private connectionMode: 'http' | 'socket' = 'http';
 
     /**
      * Initialize the Slack extension.
      *
-     * Creates and initializes the `SlackAdapter`, then registers the webhook
-     * route on the Express app for receiving Slack Events API payloads.
+     * Creates and initializes the `SlackAdapter`, then sets up either:
+     * - **HTTP mode** (default): POST webhook endpoint for Slack Events API
+     * - **Socket Mode**: WebSocket connection using an App-Level Token (no public URL needed)
      */
     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
             const settings = config.Settings as unknown as MessagingAdapterSettings;
-            this.SigningSecret = settings.SigningSecret ?? '';
+            this.signingSecret = settings.SigningSecret ?? '';
+            this.connectionMode = settings.ConnectionMode ?? 'http';
 
             // Create and initialize the Slack adapter
-            this.Adapter = new SlackAdapter(settings);
-            await this.Adapter.Initialize();
+            this.adapter = new SlackAdapter(settings);
+            await this.adapter.Initialize();
 
-            // Register HTTP webhook routes
-            const router = Router();
-            router.post('/', this.handleWebhook.bind(this));
-            app.use(config.RootPath, router);
-
-            const routes = [`POST ${config.RootPath}`];
-
-            // TODO: Socket Mode support would be added here
-            // if (settings.ConnectionMode === 'socket') { ... }
-
-            return {
-                Success: true,
-                Message: `Slack messaging extension loaded for agent ${settings.AgentID}`,
-                RegisteredRoutes: routes
-            };
+            if (this.connectionMode === 'socket') {
+                return await this.initializeSocketMode(settings);
+            } else {
+                return this.initializeHttpMode(app, config, settings);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return {
@@ -113,11 +112,15 @@ export class SlackMessagingExtension extends BaseServerExtension {
     }
 
     /**
-     * Shut down the Slack extension. Releases the adapter and any connections.
+     * Shut down the Slack extension. Releases the adapter and disconnects Socket Mode.
      */
     async Shutdown(): Promise<void> {
         LogStatus('Shutting down Slack messaging extension');
-        this.Adapter = null;
+        if (this.socketModeClient) {
+            await this.socketModeClient.disconnect();
+            this.socketModeClient = null;
+        }
+        this.adapter = null;
     }
 
     /**
@@ -126,30 +129,55 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     async HealthCheck(): Promise<ExtensionHealthResult> {
         return {
-            Healthy: this.Adapter !== null,
+            Healthy: this.adapter !== null,
             Name: 'SlackMessagingExtension',
             Details: {
-                adapterInitialized: this.Adapter !== null,
-                signatureVerificationEnabled: this.SigningSecret.length > 0
+                adapterInitialized: this.adapter !== null,
+                connectionMode: this.connectionMode,
+                signatureVerificationEnabled: this.signingSecret.length > 0,
+                socketModeConnected: this.socketModeClient !== null
             }
         };
     }
 
+    // ─── HTTP Mode ───────────────────────────────────────────────────────
+
     /**
-     * Handle an incoming Slack webhook request.
+     * Set up HTTP webhook mode: register a POST endpoint for Slack Events API.
+     */
+    private initializeHttpMode(
+        app: Application,
+        config: ServerExtensionConfig,
+        settings: MessagingAdapterSettings
+    ): ExtensionInitResult {
+        const router = Router();
+        router.use(express.json({
+            limit: '1mb',
+            verify: (req: Request, _res, buf) => {
+                (req as RequestWithRawBody).rawBody = buf.toString('utf-8');
+            }
+        }));
+        router.post('/', this.handleWebhook.bind(this));
+        app.use(config.RootPath, router);
+
+        return {
+            Success: true,
+            Message: `Slack extension loaded (HTTP mode) for agent ${settings.DefaultAgentName}`,
+            RegisteredRoutes: [`POST ${config.RootPath}`]
+        };
+    }
+
+    /**
+     * Handle an incoming Slack webhook request (HTTP mode).
      *
-     * Performs these steps:
      * 1. Verify the request signature (if signing secret is configured)
      * 2. Handle URL verification challenges (Slack sends these during setup)
      * 3. Acknowledge immediately (Slack requires response within 3 seconds)
      * 4. Process the message asynchronously via the adapter
-     *
-     * @param req - Express request with Slack event payload.
-     * @param res - Express response.
      */
     private async handleWebhook(req: Request, res: Response): Promise<void> {
         // 1. Verify signature
-        if (this.SigningSecret && !verifySlackSignature(req, this.SigningSecret)) {
+        if (this.signingSecret && !verifySlackSignature(req, this.signingSecret)) {
             res.status(401).send('Invalid signature');
             return;
         }
@@ -164,22 +192,80 @@ export class SlackMessagingExtension extends BaseServerExtension {
         res.status(200).send();
 
         // 4. Process asynchronously
-        const event = req.body?.event as Record<string, unknown> | undefined;
-        if (!event) return;
+        await this.processSlackEvent(req.body?.event as Record<string, unknown> | undefined);
+    }
+
+    // ─── Socket Mode ─────────────────────────────────────────────────────
+
+    /**
+     * Set up Socket Mode: connect via WebSocket using an App-Level Token.
+     *
+     * Socket Mode is ideal for local development — no public URL or ngrok needed.
+     * Requires an App-Level Token (`xapp-...`) with `connections:write` scope.
+     */
+    private async initializeSocketMode(settings: MessagingAdapterSettings): Promise<ExtensionInitResult> {
+        const appToken = settings.AppToken;
+        if (!appToken) {
+            return {
+                Success: false,
+                Message: 'Socket Mode requires an AppToken (xapp-...) in Settings'
+            };
+        }
+
+        this.socketModeClient = new SocketModeClient({ appToken });
+
+        // Listen for message and app_mention events
+        this.socketModeClient.on('message', async ({ event, ack }) => {
+            await ack();
+            await this.processSlackEvent(event as Record<string, unknown>);
+        });
+
+        this.socketModeClient.on('app_mention', async ({ event, ack }) => {
+            await ack();
+            await this.processSlackEvent(event as Record<string, unknown>);
+        });
+
+        await this.socketModeClient.start();
+        LogStatus('Slack Socket Mode connected');
+
+        return {
+            Success: true,
+            Message: `Slack extension loaded (Socket Mode) for agent ${settings.DefaultAgentName}`,
+            RegisteredRoutes: ['WebSocket (Socket Mode)']
+        };
+    }
+
+    // ─── Shared event processing ─────────────────────────────────────────
+
+    /**
+     * Process a Slack event from either HTTP webhook or Socket Mode.
+     */
+    private async processSlackEvent(event: Record<string, unknown> | undefined): Promise<void> {
+        if (!event) {
+            LogStatus('Slack webhook: no event in payload');
+            return;
+        }
 
         const eventType = event.type as string;
+        LogStatus(`Slack event received: type=${eventType}, channel=${event.channel}, user=${event.user}`);
 
         // Only handle message and app_mention events
-        if (eventType !== 'message' && eventType !== 'app_mention') return;
+        if (eventType !== 'message' && eventType !== 'app_mention') {
+            LogStatus(`Slack: ignoring event type '${eventType}'`);
+            return;
+        }
 
         // Skip bot messages (prevent loops) and message edits/deletes
-        if (event.bot_id || event.subtype) return;
+        if (event.bot_id || event.subtype) {
+            LogStatus(`Slack: skipping bot/subtype message (bot_id=${event.bot_id}, subtype=${event.subtype})`);
+            return;
+        }
 
         try {
-            const incomingMessage = this.Adapter!.MapSlackEvent(event);
-            await this.Adapter!.HandleMessage(incomingMessage);
+            const incomingMessage = this.adapter!.MapSlackEvent(event);
+            await this.adapter!.HandleMessage(incomingMessage);
         } catch (error) {
-            LogError('Error handling Slack webhook event:', undefined, error);
+            LogError('Error handling Slack event:', undefined, error);
         }
     }
 }

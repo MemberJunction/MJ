@@ -25,7 +25,7 @@
  *     DriverClass: 'TeamsMessagingExtension',
  *     RootPath: '/webhook/teams',
  *     Settings: {
- *         AgentID: 'your-agent-guid',
+ *         DefaultAgentName: 'Sage',
  *         ContextUserEmail: 'bot@company.com',
  *         MicrosoftAppId: process.env.MICROSOFT_APP_ID,
  *         MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
@@ -36,7 +36,7 @@
  * ```
  */
 
-import { Application } from 'express';
+import express, { Application } from 'express';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import {
@@ -70,10 +70,10 @@ import { MessagingAdapterSettings } from '../base/types.js';
 @RegisterClass(BaseServerExtension, 'TeamsMessagingExtension')
 export class TeamsMessagingExtension extends BaseServerExtension {
     /** The Teams adapter handling message processing. */
-    private Adapter: TeamsAdapter | null = null;
+    private adapter: TeamsAdapter | null = null;
 
     /** The Bot Framework cloud adapter for JWT validation and activity processing. */
-    private CloudAdapterInstance: CloudAdapter | null = null;
+    private cloudAdapterInstance: CloudAdapter | null = null;
 
     /**
      * Initialize the Teams extension.
@@ -94,23 +94,23 @@ export class TeamsMessagingExtension extends BaseServerExtension {
                 MicrosoftAppPassword: appPassword,
             });
 
-            this.CloudAdapterInstance = new CloudAdapter(botFrameworkAuth);
+            this.cloudAdapterInstance = new CloudAdapter(botFrameworkAuth);
 
             // Set up error handler for the cloud adapter
-            this.CloudAdapterInstance.onTurnError = async (context: TurnContext, error: Error) => {
+            this.cloudAdapterInstance.onTurnError = async (context: TurnContext, error: Error) => {
                 LogError(`Teams Bot Framework error: ${error.message}`, undefined, error);
                 await context.sendActivity('Sorry, an error occurred processing your message.');
             };
 
             // Create and initialize the Teams adapter
-            this.Adapter = new TeamsAdapter(settings);
-            await this.Adapter.Initialize();
+            this.adapter = new TeamsAdapter(settings);
+            await this.adapter.Initialize();
 
             // Register the Bot Framework webhook route
-            const adapter = this.Adapter;
-            const cloudAdapter = this.CloudAdapterInstance;
+            const adapter = this.adapter;
+            const cloudAdapter = this.cloudAdapterInstance;
 
-            app.post(config.RootPath, async (req, res) => {
+            app.post(config.RootPath, express.json(), async (req, res) => {
                 try {
                     await cloudAdapter.process(req, res, async (turnContext: TurnContext) => {
                         if (turnContext.activity.type === ActivityTypes.Message) {
@@ -128,7 +128,7 @@ export class TeamsMessagingExtension extends BaseServerExtension {
 
             return {
                 Success: true,
-                Message: `Teams messaging extension loaded for agent ${settings.AgentID}`,
+                Message: `Teams messaging extension loaded for agent ${settings.DefaultAgentName}`,
                 RegisteredRoutes: [`POST ${config.RootPath}`]
             };
         } catch (error) {
@@ -145,8 +145,8 @@ export class TeamsMessagingExtension extends BaseServerExtension {
      */
     async Shutdown(): Promise<void> {
         LogStatus('Shutting down Teams messaging extension');
-        this.Adapter = null;
-        this.CloudAdapterInstance = null;
+        this.adapter = null;
+        this.cloudAdapterInstance = null;
     }
 
     /**
@@ -155,11 +155,11 @@ export class TeamsMessagingExtension extends BaseServerExtension {
      */
     async HealthCheck(): Promise<ExtensionHealthResult> {
         return {
-            Healthy: this.Adapter !== null && this.CloudAdapterInstance !== null,
+            Healthy: this.adapter !== null && this.cloudAdapterInstance !== null,
             Name: 'TeamsMessagingExtension',
             Details: {
-                adapterInitialized: this.Adapter !== null,
-                cloudAdapterInitialized: this.CloudAdapterInstance !== null
+                adapterInitialized: this.adapter !== null,
+                cloudAdapterInitialized: this.cloudAdapterInstance !== null
             }
         };
     }

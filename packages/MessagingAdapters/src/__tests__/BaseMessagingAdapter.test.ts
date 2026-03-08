@@ -130,15 +130,16 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.resolveContextUser(msg);
     }
 
-    public testResolveAgent(msg: IncomingMessage): Promise<{ agent: unknown; multiAgentNote: string | null }> {
-        return this.resolveAgent(msg);
+    public async testResolveAgent(msg: IncomingMessage): Promise<{ agent: unknown; multiAgentNote: string | null }> {
+        // Use fallbackContextUser for testing; Initialize() must be called first
+        return this.resolveAgent(msg, this.fallbackContextUser!);
     }
 }
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
 const defaultSettings: MessagingAdapterSettings = {
-    AgentID: 'agent-guid-123',
+    DefaultAgentName: 'Sage',
     ContextUserEmail: 'bot@company.com',
     BotToken: 'xoxb-test-token',
     MaxThreadMessages: 50,
@@ -244,6 +245,10 @@ describe('BaseMessagingAdapter', () => {
     });
 
     describe('resolveAgent', () => {
+        beforeEach(async () => {
+            await adapter.Initialize();
+        });
+
         it('should return default agent when no agents are mentioned', async () => {
             const msg = createMessage({ MentionedAgentNames: [] });
             const result = await adapter.testResolveAgent(msg);
@@ -349,6 +354,164 @@ describe('BaseMessagingAdapter', () => {
         it('should call onInitialize', async () => {
             await adapter.Initialize();
             expect(adapter.OnInitializeCalled).toBe(true);
+        });
+    });
+
+    describe('response extraction (via HandleMessage)', () => {
+        beforeEach(async () => {
+            await adapter.Initialize();
+        });
+
+        it('should extract nextStep.message from structured JSON', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({ nextStep: { message: 'Hello from Sage!' } }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Hello from Sage!');
+        });
+
+        it('should extract top-level message field from JSON', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({ message: 'Top-level message' }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Top-level message');
+        });
+
+        it('should extract output field from JSON', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({ output: 'Output field text' }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Output field text');
+        });
+
+        it('should extract result field from JSON', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({ result: 'Result field text' }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Result field text');
+        });
+
+        it('should use plain text when OutputData is not JSON', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: 'Just plain text response',
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Just plain text response');
+        });
+
+        it('should fall back to payload string when no step output', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    payload: 'Payload fallback text',
+                    agentRun: { Steps: [] }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Payload fallback text');
+        });
+
+        it('should stringify JSON fallback when no recognized fields', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({ unknownField: 'data', count: 42 }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('unknownField');
+            expect(sent?.PlainText).toContain('42');
+        });
+
+        it('should show error message on agent failure', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: false,
+                    agentRun: { ErrorMessage: 'Something went wrong', Steps: [] }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Something went wrong');
         });
     });
 });

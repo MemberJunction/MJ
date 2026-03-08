@@ -26,7 +26,7 @@
  *         DriverClass: 'SlackMessagingExtension',
  *         RootPath: '/webhook/slack',
  *         Settings: {
- *             AgentID: 'your-agent-guid',
+ *             DefaultAgentName: 'Sage',
  *             ContextUserEmail: 'bot@company.com',
  *             BotToken: process.env.SLACK_BOT_TOKEN,
  *             SigningSecret: process.env.SLACK_SIGNING_SECRET,
@@ -48,6 +48,7 @@ export {
     FormattedResponse,
     ThreadHistoryResult,
     MarkdownSection,
+    RequestWithRawBody,
 } from './base/types.js';
 export {
     splitMarkdownIntoSections,

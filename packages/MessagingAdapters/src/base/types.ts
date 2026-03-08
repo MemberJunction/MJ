@@ -3,6 +3,18 @@
  * @description Core types shared across all messaging platform adapters.
  */
 
+import { Request } from 'express';
+
+/**
+ * Express Request extended with a `rawBody` property.
+ * Used for Slack signature verification which requires the original
+ * unparsed request body bytes (not a re-stringified version).
+ */
+export interface RequestWithRawBody extends Request {
+    /** The original raw request body as a UTF-8 string. */
+    rawBody?: string;
+}
+
 /**
  * Configuration for a messaging adapter, passed via the
  * `ServerExtensionConfig.Settings` object in `mj.config.cjs`.
@@ -14,7 +26,7 @@
  *     DriverClass: 'SlackMessagingExtension',
  *     RootPath: '/webhook/slack',
  *     Settings: {
- *         AgentID: '...',
+ *         DefaultAgentName: 'Sage',
  *         ContextUserEmail: 'bot@company.com',
  *         BotToken: process.env.SLACK_BOT_TOKEN,
  *         SigningSecret: process.env.SLACK_SIGNING_SECRET,
@@ -24,10 +36,11 @@
  */
 export interface MessagingAdapterSettings {
     /**
-     * Default MJ Agent ID used when no specific agent is @mentioned.
-     * Must be a valid GUID matching an AI Agents entity record.
+     * Default MJ Agent name used when no specific agent is @mentioned.
+     * Resolved by name at initialization (e.g., `'Sage'`).
+     * This is preferred over a hardcoded UUID since agent IDs differ across installations.
      */
-    AgentID: string;
+    DefaultAgentName: string;
 
     /**
      * Fallback MJ User email for agent execution when the platform user

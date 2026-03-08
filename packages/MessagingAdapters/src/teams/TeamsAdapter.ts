@@ -35,13 +35,13 @@ import { markdownToAdaptiveCard } from './teams-formatter.js';
  */
 export class TeamsAdapter extends BaseMessagingAdapter {
     /** The bot's Microsoft App ID (also used as the bot's user ID). */
-    private BotID: string = '';
+    private botID: string = '';
 
     /**
      * Stored conversation references for proactive messaging.
      * Maps conversation ID to the reference needed to send proactive messages.
      */
-    private ConversationReferences: Map<string, Partial<ConversationReference>> = new Map();
+    private conversationReferences: Map<string, Partial<ConversationReference>> = new Map();
 
     constructor(settings: MessagingAdapterSettings) {
         super(settings);
@@ -60,7 +60,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
 
         // Store conversation reference for potential proactive messaging
         const conversationRef = TurnContext.getConversationReference(activity);
-        this.ConversationReferences.set(
+        this.conversationReferences.set(
             activity.conversation?.id ?? '',
             conversationRef
         );
@@ -87,12 +87,12 @@ export class TeamsAdapter extends BaseMessagingAdapter {
      * Initialize: set the bot ID from config or environment.
      */
     protected async onInitialize(): Promise<void> {
-        const settings = this.Settings;
-        this.BotID = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
+        const settings = this.settings;
+        this.botID = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
     }
 
     protected getBotUserId(): string {
-        return this.BotID;
+        return this.botID;
     }
 
     /**
@@ -224,7 +224,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         return entities.some(
             e => e.type === 'mention' &&
                  (e as Record<string, unknown>).mentioned != null &&
-                 ((e as Record<string, unknown>).mentioned as Record<string, unknown>)?.id === this.BotID
+                 ((e as Record<string, unknown>).mentioned as Record<string, unknown>)?.id === this.botID
         );
     }
 }

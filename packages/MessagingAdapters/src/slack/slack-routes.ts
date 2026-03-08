@@ -10,6 +10,7 @@
 
 import { Request } from 'express';
 import crypto from 'crypto';
+import { RequestWithRawBody } from '../base/types.js';
 
 /** Maximum age of a valid Slack request (5 minutes in seconds). */
 const MAX_REQUEST_AGE_SECONDS = 300;
@@ -50,8 +51,9 @@ export function verifySlackSignature(req: Request, signingSecret: string): boole
         return false;
     }
 
-    // Compute expected signature
-    const expectedSignature = computeSignature(req.body, timestamp, signingSecret);
+    // Compute expected signature, preferring rawBody if available
+    const rawBody = (req as RequestWithRawBody).rawBody;
+    const expectedSignature = computeSignature(req.body, timestamp, signingSecret, rawBody);
 
     // Use timing-safe comparison to prevent timing attacks
     return safeCompare(expectedSignature, signature);
@@ -80,9 +82,9 @@ function isRequestTooOld(timestamp: string): boolean {
  * @param signingSecret - Slack app signing secret.
  * @returns Signature string in format `v0={hex_hash}`.
  */
-function computeSignature(body: unknown, timestamp: string, signingSecret: string): string {
-    const rawBody = typeof body === 'string' ? body : JSON.stringify(body);
-    const sigBasestring = `v0:${timestamp}:${rawBody}`;
+function computeSignature(body: unknown, timestamp: string, signingSecret: string, rawBody?: string): string {
+    const bodyStr = rawBody ?? (typeof body === 'string' ? body : JSON.stringify(body));
+    const sigBasestring = `v0:${timestamp}:${bodyStr}`;
     const hmac = crypto
         .createHmac('sha256', signingSecret)
         .update(sigBasestring)
