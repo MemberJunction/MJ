@@ -189,6 +189,8 @@ import { MJFileStorageProviderFormComponent } from "./Entities/MJFileStorageProv
 import { MJFileFormComponent } from "./Entities/MJFile/mjfile.form.component";
 import { MJGeneratedCodeCategoryFormComponent } from "./Entities/MJGeneratedCodeCategory/mjgeneratedcodecategory.form.component";
 import { MJGeneratedCodeFormComponent } from "./Entities/MJGeneratedCode/mjgeneratedcode.form.component";
+import { MJIntegrationObjectFieldFormComponent } from "./Entities/MJIntegrationObjectField/mjintegrationobjectfield.form.component";
+import { MJIntegrationObjectFormComponent } from "./Entities/MJIntegrationObject/mjintegrationobject.form.component";
 import { MJIntegrationSourceTypeFormComponent } from "./Entities/MJIntegrationSourceType/mjintegrationsourcetype.form.component";
 import { MJIntegrationURLFormatFormComponent } from "./Entities/MJIntegrationURLFormat/mjintegrationurlformat.form.component";
 import { MJIntegrationFormComponent } from "./Entities/MJIntegration/mjintegration.form.component";
@@ -613,13 +615,13 @@ declarations: [
     MJFileFormComponent,
     MJGeneratedCodeCategoryFormComponent,
     MJGeneratedCodeFormComponent,
+    MJIntegrationObjectFieldFormComponent,
+    MJIntegrationObjectFormComponent,
     MJIntegrationSourceTypeFormComponent,
     MJIntegrationURLFormatFormComponent,
     MJIntegrationFormComponent,
     MJLibraryFormComponent,
-    MJLibraryItemFormComponent,
-    MJListCategoryFormComponent,
-    MJListDetailFormComponent],
+    MJLibraryItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -637,6 +639,8 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    MJListCategoryFormComponent,
+    MJListDetailFormComponent,
     MJListInvitationFormComponent,
     MJListShareFormComponent,
     MJListFormComponent,
@@ -654,9 +658,7 @@ declarations: [
     MJOpenAppInstallHistoryFormComponent,
     MJOpenAppFormComponent,
     MJOutputDeliveryTypeFormComponent,
-    MJOutputFormatTypeFormComponent,
-    MJOutputTriggerTypeFormComponent,
-    MJProjectFormComponent],
+    MJOutputFormatTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -674,6 +676,8 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    MJOutputTriggerTypeFormComponent,
+    MJProjectFormComponent,
     MJPublicLinkFormComponent,
     MJQueryFormComponent,
     MJQueryCategoryFormComponent,
@@ -691,9 +695,7 @@ declarations: [
     MJRecommendationFormComponent,
     MJRecordChangeReplayRunFormComponent,
     MJRecordChangeFormComponent,
-    MJRecordLinkFormComponent,
-    MJRecordMergeDeletionLogFormComponent,
-    MJRecordMergeLogFormComponent],
+    MJRecordLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -711,6 +713,8 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    MJRecordMergeDeletionLogFormComponent,
+    MJRecordMergeLogFormComponent,
     MJReportCategoryFormComponent,
     MJReportSnapshotFormComponent,
     MJReportUserStateFormComponent,
@@ -728,9 +732,7 @@ declarations: [
     MJScheduledJobFormComponent,
     MJSchemaInfoFormComponent,
     MJSkillFormComponent,
-    MJSQLDialectFormComponent,
-    MJTaggedItemFormComponent,
-    MJTagFormComponent],
+    MJSQLDialectFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -748,6 +750,8 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    MJTaggedItemFormComponent,
+    MJTagFormComponent,
     MJTaskDependencyFormComponent,
     MJTaskTypeFormComponent,
     MJTaskFormComponent,
@@ -765,9 +769,7 @@ declarations: [
     MJTestSuiteTestFormComponent,
     MJTestSuiteFormComponent,
     MJTestTypeFormComponent,
-    MJTestFormComponent,
-    MJUserApplicationEntityFormComponent,
-    MJUserApplicationFormComponent],
+    MJTestFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -785,6 +787,8 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    MJUserApplicationEntityFormComponent,
+    MJUserApplicationFormComponent,
     MJUserFavoriteFormComponent,
     MJUserNotificationPreferenceFormComponent,
     MJUserNotificationTypeFormComponent,
@@ -802,9 +806,7 @@ declarations: [
     MJVersionInstallationFormComponent,
     MJVersionLabelItemFormComponent,
     MJVersionLabelRestoreFormComponent,
-    MJVersionLabelFormComponent,
-    MJWorkflowEngineFormComponent,
-    MJWorkflowRunFormComponent],
+    MJVersionLabelFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -822,6 +824,8 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    MJWorkflowEngineFormComponent,
+    MJWorkflowRunFormComponent,
     MJWorkflowFormComponent,
     MJWorkspaceItemFormComponent,
     MJWorkspaceFormComponent],

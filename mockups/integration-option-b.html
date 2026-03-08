@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integration Engine - Command Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --sidebar-bg:#1e293b;--sidebar-text:#94a3b8;--sidebar-active:#3b82f6;
+  --content-bg:#f1f5f9;--surface:#ffffff;--primary:#3b82f6;
+  --success:#22c55e;--warning:#eab308;--error:#ef4444;
+  --text:#1e293b;--muted:#64748b;
+  --border:#e2e8f0;--hover:#f8fafc;
+}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--content-bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;height:100vh}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+
+/* Layout */
+.app{display:flex;height:100vh}
+.sidebar{width:240px;min-width:240px;background:var(--sidebar-bg);display:flex;flex-direction:column;overflow-y:auto}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.content{flex:1;overflow-y:auto;padding:20px}
+
+/* Sidebar */
+.sidebar-header{padding:16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo{color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.sidebar-logo i{color:var(--primary);font-size:18px}
+.sidebar-search{margin-top:12px;position:relative}
+.sidebar-search input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:7px 10px 7px 30px;color:#fff;font-size:12px;outline:none;transition:border .15s}
+.sidebar-search input:focus{border-color:var(--primary)}
+.sidebar-search input::placeholder{color:#64748b}
+.sidebar-search .icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#64748b;font-size:12px}
+.sidebar-search .shortcut{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#475569;font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace}
+
+.sidebar-nav{flex:1;padding:8px 0}
+.nav-section{margin-bottom:4px}
+.nav-section-title{padding:8px 16px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#475569;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.nav-section-title:hover{color:#64748b}
+.nav-section-title i{font-size:8px;transition:transform .15s}
+.nav-section.collapsed .nav-section-title i{transform:rotate(-90deg)}
+.nav-section.collapsed .nav-items{display:none}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 16px 7px 20px;color:var(--sidebar-text);cursor:pointer;border-left:3px solid transparent;transition:all .15s;font-size:13px}
+.nav-item:hover{background:rgba(255,255,255,.04);color:#cbd5e1}
+.nav-item.active{background:rgba(59,130,246,.08);color:#fff;border-left-color:var(--primary)}
+.nav-item i{width:18px;text-align:center;font-size:13px}
+.nav-item .badge{margin-left:auto;background:var(--error);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600}
+
+.sidebar-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;color:var(--sidebar-text);font-size:12px}
+.sidebar-footer .avatar{width:28px;height:28px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600}
+
+/* Status banner */
+.status-banner{padding:8px 20px;display:flex;align-items:center;gap:12px;font-size:12px;font-weight:500}
+.status-banner.healthy{background:linear-gradient(90deg,#dcfce7,#f0fdf4)}
+.status-banner.warning{background:linear-gradient(90deg,#fef9c3,#fefce8)}
+.status-banner.error{background:linear-gradient(90deg,#fee2e2,#fef2f2)}
+.status-banner .dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
+.status-banner.healthy .dot{background:var(--success)}
+.status-banner.warning .dot{background:var(--warning)}
+.status-banner .status-text{flex:1}
+.status-banner .status-time{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+
+/* Metric tiles */
+.metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+.metric-tile{background:var(--surface);border-radius:8px;padding:14px 16px;border:1px solid var(--border)}
+.metric-value{font-size:24px;font-weight:700;line-height:1.1}
+.metric-label{font-size:11px;color:var(--muted);margin-top:2px}
+.metric-trend{font-size:11px;margin-top:4px;font-weight:500}
+.metric-trend.up{color:var(--success)}
+.metric-trend.down{color:var(--error)}
+.metric-trend.neutral{color:var(--muted)}
+
+/* Tables */
+.data-table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.data-table th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;background:var(--surface)}
+.data-table th:hover{color:var(--text)}
+.data-table th .sort-icon{margin-left:4px;font-size:9px;opacity:.4}
+.data-table th.sorted .sort-icon{opacity:1;color:var(--primary)}
+.data-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle;white-space:nowrap}
+.data-table tr:hover td{background:#f8fafc}
+.data-table tr.expanded-parent td{background:#eff6ff;border-bottom-color:#dbeafe}
+.data-table tr.expandable{cursor:pointer}
+
+/* Status dots */
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.status-dot.active{background:var(--success);animation:pulse 2s infinite}
+.status-dot.idle{background:#cbd5e1}
+.status-dot.error{background:var(--error);animation:pulse 1.5s infinite}
+.status-dot.warning{background:var(--warning)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.badge.success{background:#dcfce7;color:#166534}
+.badge.warning{background:#fef9c3;color:#854d0e}
+.badge.error{background:#fee2e2;color:#991b1b}
+.badge.info{background:#dbeafe;color:#1e40af}
+.badge.neutral{background:#f1f5f9;color:#475569}
+.badge.sync{background:#dbeafe;color:#1e40af}
+.badge.create{background:#dcfce7;color:#166534}
+.badge.update{background:#fef9c3;color:#854d0e}
+.badge.delete{background:#fee2e2;color:#991b1b}
+
+/* Direction arrows */
+.direction{font-weight:600;color:var(--primary);font-size:14px;letter-spacing:1px}
+
+/* Action buttons */
+.action-btn{border:none;background:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:var(--muted);font-size:13px;transition:all .15s}
+.action-btn:hover{background:#f1f5f9;color:var(--text)}
+.action-btn.primary:hover{color:var(--primary)}
+.action-btn.danger:hover{color:var(--error)}
+
+/* Expanded row detail */
+.expanded-detail{display:none}
+.expanded-detail.show{display:table-row}
+.expanded-detail td{padding:0 !important;border-bottom:2px solid var(--primary) !important}
+.detail-content{padding:16px 20px;background:#f8fafc;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.detail-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
+.detail-mini-table{width:100%;font-size:12px;border-collapse:collapse}
+.detail-mini-table td,.detail-mini-table th{padding:4px 8px;text-align:left;border-bottom:1px solid #e2e8f0}
+.detail-mini-table th{font-weight:600;font-size:10px;text-transform:uppercase;color:var(--muted)}
+.detail-timeline{display:flex;flex-direction:column;gap:6px}
+.timeline-item{display:flex;align-items:center;gap:8px;font-size:12px}
+.timeline-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.timeline-dot.ok{background:var(--success)}
+.timeline-dot.err{background:var(--error)}
+.timeline-dot.warn{background:var(--warning)}
+
+/* Live Feed */
+.live-feed-container{display:flex;flex-direction:column;height:100%}
+.live-terminal{background:#0f172a;border-radius:8px;padding:12px;flex:1;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:12px;min-height:300px;max-height:calc(100vh - 340px)}
+.live-entry{padding:4px 0;display:flex;gap:12px;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.live-entry .ts{color:#475569;white-space:nowrap}
+.live-entry .int{color:#60a5fa;white-space:nowrap}
+.live-entry .action{color:#94a3b8}
+.live-entry .entity{color:#a78bfa}
+.live-entry .count{color:#fbbf24}
+.live-entry .status-ok{color:#4ade80}
+.live-entry .status-err{color:#f87171}
+
+.live-controls{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.live-controls .btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px;transition:all .15s}
+.live-controls .btn:hover{border-color:var(--primary);color:var(--primary)}
+.live-controls .btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.live-controls .btn.recording{background:#ef4444;color:#fff;border-color:#ef4444}
+
+.filter-bar{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.filter-check{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer}
+.filter-check input{accent-color:var(--primary)}
+
+.agg-bar{display:flex;gap:16px;padding:12px;background:var(--surface);border-radius:8px;border:1px solid var(--border);margin-top:12px}
+.agg-item{display:flex;align-items:center;gap:6px;font-size:12px}
+.agg-item .agg-count{font-weight:700;font-size:16px}
+
+/* Split pane */
+.split-pane{display:flex;gap:0;height:calc(100vh - 130px);background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.split-left{border-right:1px solid var(--border);overflow-y:auto}
+.split-right{flex:1;overflow-y:auto}
+
+/* Integration list */
+.int-list-header{padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1}
+.int-list-header input{width:100%;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none}
+.int-list-header input:focus{border-color:var(--primary)}
+.int-list-search{position:relative}
+.int-list-search .icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px}
+.int-list-item{padding:12px 16px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:12px;transition:background .15s}
+.int-list-item:hover{background:#f8fafc}
+.int-list-item.selected{background:#eff6ff;border-left:3px solid var(--primary)}
+.int-list-item .int-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.int-list-item .int-info{flex:1;min-width:0}
+.int-list-item .int-name{font-weight:600;font-size:13px}
+.int-list-item .int-meta{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* Detail panel */
+.detail-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.detail-header h2{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.detail-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;background:var(--surface);position:sticky;top:0;z-index:1}
+.detail-tab{padding:10px 16px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.detail-tab:hover{color:var(--text)}
+.detail-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.detail-body{padding:20px}
+
+/* Config form */
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.config-field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
+.config-field .value{font-size:13px;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid var(--border)}
+
+/* Entity maps */
+.entity-map-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.entity-map-row:last-child{border-bottom:none}
+.map-arrow{color:var(--primary);font-size:16px}
+.toggle-switch{position:relative;width:36px;height:20px;cursor:pointer}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#cbd5e1;border-radius:10px;transition:.15s}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;left:2px;top:2px;transition:.15s}
+.toggle-switch input:checked+.toggle-slider{background:var(--primary)}
+.toggle-switch input:checked+.toggle-slider::before{transform:translateX(16px)}
+
+/* Field mapping */
+.mapping-editor{display:flex;flex-direction:column;height:100%}
+.mapping-columns{display:flex;gap:0;flex:1;position:relative}
+.mapping-col{flex:1;padding:16px}
+.mapping-col h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.mapping-field{padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all .15s}
+.mapping-field:hover{border-color:var(--primary);background:#eff6ff}
+.mapping-field.mapped{border-color:var(--primary);background:#eff6ff}
+.mapping-field.unmapped{border-color:var(--warning);background:#fefce8}
+.mapping-field.required::after{content:'*';color:var(--error);margin-left:4px;font-weight:700}
+.mapping-field .field-type{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.transform-pill{font-size:9px;padding:1px 6px;border-radius:3px;background:#e0e7ff;color:#4338ca;font-weight:500}
+
+.mapping-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.mapping-line{stroke:var(--primary);stroke-width:2;fill:none;opacity:.4}
+
+.mapping-validation{padding:12px 16px;background:#fffbeb;border-top:1px solid #fef3c7;font-size:12px}
+.mapping-validation .val-item{display:flex;align-items:center;gap:6px;padding:2px 0}
+.mapping-validation .val-item i{font-size:11px}
+
+/* Tree */
+.tree-view{padding:12px}
+.tree-node{padding:4px 0}
+.tree-toggle{cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;transition:background .15s}
+.tree-toggle:hover{background:#f1f5f9}
+.tree-toggle.selected{background:#eff6ff;color:var(--primary);font-weight:500}
+.tree-toggle i:first-child{font-size:10px;width:12px;text-align:center;color:var(--muted)}
+.tree-children{padding-left:20px}
+
+/* Schedule timeline */
+.timeline-chart{background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.timeline-header{display:flex;border-bottom:1px solid var(--border);padding:8px 16px;font-size:11px;color:var(--muted);font-weight:600}
+.timeline-header .name-col{width:200px}
+.timeline-hours{flex:1;display:flex}
+.timeline-hours span{flex:1;text-align:center}
+.timeline-row{display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #f1f5f9}
+.timeline-row .name-col{width:200px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+.timeline-bar-container{flex:1;height:28px;position:relative;background:#f8fafc;border-radius:4px}
+.timeline-bar{position:absolute;height:100%;border-radius:4px;opacity:.8;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:600}
+
+/* Credential cards */
+.cred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.cred-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;transition:all .15s}
+.cred-card:hover{border-color:var(--primary);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.cred-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cred-card-header h4{font-size:14px;font-weight:600}
+.cred-type{font-size:10px;text-transform:uppercase;font-weight:600;letter-spacing:.5px}
+.cred-field{margin-bottom:8px}
+.cred-field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+.cred-field .masked{font-family:'JetBrains Mono',monospace;font-size:13px;display:flex;align-items:center;gap:8px}
+.cred-field .reveal-btn{border:none;background:none;color:var(--primary);cursor:pointer;font-size:11px;font-weight:500}
+.cred-refs{font-size:11px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:12px;width:480px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{font-size:16px;font-weight:600}
+.modal-close{border:none;background:none;font-size:18px;color:var(--muted);cursor:pointer}
+.modal-body{padding:20px}
+.modal-body .form-group{margin-bottom:14px}
+.modal-body label{display:block;font-size:12px;font-weight:500;margin-bottom:4px}
+.modal-body input,.modal-body select{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none}
+.modal-body input:focus,.modal-body select:focus{border-color:var(--primary)}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--surface);transition:all .15s}
+.btn:hover{background:#f8fafc}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:#2563eb}
+
+/* Tabs (page level) */
+.page-tabs{display:none}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+.live-terminal::-webkit-scrollbar-thumb{background:#334155}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <i class="fa-solid fa-bolt"></i>
+        Integration Engine
+      </div>
+      <div class="sidebar-search">
+        <i class="fa-solid fa-magnifying-glass icon"></i>
+        <input type="text" placeholder="Search..." id="sidebarSearch">
+        <span class="shortcut">&#8984;K</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section" id="navMonitoring">
+        <div class="nav-section-title" onclick="toggleSection('navMonitoring')">
+          Monitoring <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="nav-items">
+          <div class="nav-item active" data-tab="overview" onclick="switchTab('overview',this)">
+            <i class="fa-solid fa-chart-line"></i> Overview
+          </div>
+          <div class="nav-item" data-tab="livefeed" onclick="switchTab('livefeed',this)">
+            <i class="fa-solid fa-tower-broadcast"></i> Live Feed
+            <span class="badge">3</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-section" id="navManage">
+        <div class="nav-section-title" onclick="toggleSection('navManage')">
+          Manage <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="nav-items">
+          <div class="nav-item" data-tab="integrations" onclick="switchTab('integrations',this)">
+            <i class="fa-solid fa-plug"></i> Integrations
+          </div>
+          <div class="nav-item" data-tab="mappings" onclick="switchTab('mappings',this)">
+            <i class="fa-solid fa-arrows-left-right"></i> Mappings
+          </div>
+        </div>
+      </div>
+      <div class="nav-section" id="navConfigure">
+        <div class="nav-section-title" onclick="toggleSection('navConfigure')">
+          Configure <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="nav-items">
+          <div class="nav-item" data-tab="schedules" onclick="switchTab('schedules',this)">
+            <i class="fa-solid fa-clock"></i> Schedules
+          </div>
+          <div class="nav-item" data-tab="credentials" onclick="switchTab('credentials',this)">
+            <i class="fa-solid fa-key"></i> Credentials
+          </div>
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="avatar">AK</div>
+      <div>
+        <div style="color:#fff;font-weight:500;font-size:12px">Amith K</div>
+        <div style="font-size:11px">Admin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- ===== OVERVIEW TAB ===== -->
+    <div class="tab-content" id="tab-overview">
+      <div class="status-banner warning">
+        <div class="dot"></div>
+        <span class="status-text"><strong>System Degraded</strong> &mdash; YourMembership connector has 3 errors in the last hour. All other integrations healthy.</span>
+        <span class="status-time">Updated 12s ago</span>
+      </div>
+      <div class="content">
+        <div class="metrics">
+          <div class="metric-tile">
+            <div class="metric-value">5</div>
+            <div class="metric-label">Integrations</div>
+            <div class="metric-trend neutral">&#8212; No change</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" style="color:var(--success)">2</div>
+            <div class="metric-label">Active Syncs</div>
+            <div class="metric-trend up">&uarr; 1 from last hr</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value">7</div>
+            <div class="metric-label">Queued</div>
+            <div class="metric-trend down">&darr; 3 from last hr</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value">14.2K</div>
+            <div class="metric-label">Records/hr</div>
+            <div class="metric-trend up">&uarr; 12%</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" style="color:var(--error)">3</div>
+            <div class="metric-label">Errors (24h)</div>
+            <div class="metric-trend down">&uarr; 3 new</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-value" style="color:var(--success)">99.7%</div>
+            <div class="metric-label">Uptime</div>
+            <div class="metric-trend neutral">&mdash; Stable</div>
+          </div>
+        </div>
+
+        <table class="data-table" id="overviewTable">
+          <thead>
+            <tr>
+              <th style="width:40px">Status</th>
+              <th onclick="sortTable(this,1)">Name <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th onclick="sortTable(this,2)">Type <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th>Dir</th>
+              <th onclick="sortTable(this,4)">Schedule <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th onclick="sortTable(this,5)">Last Run <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th>Next Run</th>
+              <th onclick="sortTable(this,7)">Records <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th onclick="sortTable(this,8)">Errors <i class="fa-solid fa-sort sort-icon"></i></th>
+              <th style="width:100px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="overviewTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== LIVE FEED TAB ===== -->
+    <div class="tab-content" id="tab-livefeed" style="display:none">
+      <div class="content" style="display:flex;flex-direction:column;height:calc(100vh - 40px)">
+        <div class="live-controls">
+          <button class="btn recording" id="livePauseBtn" onclick="toggleLiveFeed()">
+            <i class="fa-solid fa-circle" style="font-size:8px"></i> Live
+          </button>
+          <span class="mono" style="color:var(--muted)" id="liveCount">0 events</span>
+          <button class="btn" onclick="clearLiveFeed()" style="margin-left:auto"><i class="fa-solid fa-trash-can"></i> Clear</button>
+        </div>
+        <div class="filter-bar">
+          <span style="font-size:12px;font-weight:500;color:var(--muted)">Filter:</span>
+          <label class="filter-check"><input type="checkbox" checked data-filter="sync"> Sync</label>
+          <label class="filter-check"><input type="checkbox" checked data-filter="error"> Error</label>
+          <label class="filter-check"><input type="checkbox" checked data-filter="create"> Create</label>
+          <label class="filter-check"><input type="checkbox" checked data-filter="update"> Update</label>
+          <label class="filter-check"><input type="checkbox" checked data-filter="delete"> Delete</label>
+        </div>
+        <div class="live-terminal" id="liveTerminal"></div>
+        <div class="agg-bar">
+          <div class="agg-item"><span class="badge sync">Sync</span> <span class="agg-count" id="aggSync">0</span></div>
+          <div class="agg-item"><span class="badge error">Error</span> <span class="agg-count" id="aggError">0</span></div>
+          <div class="agg-item"><span class="badge create">Create</span> <span class="agg-count" id="aggCreate">0</span></div>
+          <div class="agg-item"><span class="badge update">Update</span> <span class="agg-count" id="aggUpdate">0</span></div>
+          <div class="agg-item"><span class="badge delete">Delete</span> <span class="agg-count" id="aggDelete">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== INTEGRATIONS TAB ===== -->
+    <div class="tab-content" id="tab-integrations" style="display:none">
+      <div class="split-pane" style="height:calc(100vh - 40px)">
+        <div class="split-left" style="width:40%;min-width:300px">
+          <div class="int-list-header">
+            <div class="int-list-search">
+              <i class="fa-solid fa-magnifying-glass icon"></i>
+              <input type="text" placeholder="Filter integrations..." id="intFilterInput" oninput="filterIntList()">
+            </div>
+          </div>
+          <div id="intListContainer"></div>
+        </div>
+        <div class="split-right" id="intDetailPanel">
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">
+            <div style="text-align:center">
+              <i class="fa-solid fa-plug" style="font-size:32px;margin-bottom:8px;opacity:.3"></i>
+              <div>Select an integration to view details</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MAPPINGS TAB ===== -->
+    <div class="tab-content" id="tab-mappings" style="display:none">
+      <div class="split-pane" style="height:calc(100vh - 40px)">
+        <div class="split-left" style="width:280px;min-width:280px">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px">
+            <i class="fa-solid fa-sitemap" style="margin-right:6px;color:var(--muted)"></i> Entity Maps
+          </div>
+          <div class="tree-view" id="mappingTree"></div>
+        </div>
+        <div class="split-right" id="mappingDetail">
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">
+            <div style="text-align:center">
+              <i class="fa-solid fa-arrows-left-right" style="font-size:32px;margin-bottom:8px;opacity:.3"></i>
+              <div>Select an entity map to view field mappings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCHEDULES TAB ===== -->
+    <div class="tab-content" id="tab-schedules" style="display:none">
+      <div class="content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="font-size:18px;font-weight:700">Sync Schedules</h2>
+          <span class="mono" style="color:var(--muted)">Current time: <span id="scheduleTime"></span></span>
+        </div>
+        <div class="timeline-chart">
+          <div class="timeline-header">
+            <div class="name-col">Integration</div>
+            <div class="timeline-hours" id="timelineHours"></div>
+          </div>
+          <div id="timelineRows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== CREDENTIALS TAB ===== -->
+    <div class="tab-content" id="tab-credentials" style="display:none">
+      <div class="content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="font-size:18px;font-weight:700">Credentials</h2>
+          <button class="btn btn-primary" onclick="showCredModal()"><i class="fa-solid fa-plus"></i> Add Credential</button>
+        </div>
+        <div class="cred-grid" id="credGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Credential Modal -->
+<div class="modal-overlay" id="credModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Credential</h3>
+      <button class="modal-close" onclick="hideCredModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" placeholder="e.g., HubSpot Production API Key">
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select>
+          <option>API Key</option>
+          <option>OAuth 2.0</option>
+          <option>Basic Auth</option>
+          <option>Connection String</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Value / Key</label>
+        <input type="password" placeholder="Enter credential value">
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <input type="text" placeholder="Notes about this credential">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary">Save Credential</button>
+      <button class="btn" onclick="hideCredModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============== DATA ==============
+const integrations = [
+  {
+    id:1, name:'HubSpot CRM', type:'API', icon:'fa-brands fa-hubspot', iconColor:'#ff7a59',
+    status:'active', direction:'&#8596;', schedule:'Every 15m', lastRun:'2 min ago',
+    nextRun:'13 min', records:'4,218', errors:0, uptime:'99.9%',
+    credential:'HubSpot Prod API Key', createdDate:'Jan 12, 2025',
+    entities:[
+      {source:'contacts',target:'Contacts',enabled:true,records:2841},
+      {source:'companies',target:'Companies',enabled:true,records:892},
+      {source:'deals',target:'Deals',enabled:true,records:485}
+    ],
+    runs:[
+      {time:'14:32',status:'ok',records:4218,dur:'12s'},
+      {time:'14:17',status:'ok',records:4215,dur:'11s'},
+      {time:'14:02',status:'ok',records:4210,dur:'13s'},
+      {time:'13:47',status:'ok',records:4198,dur:'12s'},
+      {time:'13:32',status:'ok',records:4190,dur:'11s'}
+    ],
+    config:{baseUrl:'https://api.hubapi.com/v3',authType:'API Key',rateLimit:'100/10s',timeout:'30s'}
+  },
+  {
+    id:2, name:'Salesforce', type:'API', icon:'fa-brands fa-salesforce', iconColor:'#00a1e0',
+    status:'warning', direction:'&#8596;', schedule:'Every 1h', lastRun:'45 min ago',
+    nextRun:'15 min', records:'12,847', errors:0, uptime:'98.2%',
+    credential:'Salesforce OAuth Token', createdDate:'Feb 3, 2025',
+    entities:[
+      {source:'Account',target:'Accounts',enabled:true,records:5420},
+      {source:'Opportunity',target:'Opportunities',enabled:true,records:4127},
+      {source:'Lead',target:'Leads',enabled:true,records:3300}
+    ],
+    runs:[
+      {time:'13:45',status:'warn',records:12847,dur:'2m 14s'},
+      {time:'12:45',status:'ok',records:12830,dur:'1m 52s'},
+      {time:'11:45',status:'ok',records:12815,dur:'1m 48s'},
+      {time:'10:45',status:'ok',records:12800,dur:'1m 55s'},
+      {time:'09:45',status:'warn',records:12788,dur:'2m 30s'}
+    ],
+    config:{baseUrl:'https://na1.salesforce.com/services/data/v59.0',authType:'OAuth 2.0',rateLimit:'1000/day',timeout:'60s'}
+  },
+  {
+    id:3, name:'YourMembership', type:'API', icon:'fa-solid fa-users', iconColor:'#8b5cf6',
+    status:'error', direction:'&#8594;', schedule:'Every 30m', lastRun:'8 min ago',
+    nextRun:'22 min', records:'6,340', errors:3, uptime:'94.1%',
+    credential:'YM API Credentials', createdDate:'Mar 1, 2025',
+    entities:[
+      {source:'members',target:'Members',enabled:true,records:3200},
+      {source:'events',target:'Events',enabled:true,records:1890},
+      {source:'registrations',target:'Registrations',enabled:true,records:1250}
+    ],
+    runs:[
+      {time:'14:26',status:'err',records:0,dur:'4s'},
+      {time:'13:56',status:'err',records:0,dur:'3s'},
+      {time:'13:26',status:'err',records:0,dur:'5s'},
+      {time:'12:56',status:'ok',records:6340,dur:'45s'},
+      {time:'12:26',status:'ok',records:6335,dur:'42s'}
+    ],
+    config:{baseUrl:'https://ws.yourmembership.com/Ams/ws',authType:'API Key + Secret',rateLimit:'60/min',timeout:'30s'},
+    errorLog:'HTTP 401 Unauthorized — API key expired. Last successful auth: 12:56 PM'
+  },
+  {
+    id:4, name:'PostgreSQL DB', type:'Database', icon:'fa-solid fa-database', iconColor:'#336791',
+    status:'active', direction:'&#8592;', schedule:'Every 6h', lastRun:'1h ago',
+    nextRun:'5h', records:'28,450', errors:0, uptime:'100%',
+    credential:'PostgreSQL Prod Conn', createdDate:'Dec 8, 2024',
+    entities:[
+      {source:'products',target:'Products',enabled:true,records:15200},
+      {source:'orders',target:'Orders',enabled:true,records:13250}
+    ],
+    runs:[
+      {time:'13:00',status:'ok',records:28450,dur:'3m 20s'},
+      {time:'07:00',status:'ok',records:28410,dur:'3m 15s'},
+      {time:'01:00',status:'ok',records:28380,dur:'3m 18s'},
+      {time:'19:00',status:'ok',records:28350,dur:'3m 22s'},
+      {time:'13:00',status:'ok',records:28320,dur:'3m 19s'}
+    ],
+    config:{baseUrl:'postgresql://prod-db.internal:5432/main',authType:'Connection String',rateLimit:'N/A',timeout:'120s'}
+  },
+  {
+    id:5, name:'CSV Import', type:'File', icon:'fa-solid fa-file-csv', iconColor:'#22c55e',
+    status:'idle', direction:'&#8594;', schedule:'Manual', lastRun:'3 days ago',
+    nextRun:'&mdash;', records:'1,240', errors:0, uptime:'100%',
+    credential:'&mdash;', createdDate:'Nov 15, 2024',
+    entities:[
+      {source:'employee_directory.csv',target:'Employee Directory',enabled:true,records:1240}
+    ],
+    runs:[
+      {time:'Mar 4',status:'ok',records:1240,dur:'8s'},
+      {time:'Feb 28',status:'ok',records:1235,dur:'7s'},
+      {time:'Feb 21',status:'ok',records:1230,dur:'8s'},
+      {time:'Feb 14',status:'ok',records:1220,dur:'7s'},
+      {time:'Feb 7',status:'ok',records:1215,dur:'7s'}
+    ],
+    config:{baseUrl:'/uploads/employee_directory.csv',authType:'None',rateLimit:'N/A',timeout:'60s'}
+  }
+];
+
+const fieldMappings = {
+  'HubSpot CRM|Contacts': {
+    source: [
+      {name:'firstname',type:'string',mapped:true,required:false},
+      {name:'lastname',type:'string',mapped:true,required:false},
+      {name:'email',type:'string',mapped:true,required:true},
+      {name:'phone',type:'string',mapped:true,required:false},
+      {name:'company',type:'string',mapped:true,required:false},
+      {name:'createdate',type:'datetime',mapped:true,required:false},
+      {name:'hs_lead_status',type:'string',mapped:false,required:false},
+      {name:'lifecyclestage',type:'string',mapped:false,required:false}
+    ],
+    target: [
+      {name:'FirstName',type:'nvarchar',mapped:true,required:true},
+      {name:'LastName',type:'nvarchar',mapped:true,required:true},
+      {name:'Email',type:'nvarchar',mapped:true,required:true},
+      {name:'Phone',type:'nvarchar',mapped:true,required:false},
+      {name:'CompanyName',type:'nvarchar',mapped:true,required:false},
+      {name:'CreatedDate',type:'datetime',mapped:true,required:false},
+      {name:'Status',type:'nvarchar',mapped:false,required:true},
+      {name:'Source',type:'nvarchar',mapped:false,required:false}
+    ],
+    transforms: [
+      {from:0,to:0,transform:null},
+      {from:1,to:1,transform:null},
+      {from:2,to:2,transform:'lowercase'},
+      {from:3,to:3,transform:'trim'},
+      {from:4,to:4,transform:null},
+      {from:5,to:5,transform:'date\u2192iso'}
+    ]
+  }
+};
+
+const credentials = [
+  {name:'HubSpot Prod API Key',type:'API Key',value:'hk-****-****-****-a82f',refs:['HubSpot CRM'],rotated:'14 days ago',revealed:false},
+  {name:'Salesforce OAuth Token',type:'OAuth 2.0',value:'Bearer ey****...dQ2f',refs:['Salesforce'],rotated:'7 days ago',revealed:false},
+  {name:'YM API Credentials',type:'API Key',value:'ym-****-****-****-c91e',refs:['YourMembership'],rotated:'62 days ago',revealed:false},
+  {name:'PostgreSQL Prod Conn',type:'Connection String',value:'postgresql://mj_admin:****@prod:5432/main',refs:['PostgreSQL DB'],rotated:'30 days ago',revealed:false}
+];
+
+// ============== SIDEBAR NAVIGATION ==============
+function toggleSection(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+function switchTab(tabId, navEl) {
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + tabId).style.display = '';
+  if (navEl) navEl.classList.add('active');
+  if (tabId === 'schedules') renderSchedules();
+  if (tabId === 'livefeed' && !liveFeedStarted) startLiveFeed();
+}
+
+// ============== OVERVIEW TABLE ==============
+function renderOverviewTable() {
+  const tbody = document.getElementById('overviewTableBody');
+  tbody.innerHTML = '';
+  integrations.forEach((int, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = 'expandable';
+    tr.onclick = () => toggleExpandedRow(idx);
+    tr.innerHTML = `
+      <td><span class="status-dot ${int.status}"></span></td>
+      <td><strong>${int.name}</strong></td>
+      <td><span class="badge neutral">${int.type}</span></td>
+      <td class="direction">${int.direction}</td>
+      <td class="mono">${int.schedule}</td>
+      <td class="mono">${int.lastRun}</td>
+      <td class="mono">${int.nextRun}</td>
+      <td class="mono" style="font-weight:600">${int.records}</td>
+      <td>${int.errors > 0 ? '<span class="badge error">' + int.errors + '</span>' : '<span style="color:var(--muted)">0</span>'}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="action-btn primary" title="Run now"><i class="fa-solid fa-play"></i></button>
+        <button class="action-btn" title="Pause"><i class="fa-solid fa-pause"></i></button>
+        <button class="action-btn" title="Configure"><i class="fa-solid fa-gear"></i></button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // Expanded detail row
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'expanded-detail';
+    detailTr.id = 'detail-' + idx;
+    detailTr.innerHTML = `<td colspan="10">${buildExpandedDetail(int)}</td>`;
+    tbody.appendChild(detailTr);
+  });
+}
+
+function buildExpandedDetail(int) {
+  let entityRows = int.entities.map(e => `<tr><td>${e.source}</td><td style="color:var(--primary)">&rarr;</td><td>${e.target}</td><td class="mono">${e.records.toLocaleString()}</td></tr>`).join('');
+  let runItems = int.runs.map(r => `
+    <div class="timeline-item">
+      <span class="timeline-dot ${r.status === 'ok' ? 'ok' : r.status === 'err' ? 'err' : 'warn'}"></span>
+      <span class="mono">${r.time}</span>
+      <span>${r.records.toLocaleString()} records</span>
+      <span class="mono" style="color:var(--muted)">${r.dur}</span>
+    </div>
+  `).join('');
+  let errorSection = int.errorLog
+    ? `<div><h4>Error Log</h4><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 12px;font-size:12px;color:#991b1b"><i class="fa-solid fa-triangle-exclamation" style="margin-right:4px"></i>${int.errorLog}</div></div>`
+    : `<div><h4>Error Log</h4><div style="color:var(--muted);font-size:12px">No recent errors</div></div>`;
+  return `<div class="detail-content">
+    <div><h4>Entity Maps</h4><table class="detail-mini-table"><tr><th>Source</th><th></th><th>Target</th><th>Records</th></tr>${entityRows}</table></div>
+    <div><h4>Last 5 Runs</h4><div class="detail-timeline">${runItems}</div></div>
+    ${errorSection}
+  </div>`;
+}
+
+function toggleExpandedRow(idx) {
+  const detailRow = document.getElementById('detail-' + idx);
+  const parentRow = detailRow.previousElementSibling;
+  const isShown = detailRow.classList.contains('show');
+  // Close all
+  document.querySelectorAll('.expanded-detail').forEach(d => d.classList.remove('show'));
+  document.querySelectorAll('.expanded-parent').forEach(p => p.classList.remove('expanded-parent'));
+  if (!isShown) {
+    detailRow.classList.add('show');
+    parentRow.classList.add('expanded-parent');
+  }
+}
+
+function sortTable(th, colIdx) {
+  // Simple visual toggle
+  document.querySelectorAll('#overviewTable th').forEach(h => h.classList.remove('sorted'));
+  th.classList.add('sorted');
+}
+
+// ============== LIVE FEED ==============
+let liveFeedStarted = false;
+let livePaused = false;
+let liveInterval = null;
+const aggCounts = {sync:0,error:0,create:0,update:0,delete:0};
+
+const liveTemplates = [
+  {type:'sync',int:'HubSpot CRM',action:'Sync completed',entity:'Contacts',count:()=>Math.floor(Math.random()*50+10)},
+  {type:'create',int:'HubSpot CRM',action:'Created records',entity:'Companies',count:()=>Math.floor(Math.random()*8+1)},
+  {type:'update',int:'Salesforce',action:'Updated records',entity:'Opportunities',count:()=>Math.floor(Math.random()*20+5)},
+  {type:'sync',int:'Salesforce',action:'Sync started',entity:'Accounts',count:()=>0},
+  {type:'error',int:'YourMembership',action:'Auth failed',entity:'Members',count:()=>0},
+  {type:'sync',int:'PostgreSQL DB',action:'Sync completed',entity:'Products',count:()=>Math.floor(Math.random()*100+50)},
+  {type:'create',int:'PostgreSQL DB',action:'New records',entity:'Orders',count:()=>Math.floor(Math.random()*15+3)},
+  {type:'update',int:'HubSpot CRM',action:'Updated records',entity:'Deals',count:()=>Math.floor(Math.random()*12+2)},
+  {type:'sync',int:'CSV Import',action:'Manual import completed',entity:'Employee Directory',count:()=>1240},
+  {type:'delete',int:'Salesforce',action:'Deleted duplicates',entity:'Leads',count:()=>Math.floor(Math.random()*5+1)},
+  {type:'error',int:'YourMembership',action:'Timeout on endpoint /events',entity:'Events',count:()=>0},
+  {type:'create',int:'Salesforce',action:'Created records',entity:'Leads',count:()=>Math.floor(Math.random()*10+2)},
+  {type:'update',int:'PostgreSQL DB',action:'Updated records',entity:'Products',count:()=>Math.floor(Math.random()*30+10)}
+];
+
+function startLiveFeed() {
+  liveFeedStarted = true;
+  addLiveEntry();
+  liveInterval = setInterval(() => {
+    if (!livePaused) addLiveEntry();
+  }, 2500);
+}
+
+function addLiveEntry() {
+  const terminal = document.getElementById('liveTerminal');
+  const tmpl = liveTemplates[Math.floor(Math.random() * liveTemplates.length)];
+
+  // Check filter
+  const filterEl = document.querySelector(`[data-filter="${tmpl.type}"]`);
+  if (filterEl && !filterEl.checked) return;
+
+  const now = new Date();
+  const ts = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3,'0');
+  const cnt = tmpl.count();
+  const statusClass = tmpl.type === 'error' ? 'status-err' : 'status-ok';
+  const statusText = tmpl.type === 'error' ? 'FAIL' : 'OK';
+
+  const entry = document.createElement('div');
+  entry.className = 'live-entry';
+  entry.innerHTML = `
+    <span class="ts">${ts}</span>
+    <span class="int">[${tmpl.int}]</span>
+    <span class="action">${tmpl.action}</span>
+    <span class="entity">${tmpl.entity}</span>
+    ${cnt > 0 ? `<span class="count">(${cnt})</span>` : ''}
+    <span class="${statusClass}">${statusText}</span>
+  `;
+  terminal.appendChild(entry);
+  terminal.scrollTop = terminal.scrollHeight;
+
+  aggCounts[tmpl.type]++;
+  updateAggCounts();
+}
+
+function updateAggCounts() {
+  document.getElementById('aggSync').textContent = aggCounts.sync;
+  document.getElementById('aggError').textContent = aggCounts.error;
+  document.getElementById('aggCreate').textContent = aggCounts.create;
+  document.getElementById('aggUpdate').textContent = aggCounts.update;
+  document.getElementById('aggDelete').textContent = aggCounts.delete;
+  document.getElementById('liveCount').textContent = Object.values(aggCounts).reduce((a,b)=>a+b,0) + ' events';
+}
+
+function toggleLiveFeed() {
+  livePaused = !livePaused;
+  const btn = document.getElementById('livePauseBtn');
+  if (livePaused) {
+    btn.classList.remove('recording');
+    btn.innerHTML = '<i class="fa-solid fa-play" style="font-size:10px"></i> Paused';
+  } else {
+    btn.classList.add('recording');
+    btn.innerHTML = '<i class="fa-solid fa-circle" style="font-size:8px"></i> Live';
+  }
+}
+
+function clearLiveFeed() {
+  document.getElementById('liveTerminal').innerHTML = '';
+  Object.keys(aggCounts).forEach(k => aggCounts[k] = 0);
+  updateAggCounts();
+}
+
+// ============== INTEGRATIONS TAB ==============
+let selectedIntId = null;
+
+function renderIntList() {
+  const container = document.getElementById('intListContainer');
+  container.innerHTML = '';
+  integrations.forEach(int => {
+    const div = document.createElement('div');
+    div.className = 'int-list-item' + (selectedIntId === int.id ? ' selected' : '');
+    div.onclick = () => selectIntegration(int.id);
+    div.innerHTML = `
+      <div class="int-icon" style="background:${int.iconColor}15;color:${int.iconColor}"><i class="${int.icon}"></i></div>
+      <div class="int-info">
+        <div class="int-name">${int.name} <span class="status-dot ${int.status}" style="margin-left:6px"></span></div>
+        <div class="int-meta">Last sync: ${int.lastRun}</div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function filterIntList() {
+  const q = document.getElementById('intFilterInput').value.toLowerCase();
+  document.querySelectorAll('.int-list-item').forEach((item, i) => {
+    item.style.display = integrations[i].name.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function selectIntegration(id) {
+  selectedIntId = id;
+  renderIntList();
+  renderIntDetail(id);
+}
+
+let activeDetailTab = 'config';
+
+function renderIntDetail(id) {
+  const int = integrations.find(i => i.id === id);
+  if (!int) return;
+  const panel = document.getElementById('intDetailPanel');
+  const statusBadge = int.status === 'active' ? '<span class="badge success">Active</span>'
+    : int.status === 'error' ? '<span class="badge error">Error</span>'
+    : int.status === 'warning' ? '<span class="badge warning">Warning</span>'
+    : '<span class="badge neutral">Idle</span>';
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <h2><i class="${int.icon}" style="color:${int.iconColor}"></i> ${int.name} ${statusBadge}</h2>
+      <div>
+        <span class="badge neutral">${int.type}</span>
+        <span style="margin-left:8px;font-size:12px;color:var(--muted)">Created ${int.createdDate}</span>
+      </div>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab ${activeDetailTab==='config'?'active':''}" onclick="activeDetailTab='config';renderIntDetail(${id})">Config</div>
+      <div class="detail-tab ${activeDetailTab==='entities'?'active':''}" onclick="activeDetailTab='entities';renderIntDetail(${id})">Entity Maps</div>
+      <div class="detail-tab ${activeDetailTab==='history'?'active':''}" onclick="activeDetailTab='history';renderIntDetail(${id})">History</div>
+      <div class="detail-tab ${activeDetailTab==='health'?'active':''}" onclick="activeDetailTab='health';renderIntDetail(${id})">Health</div>
+    </div>
+    <div class="detail-body">${renderDetailTabContent(int)}</div>
+  `;
+}
+
+function renderDetailTabContent(int) {
+  if (activeDetailTab === 'config') {
+    return `<div class="config-grid">
+      <div class="config-field"><label>Base URL</label><div class="value mono">${int.config.baseUrl}</div></div>
+      <div class="config-field"><label>Auth Type</label><div class="value">${int.config.authType}</div></div>
+      <div class="config-field"><label>Credential</label><div class="value">${int.credential}</div></div>
+      <div class="config-field"><label>Schedule</label><div class="value">${int.schedule}</div></div>
+      <div class="config-field"><label>Rate Limit</label><div class="value mono">${int.config.rateLimit}</div></div>
+      <div class="config-field"><label>Timeout</label><div class="value mono">${int.config.timeout}</div></div>
+    </div>`;
+  }
+  if (activeDetailTab === 'entities') {
+    let rows = int.entities.map(e => `
+      <div class="entity-map-row">
+        <label class="toggle-switch"><input type="checkbox" ${e.enabled?'checked':''}><span class="toggle-slider"></span></label>
+        <span style="flex:1;font-weight:500">${e.source}</span>
+        <span class="map-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+        <span style="flex:1;font-weight:500">${e.target}</span>
+        <span class="mono" style="color:var(--muted)">${e.records.toLocaleString()} records</span>
+      </div>
+    `).join('');
+    return rows;
+  }
+  if (activeDetailTab === 'history') {
+    let rows = int.runs.map(r => {
+      const badge = r.status === 'ok' ? '<span class="badge success">Success</span>'
+        : r.status === 'err' ? '<span class="badge error">Failed</span>'
+        : '<span class="badge warning">Warning</span>';
+      return `<tr><td class="mono">${r.time}</td><td>${badge}</td><td class="mono">${r.records.toLocaleString()}</td><td class="mono">${r.dur}</td></tr>`;
+    }).join('');
+    return `<table class="data-table"><thead><tr><th>Time</th><th>Status</th><th>Records</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table>
+    ${int.errorLog ? `<div style="margin-top:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;font-size:12px;color:#991b1b"><i class="fa-solid fa-triangle-exclamation" style="margin-right:4px"></i>${int.errorLog}</div>` : ''}`;
+  }
+  if (activeDetailTab === 'health') {
+    return `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
+        <div class="metric-tile"><div class="metric-value">${int.records}</div><div class="metric-label">Total Records</div></div>
+        <div class="metric-tile"><div class="metric-value" style="color:${int.errors>0?'var(--error)':'var(--success)'}">${int.errors}</div><div class="metric-label">Errors (24h)</div></div>
+        <div class="metric-tile"><div class="metric-value">${int.uptime}</div><div class="metric-label">Uptime</div></div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:20px;text-align:center;color:var(--muted)">
+        <i class="fa-solid fa-chart-area" style="font-size:24px;margin-bottom:8px;opacity:.3"></i>
+        <div>Records over time chart</div>
+        <div style="display:flex;justify-content:space-between;margin-top:16px;padding:0 20px">
+          ${renderMiniChart()}
+        </div>
+      </div>`;
+  }
+  return '';
+}
+
+function renderMiniChart() {
+  const heights = [40,55,48,62,58,70,65,72,68,75,80,78];
+  return heights.map(h => `<div style="width:20px;background:var(--primary);opacity:.6;height:${h}px;border-radius:3px 3px 0 0;align-self:flex-end"></div>`).join('');
+}
+
+// ============== MAPPINGS TAB ==============
+let selectedMapping = null;
+
+function renderMappingTree() {
+  const tree = document.getElementById('mappingTree');
+  tree.innerHTML = '';
+  integrations.forEach(int => {
+    const node = document.createElement('div');
+    node.className = 'tree-node';
+    let children = int.entities.map(e => `
+      <div class="tree-node">
+        <div class="tree-toggle ${selectedMapping === int.name + '|' + e.target ? 'selected' : ''}" onclick="selectMapping('${int.name}','${e.target}','${e.source}')">
+          <i class="fa-solid fa-table"></i>
+          <span>${e.source} &rarr; ${e.target}</span>
+        </div>
+      </div>
+    `).join('');
+    node.innerHTML = `
+      <div class="tree-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+        <i class="fa-solid fa-chevron-down"></i>
+        <i class="${int.icon}" style="color:${int.iconColor}"></i>
+        <span>${int.name}</span>
+      </div>
+      <div class="tree-children">${children}</div>
+    `;
+    tree.appendChild(node);
+  });
+}
+
+function selectMapping(intName, targetEntity, sourceEntity) {
+  selectedMapping = intName + '|' + targetEntity;
+  renderMappingTree();
+  renderMappingDetail(intName, targetEntity, sourceEntity);
+}
+
+function renderMappingDetail(intName, targetEntity, sourceEntity) {
+  const panel = document.getElementById('mappingDetail');
+  const key = intName + '|' + targetEntity;
+  const mapping = fieldMappings[key];
+
+  if (!mapping) {
+    // Generate a default mapping view
+    panel.innerHTML = `
+      <div style="padding:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="font-size:16px;font-weight:600">${sourceEntity} &rarr; ${targetEntity}</h3>
+          <button class="btn btn-primary" style="font-size:12px"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map</button>
+        </div>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:40px;text-align:center;color:var(--muted)">
+          <i class="fa-solid fa-arrows-left-right" style="font-size:24px;margin-bottom:8px;opacity:.3"></i>
+          <div>No field mappings configured yet.</div>
+          <div style="margin-top:4px;font-size:12px">Click "Auto-Map" to match fields by name similarity.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const sourceFields = mapping.source;
+  const targetFields = mapping.target;
+  const transforms = mapping.transforms;
+
+  let sourceHTML = sourceFields.map((f, i) => `
+    <div class="mapping-field ${f.mapped ? 'mapped' : 'unmapped'} ${f.required ? 'required' : ''}" id="src-${i}" data-idx="${i}">
+      <span>${f.name}</span>
+      <span class="field-type">${f.type}</span>
+    </div>
+  `).join('');
+
+  let targetHTML = targetFields.map((f, i) => `
+    <div class="mapping-field ${f.mapped ? 'mapped' : 'unmapped'} ${f.required ? 'required' : ''}" id="tgt-${i}" data-idx="${i}">
+      <span>${f.name}</span>
+      <span class="field-type">${f.type}</span>
+    </div>
+  `).join('');
+
+  let transformPills = transforms.filter(t => t.transform).map(t =>
+    `<div style="position:absolute;left:50%;transform:translateX(-50%);top:${28 + t.from * 44}px;z-index:2"><span class="transform-pill">${t.transform}</span></div>`
+  ).join('');
+
+  const unmappedSrc = sourceFields.filter(f => !f.mapped).length;
+  const unmappedTgt = targetFields.filter(f => !f.mapped).length;
+  const requiredUnmapped = targetFields.filter(f => f.required && !f.mapped).length;
+
+  panel.innerHTML = `
+    <div style="padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 style="font-size:16px;font-weight:600">${sourceEntity} &rarr; ${targetEntity}</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="font-size:12px"><i class="fa-solid fa-plus"></i> Add Mapping</button>
+          <button class="btn btn-primary" style="font-size:12px"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map</button>
+        </div>
+      </div>
+      <div style="position:relative">
+        <div class="mapping-columns">
+          <div class="mapping-col">
+            <h4><i class="fa-solid fa-arrow-right-from-bracket"></i> Source Fields</h4>
+            ${sourceHTML}
+          </div>
+          <div style="position:relative;width:0">
+            ${transformPills}
+            <svg class="mapping-svg" id="mappingSvg" style="position:absolute;left:-60px;width:120px;top:0;height:100%"></svg>
+          </div>
+          <div class="mapping-col">
+            <h4><i class="fa-solid fa-arrow-right-to-bracket"></i> Target Fields</h4>
+            ${targetHTML}
+          </div>
+        </div>
+      </div>
+      <div class="mapping-validation">
+        ${requiredUnmapped > 0 ? `<div class="val-item" style="color:var(--error)"><i class="fa-solid fa-circle-xmark"></i> ${requiredUnmapped} required target field(s) unmapped</div>` : ''}
+        ${unmappedSrc > 0 ? `<div class="val-item" style="color:var(--warning)"><i class="fa-solid fa-triangle-exclamation"></i> ${unmappedSrc} source field(s) not mapped</div>` : ''}
+        ${unmappedTgt > 0 ? `<div class="val-item" style="color:var(--warning)"><i class="fa-solid fa-triangle-exclamation"></i> ${unmappedTgt} target field(s) not mapped</div>` : ''}
+        ${requiredUnmapped === 0 && unmappedSrc === 0 && unmappedTgt === 0 ? `<div class="val-item" style="color:var(--success)"><i class="fa-solid fa-circle-check"></i> All fields mapped successfully</div>` : ''}
+      </div>
+    </div>
+  `;
+
+  // Draw SVG lines after render
+  requestAnimationFrame(() => drawMappingLines(transforms));
+}
+
+function drawMappingLines(transforms) {
+  const svg = document.getElementById('mappingSvg');
+  if (!svg) return;
+  const svgRect = svg.getBoundingClientRect();
+  svg.innerHTML = '';
+  svg.setAttribute('height', '400');
+
+  transforms.forEach(t => {
+    const srcEl = document.getElementById('src-' + t.from);
+    const tgtEl = document.getElementById('tgt-' + t.to);
+    if (!srcEl || !tgtEl) return;
+
+    const srcRect = srcEl.getBoundingClientRect();
+    const tgtRect = tgtEl.getBoundingClientRect();
+
+    const y1 = srcRect.top + srcRect.height / 2 - svgRect.top;
+    const y2 = tgtRect.top + tgtRect.height / 2 - svgRect.top;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M 0 ${y1} C 60 ${y1}, 60 ${y2}, 120 ${y2}`);
+    path.setAttribute('class', 'mapping-line');
+    svg.appendChild(path);
+  });
+}
+
+// ============== SCHEDULES TAB ==============
+function renderSchedules() {
+  const now = new Date();
+  const currentHour = now.getHours();
+  document.getElementById('scheduleTime').textContent = now.toLocaleTimeString();
+
+  // Hours header
+  const hoursContainer = document.getElementById('timelineHours');
+  hoursContainer.innerHTML = '';
+  for (let h = 0; h < 24; h++) {
+    const span = document.createElement('span');
+    span.textContent = String(h).padStart(2, '0');
+    span.style.fontFamily = "'JetBrains Mono',monospace";
+    span.style.fontSize = '10px';
+    if (h === currentHour) span.style.color = 'var(--primary)';
+    hoursContainer.appendChild(span);
+  }
+
+  const scheduleData = [
+    {name:'HubSpot CRM',color:'#ff7a59',icon:'fa-brands fa-hubspot',freq:15,status:'active'},
+    {name:'Salesforce',color:'#00a1e0',icon:'fa-brands fa-salesforce',freq:60,status:'warning'},
+    {name:'YourMembership',color:'#8b5cf6',icon:'fa-solid fa-users',freq:30,status:'error'},
+    {name:'PostgreSQL DB',color:'#336791',icon:'fa-solid fa-database',freq:360,status:'active'},
+    {name:'CSV Import',color:'#22c55e',icon:'fa-solid fa-file-csv',freq:0,status:'idle'}
+  ];
+
+  const rowsContainer = document.getElementById('timelineRows');
+  rowsContainer.innerHTML = '';
+  scheduleData.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    let bars = '';
+    if (s.freq > 0) {
+      const totalMins = 24 * 60;
+      const widthPct = Math.max(s.freq / totalMins * 100 * 0.6, 0.4);
+      for (let m = 0; m < totalMins; m += s.freq) {
+        const leftPct = (m / totalMins) * 100;
+        const isPast = (m / 60) < currentHour;
+        bars += `<div class="timeline-bar" style="left:${leftPct}%;width:${widthPct}%;background:${s.color};opacity:${isPast ? 0.4 : 0.8}"></div>`;
+      }
+    } else {
+      bars = `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--muted)">Manual trigger only</div>`;
+    }
+    row.innerHTML = `
+      <div class="name-col"><span class="status-dot ${s.status}"></span> ${s.name}</div>
+      <div class="timeline-bar-container">${bars}</div>
+    `;
+    rowsContainer.appendChild(row);
+  });
+
+  // Current time line
+  const timeLinePos = ((currentHour * 60 + now.getMinutes()) / (24 * 60)) * 100;
+  rowsContainer.querySelectorAll('.timeline-bar-container').forEach(c => {
+    const line = document.createElement('div');
+    line.style.cssText = `position:absolute;left:${timeLinePos}%;top:0;height:100%;width:2px;background:var(--error);z-index:2;opacity:.6`;
+    c.appendChild(line);
+  });
+}
+
+// ============== CREDENTIALS TAB ==============
+function renderCredentials() {
+  const grid = document.getElementById('credGrid');
+  grid.innerHTML = '';
+  credentials.forEach((cred, idx) => {
+    const typeColors = {'API Key':'#3b82f6','OAuth 2.0':'#8b5cf6','Basic Auth':'#22c55e','Connection String':'#f97316'};
+    const card = document.createElement('div');
+    card.className = 'cred-card';
+    card.innerHTML = `
+      <div class="cred-card-header">
+        <h4>${cred.name}</h4>
+        <span class="cred-type" style="color:${typeColors[cred.type] || 'var(--muted)'}">${cred.type}</span>
+      </div>
+      <div class="cred-field">
+        <label>Value</label>
+        <div class="masked">
+          <span id="credVal-${idx}">${cred.revealed ? cred.value.replace(/\*{4}/g, 'abcd') : cred.value}</span>
+          <button class="reveal-btn" onclick="toggleReveal(${idx})">${cred.revealed ? 'Hide' : 'Reveal'}</button>
+        </div>
+      </div>
+      <div class="cred-field">
+        <label>Last Rotated</label>
+        <div style="font-size:13px">${cred.rotated}</div>
+      </div>
+      <div class="cred-refs">
+        <i class="fa-solid fa-link" style="margin-right:4px"></i> Used by: ${cred.refs.join(', ')}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleReveal(idx) {
+  credentials[idx].revealed = !credentials[idx].revealed;
+  renderCredentials();
+}
+
+function showCredModal() { document.getElementById('credModal').classList.add('show'); }
+function hideCredModal() { document.getElementById('credModal').classList.remove('show'); }
+
+// ============== KEYBOARD SHORTCUTS ==============
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('sidebarSearch').focus();
+  }
+  if (e.key === 'Escape') {
+    hideCredModal();
+  }
+});
+
+// ============== INIT ==============
+renderOverviewTable();
+renderIntList();
+renderMappingTree();
+renderCredentials();
+</script>
+</body>
+</html>

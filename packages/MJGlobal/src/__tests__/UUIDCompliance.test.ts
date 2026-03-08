@@ -45,6 +45,7 @@ const EXCLUDE_PATTERNS = [
 const KNOWN_EXCEPTIONS: Record<string, string[]> = {
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
+    'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
 };
 
 function shouldScanFile(filePath: string): boolean {

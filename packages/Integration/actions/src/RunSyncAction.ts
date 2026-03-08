@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
-import { IntegrationOrchestrator, SyncResult, SyncTriggerType } from '@memberjunction/integration-engine';
+import { IntegrationEngine, SyncResult, SyncTriggerType } from '@memberjunction/integration-engine';
 
 /**
  * MJ Action that triggers a sync for a CompanyIntegration.
@@ -37,9 +37,7 @@ export class RunSyncAction extends BaseAction {
             }
 
             const triggerType = this.parseTriggerType(this.getStringParam(params, 'TriggerType'));
-            const orchestrator = new IntegrationOrchestrator();
-
-            const result = await orchestrator.RunSync(
+            const result = await IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
                 params.ContextUser,
                 triggerType

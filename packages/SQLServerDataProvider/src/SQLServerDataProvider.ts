@@ -690,15 +690,9 @@ export class SQLServerDataProvider
       throw new Error(errorDetails);
     }
     
-    // Check permissions and status
-    if (!query.UserCanRun(contextUser)) {
-      if (!query.UserHasRunPermissions(contextUser)) {
-        throw new Error('User does not have permission to run this query');
-      } else {
-        throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
-      }
-    }
-    
+    // Validate permissions and status via shared base class method
+    this.ValidateQueryForExecution(query, contextUser);
+
     return query;
   }
 

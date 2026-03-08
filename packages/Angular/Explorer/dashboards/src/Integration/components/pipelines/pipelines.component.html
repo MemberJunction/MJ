@@ -1,0 +1,730 @@
+<div class="pipelines-container">
+
+  <!-- ===================================================================== -->
+  <!-- MAP LIST VIEW (hidden when editor is open)                            -->
+  <!-- ===================================================================== -->
+  @if (!VisualEditorOpen) {
+
+    <!-- Toolbar -->
+    <div class="pipelines-toolbar">
+      <div class="toolbar-left">
+        <h2 class="toolbar-title">
+          <i class="fa-solid fa-diagram-project"></i>
+          Pipelines
+        </h2>
+        <span class="toolbar-count-badge">{{ IntegrationCount }}</span>
+        <span class="toolbar-map-count">{{ TotalMapCount }} entity maps</span>
+      </div>
+      <div class="toolbar-right">
+        <div class="global-search">
+          <i class="fa-solid fa-search search-icon"></i>
+          <input type="text"
+                 class="search-input"
+                 placeholder="Search integrations or entities..."
+                 [value]="GlobalSearch"
+                 (input)="OnGlobalSearchChange($event)" />
+        </div>
+        <button class="toolbar-btn" (click)="ExpandAll()" title="Expand All">
+          <i class="fa-solid fa-angles-down"></i>
+        </button>
+        <button class="toolbar-btn" (click)="CollapseAll()" title="Collapse All">
+          <i class="fa-solid fa-angles-up"></i>
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="toolbar-btn" (click)="LoadData()" title="Refresh">
+          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main content area -->
+    <div class="pipelines-content">
+      @if (IsLoading && PipelineCards.length === 0) {
+        <div class="content-loading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Loading pipelines...</span>
+        </div>
+      } @else if (PipelineCards.length === 0) {
+        <div class="content-empty">
+          <i class="fa-solid fa-diagram-project empty-icon"></i>
+          <h3>No Integration Pipelines</h3>
+          <p>Configure integrations to see data flow pipelines here.</p>
+        </div>
+      } @else {
+        <div class="cards-list">
+          @for (card of FilteredCards; track card.IntegrationID) {
+            <!-- Pipeline card -->
+            <div class="pipeline-card" [class.expanded]="card.IsExpanded">
+
+              <!-- Card header (always visible) -->
+              <div class="card-header" (click)="ToggleCard(card)">
+                <div class="card-header-left">
+                  <div class="card-status-dot" [style.backgroundColor]="card.StatusColor"></div>
+                  <i [class]="card.Icon + ' card-icon'"></i>
+                  <div class="card-info">
+                    <span class="card-name">{{ card.IntegrationName }}</span>
+                    <span class="card-meta">
+                      {{ card.EntityMapCount }} maps
+                      <span class="meta-sep">&middot;</span>
+                      {{ card.ActiveMapCount }} active
+                      <span class="meta-sep">&middot;</span>
+                      {{ card.UniqueEntityCount }} entities
+                    </span>
+                  </div>
+                </div>
+                <div class="card-header-right">
+                  <span class="card-status-label" [style.color]="card.StatusColor">
+                    {{ card.StatusLabel }}
+                  </span>
+                  @if (card.LastSync) {
+                    <span class="card-last-sync">{{ card.LastSync }}</span>
+                  }
+                  <!-- Mini flow indicator -->
+                  <div class="mini-flow">
+                    <span class="mini-flow-dot source"></span>
+                    <span class="mini-flow-line"></span>
+                    <span class="mini-flow-count">{{ card.EntityMapCount }}</span>
+                    <span class="mini-flow-line"></span>
+                    <span class="mini-flow-dot dest"></span>
+                  </div>
+                  <i class="fa-solid card-chevron"
+                     [class.fa-chevron-down]="!card.IsExpanded"
+                     [class.fa-chevron-up]="card.IsExpanded"></i>
+                </div>
+              </div>
+
+              <!-- Expanded entity map table -->
+              @if (card.IsExpanded) {
+                <div class="card-body">
+                  <!-- Search within this integration -->
+                  <div class="card-search-bar">
+                    <i class="fa-solid fa-filter card-search-icon"></i>
+                    <input type="text"
+                           class="card-search-input"
+                           placeholder="Filter entity maps..."
+                           [value]="card.SearchTerm"
+                           (input)="OnCardSearch(card, $event)" />
+                    <span class="card-search-count">
+                      {{ card.FilteredMaps.length }} of {{ card.EntityMapCount }}
+                    </span>
+                  </div>
+
+                  <!-- Table header -->
+                  <div class="map-table-head">
+                    <span class="map-col-toggle">Sync</span>
+                    <span class="map-col-source">External Object</span>
+                    <span class="map-col-direction"></span>
+                    <span class="map-col-dest">MJ Entity</span>
+                    <span class="map-col-meta">Config</span>
+                  </div>
+
+                  <!-- Table body -->
+                  <div class="map-table-body">
+                    @for (em of card.FilteredMaps; track em.ID) {
+                      <div class="map-row"
+                           [class.sync-disabled]="!em.SyncEnabled"
+                           (click)="OnMapRowClick(card, em)">
+                        <span class="map-col-toggle" (click)="$event.stopPropagation()">
+                          <label class="sync-toggle" [title]="em.SyncEnabled ? 'Sync enabled — click to disable' : 'Sync disabled — click to enable'">
+                            <input type="checkbox"
+                                   [checked]="em.SyncEnabled"
+                                   (change)="OnToggleSyncEnabled(card, em, $event)" />
+                            <span class="sync-toggle-track"></span>
+                          </label>
+                        </span>
+                        <span class="map-col-source" [title]="em.ExternalObjectName">
+                          {{ em.ExternalObjectLabel ?? em.ExternalObjectName }}
+                        </span>
+                        <span class="map-col-direction">
+                          <span [class]="DirectionBadgeClass(em.SyncDirection)">
+                            {{ DirectionText(em.SyncDirection) }}
+                          </span>
+                        </span>
+                        <span class="map-col-dest" [title]="em.Entity">
+                          {{ em.Entity }}
+                        </span>
+                        <span class="map-col-meta">
+                          @if (em.MatchStrategy) {
+                            <span class="map-config-badge" [title]="'Match: ' + em.MatchStrategy">
+                              <i class="fa-solid fa-link"></i>
+                            </span>
+                          }
+                          <span class="map-config-badge" [title]="'Conflict: ' + em.ConflictResolution">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                          </span>
+                          <span class="map-edit-hint">
+                            <i class="fa-solid fa-chevron-right"></i>
+                          </span>
+                        </span>
+                      </div>
+                    } @empty {
+                      <div class="map-table-empty">
+                        No entity maps match your filter.
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+  } @else {
+
+    <!-- ===================================================================== -->
+    <!-- VISUAL FIELD MAPPING EDITOR (inline, replaces map list)               -->
+    <!-- ===================================================================== -->
+
+    <div class="ve-container">
+
+      <!-- Header -->
+      <div class="ve-header">
+        <div class="ve-header-left">
+          <button class="ve-back-btn" (click)="CloseVisualEditor()" title="Back to Pipelines">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <div class="ve-header-title">
+            <span class="ve-source-label">{{ EditorEntityMap?.ExternalObjectLabel ?? EditorEntityMap?.ExternalObjectName }}</span>
+            <span class="ve-direction-arrow">
+              <i class="fa-solid fa-arrow-right-arrow-left"></i>
+            </span>
+            <span class="ve-dest-label">{{ EditorEntityMap?.Entity }}</span>
+          </div>
+          <!-- SyncEnabled toggle in editor header -->
+          @if (EditorEntityMap) {
+            <label class="sync-toggle ve-sync-toggle"
+                   [title]="EditorEntityMap.SyncEnabled ? 'Sync enabled' : 'Sync disabled'">
+              <input type="checkbox"
+                     [checked]="EditorEntityMap.SyncEnabled"
+                     (change)="OnToggleEditorSyncEnabled($event)" />
+              <span class="sync-toggle-track"></span>
+            </label>
+            <span class="ve-sync-label">{{ EditorEntityMap.SyncEnabled ? 'Sync On' : 'Sync Off' }}</span>
+          }
+        </div>
+        <div class="ve-header-stats">
+          <span class="ve-stat">
+            <strong>{{ EditorMappedCount }}</strong> mapped
+          </span>
+          <span class="ve-stat-sep"></span>
+          <span class="ve-stat">
+            <strong>{{ EditorKeyFieldCount }}</strong> key
+          </span>
+          <span class="ve-stat-sep"></span>
+          <span class="ve-stat">
+            <strong>{{ EditorRequiredCount }}</strong> required
+          </span>
+        </div>
+        <div class="ve-header-actions">
+          <!-- Data preview buttons -->
+          <button class="ve-btn ve-btn-ghost"
+                  (click)="ToggleSourcePreview()"
+                  [class.active]="ShowSourcePreview"
+                  title="Preview source data">
+            <i class="fa-solid fa-cloud"></i> Source Data
+          </button>
+          <button class="ve-btn ve-btn-ghost"
+                  (click)="ToggleDestPreview()"
+                  [class.active]="ShowDestPreview"
+                  title="Preview MJ data">
+            <i class="fa-solid fa-database"></i> MJ Data
+          </button>
+          <div class="ve-action-sep"></div>
+          <button class="ve-btn ve-btn-ghost" (click)="AutoMapEditorFields()" title="Auto-map fields by name">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
+          </button>
+          <button class="ve-btn ve-btn-primary"
+                  [disabled]="!HasEditorChanges || EditorSaving"
+                  (click)="SaveVisualEditor()">
+            @if (EditorSaving) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+            } @else {
+              <i class="fa-solid fa-check"></i> Save
+            }
+          </button>
+          @if (EditorSaveSuccess && !HasEditorChanges) {
+            <span class="ve-save-success">
+              <i class="fa-solid fa-circle-check"></i> Saved
+            </span>
+          }
+        </div>
+      </div>
+
+      <!-- Data preview panels (collapsible) -->
+      @if (ShowSourcePreview || ShowDestPreview) {
+        <div class="ve-preview-strip">
+          @if (ShowSourcePreview) {
+            <div class="ve-preview-panel">
+              <div class="ve-preview-header">
+                <i class="fa-solid fa-cloud"></i>
+                <span>Source Preview: {{ EditorEntityMap?.ExternalObjectLabel ?? EditorEntityMap?.ExternalObjectName }}</span>
+                <button class="ve-preview-close" (click)="ShowSourcePreview = false">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              @if (PreviewSourceLoading) {
+                <div class="ve-preview-loading">
+                  <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                </div>
+              } @else if (PreviewSourceRows.length === 0) {
+                <div class="ve-preview-empty">No source data available</div>
+              } @else {
+                <div class="ve-preview-table-wrap">
+                  <table class="ve-preview-table">
+                    <thead>
+                      <tr>
+                        @for (col of PreviewSourceColumns; track col) {
+                          <th>{{ col }}</th>
+                        }
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of PreviewSourceRows; track $index) {
+                        <tr>
+                          @for (col of PreviewSourceColumns; track col) {
+                            <td [title]="row[col]?.toString() ?? ''">{{ row[col] ?? '' }}</td>
+                          }
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+          @if (ShowDestPreview) {
+            <div class="ve-preview-panel">
+              <div class="ve-preview-header">
+                <i class="fa-solid fa-database"></i>
+                <span>Dest Preview: {{ EditorEntityMap?.Entity }}</span>
+                <button class="ve-preview-close" (click)="ShowDestPreview = false">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              @if (PreviewDestLoading) {
+                <div class="ve-preview-loading">
+                  <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                </div>
+              } @else if (PreviewDestRows.length === 0) {
+                <div class="ve-preview-empty">No destination data available</div>
+              } @else {
+                <div class="ve-preview-table-wrap">
+                  <table class="ve-preview-table">
+                    <thead>
+                      <tr>
+                        @for (col of PreviewDestColumns; track col) {
+                          <th>{{ col }}</th>
+                        }
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of PreviewDestRows; track $index) {
+                        <tr>
+                          @for (col of PreviewDestColumns; track col) {
+                            <td [title]="row[col]?.toString() ?? ''">{{ row[col] ?? '' }}</td>
+                          }
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Connect mode banner -->
+      @if (ConnectingFromSource) {
+        <div class="ve-connect-banner">
+          <i class="fa-solid fa-link"></i>
+          Click a destination field to map from
+          <strong>{{ ConnectingFromSource }}</strong>
+          <button class="ve-connect-cancel" (click)="CancelConnect()">Cancel</button>
+        </div>
+      }
+
+      <!-- Main content: sections + transform panel -->
+      <div class="ve-body" [class.has-transform-panel]="SelectedConnectionIdx !== null">
+
+        <!-- Loading state -->
+        @if (EditorLoading) {
+          <div class="ve-loading">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading field mappings...</span>
+          </div>
+        } @else {
+
+          <!-- Left content area (sections stacked vertically) -->
+          <div class="ve-sections-wrapper">
+
+            <!-- ============================================================= -->
+            <!-- FIELD MAPPINGS SECTION (collapsible)                          -->
+            <!-- ============================================================= -->
+            <div class="ve-section" [class.collapsed]="!FieldMapsExpanded">
+              <div class="ve-section-header" (click)="ToggleFieldMaps()">
+                <i class="fa-solid"
+                   [class.fa-chevron-down]="FieldMapsExpanded"
+                   [class.fa-chevron-right]="!FieldMapsExpanded"></i>
+                <span class="ve-section-title">Field Mappings</span>
+                <span class="ve-section-badge">{{ EditorMappedCount }} mapped</span>
+              </div>
+
+              @if (FieldMapsExpanded) {
+                <div class="ve-section-body">
+                  <!-- Canvas area (scrollable) -->
+                  <div class="ve-canvas-wrapper">
+
+                    <!-- Column headers -->
+                    <div class="ve-col-headers">
+                      <div class="ve-col-header source">
+                        <i class="fa-solid fa-cloud"></i>
+                        Source Fields
+                        <span class="ve-col-count">{{ EditorSourceFields.length }}</span>
+                      </div>
+                      <div class="ve-col-header-spacer"></div>
+                      <div class="ve-col-header dest">
+                        <i class="fa-solid fa-database"></i>
+                        MJ Entity Fields
+                        <span class="ve-col-count">{{ EditorDestFields.length }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Search bars -->
+                    <div class="ve-col-searches">
+                      <div class="ve-col-search">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text"
+                               placeholder="Filter source fields..."
+                               [value]="EditorSearchSource"
+                               (input)="EditorSearchSource = $any($event.target).value" />
+                      </div>
+                      <div class="ve-col-search-spacer"></div>
+                      <div class="ve-col-search">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text"
+                               placeholder="Filter destination fields..."
+                               [value]="EditorSearchDest"
+                               (input)="EditorSearchDest = $any($event.target).value" />
+                      </div>
+                    </div>
+
+                    <!-- Canvas grid (source + SVG + dest) -->
+                    <div class="ve-canvas-scroll" (click)="DeselectConnection()">
+                      <div class="ve-canvas-grid" [style.min-height.px]="EditorCanvasHeight">
+
+                        <!-- Source column -->
+                        <div class="ve-field-col source">
+                          @for (sf of FilteredEditorSourceFields; track sf.Name) {
+                            <div class="ve-field-item"
+                                 [class.mapped]="IsSourceFieldMapped(sf.Name)"
+                                 [class.unmapped]="!IsSourceFieldMapped(sf.Name)"
+                                 [class.connecting]="ConnectingFromSource === sf.Name"
+                                 [style.height.px]="FIELD_HEIGHT"
+                                 (click)="OnEditorSourceClick(sf.Name); $event.stopPropagation()">
+                              <span class="ve-field-name" [title]="sf.Name">{{ sf.Label || sf.Name }}</span>
+                              <span class="ve-field-type">{{ sf.Type }}</span>
+                              <span class="ve-field-badges">
+                                @if (sf.IsPrimaryKey) {
+                                  <span class="ve-fbadge pk" title="Primary Key">PK</span>
+                                }
+                                @if (sf.IsRequired) {
+                                  <span class="ve-fbadge req" title="Required">*</span>
+                                }
+                              </span>
+                            </div>
+                          }
+                          @if (FilteredEditorSourceFields.length === 0) {
+                            <div class="ve-field-empty">No source fields found</div>
+                          }
+                        </div>
+
+                        <!-- SVG connection lines -->
+                        <svg class="ve-svg"
+                             [attr.width]="SVG_WIDTH"
+                             [attr.height]="EditorCanvasHeight"
+                             [attr.viewBox]="'0 0 ' + SVG_WIDTH + ' ' + EditorCanvasHeight"
+                             (click)="$event.stopPropagation()">
+                          @for (conn of VisibleConnections; track conn.SourceFieldName + '-' + conn.DestFieldName; let i = $index) {
+                            <!-- Connection line -->
+                            <path [attr.d]="GetConnectionPath(conn)"
+                                  class="ve-conn-line"
+                                  [class]="'ve-conn-line ' + GetConnectionLineClass(conn)"
+                                  [class.selected]="SelectedConnectionIdx === i"
+                                  (click)="SelectConnection(i, $event)" />
+                            <!-- Transform badge at midpoint -->
+                            <foreignObject
+                              [attr.x]="SVG_WIDTH / 2 - 14"
+                              [attr.y]="GetConnectionMidY(conn) - 14"
+                              width="28" height="28"
+                              class="ve-badge-fo">
+                              <div xmlns="http://www.w3.org/1999/xhtml"
+                                   class="ve-conn-badge"
+                                   [class]="'ve-conn-badge ' + GetConnectionBadgeClass(conn)"
+                                   [class.selected]="SelectedConnectionIdx === i"
+                                   (click)="SelectConnection(i, $event)">
+                                <i [class]="GetConnectionDirectionIcon(conn)"></i>
+                              </div>
+                            </foreignObject>
+                          }
+                        </svg>
+
+                        <!-- Dest column -->
+                        <div class="ve-field-col dest">
+                          @for (df of FilteredEditorDestFields; track df.Name) {
+                            <div class="ve-field-item"
+                                 [class.mapped]="IsDestFieldMapped(df.Name)"
+                                 [class.unmapped]="!IsDestFieldMapped(df.Name)"
+                                 [class.connect-target]="ConnectingFromSource !== null"
+                                 [style.height.px]="FIELD_HEIGHT"
+                                 (click)="OnEditorDestClick(df.Name); $event.stopPropagation()">
+                              <span class="ve-field-name" [title]="df.Name">{{ df.Name }}</span>
+                              <span class="ve-field-type">{{ df.Type }}</span>
+                              <span class="ve-field-badges">
+                                @if (df.IsRequired) {
+                                  <span class="ve-fbadge req" title="Required">*</span>
+                                }
+                              </span>
+                            </div>
+                          }
+                          @if (FilteredEditorDestFields.length === 0) {
+                            <div class="ve-field-empty">No destination fields found</div>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- ============================================================= -->
+            <!-- INFO PANEL SECTION (collapsible)                              -->
+            <!-- ============================================================= -->
+            <div class="ve-section" [class.collapsed]="!InfoPanelExpanded">
+              <div class="ve-section-header" (click)="ToggleInfoPanel()">
+                <i class="fa-solid"
+                   [class.fa-chevron-down]="InfoPanelExpanded"
+                   [class.fa-chevron-right]="!InfoPanelExpanded"></i>
+                <span class="ve-section-title">Sync Info</span>
+              </div>
+
+              @if (InfoPanelExpanded) {
+                <div class="ve-section-body ve-info-body">
+                  @if (InfoPanelLoading) {
+                    <div class="ve-info-loading">
+                      <i class="fa-solid fa-spinner fa-spin"></i> Loading stats...
+                    </div>
+                  } @else {
+                    <div class="ve-info-grid">
+                      <!-- Destination record count -->
+                      <div class="ve-info-card">
+                        <div class="ve-info-card-icon">
+                          <i class="fa-solid fa-database"></i>
+                        </div>
+                        <div class="ve-info-card-content">
+                          <span class="ve-info-card-value">{{ InfoDestRecordCount ?? '-' }}</span>
+                          <span class="ve-info-card-label">MJ Records</span>
+                        </div>
+                      </div>
+                      <!-- Source fields count -->
+                      <div class="ve-info-card">
+                        <div class="ve-info-card-icon source">
+                          <i class="fa-solid fa-cloud"></i>
+                        </div>
+                        <div class="ve-info-card-content">
+                          <span class="ve-info-card-value">{{ EditorSourceFields.length }}</span>
+                          <span class="ve-info-card-label">Source Fields</span>
+                        </div>
+                      </div>
+                      <!-- Last sync -->
+                      <div class="ve-info-card">
+                        <div class="ve-info-card-icon sync">
+                          <i class="fa-solid fa-arrows-rotate"></i>
+                        </div>
+                        <div class="ve-info-card-content">
+                          <span class="ve-info-card-value">{{ FormatSyncDate(InfoLastSync?.StartedAt ?? null) }}</span>
+                          <span class="ve-info-card-label">Last Sync</span>
+                        </div>
+                      </div>
+                      <!-- Sync status -->
+                      @if (InfoLastSync) {
+                        <div class="ve-info-card">
+                          <div class="ve-info-card-icon" [ngClass]="SyncStatusClass(InfoLastSync.Status)">
+                            <i class="fa-solid"
+                               [class.fa-circle-check]="InfoLastSync.Status === 'Success'"
+                               [class.fa-circle-xmark]="InfoLastSync.Status === 'Failed'"
+                               [class.fa-spinner]="InfoLastSync.Status === 'In Progress'"
+                               [class.fa-clock]="InfoLastSync.Status === 'Pending'"></i>
+                          </div>
+                          <div class="ve-info-card-content">
+                            <span class="ve-info-card-value">{{ InfoLastSync.Status }}</span>
+                            <span class="ve-info-card-label">{{ InfoLastSync.TotalRecords }} records processed</span>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Configuration details -->
+                    <div class="ve-info-details">
+                      <div class="ve-info-detail-row">
+                        <span class="ve-info-detail-label">Sync Direction</span>
+                        <span class="ve-info-detail-value">{{ EditorEntityMap?.SyncDirection }}</span>
+                      </div>
+                      <div class="ve-info-detail-row">
+                        <span class="ve-info-detail-label">Conflict Resolution</span>
+                        <span class="ve-info-detail-value">{{ EditorEntityMap?.ConflictResolution }}</span>
+                      </div>
+                      <div class="ve-info-detail-row">
+                        <span class="ve-info-detail-label">Delete Behavior</span>
+                        <span class="ve-info-detail-value">{{ EditorEntityMap?.DeleteBehavior }}</span>
+                      </div>
+                      <div class="ve-info-detail-row">
+                        <span class="ve-info-detail-label">Priority</span>
+                        <span class="ve-info-detail-value">{{ EditorEntityMap?.Priority }}</span>
+                      </div>
+                      @if (EditorEntityMap?.MatchStrategy) {
+                        <div class="ve-info-detail-row">
+                          <span class="ve-info-detail-label">Match Strategy</span>
+                          <span class="ve-info-detail-value">Configured</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Transform editor panel (right side, appears when connection selected) -->
+          @if (SelectedConnection; as conn) {
+            <div class="ve-transform-panel" (click)="$event.stopPropagation()">
+              <div class="ve-tp-header">
+                <span class="ve-tp-title">Mapping Details</span>
+                <button class="ve-tp-close" (click)="DeselectConnection()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              <!-- Source → Dest -->
+              <div class="ve-tp-mapping-info">
+                <div class="ve-tp-field-pair">
+                  <span class="ve-tp-field source">{{ conn.SourceFieldName }}</span>
+                  <i class="fa-solid ve-tp-arrow"
+                     [class.fa-arrow-right]="conn.Direction === 'SourceToDest'"
+                     [class.fa-arrow-left]="conn.Direction === 'DestToSource'"
+                     [class.fa-right-left]="conn.Direction === 'Both'"></i>
+                  <span class="ve-tp-field dest">{{ conn.DestFieldName }}</span>
+                </div>
+              </div>
+
+              <!-- Toggles -->
+              <div class="ve-tp-toggles">
+                <label class="ve-tp-toggle" (click)="ToggleConnectionKey()">
+                  <span class="ve-tp-toggle-box" [class.active]="conn.IsKeyField">
+                    @if (conn.IsKeyField) { <i class="fa-solid fa-check"></i> }
+                  </span>
+                  <span>Key Field</span>
+                </label>
+                <label class="ve-tp-toggle" (click)="ToggleConnectionRequired()">
+                  <span class="ve-tp-toggle-box" [class.active]="conn.IsRequired">
+                    @if (conn.IsRequired) { <i class="fa-solid fa-check"></i> }
+                  </span>
+                  <span>Required</span>
+                </label>
+              </div>
+
+              <!-- Direction -->
+              <div class="ve-tp-section">
+                <label class="ve-tp-section-label">Direction</label>
+                <div class="ve-tp-direction-btns">
+                  <button [class.active]="conn.Direction === 'SourceToDest'"
+                          (click)="OnConnectionDirectionChange('SourceToDest')">
+                    Source &rarr; Dest
+                  </button>
+                  <button [class.active]="conn.Direction === 'DestToSource'"
+                          (click)="OnConnectionDirectionChange('DestToSource')">
+                    Dest &rarr; Source
+                  </button>
+                  <button [class.active]="conn.Direction === 'Both'"
+                          (click)="OnConnectionDirectionChange('Both')">
+                    Both
+                  </button>
+                </div>
+              </div>
+
+              <!-- Transform pipeline -->
+              <div class="ve-tp-section">
+                <div class="ve-tp-section-header">
+                  <label class="ve-tp-section-label">Transform Pipeline</label>
+                  <button class="ve-tp-add-step" (click)="AddTransformStep()">
+                    <i class="fa-solid fa-plus"></i> Add Step
+                  </button>
+                </div>
+
+                @for (step of conn.TransformSteps; track $index; let si = $index) {
+                  <div class="ve-tp-step">
+                    <div class="ve-tp-step-header">
+                      <span class="ve-tp-step-num">{{ si + 1 }}</span>
+                      <select class="ve-tp-type-select"
+                              [value]="step.Type"
+                              (change)="OnConnectionTransformChange(si, $any($event.target).value)">
+                        @for (tt of TRANSFORM_TYPES; track tt.Value) {
+                          <option [value]="tt.Value" [selected]="tt.Value === step.Type">{{ tt.Label }}</option>
+                        }
+                      </select>
+                      <button class="ve-tp-remove-step" (click)="RemoveTransformStep(si)" title="Remove step">
+                        <i class="fa-solid fa-trash-can"></i>
+                      </button>
+                    </div>
+
+                    <!-- Config fields based on transform type -->
+                    @if (step.Type !== 'direct') {
+                      <div class="ve-tp-step-config">
+                        @for (key of GetConfigKeys(step); track key) {
+                          <div class="ve-tp-config-row">
+                            <label>{{ key }}</label>
+                            <input type="text"
+                                   [value]="GetConfigValue(step, key)"
+                                   (input)="OnTransformConfigChange(conn, si, key, $any($event.target).value)"
+                                   placeholder="{{ key }}" />
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    <!-- On error -->
+                    <div class="ve-tp-step-onerror">
+                      <label>On Error:</label>
+                      <select [value]="step.OnError"
+                              (change)="step.OnError = $any($event.target).value; conn.IsDirty = true">
+                        <option value="Fail">Fail</option>
+                        <option value="Skip">Skip</option>
+                        <option value="Null">Null</option>
+                      </select>
+                    </div>
+                  </div>
+                }
+
+                @if (conn.TransformSteps.length === 0) {
+                  <div class="ve-tp-no-steps">
+                    No transform steps. Data passes through as-is.
+                  </div>
+                }
+              </div>
+
+              <!-- Delete mapping button -->
+              <div class="ve-tp-footer">
+                <button class="ve-btn ve-btn-danger" (click)="RemoveSelectedConnection()">
+                  <i class="fa-solid fa-trash-can"></i> Remove Mapping
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

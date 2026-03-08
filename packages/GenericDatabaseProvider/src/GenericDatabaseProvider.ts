@@ -1661,6 +1661,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Validates that a query can be executed by the given user. Checks both permissions
+     * and approval status. Permission failures throw an error. Non-approved status
+     * emits a console warning but allows execution to proceed, enabling query testing
+     * before formal approval.
+     *
+     * @param query - The resolved QueryInfo to validate
+     * @param contextUser - The user attempting to execute the query
+     * @throws Error if the user does not have permission to run the query
+     */
+    protected ValidateQueryForExecution(query: QueryInfo, contextUser?: UserInfo): void {
+        const user = contextUser || this.CurrentUser;
+        if (user && !query.UserHasRunPermissions(user)) {
+            throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
+        }
+
+        if (query.Status !== 'Approved') {
+            LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
+        }
+    }
+
+    /**
      * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase cache.
      */
     protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
