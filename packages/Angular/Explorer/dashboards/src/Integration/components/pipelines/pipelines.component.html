@@ -228,8 +228,8 @@
           <button class="ve-btn ve-btn-ghost"
                   (click)="ToggleDestPreview()"
                   [class.active]="ShowDestPreview"
-                  title="Preview destination data">
-            <i class="fa-solid fa-database"></i> Dest Data
+                  title="Preview MJ data">
+            <i class="fa-solid fa-database"></i> MJ Data
           </button>
           <div class="ve-action-sep"></div>
           <button class="ve-btn ve-btn-ghost" (click)="AutoMapEditorFields()" title="Auto-map fields by name">
@@ -465,7 +465,7 @@
                                    [class]="'ve-conn-badge ' + GetConnectionBadgeClass(conn)"
                                    [class.selected]="SelectedConnectionIdx === i"
                                    (click)="SelectConnection(i, $event)">
-                                <i [class]="GetConnectionTransformIcon(conn)"></i>
+                                <i [class]="GetConnectionDirectionIcon(conn)"></i>
                               </div>
                             </foreignObject>
                           }
@@ -612,7 +612,10 @@
               <div class="ve-tp-mapping-info">
                 <div class="ve-tp-field-pair">
                   <span class="ve-tp-field source">{{ conn.SourceFieldName }}</span>
-                  <i class="fa-solid ve-tp-arrow" [ngClass]="GetDirectionArrowClass(conn.Direction)"></i>
+                  <i class="fa-solid ve-tp-arrow"
+                     [class.fa-arrow-right]="conn.Direction === 'SourceToDest'"
+                     [class.fa-arrow-left]="conn.Direction === 'DestToSource'"
+                     [class.fa-right-left]="conn.Direction === 'Both'"></i>
                   <span class="ve-tp-field dest">{{ conn.DestFieldName }}</span>
                 </div>
               </div>

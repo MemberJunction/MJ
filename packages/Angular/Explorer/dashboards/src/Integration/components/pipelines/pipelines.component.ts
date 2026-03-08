@@ -671,6 +671,15 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     return this.TRANSFORM_TYPES.find(t => t.Value === type)?.Icon ?? 'fa-solid fa-arrow-right';
   }
 
+  /** Direction-aware icon for the SVG connection badge */
+  GetConnectionDirectionIcon(conn: VisualConnection): string {
+    switch (conn.Direction) {
+      case 'DestToSource': return 'fa-solid fa-arrow-left';
+      case 'Both': return 'fa-solid fa-right-left';
+      default: return 'fa-solid fa-arrow-right';
+    }
+  }
+
   GetTransformTypeLabel(type: TransformType): string {
     return this.TRANSFORM_TYPES.find(t => t.Value === type)?.Label ?? type;
   }
@@ -692,6 +701,9 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   // ---------------------------------------------------------------------------
 
   OnEditorSourceClick(fieldName: string): void {
+    // Don't allow starting a new connection from an already-mapped field
+    if (this.IsSourceFieldMapped(fieldName)) return;
+
     if (this.ConnectingFromSource === fieldName) {
       this.ConnectingFromSource = null;
     } else {
@@ -703,6 +715,9 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
 
   OnEditorDestClick(fieldName: string): void {
     if (!this.ConnectingFromSource) return;
+
+    // Don't allow mapping to an already-mapped dest field
+    if (this.IsDestFieldMapped(fieldName)) return;
 
     // Check if this mapping already exists
     const existing = this.EditorConnections.find(
