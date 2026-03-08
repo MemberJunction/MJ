@@ -74,6 +74,32 @@
             }
           </div>
 
+          <!-- Delete confirmation overlay -->
+          @if (IsDeleteConfirming(summary.Integration.ID)) {
+            <div class="delete-confirm-overlay">
+              <div class="delete-confirm-content">
+                <i class="fa-solid fa-triangle-exclamation delete-warn-icon"></i>
+                <span class="delete-confirm-text">Delete this connection and all its entity maps?</span>
+                <div class="delete-confirm-actions">
+                  <button kendoButton
+                          themeColor="error"
+                          [disabled]="IsDeleting"
+                          (click)="ConfirmDelete(summary.Integration.ID)">
+                    @if (IsDeleting) {
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                      Deleting...
+                    } @else {
+                      Delete
+                    }
+                  </button>
+                  <button kendoButton look="outline" (click)="CancelDelete()">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- Card footer -->
           <div class="card-footer">
             <button kendoButton
@@ -428,11 +454,125 @@
   </div>
 }
 
-<!-- Credential dialog -->
+<!-- Edit panel (slide-in) -->
+<div class="edit-panel-backdrop"
+     [class.open]="EditPanelOpen"
+     (click)="CloseEditPanel()"></div>
+<div class="edit-panel" [class.open]="EditPanelOpen">
+  @if (EditingSummary) {
+    <!-- Header -->
+    <div class="edit-panel-header">
+      <div class="edit-panel-title">
+        <div class="edit-icon-circle"
+             [style.background-color]="GetIconBrandColor(EditingSummary.Integration.Integration)">
+          <i [class]="GetIntegrationIcon(EditingSummary.Integration.Integration)"></i>
+        </div>
+        <span>Configure Connection</span>
+      </div>
+      <button class="edit-close-btn" (click)="CloseEditPanel()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    @if (IsEditLoading) {
+      <div class="edit-panel-loading">
+        <mj-loading text="Loading..." size="small"></mj-loading>
+      </div>
+    } @else {
+      <!-- Edit form -->
+      <div class="edit-panel-body">
+        <div class="edit-form-group">
+          <label class="edit-form-label">Connection Name</label>
+          <input type="text"
+                 class="edit-form-input"
+                 [(ngModel)]="EditName"
+                 placeholder="Connection name..." />
+        </div>
+
+        <div class="edit-form-group">
+          <label class="edit-form-label">Status</label>
+          <div class="edit-toggle-row">
+            <label class="toggle-switch">
+              <input type="checkbox" [(ngModel)]="EditIsActive" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="edit-toggle-label" [class.active]="EditIsActive">
+              {{ EditIsActive ? 'Active' : 'Inactive' }}
+            </span>
+          </div>
+        </div>
+
+        <div class="edit-form-group">
+          <label class="edit-form-label">Credential</label>
+          @if (EditCredential) {
+            <div class="edit-credential-selected">
+              <div class="edit-credential-info">
+                <i class="fa-solid fa-key"></i>
+                <span>{{ EditCredential.Name }}</span>
+              </div>
+              <button class="edit-credential-clear" (click)="ClearEditCredential()">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          } @else {
+            <div class="edit-credential-actions">
+              <button kendoButton look="outline" size="small" (click)="OpenEditCredentialDialog()">
+                <i class="fa-solid fa-plus"></i> New Credential
+              </button>
+            </div>
+            @if (EditCredentials.length > 0) {
+              <div class="edit-credential-list">
+                @for (cred of EditCredentials; track cred.ID) {
+                  <div class="edit-credential-item" (click)="SelectEditCredential(cred)">
+                    <i class="fa-solid fa-key"></i>
+                    <span>{{ cred.Name }}</span>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+
+        <div class="edit-form-group">
+          <label class="edit-form-label">Integration</label>
+          <div class="edit-readonly-field">
+            {{ EditingSummary.Integration.Integration }}
+          </div>
+        </div>
+
+        <div class="edit-form-group">
+          <label class="edit-form-label">Company</label>
+          <div class="edit-readonly-field">
+            {{ EditingSummary.Integration.Company }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="edit-panel-footer">
+        <button kendoButton
+                themeColor="primary"
+                [disabled]="IsEditSaving || !EditName.trim()"
+                (click)="SaveEditChanges()">
+          @if (IsEditSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+          } @else {
+            Save Changes
+          }
+        </button>
+        <button kendoButton look="outline" (click)="CloseEditPanel()">
+          Cancel
+        </button>
+      </div>
+    }
+  }
+</div>
+
+<!-- Credential dialog (shared between wizard and edit panel) -->
 @if (ShowCredentialDialog) {
   <mj-credential-dialog
     [Visible]="true"
     [PreselectedTypeId]="PreselectedCredentialTypeId"
-    (close)="OnCredentialDialogClose($event)">
+    (close)="EditPanelOpen ? OnEditCredentialDialogClose($event) : OnCredentialDialogClose($event)">
   </mj-credential-dialog>
 }

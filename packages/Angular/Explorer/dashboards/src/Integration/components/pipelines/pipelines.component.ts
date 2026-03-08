@@ -3,6 +3,7 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView, IRunViewProvider } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
+import { DiscoveredFieldResult } from '@memberjunction/graphql-dataprovider';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -12,59 +13,61 @@ import {
 } from '../../services/integration-data.service';
 
 // ---------------------------------------------------------------------------
-// Layout constants
-// ---------------------------------------------------------------------------
-
-const SOURCE_X = 80;
-const ENTITY_MAP_X = 350;
-const DESTINATION_X = 620;
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 56;
-const ENTITY_MAP_V_SPACING = 70;
-const GROUP_V_GAP = 50;
-const GROUP_TOP_PADDING = 20;
-const CANVAS_PADDING = 40;
-const ZOOM_STEP = 0.15;
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 2.0;
-
-// ---------------------------------------------------------------------------
 // Data interfaces
 // ---------------------------------------------------------------------------
 
-interface PipelineNode {
-  ID: string;
-  Type: 'source' | 'entityMap' | 'destination';
-  Label: string;
-  SubLabel: string;
-  Icon: string;
-  StatusColor: string;
-  X: number;
-  Y: number;
-  Width: number;
-  Height: number;
-  /** The entity map row backing this node (only for entityMap type) */
-  EntityMap: EntityMapRow | null;
-}
-
-interface PipelineConnection {
-  FromNode: PipelineNode;
-  ToNode: PipelineNode;
-  StatusColor: string;
-  Path: string;
-  AnimationDelay: number;
-}
-
-interface PipelineGroup {
+interface PipelineCard {
   IntegrationID: string;
   IntegrationName: string;
+  Icon: string;
   StatusColor: string;
-  SourceNode: PipelineNode;
-  EntityMapNodes: PipelineNode[];
-  DestinationNode: PipelineNode;
-  Connections: PipelineConnection[];
-  Y: number;
-  Height: number;
+  StatusLabel: string;
+  EntityMapCount: number;
+  ActiveMapCount: number;
+  UniqueEntityCount: number;
+  LastSync: string;
+  IsExpanded: boolean;
+  EntityMaps: EntityMapRow[];
+  /** Filtered subset currently visible */
+  FilteredMaps: EntityMapRow[];
+  SearchTerm: string;
+}
+
+// --- Visual Editor types ---
+
+type TransformType = 'direct' | 'regex' | 'split' | 'combine' | 'lookup' | 'format' | 'coerce' | 'substring' | 'custom';
+
+interface TransformStepUI {
+  Type: TransformType;
+  Config: Record<string, unknown>;
+  OnError: 'Skip' | 'Null' | 'Fail';
+}
+
+interface VisualSourceField {
+  Name: string;
+  Label: string;
+  Type: string;
+  IsRequired: boolean;
+  IsPrimaryKey: boolean;
+}
+
+interface VisualDestField {
+  Name: string;
+  Type: string;
+  IsRequired: boolean;
+}
+
+interface VisualConnection {
+  ID: string | null;
+  SourceFieldName: string;
+  DestFieldName: string;
+  IsKeyField: boolean;
+  IsRequired: boolean;
+  Direction: 'SourceToDest' | 'DestToSource' | 'Both';
+  TransformSteps: TransformStepUI[];
+  IsDirty: boolean;
+  IsNew: boolean;
+  MarkedForDelete: boolean;
 }
 
 @RegisterClass(BaseResourceComponent, 'IntegrationPipelines')
@@ -77,22 +80,72 @@ interface PipelineGroup {
 export class PipelinesComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // ---------------------------------------------------------------------------
-  // Public state
+  // Public state — Card list
   // ---------------------------------------------------------------------------
 
-  PipelineGroups: PipelineGroup[] = [];
-  ViewBox = '0 0 900 400';
-  ZoomLevel = 1.0;
+  PipelineCards: PipelineCard[] = [];
   IsLoading = false;
+  GlobalSearch = '';
 
-  /** Currently selected entity-map node (opens detail panel) */
-  SelectedNode: PipelineNode | null = null;
-  /** Field maps for the selected entity-map node */
-  SelectedFieldMaps: FieldMapRow[] = [];
-  /** Controls CSS slide-in animation */
-  DetailPanelOpen = false;
-  /** Loading state for field maps */
-  FieldMapsLoading = false;
+  // ---------------------------------------------------------------------------
+  // Visual Editor state
+  // ---------------------------------------------------------------------------
+
+  VisualEditorOpen = false;
+  EditorEntityMap: EntityMapRow | null = null;
+  EditorCard: PipelineCard | null = null;
+  EditorSourceFields: VisualSourceField[] = [];
+  EditorDestFields: VisualDestField[] = [];
+  EditorConnections: VisualConnection[] = [];
+  EditorLoading = false;
+  EditorSaving = false;
+  EditorSaveSuccess = false;
+
+  /** Currently selected connection index (opens transform panel) */
+  SelectedConnectionIdx: number | null = null;
+
+  /** When non-null, user is in "connect mode" — next dest click creates a mapping */
+  ConnectingFromSource: string | null = null;
+
+  /** Search/filter within the visual editor columns */
+  EditorSearchSource = '';
+  EditorSearchDest = '';
+
+  /** Data preview state */
+  ShowSourcePreview = false;
+  ShowDestPreview = false;
+  PreviewSourceLoading = false;
+  PreviewDestLoading = false;
+  PreviewSourceRows: Array<Record<string, string | number | boolean | null>> = [];
+  PreviewDestRows: Array<Record<string, string | number | boolean | null>> = [];
+  PreviewSourceColumns: string[] = [];
+  PreviewDestColumns: string[] = [];
+
+  /** Collapsible section state */
+  FieldMapsExpanded = true;
+  InfoPanelExpanded = false;
+
+  /** Info panel data */
+  InfoPanelLoading = false;
+  InfoDestRecordCount: number | null = null;
+  InfoLastSync: { StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null = null;
+
+  /** SVG layout constants */
+  readonly FIELD_HEIGHT = 40;
+  readonly SVG_WIDTH = 200;
+
+  /** Transform type metadata */
+  readonly TRANSFORM_TYPES: Array<{ Value: TransformType; Label: string; Icon: string }> = [
+    { Value: 'direct', Label: 'Direct', Icon: 'fa-solid fa-arrow-right' },
+    { Value: 'regex', Label: 'Regex', Icon: 'fa-solid fa-code' },
+    { Value: 'split', Label: 'Split', Icon: 'fa-solid fa-scissors' },
+    { Value: 'combine', Label: 'Combine', Icon: 'fa-solid fa-object-group' },
+    { Value: 'lookup', Label: 'Lookup', Icon: 'fa-solid fa-book' },
+    { Value: 'format', Label: 'Format', Icon: 'fa-solid fa-font' },
+    { Value: 'coerce', Label: 'Coerce', Icon: 'fa-solid fa-exchange-alt' },
+    { Value: 'substring', Label: 'Substring', Icon: 'fa-solid fa-text-width' },
+    { Value: 'custom', Label: 'Custom', Icon: 'fa-solid fa-wand-magic-sparkles' }
+  ];
 
   // ---------------------------------------------------------------------------
   // Private
@@ -138,7 +191,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
         this.dataService.LoadIntegrationSummaries(provider),
         this.loadAllEntityMaps(provider)
       ]);
-      this.BuildPipelineLayout(summaries, allEntityMaps);
+      this.BuildCards(summaries, allEntityMaps);
     } catch (err) {
       console.error('[PipelinesComponent] Failed to load data:', err);
     } finally {
@@ -148,102 +201,275 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   }
 
   // ---------------------------------------------------------------------------
-  // Layout engine
+  // Card building
   // ---------------------------------------------------------------------------
 
-  BuildPipelineLayout(summaries: IntegrationSummary[], allEntityMaps: EntityMapRow[]): void {
-    let currentY = CANVAS_PADDING;
-    const groups: PipelineGroup[] = [];
-
-    for (const summary of summaries) {
+  BuildCards(summaries: IntegrationSummary[], allEntityMaps: EntityMapRow[]): void {
+    this.PipelineCards = summaries.map(summary => {
       const maps = allEntityMaps.filter(
         m => UUIDsEqual(m.CompanyIntegrationID, summary.Integration.ID)
       );
-      const group = this.buildGroupLayout(summary, maps, currentY);
-      groups.push(group);
-      currentY += group.Height + GROUP_V_GAP;
-    }
-
-    this.PipelineGroups = groups;
-    this.updateViewBox(currentY);
+      const activeMaps = maps.filter(m => m.SyncEnabled);
+      const uniqueEntities = new Set(maps.map(m => m.EntityID)).size;
+      return {
+        IntegrationID: summary.Integration.ID,
+        IntegrationName: summary.Integration.Integration ?? summary.Integration.Name,
+        Icon: this.resolveIcon(summary),
+        StatusColor: this.statusToColor(summary.StatusColor),
+        StatusLabel: this.statusToLabel(summary.StatusColor),
+        EntityMapCount: maps.length,
+        ActiveMapCount: activeMaps.length,
+        UniqueEntityCount: uniqueEntities,
+        LastSync: summary.RelativeTime,
+        IsExpanded: false,
+        EntityMaps: maps,
+        FilteredMaps: maps,
+        SearchTerm: ''
+      };
+    });
   }
 
   // ---------------------------------------------------------------------------
-  // Node click / detail panel
+  // Card expand / collapse
   // ---------------------------------------------------------------------------
 
-  OnNodeClick(node: PipelineNode): void {
-    if (node.Type !== 'entityMap' || !node.EntityMap) return;
-
-    if (this.SelectedNode && UUIDsEqual(this.SelectedNode.ID, node.ID)) {
-      this.CloseDetailPanel();
-      return;
+  ToggleCard(card: PipelineCard): void {
+    card.IsExpanded = !card.IsExpanded;
+    if (card.IsExpanded) {
+      card.FilteredMaps = this.applyMapFilter(card);
     }
+  }
 
-    this.SelectedNode = node;
-    this.SelectedFieldMaps = [];
-    this.DetailPanelOpen = true;
+  ExpandAll(): void {
+    for (const card of this.PipelineCards) {
+      card.IsExpanded = true;
+      card.FilteredMaps = this.applyMapFilter(card);
+    }
+  }
+
+  CollapseAll(): void {
+    for (const card of this.PipelineCards) {
+      card.IsExpanded = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search / filter
+  // ---------------------------------------------------------------------------
+
+  OnCardSearch(card: PipelineCard, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    card.SearchTerm = input.value;
+    card.FilteredMaps = this.applyMapFilter(card);
     this.cdr.detectChanges();
-    this.LoadFieldMaps(node.EntityMap.ID);
   }
 
-  async LoadFieldMaps(entityMapID: string): Promise<void> {
-    this.FieldMapsLoading = true;
+  OnGlobalSearchChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.GlobalSearch = input.value;
+    this.cdr.detectChanges();
+  }
+
+  get FilteredCards(): PipelineCard[] {
+    if (!this.GlobalSearch.trim()) return this.PipelineCards;
+    const term = this.GlobalSearch.toLowerCase();
+    return this.PipelineCards.filter(card =>
+      card.IntegrationName.toLowerCase().includes(term) ||
+      card.EntityMaps.some(m =>
+        (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
+        m.Entity.toLowerCase().includes(term)
+      )
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Entity map row click → Open Visual Editor
+  // ---------------------------------------------------------------------------
+
+  OnMapRowClick(card: PipelineCard, entityMap: EntityMapRow): void {
+    this.OpenVisualEditor(card, entityMap);
+  }
+
+  // ---------------------------------------------------------------------------
+  // SyncEnabled toggle
+  // ---------------------------------------------------------------------------
+
+  async OnToggleSyncEnabled(card: PipelineCard, em: EntityMapRow, event: Event): Promise<void> {
+    const checkbox = event.target as HTMLInputElement;
+    const newValue = checkbox.checked;
+    em.SyncEnabled = newValue;
+    card.ActiveMapCount = card.EntityMaps.filter(m => m.SyncEnabled).length;
     this.cdr.detectChanges();
     try {
-      this.SelectedFieldMaps = await this.dataService.LoadFieldMaps(entityMapID, this.RunViewToUse);
+      await this.dataService.ToggleEntityMapEnabled(em.ID, newValue);
     } catch (err) {
-      console.error('[PipelinesComponent] Failed to load field maps:', err);
-    } finally {
-      this.FieldMapsLoading = false;
+      // Revert on failure
+      em.SyncEnabled = !newValue;
+      card.ActiveMapCount = card.EntityMaps.filter(m => m.SyncEnabled).length;
+      checkbox.checked = !newValue;
+      console.error('[PipelinesComponent] Failed to toggle SyncEnabled:', err);
       this.cdr.detectChanges();
     }
   }
 
-  CloseDetailPanel(): void {
-    this.DetailPanelOpen = false;
-    // Delay clearing node to allow slide-out animation to complete
-    setTimeout(() => {
-      if (!this.DetailPanelOpen) {
-        this.SelectedNode = null;
-        this.SelectedFieldMaps = [];
-        this.cdr.detectChanges();
-      }
-    }, 350);
+  async OnToggleEditorSyncEnabled(event: Event): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+    const checkbox = event.target as HTMLInputElement;
+    const newValue = checkbox.checked;
+    this.EditorEntityMap.SyncEnabled = newValue;
+    this.EditorCard.ActiveMapCount = this.EditorCard.EntityMaps.filter(m => m.SyncEnabled).length;
+    this.cdr.detectChanges();
+    try {
+      await this.dataService.ToggleEntityMapEnabled(this.EditorEntityMap.ID, newValue);
+    } catch (err) {
+      this.EditorEntityMap.SyncEnabled = !newValue;
+      this.EditorCard.ActiveMapCount = this.EditorCard.EntityMaps.filter(m => m.SyncEnabled).length;
+      checkbox.checked = !newValue;
+      console.error('[PipelinesComponent] Failed to toggle SyncEnabled:', err);
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Data preview
+  // ---------------------------------------------------------------------------
+
+  async ToggleSourcePreview(): Promise<void> {
+    this.ShowSourcePreview = !this.ShowSourcePreview;
+    if (this.ShowSourcePreview && this.PreviewSourceRows.length === 0) {
+      await this.loadSourcePreview();
+    }
     this.cdr.detectChanges();
   }
 
+  async ToggleDestPreview(): Promise<void> {
+    this.ShowDestPreview = !this.ShowDestPreview;
+    if (this.ShowDestPreview && this.PreviewDestRows.length === 0) {
+      await this.loadDestPreview();
+    }
+    this.cdr.detectChanges();
+  }
+
+  private async loadSourcePreview(): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+    this.PreviewSourceLoading = true;
+    this.cdr.detectChanges();
+    try {
+      const rows = await this.dataService.PreviewSourceData(
+        this.EditorCard.IntegrationID,
+        this.EditorEntityMap.ExternalObjectName,
+        5
+      );
+      this.PreviewSourceRows = rows;
+      this.PreviewSourceColumns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    } catch (err) {
+      console.error('[PipelinesComponent] Failed to load source preview:', err);
+      this.PreviewSourceRows = [];
+      this.PreviewSourceColumns = [];
+    } finally {
+      this.PreviewSourceLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private async loadDestPreview(): Promise<void> {
+    if (!this.EditorEntityMap) return;
+    this.PreviewDestLoading = true;
+    this.cdr.detectChanges();
+    try {
+      const rows = await this.dataService.PreviewDestinationData(
+        this.EditorEntityMap.EntityID,
+        5,
+        this.RunViewToUse
+      );
+      this.PreviewDestRows = rows;
+      this.PreviewDestColumns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    } catch (err) {
+      console.error('[PipelinesComponent] Failed to load dest preview:', err);
+      this.PreviewDestRows = [];
+      this.PreviewDestColumns = [];
+    } finally {
+      this.PreviewDestLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   // ---------------------------------------------------------------------------
-  // Zoom controls
+  // Collapsible sections
   // ---------------------------------------------------------------------------
 
-  ZoomIn(): void {
-    this.ZoomLevel = Math.min(MAX_ZOOM, Math.round((this.ZoomLevel + ZOOM_STEP) * 100) / 100);
+  ToggleFieldMaps(): void {
+    this.FieldMapsExpanded = !this.FieldMapsExpanded;
+    this.cdr.detectChanges();
   }
 
-  ZoomOut(): void {
-    this.ZoomLevel = Math.max(MIN_ZOOM, Math.round((this.ZoomLevel - ZOOM_STEP) * 100) / 100);
+  ToggleInfoPanel(): void {
+    this.InfoPanelExpanded = !this.InfoPanelExpanded;
+    if (this.InfoPanelExpanded && this.InfoDestRecordCount === null) {
+      this.loadInfoPanelData();
+    }
+    this.cdr.detectChanges();
   }
 
-  FitView(): void {
-    this.ZoomLevel = 1.0;
+  private async loadInfoPanelData(): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+    this.InfoPanelLoading = true;
+    this.cdr.detectChanges();
+    try {
+      const [destCount, lastSync] = await Promise.all([
+        this.dataService.GetDestinationRecordCount(this.EditorEntityMap.EntityID, this.RunViewToUse),
+        this.dataService.GetLastSyncForEntity(
+          this.EditorCard.IntegrationID,
+          this.EditorEntityMap.EntityID,
+          this.RunViewToUse
+        )
+      ]);
+      this.InfoDestRecordCount = destCount;
+      this.InfoLastSync = lastSync;
+    } catch (err) {
+      console.error('[PipelinesComponent] Failed to load info panel data:', err);
+    } finally {
+      this.InfoPanelLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
-  get ZoomPercent(): number {
-    return Math.round(this.ZoomLevel * 100);
+  FormatSyncDate(dateStr: string | null): string {
+    if (!dateStr) return 'Never';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString();
+  }
+
+  SyncStatusClass(status: string): string {
+    switch (status) {
+      case 'Success': return 'info-status-success';
+      case 'Failed': return 'info-status-error';
+      case 'In Progress': return 'info-status-running';
+      default: return 'info-status-pending';
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Template helpers
   // ---------------------------------------------------------------------------
 
-  IsNodeSelected(node: PipelineNode): boolean {
-    return this.SelectedNode != null && UUIDsEqual(this.SelectedNode.ID, node.ID);
-  }
-
+  /**
+   * Direction arrows for entity-level sync direction.
+   * Pull = data flows FROM external source INTO MJ = right arrow (→)
+   * Push = data flows FROM MJ OUT to external = left arrow (←)
+   */
   DirectionLabel(direction: string): string {
-    if (direction === 'Pull') return '\u2190';
-    if (direction === 'Push') return '\u2192';
+    if (direction === 'Pull') return '\u2192';
+    if (direction === 'Push') return '\u2190';
     if (direction === 'Bidirectional') return '\u2194';
     return '\u2192';
   }
@@ -255,192 +481,553 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     return 'direction-badge';
   }
 
-  FieldDirectionLabel(direction: string): string {
-    if (direction === 'SourceToDest') return '\u2192';
-    if (direction === 'DestToSource') return '\u2190';
-    if (direction === 'Both') return '\u2194';
-    return '\u2192';
+  DirectionText(direction: string): string {
+    if (direction === 'Pull') return 'Pull \u2192';
+    if (direction === 'Push') return '\u2190 Push';
+    if (direction === 'Bidirectional') return '\u2194 Bi';
+    return 'Pull \u2192';
   }
 
   get IntegrationCount(): number {
-    return this.PipelineGroups.length;
+    return this.PipelineCards.length;
   }
 
-  get SelectedEntityMap(): EntityMapRow | null {
-    return this.SelectedNode?.EntityMap ?? null;
+  get TotalMapCount(): number {
+    return this.PipelineCards.reduce((sum, c) => sum + c.EntityMapCount, 0);
   }
 
-  get ActiveFieldMaps(): FieldMapRow[] {
-    return this.SelectedFieldMaps.filter(f => f.Status === 'Active');
+  // ===========================================================================
+  // VISUAL FIELD MAPPING EDITOR
+  // ===========================================================================
+
+  // ---------------------------------------------------------------------------
+  // Open / Close
+  // ---------------------------------------------------------------------------
+
+  OpenVisualEditor(card: PipelineCard, entityMap: EntityMapRow): void {
+    this.EditorCard = card;
+    this.EditorEntityMap = entityMap;
+    this.VisualEditorOpen = true;
+    this.SelectedConnectionIdx = null;
+    this.ConnectingFromSource = null;
+    this.EditorSearchSource = '';
+    this.EditorSearchDest = '';
+    this.EditorSaveSuccess = false;
+    this.ShowSourcePreview = false;
+    this.ShowDestPreview = false;
+    this.PreviewSourceRows = [];
+    this.PreviewDestRows = [];
+    this.PreviewSourceColumns = [];
+    this.PreviewDestColumns = [];
+    this.FieldMapsExpanded = true;
+    this.InfoPanelExpanded = false;
+    this.InfoDestRecordCount = null;
+    this.InfoLastSync = null;
+    this.cdr.detectChanges();
+    this.LoadVisualEditorData();
   }
 
-  get KeyFieldCount(): number {
-    return this.ActiveFieldMaps.filter(f => f.IsKeyField).length;
+  CloseVisualEditor(): void {
+    this.VisualEditorOpen = false;
+    this.EditorEntityMap = null;
+    this.EditorCard = null;
+    this.EditorSourceFields = [];
+    this.EditorDestFields = [];
+    this.EditorConnections = [];
+    this.SelectedConnectionIdx = null;
+    this.ConnectingFromSource = null;
+    this.cdr.detectChanges();
   }
 
-  get RequiredFieldCount(): number {
-    return this.ActiveFieldMaps.filter(f => f.IsRequired).length;
+  async LoadVisualEditorData(): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+    this.EditorLoading = true;
+    this.cdr.detectChanges();
+
+    const entityMap = this.EditorEntityMap;
+    const companyIntegrationID = this.EditorCard.IntegrationID;
+
+    try {
+      // Load field maps, source fields, and dest fields in parallel
+      const [fieldMaps, sourceResult, destFields] = await Promise.all([
+        this.dataService.LoadFieldMaps(entityMap.ID, this.RunViewToUse),
+        this.dataService.DiscoverFields(companyIntegrationID, entityMap.ExternalObjectName)
+          .catch(() => ({ Success: false, Message: '', Data: [] as DiscoveredFieldResult[] })),
+        this.dataService.LoadEntityFields(entityMap.EntityID, this.RunViewToUse)
+      ]);
+
+      // Build source fields
+      if (sourceResult.Success && sourceResult.Data.length > 0) {
+        this.EditorSourceFields = sourceResult.Data.map(f => ({
+          Name: f.Name,
+          Label: f.Label || f.Name,
+          Type: f.DataType,
+          IsRequired: f.IsRequired,
+          IsPrimaryKey: f.IsUniqueKey
+        }));
+      } else {
+        // Fallback: derive source fields from existing field maps
+        this.EditorSourceFields = fieldMaps.map(fm => ({
+          Name: fm.SourceFieldName,
+          Label: fm.SourceFieldLabel ?? fm.SourceFieldName,
+          Type: '',
+          IsRequired: fm.IsRequired,
+          IsPrimaryKey: fm.IsKeyField
+        }));
+      }
+
+      // Build dest fields (exclude __mj system fields — they are read-only)
+      this.EditorDestFields = destFields
+        .filter(f => !f.Name.startsWith('__mj'))
+        .map(f => ({
+          Name: f.Name,
+          Type: f.Type,
+          IsRequired: f.IsRequired
+        }));
+
+      // Build connections
+      this.EditorConnections = fieldMaps
+        .filter(fm => fm.Status === 'Active')
+        .map(fm => ({
+          ID: fm.ID,
+          SourceFieldName: fm.SourceFieldName,
+          DestFieldName: fm.DestinationFieldName,
+          IsKeyField: fm.IsKeyField,
+          IsRequired: fm.IsRequired,
+          Direction: fm.Direction,
+          TransformSteps: this.parseTransformPipeline(fm.TransformPipeline),
+          IsDirty: false,
+          IsNew: false,
+          MarkedForDelete: false
+        }));
+    } catch (err) {
+      console.error('[PipelinesComponent] Failed to load editor data:', err);
+    } finally {
+      this.EditorLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // SVG path generation
+  // Filtered field lists
   // ---------------------------------------------------------------------------
 
-  private computeBezierPath(fromX: number, fromY: number, toX: number, toY: number): string {
-    const dx = (toX - fromX) * 0.5;
-    return `M ${fromX} ${fromY} C ${fromX + dx} ${fromY}, ${toX - dx} ${toY}, ${toX} ${toY}`;
+  get FilteredEditorSourceFields(): VisualSourceField[] {
+    if (!this.EditorSearchSource.trim()) return this.EditorSourceFields;
+    const term = this.EditorSearchSource.toLowerCase();
+    return this.EditorSourceFields.filter(f =>
+      f.Name.toLowerCase().includes(term) || f.Label.toLowerCase().includes(term)
+    );
+  }
+
+  get FilteredEditorDestFields(): VisualDestField[] {
+    if (!this.EditorSearchDest.trim()) return this.EditorDestFields;
+    const term = this.EditorSearchDest.toLowerCase();
+    return this.EditorDestFields.filter(f => f.Name.toLowerCase().includes(term));
+  }
+
+  /** Only show connections where both source and dest are visible */
+  get VisibleConnections(): VisualConnection[] {
+    return this.EditorConnections.filter(c =>
+      !c.MarkedForDelete &&
+      this.getSourceFieldIndex(c.SourceFieldName) >= 0 &&
+      this.getDestFieldIndex(c.DestFieldName) >= 0
+    );
   }
 
   // ---------------------------------------------------------------------------
-  // Private layout helpers
+  // SVG Calculations
   // ---------------------------------------------------------------------------
 
-  private buildGroupLayout(
-    summary: IntegrationSummary,
-    maps: EntityMapRow[],
-    startY: number
-  ): PipelineGroup {
-    const mapCount = Math.max(maps.length, 1);
-    const mapsBlockHeight = mapCount * ENTITY_MAP_V_SPACING;
-    const groupHeight = Math.max(mapsBlockHeight, NODE_HEIGHT) + GROUP_TOP_PADDING * 2;
-
-    const sourceNode = this.createSourceNode(summary, startY, groupHeight);
-    const entityMapNodes = this.createEntityMapNodes(maps, startY, groupHeight);
-    const destinationNode = this.createDestinationNode(summary, maps, startY, groupHeight);
-    const connections = this.createConnections(sourceNode, entityMapNodes, destinationNode);
-
-    return {
-      IntegrationID: summary.Integration.ID,
-      IntegrationName: summary.Integration.Integration ?? summary.Integration.Name,
-      StatusColor: this.statusToColor(summary.StatusColor),
-      SourceNode: sourceNode,
-      EntityMapNodes: entityMapNodes,
-      DestinationNode: destinationNode,
-      Connections: connections,
-      Y: startY,
-      Height: groupHeight
-    };
+  get EditorCanvasHeight(): number {
+    const sourceHeight = this.FilteredEditorSourceFields.length * this.FIELD_HEIGHT;
+    const destHeight = this.FilteredEditorDestFields.length * this.FIELD_HEIGHT;
+    return Math.max(sourceHeight, destHeight, 200);
   }
 
-  private createSourceNode(
-    summary: IntegrationSummary,
-    startY: number,
-    groupHeight: number
-  ): PipelineNode {
-    const centerY = startY + groupHeight / 2 - NODE_HEIGHT / 2;
-    return {
-      ID: `src-${summary.Integration.ID}`,
-      Type: 'source',
-      Label: summary.Integration.Integration ?? summary.Integration.Name,
-      SubLabel: 'Source',
-      Icon: this.resolveIcon(summary),
-      StatusColor: this.statusToColor(summary.StatusColor),
-      X: SOURCE_X,
-      Y: centerY,
-      Width: NODE_WIDTH,
-      Height: NODE_HEIGHT,
-      EntityMap: null
-    };
+  GetConnectionPath(conn: VisualConnection): string {
+    const sourceY = this.getSourceFieldY(conn.SourceFieldName);
+    const destY = this.getDestFieldY(conn.DestFieldName);
+    if (sourceY < 0 || destY < 0) return '';
+    const cp1x = this.SVG_WIDTH * 0.35;
+    const cp2x = this.SVG_WIDTH * 0.65;
+    return `M 0 ${sourceY} C ${cp1x} ${sourceY}, ${cp2x} ${destY}, ${this.SVG_WIDTH} ${destY}`;
   }
 
-  private createEntityMapNodes(
-    maps: EntityMapRow[],
-    startY: number,
-    groupHeight: number
-  ): PipelineNode[] {
-    if (maps.length === 0) return [];
-
-    const blockHeight = maps.length * ENTITY_MAP_V_SPACING;
-    const blockStartY = startY + (groupHeight - blockHeight) / 2 + (ENTITY_MAP_V_SPACING - NODE_HEIGHT) / 2;
-
-    return maps.map((em, i) => ({
-      ID: em.ID,
-      Type: 'entityMap' as const,
-      Label: em.ExternalObjectLabel ?? em.ExternalObjectName,
-      SubLabel: em.Entity,
-      Icon: this.directionIcon(em.SyncDirection),
-      StatusColor: em.SyncEnabled ? '#059669' : '#9ca3af',
-      X: ENTITY_MAP_X,
-      Y: blockStartY + i * ENTITY_MAP_V_SPACING,
-      Width: NODE_WIDTH,
-      Height: NODE_HEIGHT,
-      EntityMap: em
-    }));
+  GetConnectionMidY(conn: VisualConnection): number {
+    const sourceY = this.getSourceFieldY(conn.SourceFieldName);
+    const destY = this.getDestFieldY(conn.DestFieldName);
+    return (sourceY + destY) / 2;
   }
 
-  private createDestinationNode(
-    summary: IntegrationSummary,
-    maps: EntityMapRow[],
-    startY: number,
-    groupHeight: number
-  ): PipelineNode {
-    const centerY = startY + groupHeight / 2 - NODE_HEIGHT / 2;
-    const entityCount = new Set(maps.map(m => m.EntityID)).size;
-    return {
-      ID: `dest-${summary.Integration.ID}`,
-      Type: 'destination',
-      Label: 'MemberJunction',
-      SubLabel: `${entityCount} ${entityCount === 1 ? 'entity' : 'entities'}`,
-      Icon: 'fa-solid fa-database',
-      StatusColor: '#059669',
-      X: DESTINATION_X,
-      Y: centerY,
-      Width: NODE_WIDTH,
-      Height: NODE_HEIGHT,
-      EntityMap: null
-    };
+  GetConnectionLineClass(conn: VisualConnection): string {
+    const type = this.getPrimaryTransformType(conn);
+    return `conn-${type}`;
   }
 
-  private createConnections(
-    source: PipelineNode,
-    entityMaps: PipelineNode[],
-    destination: PipelineNode
-  ): PipelineConnection[] {
-    const connections: PipelineConnection[] = [];
+  GetConnectionBadgeClass(conn: VisualConnection): string {
+    const type = this.getPrimaryTransformType(conn);
+    return `badge-${type}`;
+  }
 
-    if (entityMaps.length === 0) {
-      // Direct source-to-destination when no entity maps
-      connections.push(this.buildConnection(source, destination, '#9ca3af', 0));
-      return connections;
+  GetConnectionTransformIcon(conn: VisualConnection): string {
+    const type = this.getPrimaryTransformType(conn);
+    return this.TRANSFORM_TYPES.find(t => t.Value === type)?.Icon ?? 'fa-solid fa-arrow-right';
+  }
+
+  GetTransformTypeLabel(type: TransformType): string {
+    return this.TRANSFORM_TYPES.find(t => t.Value === type)?.Label ?? type;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Field mapped state
+  // ---------------------------------------------------------------------------
+
+  IsSourceFieldMapped(fieldName: string): boolean {
+    return this.EditorConnections.some(c => !c.MarkedForDelete && c.SourceFieldName === fieldName);
+  }
+
+  IsDestFieldMapped(fieldName: string): boolean {
+    return this.EditorConnections.some(c => !c.MarkedForDelete && c.DestFieldName === fieldName);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Creating connections (click source → click dest)
+  // ---------------------------------------------------------------------------
+
+  OnEditorSourceClick(fieldName: string): void {
+    if (this.ConnectingFromSource === fieldName) {
+      this.ConnectingFromSource = null;
+    } else {
+      this.ConnectingFromSource = fieldName;
+      this.SelectedConnectionIdx = null;
+    }
+    this.cdr.detectChanges();
+  }
+
+  OnEditorDestClick(fieldName: string): void {
+    if (!this.ConnectingFromSource) return;
+
+    // Check if this mapping already exists
+    const existing = this.EditorConnections.find(
+      c => !c.MarkedForDelete && c.SourceFieldName === this.ConnectingFromSource && c.DestFieldName === fieldName
+    );
+    if (existing) {
+      this.ConnectingFromSource = null;
+      return;
     }
 
-    for (let i = 0; i < entityMaps.length; i++) {
-      const emNode = entityMaps[i];
-      connections.push(this.buildConnection(source, emNode, emNode.StatusColor, i * 0.4));
-      connections.push(this.buildConnection(emNode, destination, emNode.StatusColor, i * 0.4 + 0.2));
+    // Create new connection
+    this.EditorConnections.push({
+      ID: null,
+      SourceFieldName: this.ConnectingFromSource,
+      DestFieldName: fieldName,
+      IsKeyField: false,
+      IsRequired: false,
+      Direction: 'SourceToDest',
+      TransformSteps: [{ Type: 'direct', Config: {}, OnError: 'Fail' }],
+      IsDirty: true,
+      IsNew: true,
+      MarkedForDelete: false
+    });
+
+    this.ConnectingFromSource = null;
+    this.SelectedConnectionIdx = this.EditorConnections.length - 1;
+    this.cdr.detectChanges();
+  }
+
+  CancelConnect(): void {
+    this.ConnectingFromSource = null;
+    this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Connection selection / editing
+  // ---------------------------------------------------------------------------
+
+  SelectConnection(index: number, event: Event): void {
+    event.stopPropagation();
+    this.SelectedConnectionIdx = this.SelectedConnectionIdx === index ? null : index;
+    this.ConnectingFromSource = null;
+    this.cdr.detectChanges();
+  }
+
+  DeselectConnection(): void {
+    this.SelectedConnectionIdx = null;
+    this.cdr.detectChanges();
+  }
+
+  get SelectedConnection(): VisualConnection | null {
+    if (this.SelectedConnectionIdx == null) return null;
+    return this.EditorConnections[this.SelectedConnectionIdx] ?? null;
+  }
+
+  RemoveSelectedConnection(): void {
+    if (this.SelectedConnectionIdx == null) return;
+    const conn = this.EditorConnections[this.SelectedConnectionIdx];
+    if (conn.IsNew) {
+      this.EditorConnections.splice(this.SelectedConnectionIdx, 1);
+    } else {
+      conn.MarkedForDelete = true;
+      conn.IsDirty = true;
+    }
+    this.SelectedConnectionIdx = null;
+    this.cdr.detectChanges();
+  }
+
+  ToggleConnectionKey(): void {
+    const conn = this.SelectedConnection;
+    if (!conn) return;
+    conn.IsKeyField = !conn.IsKeyField;
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  ToggleConnectionRequired(): void {
+    const conn = this.SelectedConnection;
+    if (!conn) return;
+    conn.IsRequired = !conn.IsRequired;
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  GetDirectionArrowClass(direction: string): string {
+    switch (direction) {
+      case 'DestToSource': return 'fa-arrow-left';
+      case 'Both': return 'fa-right-left';
+      default: return 'fa-arrow-right';
+    }
+  }
+
+  OnConnectionDirectionChange(direction: 'SourceToDest' | 'DestToSource' | 'Both'): void {
+    const conn = this.SelectedConnection;
+    if (!conn) return;
+    conn.Direction = direction;
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  OnConnectionTransformChange(stepIndex: number, type: TransformType): void {
+    const conn = this.SelectedConnection;
+    if (!conn || !conn.TransformSteps[stepIndex]) return;
+    conn.TransformSteps[stepIndex].Type = type;
+    conn.TransformSteps[stepIndex].Config = this.getDefaultConfigForType(type);
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  OnTransformConfigChange(conn: VisualConnection, stepIndex: number, key: string, value: string): void {
+    if (!conn.TransformSteps[stepIndex]) return;
+    conn.TransformSteps[stepIndex].Config[key] = value;
+    conn.IsDirty = true;
+  }
+
+  AddTransformStep(): void {
+    const conn = this.SelectedConnection;
+    if (!conn) return;
+    conn.TransformSteps.push({ Type: 'direct', Config: {}, OnError: 'Fail' });
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  RemoveTransformStep(stepIndex: number): void {
+    const conn = this.SelectedConnection;
+    if (!conn) return;
+    conn.TransformSteps.splice(stepIndex, 1);
+    conn.IsDirty = true;
+    this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Save / Auto-map
+  // ---------------------------------------------------------------------------
+
+  get HasEditorChanges(): boolean {
+    return this.EditorConnections.some(c => c.IsDirty);
+  }
+
+  async SaveVisualEditor(): Promise<void> {
+    if (!this.EditorEntityMap) return;
+    this.EditorSaving = true;
+    this.EditorSaveSuccess = false;
+    this.cdr.detectChanges();
+
+    try {
+      for (const conn of this.EditorConnections) {
+        if (!conn.IsDirty) continue;
+
+        if (conn.MarkedForDelete && conn.ID) {
+          await this.dataService.DeleteFieldMap(conn.ID);
+        } else if (conn.IsNew && !conn.MarkedForDelete) {
+          await this.dataService.CreateFieldMap({
+            EntityMapID: this.EditorEntityMap.ID,
+            SourceFieldName: conn.SourceFieldName,
+            DestinationFieldName: conn.DestFieldName,
+            IsKeyField: conn.IsKeyField,
+            IsRequired: conn.IsRequired,
+            Direction: conn.Direction,
+            TransformPipeline: this.serializeTransformPipeline(conn.TransformSteps)
+          });
+        } else if (conn.ID && !conn.MarkedForDelete) {
+          await this.dataService.UpdateFieldMap(conn.ID, {
+            SourceFieldName: conn.SourceFieldName,
+            DestinationFieldName: conn.DestFieldName,
+            IsKeyField: conn.IsKeyField,
+            IsRequired: conn.IsRequired,
+            Direction: conn.Direction,
+            TransformPipeline: this.serializeTransformPipeline(conn.TransformSteps)
+          });
+        }
+      }
+
+      // Reload to get clean state
+      await this.LoadVisualEditorData();
+      this.EditorSaveSuccess = true;
+      this.SelectedConnectionIdx = null;
+    } catch (err) {
+      console.error('[PipelinesComponent] Failed to save field mappings:', err);
+    } finally {
+      this.EditorSaving = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async AutoMapEditorFields(): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+
+    // Match source to dest by name (case-insensitive)
+    const destMap = new Map<string, VisualDestField>();
+    for (const df of this.EditorDestFields) {
+      destMap.set(df.Name.toLowerCase(), df);
     }
 
-    return connections;
-  }
+    let addedCount = 0;
+    for (const sf of this.EditorSourceFields) {
+      // Skip if already mapped
+      if (this.IsSourceFieldMapped(sf.Name)) continue;
+      const destMatch = destMap.get(sf.Name.toLowerCase());
+      if (!destMatch) continue;
+      if (this.IsDestFieldMapped(destMatch.Name)) continue;
 
-  private buildConnection(
-    from: PipelineNode,
-    to: PipelineNode,
-    statusColor: string,
-    animDelay: number
-  ): PipelineConnection {
-    const fromX = from.X + from.Width;
-    const fromY = from.Y + from.Height / 2;
-    const toX = to.X;
-    const toY = to.Y + to.Height / 2;
-    return {
-      FromNode: from,
-      ToNode: to,
-      StatusColor: statusColor,
-      Path: this.computeBezierPath(fromX, fromY, toX, toY),
-      AnimationDelay: animDelay
-    };
-  }
+      this.EditorConnections.push({
+        ID: null,
+        SourceFieldName: sf.Name,
+        DestFieldName: destMatch.Name,
+        IsKeyField: sf.IsPrimaryKey,
+        IsRequired: sf.IsRequired || destMatch.IsRequired,
+        Direction: 'SourceToDest',
+        TransformSteps: [{ Type: 'direct', Config: {}, OnError: 'Fail' }],
+        IsDirty: true,
+        IsNew: true,
+        MarkedForDelete: false
+      });
+      addedCount++;
+    }
 
-  private updateViewBox(totalHeight: number): void {
-    const width = DESTINATION_X + NODE_WIDTH + CANVAS_PADDING * 2;
-    const height = Math.max(totalHeight + CANVAS_PADDING, 400);
-    this.ViewBox = `0 0 ${width} ${height}`;
+    if (addedCount > 0) {
+      this.cdr.detectChanges();
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Private data helpers
+  // Editor computed props
   // ---------------------------------------------------------------------------
+
+  get EditorMappedCount(): number {
+    return this.EditorConnections.filter(c => !c.MarkedForDelete).length;
+  }
+
+  get EditorKeyFieldCount(): number {
+    return this.EditorConnections.filter(c => !c.MarkedForDelete && c.IsKeyField).length;
+  }
+
+  get EditorRequiredCount(): number {
+    return this.EditorConnections.filter(c => !c.MarkedForDelete && c.IsRequired).length;
+  }
+
+  /** Get transform config keys for inline editing */
+  GetConfigKeys(step: TransformStepUI): string[] {
+    return Object.keys(step.Config);
+  }
+
+  GetConfigValue(step: TransformStepUI, key: string): string {
+    const val = step.Config[key];
+    if (val == null) return '';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private getSourceFieldIndex(fieldName: string): number {
+    return this.FilteredEditorSourceFields.findIndex(f => f.Name === fieldName);
+  }
+
+  private getDestFieldIndex(fieldName: string): number {
+    return this.FilteredEditorDestFields.findIndex(f => f.Name === fieldName);
+  }
+
+  private getSourceFieldY(fieldName: string): number {
+    const idx = this.getSourceFieldIndex(fieldName);
+    if (idx < 0) return -1;
+    return idx * this.FIELD_HEIGHT + this.FIELD_HEIGHT / 2;
+  }
+
+  private getDestFieldY(fieldName: string): number {
+    const idx = this.getDestFieldIndex(fieldName);
+    if (idx < 0) return -1;
+    return idx * this.FIELD_HEIGHT + this.FIELD_HEIGHT / 2;
+  }
+
+  private getPrimaryTransformType(conn: VisualConnection): TransformType {
+    if (conn.TransformSteps.length === 0) return 'direct';
+    return conn.TransformSteps[0].Type;
+  }
+
+  private parseTransformPipeline(json: string | null): TransformStepUI[] {
+    if (!json || json.trim() === '') return [];
+    try {
+      const parsed: unknown = JSON.parse(json);
+      if (!Array.isArray(parsed)) return [];
+      return (parsed as TransformStepUI[]).map(step => ({
+        Type: step.Type ?? 'direct',
+        Config: (step.Config as Record<string, unknown>) ?? {},
+        OnError: step.OnError ?? 'Fail'
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  private serializeTransformPipeline(steps: TransformStepUI[]): string | null {
+    if (steps.length === 0) return null;
+    return JSON.stringify(steps.map(s => ({ Type: s.Type, Config: s.Config, OnError: s.OnError })));
+  }
+
+  private getDefaultConfigForType(type: TransformType): Record<string, unknown> {
+    switch (type) {
+      case 'direct': return {};
+      case 'regex': return { Pattern: '', Replacement: '', Flags: 'g' };
+      case 'split': return { Delimiter: ',', Index: 0 };
+      case 'combine': return { SourceFields: [], Separator: ' ' };
+      case 'lookup': return { Map: {}, Default: '' };
+      case 'format': return { FormatString: '', FormatType: 'date' };
+      case 'coerce': return { TargetType: 'string' };
+      case 'substring': return { Start: 0, Length: 10 };
+      case 'custom': return { Expression: 'value' };
+    }
+  }
+
+  private applyMapFilter(card: PipelineCard): EntityMapRow[] {
+    if (!card.SearchTerm.trim()) return card.EntityMaps;
+    const term = card.SearchTerm.toLowerCase();
+    return card.EntityMaps.filter(m =>
+      (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
+      m.Entity.toLowerCase().includes(term)
+    );
+  }
 
   private async loadAllEntityMaps(provider: IRunViewProvider | null): Promise<EntityMapRow[]> {
     const rv = new RunView(provider ?? null);
@@ -464,18 +1051,18 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     return ResolveIntegrationIcon(name);
   }
 
-  private directionIcon(direction: string): string {
-    if (direction === 'Pull') return 'fa-solid fa-arrow-left';
-    if (direction === 'Push') return 'fa-solid fa-arrow-right';
-    if (direction === 'Bidirectional') return 'fa-solid fa-arrows-left-right';
-    return 'fa-solid fa-arrow-right';
-  }
-
   private statusToColor(color: string): string {
     if (color === 'green') return '#059669';
     if (color === 'amber') return '#d97706';
     if (color === 'red') return '#dc2626';
     return '#9ca3af';
+  }
+
+  private statusToLabel(color: string): string {
+    if (color === 'green') return 'Healthy';
+    if (color === 'amber') return 'Warning';
+    if (color === 'red') return 'Error';
+    return 'Inactive';
   }
 }
 

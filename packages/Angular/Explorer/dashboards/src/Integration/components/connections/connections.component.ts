@@ -118,6 +118,23 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Card menu
   OpenMenuID: string | null = null;
 
+  // Edit panel state
+  EditPanelOpen = false;
+  EditingSummary: IntegrationSummary | null = null;
+  EditEntity: MJCompanyIntegrationEntity | null = null;
+  EditName = '';
+  EditDescription = '';
+  EditCredentialID: string | null = null;
+  EditCredential: MJCredentialEntity | null = null;
+  EditCredentials: MJCredentialEntity[] = [];
+  EditIsActive = false;
+  IsEditSaving = false;
+  IsEditLoading = false;
+
+  // Delete confirmation state
+  DeleteConfirmID: string | null = null;
+  IsDeleting = false;
+
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
   private documentClickHandler: ((e: Event) => void) | null = null;
@@ -232,21 +249,161 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.OpenMenuID = null;
     switch (action) {
       case 'edit':
-        // Future: open edit modal
-        console.log('[IntegrationConnections] Edit:', summary.Integration.ID);
+        this.OpenEditPanel(summary);
         break;
       case 'disable':
         this.toggleConnectionActive(summary);
         break;
       case 'delete':
-        // Future: confirm and delete
-        console.log('[IntegrationConnections] Delete:', summary.Integration.ID);
+        this.ShowDeleteConfirm(summary.Integration.ID);
         break;
     }
   }
 
   GetMenuActionLabel(summary: IntegrationSummary): string {
     return this.IsConnectionActive(summary) ? 'Disable' : 'Enable';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Edit panel
+  // ---------------------------------------------------------------------------
+
+  async OpenEditPanel(summary: IntegrationSummary): Promise<void> {
+    this.EditingSummary = summary;
+    this.EditName = summary.Integration.Name;
+    this.EditDescription = '';
+    this.EditIsActive = summary.Integration.IsActive === true;
+    this.EditCredentialID = null;
+    this.EditCredential = null;
+    this.EditCredentials = [];
+    this.EditEntity = null;
+    this.EditPanelOpen = true;
+    this.IsEditLoading = true;
+    this.cdr.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+      await ci.Load(summary.Integration.ID);
+      this.EditEntity = ci;
+      this.EditName = ci.Name;
+      this.EditIsActive = ci.IsActive === true;
+      if (ci.CredentialID) {
+        this.EditCredentialID = ci.CredentialID;
+      }
+      await this.loadEditCredentials();
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to load connection for editing:', err);
+    } finally {
+      this.IsEditLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  CloseEditPanel(): void {
+    this.EditPanelOpen = false;
+    setTimeout(() => {
+      if (!this.EditPanelOpen) {
+        this.EditingSummary = null;
+        this.EditEntity = null;
+        this.cdr.detectChanges();
+      }
+    }, 350);
+    this.cdr.detectChanges();
+  }
+
+  async SaveEditChanges(): Promise<void> {
+    if (!this.EditEntity) return;
+    this.IsEditSaving = true;
+    this.cdr.detectChanges();
+
+    try {
+      this.EditEntity.Name = this.EditName;
+      this.EditEntity.IsActive = this.EditIsActive;
+      if (this.EditCredentialID) {
+        this.EditEntity.CredentialID = this.EditCredentialID;
+      }
+      const saved = await this.EditEntity.Save();
+      if (saved) {
+        this.CloseEditPanel();
+        await this.LoadData();
+      } else {
+        console.error('[IntegrationConnections] Save failed:',
+          this.EditEntity.LatestResult?.CompleteMessage ?? this.EditEntity.LatestResult?.Message);
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Save error:', err);
+    } finally {
+      this.IsEditSaving = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  SelectEditCredential(credential: MJCredentialEntity): void {
+    this.EditCredential = credential;
+    this.EditCredentialID = credential.ID;
+  }
+
+  ClearEditCredential(): void {
+    this.EditCredential = null;
+    this.EditCredentialID = null;
+  }
+
+  OpenEditCredentialDialog(): void {
+    this.PreselectedCredentialTypeId = undefined;
+    this.ShowCredentialDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  OnEditCredentialDialogClose(result: CredentialDialogResult): void {
+    this.ShowCredentialDialog = false;
+    if (result.success && result.credential) {
+      this.EditCredential = result.credential;
+      this.EditCredentialID = result.credential.ID;
+    }
+    this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delete confirmation
+  // ---------------------------------------------------------------------------
+
+  ShowDeleteConfirm(integrationID: string): void {
+    this.DeleteConfirmID = integrationID;
+    this.cdr.detectChanges();
+  }
+
+  CancelDelete(): void {
+    this.DeleteConfirmID = null;
+    this.cdr.detectChanges();
+  }
+
+  async ConfirmDelete(integrationID: string): Promise<void> {
+    this.IsDeleting = true;
+    this.cdr.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+      await ci.Load(integrationID);
+      const deleted = await ci.Delete();
+      if (deleted) {
+        this.DeleteConfirmID = null;
+        await this.LoadData();
+      } else {
+        console.error('[IntegrationConnections] Delete failed:',
+          ci.LatestResult?.CompleteMessage ?? ci.LatestResult?.Message);
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Delete error:', err);
+    } finally {
+      this.IsDeleting = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  IsDeleteConfirming(integrationID: string): boolean {
+    return UUIDsEqual(this.DeleteConfirmID, integrationID);
   }
 
   // ---------------------------------------------------------------------------
@@ -695,6 +852,24 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     const saved = await ci.Save();
     if (saved) {
       await this.LoadData();
+    }
+  }
+
+  private async loadEditCredentials(): Promise<void> {
+    const rv = new RunView();
+    const result = await rv.RunView<MJCredentialEntity>({
+      EntityName: 'MJ: Credentials',
+      ExtraFilter: 'IsActive=1',
+      OrderBy: 'Name',
+      ResultType: 'entity_object'
+    });
+    this.EditCredentials = result.Results;
+
+    // Pre-select the current credential if one is set
+    if (this.EditCredentialID) {
+      this.EditCredential = this.EditCredentials.find(c =>
+        UUIDsEqual(c.ID, this.EditCredentialID!)
+      ) ?? null;
     }
   }
 

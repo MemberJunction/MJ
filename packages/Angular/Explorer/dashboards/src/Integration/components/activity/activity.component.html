@@ -176,7 +176,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      @for (detail of GetExpandedDetails(); track detail.ID) {
+                      @for (detail of GetExpandedDetails(); track detail.EntityID) {
                         <tr [class.error-row]="detail.RecordsErrored > 0">
                           <td>{{ detail.Entity }}</td>
                           <td class="num-col">{{ detail.RecordsProcessed | number }}</td>
@@ -276,7 +276,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @for (detail of SelectedRunDetails; track detail.ID) {
+                    @for (detail of SelectedRunDetails; track detail.EntityID) {
                       <tr [class.error-row]="detail.RecordsErrored > 0">
                         <td>{{ detail.Entity }}</td>
                         <td class="num-col">{{ detail.RecordsProcessed | number }}</td>

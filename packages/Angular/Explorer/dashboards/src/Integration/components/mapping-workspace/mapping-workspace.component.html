@@ -811,7 +811,7 @@
 
           @if (RunEntityDetails.length > 0) {
             <h4 class="panel-label" style="margin-top: 16px;">Per-Entity Stats</h4>
-            @for (detail of RunEntityDetails; track detail.ID) {
+            @for (detail of RunEntityDetails; track detail.EntityID) {
               <div class="entity-stat-card">
                 <div class="entity-stat-name">{{ detail.Entity }}</div>
                 <div class="entity-stat-grid">

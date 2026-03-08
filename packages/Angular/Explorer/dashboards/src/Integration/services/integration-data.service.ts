@@ -87,16 +87,26 @@ export interface FieldMapRow {
   Status: 'Active' | 'Inactive';
 }
 
+/** Aggregated per-entity stats for a run (computed client-side from raw detail records) */
 export interface RunDetailRow {
-  ID: string;
-  CompanyIntegrationRunID: string;
   EntityID: string;
+  Entity: string;
   RecordsProcessed: number;
   RecordsCreated: number;
   RecordsUpdated: number;
   RecordsDeleted: number;
   RecordsErrored: number;
   RecordsSkipped: number;
+}
+
+/** Raw record from MJ: Company Integration Run Details (one row per record operation) */
+interface RawRunDetailRecord {
+  ID: string;
+  CompanyIntegrationRunID: string;
+  EntityID: string;
+  RecordID: string;
+  Action: string;
+  IsSuccess: boolean;
   Entity: string;
 }
 
@@ -306,16 +316,57 @@ export class IntegrationDataService {
 
   async LoadRunDetails(runID: string, provider?: IRunViewProvider | null): Promise<RunDetailRow[]> {
     const rv = this.createRunView(provider);
-    const result = await rv.RunView<RunDetailRow>({
+    const result = await rv.RunView<RawRunDetailRecord>({
       EntityName: 'MJ: Company Integration Run Details',
       ExtraFilter: `CompanyIntegrationRunID='${runID}'`,
       OrderBy: 'Entity',
-      Fields: ['ID', 'CompanyIntegrationRunID', 'EntityID', 'RecordsProcessed',
-               'RecordsCreated', 'RecordsUpdated', 'RecordsDeleted',
-               'RecordsErrored', 'RecordsSkipped', 'Entity'],
+      Fields: ['ID', 'CompanyIntegrationRunID', 'EntityID', 'RecordID',
+               'Action', 'IsSuccess', 'Entity'],
       ResultType: 'simple'
     });
-    return result.Results;
+    return this.aggregateRunDetails(result.Results);
+  }
+
+  /** Aggregate raw per-record detail rows into per-entity summary rows */
+  private aggregateRunDetails(rawRecords: RawRunDetailRecord[]): RunDetailRow[] {
+    const entityMap = new Map<string, RunDetailRow>();
+
+    for (const rec of rawRecords) {
+      const key = rec.EntityID.toLowerCase();
+      let row = entityMap.get(key);
+      if (!row) {
+        row = {
+          EntityID: rec.EntityID,
+          Entity: rec.Entity,
+          RecordsProcessed: 0,
+          RecordsCreated: 0,
+          RecordsUpdated: 0,
+          RecordsDeleted: 0,
+          RecordsErrored: 0,
+          RecordsSkipped: 0
+        };
+        entityMap.set(key, row);
+      }
+
+      row.RecordsProcessed++;
+
+      if (!rec.IsSuccess) {
+        row.RecordsErrored++;
+      } else {
+        const action = (rec.Action ?? '').toUpperCase();
+        if (action === 'INSERT' || action === 'CREATE') {
+          row.RecordsCreated++;
+        } else if (action === 'UPDATE') {
+          row.RecordsUpdated++;
+        } else if (action === 'DELETE') {
+          row.RecordsDeleted++;
+        } else if (action === 'SKIP' || action === 'SKIPPED') {
+          row.RecordsSkipped++;
+        }
+      }
+    }
+
+    return Array.from(entityMap.values()).sort((a, b) => a.Entity.localeCompare(b.Entity));
   }
 
   async LoadIntegrationDefinitions(provider?: IRunViewProvider | null): Promise<IntegrationDefinitionRow[]> {
@@ -643,6 +694,71 @@ export class IntegrationDataService {
       ResultType: 'simple'
     });
     return result.Results;
+  }
+
+  /** Get a count of records in the destination MJ entity */
+  async GetDestinationRecordCount(
+    entityID: string,
+    provider?: IRunViewProvider | null
+  ): Promise<number> {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    if (!entityInfo) return 0;
+
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ TotalCount: number }>({
+      EntityName: entityInfo.Name,
+      ExtraFilter: '',
+      Fields: [entityInfo.FirstPrimaryKey?.Name ?? 'ID'],
+      ResultType: 'simple'
+    });
+    return result.TotalRowCount ?? result.Results.length;
+  }
+
+  /** Get the most recent run that touched a given entity */
+  async GetLastSyncForEntity(
+    companyIntegrationID: string,
+    entityID: string,
+    provider?: IRunViewProvider | null
+  ): Promise<{ StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null> {
+    const rv = this.createRunView(provider);
+    // Get runs for this integration, most recent first
+    const runsResult = await rv.RunView<IntegrationRunRow>({
+      EntityName: 'MJ: Company Integration Runs',
+      ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+      OrderBy: 'StartedAt DESC',
+      MaxRows: 5,
+      Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords', 'Status'],
+      ResultType: 'simple'
+    });
+    if (runsResult.Results.length === 0) return null;
+
+    // Check each run's details to find one that touched this entity
+    for (const run of runsResult.Results) {
+      const detailResult = await rv.RunView<{ EntityID: string }>({
+        EntityName: 'MJ: Company Integration Run Details',
+        ExtraFilter: `CompanyIntegrationRunID='${run.ID}' AND EntityID='${entityID}'`,
+        MaxRows: 1,
+        Fields: ['EntityID'],
+        ResultType: 'simple'
+      });
+      if (detailResult.Results.length > 0) {
+        return {
+          StartedAt: run.StartedAt,
+          EndedAt: run.EndedAt,
+          Status: run.Status,
+          TotalRecords: run.TotalRecords
+        };
+      }
+    }
+    // No run touched this entity — return the most recent run anyway as context
+    const latest = runsResult.Results[0];
+    return {
+      StartedAt: latest.StartedAt,
+      EndedAt: latest.EndedAt,
+      Status: latest.Status,
+      TotalRecords: latest.TotalRecords
+    };
   }
 
   /** Run an integration sync via the "Run Integration Sync" action */
