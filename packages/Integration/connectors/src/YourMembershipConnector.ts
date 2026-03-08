@@ -202,7 +202,12 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /**
      * Overrides base FetchChanges to handle YM-specific edge cases:
      * - Groups/GroupTypes: nested GroupTypeList response needs custom flattening
-     * - Members: sparse list data gets enriched via per-record detail endpoint
+     * - Members: client-side watermark filtering + selective detail enrichment
+     *
+     * The MemberList API returns all members every time (no server-side date filter),
+     * but each record includes a `LastUpdated` field. We pull the full list, filter
+     * to only records changed since the watermark, and only call the expensive
+     * per-member detail endpoint for those changed records.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         if (ctx.ObjectName === 'Groups' || ctx.ObjectName === 'GroupTypes') {
@@ -211,12 +216,93 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         const result = await super.FetchChanges(ctx);
 
-        // Enrich Members with detail endpoint data (address, phone, etc.)
         if (ctx.ObjectName === 'Members' && result.Records.length > 0) {
-            return this.EnrichMembersWithDetails(ctx, result);
+            return this.FetchMembersWithWatermark(ctx, result);
         }
 
         return result;
+    }
+
+    /**
+     * Filters the full member list to only records changed since the watermark,
+     * then enriches only those changed records via the detail endpoint.
+     * Returns a new watermark based on the latest LastUpdated value seen.
+     */
+    private async FetchMembersWithWatermark(
+        ctx: FetchContext,
+        fullResult: FetchBatchResult
+    ): Promise<FetchBatchResult> {
+        const { changedRecords, newWatermark } = this.FilterByWatermark(
+            fullResult.Records,
+            ctx.WatermarkValue,
+            'LastUpdated'
+        );
+
+        if (changedRecords.length === 0) {
+            return {
+                Records: [],
+                HasMore: false,
+                NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
+            };
+        }
+
+        console.log(
+            `[YM Members] ${changedRecords.length} of ${fullResult.Records.length} records changed since watermark`
+        );
+
+        const enriched = await this.EnrichMembersWithDetails(ctx, {
+            Records: changedRecords,
+            HasMore: false,
+        });
+
+        return {
+            ...enriched,
+            NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
+        };
+    }
+
+    /**
+     * Filters records by comparing a date field against a watermark timestamp.
+     * Returns only records where the date field is newer than the watermark,
+     * plus the latest date value seen (to use as the next watermark).
+     */
+    private FilterByWatermark(
+        records: ExternalRecord[],
+        watermarkValue: string | null,
+        dateFieldName: string
+    ): { changedRecords: ExternalRecord[]; newWatermark: string | null } {
+        let latestDate: Date | null = null;
+        const watermarkDate = watermarkValue ? new Date(watermarkValue) : null;
+
+        const changed: ExternalRecord[] = [];
+
+        for (const record of records) {
+            const dateValue = record.Fields[dateFieldName];
+            if (dateValue == null) {
+                // No date field — include record (can't determine if changed)
+                changed.push(record);
+                continue;
+            }
+
+            const recordDate = new Date(String(dateValue));
+            if (isNaN(recordDate.getTime())) {
+                changed.push(record);
+                continue;
+            }
+
+            // Track the latest date for the new watermark
+            if (!latestDate || recordDate > latestDate) {
+                latestDate = recordDate;
+            }
+
+            // Include if no watermark or record is newer than watermark
+            if (!watermarkDate || recordDate > watermarkDate) {
+                changed.push(record);
+            }
+        }
+
+        const newWatermark = latestDate ? latestDate.toISOString() : null;
+        return { changedRecords: changed, newWatermark };
     }
 
     // ─── TestConnection ─────────────────────────────────────────────

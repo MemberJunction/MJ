@@ -265,14 +265,141 @@ describe('YourMembershipConnector (Groups)', () => {
     });
 });
 
+// ─── Watermark filtering tests ──────────────────────────────────
+
+describe('YourMembershipConnector (watermark filtering)', () => {
+    function setupMemberTest(
+        memberRecords: Array<{ ExternalID: string; Fields: Record<string, unknown> }>,
+        watermarkValue: string | null,
+        detailResponses: Record<string, Record<string, unknown>> = {}
+    ) {
+        const makeRequest = vi.fn().mockImplementation(
+            (_auth: unknown, url: string): Promise<RESTResponse> => {
+                const memberMatch = (url as string).match(/Members\/(\d+)/);
+                if (memberMatch) {
+                    const id = memberMatch[1];
+                    const body = detailResponses[id] ?? { id: Number(id), ResponseStatus: { ErrorCode: 'None' } };
+                    return Promise.resolve({ Status: 200, Body: body, Headers: {} });
+                }
+                return Promise.resolve({ Status: 200, Body: {}, Headers: {} });
+            }
+        );
+
+        const connector = createMockedConnector(makeRequest);
+        const originalFetchChanges = Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges;
+        const superFetchMock = vi.fn().mockResolvedValue({
+            Records: memberRecords.map(r => ({ ...r, ObjectType: 'Members' })),
+            HasMore: false,
+        });
+        Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = superFetchMock;
+
+        const ctx: FetchContext = {
+            CompanyIntegration: MOCK_CI,
+            ObjectName: 'Members',
+            WatermarkValue: watermarkValue,
+            BatchSize: 500,
+            ContextUser: contextUser,
+        };
+
+        return { connector, ctx, originalFetchChanges, makeRequest };
+    }
+
+    it('should return all records on first sync (no watermark)', async () => {
+        const { connector, ctx, originalFetchChanges } = setupMemberTest(
+            [
+                { ExternalID: '1', Fields: { ProfileID: 1, LastUpdated: '2026-01-15T10:00:00Z' } },
+                { ExternalID: '2', Fields: { ProfileID: 2, LastUpdated: '2026-02-20T10:00:00Z' } },
+            ],
+            null
+        );
+
+        try {
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(2);
+            expect(result.NewWatermarkValue).toBe('2026-02-20T10:00:00.000Z');
+        } finally {
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
+    });
+
+    it('should filter to only changed records when watermark is set', async () => {
+        const { connector, ctx, originalFetchChanges, makeRequest } = setupMemberTest(
+            [
+                { ExternalID: '1', Fields: { ProfileID: 1, LastUpdated: '2026-01-15T10:00:00Z' } },
+                { ExternalID: '2', Fields: { ProfileID: 2, LastUpdated: '2026-03-01T10:00:00Z' } },
+                { ExternalID: '3', Fields: { ProfileID: 3, LastUpdated: '2026-03-05T10:00:00Z' } },
+            ],
+            '2026-02-01T00:00:00Z',
+            {
+                '2': { id: 2, firstName: 'Changed', ResponseStatus: { ErrorCode: 'None' } },
+                '3': { id: 3, firstName: 'AlsoChanged', ResponseStatus: { ErrorCode: 'None' } },
+            }
+        );
+
+        try {
+            const result = await connector.FetchChanges(ctx);
+            // Only records 2 and 3 are after the watermark
+            expect(result.Records.length).toBe(2);
+            expect(result.Records.map(r => r.ExternalID).sort()).toEqual(['2', '3']);
+            expect(result.NewWatermarkValue).toBe('2026-03-05T10:00:00.000Z');
+
+            // Detail endpoint should only be called for the 2 changed records
+            const detailCalls = makeRequest.mock.calls.filter(
+                (c: unknown[]) => (c[1] as string).includes('Members/')
+            );
+            expect(detailCalls.length).toBe(2);
+        } finally {
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
+    });
+
+    it('should return empty records when nothing changed since watermark', async () => {
+        const { connector, ctx, originalFetchChanges, makeRequest } = setupMemberTest(
+            [
+                { ExternalID: '1', Fields: { ProfileID: 1, LastUpdated: '2026-01-15T10:00:00Z' } },
+                { ExternalID: '2', Fields: { ProfileID: 2, LastUpdated: '2026-02-20T10:00:00Z' } },
+            ],
+            '2026-03-01T00:00:00Z'
+        );
+
+        try {
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(0);
+            // No detail calls should be made
+            const detailCalls = makeRequest.mock.calls.filter(
+                (c: unknown[]) => (c[1] as string).includes('Members/')
+            );
+            expect(detailCalls.length).toBe(0);
+        } finally {
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
+    });
+
+    it('should include records with missing LastUpdated (conservative)', async () => {
+        const { connector, ctx, originalFetchChanges } = setupMemberTest(
+            [
+                { ExternalID: '1', Fields: { ProfileID: 1 } }, // No LastUpdated
+                { ExternalID: '2', Fields: { ProfileID: 2, LastUpdated: '2026-03-01T10:00:00Z' } },
+            ],
+            '2026-02-01T00:00:00Z'
+        );
+
+        try {
+            const result = await connector.FetchChanges(ctx);
+            // Both should be included: record 1 has no date (can't determine), record 2 is newer
+            expect(result.Records.length).toBe(2);
+        } finally {
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
+    });
+});
+
 // ─── Detail enrichment tests ────────────────────────────────────
 
 describe('YourMembershipConnector (enrichment)', () => {
     it('should enrich Members records with detail data', async () => {
-        let callCount = 0;
         const makeRequest = vi.fn().mockImplementation(
             (_auth: unknown, url: string): Promise<RESTResponse> => {
-                callCount++;
                 if ((url as string).includes('Members/123')) {
                     // Detail endpoint for ProfileID 123
                     return Promise.resolve({
@@ -312,7 +439,7 @@ describe('YourMembershipConnector (enrichment)', () => {
             Records: [{
                 ExternalID: '123',
                 ObjectType: 'Members',
-                Fields: { ProfileID: 123, FirstName: 'Jane', LastName: 'Doe' },
+                Fields: { ProfileID: 123, FirstName: 'Jane', LastName: 'Doe', LastUpdated: '2026-03-01T10:00:00Z' },
             }],
             HasMore: false,
         });
@@ -365,7 +492,7 @@ describe('YourMembershipConnector (enrichment)', () => {
             Records: [{
                 ExternalID: '456',
                 ObjectType: 'Members',
-                Fields: { ProfileID: 456, FirstName: 'Bob', LastName: 'Smith' },
+                Fields: { ProfileID: 456, FirstName: 'Bob', LastName: 'Smith', LastUpdated: '2026-03-01T10:00:00Z' },
             }],
             HasMore: false,
         });
