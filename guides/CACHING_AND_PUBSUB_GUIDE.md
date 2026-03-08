@@ -100,17 +100,17 @@ sequenceDiagram
         SA->>Redis: PUBLISH mj:__pubsub__
     end
 
-    par Browser notifications
+    par Browser notifications (include RecordData for saves)
         SA-->>BA: WebSocket CACHE_INVALIDATION<br/>originSessionId matches → SKIP
-        SA-->>BC: WebSocket CACHE_INVALIDATION<br/>originSessionId differs → PROCESS
+        SA-->>BC: WebSocket CACHE_INVALIDATION + RecordData<br/>originSessionId differs → PROCESS
     end
 
     Redis->>SB: SUBSCRIBE receives
     SB->>SB: OnCacheChanged → CACHE_INVALIDATION publish (no originSessionId)
-    SB-->>BB: WebSocket CACHE_INVALIDATION → PROCESS
+    SB-->>BB: WebSocket CACHE_INVALIDATION + RecordData → PROCESS
 
-    BC->>SA: RunView (fresh data)
-    BB->>SB: RunView (fresh data)
+    Note over BC: Apply RecordData directly to<br/>BaseEngine arrays + LocalCacheManager<br/>(zero server round-trip)
+    Note over BB: Apply RecordData directly to<br/>BaseEngine arrays + LocalCacheManager<br/>(zero server round-trip)
 ```
 
 ---
@@ -171,9 +171,9 @@ InvalidateQueryCaches(queryName): Promise<void>
 ApplyDifferentialUpdate(fingerprint, params, updatedRows, deletedRecordIDs,
     primaryKeyFieldName, newMaxUpdatedAt, serverRowCount?, aggregateResults?): Promise<CachedRunViewResult | null>
 
-// Single-entity operations
-UpsertSingleEntity(fingerprint, entityData, primaryKeyFieldName, newMaxUpdatedAt): Promise<boolean>
-RemoveSingleEntity(fingerprint, primaryKeyValue, primaryKeyFieldName, newMaxUpdatedAt): Promise<boolean>
+// Single-entity operations (use CompositeKey for primary key matching)
+UpsertSingleEntity(fingerprint, entityData, key: CompositeKey, newMaxUpdatedAt): Promise<boolean>
+RemoveSingleEntity(fingerprint, key: CompositeKey, newMaxUpdatedAt): Promise<boolean>
 
 // Storage provider hot-swap
 SetStorageProvider(newProvider: ILocalStorageProvider): Promise<void>
@@ -388,27 +388,40 @@ const result = await cacheManager.ApplyDifferentialUpdate(
 
 ## Single-Entity Operations
 
-For immediate, fine-grained cache updates when a single entity is saved or deleted (no round-trip to server).
+For immediate, fine-grained cache updates when a single entity is saved or deleted (no round-trip to server). Both methods use `CompositeKey` for primary key matching, fully supporting entities with any number of primary key fields.
 
 ### UpsertSingleEntity
 
 Adds or replaces a single record in a cached RunView result:
 
 ```typescript
+import { CompositeKey, KeyValuePair } from '@memberjunction/core';
+
+// Single-field primary key
+const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', entity.ID)]);
 const success = await LocalCacheManager.Instance.UpsertSingleEntity(
     fingerprint,
     entity.GetAll(),           // Plain object from BaseEntity
-    'ID',                      // Primary key field name
+    key,                       // CompositeKey identifying the record
     entity.__mj_UpdatedAt      // New maxUpdatedAt
+);
+
+// Composite primary key (e.g., junction table)
+const compositeKey = CompositeKey.FromKeyValuePairs([
+    new KeyValuePair('UserID', 'u1'),
+    new KeyValuePair('RoleID', 'r2'),
+]);
+await LocalCacheManager.Instance.UpsertSingleEntity(
+    fingerprint, entityData, compositeKey, updatedAt
 );
 // Returns false if fingerprint not found in cache
 ```
 
 Algorithm:
 1. Load cached results by fingerprint
-2. Search for existing record by primary key match
-3. If found: replace in-place. If not: append to array
-4. Persist updated array
+2. Build a `Map<string, unknown>` keyed by `CompositeKey.ToConcatenatedString()` for O(1) lookups
+3. Upsert: set the key → entity data in the map
+4. Persist updated array back to storage
 5. Update registry `rowCount` (derived from array length)
 
 ### RemoveSingleEntity
@@ -416,11 +429,11 @@ Algorithm:
 Removes a single record from a cached RunView result:
 
 ```typescript
+const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 'some-uuid')]);
 const success = await LocalCacheManager.Instance.RemoveSingleEntity(
     fingerprint,
-    'some-uuid',              // Primary key value
-    'ID',                     // Primary key field name
-    new Date().toISOString()  // New maxUpdatedAt
+    key,                       // CompositeKey identifying the record to remove
+    new Date().toISOString()   // New maxUpdatedAt
 );
 // Returns true even if entity wasn't in cache (no-op is OK)
 ```
@@ -462,16 +475,18 @@ flowchart TD
     G --> H[NotifyDataChange via DataChange$]
     G --> I{CacheLocal enabled?}
     I -->|Yes| J[syncLocalCacheForConfig]
-    J --> K[UpsertSingleEntity or RemoveSingleEntity]
+    J --> K[UpsertSingleEntity or RemoveSingleEntity<br/>using CompositeKey]
 
     F -->|1.5s debounce| L[LoadSingleConfig from server]
     L --> M[RunView → updates cache naturally]
     L --> H
 ```
 
+**Note**: LocalCacheManager also independently subscribes to MJGlobal events (including `remote-invalidate`) and updates its own caches. The `syncLocalCacheForConfig` path is only for local save/delete events where BaseEngine handles the immediate mutation — remote events are handled by LocalCacheManager's own `HandleRemoteInvalidateEvent`.
+
 ### syncLocalCacheForConfig (BaseEngine)
 
-When immediate mutation is used and `CacheLocal` is enabled, BaseEngine synchronizes the change to LocalCacheManager:
+When immediate mutation is used and `CacheLocal` is enabled, BaseEngine synchronizes the change to LocalCacheManager using `CompositeKey`:
 
 ```typescript
 protected async syncLocalCacheForConfig(
@@ -489,16 +504,15 @@ protected async syncLocalCacheForConfig(
         MaxRows: -1, StartRow: 0,
     }, connectionPrefix);
 
-    const pkField = entity.EntityInfo.FirstPrimaryKey?.Name || 'ID';
+    // Uses entity.PrimaryKey (CompositeKey) — works with any number of PK fields
+    const key = entity.PrimaryKey;
     const updatedAt = entity.Get('__mj_UpdatedAt') || new Date().toISOString();
 
     if (event.type === 'delete') {
-        const pkValue = entity.PrimaryKey.KeyValuePairs[0]?.Value;
-        await LocalCacheManager.Instance.RemoveSingleEntity(
-            fingerprint, String(pkValue), pkField, updatedAt);
+        await LocalCacheManager.Instance.RemoveSingleEntity(fingerprint, key, updatedAt);
     } else {
         await LocalCacheManager.Instance.UpsertSingleEntity(
-            fingerprint, entity.GetAll(), pkField, updatedAt);
+            fingerprint, entity.GetAll(), key, updatedAt);
     }
 }
 ```
@@ -746,11 +760,16 @@ this._eventListener.subscribe(async (event) => {
 #### Immediate Mutation vs Debounced Refresh
 
 **Immediate mutation** (synchronous, no server round-trip):
-- Conditions: config has no `Filter`, no `OrderBy`, engine doesn't override `AdditionalLoading`
+- Conditions checked by `canUseImmediateMutation(config)`:
+  1. Config has no `Filter` (can't verify new/updated records match the filter)
+  2. Config has no `OrderBy` (can't maintain sort order without full data)
+  3. Engine doesn't override `AdditionalLoading` (no post-processing dependencies)
 - On `save` + `create`: push new entity to array
 - On `save` + `update`: replace entity in array by primary key match
 - On `delete`: splice entity from array by primary key match
 - Syncs change to LocalCacheManager via `UpsertSingleEntity` / `RemoveSingleEntity`
+
+**`skipAdditionalLoadingCheck` parameter**: Callers that invoke `AdditionalLoading()` themselves after applying mutations can pass `canUseImmediateMutation(config, true)` to skip the override check. This is used by `applyRemoteRecordData` which applies all config mutations first, then calls `AdditionalLoading()` once at the end.
 
 **Debounced refresh** (server round-trip, 1.5s debounce):
 - Used when immediate mutation isn't safe (filtered/sorted data, post-processing)
@@ -772,30 +791,77 @@ engine.DataChange$.subscribe(change => {
 
 ### Remote Invalidation Handler
 
-When a `remote-invalidate` event arrives (from another server via GraphQL subscription):
+When a `remote-invalidate` event arrives (from another server via GraphQL subscription), the engine applies changes directly to its in-memory arrays — **no server round-trip needed** when the event includes record data:
+
+```mermaid
+flowchart TD
+    A[remote-invalidate event arrives] --> B{action?}
+    B -->|save + recordData| C[applyRemoteRecordData]
+    B -->|delete + primaryKeyValues| D[applyRemoteDelete]
+    B -->|missing data| E[Fallback: LoadSingleConfig]
+
+    C --> F{canUseImmediateMutation?<br/>skipAdditionalLoadingCheck=true}
+    F -->|Yes| G[Create BaseEntity from JSON<br/>LoadFromData]
+    F -->|No: Filter/OrderBy| E
+    G --> H[Find by PrimaryKey → replace<br/>or append to array]
+    H --> I[AdditionalLoading + NotifyDataChange]
+
+    D --> J[Parse CompositeKey from JSON]
+    J --> K[Find by PrimaryKey.Equals → splice]
+    K --> I
+
+    E --> L[RunView from server<br/>updates cache naturally]
+    L --> I
+```
+
+#### applyRemoteRecordData
+
+For `save` events with record data, the engine creates a BaseEntity instance from the JSON, then upserts it into matching config arrays. This avoids a server round-trip entirely:
 
 ```typescript
-protected async HandleRemoteInvalidateEvent(event: BaseEntityEvent): Promise<boolean> {
-    const entityName = event.entityName?.toLowerCase().trim();
-    if (!entityName) return true;
+// Event payload includes full record data as JSON
+const payload = event.payload as RemoteInvalidatePayload;
+// payload.recordData = '{"ID":"abc","Name":"Updated Name",...}'
 
-    const matchingConfigs = this.Configs.filter(config =>
-        config.AutoRefresh &&
-        config.EntityName?.trim().toLowerCase() === entityName
-    );
+// Engine creates entity, loads JSON, and mutates arrays directly
+const entity = await md.GetEntityObject(entityName, contextUser);
+entity.LoadFromData(JSON.parse(payload.recordData));
 
-    if (matchingConfigs.length === 0) return true;
-
-    for (const config of matchingConfigs) {
-        await this.LoadSingleConfig(config, this._contextUser);
-    }
-
-    if (matchingConfigs.length > 0) {
-        await this.AdditionalLoading(this._contextUser);
-    }
-    return true;
-}
+// Uses canUseImmediateMutation(config, true) — skips AdditionalLoading check
+// because applyRemoteRecordData calls AdditionalLoading() itself after all mutations
 ```
+
+#### applyRemoteDelete
+
+For `delete` events, the engine parses the primary key values and removes matching records:
+
+```typescript
+// payload.primaryKeyValues = '[{"FieldName":"ID","Value":"abc"}]'
+const targetKey = CompositeKey.FromKeyValuePairs(
+    rawPairs.map(kv => new KeyValuePair(kv.FieldName, kv.Value))
+);
+// Finds record by entity.PrimaryKey.Equals(targetKey) and splices it out
+```
+
+#### Fallback Path
+
+If direct apply fails (parse error, filtered config, etc.), the engine falls back to `LoadSingleConfig` which fetches fresh data from the server.
+
+### LocalCacheManager Independent Event Handling
+
+LocalCacheManager subscribes to the **same** `remote-invalidate` MJGlobal events independently from BaseEngine. It handles its own RunView cache updates without coordination:
+
+```mermaid
+flowchart LR
+    A[GraphQL Subscription<br/>remote-invalidate] -->|MJGlobal event| B[BaseEngine<br/>in-memory arrays]
+    A -->|MJGlobal event| C[LocalCacheManager<br/>RunView caches]
+```
+
+- **Save with recordData**: Looks up entity PK fields from `Metadata`, builds `CompositeKey` from the record data, and calls `UpsertSingleEntity` on all matching unfiltered fingerprints. Filtered fingerprints are invalidated.
+- **Delete with primaryKeyValues**: Parses the `CompositeKey` from JSON and calls `RemoveSingleEntity` on all matching fingerprints.
+- **Missing data or error**: Falls back to `InvalidateRunViewResult` for each fingerprint.
+
+This separation means engines don't need to worry about cache sync — LocalCacheManager is self-contained.
 
 ---
 
@@ -919,15 +985,18 @@ type Subscription {
 
 type CacheInvalidationNotification {
     EntityName: String!
-    PrimaryKeyValues: String
-    Action: String!              # 'save', 'delete', etc.
-    SourceServerID: String!      # ProcessUUID of originating server
-    OriginSessionID: String      # Session of the user who made the change (nullable)
+    PrimaryKeyValues: String       # JSON array of {FieldName, Value} pairs (CompositeKey)
+    Action: String!                # 'save' or 'delete'
+    SourceServerID: String!        # ProcessUUID of originating server
+    OriginSessionID: String        # Session of the user who made the change (nullable)
     Timestamp: Timestamp!
+    RecordData: String             # Full entity data as JSON (save events only)
 }
 ```
 
 This is a **broadcast subscription** — no filtering by session. Every connected browser receives every event. Filtering happens client-side.
+
+**RecordData**: For `save` events, the server includes the full entity record as JSON (`entity.GetAll()`). This allows browsers to update their in-memory arrays and caches directly — **no server round-trip needed**. For `delete` events, `RecordData` is omitted (only the primary key values are needed to remove the record).
 
 ### Two Publish Paths
 
@@ -952,12 +1021,18 @@ next: (data) => {
         return;
     }
 
-    // Raise MJGlobal event for BaseEngines to handle
+    // Raise MJGlobal event for both BaseEngine and LocalCacheManager to handle
     const baseEntityEvent: BaseEntityEvent = {
         type: 'remote-invalidate',
         entityName: event.EntityName,
         baseEntity: null,
-        payload: { action: event.Action, sourceServerId: event.SourceServerID },
+        payload: {
+            primaryKeyValues: event.PrimaryKeyValues,
+            action: event.Action,            // 'save' or 'delete'
+            sourceServerId: event.SourceServerID,
+            timestamp: event.Timestamp,
+            recordData: event.RecordData,    // Full entity JSON for saves (undefined for deletes)
+        },
     };
     MJGlobal.Instance.RaiseEvent({
         event: MJEventType.ComponentEvent,
@@ -984,18 +1059,84 @@ The `remote-invalidate` event type was added to `BaseEntityEvent` to support cro
 ```typescript
 type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready'
     | 'save_started' | 'delete_started' | 'load_started'
-    | 'remote-invalidate'  // NEW: cross-server cache invalidation
+    | 'remote-invalidate'  // Cross-server cache invalidation
     | 'other';
 
 baseEntity: BaseEntity | null;  // null for remote-invalidate (no local entity)
 entityName?: string;            // Entity name (used when baseEntity is null)
+payload?: RemoteInvalidatePayload;  // Included for remote-invalidate events
 ```
+
+The `RemoteInvalidatePayload` interface:
+
+```typescript
+export interface RemoteInvalidatePayload {
+    primaryKeyValues: string | null;  // JSON array of {FieldName, Value} pairs
+    action: 'save' | 'delete';       // What happened to the entity
+    sourceServerId: string;           // Which server originated the change
+    timestamp: string;                // When the change occurred
+    recordData?: string;              // Full entity JSON (save events only)
+}
+```
+
+### Reactive Dashboard Pattern
+
+Angular components can subscribe to MJGlobal events to react in real-time when data changes on other browsers/servers:
+
+```typescript
+@Component({ ... })
+export class ModelManagementComponent implements OnDestroy {
+    private destroy$ = new Subject<void>();
+
+    ngOnInit() {
+        // Subscribe to cache invalidation events
+        MJGlobal.Instance.GetEventListener(false).pipe(
+            takeUntil(this.destroy$),
+            filter(e => e.event === MJEventType.ComponentEvent
+                     && e.eventCode === BaseEntity.BaseEventCode),
+            filter(e => {
+                const entityEvent = e.args as BaseEntityEvent;
+                return entityEvent.type === 'remote-invalidate'
+                    && entityEvent.entityName === 'MJ: AI Models';
+            }),
+            // Small delay to let BaseEngine finish its array mutation
+            delay(500),
+        ).subscribe(() => {
+            // Re-read from engine's in-memory arrays (already updated)
+            this.Models = AIEngineBase.Instance.Models;
+            this.cdr.detectChanges();
+        });
+    }
+
+    ngOnDestroy() {
+        this.destroy$.next();
+        this.destroy$.complete();
+    }
+}
+```
+
+This pattern gives **instant UI updates** with zero network calls — the engine's arrays are already mutated by the time the component reads them.
 
 ---
 
 ## Deployment Topologies
 
-### Single Server, No Redis
+### What Works With and Without Redis
+
+| Feature | No Redis | With Redis |
+|---------|----------|------------|
+| **L1 cache** (BaseEngine in-memory arrays) | Yes | Yes |
+| **L2 cache** (IndexedDB/localStorage in browser) | Yes | Yes |
+| **L3 cache** (server-side persistent cache) | In-memory only (lost on restart) | Persistent across restarts |
+| **Same-browser instant updates** (local MJGlobal events) | Yes | Yes |
+| **Cross-browser updates** (same server, GraphQL subscription) | Yes | Yes |
+| **Cross-server updates** (multiple MJAPI instances) | **No** | Yes |
+| **Zero round-trip remote updates** (RecordData in subscription) | Yes | Yes |
+| **Session deduplication** (originating browser skips own events) | Yes | Yes |
+
+**Key takeaway**: Redis is only required for **multi-server coordination**. A single MJAPI instance gets real-time cross-browser push updates, session deduplication, zero-round-trip cache updates, and composite key support — all without Redis.
+
+### Single Server, No Redis (Default)
 
 ```mermaid
 graph TD
@@ -1009,13 +1150,15 @@ graph TD
 
     subgraph "MJAPI"
         Server[ResolverBase]
-        Server -->|"CACHE_INVALIDATION<br/>GraphQL WS"| BB_Engine
+        Server -->|"CACHE_INVALIDATION + RecordData<br/>GraphQL WS"| BB_Engine
         Server -->|"CACHE_INVALIDATION<br/>WS + skip (same session)"| BA_Engine
     end
 ```
 
-- Browser A updates instantly via local MJGlobal events
-- Browser B receives `CACHE_INVALIDATION` via WebSocket and re-fetches
+- Browser A updates instantly via local MJGlobal events (no network call)
+- Browser B receives `CACHE_INVALIDATION` with `RecordData` via WebSocket
+- Browser B's BaseEngine applies the record data directly to arrays — **zero server round-trip**
+- Browser B's LocalCacheManager updates its RunView caches independently
 - No Redis required — works out of the box
 - Server uses InMemoryLocalStorageProvider (cache lost on restart)
 
@@ -1025,6 +1168,7 @@ Same as above, plus:
 - Redis provides persistent L3 cache that survives server restarts
 - Cache data shared across worker processes (if using cluster mode)
 - Foundation for future scale-out to multiple servers
+- To enable: set `REDIS_URL` in `.env` (e.g., `REDIS_URL=redis://localhost:6379`)
 
 ### Multi-Server, With Redis
 
@@ -1042,13 +1186,14 @@ graph TD
     SA <-->|Redis Pub/Sub| Redis[(Redis)]
     SB <-->|Redis Pub/Sub| Redis
 
-    SA -->|GraphQL WS| BA
-    SA -->|GraphQL WS| BC
-    SB -->|GraphQL WS| BB
+    SA -->|"GraphQL WS + RecordData"| BA
+    SA -->|"GraphQL WS + RecordData"| BC
+    SB -->|"GraphQL WS + RecordData"| BB
 ```
 
 - Browser A saves → MJAPI-A handles locally + publishes to Redis
-- MJAPI-B receives via Redis → publishes CACHE_INVALIDATION to Browser B
+- MJAPI-B receives via Redis → publishes CACHE_INVALIDATION (with RecordData) to Browser B
+- Browser B applies changes directly — **no round-trip back to MJAPI-B**
 - MJAPI-A publishes CACHE_INVALIDATION to Browser C (same server, different user)
 - Browser A skips the notification (OriginSessionID match)
 
@@ -1069,7 +1214,7 @@ graph TD
     SC -->|WebSocket| Browsers_C[Connected Browsers]
 ```
 
-All servers share cache state via Redis. All browsers get real-time updates via their server's WebSocket. The system is horizontally scalable — add more MJAPI instances behind the load balancer as traffic grows.
+All servers share cache state via Redis. All browsers get real-time updates via their server's WebSocket. The system is horizontally scalable — add more MJAPI instances behind the load balancer as traffic grows. Record data flows through Redis pub/sub → GraphQL subscription → direct array mutation — no extra round-trips at any tier.
 
 **Important**: WebSocket connections are sticky (a browser stays connected to the same MJAPI instance for the duration of its session). The load balancer should be configured for WebSocket support (e.g., HAProxy with `option http-server-close`).
 
