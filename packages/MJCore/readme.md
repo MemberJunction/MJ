@@ -887,6 +887,8 @@ unsubscribe();
 
 For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
 
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+
 ---
 
 ### DatabaseProviderBase

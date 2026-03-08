@@ -321,3 +321,4 @@ docker exec mj-redis redis-cli INFO stats | grep keyspace
 - [`@memberjunction/generic-database-provider`](../GenericDatabaseProvider/) — Where `LocalStorageProvider` is wired into the data provider chain
 - [`@memberjunction/sqlserver-dataprovider`](../SQLServerDataProvider/) — SQL Server provider (inherits caching from GenericDatabaseProvider)
 - [`@memberjunction/postgresql-dataprovider`](../PostgreSQLDataProvider/) — PostgreSQL provider (inherits caching from GenericDatabaseProvider)
+- [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md) — Comprehensive architecture guide covering Redis cross-server sync, GraphQL cache invalidation, deployment topologies, and troubleshooting
