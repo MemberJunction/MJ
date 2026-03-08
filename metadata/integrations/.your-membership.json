@@ -24,7 +24,7 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "PageNumber",
-            "SupportsIncrementalSync": false,
+            "SupportsIncrementalSync": true,
             "SupportsWrite": false,
             "DefaultQueryParams": {
               "FieldSelection": "ProfileID,FirstName,LastName,EmailAddr,MemberTypeCode,Status,Organization,Phone,Address1,Address2,City,State,PostalCode,Country,JoinDate,RenewalDate,ExpirationDate,MemberSinceDate,Title,WebsiteUrl"
