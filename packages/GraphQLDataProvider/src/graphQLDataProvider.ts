@@ -1483,7 +1483,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = '';
                     }
                 }
-                vars.input[f.CodeName] = val;
+                vars.input[mapper.MapFieldName(f.CodeName)] = val;
             }
 
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
@@ -1502,7 +1502,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         else
                             val = f.OldValue;
                     }
-                    ov.push({Key: f.CodeName, Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    ov.push({Key: mapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }

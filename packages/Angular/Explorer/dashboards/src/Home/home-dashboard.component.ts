@@ -393,9 +393,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       this.navigationService.OpenArtifact(recordId, 'Artifact');
     } else {
       // Default: navigate to record
-      const compositeKey = new CompositeKey();
-      compositeKey.LoadFromSingleKeyValuePair('ID', recordId);
-      this.navigationService.OpenEntityRecord(favorite.Entity, compositeKey);
+      const compositeKey = this.buildCompositeKeyForRecord(favorite.Entity, recordId);
+      if (compositeKey) {
+        this.navigationService.OpenEntityRecord(favorite.Entity, compositeKey);
+      }
     }
   }
 
@@ -419,11 +420,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       case 'report':
         this.navigationService.OpenReport(item.recordId, name || 'Report');
         break;
-      default:
+      default: {
         // Regular record
-        const compositeKey = new CompositeKey();
-        compositeKey.LoadFromSingleKeyValuePair('ID', item.recordId);
-        this.navigationService.OpenEntityRecord(item.entityName, compositeKey);
+        const compositeKey = this.buildCompositeKeyForRecord(item.entityName, item.recordId);
+        if (compositeKey) {
+          this.navigationService.OpenEntityRecord(item.entityName, compositeKey);
+        }
+      }
     }
   }
 

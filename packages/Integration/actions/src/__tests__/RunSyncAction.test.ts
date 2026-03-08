@@ -8,12 +8,15 @@ import { RunSyncAction } from '../RunSyncAction.js';
 let mockRunSyncFn: ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
 vi.mock('@memberjunction/integration-engine', () => {
-    function MockOrchestrator(this: { RunSync: (...args: unknown[]) => unknown }) {
-        this.RunSync = function(...args: unknown[]) {
-            return mockRunSyncFn(...args);
-        };
-    }
-    return { IntegrationOrchestrator: MockOrchestrator };
+    const mockInstance = {
+        RunSync: (...args: unknown[]) => mockRunSyncFn(...args),
+        Config: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+        IntegrationEngine: {
+            Instance: mockInstance,
+        },
+    };
 });
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
