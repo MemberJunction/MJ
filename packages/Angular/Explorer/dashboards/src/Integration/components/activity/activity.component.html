@@ -1,0 +1,346 @@
+<div class="activity-container">
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div class="filter-group filter-pills">
+      @for (status of StatusOptions; track status) {
+        <button class="pill-btn"
+                [class.active]="StatusFilter === status"
+                (click)="SetStatusFilter(status)">
+          {{ status }}
+        </button>
+      }
+    </div>
+
+    <div class="filter-group">
+      <select class="filter-select"
+              [ngModel]="IntegrationFilter ?? ''"
+              (ngModelChange)="SetIntegrationFilter($event || null)">
+        <option value="">All Integrations</option>
+        @for (opt of Integrations; track opt.ID) {
+          <option [value]="opt.ID">{{ opt.Name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="filter-group filter-pills">
+      @for (d of DateOptions; track d.Value) {
+        <button class="pill-btn"
+                [class.active]="DateFilter === d.Value"
+                (click)="SetDateFilter(d.Value)">
+          {{ d.Label }}
+        </button>
+      }
+    </div>
+
+    <div class="filter-group">
+      <input type="text"
+             class="search-input"
+             placeholder="Search integrations..."
+             [(ngModel)]="SearchQuery"
+             (input)="OnSearchChange()" />
+    </div>
+
+    <button class="refresh-btn" (click)="Refresh()" title="Refresh">
+      <i class="fa-solid fa-arrows-rotate"></i>
+    </button>
+  </div>
+
+  <!-- Summary Strip -->
+  @if (!IsLoading && AllRuns.length > 0) {
+    <div class="summary-strip">
+      <div class="summary-badge">
+        <span class="badge-dot dot-blue"></span>
+        <span class="badge-count">{{ TotalRuns }}</span>
+        <span class="badge-label">Total Runs</span>
+      </div>
+      <div class="summary-badge">
+        <span class="badge-dot dot-green"></span>
+        <span class="badge-count count-green">{{ SuccessfulRuns }}</span>
+        <span class="badge-label">Successful</span>
+      </div>
+      <div class="summary-badge">
+        <span class="badge-dot dot-red"></span>
+        <span class="badge-count count-red">{{ FailedRuns }}</span>
+        <span class="badge-label">Failed</span>
+      </div>
+      <div class="summary-badge">
+        <span class="badge-dot dot-blue"></span>
+        <span class="badge-count">{{ TotalRecordsProcessed | number }}</span>
+        <span class="badge-label">Records Processed</span>
+      </div>
+    </div>
+  }
+
+  <!-- Loading state -->
+  @if (IsLoading) {
+    <div class="loading-area">
+      <mj-loading text="Loading activity..." size="medium"></mj-loading>
+    </div>
+  }
+
+  <!-- Empty state -->
+  @if (!IsLoading && FilteredRuns.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-inbox"></i>
+      <p>No runs found for the selected filters.</p>
+    </div>
+  }
+
+  <!-- Split View: Run List + Detail Panel -->
+  @if (!IsLoading && FilteredRuns.length > 0) {
+    <div class="split-view">
+
+      <!-- Left panel: Run list -->
+      <div class="run-list-panel">
+        @for (run of FilteredRuns; track run.ID) {
+          <!-- Run row -->
+          <div class="run-row"
+               [class.selected]="IsSelectedRun(run.ID)"
+               (click)="SelectRun(run.ID)">
+            <div class="run-row-main">
+              <!-- Status indicator -->
+              <span [class]="GetStatusDotClass(run.Status)"></span>
+              <i [class]="GetStatusIcon(run.Status)"
+                 [class.icon-green]="run.Status === 'Success'"
+                 [class.icon-red]="run.Status === 'Failed'"
+                 [class.icon-amber]="run.Status === 'In Progress'"
+                 [class.icon-gray]="run.Status === 'Pending'"
+                 class="status-icon"></i>
+
+              <!-- Integration info -->
+              <div class="run-info">
+                <span class="run-integration">{{ run.Integration }}</span>
+                <span class="run-company">{{ run.Company }}</span>
+              </div>
+
+              <!-- Started time -->
+              <div class="run-meta" [title]="FormatAbsoluteDate(run.StartedAt)">
+                {{ GetRelativeTime(run.StartedAt) }}
+              </div>
+
+              <!-- Duration -->
+              <div class="run-meta run-duration">
+                {{ FormatDuration(run.StartedAt, run.EndedAt) }}
+              </div>
+
+              <!-- Records -->
+              <div class="run-meta run-records">
+                {{ run.TotalRecords | number }}
+              </div>
+
+              <!-- Errors -->
+              <div class="run-meta run-errors" [class.has-errors]="run.ErrorLog">
+                @if (run.ErrorLog) {
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                }
+              </div>
+
+              <!-- Triggered by -->
+              <div class="run-meta run-user">
+                {{ run.RunByUser || 'Scheduled' }}
+              </div>
+
+              <!-- Expand chevron -->
+              <button class="expand-btn"
+                      (click)="ToggleExpand(run.ID); $event.stopPropagation()"
+                      title="Show entity breakdown">
+                <i class="fa-solid fa-chevron-down"
+                   [class.rotated]="IsExpanded(run.ID)"></i>
+              </button>
+            </div>
+
+            <!-- Expanded section: entity breakdown -->
+            @if (IsExpanded(run.ID)) {
+              <div class="expanded-section" (click)="$event.stopPropagation()">
+                @if (IsLoadingExpandedDetails()) {
+                  <div class="expanded-loading">
+                    <mj-loading text="Loading breakdown..." size="small"></mj-loading>
+                  </div>
+                } @else if (GetExpandedDetails().length === 0) {
+                  <div class="expanded-empty">
+                    <i class="fa-solid fa-circle-info"></i>
+                    No entity details for this run.
+                  </div>
+                } @else {
+                  <table class="entity-table">
+                    <thead>
+                      <tr>
+                        <th>Entity</th>
+                        <th class="num-col">Processed</th>
+                        <th class="num-col">Created</th>
+                        <th class="num-col">Updated</th>
+                        <th class="num-col">Deleted</th>
+                        <th class="num-col">Errored</th>
+                        <th class="num-col">Skipped</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (detail of GetExpandedDetails(); track detail.ID) {
+                        <tr [class.error-row]="detail.RecordsErrored > 0">
+                          <td>{{ detail.Entity }}</td>
+                          <td class="num-col">{{ detail.RecordsProcessed | number }}</td>
+                          <td class="num-col created-col">{{ detail.RecordsCreated | number }}</td>
+                          <td class="num-col updated-col">{{ detail.RecordsUpdated | number }}</td>
+                          <td class="num-col">{{ detail.RecordsDeleted | number }}</td>
+                          <td class="num-col error-col">{{ detail.RecordsErrored | number }}</td>
+                          <td class="num-col">{{ detail.RecordsSkipped | number }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+
+                <!-- Error log in expanded view -->
+                @if (run.ErrorLog) {
+                  <div class="error-log-block">
+                    <div class="error-log-label">
+                      <i class="fa-solid fa-triangle-exclamation"></i> Error Log
+                    </div>
+                    <pre class="error-log-content">{{ run.ErrorLog }}</pre>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Right panel: Detail -->
+      @if (SelectedRunID && GetSelectedRun()) {
+        <div class="detail-panel">
+          <div class="detail-header">
+            <div class="detail-header-info">
+              <h3>{{ GetSelectedRun()!.Integration }}</h3>
+              <span [class]="StatusChipClass(GetSelectedRun()!.Status)">
+                <i [class]="GetStatusIcon(GetSelectedRun()!.Status)"></i>
+                {{ GetSelectedRun()!.Status }}
+              </span>
+              <span class="detail-time">{{ FormatDate(GetSelectedRun()!.StartedAt) }}</span>
+            </div>
+            <button class="close-detail-btn" (click)="SelectRun(SelectedRunID!)" title="Close">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Duration bar -->
+          @if (GetSelectedRun()!.StartedAt && GetSelectedRun()!.EndedAt) {
+            <div class="duration-bar-container">
+              <div class="duration-bar-track">
+                <div class="duration-bar-fill"
+                     [style.width.%]="GetDurationBarWidth(GetSelectedRun()!)"></div>
+              </div>
+              <div class="duration-bar-labels">
+                <span>{{ FormatDate(GetSelectedRun()!.StartedAt) }}</span>
+                <span class="duration-bar-value">{{ GetDurationBarLabel(GetSelectedRun()!) }}</span>
+                <span>{{ FormatDate(GetSelectedRun()!.EndedAt) }}</span>
+              </div>
+            </div>
+          }
+
+          <!-- Tabs -->
+          <div class="detail-tabs">
+            <button class="tab-btn" [class.active]="ActiveDetailTab === 'entities'"
+                    (click)="SetDetailTab('entities')">
+              <i class="fa-solid fa-table"></i> Entity Breakdown
+            </button>
+            <button class="tab-btn" [class.active]="ActiveDetailTab === 'watermarks'"
+                    (click)="SetDetailTab('watermarks')">
+              <i class="fa-solid fa-droplet"></i> Watermarks
+            </button>
+          </div>
+
+          <div class="detail-content">
+            <!-- Entity breakdown tab -->
+            @if (ActiveDetailTab === 'entities') {
+              @if (IsLoadingDetail) {
+                <div class="detail-loading">
+                  <mj-loading text="Loading details..." size="small"></mj-loading>
+                </div>
+              } @else if (SelectedRunDetails.length === 0) {
+                <div class="detail-empty">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <p>No entity detail records for this run.</p>
+                </div>
+              } @else {
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>Entity</th>
+                      <th class="num-col">Processed</th>
+                      <th class="num-col">Created</th>
+                      <th class="num-col">Updated</th>
+                      <th class="num-col">Deleted</th>
+                      <th class="num-col">Errors</th>
+                      <th class="num-col">Skipped</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (detail of SelectedRunDetails; track detail.ID) {
+                      <tr [class.error-row]="detail.RecordsErrored > 0">
+                        <td>{{ detail.Entity }}</td>
+                        <td class="num-col">{{ detail.RecordsProcessed | number }}</td>
+                        <td class="num-col created-col">{{ detail.RecordsCreated | number }}</td>
+                        <td class="num-col updated-col">{{ detail.RecordsUpdated | number }}</td>
+                        <td class="num-col">{{ detail.RecordsDeleted | number }}</td>
+                        <td class="num-col error-col">{{ detail.RecordsErrored | number }}</td>
+                        <td class="num-col">{{ detail.RecordsSkipped | number }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+
+              <!-- Error log -->
+              @if (GetSelectedRun()?.ErrorLog) {
+                <div class="error-log-block detail-error-log">
+                  <div class="error-log-label">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Error Log
+                  </div>
+                  <pre class="error-log-content">{{ GetSelectedRun()!.ErrorLog }}</pre>
+                </div>
+              }
+            }
+
+            <!-- Watermarks tab -->
+            @if (ActiveDetailTab === 'watermarks') {
+              @if (IsLoadingWatermarks) {
+                <div class="detail-loading">
+                  <mj-loading text="Loading watermarks..." size="small"></mj-loading>
+                </div>
+              } @else if (WatermarkData.length === 0) {
+                <div class="detail-empty">
+                  <i class="fa-solid fa-droplet-slash"></i>
+                  <p>No watermarks recorded for this integration.</p>
+                </div>
+              } @else {
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>Entity Map</th>
+                      <th>Type</th>
+                      <th>Current Value</th>
+                      <th>Last Applied</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (wm of WatermarkData; track wm.ID) {
+                      <tr>
+                        <td>{{ wm.EntityMap }}</td>
+                        <td><span class="type-badge">{{ wm.WatermarkType }}</span></td>
+                        <td class="mono-cell watermark-value">{{ FormatWatermark(wm.WatermarkValue) }}</td>
+                        <td>{{ FormatDate(wm.LastAppliedAt) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            }
+          </div>
+        </div>
+      }
+
+    </div>
+  }
+
+</div>

@@ -82,6 +82,8 @@
     "@memberjunction/doc-utils": "5.8.0",
     "@memberjunction/encryption": "5.8.0",
     "@memberjunction/entity-communications-base": "5.8.0",
+    "@memberjunction/integration-connectors": "5.8.0",
+    "@memberjunction/integration-engine": "5.8.0",
     "@memberjunction/queue": "5.8.0",
     "@memberjunction/scheduling-actions": "5.8.0",
     "@memberjunction/scheduling-engine": "5.8.0",

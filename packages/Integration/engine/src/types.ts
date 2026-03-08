@@ -214,6 +214,8 @@ export interface SourceObjectInfo {
     ExternalName: string;
     /** Human-readable label (e.g., "Deals", "Members"). */
     ExternalLabel: string;
+    /** Human-readable description of the object's purpose (used for sp_addextendedproperty on the table). */
+    Description?: string;
     /** Fields/columns in the source object. */
     Fields: SourceFieldInfo[];
     /** Primary key field name(s). */
@@ -228,6 +230,8 @@ export interface SourceFieldInfo {
     Name: string;
     /** Human-readable label. */
     Label: string;
+    /** Human-readable description of the field's purpose (used for sp_addextendedproperty on the column). */
+    Description?: string;
     /** Generic source type (e.g., "string", "integer", "datetime", "boolean"). */
     SourceType: string;
     /** Whether the field is required/non-nullable. */

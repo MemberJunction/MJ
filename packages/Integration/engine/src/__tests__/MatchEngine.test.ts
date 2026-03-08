@@ -16,6 +16,14 @@ vi.mock('@memberjunction/core', async () => {
                 return mockRunViewFn(...args);
             }
         },
+        Metadata: class MockMetadata {
+            get Entities() {
+                return [{
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID' },
+                }];
+            }
+        },
     };
 });
 

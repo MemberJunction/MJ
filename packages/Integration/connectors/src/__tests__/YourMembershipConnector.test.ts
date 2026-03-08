@@ -56,19 +56,34 @@ describe('YourMembershipConnector (unit)', () => {
             const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
             const names = objects.map(o => o.Name);
 
-            expect(names).toContain('Members');
-            expect(names).toContain('Events');
-            expect(names).toContain('MemberTypes');
-            expect(names).toContain('Memberships');
-            expect(names).toContain('Groups');
-            expect(names).toContain('Products');
-            expect(names).toContain('DonationFunds');
-            expect(names).toContain('Certifications');
-            expect(objects.length).toBe(8);
+            // Verify a sample of key endpoints
+            const expectedNames = [
+                'Members', 'Events', 'MemberTypes', 'Memberships', 'Groups',
+                'Products', 'DonationFunds', 'Certifications', 'InvoiceItems', 'DuesTransactions',
+                'EventRegistrations', 'EventSessions', 'EventTickets', 'EventCategories',
+                'MemberGroups', 'Connections', 'DonationHistory', 'EngagementScores',
+                'GroupTypes', 'DonationTransactions', 'StoreOrders', 'StoreOrderDetails',
+                'CertificationsJournals', 'CertificationCreditTypes', 'ProductCategories',
+                'CareerOpenings', 'Campaigns', 'GLCodes',
+                'MembersProfiles', 'PeopleIDs', 'MembersGroupsBulk',
+                'FinanceBatches', 'FinanceBatchDetails', 'AllCampaigns', 'CampaignEmailLists',
+                'EventAttendeeTypes', 'EventSessionGroups', 'EventCEUAwards',
+                'EventRegistrationForms', 'EventIDs', 'GroupMembershipLogs',
+                'DuesRules', 'MemberReferrals', 'MemberSubAccounts',
+                'Countries', 'Locations', 'ShippingMethods', 'PaymentProcessors',
+                'CustomTaxLocations', 'QBClasses', 'MembershipModifiers', 'MembershipPromoCodes',
+                'Announcements', 'EmailSuppressionList', 'SponsorRotators',
+                'MemberNetworks', 'MemberFavorites', 'TimeZones',
+            ];
+            for (const name of expectedNames) {
+                expect(names).toContain(name);
+            }
+            expect(objects.length).toBe(58);
 
             for (const obj of objects) {
                 expect(obj.SupportsWrite).toBe(false);
                 expect(obj.Label).toBeTruthy();
+                expect(obj.Description).toBeTruthy();
             }
         });
     });
@@ -116,7 +131,7 @@ describe('YourMembershipConnector (unit)', () => {
             const connector = new YourMembershipConnector();
             const result = await connector.TestConnection(badCi, contextUser);
             expect(result.Success).toBe(false);
-            expect(result.Message).toContain('Configuration is null');
+            expect(result.Message).toContain('No YM credentials found');
         });
 
         it('should return failure on incomplete Configuration', async () => {
@@ -126,6 +141,121 @@ describe('YourMembershipConnector (unit)', () => {
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('must contain');
         });
+    });
+
+    describe('GetDefaultConfiguration', () => {
+        it('should include Members with DetailPath', () => {
+            const connector = new YourMembershipConnector();
+            const config = connector.GetDefaultConfiguration();
+            expect(config.DefaultSchemaName).toBe('YourMembership');
+            expect(config.DefaultObjects.find(o => o.SourceObjectName === 'Members')).toBeDefined();
+        });
+    });
+});
+
+// ─── Detail enrichment tests ────────────────────────────────────
+
+describe('YourMembershipConnector (enrichment)', () => {
+    it('should enrich records with detail data when detail endpoint is available', async () => {
+        const connector = new YourMembershipConnector();
+
+        // Mock MakeRequest to return detail data
+        const mockMakeRequest = vi.fn()
+            // First call: list endpoint
+            .mockResolvedValueOnce({
+                Members: [
+                    { ProfileID: 123, FirstName: 'Jane', LastName: 'Doe' },
+                ],
+            })
+            // Second call: detail endpoint for ProfileID 123 (returns camelCase + nested)
+            .mockResolvedValueOnce({
+                id: 123,
+                firstName: 'Jane',
+                lastName: 'Doe',
+                emailAddress: 'jane@example.com',
+                organization: 'Acme Corp',
+                primaryAddress: {
+                    phone: '555-1234',
+                    address1: '123 Main St',
+                    city: 'Portland',
+                    location: 'Oregon',
+                    postalCode: '97201',
+                    countryName: 'United States',
+                },
+                UsingRedis: true,
+                ServerID: 'WS-1',
+                ResponseStatus: { ErrorCode: 'None' },
+            });
+
+        (connector as unknown as Record<string, unknown>)['MakeRequest'] = mockMakeRequest;
+        (connector as unknown as Record<string, unknown>)['GetSession'] = vi.fn().mockResolvedValue('fake-session');
+        (connector as unknown as Record<string, unknown>)['ParseConfig'] = vi.fn().mockResolvedValue({
+            ClientID: '12345',
+            APIKey: 'key',
+            APIPassword: 'pass',
+        });
+
+        const ctx: FetchContext = {
+            CompanyIntegration: MOCK_CI,
+            ObjectName: 'Members',
+            WatermarkValue: null,
+            BatchSize: 5,
+            ContextUser: contextUser,
+        };
+
+        const result = await connector.FetchChanges(ctx);
+        expect(result.Records.length).toBe(1);
+
+        const record = result.Records[0];
+        // Should have enriched and normalized data from detail endpoint
+        expect(record.Fields['EmailAddr']).toBe('jane@example.com');
+        expect(record.Fields['Phone']).toBe('555-1234');
+        expect(record.Fields['City']).toBe('Portland');
+        expect(record.Fields['State']).toBe('Oregon');
+        expect(record.Fields['PostalCode']).toBe('97201');
+        expect(record.Fields['Organization']).toBe('Acme Corp');
+        expect(record.Fields['Address1']).toBe('123 Main St');
+        // Metadata keys should be filtered out
+        expect(record.Fields['UsingRedis']).toBeUndefined();
+        expect(record.Fields['ServerID']).toBeUndefined();
+        expect(record.Fields['ResponseStatus']).toBeUndefined();
+
+        // Verify detail endpoint was called with correct path
+        expect(mockMakeRequest).toHaveBeenCalledTimes(2);
+        expect(mockMakeRequest).toHaveBeenLastCalledWith(expect.anything(), 'Members/123');
+    });
+
+    it('should gracefully handle detail endpoint failures', async () => {
+        const connector = new YourMembershipConnector();
+
+        const mockMakeRequest = vi.fn()
+            .mockResolvedValueOnce({
+                Members: [
+                    { ProfileID: 456, FirstName: 'Bob', LastName: 'Smith' },
+                ],
+            })
+            .mockRejectedValueOnce(new Error('API timeout'));
+
+        (connector as unknown as Record<string, unknown>)['MakeRequest'] = mockMakeRequest;
+        (connector as unknown as Record<string, unknown>)['GetSession'] = vi.fn().mockResolvedValue('fake-session');
+        (connector as unknown as Record<string, unknown>)['ParseConfig'] = vi.fn().mockResolvedValue({
+            ClientID: '12345',
+            APIKey: 'key',
+            APIPassword: 'pass',
+        });
+
+        const ctx: FetchContext = {
+            CompanyIntegration: MOCK_CI,
+            ObjectName: 'Members',
+            WatermarkValue: null,
+            BatchSize: 5,
+            ContextUser: contextUser,
+        };
+
+        const result = await connector.FetchChanges(ctx);
+        expect(result.Records.length).toBe(1);
+        // Should still have list data even though detail call failed
+        expect(result.Records[0].Fields['FirstName']).toBe('Bob');
     });
 });
 

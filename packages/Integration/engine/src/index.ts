@@ -67,6 +67,8 @@ export type {
     FetchContext,
     FetchBatchResult,
     OperationTimeouts,
+    DefaultIntegrationConfig,
+    DefaultObjectConfig,
 } from './BaseIntegrationConnector.js';
 
 // Factory
@@ -83,5 +85,6 @@ export { WatermarkService } from './WatermarkService.js';
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';
 
-// Orchestrator
-export { IntegrationOrchestrator } from './IntegrationOrchestrator.js';
+// Integration Engine (server-side, wraps IntegrationEngineBase via composition)
+// NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
+export { IntegrationEngine } from './IntegrationEngine.js';

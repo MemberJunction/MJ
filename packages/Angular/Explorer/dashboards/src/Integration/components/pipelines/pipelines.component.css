@@ -1,0 +1,695 @@
+/* =========================================================================
+   Integration Pipelines - Visual SVG Node Graph
+   ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+   Container
+   --------------------------------------------------------------------------- */
+
+.pipelines-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  background: #f8fafc;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Toolbar
+   --------------------------------------------------------------------------- */
+
+.pipelines-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-title i {
+  color: #6366f1;
+}
+
+.integration-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-size: 13px;
+}
+
+.toolbar-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.toolbar-btn:active {
+  background: #e2e8f0;
+}
+
+.zoom-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  min-width: 36px;
+  text-align: center;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Canvas Area
+   --------------------------------------------------------------------------- */
+
+.canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.canvas-wrapper {
+  min-width: 100%;
+  min-height: 100%;
+  background:
+    radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+  background-size: 20px 20px;
+  transition: transform 200ms ease;
+}
+
+.pipeline-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Loading / Empty states
+   --------------------------------------------------------------------------- */
+
+.canvas-loading,
+.canvas-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: #94a3b8;
+}
+
+.canvas-loading i {
+  font-size: 28px;
+  color: #6366f1;
+}
+
+.canvas-loading span {
+  font-size: 14px;
+}
+
+.canvas-empty .empty-icon {
+  font-size: 48px;
+  color: #cbd5e1;
+}
+
+.canvas-empty h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.canvas-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* ---------------------------------------------------------------------------
+   SVG Group Label
+   --------------------------------------------------------------------------- */
+
+.group-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ---------------------------------------------------------------------------
+   Pipeline Nodes (foreignObject content)
+   --------------------------------------------------------------------------- */
+
+.pipeline-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
+  position: relative;
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pipeline-node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Source node accent */
+.source-node {
+  border-left: 3px solid #2563eb;
+}
+
+/* Entity map node accent */
+.entitymap-node {
+  border-left: 3px solid #8b5cf6;
+  cursor: pointer;
+}
+
+.entitymap-node:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.entitymap-node.selected {
+  box-shadow: 0 0 0 2px #2563eb, 0 4px 12px rgba(37, 99, 235, 0.15);
+  border-color: #2563eb;
+}
+
+/* Destination node accent */
+.destination-node {
+  border-left: 3px solid #059669;
+}
+
+/* Status dot on node */
+.node-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Node icon */
+.node-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.source-icon {
+  color: #2563eb;
+}
+
+.dest-icon {
+  color: #059669;
+}
+
+/* Node text */
+.node-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.node-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-sublabel {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entitymap-text {
+  gap: 2px;
+}
+
+.entitymap-label {
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------------
+   Direction Badges
+   --------------------------------------------------------------------------- */
+
+.direction-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.direction-badge.pull {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.direction-badge.push {
+  background: #dcfce7;
+  color: #059669;
+}
+
+.direction-badge.bidirectional {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* ---------------------------------------------------------------------------
+   Detail Panel
+   --------------------------------------------------------------------------- */
+
+.detail-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.1);
+  z-index: 19;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.detail-panel-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 100%;
+  background: #ffffff;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+  transform: translateX(100%);
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-panel.open {
+  transform: translateX(0);
+}
+
+/* Detail header */
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.detail-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.detail-source-name,
+.detail-dest-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.detail-source-name {
+  color: #6366f1;
+}
+
+.detail-dest-name {
+  color: #059669;
+}
+
+.detail-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: all 150ms ease;
+}
+
+.detail-close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Detail stats strip */
+.detail-stats {
+  display: flex;
+  gap: 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.detail-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.status-dot-inline {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Config row */
+.detail-config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.config-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.config-badge i {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Field mapping list */
+.detail-field-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.field-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.field-loading,
+.field-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 20px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.field-table {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+
+.field-table-head {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid #f1f5f9;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 1;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 6px;
+  transition: background 150ms ease;
+}
+
+.field-row:hover {
+  background: #f8fafc;
+}
+
+.field-row.key-field {
+  background: #fefce8;
+}
+
+.field-row.key-field:hover {
+  background: #fef9c3;
+}
+
+.field-col-source,
+.field-col-dest {
+  flex: 1;
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.field-col-arrow {
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.field-direction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field-col-meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  min-width: 50px;
+  justify-content: flex-end;
+}
+
+.meta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.key-badge {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.required-badge {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.transform-badge {
+  background: #ede9fe;
+  color: #7c3aed;
+  font-size: 9px;
+}
+
+/* Detail footer */
+.detail-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6366f1;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.edit-link:hover {
+  color: #4f46e5;
+}
+
+.edit-link i {
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar styling
+   --------------------------------------------------------------------------- */
+
+.canvas-scroll::-webkit-scrollbar,
+.field-table::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.canvas-scroll::-webkit-scrollbar-track,
+.field-table::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.canvas-scroll::-webkit-scrollbar-thumb,
+.field-table::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.canvas-scroll::-webkit-scrollbar-thumb:hover,
+.field-table::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

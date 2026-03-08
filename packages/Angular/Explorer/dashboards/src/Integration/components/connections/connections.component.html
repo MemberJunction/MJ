@@ -1,0 +1,438 @@
+<!-- Main view: Connection card grid -->
+<div class="connections-container">
+
+  <!-- Header -->
+  <div class="connections-header">
+    <div class="header-left">
+      <h2 class="header-title">Connections</h2>
+      <span class="header-count">{{ Connections.length }} integration{{ Connections.length !== 1 ? 's' : '' }}</span>
+    </div>
+    <button kendoButton (click)="OpenWizard()" class="add-connection-btn">
+      <i class="fa-solid fa-plus"></i>
+      Add Integration
+    </button>
+  </div>
+
+  <!-- Loading state -->
+  @if (IsLoading) {
+    <div class="loading-container">
+      <mj-loading text="Loading connections..."></mj-loading>
+    </div>
+  }
+
+  <!-- Empty state -->
+  @if (!IsLoading && Connections.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-plug empty-icon"></i>
+      <h3>No connections yet</h3>
+      <p>Connect your first external system to start syncing data.</p>
+      <button kendoButton (click)="OpenWizard()" themeColor="primary">
+        <i class="fa-solid fa-plus"></i>
+        Add Your First Integration
+      </button>
+    </div>
+  }
+
+  <!-- Card grid -->
+  @if (!IsLoading && Connections.length > 0) {
+    <div class="card-grid">
+      <!-- Connection cards -->
+      @for (summary of Connections; track summary.Integration.ID) {
+        <div class="connection-card">
+          <!-- Card header -->
+          <div class="card-header">
+            <div class="icon-circle" [style.background-color]="GetIconBrandColor(summary.Integration.Integration)">
+              <i [class]="GetIntegrationIcon(summary.Integration.Integration)" class="icon-large"></i>
+            </div>
+            <span [class]="GetStatusBadgeClass(summary)">{{ GetStatusBadge(summary) }}</span>
+          </div>
+
+          <!-- Card body -->
+          <div class="card-body">
+            <div class="card-name">{{ summary.Integration.Name }}</div>
+            <div class="card-company">{{ summary.Integration.Company }}</div>
+            <div class="card-meta">
+              <span class="meta-label">{{ GetSourceTypeLabel(summary) }}</span>
+              <span class="meta-separator">&middot;</span>
+              <span class="meta-value">{{ GetCredentialHint(summary) }}</span>
+            </div>
+            <div class="card-sync-info">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              Syncing {{ GetEntityMapCount(summary.Integration.ID) }} entities
+            </div>
+
+            <!-- Inline test result -->
+            @if (GetCardTestResult(summary.Integration.ID); as testResult) {
+              <div class="card-test-result" [class.test-success]="testResult.Success" [class.test-failure]="!testResult.Success">
+                @if (testResult.Success) {
+                  <i class="fa-solid fa-circle-check"></i>
+                } @else {
+                  <i class="fa-solid fa-circle-xmark"></i>
+                }
+                <span>{{ testResult.Message }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Card footer -->
+          <div class="card-footer">
+            <button kendoButton
+                    look="outline"
+                    [disabled]="!!TestingCardID"
+                    (click)="TestExistingConnection(summary.Integration.ID)">
+              @if (IsTestingCard(summary.Integration.ID)) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              } @else {
+                Test
+              }
+            </button>
+            <button kendoButton look="outline" (click)="OnMenuAction('edit', summary)">
+              Configure
+            </button>
+            @if (IsConnectionActive(summary)) {
+              <button kendoButton themeColor="primary" (click)="RunSync(summary.Integration.ID)">
+                Sync Now
+              </button>
+            }
+            <div class="card-menu-wrapper">
+              <button class="menu-trigger" (click)="ToggleMenu(summary.Integration.ID, $event)">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+              </button>
+              @if (IsMenuOpen(summary.Integration.ID)) {
+                <div class="card-menu-dropdown">
+                  <button class="menu-item" (click)="OnMenuAction('edit', summary)">
+                    <i class="fa-solid fa-pen-to-square"></i> Edit
+                  </button>
+                  <button class="menu-item" (click)="OnMenuAction('disable', summary)">
+                    <i class="fa-solid fa-toggle-off"></i> {{ GetMenuActionLabel(summary) }}
+                  </button>
+                  <button class="menu-item menu-item-danger" (click)="OnMenuAction('delete', summary)">
+                    <i class="fa-solid fa-trash-can"></i> Delete
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- New connection card -->
+      <div class="connection-card new-connection-card" (click)="OpenWizard()">
+        <div class="new-card-content">
+          <div class="new-card-icon">
+            <i class="fa-solid fa-plus"></i>
+          </div>
+          <span class="new-card-label">Add Integration</span>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Wizard modal -->
+@if (WizardOpen) {
+  <div class="wizard-backdrop" (click)="OnBackdropClick($event)" (keydown)="OnKeydown($event)">
+    <div class="wizard-modal">
+      <!-- Modal header -->
+      <div class="wizard-header">
+        <h2 class="wizard-title">New Connection</h2>
+        <button class="wizard-close" (click)="CloseWizard()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Step indicator -->
+      <div class="step-indicator">
+        @for (step of WizardSteps; track step.Number) {
+          <div class="step-item" [class.step-active]="IsStepActive(step.Number)" [class.step-completed]="IsStepCompleted(step.Number)">
+            <div class="step-circle">
+              @if (IsStepCompleted(step.Number)) {
+                <i class="fa-solid fa-check"></i>
+              } @else {
+                {{ step.Number }}
+              }
+            </div>
+            <span class="step-label">{{ step.Label }}</span>
+          </div>
+          @if (step.Number < WizardSteps.length) {
+            <div class="step-line" [class.step-line-active]="IsStepCompleted(step.Number)"></div>
+          }
+        }
+      </div>
+
+      <!-- Step content -->
+      <div class="wizard-body">
+
+        <!-- Step 1: Choose Integration -->
+        @if (WizardStep === 1) {
+          <div class="step-content">
+            <h3 class="step-title">What system do you want to connect?</h3>
+            <div class="search-bar">
+              <i class="fa-solid fa-search search-icon"></i>
+              <input type="text"
+                     class="search-input"
+                     placeholder="Search integrations..."
+                     [(ngModel)]="SearchQuery" />
+            </div>
+
+            @if (FilteredIntegrations.length === 0 && AvailableIntegrations.length === 0) {
+              <div class="no-integrations">
+                <i class="fa-solid fa-puzzle-piece"></i>
+                <p>No integrations configured</p>
+                <span class="no-integrations-hint">Configure integration definitions in the admin area first.</span>
+              </div>
+            } @else if (FilteredIntegrations.length === 0) {
+              <div class="no-integrations">
+                <i class="fa-solid fa-search"></i>
+                <p>No matching integrations</p>
+              </div>
+            } @else {
+              <div class="integration-picker-grid">
+                @for (def of FilteredIntegrations; track def.ID) {
+                  <div class="integration-picker-card"
+                       [class.picker-selected]="IsSelectedIntegration(def)"
+                       (click)="SelectIntegration(def)">
+                    <div class="picker-icon-circle" [style.background-color]="GetIconBrandColor(def.Name)">
+                      <i [class]="GetIntegrationIcon(def.Name)"></i>
+                    </div>
+                    <div class="picker-name">{{ def.Name }}</div>
+                    @if (def.Description) {
+                      <div class="picker-description">{{ def.Description }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Step 2: Configure Connection -->
+        @if (WizardStep === 2) {
+          <div class="step-content">
+            <h3 class="step-title">Set up your connection</h3>
+            <div class="form-group">
+              <label class="form-label" for="connectionName">Connection Name</label>
+              <input id="connectionName"
+                     type="text"
+                     class="form-input"
+                     placeholder="e.g. Production HubSpot"
+                     [(ngModel)]="ConnectionName" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="companySelect">Company</label>
+              @if (NeedsCompanyPicker) {
+                <select id="companySelect" class="form-input" [(ngModel)]="SelectedCompanyID">
+                  <option [ngValue]="null" disabled>Select a company...</option>
+                  @for (company of Companies; track company.ID) {
+                    <option [value]="company.ID">{{ company.Name }}</option>
+                  }
+                </select>
+              } @else if (Companies.length === 1) {
+                <input type="text" class="form-input" [value]="Companies[0].Name" disabled />
+              } @else {
+                <div class="form-hint">No companies available. Create one in the admin area.</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="connectionDescription">Description <span class="optional-label">(optional)</span></label>
+              <textarea id="connectionDescription"
+                        class="form-input form-textarea"
+                        placeholder="Notes about this connection..."
+                        [(ngModel)]="ConnectionDescription"
+                        rows="3"></textarea>
+            </div>
+
+            <!-- Credential section -->
+            <div class="form-group">
+              <label class="form-label">Credential</label>
+              @if (SelectedCredential) {
+                <div class="credential-selected">
+                  <div class="credential-info">
+                    <i class="fa-solid fa-key"></i>
+                    <span>{{ SelectedCredential.Name }}</span>
+                  </div>
+                  <button class="credential-clear" (click)="ClearCredential()">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              } @else {
+                <div class="credential-actions">
+                  <button kendoButton look="outline" (click)="ShowExistingCredentials()">
+                    <i class="fa-solid fa-key"></i>
+                    Choose Existing Credential
+                  </button>
+                  <button kendoButton look="outline" (click)="OpenCredentialDialog()">
+                    <i class="fa-solid fa-plus"></i>
+                    Create New Credential
+                  </button>
+                </div>
+              }
+
+              @if (IsLoadingCredentials) {
+                <div class="credential-loading">
+                  <mj-loading text="Loading credentials..." size="small"></mj-loading>
+                </div>
+              }
+
+              @if (!IsLoadingCredentials && ExistingCredentials.length > 0 && !SelectedCredential) {
+                <div class="credential-list">
+                  @for (cred of ExistingCredentials; track cred.ID) {
+                    <div class="credential-list-item" (click)="SelectExistingCredential(cred)">
+                      <i class="fa-solid fa-key"></i>
+                      <span>{{ cred.Name }}</span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Step 3: Test Connection -->
+        @if (WizardStep === 3) {
+          <div class="step-content step-content-centered">
+            <h3 class="step-title">Let's verify everything works</h3>
+
+            @if (!TestResult && !IsTesting) {
+              <div class="test-prompt">
+                <button kendoButton
+                        themeColor="primary"
+                        size="large"
+                        (click)="TestNewConnection()">
+                  <i class="fa-solid fa-vial"></i>
+                  Test Connection
+                </button>
+                <p class="test-hint">We'll verify we can reach your system and authenticate.</p>
+              </div>
+            }
+
+            @if (IsTesting) {
+              <div class="test-running">
+                <div class="test-spinner">
+                  <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
+                </div>
+                <p>Testing connection...</p>
+              </div>
+            }
+
+            @if (TestResult) {
+              <div class="test-result" [class.test-result-success]="TestResult.Success" [class.test-result-failure]="!TestResult.Success">
+                <div class="test-result-icon">
+                  @if (TestResult.Success) {
+                    <i class="fa-solid fa-circle-check"></i>
+                  } @else {
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  }
+                </div>
+                <div class="test-result-message">{{ TestResult.Message }}</div>
+                @if (TestResult.Success && TestResult.ServerVersion) {
+                  <div class="test-result-detail">
+                    Server version: {{ TestResult.ServerVersion }}
+                  </div>
+                }
+                @if (!TestResult.Success) {
+                  <button kendoButton look="outline" (click)="TestNewConnection()" class="test-retry-btn">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Retry
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Step 4: Quick Setup -->
+        @if (WizardStep === 4) {
+          <div class="step-content">
+            <h3 class="step-title">Configure what to sync</h3>
+
+            @if (IsDiscovering) {
+              <div class="discovery-loading">
+                <mj-loading text="Discovering available objects..."></mj-loading>
+              </div>
+            }
+
+            @if (!IsDiscovering && DiscoveredObjects.length === 0) {
+              <div class="no-integrations">
+                <i class="fa-solid fa-cube"></i>
+                <p>No objects discovered</p>
+                <span class="no-integrations-hint">You can configure entity maps manually later.</span>
+              </div>
+            }
+
+            @if (!IsDiscovering && DiscoveredObjects.length > 0) {
+              <div class="discovered-list">
+                @for (obj of DiscoveredObjects; track obj.Name) {
+                  <div class="discovered-item">
+                    <div class="discovered-info">
+                      <span class="discovered-name">{{ obj.Name }}</span>
+                      @if (obj.RecordCount != null) {
+                        <span class="discovered-count">~{{ obj.RecordCount }} records</span>
+                      }
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" [checked]="obj.Selected" (change)="ToggleDiscoveredObject(obj)" />
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                }
+              </div>
+              <div class="quick-setup-summary">
+                {{ SelectedDiscoveredCount }} object{{ SelectedDiscoveredCount !== 1 ? 's' : '' }} selected
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Modal footer -->
+      <div class="wizard-footer">
+        <div class="footer-left">
+          @if (WizardStep === 4) {
+            <button kendoButton look="flat" (click)="SkipQuickSetup()">
+              Skip for now
+            </button>
+          }
+        </div>
+        <div class="footer-right">
+          @if (WizardStep > 1) {
+            <button kendoButton look="outline" (click)="PreviousStep()">
+              Back
+            </button>
+          }
+          @if (WizardStep < 4) {
+            <button kendoButton
+                    themeColor="primary"
+                    [disabled]="IsNextDisabled"
+                    (click)="NextStep()">
+              {{ NextButtonLabel }}
+            </button>
+          } @else {
+            <button kendoButton
+                    themeColor="primary"
+                    [disabled]="IsSaving"
+                    (click)="FinishWizard()">
+              @if (IsSaving) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Saving...
+              } @else {
+                Finish
+              }
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Credential dialog -->
+@if (ShowCredentialDialog) {
+  <mj-credential-dialog
+    [Visible]="true"
+    [PreselectedTypeId]="PreselectedCredentialTypeId"
+    (close)="OnCredentialDialogClose($event)">
+  </mj-credential-dialog>
+}

@@ -1,6 +1,22 @@
 import { Injectable } from '@angular/core';
-import { RunView, IRunViewProvider } from '@memberjunction/core';
+import { Metadata, RunView, IRunViewProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import {
+  MJCompanyIntegrationEntityMapEntity,
+  MJCompanyIntegrationFieldMapEntity
+} from '@memberjunction/core-entities';
+import {
+  GraphQLDataProvider,
+  GraphQLIntegrationClient,
+  GraphQLActionClient,
+  DiscoveredObjectResult,
+  DiscoveredFieldResult,
+  DiscoveryResult,
+  ConnectionTestGraphQLResult,
+  SchemaPreviewObjectInput,
+  SchemaPreviewResult,
+  DefaultConfigResult
+} from '@memberjunction/graphql-dataprovider';
 
 /**
  * Simple row types for read-only data loaded via ResultType: 'simple'
@@ -95,6 +111,7 @@ export interface IntegrationDefinitionRow {
   BatchMaxRequestCount: number;
   BatchRequestWaitTime: number;
   CredentialTypeID: string | null;
+  SourceTypeID: string | null;
 }
 
 /** Aggregated summary for a single integration, used by the Control Tower UI */
@@ -138,6 +155,61 @@ export interface DailyRecordCount {
   Records: number;
 }
 
+/** Schedule row for the Schedules component (includes new scheduling fields) */
+export interface ScheduleRow {
+  ID: string;
+  Name: string;
+  Integration: string;
+  Company: string;
+  IsActive: boolean | null;
+  ScheduleEnabled: boolean;
+  ScheduleType: 'Manual' | 'Interval' | 'Cron';
+  ScheduleIntervalMinutes: number | null;
+  CronExpression: string | null;
+  NextScheduledRunAt: string | null;
+  LastScheduledRunAt: string | null;
+  IsLocked: boolean;
+  LockedAt: string | null;
+}
+
+/** Watermark row for the Activity detail panel */
+export interface WatermarkRow {
+  ID: string;
+  EntityMapID: string;
+  WatermarkType: string;
+  WatermarkValue: string | null;
+  Direction: 'Pull' | 'Push';
+  EntityMap: string;
+}
+
+/** Shared icon resolution map for integration names to Font Awesome icon classes */
+const INTEGRATION_ICON_MAP: Array<{ Pattern: RegExp; Icon: string }> = [
+  { Pattern: /hubspot/i, Icon: 'fa-brands fa-hubspot' },
+  { Pattern: /salesforce/i, Icon: 'fa-brands fa-salesforce' },
+  { Pattern: /google/i, Icon: 'fa-brands fa-google' },
+  { Pattern: /microsoft|dynamics|azure/i, Icon: 'fa-brands fa-microsoft' },
+  { Pattern: /slack/i, Icon: 'fa-brands fa-slack' },
+  { Pattern: /jira|atlassian/i, Icon: 'fa-brands fa-atlassian' },
+  { Pattern: /github/i, Icon: 'fa-brands fa-github' },
+  { Pattern: /stripe/i, Icon: 'fa-brands fa-stripe' },
+  { Pattern: /shopify/i, Icon: 'fa-brands fa-shopify' },
+  { Pattern: /mailchimp/i, Icon: 'fa-brands fa-mailchimp' },
+  { Pattern: /wordpress/i, Icon: 'fa-brands fa-wordpress' },
+  { Pattern: /dropbox/i, Icon: 'fa-brands fa-dropbox' },
+  { Pattern: /csv|file|import/i, Icon: 'fa-solid fa-file-csv' },
+  { Pattern: /postgres|mysql|sql|database|db/i, Icon: 'fa-solid fa-database' },
+  { Pattern: /api|rest|graphql/i, Icon: 'fa-solid fa-code' },
+  { Pattern: /member|membership/i, Icon: 'fa-solid fa-users' },
+  { Pattern: /email|mail/i, Icon: 'fa-solid fa-envelope' },
+  { Pattern: /calendar|event/i, Icon: 'fa-solid fa-calendar' }
+];
+
+/** Resolve an integration name to a Font Awesome icon class */
+export function ResolveIntegrationIcon(name: string): string {
+  const match = INTEGRATION_ICON_MAP.find(m => m.Pattern.test(name));
+  return match ? match.Icon : 'fa-solid fa-plug';
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -145,7 +217,7 @@ export class IntegrationDataService {
 
   async LoadIntegrationSummaries(provider?: IRunViewProvider | null): Promise<IntegrationSummary[]> {
     const rv = this.createRunView(provider);
-    const [integrationsResult, runsResult] = await rv.RunViews([
+    const [integrationsResult, runsResult, sourceTypesResult, defsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Company Integrations',
         ExtraFilter: '',
@@ -162,13 +234,31 @@ export class IntegrationDataService {
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: Integration Source Types',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        Fields: ['ID', 'Name', 'Description', 'DriverClass', 'IconClass', 'Status'],
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: Integrations',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
+                 'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
+                 'CredentialTypeID', 'SourceTypeID'],
+        ResultType: 'simple'
       }
     ]);
 
     const integrations = integrationsResult.Results as IntegrationRow[];
     const runs = runsResult.Results as IntegrationRunRow[];
+    const sourceTypes = sourceTypesResult.Results as SourceTypeRow[];
+    const defs = defsResult.Results as IntegrationDefinitionRow[];
 
-    return integrations.map(integration => this.buildSummary(integration, runs));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, defs));
   }
 
   async LoadEntityMaps(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<EntityMapRow[]> {
@@ -236,7 +326,7 @@ export class IntegrationDataService {
       OrderBy: 'Name',
       Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
                'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
-               'CredentialTypeID'],
+               'CredentialTypeID', 'SourceTypeID'],
       ResultType: 'simple'
     });
     return result.Results;
@@ -329,13 +419,327 @@ export class IntegrationDataService {
     return this.computeRelativeTime(dateStr);
   }
 
+  // --- Entity Map CRUD ---
+
+  async CreateEntityMap(params: {
+    CompanyIntegrationID: string;
+    ExternalObjectName: string;
+    ExternalObjectLabel?: string;
+    EntityID: string;
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    ConflictResolution?: 'SourceWins' | 'DestWins' | 'MostRecent' | 'Manual';
+    Priority?: number;
+    DeleteBehavior?: 'SoftDelete' | 'DoNothing' | 'HardDelete';
+  }): Promise<MJCompanyIntegrationEntityMapEntity | null> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    em.NewRecord();
+    em.CompanyIntegrationID = params.CompanyIntegrationID;
+    em.ExternalObjectName = params.ExternalObjectName;
+    if (params.ExternalObjectLabel) em.ExternalObjectLabel = params.ExternalObjectLabel;
+    em.EntityID = params.EntityID;
+    em.SyncDirection = params.SyncDirection ?? 'Pull';
+    em.ConflictResolution = params.ConflictResolution ?? 'SourceWins';
+    em.Priority = params.Priority ?? 0;
+    em.DeleteBehavior = params.DeleteBehavior ?? 'SoftDelete';
+    em.Status = 'Active';
+    em.SyncEnabled = true;
+
+    const saved = await em.Save();
+    if (!saved) {
+      console.error('[IntegrationDataService] Failed to create entity map:', em.LatestResult?.CompleteMessage);
+      return null;
+    }
+    return em;
+  }
+
+  async DeleteEntityMap(entityMapID: string): Promise<boolean> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    await em.Load(entityMapID);
+    return em.Delete();
+  }
+
+  async ToggleEntityMapEnabled(entityMapID: string, enabled: boolean): Promise<boolean> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    await em.Load(entityMapID);
+    em.SyncEnabled = enabled;
+    return em.Save();
+  }
+
+  // --- Field Map CRUD ---
+
+  async CreateFieldMap(params: {
+    EntityMapID: string;
+    SourceFieldName: string;
+    SourceFieldLabel?: string;
+    DestinationFieldName: string;
+    DestinationFieldLabel?: string;
+    IsKeyField?: boolean;
+    IsRequired?: boolean;
+    Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
+    TransformPipeline?: string | null;
+    Priority?: number;
+  }): Promise<MJCompanyIntegrationFieldMapEntity | null> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    fm.NewRecord();
+    fm.EntityMapID = params.EntityMapID;
+    fm.SourceFieldName = params.SourceFieldName;
+    if (params.SourceFieldLabel) fm.SourceFieldLabel = params.SourceFieldLabel;
+    fm.DestinationFieldName = params.DestinationFieldName;
+    if (params.DestinationFieldLabel) fm.DestinationFieldLabel = params.DestinationFieldLabel;
+    fm.IsKeyField = params.IsKeyField ?? false;
+    fm.IsRequired = params.IsRequired ?? false;
+    fm.Direction = params.Direction ?? 'SourceToDest';
+    if (params.TransformPipeline !== undefined) fm.TransformPipeline = params.TransformPipeline;
+    fm.Status = 'Active';
+    fm.Priority = params.Priority ?? 0;
+
+    const saved = await fm.Save();
+    if (!saved) {
+      console.error('[IntegrationDataService] Failed to create field map:', fm.LatestResult?.CompleteMessage);
+      return null;
+    }
+    return fm;
+  }
+
+  async DeleteFieldMap(fieldMapID: string): Promise<boolean> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    await fm.Load(fieldMapID);
+    return fm.Delete();
+  }
+
+  async UpdateFieldMap(fieldMapID: string, updates: {
+    SourceFieldName?: string;
+    DestinationFieldName?: string;
+    IsKeyField?: boolean;
+    IsRequired?: boolean;
+    Direction?: 'SourceToDest' | 'DestToSource' | 'Both';
+    Status?: 'Active' | 'Inactive';
+    TransformPipeline?: string | null;
+  }): Promise<boolean> {
+    const md = new Metadata();
+    const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
+    await fm.Load(fieldMapID);
+    if (updates.SourceFieldName !== undefined) fm.SourceFieldName = updates.SourceFieldName;
+    if (updates.DestinationFieldName !== undefined) fm.DestinationFieldName = updates.DestinationFieldName;
+    if (updates.IsKeyField !== undefined) fm.IsKeyField = updates.IsKeyField;
+    if (updates.IsRequired !== undefined) fm.IsRequired = updates.IsRequired;
+    if (updates.Direction !== undefined) fm.Direction = updates.Direction;
+    if (updates.Status !== undefined) fm.Status = updates.Status;
+    if (updates.TransformPipeline !== undefined) fm.TransformPipeline = updates.TransformPipeline;
+    return fm.Save();
+  }
+
+  /** Load available MJ entities for mapping target selection */
+  async LoadMJEntities(provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string }>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ ID: string; Name: string }>({
+      EntityName: 'MJ: Entities',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      Fields: ['ID', 'Name'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load entity fields for a given entity (for field mapping destination picker) */
+  async LoadEntityFields(entityID: string, provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string; Type: string; IsRequired: boolean }>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ ID: string; Name: string; Type: string; IsRequired: boolean }>({
+      EntityName: 'MJ: Entity Fields',
+      ExtraFilter: `EntityID='${entityID}'`,
+      OrderBy: 'Sequence',
+      Fields: ['ID', 'Name', 'Type', 'IsRequired'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  // --- Discovery (via GraphQL) ---
+
+  /** Discover external objects available for a company integration */
+  async DiscoverObjects(companyIntegrationID: string): Promise<DiscoveryResult<DiscoveredObjectResult[]>> {
+    const client = this.getIntegrationClient();
+    return client.DiscoverObjects(companyIntegrationID);
+  }
+
+  /** Discover fields on a specific external object */
+  async DiscoverFields(companyIntegrationID: string, objectName: string): Promise<DiscoveryResult<DiscoveredFieldResult[]>> {
+    const client = this.getIntegrationClient();
+    return client.DiscoverFields(companyIntegrationID, objectName);
+  }
+
+  /** Generate DDL preview for creating tables from discovered objects */
+  async SchemaPreview(
+    companyIntegrationID: string,
+    objects: SchemaPreviewObjectInput[],
+    platform: string = 'sqlserver'
+  ): Promise<SchemaPreviewResult> {
+    const client = this.getIntegrationClient();
+    return client.SchemaPreview(companyIntegrationID, objects, platform);
+  }
+
+  /** Get the connector's default configuration for quick setup */
+  async GetDefaultConfig(companyIntegrationID: string): Promise<DefaultConfigResult> {
+    const client = this.getIntegrationClient();
+    return client.GetDefaultConfig(companyIntegrationID);
+  }
+
+  /** Test connection to the external system */
+  async TestConnection(companyIntegrationID: string): Promise<ConnectionTestGraphQLResult> {
+    const client = this.getIntegrationClient();
+    return client.TestConnection(companyIntegrationID);
+  }
+
+  /** Preview source data from the external system via connector's FetchChanges */
+  async PreviewSourceData(
+    companyIntegrationID: string,
+    objectName: string,
+    limit: number = 5
+  ): Promise<Array<Record<string, string | number | boolean | null>>> {
+    const client = this.getIntegrationClient();
+    const result = await client.PreviewData(companyIntegrationID, objectName, limit);
+    if (!result.Success || !result.Records) {
+      console.warn('[IntegrationDataService] PreviewSourceData failed:', result.Message);
+      return [];
+    }
+    return result.Records.map(r => {
+      try {
+        return JSON.parse(r.Data) as Record<string, string | number | boolean | null>;
+      } catch {
+        return { _raw: r.Data } as Record<string, string | number | boolean | null>;
+      }
+    });
+  }
+
+  /** Preview destination data by loading a few records from the target entity */
+  async PreviewDestinationData(
+    entityID: string,
+    limit: number = 5,
+    provider?: IRunViewProvider | null
+  ): Promise<Array<Record<string, string | number | boolean | null>>> {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    if (!entityInfo) return [];
+
+    // Load first N fields (skip internal __mj fields) to keep preview compact
+    const fields = entityInfo.Fields
+      .filter(f => !f.Name.startsWith('__mj'))
+      .slice(0, 8)
+      .map(f => f.Name);
+
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<Record<string, string | number | boolean | null>>({
+      EntityName: entityInfo.Name,
+      ExtraFilter: '',
+      OrderBy: `${fields[0]} ASC`,
+      MaxRows: limit,
+      Fields: fields,
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Run an integration sync via the "Run Integration Sync" action */
+  async RunSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string }> {
+    const actionID = await this.lookupActionID('Run Integration Sync');
+    if (!actionID) {
+      return {
+        Success: false,
+        Message: 'Action "Run Integration Sync" not found. Ensure the action is registered.'
+      };
+    }
+
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    const result = await actionClient.RunAction(actionID, [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' }
+    ]);
+    return { Success: result.Success, Message: result.Message ?? '' };
+  }
+
+  /** Load schedule data for all company integrations (includes new scheduling fields) */
+  async LoadSchedules(provider?: IRunViewProvider | null): Promise<ScheduleRow[]> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<ScheduleRow>({
+      EntityName: 'MJ: Company Integrations',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      Fields: ['ID', 'Name', 'Integration', 'Company', 'IsActive',
+               'ScheduleEnabled', 'ScheduleType', 'ScheduleIntervalMinutes',
+               'CronExpression', 'NextScheduledRunAt', 'LastScheduledRunAt',
+               'IsLocked', 'LockedAt'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load sync watermarks for a specific company integration's entity maps */
+  async LoadWatermarks(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<WatermarkRow[]> {
+    const rv = this.createRunView(provider);
+    // First get entity maps for this integration, then load their watermarks
+    const entityMaps = await this.LoadEntityMaps(companyIntegrationID, provider);
+    if (entityMaps.length === 0) return [];
+
+    const mapIDs = entityMaps.map(em => `'${em.ID}'`).join(',');
+    const result = await rv.RunView<WatermarkRow>({
+      EntityName: 'MJ: Company Integration Sync Watermarks',
+      ExtraFilter: `EntityMapID IN (${mapIDs})`,
+      OrderBy: 'EntityMap',
+      Fields: ['ID', 'EntityMapID', 'WatermarkType', 'WatermarkValue', 'Direction', 'EntityMap'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  /** Load entity map count per company integration (used by Overview cards) */
+  async LoadEntityMapCounts(provider?: IRunViewProvider | null): Promise<Map<string, number>> {
+    const rv = this.createRunView(provider);
+    const result = await rv.RunView<{ CompanyIntegrationID: string }>({
+      EntityName: 'MJ: Company Integration Entity Maps',
+      ExtraFilter: 'SyncEnabled=1',
+      Fields: ['CompanyIntegrationID'],
+      ResultType: 'simple'
+    });
+    const counts = new Map<string, number>();
+    for (const row of result.Results) {
+      const key = row.CompanyIntegrationID.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  private async lookupActionID(actionName: string): Promise<string | null> {
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string }>({
+      EntityName: 'MJ: Actions',
+      ExtraFilter: `Name='${actionName}'`,
+      Fields: ['ID'],
+      MaxRows: 1,
+      ResultType: 'simple'
+    });
+    return result.Results.length > 0 ? result.Results[0].ID : null;
+  }
+
+  private getIntegrationClient(): GraphQLIntegrationClient {
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    return new GraphQLIntegrationClient(provider);
+  }
+
   private createRunView(provider?: IRunViewProvider | null): RunView {
     return new RunView(provider ?? null);
   }
 
   private buildSummary(
     integration: IntegrationRow,
-    allRuns: IntegrationRunRow[]
+    allRuns: IntegrationRunRow[],
+    sourceTypes: SourceTypeRow[],
+    defs: IntegrationDefinitionRow[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
@@ -345,10 +749,11 @@ export class IntegrationDataService {
     const totalRecordsSyncedToday = this.computeRecordsSyncedToday(integrationRuns);
     const totalErrors = integrationRuns.filter(r => r.Status === 'Failed').length;
     const durationMs = this.computeDuration(latestRun);
+    const sourceType = this.resolveSourceType(integration, defs, sourceTypes);
 
     return {
       Integration: integration,
-      SourceType: null,
+      SourceType: sourceType,
       LatestRun: latestRun,
       RecentRuns: recentRuns,
       StatusColor: statusColor,
@@ -357,6 +762,17 @@ export class IntegrationDataService {
       TotalErrors: totalErrors,
       DurationMs: durationMs
     };
+  }
+
+  private resolveSourceType(
+    integration: IntegrationRow,
+    defs: IntegrationDefinitionRow[],
+    sourceTypes: SourceTypeRow[]
+  ): SourceTypeRow | null {
+    // Match CompanyIntegration.Integration (name) to Integration definition, then look up SourceTypeID
+    const def = defs.find(d => d.Name === integration.Integration);
+    if (!def?.SourceTypeID) return null;
+    return sourceTypes.find(st => UUIDsEqual(st.ID, def.SourceTypeID)) ?? null;
   }
 
   private buildActivityFeedItem(run: IntegrationRunRow): ActivityFeedItem {
