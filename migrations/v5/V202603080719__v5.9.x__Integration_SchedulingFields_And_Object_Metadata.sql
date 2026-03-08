@@ -28,6 +28,10 @@ ALTER TABLE ${flyway:defaultSchema}.CompanyIntegration ADD
     LockExpiresAt DATETIMEOFFSET NULL;
 GO
 
+-- we have a custom base view for vwCompanyIntegrations, must refresh it so rest of codegen picks up the changes
+EXEC sp_refreshview '__mj.vwCompanyIntegrations'
+GO
+
 -- Add extended properties for documentation
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Whether automatic sync scheduling is enabled for this integration', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CompanyIntegration', @level2type=N'COLUMN', @level2name=N'ScheduleEnabled';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CompanyIntegration', @level2type=N'COLUMN', @level2name=N'ScheduleType';
@@ -300,7 +304,7 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Active, Deprecated
 
 
 
--- CODE GEN RUN
+-- CODE GEN RUN 
 /* SQL generated to create new entity MJ: Integration Objects */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -326,7 +330,7 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Active, Deprecated
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'a376650b-0958-4b75-8122-e3bd4e2085f2',
+         '86d3ed6f-2d1d-43f6-9777-fd9672fa9021',
          'MJ: Integration Objects',
          'Integration Objects',
          'Describes an external object or endpoint exposed by an integration (e.g., Members, Events, Invoices)',
@@ -352,22 +356,22 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Active, Deprecated
 /* SQL generated to add new entity MJ: Integration Objects to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a376650b-0958-4b75-8122-e3bd4e2085f2', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '86d3ed6f-2d1d-43f6-9777-fd9672fa9021', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Objects for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('a376650b-0958-4b75-8122-e3bd4e2085f2', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('86d3ed6f-2d1d-43f6-9777-fd9672fa9021', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Objects for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('a376650b-0958-4b75-8122-e3bd4e2085f2', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('86d3ed6f-2d1d-43f6-9777-fd9672fa9021', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Objects for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('a376650b-0958-4b75-8122-e3bd4e2085f2', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                                                   ('86d3ed6f-2d1d-43f6-9777-fd9672fa9021', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to create new entity MJ: Integration Object Fields */
 
@@ -394,7 +398,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '3cc4adca-ce0c-47e9-aa8d-0b7c43e3458b',
+         '3630cbfd-4c85-4b24-8a51-88d67389373e',
          'MJ: Integration Object Fields',
          'Integration Object Fields',
          'Describes a field on an integration object, mirroring EntityField column patterns for type compatibility',
@@ -420,22 +424,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Integration Object Fields to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3cc4adca-ce0c-47e9-aa8d-0b7c43e3458b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3630cbfd-4c85-4b24-8a51-88d67389373e', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Object Fields for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cc4adca-ce0c-47e9-aa8d-0b7c43e3458b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('3630cbfd-4c85-4b24-8a51-88d67389373e', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Object Fields for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cc4adca-ce0c-47e9-aa8d-0b7c43e3458b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('3630cbfd-4c85-4b24-8a51-88d67389373e', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Integration Object Fields for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cc4adca-ce0c-47e9-aa8d-0b7c43e3458b', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                                                   ('3630cbfd-4c85-4b24-8a51-88d67389373e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.IntegrationObjectField */
 ALTER TABLE [${flyway:defaultSchema}].[IntegrationObjectField] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
@@ -451,7 +455,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1f26c73-2300-40e8-ada7-6485522b2df2' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d811e36-6c67-4927-957c-cf3692941c43' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleEnabled')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -483,8 +487,638 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'e1f26c73-2300-40e8-ada7-6485522b2df2',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '4d811e36-6c67-4927-957c-cf3692941c43',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100046,
+            'ScheduleEnabled',
+            'Schedule Enabled',
+            'Whether automatic sync scheduling is enabled for this integration',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '91e87b89-a40e-49ce-8464-75ec06bff1a7' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleType')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '91e87b89-a40e-49ce-8464-75ec06bff1a7',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100047,
+            'ScheduleType',
+            'Schedule Type',
+            'Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Manual',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '801d0e7d-4fcb-4249-9052-4e929307f070' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleIntervalMinutes')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '801d0e7d-4fcb-4249-9052-4e929307f070',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100048,
+            'ScheduleIntervalMinutes',
+            'Schedule Interval Minutes',
+            'Interval in minutes for Interval schedule type',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fa43cb1d-7a04-40d8-ac9a-2036e3f06252' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CronExpression')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fa43cb1d-7a04-40d8-ac9a-2036e3f06252',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100049,
+            'CronExpression',
+            'Cron Expression',
+            'Cron expression for Cron schedule type (e.g., "0 */6 * * *" for every 6 hours)',
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '45e7c880-19c4-45fb-ba3c-9ffd9533fb12' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'NextScheduledRunAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '45e7c880-19c4-45fb-ba3c-9ffd9533fb12',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100050,
+            'NextScheduledRunAt',
+            'Next Scheduled Run At',
+            'When the next scheduled sync should run. Updated after each run based on schedule config.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cac39331-fa43-46bd-abc0-11ae683ea5ec' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LastScheduledRunAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cac39331-fa43-46bd-abc0-11ae683ea5ec',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100051,
+            'LastScheduledRunAt',
+            'Last Scheduled Run At',
+            'When the last scheduled sync was initiated',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsLocked')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100052,
+            'IsLocked',
+            'Is Locked',
+            'Whether a sync is currently locked/running for this integration',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8b9edf01-96fe-4506-97d8-1971830f101e' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8b9edf01-96fe-4506-97d8-1971830f101e',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100053,
+            'LockedAt',
+            'Locked At',
+            'When the lock was acquired',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '186eb537-b916-46ac-82f3-dce1789b572f' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockedByInstance')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '186eb537-b916-46ac-82f3-dce1789b572f',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100054,
+            'LockedByInstance',
+            'Locked By Instance',
+            'Server instance identifier that holds the lock (hostname-pid)',
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f9e35f33-7ed2-4413-922f-12ba98e60355' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockExpiresAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f9e35f33-7ed2-4413-922f-12ba98e60355',
+            'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
+            100055,
+            'LockExpiresAt',
+            'Lock Expires At',
+            'When the lock should be considered stale and eligible for cleanup',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c29bac47-fd92-4209-b600-998618c2a052' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c29bac47-fd92-4209-b600-998618c2a052',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100001,
             'ID',
             'ID',
@@ -514,7 +1148,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0f0963d-7634-4460-a239-a016d7d1c914' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IntegrationObjectID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8ea456ad-785f-4e37-b397-8ff6f2040810' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IntegrationObjectID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -546,8 +1180,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'd0f0963d-7634-4460-a239-a016d7d1c914',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '8ea456ad-785f-4e37-b397-8ff6f2040810',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100002,
             'IntegrationObjectID',
             'Integration Object ID',
@@ -561,7 +1195,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
             0,
             1,
             0,
-            'A376650B-0958-4B75-8122-E3BD4E2085F2',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
             'ID',
             0,
             0,
@@ -577,7 +1211,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a2088a6-ccc0-42ed-a697-05b4487dc24a' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f087bb9d-a16e-4778-a711-026b5cdb5ecb' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -609,8 +1243,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '0a2088a6-ccc0-42ed-a697-05b4487dc24a',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'f087bb9d-a16e-4778-a711-026b5cdb5ecb',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100003,
             'Name',
             'Name',
@@ -640,7 +1274,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3f6894bd-7eb1-44df-920c-042beda7d05d' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'DisplayName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c0279d61-5dd7-4636-acaf-3c07b4ebf599' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'DisplayName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -672,8 +1306,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '3f6894bd-7eb1-44df-920c-042beda7d05d',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'c0279d61-5dd7-4636-acaf-3c07b4ebf599',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100004,
             'DisplayName',
             'Display Name',
@@ -703,7 +1337,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4a7c00a9-ebfd-4f82-b5a6-d54842e0f8ad' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eb935245-a13b-46ba-b54c-bede08fafec0' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -735,8 +1369,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '4a7c00a9-ebfd-4f82-b5a6-d54842e0f8ad',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'eb935245-a13b-46ba-b54c-bede08fafec0',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100005,
             'Description',
             'Description',
@@ -766,7 +1400,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '35153b4c-bf7a-45dc-8e6c-8eeca3f68f98' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Category')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Category')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -798,8 +1432,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '35153b4c-bf7a-45dc-8e6c-8eeca3f68f98',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100006,
             'Category',
             'Category',
@@ -829,7 +1463,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c51bf160-471d-4fbd-ae8a-f0f8b90386e6' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Type')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fe592595-e4fd-458a-a892-918db3abc0b8' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Type')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -861,8 +1495,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'c51bf160-471d-4fbd-ae8a-f0f8b90386e6',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'fe592595-e4fd-458a-a892-918db3abc0b8',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100007,
             'Type',
             'Type',
@@ -892,7 +1526,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a9dacbc5-e435-43a8-be69-7722cfa90db1' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Length')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a184fa33-d1e3-4341-854a-63ba62571622' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Length')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -924,8 +1558,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'a9dacbc5-e435-43a8-be69-7722cfa90db1',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'a184fa33-d1e3-4341-854a-63ba62571622',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100008,
             'Length',
             'Length',
@@ -955,7 +1589,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dfe3880c-798d-4db5-bdc5-23a66c9a0144' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Precision')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fc62f3d1-514c-4850-a884-098accea440c' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Precision')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -987,8 +1621,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'dfe3880c-798d-4db5-bdc5-23a66c9a0144',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'fc62f3d1-514c-4850-a884-098accea440c',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100009,
             'Precision',
             'Precision',
@@ -1018,7 +1652,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '797522b4-4c34-497c-8fb3-d2878b1998a5' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Scale')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a27f5839-ca61-42fc-b724-c4f885fb5fa0' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Scale')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1050,8 +1684,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '797522b4-4c34-497c-8fb3-d2878b1998a5',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'a27f5839-ca61-42fc-b724-c4f885fb5fa0',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100010,
             'Scale',
             'Scale',
@@ -1081,7 +1715,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '91b7e80a-2156-48cd-9365-1ddb4b933069' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'AllowsNull')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f48e0a4-576c-4746-af78-0ced62880881' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'AllowsNull')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1113,8 +1747,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '91b7e80a-2156-48cd-9365-1ddb4b933069',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '4f48e0a4-576c-4746-af78-0ced62880881',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100011,
             'AllowsNull',
             'Allows Null',
@@ -1144,7 +1778,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c0ea6fa-f274-47a1-8f7e-180535926a0a' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'DefaultValue')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e996e3e-68a6-468d-92b5-b1e7d905ab64' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'DefaultValue')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1176,8 +1810,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '5c0ea6fa-f274-47a1-8f7e-180535926a0a',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '1e996e3e-68a6-468d-92b5-b1e7d905ab64',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100012,
             'DefaultValue',
             'Default Value',
@@ -1207,7 +1841,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fef5c1e5-550c-4d0e-9562-d569a60fe679' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IsPrimaryKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a41406ef-d751-4e1d-8b03-537ec3f5ed26' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsPrimaryKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1239,8 +1873,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'fef5c1e5-550c-4d0e-9562-d569a60fe679',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'a41406ef-d751-4e1d-8b03-537ec3f5ed26',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100013,
             'IsPrimaryKey',
             'Is Primary Key',
@@ -1270,7 +1904,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3effcaf7-6b7b-40a2-8303-1207cd5d78cc' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IsUniqueKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsUniqueKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1302,8 +1936,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '3effcaf7-6b7b-40a2-8303-1207cd5d78cc',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100014,
             'IsUniqueKey',
             'Is Unique Key',
@@ -1333,7 +1967,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09fde9ae-1adc-4ea0-91f9-02e901769a63' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IsReadOnly')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6b8579c3-5351-4263-aef4-bb44e30d4b4d' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsReadOnly')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1365,8 +1999,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '09fde9ae-1adc-4ea0-91f9-02e901769a63',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '6b8579c3-5351-4263-aef4-bb44e30d4b4d',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100015,
             'IsReadOnly',
             'Is Read Only',
@@ -1396,7 +2030,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7a00d310-7159-4a80-8de9-2bacb8538e2f' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IsRequired')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da3bc5ce-671c-48ac-9cd5-497ca602d0e5' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsRequired')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1428,8 +2062,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '7a00d310-7159-4a80-8de9-2bacb8538e2f',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'da3bc5ce-671c-48ac-9cd5-497ca602d0e5',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100016,
             'IsRequired',
             'Is Required',
@@ -1459,7 +2093,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8b22f876-9b5d-42f2-9377-d64049fa9467' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'RelatedIntegrationObjectID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22a62bf2-861b-4b29-a7e1-b69b476e706e' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObjectID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1491,8 +2125,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '8b22f876-9b5d-42f2-9377-d64049fa9467',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '22a62bf2-861b-4b29-a7e1-b69b476e706e',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100017,
             'RelatedIntegrationObjectID',
             'Related Integration Object ID',
@@ -1506,7 +2140,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
             0,
             1,
             0,
-            'A376650B-0958-4B75-8122-E3BD4E2085F2',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
             'ID',
             0,
             0,
@@ -1522,7 +2156,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6d4a9fbe-dc9c-49df-a0ee-484ad4da7b2f' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'RelatedIntegrationObjectFieldName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObjectFieldName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1554,8 +2188,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '6d4a9fbe-dc9c-49df-a0ee-484ad4da7b2f',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100018,
             'RelatedIntegrationObjectFieldName',
             'Related Integration Object Field Name',
@@ -1585,7 +2219,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd6421496-41c4-4b3d-ae2b-a35a35a2fae0' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Sequence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5bc346a1-8015-4f20-9247-cb0039ee14e4' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Sequence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1617,8 +2251,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'd6421496-41c4-4b3d-ae2b-a35a35a2fae0',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '5bc346a1-8015-4f20-9247-cb0039ee14e4',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100019,
             'Sequence',
             'Sequence',
@@ -1648,7 +2282,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '88e614b2-5717-4fb2-b7ae-9b09aa02206c' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Configuration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2efa2d36-459b-4433-bfbc-4e76e8a5a461' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Configuration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1680,8 +2314,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '88e614b2-5717-4fb2-b7ae-9b09aa02206c',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '2efa2d36-459b-4433-bfbc-4e76e8a5a461',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100020,
             'Configuration',
             'Configuration',
@@ -1711,7 +2345,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '42b12ae5-bb2f-4554-bedd-0b71a199c409' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1743,8 +2377,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '42b12ae5-bb2f-4554-bedd-0b71a199c409',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100021,
             'Status',
             'Status',
@@ -1774,7 +2408,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4efe9b99-47bc-43a1-8a97-ce70a626e168' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a40b0908-76cc-4d93-b7ff-659d450cdf19' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1806,8 +2440,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '4efe9b99-47bc-43a1-8a97-ce70a626e168',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'a40b0908-76cc-4d93-b7ff-659d450cdf19',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100022,
             '__mj_CreatedAt',
             'Created At',
@@ -1837,7 +2471,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '753b52da-2368-4582-8988-e2047391f88e' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e19f566-6ffb-4b64-96c9-8ea44b3dae08' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1869,8 +2503,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '753b52da-2368-4582-8988-e2047391f88e',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '1e19f566-6ffb-4b64-96c9-8ea44b3dae08',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100023,
             '__mj_UpdatedAt',
             'Updated At',
@@ -1900,7 +2534,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '952ac623-01e2-4169-97c5-ae4bd3bc5b00' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1932,8 +2566,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '952ac623-01e2-4169-97c5-ae4bd3bc5b00',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100001,
             'ID',
             'ID',
@@ -1963,7 +2597,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f6b48b88-67f8-4a24-b5cf-52e931039add' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'IntegrationID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0eab738-4bb1-499f-80fc-aa8a0b46b389' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'IntegrationID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1995,8 +2629,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'f6b48b88-67f8-4a24-b5cf-52e931039add',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'a0eab738-4bb1-499f-80fc-aa8a0b46b389',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100002,
             'IntegrationID',
             'Integration ID',
@@ -2026,7 +2660,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1101e0f3-dd2e-45cc-a8d5-6a85c661a33b' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7f19f87b-4609-4738-97d6-8627de23af4b' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2058,8 +2692,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '1101e0f3-dd2e-45cc-a8d5-6a85c661a33b',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '7f19f87b-4609-4738-97d6-8627de23af4b',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100003,
             'Name',
             'Name',
@@ -2089,7 +2723,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '23a830da-a0d6-434a-a5d9-42a36a6bea49' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'DisplayName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DisplayName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2121,8 +2755,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '23a830da-a0d6-434a-a5d9-42a36a6bea49',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100004,
             'DisplayName',
             'Display Name',
@@ -2152,7 +2786,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd6e1a3b9-952d-461b-9fff-1d4bb11014d5' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dbfed2a5-355d-4617-b4f8-237b4d3b2365' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2184,8 +2818,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'd6e1a3b9-952d-461b-9fff-1d4bb11014d5',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'dbfed2a5-355d-4617-b4f8-237b4d3b2365',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100005,
             'Description',
             'Description',
@@ -2215,7 +2849,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd5869926-6849-4935-bf80-cd42946e70f4' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Category')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0f0f0147-386f-45c8-aa9f-021c26b634a5' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Category')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2247,8 +2881,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'd5869926-6849-4935-bf80-cd42946e70f4',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '0f0f0147-386f-45c8-aa9f-021c26b634a5',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100006,
             'Category',
             'Category',
@@ -2278,7 +2912,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a6aeeb8-3b33-4f26-9603-3dc602951680' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'APIPath')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1cfa6c37-9057-4662-8c40-f835aa972edf' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'APIPath')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2310,8 +2944,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '0a6aeeb8-3b33-4f26-9603-3dc602951680',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '1cfa6c37-9057-4662-8c40-f835aa972edf',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100007,
             'APIPath',
             'API Path',
@@ -2341,7 +2975,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '916eeff8-7f1e-4e01-950a-4dbd79f01177' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'ResponseDataKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ade52a5e-adba-4414-aae2-12b535f85ac3' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'ResponseDataKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2373,8 +3007,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '916eeff8-7f1e-4e01-950a-4dbd79f01177',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'ade52a5e-adba-4414-aae2-12b535f85ac3',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100008,
             'ResponseDataKey',
             'Response Data Key',
@@ -2404,7 +3038,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5ef38d90-fe1e-42a0-9ac6-9ac34f76b3f7' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'DefaultPageSize')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '85d95d3f-dad6-492d-90af-5207d16780ee' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DefaultPageSize')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2436,8 +3070,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '5ef38d90-fe1e-42a0-9ac6-9ac34f76b3f7',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '85d95d3f-dad6-492d-90af-5207d16780ee',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100009,
             'DefaultPageSize',
             'Default Page Size',
@@ -2467,7 +3101,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6a3ceb60-380b-44ea-bbcd-e9029f3e1aa4' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'SupportsPagination')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '27719863-6129-44d5-a77c-7827db58bd91' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsPagination')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2499,8 +3133,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '6a3ceb60-380b-44ea-bbcd-e9029f3e1aa4',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '27719863-6129-44d5-a77c-7827db58bd91',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100010,
             'SupportsPagination',
             'Supports Pagination',
@@ -2530,7 +3164,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '707feee6-a58b-466e-ba6a-04a7322ef2de' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'PaginationType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '248dbcef-e551-4913-8579-200b33459e16' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'PaginationType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2562,8 +3196,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '707feee6-a58b-466e-ba6a-04a7322ef2de',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '248dbcef-e551-4913-8579-200b33459e16',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100011,
             'PaginationType',
             'Pagination Type',
@@ -2593,7 +3227,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1dddf958-0fcd-4413-8bfa-107f8e6d1659' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'SupportsIncrementalSync')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c73a053e-44e2-40a8-9a0a-899e6e28af4d' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsIncrementalSync')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2625,8 +3259,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '1dddf958-0fcd-4413-8bfa-107f8e6d1659',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'c73a053e-44e2-40a8-9a0a-899e6e28af4d',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100012,
             'SupportsIncrementalSync',
             'Supports Incremental Sync',
@@ -2656,7 +3290,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf91194f-744d-4cf6-80bd-ceab34643678' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'SupportsWrite')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e48963cb-3027-4554-bf48-52eca282d983' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsWrite')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2688,8 +3322,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            'bf91194f-744d-4cf6-80bd-ceab34643678',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'e48963cb-3027-4554-bf48-52eca282d983',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100013,
             'SupportsWrite',
             'Supports Write',
@@ -2719,7 +3353,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7938992b-adb1-44fb-bf0d-9bcd140d08f2' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'DefaultQueryParams')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '38708eac-bec9-4bd1-afa5-af93a00f0fea' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DefaultQueryParams')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2751,8 +3385,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '7938992b-adb1-44fb-bf0d-9bcd140d08f2',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '38708eac-bec9-4bd1-afa5-af93a00f0fea',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100014,
             'DefaultQueryParams',
             'Default Query Params',
@@ -2782,7 +3416,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '138a2d66-fdcb-4170-be65-75ae0dc8a9b1' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Configuration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed9326f4-6377-4fb3-84fa-ebcc9859fc07' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Configuration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2814,8 +3448,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '138a2d66-fdcb-4170-be65-75ae0dc8a9b1',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            'ed9326f4-6377-4fb3-84fa-ebcc9859fc07',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100015,
             'Configuration',
             'Configuration',
@@ -2845,7 +3479,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9178b46c-0150-45d1-a9b9-d52d190afa0c' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Sequence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9057e47c-7633-4b86-8adf-f09044fe4470' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Sequence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2877,8 +3511,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '9178b46c-0150-45d1-a9b9-d52d190afa0c',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '9057e47c-7633-4b86-8adf-f09044fe4470',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100016,
             'Sequence',
             'Sequence',
@@ -2908,7 +3542,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0f31c7be-3356-40c4-aa87-8d0ed03bd24d' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '027bc6fb-ac73-41c5-8856-981fb0031897' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2940,8 +3574,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '0f31c7be-3356-40c4-aa87-8d0ed03bd24d',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '027bc6fb-ac73-41c5-8856-981fb0031897',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100017,
             'Status',
             'Status',
@@ -2971,7 +3605,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '70ad8587-b21a-4a23-b5b4-68582461f339' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4c7b2511-b32a-4e05-ad8f-71a8d7438e96' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3003,8 +3637,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '70ad8587-b21a-4a23-b5b4-68582461f339',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '4c7b2511-b32a-4e05-ad8f-71a8d7438e96',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100018,
             '__mj_CreatedAt',
             'Created At',
@@ -3034,7 +3668,7 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '542bafe0-6988-4366-b23c-8efa167f8080' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '17416191-6ba9-4d7d-b38d-5d32220c994e' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3066,8 +3700,8 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
          VALUES
          (
-            '542bafe0-6988-4366-b23c-8efa167f8080',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '17416191-6ba9-4d7d-b38d-5d32220c994e',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100019,
             '__mj_UpdatedAt',
             'Updated At',
@@ -3095,105 +3729,549 @@ ALTER TABLE [${flyway:defaultSchema}].[IntegrationObject] ADD __mj_UpdatedAt DAT
          )
       END
 
-/* SQL text to insert entity field value with ID d748408f-cf2e-40cf-9bd6-405b5b5da26e */
+/* SQL text to insert entity field value with ID b598a04e-5f57-4ae2-91aa-54bbafe86032 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d748408f-cf2e-40cf-9bd6-405b5b5da26e', '707FEEE6-A58B-466E-BA6A-04A7322EF2DE', 1, 'Cursor', 'Cursor', GETUTCDATE(), GETUTCDATE())
+                                       ('b598a04e-5f57-4ae2-91aa-54bbafe86032', '91E87B89-A40E-49CE-8464-75EC06BFF1A7', 1, 'Cron', 'Cron', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 156d4663-9c3a-451a-917f-3d03474b5429 */
+/* SQL text to insert entity field value with ID 48c82bbd-d8fd-4c6a-92b3-b3cf0902b069 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('156d4663-9c3a-451a-917f-3d03474b5429', '707FEEE6-A58B-466E-BA6A-04A7322EF2DE', 2, 'None', 'None', GETUTCDATE(), GETUTCDATE())
+                                       ('48c82bbd-d8fd-4c6a-92b3-b3cf0902b069', '91E87B89-A40E-49CE-8464-75EC06BFF1A7', 2, 'Interval', 'Interval', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 82607fb8-c597-4130-9257-56d33499df56 */
+/* SQL text to insert entity field value with ID 367ef13f-861f-42ff-afa3-c977d8b4b882 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('82607fb8-c597-4130-9257-56d33499df56', '707FEEE6-A58B-466E-BA6A-04A7322EF2DE', 3, 'Offset', 'Offset', GETUTCDATE(), GETUTCDATE())
+                                       ('367ef13f-861f-42ff-afa3-c977d8b4b882', '91E87B89-A40E-49CE-8464-75EC06BFF1A7', 3, 'Manual', 'Manual', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 8b3ae715-9aed-4e53-82fd-832bdf209fc6 */
+/* SQL text to update ValueListType for entity field ID 91E87B89-A40E-49CE-8464-75EC06BFF1A7 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='91E87B89-A40E-49CE-8464-75EC06BFF1A7'
+
+/* SQL text to insert entity field value with ID 22d3d809-4b32-4a1e-9265-dfe88aabd686 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8b3ae715-9aed-4e53-82fd-832bdf209fc6', '707FEEE6-A58B-466E-BA6A-04A7322EF2DE', 4, 'PageNumber', 'PageNumber', GETUTCDATE(), GETUTCDATE())
+                                       ('22d3d809-4b32-4a1e-9265-dfe88aabd686', '248DBCEF-E551-4913-8579-200B33459E16', 1, 'Cursor', 'Cursor', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID 707FEEE6-A58B-466E-BA6A-04A7322EF2DE */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='707FEEE6-A58B-466E-BA6A-04A7322EF2DE'
-
-/* SQL text to insert entity field value with ID 8a087d38-2b46-4b11-81cc-cbd61dd6095a */
+/* SQL text to insert entity field value with ID af8bf689-dfcd-49fe-b77b-536c8139f333 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8a087d38-2b46-4b11-81cc-cbd61dd6095a', '0F31C7BE-3356-40C4-AA87-8D0ED03BD24D', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE())
+                                       ('af8bf689-dfcd-49fe-b77b-536c8139f333', '248DBCEF-E551-4913-8579-200B33459E16', 2, 'None', 'None', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID af6b1ea5-d1eb-416e-be7e-70cfc9e528cc */
+/* SQL text to insert entity field value with ID 5b516c4d-7e06-4312-8f83-031da0ad84f4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('af6b1ea5-d1eb-416e-be7e-70cfc9e528cc', '0F31C7BE-3356-40C4-AA87-8D0ED03BD24D', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE())
+                                       ('5b516c4d-7e06-4312-8f83-031da0ad84f4', '248DBCEF-E551-4913-8579-200B33459E16', 3, 'Offset', 'Offset', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 7d64a741-86b3-41cd-a99d-1f56c31e8b95 */
+/* SQL text to insert entity field value with ID 038699bd-21cc-4fe9-a198-57b83226c06a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7d64a741-86b3-41cd-a99d-1f56c31e8b95', '0F31C7BE-3356-40C4-AA87-8D0ED03BD24D', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE())
+                                       ('038699bd-21cc-4fe9-a198-57b83226c06a', '248DBCEF-E551-4913-8579-200B33459E16', 4, 'PageNumber', 'PageNumber', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID 0F31C7BE-3356-40C4-AA87-8D0ED03BD24D */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0F31C7BE-3356-40C4-AA87-8D0ED03BD24D'
+/* SQL text to update ValueListType for entity field ID 248DBCEF-E551-4913-8579-200B33459E16 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='248DBCEF-E551-4913-8579-200B33459E16'
 
-/* SQL text to insert entity field value with ID e50a7929-b98c-4325-875b-2dd675500893 */
+/* SQL text to insert entity field value with ID 34bcc036-7f0f-43dc-9c61-3d702c3c3781 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e50a7929-b98c-4325-875b-2dd675500893', '42B12AE5-BB2F-4554-BEDD-0B71A199C409', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE())
+                                       ('34bcc036-7f0f-43dc-9c61-3d702c3c3781', '027BC6FB-AC73-41C5-8856-981FB0031897', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 7a9c7d01-9489-4849-bd15-1a55f04a9fbd */
+/* SQL text to insert entity field value with ID 6adab35a-a84b-4aa1-8520-314bd33a7844 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7a9c7d01-9489-4849-bd15-1a55f04a9fbd', '42B12AE5-BB2F-4554-BEDD-0B71A199C409', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE())
+                                       ('6adab35a-a84b-4aa1-8520-314bd33a7844', '027BC6FB-AC73-41C5-8856-981FB0031897', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID db35f0f3-ee02-4b6e-8685-09bc787de1f0 */
+/* SQL text to insert entity field value with ID 4a58e9c8-140f-4e8a-8b8e-8630b180f29b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('db35f0f3-ee02-4b6e-8685-09bc787de1f0', '42B12AE5-BB2F-4554-BEDD-0B71A199C409', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE())
+                                       ('4a58e9c8-140f-4e8a-8b8e-8630b180f29b', '027BC6FB-AC73-41C5-8856-981FB0031897', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID 42B12AE5-BB2F-4554-BEDD-0B71A199C409 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='42B12AE5-BB2F-4554-BEDD-0B71A199C409'
+/* SQL text to update ValueListType for entity field ID 027BC6FB-AC73-41C5-8856-981FB0031897 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='027BC6FB-AC73-41C5-8856-981FB0031897'
+
+/* SQL text to insert entity field value with ID 1a3603bc-95a3-454c-bc37-05749e54e010 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('1a3603bc-95a3-454c-bc37-05749e54e010', '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE())
+
+/* SQL text to insert entity field value with ID f580b59b-6a40-489f-a5d0-8b751239a100 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('f580b59b-6a40-489f-a5d0-8b751239a100', '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE())
+
+/* SQL text to insert entity field value with ID ec196207-986c-4cac-981d-9eeb838d2c53 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('ec196207-986c-4cac-981d-9eeb838d2c53', '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE())
+
+/* SQL text to update ValueListType for entity field ID 82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4'
 
 
 /* Create Entity Relationship: MJ: Integrations -> MJ: Integration Objects (One To Many via IntegrationID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e0a886d5-0259-4cdc-9c97-71f5d45f9a99'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f9f16e5b-2784-4682-aaac-df0f98e7a2c0'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('e0a886d5-0259-4cdc-9c97-71f5d45f9a99', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', 'A376650B-0958-4B75-8122-E3BD4E2085F2', 'IntegrationID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f9f16e5b-2784-4682-aaac-df0f98e7a2c0', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', 'IntegrationID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
 
 
 /* Create Entity Relationship: MJ: Integration Objects -> MJ: Integration Object Fields (One To Many via IntegrationObjectID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '80f944f7-082c-4c89-be3c-dc6cc3e90896'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'eaf27ef3-7e36-41ad-a878-cf636ea412e8'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('80f944f7-082c-4c89-be3c-dc6cc3e90896', 'A376650B-0958-4B75-8122-E3BD4E2085F2', '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', 'IntegrationObjectID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('eaf27ef3-7e36-41ad-a878-cf636ea412e8', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'IntegrationObjectID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: Integration Objects -> MJ: Integration Object Fields (One To Many via RelatedIntegrationObjectID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'da1ba76c-cc4c-4da7-bbb9-f44c6c7d8b3d'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c13b39a7-b4c6-4e0f-8b91-761e40d40ef6'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('da1ba76c-cc4c-4da7-bbb9-f44c6c7d8b3d', 'A376650B-0958-4B75-8122-E3BD4E2085F2', '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', 'RelatedIntegrationObjectID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('c13b39a7-b4c6-4e0f-8b91-761e40d40ef6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'RelatedIntegrationObjectID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
                     
+
+/* Index for Foreign Keys for CompanyIntegration */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key CompanyID in table CompanyIntegration
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegration_CompanyID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegration]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_CompanyID ON [${flyway:defaultSchema}].[CompanyIntegration] ([CompanyID]);
+
+-- Index for foreign key IntegrationID in table CompanyIntegration
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegration_IntegrationID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegration]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_IntegrationID ON [${flyway:defaultSchema}].[CompanyIntegration] ([IntegrationID]);
+
+-- Index for foreign key SourceTypeID in table CompanyIntegration
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegration_SourceTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegration]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_SourceTypeID ON [${flyway:defaultSchema}].[CompanyIntegration] ([SourceTypeID]);
+
+-- Index for foreign key CredentialID in table CompanyIntegration
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegration_CredentialID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegration]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_CredentialID ON [${flyway:defaultSchema}].[CompanyIntegration] ([CredentialID]);
+
+/* Base View Permissions SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: Permissions for vwCompanyIntegrations
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwCompanyIntegrations] TO [cdp_UI], [cdp_Integration], [cdp_Developer]
+
+/* spCreate SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spCreateCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateCompanyIntegration]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateCompanyIntegration];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateCompanyIntegration]
+    @ID uniqueidentifier = NULL,
+    @CompanyID uniqueidentifier,
+    @IntegrationID uniqueidentifier,
+    @IsActive bit,
+    @AccessToken nvarchar(255),
+    @RefreshToken nvarchar(255),
+    @TokenExpirationDate datetimeoffset,
+    @APIKey nvarchar(255),
+    @ExternalSystemID nvarchar(100),
+    @IsExternalSystemReadOnly bit = NULL,
+    @ClientID nvarchar(255),
+    @ClientSecret nvarchar(255),
+    @CustomAttribute1 nvarchar(255),
+    @Name nvarchar(255),
+    @SourceTypeID uniqueidentifier,
+    @Configuration nvarchar(MAX),
+    @CredentialID uniqueidentifier,
+    @ScheduleEnabled bit = NULL,
+    @ScheduleType nvarchar(20) = NULL,
+    @ScheduleIntervalMinutes int,
+    @CronExpression nvarchar(200),
+    @NextScheduledRunAt datetimeoffset,
+    @LastScheduledRunAt datetimeoffset,
+    @IsLocked bit = NULL,
+    @LockedAt datetimeoffset,
+    @LockedByInstance nvarchar(200),
+    @LockExpiresAt datetimeoffset
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[CompanyIntegration]
+            (
+                [ID],
+                [CompanyID],
+                [IntegrationID],
+                [IsActive],
+                [AccessToken],
+                [RefreshToken],
+                [TokenExpirationDate],
+                [APIKey],
+                [ExternalSystemID],
+                [IsExternalSystemReadOnly],
+                [ClientID],
+                [ClientSecret],
+                [CustomAttribute1],
+                [Name],
+                [SourceTypeID],
+                [Configuration],
+                [CredentialID],
+                [ScheduleEnabled],
+                [ScheduleType],
+                [ScheduleIntervalMinutes],
+                [CronExpression],
+                [NextScheduledRunAt],
+                [LastScheduledRunAt],
+                [IsLocked],
+                [LockedAt],
+                [LockedByInstance],
+                [LockExpiresAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @CompanyID,
+                @IntegrationID,
+                @IsActive,
+                @AccessToken,
+                @RefreshToken,
+                @TokenExpirationDate,
+                @APIKey,
+                @ExternalSystemID,
+                ISNULL(@IsExternalSystemReadOnly, 0),
+                @ClientID,
+                @ClientSecret,
+                @CustomAttribute1,
+                @Name,
+                @SourceTypeID,
+                @Configuration,
+                @CredentialID,
+                ISNULL(@ScheduleEnabled, 0),
+                ISNULL(@ScheduleType, 'Manual'),
+                @ScheduleIntervalMinutes,
+                @CronExpression,
+                @NextScheduledRunAt,
+                @LastScheduledRunAt,
+                ISNULL(@IsLocked, 0),
+                @LockedAt,
+                @LockedByInstance,
+                @LockExpiresAt
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[CompanyIntegration]
+            (
+                [CompanyID],
+                [IntegrationID],
+                [IsActive],
+                [AccessToken],
+                [RefreshToken],
+                [TokenExpirationDate],
+                [APIKey],
+                [ExternalSystemID],
+                [IsExternalSystemReadOnly],
+                [ClientID],
+                [ClientSecret],
+                [CustomAttribute1],
+                [Name],
+                [SourceTypeID],
+                [Configuration],
+                [CredentialID],
+                [ScheduleEnabled],
+                [ScheduleType],
+                [ScheduleIntervalMinutes],
+                [CronExpression],
+                [NextScheduledRunAt],
+                [LastScheduledRunAt],
+                [IsLocked],
+                [LockedAt],
+                [LockedByInstance],
+                [LockExpiresAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @CompanyID,
+                @IntegrationID,
+                @IsActive,
+                @AccessToken,
+                @RefreshToken,
+                @TokenExpirationDate,
+                @APIKey,
+                @ExternalSystemID,
+                ISNULL(@IsExternalSystemReadOnly, 0),
+                @ClientID,
+                @ClientSecret,
+                @CustomAttribute1,
+                @Name,
+                @SourceTypeID,
+                @Configuration,
+                @CredentialID,
+                ISNULL(@ScheduleEnabled, 0),
+                ISNULL(@ScheduleType, 'Manual'),
+                @ScheduleIntervalMinutes,
+                @CronExpression,
+                @NextScheduledRunAt,
+                @LastScheduledRunAt,
+                ISNULL(@IsLocked, 0),
+                @LockedAt,
+                @LockedByInstance,
+                @LockExpiresAt
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwCompanyIntegrations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+    
+
+/* spCreate Permissions for MJ: Company Integrations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+
+
+
+/* spUpdate SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spUpdateCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateCompanyIntegration]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateCompanyIntegration];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateCompanyIntegration]
+    @ID uniqueidentifier,
+    @CompanyID uniqueidentifier,
+    @IntegrationID uniqueidentifier,
+    @IsActive bit,
+    @AccessToken nvarchar(255),
+    @RefreshToken nvarchar(255),
+    @TokenExpirationDate datetimeoffset,
+    @APIKey nvarchar(255),
+    @ExternalSystemID nvarchar(100),
+    @IsExternalSystemReadOnly bit,
+    @ClientID nvarchar(255),
+    @ClientSecret nvarchar(255),
+    @CustomAttribute1 nvarchar(255),
+    @Name nvarchar(255),
+    @SourceTypeID uniqueidentifier,
+    @Configuration nvarchar(MAX),
+    @CredentialID uniqueidentifier,
+    @ScheduleEnabled bit,
+    @ScheduleType nvarchar(20),
+    @ScheduleIntervalMinutes int,
+    @CronExpression nvarchar(200),
+    @NextScheduledRunAt datetimeoffset,
+    @LastScheduledRunAt datetimeoffset,
+    @IsLocked bit,
+    @LockedAt datetimeoffset,
+    @LockedByInstance nvarchar(200),
+    @LockExpiresAt datetimeoffset
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[CompanyIntegration]
+    SET
+        [CompanyID] = @CompanyID,
+        [IntegrationID] = @IntegrationID,
+        [IsActive] = @IsActive,
+        [AccessToken] = @AccessToken,
+        [RefreshToken] = @RefreshToken,
+        [TokenExpirationDate] = @TokenExpirationDate,
+        [APIKey] = @APIKey,
+        [ExternalSystemID] = @ExternalSystemID,
+        [IsExternalSystemReadOnly] = @IsExternalSystemReadOnly,
+        [ClientID] = @ClientID,
+        [ClientSecret] = @ClientSecret,
+        [CustomAttribute1] = @CustomAttribute1,
+        [Name] = @Name,
+        [SourceTypeID] = @SourceTypeID,
+        [Configuration] = @Configuration,
+        [CredentialID] = @CredentialID,
+        [ScheduleEnabled] = @ScheduleEnabled,
+        [ScheduleType] = @ScheduleType,
+        [ScheduleIntervalMinutes] = @ScheduleIntervalMinutes,
+        [CronExpression] = @CronExpression,
+        [NextScheduledRunAt] = @NextScheduledRunAt,
+        [LastScheduledRunAt] = @LastScheduledRunAt,
+        [IsLocked] = @IsLocked,
+        [LockedAt] = @LockedAt,
+        [LockedByInstance] = @LockedByInstance,
+        [LockExpiresAt] = @LockExpiresAt
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwCompanyIntegrations] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwCompanyIntegrations]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the CompanyIntegration table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateCompanyIntegration]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateCompanyIntegration];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateCompanyIntegration
+ON [${flyway:defaultSchema}].[CompanyIntegration]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[CompanyIntegration]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[CompanyIntegration] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Company Integrations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+
+
+
+/* spDelete SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spDeleteCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteCompanyIntegration]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteCompanyIntegration];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteCompanyIntegration]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[CompanyIntegration]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+    
+
+/* spDelete Permissions for MJ: Company Integrations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCompanyIntegration] TO [cdp_Integration], [cdp_Developer]
+
+
 
 /* Index for Foreign Keys for IntegrationObjectField */
 -----------------------------------------------------------------
@@ -3222,8 +4300,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_IntegrationObjectField_RelatedIntegrationObjectID ON [${flyway:defaultSchema}].[IntegrationObjectField] ([RelatedIntegrationObjectID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID D0F0963D-7634-4460-A239-A016D7D1C914 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D0F0963D-7634-4460-A239-A016D7D1C914', @RelatedEntityNameFieldMap='IntegrationObject'
+/* SQL text to update entity field related entity name field map for entity field ID 8EA456AD-785F-4E37-B397-8FF6F2040810 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8EA456AD-785F-4E37-B397-8FF6F2040810', @RelatedEntityNameFieldMap='IntegrationObject'
 
 /* Index for Foreign Keys for IntegrationObject */
 -----------------------------------------------------------------
@@ -3243,11 +4321,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_IntegrationObject_IntegrationID ON [${flyway:defaultSchema}].[IntegrationObject] ([IntegrationID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID F6B48B88-67F8-4A24-B5CF-52E931039ADD */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F6B48B88-67F8-4A24-B5CF-52E931039ADD', @RelatedEntityNameFieldMap='Integration'
-
-/* SQL text to update entity field related entity name field map for entity field ID 8B22F876-9B5D-42F2-9377-D64049FA9467 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8B22F876-9B5D-42F2-9377-D64049FA9467', @RelatedEntityNameFieldMap='RelatedIntegrationObject'
+/* SQL text to update entity field related entity name field map for entity field ID A0EAB738-4BB1-499F-80FC-AA8A0B46B389 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A0EAB738-4BB1-499F-80FC-AA8A0B46B389', @RelatedEntityNameFieldMap='Integration'
 
 /* Base View SQL for MJ: Integration Objects */
 -----------------------------------------------------------------
@@ -3590,6 +4665,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObject] TO [cdp_I
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObject] TO [cdp_Integration]
 
 
+
+/* SQL text to update entity field related entity name field map for entity field ID 22A62BF2-861B-4B29-A7E1-B69B476E706E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='22A62BF2-861B-4B29-A7E1-B69B476E706E', @RelatedEntityNameFieldMap='RelatedIntegrationObject'
 
 /* Base View SQL for MJ: Integration Object Fields */
 -----------------------------------------------------------------
@@ -3968,7 +5046,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '499e59d2-77ee-4e7e-8690-ca1d38e5ea47' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'IntegrationObject')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0dcda729-db83-421e-b5ec-1b1636c7bc1e' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IntegrationObject')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4000,8 +5078,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
          )
          VALUES
          (
-            '499e59d2-77ee-4e7e-8690-ca1d38e5ea47',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            '0dcda729-db83-421e-b5ec-1b1636c7bc1e',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100047,
             'IntegrationObject',
             'Integration Object',
@@ -4031,7 +5109,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a17d910-b127-4f73-b6ec-8338c2613ac7' OR (EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B' AND Name = 'RelatedIntegrationObject')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1ed4d02-2463-457c-9c8d-761d24cc5288' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObject')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4063,8 +5141,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
          )
          VALUES
          (
-            '0a17d910-b127-4f73-b6ec-8338c2613ac7',
-            '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', -- Entity: MJ: Integration Object Fields
+            'e1ed4d02-2463-457c-9c8d-761d24cc5288',
+            '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100048,
             'RelatedIntegrationObject',
             'Related Integration Object',
@@ -4094,7 +5172,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '184644d6-4079-425e-9cf8-d54c1d8339ef' OR (EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2' AND Name = 'Integration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8defcead-c227-45e0-af79-6b3318c563c7' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Integration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4126,8 +5204,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
          )
          VALUES
          (
-            '184644d6-4079-425e-9cf8-d54c1d8339ef',
-            'A376650B-0958-4B75-8122-E3BD4E2085F2', -- Entity: MJ: Integration Objects
+            '8defcead-c227-45e0-af79-6b3318c563c7',
+            '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100039,
             'Integration',
             'Integration',
@@ -4157,57 +5235,65 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
 
 /* Set field properties for entity */
 
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateDefaultInView = 1
+            
+
+/* Set field properties for entity */
+
             UPDATE [${flyway:defaultSchema}].[EntityField]
             SET IsNameField = 1
-            WHERE ID = '23A830DA-A0D6-434A-A5D9-42A36A6BEA49'
+            WHERE ID = '8B3F3DFF-3E46-4DB2-9FC6-D5B764D80B7E'
             AND AutoUpdateIsNameField = 1
          
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '23A830DA-A0D6-434A-A5D9-42A36A6BEA49'
+               WHERE ID = '8B3F3DFF-3E46-4DB2-9FC6-D5B764D80B7E'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'D5869926-6849-4935-BF80-CD42946E70F4'
+               WHERE ID = '0F0F0147-386F-45C8-AA9F-021C26B634A5'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '9178B46C-0150-45D1-A9B9-D52D190AFA0C'
+               WHERE ID = '027BC6FB-AC73-41C5-8856-981FB0031897'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '0F31C7BE-3356-40C4-AA87-8D0ED03BD24D'
-               AND AutoUpdateDefaultInView = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '184644D6-4079-425E-9CF8-D54C1D8339EF'
+               WHERE ID = '8DEFCEAD-C227-45E0-AF79-6B3318C563C7'
                AND AutoUpdateDefaultInView = 1
             
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '23A830DA-A0D6-434A-A5D9-42A36A6BEA49'
+                  WHERE ID = '8B3F3DFF-3E46-4DB2-9FC6-D5B764D80B7E'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = 'D5869926-6849-4935-BF80-CD42946E70F4'
+                  WHERE ID = '0F0F0147-386F-45C8-AA9F-021C26B634A5'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '0A6AEEB8-3B33-4F26-9603-3DC602951680'
+                  WHERE ID = '1CFA6C37-9057-4662-8C40-F835AA972EDF'
+                  AND AutoUpdateIncludeInUserSearchAPI = 1
+               
+
+                  UPDATE [${flyway:defaultSchema}].[EntityField]
+                  SET IncludeInUserSearchAPI = 1
+                  WHERE ID = '8DEFCEAD-C227-45E0-AF79-6B3318C563C7'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
@@ -4215,69 +5301,283 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObjectField] TO [
 
             UPDATE [${flyway:defaultSchema}].[EntityField]
             SET IsNameField = 1
-            WHERE ID = '3F6894BD-7EB1-44DF-920C-042BEDA7D05D'
+            WHERE ID = 'C0279D61-5DD7-4636-ACAF-3C07B4EBF599'
             AND AutoUpdateIsNameField = 1
          
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '3F6894BD-7EB1-44DF-920C-042BEDA7D05D'
+               WHERE ID = 'C0279D61-5DD7-4636-ACAF-3C07B4EBF599'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'C51BF160-471D-4FBD-AE8A-F0F8B90386E6'
+               WHERE ID = 'FE592595-E4FD-458A-A892-918DB3ABC0B8'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'D6421496-41C4-4B3D-AE2B-A35A35A2FAE0'
+               WHERE ID = '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4'
                AND AutoUpdateDefaultInView = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '42B12AE5-BB2F-4554-BEDD-0B71A199C409'
-               AND AutoUpdateDefaultInView = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '499E59D2-77EE-4E7E-8690-CA1D38E5EA47'
+               WHERE ID = '0DCDA729-DB83-421E-B5EC-1B1636C7BC1E'
                AND AutoUpdateDefaultInView = 1
             
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '3F6894BD-7EB1-44DF-920C-042BEDA7D05D'
+                  WHERE ID = 'C0279D61-5DD7-4636-ACAF-3C07B4EBF599'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '4A7C00A9-EBFD-4F82-B5A6-D54842E0F8AD'
+                  WHERE ID = 'CC99E8BA-DDB8-4CFB-8F0A-A4A68769A942'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '35153B4C-BF7A-45DC-8E6C-8EECA3F68F98'
+                  WHERE ID = '0DCDA729-DB83-421E-B5EC-1B1636C7BC1E'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
 
-                  UPDATE [${flyway:defaultSchema}].[EntityField]
-                  SET IncludeInUserSearchAPI = 1
-                  WHERE ID = 'C51BF160-471D-4FBD-AE8A-F0F8B90386E6'
-                  AND AutoUpdateIncludeInUserSearchAPI = 1
-               
+/* Set categories for 20 fields */
 
-                  UPDATE [${flyway:defaultSchema}].[EntityField]
-                  SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '499E59D2-77EE-4E7E-8690-CA1D38E5EA47'
-                  AND AutoUpdateIncludeInUserSearchAPI = 1
-               
+-- UPDATE Entity Field Category Info MJ: Integration Objects.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F5F7651F-56E2-4E92-A9FE-CFCD61B58B25' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.IntegrationID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Integration',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A0EAB738-4BB1-499F-80FC-AA8A0B46B389' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Integration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Integration Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8DEFCEAD-C227-45E0-AF79-6B3318C563C7' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Internal Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7F19F87B-4609-4738-97D6-8627DE23AF4B' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.DisplayName 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8B3F3DFF-3E46-4DB2-9FC6-D5B764D80B7E' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DBFED2A5-355D-4617-B4F8-237B4D3B2365' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Category 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0F0F0147-386F-45C8-AA9F-021C26B634A5' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '027BC6FB-AC73-41C5-8856-981FB0031897' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Sequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9057E47C-7633-4B86-8ADF-F09044FE4470' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.APIPath 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'API Endpoint Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1CFA6C37-9057-4662-8C40-F835AA972EDF' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.ResponseDataKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'API Endpoint Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ADE52A5E-ADBA-4414-AAE2-12B535F85AC3' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.DefaultQueryParams 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'API Endpoint Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Default Query Parameters',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '38708EAC-BEC9-4BD1-AFA5-AF93A00F0FEA' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.Configuration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'API Endpoint Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'ED9326F4-6377-4FB3-84FA-EBCC9859FC07' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsPagination 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync and Pagination',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '27719863-6129-44D5-A77C-7827DB58BD91' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.PaginationType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync and Pagination',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '248DBCEF-E551-4913-8579-200B33459E16' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.DefaultPageSize 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync and Pagination',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '85D95D3F-DAD6-492D-90AF-5207D16780EE' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsIncrementalSync 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync and Pagination',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C73A053E-44E2-40A8-9A0A-899E6E28AF4D' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsWrite 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync and Pagination',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E48963CB-3027-4554-BF48-52ECA282D983' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4C7B2511-B32A-4E05-AD8F-71A8D7438E96' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '17416191-6BA9-4D7D-B38D-5D32220C994E' AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-plug */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET Icon = 'fa fa-plug', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('4bd4782e-33b8-49ea-8b6c-8ab9f3a924a0', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', 'FieldCategoryInfo', '{"Object Definition":{"icon":"fa fa-info-circle","description":"Basic identification and descriptive information for the integration object"},"API Endpoint Details":{"icon":"fa fa-network-wired","description":"Technical configuration for the API endpoint, paths, and response parsing"},"Sync and Pagination":{"icon":"fa fa-sync","description":"Settings governing how data is fetched, paginated, and synchronized"},"Integration Context":{"icon":"fa fa-link","description":"Relationship to the parent integration provider"},"System Metadata":{"icon":"fa fa-cog","description":"Internal system identifiers and audit timestamps"}}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('c0d63ca2-b1cd-43f7-a551-3f3cd0ebcb3b', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', 'FieldCategoryIcons', '{"Object Definition":"fa fa-info-circle","API Endpoint Details":"fa fa-network-wired","Sync and Pagination":"fa fa-sync","Integration Context":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Set DefaultForNewUser=0 for NEW entity (category: system, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021'
+      
 
 /* Set categories for 25 fields */
 
@@ -4289,216 +5589,214 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E1F26C73-2300-40E8-ADA7-6485522B2DF2' AND AutoUpdateCategory = 1
+   ID = 'C29BAC47-FD92-4209-B600-998618C2A052' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IntegrationObjectID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Integration Relationships',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Integration Object',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D0F0963D-7634-4460-A239-A016D7D1C914' AND AutoUpdateCategory = 1
+   ID = '8EA456AD-785F-4E37-B397-8FF6F2040810' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Field Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0A2088A6-CCC0-42ED-A697-05B4487DC24A' AND AutoUpdateCategory = 1
+   ID = 'F087BB9D-A16E-4778-A711-026B5CDB5ECB' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.DisplayName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3F6894BD-7EB1-44DF-920C-042BEDA7D05D' AND AutoUpdateCategory = 1
+   ID = 'C0279D61-5DD7-4636-ACAF-3C07B4EBF599' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '4A7C00A9-EBFD-4F82-B5A6-D54842E0F8AD' AND AutoUpdateCategory = 1
+   ID = 'EB935245-A13B-46BA-B54C-BEDE08FAFEC0' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Category 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
-   DisplayName = 'UI Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '35153B4C-BF7A-45DC-8E6C-8EECA3F68F98' AND AutoUpdateCategory = 1
+   ID = 'CC99E8BA-DDB8-4CFB-8F0A-A4A68769A942' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Type 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Data Type',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'C51BF160-471D-4FBD-AE8A-F0F8B90386E6' AND AutoUpdateCategory = 1
+   ID = 'FE592595-E4FD-458A-A892-918DB3ABC0B8' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Length 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A9DACBC5-E435-43A8-BE69-7722CFA90DB1' AND AutoUpdateCategory = 1
+   ID = 'A184FA33-D1E3-4341-854A-63BA62571622' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Precision 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'DFE3880C-798D-4DB5-BDC5-23A66C9A0144' AND AutoUpdateCategory = 1
+   ID = 'FC62F3D1-514C-4850-A884-098ACCEA440C' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Scale 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '797522B4-4C34-497C-8FB3-D2878B1998A5' AND AutoUpdateCategory = 1
+   ID = 'A27F5839-CA61-42FC-B724-C4F885FB5FA0' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.AllowsNull 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '91B7E80A-2156-48CD-9365-1DDB4B933069' AND AutoUpdateCategory = 1
+   ID = '4F48E0A4-576C-4746-AF78-0CED62880881' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.DefaultValue 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5C0EA6FA-F274-47A1-8F7E-180535926A0A' AND AutoUpdateCategory = 1
+   ID = '1E996E3E-68A6-468D-92B5-B1E7D905AB64' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IsPrimaryKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    DisplayName = 'Primary Key',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FEF5C1E5-550C-4D0E-9562-D569A60FE679' AND AutoUpdateCategory = 1
+   ID = 'A41406EF-D751-4E1D-8B03-537EC3F5ED26' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IsUniqueKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    DisplayName = 'Unique Key',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3EFFCAF7-6B7B-40A2-8303-1207CD5D78CC' AND AutoUpdateCategory = 1
+   ID = 'DB6D509C-4DDC-4F2B-A2ED-6ABDEFD210A5' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IsReadOnly 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    DisplayName = 'Read Only',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '09FDE9AE-1ADC-4EA0-91F9-02E901769A63' AND AutoUpdateCategory = 1
+   ID = '6B8579C3-5351-4263-AEF4-BB44E30D4B4D' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IsRequired 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Specifications',
+   Category = 'Data Constraints',
    GeneratedFormSection = 'Category',
    DisplayName = 'Required',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '7A00D310-7159-4A80-8DE9-2BACB8538E2F' AND AutoUpdateCategory = 1
+   ID = 'DA3BC5CE-671C-48AC-9CD5-497CA602D0E5' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.RelatedIntegrationObjectID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Integration Relationships',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Related Object ID',
+   DisplayName = 'Related Integration Object',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8B22F876-9B5D-42F2-9377-D64049FA9467' AND AutoUpdateCategory = 1
+   ID = '22A62BF2-861B-4B29-A7E1-B69B476E706E' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.RelatedIntegrationObjectFieldName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Integration Relationships',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
    DisplayName = 'Related Field Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6D4A9FBE-DC9C-49DF-A0EE-484AD4DA7B2F' AND AutoUpdateCategory = 1
+   ID = 'EFD4B858-690A-4AD6-9BCE-DACBE0F0BDF3' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Sequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D6421496-41C4-4B3D-AE2B-A35A35A2FAE0' AND AutoUpdateCategory = 1
+   ID = '5BC346A1-8015-4F20-9247-CB0039EE14E4' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Configuration 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
    ExtendedType = 'Code',
    CodeType = 'Other'
 WHERE 
-   ID = '88E614B2-5717-4FB2-B7AE-9B09AA02206C' AND AutoUpdateCategory = 1
+   ID = '2EFA2D36-459B-4433-BFBC-4E76E8A5A461' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Field Details',
+   Category = 'Field Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '42B12AE5-BB2F-4554-BEDD-0B71A199C409' AND AutoUpdateCategory = 1
+   ID = '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4508,7 +5806,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '4EFE9B99-47BC-43A1-8A97-CE70A626E168' AND AutoUpdateCategory = 1
+   ID = 'A40B0908-76CC-4D93-B7FF-659D450CDF19' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4518,303 +5816,410 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '753B52DA-2368-4582-8988-E2047391F88E' AND AutoUpdateCategory = 1
+   ID = '1E19F566-6FFB-4B64-96C9-8EA44B3DAE08' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.IntegrationObject 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Integration Relationships',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Integration Object Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '499E59D2-77EE-4E7E-8690-CA1D38E5EA47' AND AutoUpdateCategory = 1
+   ID = '0DCDA729-DB83-421E-B5EC-1B1636C7BC1E' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.RelatedIntegrationObject 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Integration Relationships',
+   Category = 'Object Mapping',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Related Object Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0A17D910-B127-4F73-B6EC-8338C2613AC7' AND AutoUpdateCategory = 1
+   ID = 'E1ED4D02-2463-457C-9C8D-761D24CC5288' AND AutoUpdateCategory = 1
 
 /* Set entity icon to fa fa-columns */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET Icon = 'fa fa-columns', __mj_UpdatedAt = GETUTCDATE()
-               WHERE ID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B'
+               WHERE ID = '3630CBFD-4C85-4B24-8A51-88D67389373E'
             
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('ec7e812a-ebd6-4fc3-8f9b-d26af2e5427f', '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', 'FieldCategoryInfo', '{"Field Details":{"icon":"fa fa-info-circle","description":"Basic identification and descriptive information for the integration field"},"Data Specifications":{"icon":"fa fa-database","description":"Technical data types, constraints, and validation rules for the field"},"Integration Relationships":{"icon":"fa fa-link","description":"Mappings and links to other integration objects and external systems"},"System Metadata":{"icon":"fa fa-cog","description":"Technical audit fields and system-level configurations"}}', GETUTCDATE(), GETUTCDATE())
+               VALUES ('dfd2b43f-f81e-41f1-9f9b-35a9502a589e', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'FieldCategoryInfo', '{"Field Identity":{"icon":"fa fa-id-card","description":"Basic identification, labeling, and status information for the integration field"},"Data Constraints":{"icon":"fa fa-check-double","description":"Technical specifications, validation rules, and data type requirements"},"Object Mapping":{"icon":"fa fa-link","description":"Relationships between integration objects and specific field configurations"},"System Metadata":{"icon":"fa fa-cog","description":"Internal system identifiers and audit timestamps"}}', GETUTCDATE(), GETUTCDATE())
             
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('435d2f9d-f795-4c05-b933-d47d77582534', '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B', 'FieldCategoryIcons', '{"Field Details":"fa fa-info-circle","Data Specifications":"fa fa-database","Integration Relationships":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+               VALUES ('fbeb188d-a2d6-4ec8-a012-5748e6d01bf0', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'FieldCategoryIcons', '{"Field Identity":"fa fa-id-card","Data Constraints":"fa fa-check-double","Object Mapping":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
             
 
 /* Set DefaultForNewUser=0 for NEW entity (category: system, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
-         WHERE EntityID = '3CC4ADCA-CE0C-47E9-AA8D-0B7C43E3458B'
+         WHERE EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E'
       
 
-/* Set categories for 20 fields */
+/* Set categories for 36 fields */
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.ID 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '952AC623-01E2-4169-97C5-AE4BD3BC5B00' AND AutoUpdateCategory = 1
+   ID = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.IntegrationID 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.CompanyID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.IntegrationID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.IsActive 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Is Active',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.AccessToken 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.RefreshToken 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.TokenExpirationDate 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.APIKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ExternalSystemID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.IsExternalSystemReadOnly 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ClientID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ClientSecret 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.CustomAttribute1 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.SourceTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F647023E-D909-4ECB-B59D-EE477C274827' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.Configuration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '987EAF20-227F-4043-BD87-06C9E01598F4' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.CredentialID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ScheduleEnabled 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4D811E36-6C67-4927-957C-CF3692941C43' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ScheduleType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '91E87B89-A40E-49CE-8464-75EC06BFF1A7' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.ScheduleIntervalMinutes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Schedule Interval (Minutes)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '801D0E7D-4FCB-4249-9052-4E929307F070' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.CronExpression 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FA43CB1D-7A04-40D8-AC9A-2036E3F06252' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.NextScheduledRunAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Next Scheduled Run',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '45E7C880-19C4-45FB-BA3C-9FFD9533FB12' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LastScheduledRunAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Sync Scheduling',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Last Scheduled Run',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CAC39331-FA43-46BD-ABC0-11AE683EA5EC' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.IsLocked 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Run History & Monitoring',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6E0A21B0-0039-4ACC-B40A-3B8E1767D4D4' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LockedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Run History & Monitoring',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8B9EDF01-96FE-4506-97D8-1971830F101E' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LockedByInstance 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Run History & Monitoring',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '186EB537-B916-46AC-82F3-DCE1789B572F' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LockExpiresAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Run History & Monitoring',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F9E35F33-7ED2-4413-922F-12BA98E60355' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.Company 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Company',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.Integration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
    GeneratedFormSection = 'Category',
    DisplayName = 'Integration',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F6B48B88-67F8-4A24-B5CF-52E931039ADD' AND AutoUpdateCategory = 1
+   ID = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.Integration 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.DriverClassName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Integration Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '184644D6-4079-425E-9CF8-D54C1D8339EF' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Object Definition',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Internal Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1101E0F3-DD2E-45CC-A8D5-6A85C661A33B' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.DisplayName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Object Definition',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '23A830DA-A0D6-434A-A5D9-42A36A6BEA49' AND AutoUpdateCategory = 1
+   ID = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.Description 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.DriverImportPath 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D6E1A3B9-952D-461B-9FFF-1D4BB11014D5' AND AutoUpdateCategory = 1
+   ID = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.Category 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LastRunID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
    GeneratedFormSection = 'Category',
-   DisplayName = 'UI Category',
+   DisplayName = 'Last Run ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D5869926-6849-4935-BF80-CD42946E70F4' AND AutoUpdateCategory = 1
+   ID = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.Status 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LastRunStartedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Object Definition',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0F31C7BE-3356-40C4-AA87-8D0ED03BD24D' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.Sequence 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Object Definition',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '9178B46C-0150-45D1-A9B9-D52D190AFA0C' AND AutoUpdateCategory = 1
+   ID = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.APIPath 
+-- UPDATE Entity Field Category Info MJ: Company Integrations.LastRunEndedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'API Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0A6AEEB8-3B33-4F26-9603-3DC602951680' AND AutoUpdateCategory = 1
+   ID = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.ResponseDataKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'API Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '916EEFF8-7F1E-4E01-950A-4DBD79F01177' AND AutoUpdateCategory = 1
+/* Update FieldCategoryInfo setting for entity */
 
--- UPDATE Entity Field Category Info MJ: Integration Objects.DefaultQueryParams 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'API Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Default Query Parameters',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
-WHERE 
-   ID = '7938992B-ADB1-44FB-BF0D-9BCD140D08F2' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.Configuration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'API Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
-WHERE 
-   ID = '138A2D66-FDCB-4170-BE65-75AE0DC8A9B1' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsPagination 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Sync Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6A3CEB60-380B-44EA-BBCD-E9029F3E1AA4' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.PaginationType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Sync Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '707FEEE6-A58B-466E-BA6A-04A7322EF2DE' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.DefaultPageSize 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Sync Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5EF38D90-FE1E-42A0-9AC6-9AC34F76B3F7' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsIncrementalSync 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Sync Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1DDDF958-0FCD-4413-8BFA-107F8E6D1659' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.SupportsWrite 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Sync Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BF91194F-744D-4CF6-80BD-CEAB34643678' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '70AD8587-B21A-4A23-B5B4-68582461F339' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '542BAFE0-6988-4366-B23C-8EFA167F8080' AND AutoUpdateCategory = 1
-
-/* Set entity icon to fa fa-plug */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET Icon = 'fa fa-plug', __mj_UpdatedAt = GETUTCDATE()
-               WHERE ID = 'A376650B-0958-4B75-8122-E3BD4E2085F2'
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET Value = '{"Sync Scheduling":{"icon":"fa fa-clock","description":"Configuration for automatic synchronization frequency, timing, and next scheduled executions."}}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryInfo'
             
 
-/* Insert FieldCategoryInfo setting for entity */
+/* Update FieldCategoryIcons setting (legacy) */
 
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('7ee33511-ab63-4994-a3f3-c256c015be84', 'A376650B-0958-4B75-8122-E3BD4E2085F2', 'FieldCategoryInfo', '{"Object Definition":{"icon":"fa fa-id-card","description":"Basic identification, labeling, and status information for the external integration object."},"API Configuration":{"icon":"fa fa-network-wired","description":"Technical endpoint details, JSON path keys, and request parameters required for connectivity."},"Sync Settings":{"icon":"fa fa-sync-alt","description":"Configuration for data transfer behaviors including pagination, incremental sync, and write-back capabilities."},"System Metadata":{"icon":"fa fa-cog","description":"Internal system-managed audit fields and record timestamps."}}', GETUTCDATE(), GETUTCDATE())
-            
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('26093912-d400-45a8-b005-42ed77f56edd', 'A376650B-0958-4B75-8122-E3BD4E2085F2', 'FieldCategoryIcons', '{"Object Definition":"fa fa-id-card","API Configuration":"fa fa-network-wired","Sync Settings":"fa fa-sync-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
-            
-
-/* Set DefaultForNewUser=0 for NEW entity (category: system, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
-         WHERE EntityID = 'A376650B-0958-4B75-8122-E3BD4E2085F2'
-      
-
-/* Generated Validation Functions for MJ: Company Integrations */
--- CHECK constraint for MJ: Company Integrations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', GETUTCDATE(), 'TypeScript','Approved', '([ScheduleType]=''Cron'' OR [ScheduleType]=''Interval'' OR [ScheduleType]=''Manual'')', 'public ValidateScheduleTypeAllowedValues(result: ValidationResult) {
-	if (this.ScheduleType != null) {
-		const allowed = ["Cron", "Interval", "Manual"];
-		if (allowed.indexOf(this.ScheduleType) === -1) {
-			result.Errors.push(new ValidationErrorInfo(
-				"ScheduleType",
-				"Schedule Type must be one of the following values: " + allowed.join(", ") + ".",
-				this.ScheduleType,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'The schedule type must be set to ''Cron'', ''Interval'', or ''Manual'' to ensure the system knows how to properly trigger the integration.', 'ValidateScheduleTypeAllowedValues', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'DE238F34-2837-EF11-86D4-6045BDEE16E6');
-  
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET Value = '{"Sync Scheduling":"fa fa-clock"}', __mj_UpdatedAt = GETUTCDATE()
+               WHERE EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
             
 

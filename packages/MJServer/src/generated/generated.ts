@@ -23744,6 +23744,39 @@ export class MJCompanyIntegration_ {
     @MaxLength(36)
     CredentialID?: string;
         
+    @Field(() => Boolean, {description: `Whether automatic sync scheduling is enabled for this integration`}) 
+    ScheduleEnabled: boolean;
+        
+    @Field({description: `Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)`}) 
+    @MaxLength(20)
+    ScheduleType: string;
+        
+    @Field(() => Int, {nullable: true, description: `Interval in minutes for Interval schedule type`}) 
+    ScheduleIntervalMinutes?: number;
+        
+    @Field({nullable: true, description: `Cron expression for Cron schedule type (e.g., "0 */6 * * *" for every 6 hours)`}) 
+    @MaxLength(200)
+    CronExpression?: string;
+        
+    @Field({nullable: true, description: `When the next scheduled sync should run. Updated after each run based on schedule config.`}) 
+    NextScheduledRunAt?: Date;
+        
+    @Field({nullable: true, description: `When the last scheduled sync was initiated`}) 
+    LastScheduledRunAt?: Date;
+        
+    @Field(() => Boolean, {description: `Whether a sync is currently locked/running for this integration`}) 
+    IsLocked: boolean;
+        
+    @Field({nullable: true, description: `When the lock was acquired`}) 
+    LockedAt?: Date;
+        
+    @Field({nullable: true, description: `Server instance identifier that holds the lock (hostname-pid)`}) 
+    @MaxLength(200)
+    LockedByInstance?: string;
+        
+    @Field({nullable: true, description: `When the lock should be considered stale and eligible for cleanup`}) 
+    LockExpiresAt?: Date;
+        
     @Field() 
     @MaxLength(50)
     Company: string;
@@ -23842,6 +23875,36 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CredentialID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ScheduleType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ScheduleIntervalMinutes: number | null;
+
+    @Field({ nullable: true })
+    CronExpression: string | null;
+
+    @Field({ nullable: true })
+    NextScheduledRunAt: Date | null;
+
+    @Field({ nullable: true })
+    LastScheduledRunAt: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLocked?: boolean;
+
+    @Field({ nullable: true })
+    LockedAt: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance: string | null;
+
+    @Field({ nullable: true })
+    LockExpiresAt: Date | null;
 }
     
 
@@ -23900,6 +23963,36 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CredentialID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ScheduleType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ScheduleIntervalMinutes?: number | null;
+
+    @Field({ nullable: true })
+    CronExpression?: string | null;
+
+    @Field({ nullable: true })
+    NextScheduledRunAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastScheduledRunAt?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLocked?: boolean;
+
+    @Field({ nullable: true })
+    LockedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance?: string | null;
+
+    @Field({ nullable: true })
+    LockExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

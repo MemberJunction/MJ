@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Integration Relationships Section -->
+    <!-- Object Mapping Section -->
     <mj-collapsible-panel
-        SectionKey="integrationRelationships"
-        SectionName="Integration Relationships"
+        SectionKey="objectMapping"
+        SectionName="Object Mapping"
         Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
@@ -41,14 +41,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Field Details Section -->
+    <!-- Field Identity Section -->
     <mj-collapsible-panel
-        SectionKey="fieldDetails"
-        SectionName="Field Details"
-        Icon="fa fa-info-circle"
+        SectionKey="fieldIdentity"
+        SectionName="Field Identity"
+        Icon="fa fa-id-card"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -102,11 +110,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Data Specifications Section -->
+    <!-- Data Constraints Section -->
     <mj-collapsible-panel
-        SectionKey="dataSpecifications"
-        SectionName="Data Specifications"
-        Icon="fa fa-database"
+        SectionKey="dataConstraints"
+        SectionName="Data Constraints"
+        Icon="fa fa-check-double"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -199,14 +207,6 @@
         Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

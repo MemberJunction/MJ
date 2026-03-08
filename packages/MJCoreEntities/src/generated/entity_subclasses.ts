@@ -8495,7 +8495,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)`),
     IsActive: z.boolean().nullable().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Description: Controls whether this integration is currently active for the company.`),
     AccessToken: z.string().nullable().describe(`
@@ -8576,13 +8576,71 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).`),
+    ScheduleEnabled: z.boolean().describe(`
+        * * Field Name: ScheduleEnabled
+        * * Display Name: Schedule Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether automatic sync scheduling is enabled for this integration`),
+    ScheduleType: z.union([z.literal('Cron'), z.literal('Interval'), z.literal('Manual')]).describe(`
+        * * Field Name: ScheduleType
+        * * Display Name: Schedule Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cron
+    *   * Interval
+    *   * Manual
+        * * Description: Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)`),
+    ScheduleIntervalMinutes: z.number().nullable().describe(`
+        * * Field Name: ScheduleIntervalMinutes
+        * * Display Name: Schedule Interval (Minutes)
+        * * SQL Data Type: int
+        * * Description: Interval in minutes for Interval schedule type`),
+    CronExpression: z.string().nullable().describe(`
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Cron expression for Cron schedule type (e.g., "0 *\/6 * * *" for every 6 hours)`),
+    NextScheduledRunAt: z.date().nullable().describe(`
+        * * Field Name: NextScheduledRunAt
+        * * Display Name: Next Scheduled Run
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the next scheduled sync should run. Updated after each run based on schedule config.`),
+    LastScheduledRunAt: z.date().nullable().describe(`
+        * * Field Name: LastScheduledRunAt
+        * * Display Name: Last Scheduled Run
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the last scheduled sync was initiated`),
+    IsLocked: z.boolean().describe(`
+        * * Field Name: IsLocked
+        * * Display Name: Is Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether a sync is currently locked/running for this integration`),
+    LockedAt: z.date().nullable().describe(`
+        * * Field Name: LockedAt
+        * * Display Name: Locked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lock was acquired`),
+    LockedByInstance: z.string().nullable().describe(`
+        * * Field Name: LockedByInstance
+        * * Display Name: Locked By Instance
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Server instance identifier that holds the lock (hostname-pid)`),
+    LockExpiresAt: z.date().nullable().describe(`
+        * * Field Name: LockExpiresAt
+        * * Display Name: Lock Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lock should be considered stale and eligible for cleanup`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company Name
+        * * Display Name: Company
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8594,7 +8652,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run
+        * * Display Name: Last Run ID
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -14613,13 +14671,13 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Primary key`),
     IntegrationObjectID: z.string().describe(`
         * * Field Name: IntegrationObjectID
-        * * Display Name: Integration Object ID
+        * * Display Name: Integration Object
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Field Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Field name as returned by the external API`),
     DisplayName: z.string().nullable().describe(`
@@ -14634,12 +14692,12 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Description of what this field represents`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: UI Category
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         * * Description: UI grouping category within the object`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Data Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
         * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
     Length: z.number().nullable().describe(`
@@ -14694,7 +14752,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Object ID
+        * * Display Name: Related Integration Object
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -14737,11 +14795,11 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
-        * * Display Name: Integration Object
+        * * Display Name: Integration Object Name
         * * SQL Data Type: nvarchar(255)`),
     RelatedIntegrationObject: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObject
-        * * Display Name: Related Integration Object
+        * * Display Name: Related Object Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -14780,7 +14838,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Description of what this external object represents`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: UI Category
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         * * Description: UI grouping category (e.g., Membership, Events, Finance)`),
     APIPath: z.string().describe(`
@@ -45372,41 +45430,6 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
-    * Validate() method override for MJ: Company Integrations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * ScheduleType: The schedule type must be set to 'Cron', 'Interval', or 'Manual' to ensure the system knows how to properly trigger the integration.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateScheduleTypeAllowedValues(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * The schedule type must be set to 'Cron', 'Interval', or 'Manual' to ensure the system knows how to properly trigger the integration.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScheduleTypeAllowedValues(result: ValidationResult) {
-    	if (this.ScheduleType != null) {
-    		const allowed = ["Cron", "Interval", "Manual"];
-    		if (allowed.indexOf(this.ScheduleType) === -1) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ScheduleType",
-    				"Schedule Type must be one of the following values: " + allowed.join(", ") + ".",
-    				this.ScheduleType,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -45447,7 +45470,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Description: Controls whether this integration is currently active for the company.
     */
@@ -45651,8 +45674,146 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: ScheduleEnabled
+    * * Display Name: Schedule Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether automatic sync scheduling is enabled for this integration
+    */
+    get ScheduleEnabled(): boolean {
+        return this.Get('ScheduleEnabled');
+    }
+    set ScheduleEnabled(value: boolean) {
+        this.Set('ScheduleEnabled', value);
+    }
+
+    /**
+    * * Field Name: ScheduleType
+    * * Display Name: Schedule Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cron
+    *   * Interval
+    *   * Manual
+    * * Description: Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)
+    */
+    get ScheduleType(): 'Cron' | 'Interval' | 'Manual' {
+        return this.Get('ScheduleType');
+    }
+    set ScheduleType(value: 'Cron' | 'Interval' | 'Manual') {
+        this.Set('ScheduleType', value);
+    }
+
+    /**
+    * * Field Name: ScheduleIntervalMinutes
+    * * Display Name: Schedule Interval (Minutes)
+    * * SQL Data Type: int
+    * * Description: Interval in minutes for Interval schedule type
+    */
+    get ScheduleIntervalMinutes(): number | null {
+        return this.Get('ScheduleIntervalMinutes');
+    }
+    set ScheduleIntervalMinutes(value: number | null) {
+        this.Set('ScheduleIntervalMinutes', value);
+    }
+
+    /**
+    * * Field Name: CronExpression
+    * * Display Name: Cron Expression
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Cron expression for Cron schedule type (e.g., "0 *\/6 * * *" for every 6 hours)
+    */
+    get CronExpression(): string | null {
+        return this.Get('CronExpression');
+    }
+    set CronExpression(value: string | null) {
+        this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: NextScheduledRunAt
+    * * Display Name: Next Scheduled Run
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the next scheduled sync should run. Updated after each run based on schedule config.
+    */
+    get NextScheduledRunAt(): Date | null {
+        return this.Get('NextScheduledRunAt');
+    }
+    set NextScheduledRunAt(value: Date | null) {
+        this.Set('NextScheduledRunAt', value);
+    }
+
+    /**
+    * * Field Name: LastScheduledRunAt
+    * * Display Name: Last Scheduled Run
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the last scheduled sync was initiated
+    */
+    get LastScheduledRunAt(): Date | null {
+        return this.Get('LastScheduledRunAt');
+    }
+    set LastScheduledRunAt(value: Date | null) {
+        this.Set('LastScheduledRunAt', value);
+    }
+
+    /**
+    * * Field Name: IsLocked
+    * * Display Name: Is Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether a sync is currently locked/running for this integration
+    */
+    get IsLocked(): boolean {
+        return this.Get('IsLocked');
+    }
+    set IsLocked(value: boolean) {
+        this.Set('IsLocked', value);
+    }
+
+    /**
+    * * Field Name: LockedAt
+    * * Display Name: Locked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lock was acquired
+    */
+    get LockedAt(): Date | null {
+        return this.Get('LockedAt');
+    }
+    set LockedAt(value: Date | null) {
+        this.Set('LockedAt', value);
+    }
+
+    /**
+    * * Field Name: LockedByInstance
+    * * Display Name: Locked By Instance
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Server instance identifier that holds the lock (hostname-pid)
+    */
+    get LockedByInstance(): string | null {
+        return this.Get('LockedByInstance');
+    }
+    set LockedByInstance(value: string | null) {
+        this.Set('LockedByInstance', value);
+    }
+
+    /**
+    * * Field Name: LockExpiresAt
+    * * Display Name: Lock Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lock should be considered stale and eligible for cleanup
+    */
+    get LockExpiresAt(): Date | null {
+        return this.Get('LockExpiresAt');
+    }
+    set LockExpiresAt(value: Date | null) {
+        this.Set('LockExpiresAt', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company Name
+    * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -45661,7 +45822,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -45688,7 +45849,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run
+    * * Display Name: Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -61137,7 +61298,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObjectID
-    * * Display Name: Integration Object ID
+    * * Display Name: Integration Object
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to the IntegrationObject this field belongs to
@@ -61151,7 +61312,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Name
-    * * Display Name: Field Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Field name as returned by the external API
     */
@@ -61190,7 +61351,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Category
-    * * Display Name: UI Category
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     * * Description: UI grouping category within the object
     */
@@ -61203,7 +61364,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Type
-    * * Display Name: Data Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
     */
@@ -61338,7 +61499,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Object ID
+    * * Display Name: Related Integration Object
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -61431,7 +61592,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObject
-    * * Display Name: Integration Object
+    * * Display Name: Integration Object Name
     * * SQL Data Type: nvarchar(255)
     */
     get IntegrationObject(): string {
@@ -61440,7 +61601,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObject
-    * * Display Name: Related Integration Object
+    * * Display Name: Related Object Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedIntegrationObject(): string | null {
@@ -61548,7 +61709,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: Category
-    * * Display Name: UI Category
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     * * Description: UI grouping category (e.g., Membership, Events, Finance)
     */

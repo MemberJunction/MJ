@@ -466,7 +466,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (293 classes)
+// @memberjunction/core-entities (295 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -647,6 +647,8 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
@@ -1322,6 +1324,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJIntegrationEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJLibraryEntity,
@@ -1477,7 +1481,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 631;
+export const CLASS_REGISTRATIONS_COUNT = 633;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

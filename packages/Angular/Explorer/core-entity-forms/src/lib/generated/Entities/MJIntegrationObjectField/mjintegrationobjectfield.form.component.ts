@@ -15,9 +15,9 @@ export class MJIntegrationObjectFieldFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'integrationRelationships', sectionName: 'Integration Relationships', isExpanded: true },
-            { sectionKey: 'fieldDetails', sectionName: 'Field Details', isExpanded: true },
-            { sectionKey: 'dataSpecifications', sectionName: 'Data Specifications', isExpanded: false },
+            { sectionKey: 'objectMapping', sectionName: 'Object Mapping', isExpanded: true },
+            { sectionKey: 'fieldIdentity', sectionName: 'Field Identity', isExpanded: true },
+            { sectionKey: 'dataConstraints', sectionName: 'Data Constraints', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

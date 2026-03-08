@@ -8,22 +8,32 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Object Definition Section -->
+    <!-- Integration Context Section -->
     <mj-collapsible-panel
-        SectionKey="objectDefinition"
-        SectionName="Object Definition"
-        Icon="fa fa-id-card"
+        SectionKey="integrationContext"
+        SectionName="Integration Context"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="IntegrationID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Object Definition Section -->
+    <mj-collapsible-panel
+        SectionKey="objectDefinition"
+        SectionName="Object Definition"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -75,10 +85,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- API Configuration Section -->
+    <!-- API Endpoint Details Section -->
     <mj-collapsible-panel
-        SectionKey="aPIConfiguration"
-        SectionName="API Configuration"
+        SectionKey="aPIEndpointDetails"
+        SectionName="API Endpoint Details"
         Icon="fa fa-network-wired"
         [Form]="this"
         [FormContext]="formContext">
@@ -117,11 +127,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Sync Settings Section -->
+    <!-- Sync and Pagination Section -->
     <mj-collapsible-panel
-        SectionKey="syncSettings"
-        SectionName="Sync Settings"
-        Icon="fa fa-sync-alt"
+        SectionKey="syncAndPagination"
+        SectionName="Sync and Pagination"
+        Icon="fa fa-sync"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -197,10 +207,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Integration Object Fields (Integration Object ID) Section -->
+    <!-- Integration Object Fields (Integration Object) Section -->
     <mj-collapsible-panel
         SectionKey="mJIntegrationObjectFieldsIntegrationObjectID"
-        SectionName="Integration Object Fields (Integration Object ID)"
+        SectionName="Integration Object Fields (Integration Object)"
         Icon="fa fa-columns"
         Variant="related-entity"
         [Form]="this"
@@ -222,10 +232,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Integration Object Fields (Related Object ID) Section -->
+    <!-- Integration Object Fields (Related Integration Object) Section -->
     <mj-collapsible-panel
         SectionKey="mJIntegrationObjectFieldsRelatedIntegrationObjectID"
-        SectionName="Integration Object Fields (Related Object ID)"
+        SectionName="Integration Object Fields (Related Integration Object)"
         Icon="fa fa-columns"
         Variant="related-entity"
         [Form]="this"

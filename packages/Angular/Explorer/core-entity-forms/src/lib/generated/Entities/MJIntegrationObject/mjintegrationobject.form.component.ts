@@ -16,12 +16,13 @@ export class MJIntegrationObjectFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
+            { sectionKey: 'integrationContext', sectionName: 'Integration Context', isExpanded: true },
             { sectionKey: 'objectDefinition', sectionName: 'Object Definition', isExpanded: true },
-            { sectionKey: 'aPIConfiguration', sectionName: 'API Configuration', isExpanded: true },
-            { sectionKey: 'syncSettings', sectionName: 'Sync Settings', isExpanded: false },
+            { sectionKey: 'aPIEndpointDetails', sectionName: 'API Endpoint Details', isExpanded: false },
+            { sectionKey: 'syncAndPagination', sectionName: 'Sync and Pagination', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJIntegrationObjectFieldsIntegrationObjectID', sectionName: 'Integration Object Fields (Integration Object ID)', isExpanded: false },
-            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Object ID)', isExpanded: false }
+            { sectionKey: 'mJIntegrationObjectFieldsIntegrationObjectID', sectionName: 'Integration Object Fields (Integration Object)', isExpanded: false },
+            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Integration Object)', isExpanded: false }
         ]);
     }
 }
