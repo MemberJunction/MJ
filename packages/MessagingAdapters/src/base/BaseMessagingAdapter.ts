@@ -260,13 +260,19 @@ export abstract class BaseMessagingAdapter {
     protected matchAgentMentions(text: string): string[] {
         const cleanText = this.stripBotMention(text);
 
-        // Pass 1: Exact full-name match (longest-first to avoid prefix collisions)
+        // Pass 1: Exact full-name match with @ prefix (longest-first)
         const exactMatched = this.matchExactAgentNames(cleanText);
         if (exactMatched.length > 0) return exactMatched;
 
-        // Pass 2: First-word prefix match — "@Codesmith" matches "Codesmith Agent"
+        // Pass 2: First-word prefix match with @ prefix — "@Codesmith" matches "Codesmith Agent"
         const prefixMatched = this.matchPrefixAgentNames(cleanText);
         if (prefixMatched.length > 0) return prefixMatched;
+
+        // Pass 3: Bare name match (no @ required) — handles "@Bot marketing agent help"
+        // where the @ was consumed by the bot mention. Only matches at the start of
+        // the message to avoid false positives in regular text.
+        const bareMatched = this.matchBareAgentNames(cleanText);
+        if (bareMatched.length > 0) return bareMatched;
 
         return [];
     }
@@ -313,6 +319,29 @@ export abstract class BaseMessagingAdapter {
             }
         }
         return matched;
+    }
+
+    /**
+     * Match agent names at the start of the message without an @ prefix.
+     *
+     * Handles the common Slack pattern where the user types `@Bot Marketing Agent help me`
+     * — the `@Bot` becomes `<@U123>` and gets stripped, leaving `Marketing Agent help me`.
+     * We check if the cleaned text starts with a known agent name (case-insensitive,
+     * longest-first to avoid prefix collisions).
+     */
+    private matchBareAgentNames(text: string): string[] {
+        const trimmed = text.trim().toLowerCase();
+        for (const agent of this.availableAgents) {
+            const agentName = agent.Name;
+            if (!agentName) continue;
+            const lowerName = agentName.toLowerCase();
+            // Must start with the agent name followed by a word boundary or end
+            if (trimmed.startsWith(lowerName) &&
+                (trimmed.length === lowerName.length || /\W/.test(trimmed[lowerName.length]))) {
+                return [agentName];
+            }
+        }
+        return [];
     }
 
     /**
@@ -462,12 +491,49 @@ export abstract class BaseMessagingAdapter {
         let lastUpdateTime = 0;
         const updateInterval = this.settings.StreamingUpdateIntervalMs ?? 1000;
         let progressMessageId: string | null = null;
+        const agentName = agent.Name ?? 'Agent';
 
         try {
+            // Send initial "thinking" message with agent name
+            const thinkingText = `_${agentName} is thinking..._`;
+            progressMessageId = await this.sendOrUpdateStreamingMessage(
+                message, thinkingText, null, agent
+            );
+            lastUpdateTime = Date.now();
+
+            // Track the latest progress label for display before streamed text arrives
+            let progressLabel = '';
+
             const params: ExecuteAgentParams = {
                 agent,
                 conversationMessages,
                 contextUser,
+                onProgress: (progress) => {
+                    if (progress.displayMode === 'historical') return;
+
+                    // Build a step-level progress indicator
+                    const stepCount = (progress.metadata?.stepCount as number) ?? undefined;
+                    const stepNumber = (progress.metadata?.stepNumber as number) ?? undefined;
+                    const stepSuffix = stepNumber != null && stepCount != null
+                        ? ` (Step ${stepNumber} of ${stepCount})`
+                        : '';
+                    progressLabel = `_${progress.message}${stepSuffix}_`;
+
+                    // If we haven't started receiving streamed text yet, show progress
+                    if (!streamBuffer) {
+                        const now = Date.now();
+                        if (now - lastUpdateTime >= updateInterval) {
+                            lastUpdateTime = now;
+                            this.sendOrUpdateStreamingMessage(
+                                message, progressLabel, progressMessageId, agent
+                            ).then(msgId => {
+                                progressMessageId = msgId;
+                            }).catch((err) => {
+                                LogError('Progress update failed:', undefined, err);
+                            });
+                        }
+                    }
+                },
                 onStreaming: (chunk) => {
                     streamBuffer += chunk.content;
                     const now = Date.now();
@@ -575,18 +641,20 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Check if a message looks like a brief delegation note rather than the actual response.
+     * Check if a message looks like a brief summary rather than the actual response.
      *
-     * Delegation notes are short messages (under 200 chars) where the payload has
-     * substantially more content. This happens when a parent agent (e.g., Sage) delegates
-     * to a sub-agent (e.g., Codesmith) — the parent's Message is a brief handoff note
-     * while the real output is in the merged payload.
+     * This covers two cases:
+     * - Delegation notes: parent agent (e.g., Sage) delegates to sub-agent, Message is a handoff note
+     * - Summary-only messages: agent sets Message to a status line but the real content is in the payload
+     *   (e.g., Marketing Agent: "Your blog post is finalized" but the blog text is in FinalPayload)
+     *
+     * The heuristic: Message is short AND the payload has substantially more content.
      */
     private isDelegationNote(message: string, richerContent: string): boolean {
         const messageLen = message.trim().length;
         const richLen = richerContent.trim().length;
         // Message is short AND payload has significantly more content
-        return messageLen < 200 && richLen > messageLen * 2;
+        return messageLen < 300 && richLen > messageLen * 1.5;
     }
 
     /**
@@ -594,20 +662,30 @@ export abstract class BaseMessagingAdapter {
      * Used to detect when agentRun.Message is just a delegation note.
      */
     private extractRicherContent(result: ExecuteAgentResult): string | null {
-        // Try FinalPayload first (merged payload from sub-agent execution)
+        // Collect all candidate content and return the richest (longest) one.
+        // This prevents short status strings from winning over full document content.
+        let bestContent: string | null = null;
+        let bestLength = 0;
+
+        const consider = (text: string | null): void => {
+            if (text && text.trim().length > bestLength) {
+                bestLength = text.trim().length;
+                bestContent = text;
+            }
+        };
+
+        // Try FinalPayload (merged payload from sub-agent execution)
         const finalPayload = result.agentRun?.FinalPayload;
         if (finalPayload) {
-            const parsed = this.extractHumanContentFromPayload(finalPayload);
-            if (parsed) return parsed;
+            consider(this.extractHumanContentFromPayload(finalPayload));
         }
 
         // Try in-memory payload
         if (result.payload != null) {
             if (typeof result.payload === 'string' && result.payload.trim()) {
-                return result.payload;
-            }
-            if (typeof result.payload === 'object' && result.payload !== null) {
-                return this.extractHumanTextFromObject(result.payload as Record<string, unknown>);
+                consider(result.payload);
+            } else if (typeof result.payload === 'object' && result.payload !== null) {
+                consider(this.extractHumanTextFromObject(result.payload as Record<string, unknown>));
             }
         }
 
@@ -616,11 +694,17 @@ export abstract class BaseMessagingAdapter {
         if (runResult) {
             const parsed = this.parseOutputData(runResult);
             if (parsed && !this.isOrchestrationMetadata(parsed)) {
-                return parsed;
+                consider(parsed);
             }
         }
 
-        return null;
+        // Try step outputs — the real content might be in an earlier step
+        const stepContent = this.extractFromStepOutputs(result);
+        if (stepContent) {
+            consider(stepContent);
+        }
+
+        return bestContent;
     }
 
     /**
@@ -637,19 +721,32 @@ export abstract class BaseMessagingAdapter {
     /**
      * Try to extract a human-readable message from step outputs.
      * Skips orchestration metadata (subAgentResult, payloadChangeResult, etc.).
+     *
+     * Searches backwards from the last step, but also tracks the LONGEST
+     * non-orchestration output found across all steps. This ensures that
+     * a substantial output (like a full blog post in step 7) isn't overshadowed
+     * by a short status message in step 10.
      */
     private extractFromStepOutputs(result: ExecuteAgentResult): string | null {
         const steps = result.agentRun?.Steps ?? [];
+        let bestOutput: string | null = null;
+        let bestLength = 0;
+
         for (let i = steps.length - 1; i >= 0; i--) {
             const step = steps[i];
             if (!step.OutputData) continue;
 
             const parsed = this.parseOutputData(step.OutputData);
             if (parsed && !this.isOrchestrationMetadata(parsed)) {
-                return parsed;
+                // Track the longest output — agent steps often end with a short
+                // status message while the real content was generated in an earlier step
+                if (parsed.length > bestLength) {
+                    bestLength = parsed.length;
+                    bestOutput = parsed;
+                }
             }
         }
-        return null;
+        return bestOutput;
     }
 
     /**
@@ -711,6 +808,10 @@ export abstract class BaseMessagingAdapter {
             '"shouldTerminate"',
             '"nextStep":"retry"',
             '"nextStep": "retry"',
+            '"step":"Sub-Agent"',
+            '"step": "Sub-Agent"',
+            '"subAgent"',
+            '"terminateAfter"',
         ];
         return orchestrationMarkers.some(marker => text.includes(marker));
     }
@@ -726,6 +827,16 @@ export abstract class BaseMessagingAdapter {
             const nextStep = obj.nextStep as Record<string, unknown>;
             if (typeof nextStep.message === 'string' && nextStep.message.trim()) {
                 return nextStep.message;
+            }
+            // Delegation pattern: { nextStep: { subAgent: { name: "..." } } }
+            // The parent agent delegates to a sub-agent — show a brief note.
+            // Do NOT show subAgent.message — it's the internal prompt to the sub-agent.
+            if (nextStep.subAgent != null && typeof nextStep.subAgent === 'object') {
+                const subAgent = nextStep.subAgent as Record<string, unknown>;
+                const subAgentName = subAgent.name as string | undefined;
+                if (subAgentName) {
+                    return `_Delegating to ${subAgentName}..._`;
+                }
             }
         }
 
@@ -793,7 +904,79 @@ export abstract class BaseMessagingAdapter {
             }
         }
 
+        // Deep search: walk ALL fields looking for substantial text content.
+        // This catches agent-specific payload shapes (e.g., Marketing Agent's blogPost.content,
+        // campaign.deliverables, etc.) that don't match our known field patterns.
+        const deepText = this.findDeepTextContent(obj, 3);
+        if (deepText) return deepText;
+
         return null;
+    }
+
+    /**
+     * Walk an object tree looking for the longest substantial text field.
+     *
+     * Used as a fallback when structured pattern matching fails.
+     * Finds text content buried under arbitrary agent-specific field names
+     * (e.g., blogPost.content, campaign.body, deliverables.text).
+     *
+     * @param obj - Object to search.
+     * @param maxDepth - Maximum recursion depth to prevent runaway traversal.
+     * @returns The longest text value found that looks like document content, or null.
+     */
+    private findDeepTextContent(obj: Record<string, unknown>, maxDepth: number): string | null {
+        if (maxDepth <= 0) return null;
+
+        let bestText: string | null = null;
+        let bestLength = 0;
+
+        // Minimum length to be considered "substantial" content (not a label or ID)
+        const MIN_CONTENT_LENGTH = 100;
+
+        for (const [key, value] of Object.entries(obj)) {
+            // Skip known non-content fields
+            if (this.isNonContentField(key)) continue;
+
+            if (typeof value === 'string' && value.trim().length > MIN_CONTENT_LENGTH) {
+                // Prefer longer text — it's more likely to be the primary document content
+                if (value.length > bestLength) {
+                    bestLength = value.length;
+                    bestText = value;
+                }
+            } else if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+                const nested = this.findDeepTextContent(value as Record<string, unknown>, maxDepth - 1);
+                if (nested && nested.length > bestLength) {
+                    bestLength = nested.length;
+                    bestText = nested;
+                }
+            } else if (Array.isArray(value) && value.length > 0) {
+                // Check arrays of objects (e.g., deliverables: [{ content: "..." }])
+                for (const item of value) {
+                    if (item != null && typeof item === 'object' && !Array.isArray(item)) {
+                        const nested = this.findDeepTextContent(item as Record<string, unknown>, maxDepth - 1);
+                        if (nested && nested.length > bestLength) {
+                            bestLength = nested.length;
+                            bestText = nested;
+                        }
+                    }
+                }
+            }
+        }
+
+        return bestText;
+    }
+
+    /**
+     * Check if a field name is unlikely to contain user-facing document content.
+     */
+    private isNonContentField(key: string): boolean {
+        const nonContentFields = [
+            'id', 'ID', 'uuid', 'status', 'type', 'step', 'nextStep',
+            'createdAt', 'updatedAt', 'timestamp', 'metadata',
+            'subAgentResult', 'payloadChangeResult', 'shouldTerminate',
+            'terminateAfter', 'iterationNumber', 'number'
+        ];
+        return nonContentFields.includes(key);
     }
 
     /**
@@ -1037,7 +1220,16 @@ export abstract class BaseMessagingAdapter {
      */
     private looksLikeOrchestrationObject(obj: Record<string, unknown>): boolean {
         const orchestrationKeys = ['subAgentResult', 'payloadChangeResult', 'shouldTerminate'];
-        return orchestrationKeys.some(key => key in obj);
+        if (orchestrationKeys.some(key => key in obj)) return true;
+
+        // nextStep with subAgent or step type is orchestration control flow
+        if (obj.nextStep != null && typeof obj.nextStep === 'object') {
+            const nextStep = obj.nextStep as Record<string, unknown>;
+            if (nextStep.subAgent != null || nextStep.step === 'Sub-Agent' || nextStep.terminate === true) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

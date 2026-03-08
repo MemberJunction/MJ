@@ -267,7 +267,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         try {
-            await handleSlackInteraction(payloadStr, this.interactClient!);
+            await handleSlackInteraction(payloadStr, this.interactClient!, this.adapter ?? undefined);
         } catch (error) {
             LogError('Error handling Slack interaction:', undefined, error);
         }

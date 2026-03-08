@@ -296,11 +296,18 @@ describe('slack-block-builder', () => {
             const longText = Array.from({ length: 100 }, (_, i) => `# Section ${i}\n\nParagraph ${i}.`).join('\n\n');
             const blocks = buildRichResponse(null, agent as never, longText);
 
-            const lastBlock = blocks[blocks.length - 1];
             if (blocks.length === 50) {
-                expect(lastBlock.type).toBe('context');
-                const elements = lastBlock.elements as Record<string, unknown>[];
+                // Second-to-last block is the truncation notice
+                const noticeBlock = blocks[blocks.length - 2];
+                expect(noticeBlock.type).toBe('context');
+                const elements = noticeBlock.elements as Record<string, unknown>[];
                 expect((elements[0].text as string)).toContain('truncated');
+
+                // Last block is the "View Full Response" button
+                const buttonBlock = blocks[blocks.length - 1];
+                expect(buttonBlock.type).toBe('actions');
+                const btnElements = buttonBlock.elements as Record<string, unknown>[];
+                expect(btnElements[0].action_id).toBe('mj:view_full:response');
             }
         });
 
