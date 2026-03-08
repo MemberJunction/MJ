@@ -9,7 +9,140 @@
     min-height: 0 !important;
 }
 
-/* Status Warning Banner */
+/* ========================================
+   Header Section — matches Query Browser gradient
+   ======================================== */
+
+.query-header {
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
+    border-bottom: none;
+    padding: 0;
+}
+
+.query-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px;
+}
+
+.query-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.query-name-section {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.query-title-icon {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.3em;
+    flex-shrink: 0;
+}
+
+.query-name-input {
+    font-size: 1.2em;
+    font-weight: 600;
+    min-width: 300px;
+    flex: 1;
+}
+
+.query-name-display {
+    margin: 0;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.2em;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.query-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.run-query-btn {
+    white-space: nowrap;
+}
+
+/* Meta row (category + status) */
+.query-meta-row {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.query-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.meta-label {
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 13px;
+    min-width: 60px;
+}
+
+.meta-value {
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 14px;
+}
+
+.meta-dropdown {
+    min-width: 200px;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-pill i {
+    font-size: 12px;
+}
+
+/* Description row */
+.query-description-row {
+    margin-top: 2px;
+}
+
+.query-description-input {
+    width: 100%;
+}
+
+.query-description-text {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* ========================================
+   Status Warning Banner
+   ======================================== */
+
 .status-warning-banner {
     display: flex;
     align-items: center;
@@ -32,41 +165,31 @@
     font-weight: 600;
 }
 
-.sql-editor-container {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+/* ========================================
+   Main Content Area
+   ======================================== */
+
+.query-content {
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f5f5f5;
 }
 
-.filters-help .filter-card {
-    transition: transform 0.2s ease;
+/* ========================================
+   Expansion Panel Overrides — Modern Style
+   ======================================== */
+
+.query-panel {
+    margin-bottom: 12px;
 }
 
-.filters-help .filter-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.toolbar-actions {
-    margin-left: auto;
-}
-
-.query-header {
-    border-bottom: 2px solid #dee2e6;
-}
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* Modern Expansion Panel Styling */
 ::ng-deep .query-content kendo-expansionpanel {
     border: none !important;
-    border-radius: 12px !important;
-    margin-bottom: 16px !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+    border-radius: 8px !important;
+    margin-bottom: 12px !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
     background: white !important;
     overflow: hidden !important;
 }
@@ -74,152 +197,374 @@
 ::ng-deep .query-content .k-expander-header {
     background: white !important;
     border: none !important;
-    padding: 16px 20px !important;
-    border-radius: 12px !important;
-    color: #2c3e50 !important;
+    padding: 14px 18px !important;
+    border-radius: 8px !important;
+    color: #333 !important;
     font-weight: 600 !important;
-    font-size: 16px !important;
-    transition: all 0.2s ease !important;
+    font-size: 14px !important;
+    transition: background 0.15s ease !important;
 }
 
 ::ng-deep .query-content .k-expander-header:hover {
     background: #f8f9fa !important;
 }
 
-/* Expanded state header */
 ::ng-deep .query-content kendo-expansionpanel[aria-expanded="true"] .k-expander-header {
-    background: #2196f3 !important;
+    background: #5c6bc0 !important;
     color: white !important;
-    border-radius: 12px 12px 0 0 !important;
+    border-radius: 8px 8px 0 0 !important;
 }
 
-/* Content area */
 ::ng-deep .query-content .k-expander-content {
     padding: 0 !important;
     border: none !important;
     background: white !important;
-    border-radius: 0 0 12px 12px !important;
+    border-radius: 0 0 8px 8px !important;
 }
 
-/* Icon in header */
-::ng-deep .query-content .k-expander-header .fa-solid {
-    transition: transform 0.2s ease !important;
+/* ========================================
+   Panel Title & Badges
+   ======================================== */
+
+.panel-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
 }
 
-::ng-deep .query-content kendo-expansionpanel[aria-expanded="true"] .k-expander-header .fa-chevron-down {
-    transform: rotate(180deg) !important;
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
 }
 
-/* Parameter Cards */
-.parameters-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 16px;
-    padding: 20px;
+.panel-icon {
+    font-size: 14px;
+    opacity: 0.7;
 }
 
-.param-card {
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
+.sql-icon {
+    color: #5c6bc0;
+}
+
+::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-icon {
+    color: rgba(255, 255, 255, 0.85) !important;
+    opacity: 1;
+}
+
+.panel-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.panel-badge.defined {
+    background: #28a745;
+    color: white;
+}
+
+.panel-badge.count {
+    background: #5c6bc0;
+    color: white;
+}
+
+::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-badge.count {
+    background: rgba(255, 255, 255, 0.25) !important;
+}
+
+::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-badge.defined {
+    background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.filters-help-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 8px;
+    font-size: 12px;
+}
+
+/* ========================================
+   Panel Body & Loading
+   ======================================== */
+
+.panel-body {
+    padding: 16px 0;
+}
+
+.panel-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.panel-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 20px 12px;
+}
+
+/* ========================================
+   SQL Panel
+   ======================================== */
+
+.sql-panel-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.sql-editor {
+    flex: 1;
+    height: 400px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    margin: 16px;
+}
+
+/* Filters Help */
+.filters-help {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
     padding: 16px;
-    transition: all 0.2s;
+    margin: 0 16px 16px;
+}
+
+.filters-help-title {
+    margin: 0 0 12px 0;
+    color: #333;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 10px;
+}
+
+.filter-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filter-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.filter-name {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: #5c6bc0;
+    margin-bottom: 4px;
+}
+
+.filter-description {
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.filter-syntax {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: #f5f5f5;
+    padding: 6px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.filter-notes {
+    font-size: 11px;
+    color: #888;
+    font-style: italic;
+}
+
+/* ========================================
+   Card Grid (Parameters, Fields, Entities)
+   ======================================== */
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    padding: 0 20px 20px;
+}
+
+.item-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 14px;
+    transition: all 0.15s ease;
     cursor: pointer;
     position: relative;
 }
 
-.param-card:hover {
-    border-color: #007bff;
-    box-shadow: 0 2px 8px rgba(0,123,255,0.1);
-    transform: translateY(-1px);
+.item-card:hover {
+    border-color: #5c6bc0;
+    box-shadow: 0 2px 8px rgba(92, 107, 192, 0.12);
 }
 
-.param-card.required {
-    border-color: #ffc107;
+.item-card.required {
+    border-left: 3px solid #f59e0b;
 }
 
-.param-card-header {
+.item-card-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
-.param-name {
+.item-name {
     font-weight: 600;
-    font-size: 1.1em;
-    color: #2c3e50;
+    font-size: 14px;
+    color: #333;
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.param-badges {
+.item-name-icon {
+    font-size: 14px;
+}
+
+.item-name-icon.param-icon {
+    color: #5c6bc0;
+}
+
+.item-name-icon.field-icon {
+    color: #5c6bc0;
+}
+
+.item-name-icon.entity-icon {
+    color: #28a745;
+}
+
+.item-badges {
     display: flex;
     gap: 6px;
 }
 
-.param-badge {
+.item-badge {
     padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75em;
+    border-radius: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: white;
 }
 
-.param-badge.required {
-    background: #ffc107;
+.item-badge.required {
+    background: #f59e0b;
 }
 
-.param-badge.array {
-    background: #9c27b0;
+.item-badge.type {
+    background: #e8eaf6;
+    color: #3949ab;
 }
 
-.param-card-body {
-    color: #6c757d;
-    font-size: 0.9em;
+.item-badge.sequence {
+    background: #f3e5f5;
+    color: #7b1fa2;
 }
 
-.param-actions {
+.item-card-body {
+    color: #666;
+    font-size: 13px;
+}
+
+.item-description {
+    margin-bottom: 8px;
+}
+
+.item-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.meta-code {
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+/* Card actions (edit/delete) */
+.item-actions {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 10px;
+    right: 10px;
     display: flex;
     gap: 4px;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.15s ease;
 }
 
-.param-card:hover .param-actions {
+.item-card:hover .item-actions {
     opacity: 1;
 }
 
-.param-action-btn {
+.item-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.item-action-btn {
     background: none;
     border: none;
     padding: 4px 8px;
     border-radius: 4px;
     cursor: pointer;
-    color: #6c757d;
-    transition: all 0.2s;
+    color: #888;
+    transition: all 0.15s ease;
 }
 
-.param-action-btn:hover {
-    background: #f8f9fa;
-    color: #007bff;
+.item-action-btn:hover {
+    background: #f0f0f0;
+    color: #5c6bc0;
 }
 
-.param-action-btn.delete:hover {
+.item-action-btn.delete:hover {
     background: #fff5f5;
     color: #dc3545;
 }
 
-/* Details Section */
+/* Entity dropdown in card */
+.entity-dropdown-wrapper {
+    flex: 1;
+    margin-left: 12px;
+}
+
+.entity-dropdown {
+    width: 100%;
+}
+
+/* ========================================
+   Details Grid
+   ======================================== */
+
 .details-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    padding: 16px 20px;
 }
 
 .detail-item {
@@ -229,94 +574,151 @@
 }
 
 .detail-label {
-    font-size: 0.85em;
+    font-size: 12px;
     font-weight: 600;
-    color: #6c757d;
+    color: #888;
     display: flex;
     align-items: center;
     gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
 .detail-value {
-    font-size: 1em;
-    color: #2c3e50;
+    font-size: 14px;
+    color: #333;
 }
 
-/* Category Tree Dropdown */
-.category-selector {
-    display: flex;
-    gap: 8px;
+.detail-tag {
+    display: inline-flex;
     align-items: center;
+    gap: 4px;
+    font-size: 13px;
 }
 
-.category-tree-dropdown {
+.detail-tag.positive {
+    color: #28a745;
+}
+
+.detail-tag.neutral {
+    color: #888;
+}
+
+/* ========================================
+   Permissions
+   ======================================== */
+
+.permissions-list {
+    padding: 0 20px;
+}
+
+.permission-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+}
+
+.permission-icon {
+    font-size: 1.3em;
+    color: #5c6bc0;
+}
+
+.permission-info {
     flex: 1;
 }
 
-.add-category-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
+.permission-role {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.permission-type {
+    font-size: 12px;
+    color: #888;
+}
+
+.permission-badge {
+    display: inline-flex;
     align-items: center;
     gap: 4px;
+    background: #5c6bc0;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
-.add-category-btn:hover {
-    background: #218838;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(40,167,69,0.2);
-}
+/* ========================================
+   Empty State
+   ======================================== */
 
-/* Empty State */
 .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 60px 20px;
+    padding: 48px 20px;
     text-align: center;
-    color: #6c757d;
+    color: #888;
 }
 
 .empty-state-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.3;
+    font-size: 40px;
+    margin-bottom: 14px;
+    opacity: 0.25;
+    color: #333;
 }
 
 .empty-state-title {
-    font-size: 1.2em;
+    font-size: 15px;
     font-weight: 600;
-    margin-bottom: 8px;
-    color: #495057;
+    margin-bottom: 6px;
+    color: #555;
 }
 
 .empty-state-text {
-    font-size: 0.9em;
-    margin-bottom: 20px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    color: #888;
 }
 
-.add-param-btn {
-    background: #007bff;
+/* ========================================
+   Buttons
+   ======================================== */
+
+.add-item-btn {
+    background: #5c6bc0;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 8px 16px;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
+    transition: all 0.15s ease;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 500;
+    font-size: 13px;
 }
 
-.add-param-btn:hover {
-    background: #0056b3;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+.add-item-btn:hover {
+    background: #3949ab;
+    box-shadow: 0 2px 6px rgba(92, 107, 192, 0.3);
+}
+
+/* ========================================
+   Badge (reused across components)
+   ======================================== */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }

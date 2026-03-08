@@ -66,20 +66,28 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     
     private destroy$ = new Subject<void>();
     private isUpdatingEditorValue = false;
+    private isInitialLoad = true;
 
     async ngOnInit() {
         await super.ngOnInit();
-        
+
+        // During init, suppress per-method detectChanges to avoid NG0100.
+        // We do one unified detectChanges after everything completes.
+        this.isInitialLoad = true;
+
         // Load categories first to ensure they're available for the dropdown
         await this.loadCategories();
-        
-        // Then load other data in parallel — each method calls detectChanges on completion
+
+        // Then load other data in parallel
         await Promise.all([
             this.loadQueryParameters(),
             this.loadQueryFields(),
             this.loadQueryEntities(),
             this.loadQueryPermissions()
         ]);
+
+        this.isInitialLoad = false;
+        this.cdr.detectChanges();
     }
 
     ngOnDestroy() {
@@ -161,7 +169,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query parameters:', error);
             } finally {
                 this.isLoadingParameters = false;
-                this.cdr.detectChanges();
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -185,7 +193,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query fields:', error);
             } finally {
                 this.isLoadingFields = false;
-                this.cdr.detectChanges();
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -210,7 +218,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query entities:', error);
             } finally {
                 this.isLoadingEntities = false;
-                this.cdr.detectChanges();
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -234,7 +242,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 console.error('Error loading query permissions:', error);
             } finally {
                 this.isLoadingPermissions = false;
-                this.cdr.detectChanges();
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -263,8 +271,8 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 // Build tree data after options are set
                 this.categoryTreeData = this.buildCategoryTree(this.categories);
                 
-                // Trigger change detection to update the view
-                this.cdr.detectChanges();
+                // Trigger change detection to update the view (skip during init)
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         } catch (error) {
             console.error('Error loading categories:', error);
