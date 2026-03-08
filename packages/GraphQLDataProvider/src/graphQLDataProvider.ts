@@ -2709,13 +2709,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 SourceServerID
                 Timestamp
                 OriginSessionID
+                RecordData
             }
         }`;
 
         const observable = this.subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string }>) => {
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
 
@@ -2738,6 +2739,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         action: event.Action,
                         sourceServerId: event.SourceServerID,
                         timestamp: event.Timestamp,
+                        recordData: event.RecordData,
                     },
                 };
 

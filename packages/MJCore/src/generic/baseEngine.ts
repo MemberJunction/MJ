@@ -10,6 +10,7 @@ import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { CompositeKey, KeyValuePair } from "./compositeKey";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
@@ -152,6 +153,17 @@ export interface EngineDataChangeEvent {
  * provides a mechanism for loading metadata from the database and caching it for use by the engine. Subclasses must implement the Config abstract method and within that
  * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks.
  */
+/**
+ * Typed payload for remote-invalidate events received via cache invalidation subscription.
+ */
+export interface RemoteInvalidatePayload {
+    primaryKeyValues: string | null;
+    action: 'save' | 'delete';
+    sourceServerId: string;
+    timestamp: string;
+    recordData?: string;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
@@ -508,8 +520,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * These events are fired by GraphQLDataProvider when it receives a cache invalidation
      * notification via GraphQL subscription (originating from Redis pub/sub on another server).
      *
-     * For each matching config, we re-fetch the data from the server via LoadSingleConfig,
-     * then call AdditionalLoading if any refreshes occurred.
+     * When the event payload includes recordData (the saved entity as JSON), the engine
+     * applies the change directly to its in-memory array — no server round-trip needed.
+     * For delete events or events without recordData, falls back to LoadSingleConfig.
      */
     protected async HandleRemoteInvalidateEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
@@ -526,6 +539,29 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true;
             }
 
+            const payload = event.payload as RemoteInvalidatePayload | undefined;
+            const action = payload?.action;
+
+            // Save with record data: apply directly without a server call
+            if (action === 'save' && payload?.recordData) {
+                const applied = await this.applyRemoteRecordData(matchingConfigs, entityName, payload.recordData);
+                if (applied) {
+                    return true;
+                }
+                // Fall through to server fetch if direct apply failed
+            }
+
+            // Delete with primary key values: remove from arrays directly
+            if (action === 'delete' && payload?.primaryKeyValues) {
+                const removed = this.applyRemoteDelete(matchingConfigs, payload.primaryKeyValues);
+                if (removed) {
+                    await this.AdditionalLoading(this._contextUser);
+                    return true;
+                }
+                // Fall through to server fetch if direct delete failed
+            }
+
+            // Fallback: re-fetch from server (missing data or apply failure)
             let refreshCount = 0;
             for (const config of matchingConfigs) {
                 await this.LoadSingleConfig(config, this._contextUser);
@@ -544,6 +580,98 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
     }
 
+    /**
+     * Applies record data from a remote-invalidate event directly to the engine's in-memory arrays.
+     * Creates a BaseEntity instance, loads the JSON data into it, then updates the matching
+     * config arrays — same as applyImmediateMutation but from serialized data instead of a live entity.
+     *
+     * @returns true if successfully applied to all matching configs, false if fallback is needed
+     */
+    protected async applyRemoteRecordData(
+        matchingConfigs: BaseEnginePropertyConfig[],
+        entityName: string,
+        recordDataJSON: string
+    ): Promise<boolean> {
+        try {
+            const recordData = JSON.parse(recordDataJSON);
+            const md = new Metadata();
+            // Find the proper entity name with original casing from the config
+            const originalEntityName = matchingConfigs[0].EntityName!;
+            const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
+            entity.LoadFromData(recordData);
+
+            for (const config of matchingConfigs) {
+                if (!this.canUseImmediateMutation(config)) {
+                    // Config has Filter/OrderBy — can't safely apply inline, need server fetch
+                    return false;
+                }
+
+                const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+                if (!currentData) continue;
+
+                const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (index >= 0) {
+                    currentData[index] = entity;
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'update', entity);
+                } else {
+                    currentData.push(entity);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'add', entity);
+                }
+                // LocalCacheManager handles its own cache sync by listening for
+                // remote-invalidate events directly — no need to sync here
+            }
+
+            await this.AdditionalLoading(this._contextUser);
+            return true;
+        }
+        catch (e) {
+            LogError(e);
+            return false; // Fall back to server fetch
+        }
+    }
+
+    /**
+     * Removes a deleted record from the engine's in-memory arrays using the primary key values
+     * from the remote-invalidate event payload. No server round-trip needed.
+     *
+     * @returns true if successfully applied to all matching configs, false if fallback is needed
+     */
+    protected applyRemoteDelete(
+        matchingConfigs: BaseEnginePropertyConfig[],
+        primaryKeyValuesJSON: string
+    ): boolean {
+        try {
+            const rawPairs = JSON.parse(primaryKeyValuesJSON) as Array<{ FieldName: string; Value: string }>;
+            if (!rawPairs || rawPairs.length === 0) return false;
+
+            const targetKey = CompositeKey.FromKeyValuePairs(
+                rawPairs.map(kv => new KeyValuePair(kv.FieldName, kv.Value))
+            );
+
+            for (const config of matchingConfigs) {
+                const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+                if (!currentData) continue;
+
+                const index = currentData.findIndex(e => e.PrimaryKey.Equals(targetKey));
+
+                if (index >= 0) {
+                    const removed = currentData[index];
+                    currentData.splice(index, 1);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'delete', removed);
+                }
+                // LocalCacheManager handles its own cache sync for deletes
+            }
+
+            return true;
+        }
+        catch (e) {
+            LogError(e);
+            return false;
+        }
+    }
 
     /**
      * This method handles the debouncing process, by default using the EntityEventDebounceTime property to set the debounce time. Debouncing is 
@@ -861,7 +989,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         const entity = event.baseEntity;
-        const entityInfo = entity.EntityInfo;
 
         // Get the connection string from the provider for fingerprint generation
         // The provider is needed because fingerprints include connection prefix
@@ -882,34 +1009,28 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         };
         const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
 
-        // Get the primary key field name
-        const primaryKeyFieldName = entityInfo.FirstPrimaryKey?.Name || 'ID';
+        // Build CompositeKey from the entity's primary key fields
+        const key = entity.PrimaryKey;
+        if (!key || key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) {
+            LogStatus(`BaseEngine.syncLocalCacheForConfig: Cannot sync - primary key is incomplete for ${config.EntityName}`);
+            return;
+        }
 
         // Get the updated timestamp from the entity
         const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
 
         if (event.type === 'delete') {
-            // For deletes, remove the entity from cache
-            // Use the first primary key value for simple keys
-            const pkValue = entity.PrimaryKey.KeyValuePairs[0]?.Value;
-            if (pkValue === null || pkValue === undefined) {
-                LogStatus(`BaseEngine.syncLocalCacheForConfig: Cannot sync delete - primary key value is null for ${config.EntityName}`);
-                return;
-            }
             await LocalCacheManager.Instance.RemoveSingleEntity(
                 fingerprint,
-                String(pkValue),
-                primaryKeyFieldName,
+                key,
                 updatedAt
             );
         } else {
-            // For save (create or update), upsert the entity data
-            // Use GetAll() to get a plain object representation
             const entityData = entity.GetAll();
             await LocalCacheManager.Instance.UpsertSingleEntity(
                 fingerprint,
                 entityData,
-                primaryKeyFieldName,
+                key,
                 updatedAt
             );
         }

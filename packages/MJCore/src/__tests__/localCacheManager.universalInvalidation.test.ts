@@ -416,10 +416,14 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
                 .HandleBaseEntityEvent(event);
 
-            // Both caches should be invalidated (not updated in place)
+            // Unfiltered cache: record upserted in place (composite PK now fully supported)
             const cached1 = await cacheManager.GetRunViewResult(fp1);
+            expect(cached1).not.toBeNull();
+            expect(cached1!.results).toHaveLength(1);
+            expect((cached1!.results[0] as Record<string, unknown>).Active).toBe(false);
+
+            // Filtered cache: still invalidated (can't verify filter match)
             const cached2 = await cacheManager.GetRunViewResult(fp2);
-            expect(cached1).toBeNull();
             expect(cached2).toBeNull();
         });
 
@@ -442,8 +446,10 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
                 .HandleBaseEntityEvent(event);
 
+            // Composite PK now fully supported — record removed, cache remains
             const cached = await cacheManager.GetRunViewResult(fp);
-            expect(cached).toBeNull();
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(0);
         });
 
         it('should handle single PK normally (not invalidate)', async () => {

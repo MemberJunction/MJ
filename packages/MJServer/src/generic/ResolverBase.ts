@@ -987,6 +987,7 @@ export class ResolverBase {
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
+      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
     });
   }
 

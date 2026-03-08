@@ -21,6 +21,9 @@ export class CacheInvalidationNotification {
 
     @Field(() => String, { nullable: true })
     OriginSessionID?: string;
+
+    @Field(() => String, { nullable: true })
+    RecordData?: string;
 }
 
 /**
@@ -34,6 +37,7 @@ export interface CacheInvalidationPayload {
     sourceServerId: string;
     timestamp: Date;
     originSessionId?: string;
+    recordData?: string;
 }
 
 @Resolver()
@@ -56,6 +60,7 @@ export class CacheInvalidationResolver {
             SourceServerID: payload.sourceServerId,
             Timestamp: payload.timestamp,
             OriginSessionID: payload.originSessionId ?? undefined,
+            RecordData: payload.recordData ?? undefined,
         };
     }
 }

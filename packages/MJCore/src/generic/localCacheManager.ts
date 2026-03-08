@@ -3,6 +3,8 @@ import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorag
 import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { Metadata } from "./metadata";
+import { CompositeKey, KeyValuePair } from "./compositeKey";
 
 // ============================================================================
 // TYPES AND INTERFACES
@@ -465,6 +467,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             const entityEvent = mjEvent.args as BaseEntityEvent;
             if (!entityEvent) return;
 
+            // Handle remote-invalidate events with embedded record data
+            if (entityEvent.type === 'remote-invalidate') {
+                this.HandleRemoteInvalidateEvent(entityEvent).catch((err) => {
+                    LogError(`LocalCacheManager.HandleRemoteInvalidateEvent error: ${(err as Error).message}`);
+                });
+                return;
+            }
+
             // Only react to completed save and delete events
             if (entityEvent.type !== 'save' && entityEvent.type !== 'delete') return;
 
@@ -494,34 +504,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) return;
 
-        LogStatus(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}", updating ${fingerprints.size} cached fingerprint(s)`);
+        // Build a CompositeKey from the entity's primary key fields
+        const key = new CompositeKey();
+        key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, baseEntity.GetAll());
+        if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) return;
 
-        // Snapshot the fingerprints since we may modify the set during iteration
+        LogStatus(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
+
         const fingerprintSnapshot = [...fingerprints];
-
-        // For composite primary keys, we can't safely do in-place upsert/remove
-        // because UpsertSingleEntity/RemoveSingleEntity work with a single PK field.
-        // Fall back to cache invalidation for safety.
-        if (primaryKeys.length > 1) {
-            LogStatus(`LocalCacheManager: Composite PK detected for "${entityName}" (${primaryKeys.length} fields), invalidating all ${fingerprintSnapshot.length} cached fingerprint(s)`);
-            for (const fingerprint of fingerprintSnapshot) {
-                try {
-                    await this.InvalidateRunViewResult(fingerprint);
-                } catch (err) {
-                    LogError(`HandleBaseEntityEvent: failed to invalidate fingerprint "${fingerprint}" (composite PK): ${(err as Error).message}`);
-                }
-            }
-            return;
-        }
-
-        // Single primary key — can do targeted upsert/remove
-        const pkFieldInfo = primaryKeys[0];
-        if (!pkFieldInfo?.Name) return;
-
-        const pkValue = baseEntity.Get(pkFieldInfo.Name);
-        if (pkValue == null) return;
-
-        const primaryKeyValue = String(pkValue);
         const nowISO = new Date().toISOString();
 
         for (const fingerprint of fingerprintSnapshot) {
@@ -530,14 +520,135 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     entityEvent.type,
                     fingerprint,
                     baseEntity,
-                    pkFieldInfo.Name,
-                    primaryKeyValue,
+                    key,
                     nowISO
                 );
             } catch (err) {
                 LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
             }
         }
+    }
+
+    /**
+     * Handles remote-invalidate events that include recordData (the saved entity as JSON).
+     * Updates all cached RunView results for the entity without a server round-trip.
+     * For delete events or events without recordData, the cache entries are invalidated
+     * so the next RunView call will fetch fresh data from the server.
+     */
+    protected async HandleRemoteInvalidateEvent(entityEvent: BaseEntityEvent): Promise<void> {
+        const payload = entityEvent.payload as { action?: 'save' | 'delete'; recordData?: string; primaryKeyValues?: string } | undefined;
+        const entityName = entityEvent.entityName;
+        if (!entityName) return;
+
+        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        if (!fingerprints || fingerprints.size === 0) return;
+
+        const action = payload?.action;
+
+        // Look up entity metadata for PK field names
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        if (!entityInfo) {
+            LogStatus(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
+            for (const fp of [...fingerprints]) {
+                await this.InvalidateRunViewResult(fp);
+            }
+            return;
+        }
+
+        const primaryKeys = entityInfo.PrimaryKeys;
+        if (!primaryKeys || primaryKeys.length === 0) {
+            LogStatus(`LocalCacheManager: remote-invalidate — no PKs for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
+            for (const fp of [...fingerprints]) {
+                await this.InvalidateRunViewResult(fp);
+            }
+            return;
+        }
+
+        const nowISO = new Date().toISOString();
+        const fingerprintSnapshot = [...fingerprints];
+
+        // Handle delete: remove the record from all cached results
+        if (action === 'delete') {
+            const key = this.parseCompositeKeyFromJSON(payload?.primaryKeyValues);
+            if (!key) {
+                LogStatus(`LocalCacheManager: remote-invalidate (delete) — no PK values for "${entityName}", invalidating caches`);
+                for (const fp of fingerprintSnapshot) {
+                    await this.InvalidateRunViewResult(fp);
+                }
+                return;
+            }
+
+            LogStatus(`LocalCacheManager: remote-invalidate (delete) for "${entityName}" PK=${key.ToConcatenatedString()}, removing from ${fingerprints.size} cached fingerprint(s)`);
+            for (const fingerprint of fingerprintSnapshot) {
+                try {
+                    await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                } catch (err) {
+                    LogError(`HandleRemoteInvalidateEvent: failed to remove from "${fingerprint}": ${(err as Error).message}`);
+                }
+            }
+            return;
+        }
+
+        // Handle save: upsert record data into cached results
+        if (action === 'save' && payload?.recordData) {
+            try {
+                const recordData = JSON.parse(payload.recordData) as Record<string, unknown>;
+
+                // Build CompositeKey from record data using entity PK fields
+                const key = this.buildCompositeKeyFromRow(recordData, primaryKeys.map(pk => pk.Name));
+                if (key.KeyValuePairs.some(kv => kv.Value == null)) return;
+
+                LogStatus(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
+
+                for (const fingerprint of fingerprintSnapshot) {
+                    try {
+                        if (!this.isFilteredFingerprint(fingerprint)) {
+                            await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
+                        } else {
+                            await this.InvalidateRunViewResult(fingerprint);
+                        }
+                    } catch (err) {
+                        LogError(`HandleRemoteInvalidateEvent: failed to update "${fingerprint}": ${(err as Error).message}`);
+                    }
+                }
+            } catch (e) {
+                LogError(`HandleRemoteInvalidateEvent: failed to parse recordData for "${entityName}": ${(e as Error).message}`);
+                for (const fp of fingerprintSnapshot) {
+                    await this.InvalidateRunViewResult(fp);
+                }
+            }
+            return;
+        }
+
+        // Fallback: no record data or unrecognized action — invalidate
+        LogStatus(`LocalCacheManager: remote-invalidate (${action || 'unknown'}) for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
+        for (const fp of fingerprintSnapshot) {
+            await this.InvalidateRunViewResult(fp);
+        }
+    }
+
+    /**
+     * Parses a JSON-encoded primaryKeyValues string (array of {FieldName, Value} pairs)
+     * into a CompositeKey. Returns null if parsing fails or the string is empty.
+     */
+    private parseCompositeKeyFromJSON(primaryKeyValuesJSON: string | undefined): CompositeKey | null {
+        if (!primaryKeyValuesJSON) return null;
+        try {
+            const pairs = JSON.parse(primaryKeyValuesJSON) as Array<{ FieldName: string; Value: string }>;
+            if (!pairs || pairs.length === 0) return null;
+            return CompositeKey.FromKeyValuePairs(pairs.map(p => new KeyValuePair(p.FieldName, p.Value)));
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Builds a CompositeKey from a plain row object using the specified PK field names.
+     */
+    private buildCompositeKeyFromRow(row: Record<string, unknown>, pkFieldNames: string[]): CompositeKey {
+        const pairs = pkFieldNames.map(fn => new KeyValuePair(fn, row[fn]));
+        return CompositeKey.FromKeyValuePairs(pairs);
     }
 
     /**
@@ -548,18 +659,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         eventType: BaseEntityEvent['type'],
         fingerprint: string,
         baseEntity: BaseEntity,
-        primaryKeyFieldName: string,
-        primaryKeyValue: string,
+        key: CompositeKey,
         nowISO: string
     ): Promise<void> {
+        const keyStr = key.ToConcatenatedString();
         if (eventType === 'delete') {
-            LogStatus(`LocalCacheManager: Removing entity ${primaryKeyValue} from cache "${fingerprint.substring(0, 60)}"`);
-            await this.RemoveSingleEntity(fingerprint, primaryKeyValue, primaryKeyFieldName, nowISO);
+            LogStatus(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
+            await this.RemoveSingleEntity(fingerprint, key, nowISO);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
             // Unfiltered cache: update the record in place
-            LogStatus(`LocalCacheManager: Upserting entity ${primaryKeyValue} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
+            LogStatus(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
-            await this.UpsertSingleEntity(fingerprint, entityData, primaryKeyFieldName, nowISO);
+            await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
         } else {
             // Filtered cache: conservatively invalidate (can't verify filter match)
             LogStatus(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
@@ -1080,34 +1191,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 return null;
             }
 
-            // Build a map of existing records by primary key for O(1) lookups
+            // Build a map of existing records by composite key string for O(1) lookups
+            const pkFieldNames = [primaryKeyFieldName];
             const resultMap = new Map<string, unknown>();
             for (const row of cached.results) {
                 const rowObj = row as Record<string, unknown>;
-                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
-                if (pkValue) {
-                    resultMap.set(pkValue, row);
-                }
+                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                resultMap.set(rowKey.ToConcatenatedString(), row);
             }
 
             // Apply deletions - remove records that have been deleted
             for (const deletedID of deletedRecordIDs) {
-                // deletedID is in CompositeKey concatenated format: "Field1|Value1||Field2|Value2"
-                // For single-field PKs, it's just "ID|abc123"
-                // We need to extract just the value(s) to match against our map
-                const pkValue = this.extractValueFromConcatenatedKey(deletedID, primaryKeyFieldName);
-                if (pkValue) {
-                    resultMap.delete(pkValue);
-                }
+                // deletedID is already in CompositeKey concatenated format: "Field1|Value1||Field2|Value2"
+                // Use it directly as the map key since ToConcatenatedString() produces the same format
+                resultMap.delete(deletedID);
             }
 
             // Apply updates/inserts - add or replace records
             for (const row of updatedRows) {
                 const rowObj = row as Record<string, unknown>;
-                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
-                if (pkValue) {
-                    resultMap.set(pkValue, row);
-                }
+                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                resultMap.set(rowKey.ToConcatenatedString(), row);
             }
 
             // Convert map back to array
@@ -1153,66 +1257,36 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     public async UpsertSingleEntity(
         fingerprint: string,
         entityData: Record<string, unknown>,
-        primaryKeyFieldName: string,
+        key: CompositeKey,
         newMaxUpdatedAt: string
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
         try {
-            // Get existing cached data
             const cached = await this.GetRunViewResult(fingerprint);
             if (!cached) {
-                // No existing cache - nothing to update
-                // The next RunView call will populate the cache
                 LogStatus(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                 return false;
             }
             LogStatus(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
 
-            // Get the primary key value from the entity
-            const pkValue = this.extractPrimaryKeyString(entityData, primaryKeyFieldName);
-            if (!pkValue) {
-                LogError(`LocalCacheManager.UpsertSingleEntity: Could not extract primary key from entity data`);
-                return false;
-            }
+            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+            const keyStr = key.ToConcatenatedString();
 
-            // Build a map of existing records by primary key
+            // Build a map of existing records by composite key string
             const resultMap = new Map<string, unknown>();
             for (const row of cached.results) {
                 const rowObj = row as Record<string, unknown>;
-                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
-                if (rowPkValue) {
-                    resultMap.set(rowPkValue, row);
-                }
+                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                resultMap.set(rowKey.ToConcatenatedString(), row);
             }
 
             // Upsert the entity (add or replace)
-            resultMap.set(pkValue, entityData);
+            resultMap.set(keyStr, entityData);
 
-            // Convert map back to array
             const updatedResults = Array.from(resultMap.values());
 
-            // Store the updated cache - rowCount is derived from results.length
-            const data: CachedRunViewData = {
-                results: updatedResults,
-                maxUpdatedAt: newMaxUpdatedAt
-            };
-            const value = JSON.stringify(data);
-            const sizeBytes = this.estimateSize(value);
-
-            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
-
-            // Update registry entry with derived rowCount
-            const existingEntry = this._registry.get(fingerprint);
-            if (existingEntry) {
-                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
-                existingEntry.rowCount = updatedResults.length;
-                existingEntry.sizeBytes = sizeBytes;
-                existingEntry.lastAccessedAt = Date.now();
-                this.debouncedPersistRegistry();
-            }
-
-            return true;
+            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
         } catch (e) {
             LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
             return false;
@@ -1221,73 +1295,46 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * Removes a single entity from a cached RunView result.
-     * Used by BaseEngine for immediate cache sync when an entity is deleted.
+     * Supports composite primary keys via CompositeKey matching.
      *
      * @param fingerprint - The cache fingerprint to update
-     * @param primaryKeyValue - The primary key value of the entity to remove
-     * @param primaryKeyFieldName - Name of the primary key field
+     * @param key - CompositeKey identifying the entity to remove
      * @param newMaxUpdatedAt - New maxUpdatedAt timestamp
      * @returns true if cache was updated, false if cache not found or update failed
      */
     public async RemoveSingleEntity(
         fingerprint: string,
-        primaryKeyValue: string,
-        primaryKeyFieldName: string,
+        key: CompositeKey,
         newMaxUpdatedAt: string
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
         try {
-            // Get existing cached data
             const cached = await this.GetRunViewResult(fingerprint);
             if (!cached) {
-                // No existing cache - nothing to update
                 return false;
             }
 
-            // Build a map of existing records by primary key
+            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+            const keyStr = key.ToConcatenatedString();
+
+            // Build a map of existing records by composite key string
             const resultMap = new Map<string, unknown>();
             for (const row of cached.results) {
                 const rowObj = row as Record<string, unknown>;
-                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
-                if (rowPkValue) {
-                    resultMap.set(rowPkValue, row);
-                }
+                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                resultMap.set(rowKey.ToConcatenatedString(), row);
             }
 
-            // Check if entity exists in cache
-            if (!resultMap.has(primaryKeyValue)) {
-                // Entity not in cache, nothing to remove
-                return true; // Not an error, just a no-op
+            if (!resultMap.has(keyStr)) {
+                return true; // Not in cache, no-op
             }
 
-            // Remove the entity
-            resultMap.delete(primaryKeyValue);
+            resultMap.delete(keyStr);
 
-            // Convert map back to array
             const updatedResults = Array.from(resultMap.values());
 
-            // Store the updated cache - rowCount is derived from results.length
-            const data: CachedRunViewData = {
-                results: updatedResults,
-                maxUpdatedAt: newMaxUpdatedAt
-            };
-            const value = JSON.stringify(data);
-            const sizeBytes = this.estimateSize(value);
-
-            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
-
-            // Update registry entry with derived rowCount
-            const existingEntry = this._registry.get(fingerprint);
-            if (existingEntry) {
-                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
-                existingEntry.rowCount = updatedResults.length;
-                existingEntry.sizeBytes = sizeBytes;
-                existingEntry.lastAccessedAt = Date.now();
-                this.debouncedPersistRegistry();
-            }
-
-            return true;
+            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
         } catch (e) {
             LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
             return false;
@@ -1295,58 +1342,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Extracts the primary key value as a string from a row object.
-     * Handles both single-field and composite primary keys.
-     * @param row - The row object
-     * @param primaryKeyFieldName - The primary key field name (first field for composite keys)
-     * @returns The primary key value as a string, or null if not found
+     * Stores updated results array back to the cache and updates the registry.
+     * Shared by UpsertSingleEntity and RemoveSingleEntity to avoid duplication.
      */
-    private extractPrimaryKeyString(row: Record<string, unknown>, primaryKeyFieldName: string): string | null {
-        const value = row[primaryKeyFieldName];
-        if (value === null || value === undefined) {
-            return null;
+    private async storeCachedResults(
+        fingerprint: string,
+        updatedResults: unknown[],
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        const data: CachedRunViewData = {
+            results: updatedResults,
+            maxUpdatedAt: newMaxUpdatedAt
+        };
+        const value = JSON.stringify(data);
+        const sizeBytes = this.estimateSize(value);
+
+        await this._storageProvider!.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+
+        const existingEntry = this._registry.get(fingerprint);
+        if (existingEntry) {
+            existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+            existingEntry.rowCount = updatedResults.length;
+            existingEntry.sizeBytes = sizeBytes;
+            existingEntry.lastAccessedAt = Date.now();
+            this.debouncedPersistRegistry();
         }
-        return String(value);
+
+        return true;
     }
 
-    /**
-     * Extracts the primary key value from a CompositeKey concatenated string.
-     * Format: "Field1|Value1||Field2|Value2" for composite keys, or "ID|abc123" for single keys.
-     * @param concatenatedKey - The concatenated key string from RecordChange.RecordID
-     * @param primaryKeyFieldName - The primary key field name to extract
-     * @returns The value for the specified field, or the first value if field not found
-     */
-    private extractValueFromConcatenatedKey(concatenatedKey: string, primaryKeyFieldName: string): string | null {
-        if (!concatenatedKey) {
-            return null;
-        }
-
-        // Split by field delimiter (||)
-        const fieldPairs = concatenatedKey.split('||');
-
-        for (const pair of fieldPairs) {
-            // Split by value delimiter (|)
-            const parts = pair.split('|');
-            if (parts.length >= 2) {
-                const fieldName = parts[0];
-                const value = parts.slice(1).join('|'); // Rejoin in case value contained |
-
-                if (fieldName === primaryKeyFieldName) {
-                    return value;
-                }
-            }
-        }
-
-        // If field name not found, return the first value (fallback for simple keys)
-        if (fieldPairs.length > 0) {
-            const parts = fieldPairs[0].split('|');
-            if (parts.length >= 2) {
-                return parts.slice(1).join('|');
-            }
-        }
-
-        return null;
-    }
 
     /**
      * Invalidates all cached RunView results for a specific entity.
