@@ -2708,15 +2708,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Action
                 SourceServerID
                 Timestamp
+                OriginSessionID
             }
         }`;
 
         const observable = this.subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string }>) => {
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string }>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
+
+                // Skip events that originated from this browser session — we already
+                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+                    console.log(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    return;
+                }
 
                 console.log(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
 
