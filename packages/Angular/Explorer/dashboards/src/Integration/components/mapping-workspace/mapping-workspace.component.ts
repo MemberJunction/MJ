@@ -241,7 +241,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   get SelectedMap(): MapListItem | null {
     if (!this.SelectedMapID) return null;
-    return this.AllMaps.find(m => m.ID === this.SelectedMapID || UUIDsEqual(m.ID, this.SelectedMapID)) ?? null;
+    return this.AllMaps.find(m => UUIDsEqual(m.ID, this.SelectedMapID)) ?? null;
   }
 
   get SelectedEntityMap(): EntityMapRow | null {

@@ -1,4 +1,5 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
@@ -719,7 +720,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
 
-            const targetObj = allObjects.find(o => o.ID === field.RelatedIntegrationObjectID);
+            const targetObj = allObjects.find(o => UUIDsEqual(o.ID, field.RelatedIntegrationObjectID));
             if (!targetObj) continue;
 
             relationships.push({
