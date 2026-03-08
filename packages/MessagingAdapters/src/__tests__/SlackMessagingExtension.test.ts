@@ -108,12 +108,18 @@ describe('SlackMessagingExtension', () => {
         vi.mocked(verifySlackSignature).mockReset().mockReturnValue(true);
 
         const { RunView } = await import('@memberjunction/core');
-        vi.mocked(RunView).mockImplementation(() => ({
-            RunView: vi.fn().mockResolvedValue({
-                Success: true,
-                Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
-            })
-        }) as ReturnType<typeof vi.fn>);
+        vi.mocked(RunView).mockImplementation(() => {
+            const callCount = { n: 0 };
+            return {
+                RunView: vi.fn().mockImplementation(() => {
+                    callCount.n++;
+                    if (callCount.n === 1) {
+                        return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                    }
+                    return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                })
+            } as ReturnType<typeof vi.fn>;
+        });
 
         extension = new SlackMessagingExtension();
     });
@@ -127,7 +133,7 @@ describe('SlackMessagingExtension', () => {
 
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('Slack extension loaded (HTTP mode)');
-            expect(result.RegisteredRoutes).toEqual(['POST /webhook/slack']);
+            expect(result.RegisteredRoutes).toEqual(['POST /webhook/slack', 'POST /webhook/slack/interact']);
         });
 
         it('should mount router on the configured root path', async () => {

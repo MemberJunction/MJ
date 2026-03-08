@@ -64,10 +64,26 @@ const defaultSettings: MessagingAdapterSettings = {
 
 async function createInitializedAdapter(): Promise<SlackAdapter> {
     const { RunView } = await import('@memberjunction/core');
+    const callCount = { n: 0 };
     vi.mocked(RunView).mockImplementation(() => ({
-        RunView: vi.fn().mockResolvedValue({
-            Success: true,
-            Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
+        RunView: vi.fn().mockImplementation(() => {
+            callCount.n++;
+            if (callCount.n === 1) {
+                // loadDefaultAgent
+                return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+            }
+            // loadAvailableAgents
+            return {
+                Success: true,
+                Results: [
+                    { ID: 'sage-id', Name: 'Sage' },
+                    { ID: 'research-id', Name: 'Research Agent' },
+                    { ID: 'research-bot-id', Name: 'ResearchBot' },
+                    { ID: 'skip-id', Name: 'Skip' },
+                    { ID: 'codesmith-id', Name: 'Codesmith Agent' },
+                    { ID: 'agent-guid-123', Name: 'Default Agent' }
+                ]
+            };
         })
     }) as ReturnType<typeof vi.fn>);
 
@@ -129,7 +145,7 @@ describe('SlackAdapter', () => {
             expect(msg.ThreadID).toBe('1234567890.000001');
         });
 
-        it('should parse agent @mentions from message text', () => {
+        it('should parse single-word agent @mentions from message text', () => {
             const event = {
                 ts: '1234567890.111111',
                 text: '<@UBOTID123> ask @Sage about the project',
@@ -142,9 +158,22 @@ describe('SlackAdapter', () => {
             expect(msg.MentionedAgentNames).toContain('Sage');
         });
 
-        it('should parse multiple agent @mentions', () => {
+        it('should parse multi-word agent @mentions', () => {
             const event = {
                 ts: '1234567890.222222',
+                text: '<@UBOTID123> ask @Research Agent about quantum computing',
+                user: 'U_SENDER',
+                channel: 'C_CHANNEL',
+                type: 'app_mention'
+            };
+
+            const msg = adapter.MapSlackEvent(event);
+            expect(msg.MentionedAgentNames).toContain('Research Agent');
+        });
+
+        it('should parse multiple agent @mentions', () => {
+            const event = {
+                ts: '1234567890.222223',
                 text: '<@UBOTID123> ask @Sage and @ResearchBot for help',
                 user: 'U_SENDER',
                 channel: 'C_CHANNEL',
@@ -167,6 +196,32 @@ describe('SlackAdapter', () => {
 
             const msg = adapter.MapSlackEvent(event);
             expect(msg.MentionedAgentNames).toEqual([]);
+        });
+
+        it('should match agent by first-word prefix (e.g., @Codesmith → Codesmith Agent)', () => {
+            const event = {
+                ts: '1234567890.555555',
+                text: '<@UBOTID123> @Codesmith render a circle',
+                user: 'U_SENDER',
+                channel: 'C_CHANNEL',
+                type: 'app_mention'
+            };
+
+            const msg = adapter.MapSlackEvent(event);
+            expect(msg.MentionedAgentNames).toContain('Codesmith Agent');
+        });
+
+        it('should match agent by first-word prefix case-insensitively', () => {
+            const event = {
+                ts: '1234567890.555556',
+                text: '<@UBOTID123> @codesmith do something cool',
+                user: 'U_SENDER',
+                channel: 'C_CHANNEL',
+                type: 'app_mention'
+            };
+
+            const msg = adapter.MapSlackEvent(event);
+            expect(msg.MentionedAgentNames).toContain('Codesmith Agent');
         });
 
         it('should not treat Slack user mentions <@U...> as agent mentions', () => {

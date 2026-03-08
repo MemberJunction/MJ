@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
 
@@ -71,7 +72,7 @@ class TestAdapter extends BaseMessagingAdapter {
         this.OnInitializeCalled = true;
     }
 
-    protected async showTypingIndicator(_message: IncomingMessage): Promise<void> {
+    protected async showTypingIndicator(_message: IncomingMessage, _agent?: MJAIAgentEntityExtended): Promise<void> {
         this.TypeIndicatorShown = true;
     }
 
@@ -82,7 +83,8 @@ class TestAdapter extends BaseMessagingAdapter {
     protected async sendOrUpdateStreamingMessage(
         _originalMessage: IncomingMessage,
         currentContent: string,
-        existingMessageId: string | null
+        existingMessageId: string | null,
+        _agent?: MJAIAgentEntityExtended
     ): Promise<string> {
         this.StreamingMessageCounter++;
         const msgId = existingMessageId ?? `stream-msg-${this.StreamingMessageCounter}`;
@@ -102,10 +104,14 @@ class TestAdapter extends BaseMessagingAdapter {
         this.FinalUpdates.push({ messageId, response });
     }
 
-    protected async formatResponse(markdownText: string): Promise<FormattedResponse> {
+    protected async formatResponse(
+        _result: ExecuteAgentResult | null,
+        _agent: MJAIAgentEntityExtended,
+        responseText: string
+    ): Promise<FormattedResponse> {
         return {
-            PlainText: markdownText,
-            RichPayload: { formatted: true, text: markdownText }
+            PlainText: responseText,
+            RichPayload: { formatted: true, text: responseText }
         };
     }
 
@@ -130,9 +136,9 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.resolveContextUser(msg);
     }
 
-    public async testResolveAgent(msg: IncomingMessage): Promise<{ agent: unknown; multiAgentNote: string | null }> {
+    public async testResolveAgent(msg: IncomingMessage, threadHistory: IncomingMessage[] = []): Promise<{ agent: unknown; multiAgentNote: string | null }> {
         // Use fallbackContextUser for testing; Initialize() must be called first
-        return this.resolveAgent(msg, this.fallbackContextUser!);
+        return this.resolveAgent(msg, this.fallbackContextUser!, threadHistory);
     }
 }
 
@@ -170,11 +176,24 @@ describe('BaseMessagingAdapter', () => {
 
     beforeEach(() => {
         adapter = new TestAdapter(defaultSettings);
-        // Mock RunView for agent lookup
+        // Mock RunView for agent lookup: first call = loadDefaultAgent, second = loadAvailableAgents
+        const callCount = { n: 0 };
         const mockRunView = {
-            RunView: vi.fn().mockResolvedValue({
-                Success: true,
-                Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
+            RunView: vi.fn().mockImplementation(() => {
+                callCount.n++;
+                if (callCount.n === 1) {
+                    // loadDefaultAgent
+                    return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                }
+                // loadAvailableAgents
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: 'agent-guid-123', Name: 'Default Agent' },
+                        { ID: 'sage-id', Name: 'Sage' },
+                        { ID: 'research-id', Name: 'Research Bot' }
+                    ]
+                };
             })
         };
         vi.mocked(RunView).mockImplementation(() => mockRunView as unknown as RunView);
@@ -261,58 +280,80 @@ describe('BaseMessagingAdapter', () => {
             expect(result.multiAgentNote).toBeNull();
         });
 
-        it('should look up first mentioned agent by name', async () => {
-            const mockRunView = {
-                RunView: vi.fn().mockResolvedValue({
-                    Success: true,
-                    Results: [{ ID: 'named-agent-id', Name: 'Research Bot' }]
-                })
-            };
-            vi.mocked(RunView).mockImplementation(() => mockRunView as unknown as RunView);
-
+        it('should look up first mentioned agent by name from cached agents', async () => {
+            // 'Research Bot' is already in availableAgents from the mock setup
             const msg = createMessage({ MentionedAgentNames: ['Research Bot'] });
             const result = await adapter.testResolveAgent(msg);
-            expect(result.agent).toEqual({ ID: 'named-agent-id', Name: 'Research Bot' });
+            expect((result.agent as Record<string, unknown>).Name).toBe('Research Bot');
             expect(result.multiAgentNote).toBeNull();
         });
 
         it('should return multi-agent note when multiple agents mentioned', async () => {
-            const mockRunView = {
-                RunView: vi.fn().mockResolvedValue({
-                    Success: true,
-                    Results: [{ ID: 'first-agent-id', Name: 'First Bot' }]
-                })
-            };
-            vi.mocked(RunView).mockImplementation(() => mockRunView as unknown as RunView);
-
-            const msg = createMessage({ MentionedAgentNames: ['First Bot', 'Second Bot', 'Third Bot'] });
+            const msg = createMessage({ MentionedAgentNames: ['Sage', 'Research Bot', 'Default Agent'] });
             const result = await adapter.testResolveAgent(msg);
-            expect(result.agent).toEqual({ ID: 'first-agent-id', Name: 'First Bot' });
-            expect(result.multiAgentNote).toContain('First Bot');
-            expect(result.multiAgentNote).toContain('Second Bot');
-            expect(result.multiAgentNote).toContain('Third Bot');
+            expect((result.agent as Record<string, unknown>).Name).toBe('Sage');
+            expect(result.multiAgentNote).toContain('Sage');
+            expect(result.multiAgentNote).toContain('Research Bot');
             expect(result.multiAgentNote).toContain('Only one agent');
         });
 
         it('should fall back to default agent when named agent not found', async () => {
-            const callCount = { n: 0 };
-            const mockRunView = {
-                RunView: vi.fn().mockImplementation(() => {
-                    callCount.n++;
-                    if (callCount.n === 1) {
-                        // First call: agent name lookup — not found
-                        return { Success: true, Results: [] };
-                    }
-                    // Second call: default agent
-                    return { Success: true, Results: [{ ID: 'default-id', Name: 'Default' }] };
-                })
-            };
-            vi.mocked(RunView).mockImplementation(() => mockRunView as unknown as RunView);
-
             const msg = createMessage({ MentionedAgentNames: ['NonexistentBot'] });
             const result = await adapter.testResolveAgent(msg);
-            // Should fall back to default agent
+            // Should fall back to default agent and show help message
+            expect(result.multiAgentNote).toContain('couldn\'t find');
+            expect(result.multiAgentNote).toContain('NonexistentBot');
+        });
+
+        it('should use thread affinity when no agent mentioned in current message', async () => {
+            // Simulate a thread where the first message mentioned 'Research Bot'
+            const threadHistory: IncomingMessage[] = [
+                createMessage({
+                    MessageID: 'thread-start',
+                    Text: '<@BOT123> @Research Bot how do joins work?',
+                    SenderID: 'user-1',
+                    MentionedAgentNames: ['Research Bot'],
+                }),
+                createMessage({
+                    MessageID: 'bot-reply',
+                    Text: 'Here is how joins work...',
+                    SenderID: 'BOT123', // Bot's own message
+                }),
+            ];
+            // Current message has no @mention
+            const msg = createMessage({ MentionedAgentNames: [], ThreadID: 'thread-start' });
+            const result = await adapter.testResolveAgent(msg, threadHistory);
+            expect((result.agent as Record<string, unknown>).Name).toBe('Research Bot');
             expect(result.multiAgentNote).toBeNull();
+        });
+
+        it('should prefer explicit mention over thread affinity', async () => {
+            const threadHistory: IncomingMessage[] = [
+                createMessage({
+                    MessageID: 'thread-start',
+                    Text: '@Research Bot question',
+                    SenderID: 'user-1',
+                    MentionedAgentNames: ['Research Bot'],
+                }),
+            ];
+            // Current message explicitly mentions a different agent
+            const msg = createMessage({ MentionedAgentNames: ['Sage'], ThreadID: 'thread-start' });
+            const result = await adapter.testResolveAgent(msg, threadHistory);
+            expect((result.agent as Record<string, unknown>).Name).toBe('Sage');
+        });
+
+        it('should fall back to default when thread has no agent mentions', async () => {
+            const threadHistory: IncomingMessage[] = [
+                createMessage({
+                    MessageID: 'thread-start',
+                    Text: 'Just a regular DM',
+                    SenderID: 'user-1',
+                }),
+            ];
+            const msg = createMessage({ MentionedAgentNames: [] });
+            const result = await adapter.testResolveAgent(msg, threadHistory);
+            // Should use default agent (first result from loadDefaultAgent mock)
+            expect((result.agent as Record<string, unknown>).Name).toBe('Default Agent');
         });
     });
 
@@ -360,6 +401,93 @@ describe('BaseMessagingAdapter', () => {
     describe('response extraction (via HandleMessage)', () => {
         beforeEach(async () => {
             await adapter.Initialize();
+        });
+
+        it('should use agentRun.Message as top priority extraction (matches Explorer/AICLI)', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    payload: 'payload fallback',
+                    agentRun: {
+                        Message: 'Human-readable message from agent',
+                        Result: JSON.stringify({ summary: 'Some result' }),
+                        Steps: [{
+                            OutputData: JSON.stringify({ nextStep: { message: 'Step output message' } }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Human-readable message from agent');
+        });
+
+        it('should append payload content when agentRun.Message is a short delegation note', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: "I'll have Codesmith handle this calculation.",
+                        FinalPayload: JSON.stringify({
+                            summary: 'The first 20 prime numbers are: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71. These are the natural numbers greater than 1 that have no positive divisors other than 1 and themselves.',
+                        }),
+                        Steps: []
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // Should include BOTH the delegation note and the actual content
+            expect(sent?.PlainText).toContain("I'll have Codesmith handle this calculation.");
+            expect(sent?.PlainText).toContain('first 20 prime numbers');
+        });
+
+        it('should NOT append payload when agentRun.Message is already substantial', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: 'Here is a detailed response about quantum computing that covers all the key concepts including superposition, entanglement, quantum gates, and decoherence. Quantum computers use qubits which can exist in superposition states unlike classical bits.',
+                        FinalPayload: JSON.stringify({ summary: 'Quantum computing overview' }),
+                        Steps: []
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // Should use Message directly without appending short payload
+            expect(sent?.PlainText).toBe('Here is a detailed response about quantum computing that covers all the key concepts including superposition, entanglement, quantum gates, and decoherence. Quantum computers use qubits which can exist in superposition states unlike classical bits.');
+        });
+
+        it('should skip empty agentRun.Message and fall through to step outputs', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: '   ',
+                        Steps: [{
+                            OutputData: 'Fallback step text',
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toBe('Fallback step text');
         });
 
         it('should extract nextStep.message from structured JSON', async () => {
@@ -512,6 +640,154 @@ describe('BaseMessagingAdapter', () => {
             await adapter.HandleMessage(msg);
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
             expect(sent?.PlainText).toContain('Something went wrong');
+        });
+
+        it('should skip orchestration metadata in step outputs and use agentRun.Result', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Result: JSON.stringify({ summary: 'Quantum computing is a paradigm...' }),
+                        Steps: [{
+                            OutputData: JSON.stringify({
+                                subAgentResult: { success: true, finalStep: 'Chat' },
+                                shouldTerminate: false,
+                                nextStep: 'retry',
+                                payloadChangeResult: { applied: { additions: 2 } }
+                            }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Quantum computing');
+            expect(sent?.PlainText).not.toContain('subAgentResult');
+        });
+
+        it('should compose text from structured research payload with findings', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        FinalPayload: JSON.stringify({
+                            title: 'Research Report',
+                            summary: 'Key findings about AI',
+                            extractedFindings: [
+                                { heading: 'Finding 1', content: 'Details about finding one' },
+                                { heading: 'Finding 2', content: 'Details about finding two' }
+                            ],
+                            sources: [
+                                { title: 'Wikipedia', url: 'https://en.wikipedia.org' }
+                            ]
+                        }),
+                        Steps: [{
+                            OutputData: JSON.stringify({
+                                subAgentResult: { success: true },
+                                shouldTerminate: false,
+                                nextStep: 'retry'
+                            }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Research Report');
+            expect(sent?.PlainText).toContain('Key findings about AI');
+            expect(sent?.PlainText).toContain('Finding 1');
+            expect(sent?.PlainText).toContain('Wikipedia');
+        });
+
+        it('should compose readable text from Research Agent state payload', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Steps: [{
+                            OutputData: JSON.stringify({
+                                metadata: {
+                                    researchGoal: 'Research photonic computing',
+                                    status: 'in_progress',
+                                    iterationCount: 1
+                                },
+                                plan: {
+                                    initialPlan: 'Perform a comprehensive web search on photonic computing.',
+                                    researchQuestions: [
+                                        'What is photonic computing?',
+                                        'What are the main technical challenges?'
+                                    ]
+                                },
+                                iterations: [],
+                                comparisons: [],
+                                contradictions: []
+                            }),
+                            Status: 'Completed'
+                        }]
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Research photonic computing');
+            expect(sent?.PlainText).toContain('comprehensive web search');
+            expect(sent?.PlainText).toContain('What is photonic computing');
+            expect(sent?.PlainText).not.toContain('"metadata"');
+        });
+
+        it('should extract Codesmith-style payload with code and results', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: "I'll have Codesmith calculate this for you.",
+                        FinalPayload: JSON.stringify({
+                            task: 'Calculate the first 20 prime numbers',
+                            code: 'const primes = []; let n = 2; while (primes.length < 20) { if (isPrime(n)) primes.push(n); n++; } output = primes;',
+                            results: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
+                            iterations: 1,
+                            errors: []
+                        }),
+                        Steps: []
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // Should include delegation note + Codesmith results
+            expect(sent?.PlainText).toContain("I'll have Codesmith calculate this for you.");
+            expect(sent?.PlainText).toContain('Calculate the first 20 prime numbers');
+            expect(sent?.PlainText).toContain('71');
+        });
+
+        it('should extract summary field from payload object', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    payload: { summary: 'Here is the executive summary' },
+                    agentRun: { Steps: [] }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('executive summary');
         });
     });
 });

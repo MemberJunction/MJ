@@ -485,10 +485,11 @@ describe('TeamsAdapter', () => {
         it('should return PlainText and Adaptive Card RichPayload', async () => {
             const adapter = await createInitializedAdapter();
             const formatResp = (adapter as unknown as {
-                formatResponse(text: string): Promise<{ PlainText: string; RichPayload: Record<string, unknown> }>
+                formatResponse(result: unknown, agent: unknown, text: string): Promise<{ PlainText: string; RichPayload: Record<string, unknown> }>
             }).formatResponse.bind(adapter);
 
-            const result = await formatResp('# Hello\n\nThis is **bold**.');
+            const mockAgent = { Name: 'TestBot', LogoURL: null };
+            const result = await formatResp(null, mockAgent, '# Hello\n\nThis is **bold**.');
 
             expect(result.PlainText).toBe('# Hello\n\nThis is **bold**.');
             expect(result.RichPayload).toHaveProperty('type', 'AdaptiveCard');

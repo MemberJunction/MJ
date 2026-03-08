@@ -3,16 +3,19 @@
  * @description Slack-specific messaging adapter implementation.
  *
  * Extends `BaseMessagingAdapter` with Slack API calls for:
- * - Posting and updating messages via the Web API
+ * - Posting and updating messages via the Web API with per-agent identity
  * - Fetching thread history via `conversations.replies`
- * - Formatting responses as Slack Block Kit blocks
+ * - Rich Block Kit formatting with agent context, artifact cards, and metadata
+ * - Multi-word agent name matching via known-name lookup
  * - Looking up user email addresses
  * - Stripping bot @mentions from message text
  */
 
 import { WebClient, type KnownBlock } from '@slack/web-api';
+import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
+import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
 import { markdownToBlocks } from './slack-formatter.js';
 
 /**
@@ -20,15 +23,18 @@ import { markdownToBlocks } from './slack-formatter.js';
  * using the Slack Web API (`@slack/web-api`).
  *
  * ## Features
+ * - Per-agent identity: each agent's name and avatar appear on their messages
  * - Thread-based conversation context via `conversations.replies`
  * - Progressive streaming updates via `chat.postMessage` / `chat.update`
- * - Block Kit rich formatting with auto-splitting for long responses
+ * - Rich Block Kit formatting with agent headers, artifact cards, and metadata
+ * - Multi-word agent name matching (e.g., `@Research Agent`)
  * - User email lookup via `users.info` for MJ user mapping
  * - Bot mention stripping for clean agent input
  *
  * ## Authentication
  * Requires a Bot User OAuth Token (`xoxb-...`) with these scopes:
  * - `chat:write` — Post and update messages
+ * - `chat:write.customize` — Post with custom username and icon
  * - `channels:history` / `groups:history` / `im:history` — Read thread history
  * - `users:read` / `users:read.email` — Look up user email addresses
  * - `app_mentions:read` — Receive @mention events
@@ -52,6 +58,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * Convert a raw Slack event payload into a normalized `IncomingMessage`.
      *
      * Called by `SlackMessagingExtension` when a webhook event is received.
+     * Uses multi-word agent name matching against the loaded agent list.
      *
      * @param event - Raw Slack event object from the Events API.
      * @returns Normalized incoming message.
@@ -67,39 +74,10 @@ export class SlackAdapter extends BaseMessagingAdapter {
             ThreadID: (event.thread_ts as string) ?? null,
             IsDirectMessage: event.channel_type === 'im',
             IsBotMention: event.type === 'app_mention',
-            MentionedAgentNames: this.parseAgentMentions(text),
+            MentionedAgentNames: this.matchAgentMentions(text),
             Timestamp: new Date(parseFloat(event.ts as string) * 1000),
             RawEvent: event
         };
-    }
-
-    /**
-     * Parse potential agent names from the message text.
-     *
-     * After stripping the bot's own `<@UBOTID>` mention, looks for `@Name`
-     * patterns (e.g., `@Sage`, `@ResearchBot`). These are matched against
-     * MJ agent records by `BaseMessagingAdapter.resolveAgent()`.
-     *
-     * @returns Array of potential agent names (may be empty).
-     */
-    private parseAgentMentions(text: string): string[] {
-        // Strip the bot's own Slack mention
-        const withoutBot = this.botUserID
-            ? text.replace(new RegExp(`<@${this.botUserID}>`, 'g'), '')
-            : text;
-
-        // Match @AgentName patterns (single word, alphanumeric + hyphens/underscores)
-        // Slack user mentions are <@U...> so plain @Word is an agent reference
-        const agentMentionPattern = /(?<!\<)@(\w+)/g;
-        const names: string[] = [];
-        let match: RegExpExecArray | null;
-        while ((match = agentMentionPattern.exec(withoutBot)) !== null) {
-            const name = match[1].trim();
-            if (name) {
-                names.push(name);
-            }
-        }
-        return names;
     }
 
     /**
@@ -117,15 +95,18 @@ export class SlackAdapter extends BaseMessagingAdapter {
 
     /**
      * Post a "Thinking..." message as the typing indicator.
-     * This message gets replaced in-place by the first streaming update,
-     * giving the user immediate visual feedback.
+     * Shows the agent's identity if available. This message gets replaced
+     * in-place by the first streaming update.
      */
-    protected async showTypingIndicator(message: IncomingMessage): Promise<void> {
+    protected async showTypingIndicator(message: IncomingMessage, agent?: MJAIAgentEntityExtended): Promise<void> {
         const threadTs = message.ThreadID ?? message.MessageID;
+        const identityParams = agent ? this.buildSlackIdentityParams(agent) : {};
+
         const result = await this.client.chat.postMessage({
             channel: message.ChannelID,
             thread_ts: threadTs,
-            text: '_Thinking..._'
+            text: '_Thinking..._',
+            ...identityParams
         });
         this.thinkingMessageId = result.ts ?? null;
     }
@@ -156,12 +137,13 @@ export class SlackAdapter extends BaseMessagingAdapter {
 
     /**
      * Post a new streaming message or update an existing one.
-     * Posts as a reply in the thread.
+     * Shows the agent's identity on new messages.
      */
     protected async sendOrUpdateStreamingMessage(
         originalMessage: IncomingMessage,
         currentContent: string,
-        existingMessageId: string | null
+        existingMessageId: string | null,
+        agent?: MJAIAgentEntityExtended
     ): Promise<string> {
         // Reuse the "Thinking..." message for the first streaming update
         const messageToUpdate = existingMessageId ?? this.thinkingMessageId;
@@ -176,10 +158,13 @@ export class SlackAdapter extends BaseMessagingAdapter {
             return messageToUpdate;
         } else {
             const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+            const identityParams = agent ? this.buildSlackIdentityParams(agent) : {};
+
             const result = await this.client.chat.postMessage({
                 channel: originalMessage.ChannelID,
                 thread_ts: threadTs,
-                text: currentContent + ' ...'
+                text: currentContent + ' ...',
+                ...identityParams
             });
             return result.ts!;
         }
@@ -196,11 +181,16 @@ export class SlackAdapter extends BaseMessagingAdapter {
             return;
         }
         const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+        const identityParams = response.AgentIdentity
+            ? this.buildSlackIdentityParamsFromIdentity(response.AgentIdentity)
+            : {};
+
         await this.client.chat.postMessage({
             channel: originalMessage.ChannelID,
             thread_ts: threadTs,
             text: response.PlainText,
-            blocks: response.RichPayload.blocks as KnownBlock[]
+            blocks: response.RichPayload.blocks as KnownBlock[],
+            ...identityParams
         });
     }
 
@@ -221,12 +211,26 @@ export class SlackAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Format agent response Markdown as Slack Block Kit blocks.
+     * Format agent response as rich Slack Block Kit blocks.
+     *
+     * When a full `ExecuteAgentResult` is available, builds a rich layout with
+     * agent header, artifact cards, action buttons, and metadata footer.
+     * Falls back to simple markdown→blocks conversion for plain text.
      */
-    protected async formatResponse(markdownText: string): Promise<FormattedResponse> {
+    protected async formatResponse(
+        result: ExecuteAgentResult | null,
+        agent: MJAIAgentEntityExtended,
+        responseText: string
+    ): Promise<FormattedResponse> {
+        const identity = this.buildAgentIdentity(agent);
+
+        // Build rich Block Kit layout
+        const blocks = buildRichResponse(result, agent, responseText);
+
         return {
-            PlainText: markdownText,
-            RichPayload: { blocks: markdownToBlocks(markdownText) }
+            PlainText: responseText,
+            RichPayload: { blocks },
+            AgentIdentity: identity
         };
     }
 
@@ -253,5 +257,42 @@ export class SlackAdapter extends BaseMessagingAdapter {
         } catch {
             return null;
         }
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────
+
+    /**
+     * Build Slack API params for per-agent identity from an agent entity.
+     * Uses `username` and `icon_url` which require the `chat:write.customize` scope.
+     * Only includes `icon_url` if it's a valid HTTPS URL.
+     */
+    private buildSlackIdentityParams(agent: MJAIAgentEntityExtended): Record<string, string> {
+        const params: Record<string, string> = {};
+
+        if (agent.Name) {
+            params.username = agent.Name;
+        }
+
+        const logoURL = agent.LogoURL;
+        if (logoURL && typeof logoURL === 'string' && logoURL.startsWith('https://')) {
+            params.icon_url = logoURL;
+        }
+
+        return params;
+    }
+
+    /**
+     * Build Slack API params from an AgentIdentity object.
+     */
+    private buildSlackIdentityParamsFromIdentity(identity: { Name: string; IconURL?: string }): Record<string, string> {
+        const params: Record<string, string> = {
+            username: identity.Name
+        };
+
+        if (identity.IconURL) {
+            params.icon_url = identity.IconURL;
+        }
+
+        return params;
     }
 }

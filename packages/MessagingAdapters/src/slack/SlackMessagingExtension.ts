@@ -38,6 +38,7 @@
  */
 
 import express, { Application, Request, Response, Router } from 'express';
+import { WebClient } from '@slack/web-api';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { SocketModeClient } from '@slack/socket-mode';
@@ -50,6 +51,7 @@ import {
 import { SlackAdapter } from './SlackAdapter.js';
 import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
 import { verifySlackSignature } from './slack-routes.js';
+import { handleSlackInteraction } from './slack-interactivity.js';
 
 /**
  * Server Extension that registers Slack webhook routes and delegates
@@ -70,6 +72,9 @@ import { verifySlackSignature } from './slack-routes.js';
 export class SlackMessagingExtension extends BaseServerExtension {
     /** The Slack adapter handling message processing. */
     private adapter: SlackAdapter | null = null;
+
+    /** Slack WebClient for interactivity handlers (modals, etc.). */
+    private interactClient: WebClient | null = null;
 
     /** The signing secret for webhook verification. */
     private signingSecret: string = '';
@@ -93,8 +98,9 @@ export class SlackMessagingExtension extends BaseServerExtension {
             this.signingSecret = settings.SigningSecret ?? '';
             this.connectionMode = settings.ConnectionMode ?? 'http';
 
-            // Create and initialize the Slack adapter
+            // Create and initialize the Slack adapter + interactivity client
             this.adapter = new SlackAdapter(settings);
+            this.interactClient = new WebClient(settings.BotToken);
             await this.adapter.Initialize();
 
             if (this.connectionMode === 'socket') {
@@ -143,7 +149,8 @@ export class SlackMessagingExtension extends BaseServerExtension {
     // ─── HTTP Mode ───────────────────────────────────────────────────────
 
     /**
-     * Set up HTTP webhook mode: register a POST endpoint for Slack Events API.
+     * Set up HTTP webhook mode: register POST endpoints for Slack Events API
+     * and Slack Interactivity payloads.
      */
     private initializeHttpMode(
         app: Application,
@@ -158,12 +165,20 @@ export class SlackMessagingExtension extends BaseServerExtension {
             }
         }));
         router.post('/', this.handleWebhook.bind(this));
+
+        // Interactivity endpoint for button clicks, modal submissions, etc.
+        // Slack sends these as application/x-www-form-urlencoded with a `payload` JSON field
+        const interactRouter = Router();
+        interactRouter.use(express.urlencoded({ extended: true }));
+        interactRouter.post('/', this.handleInteraction.bind(this));
+        app.use(config.RootPath + '/interact', interactRouter);
+
         app.use(config.RootPath, router);
 
         return {
             Success: true,
             Message: `Slack extension loaded (HTTP mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: [`POST ${config.RootPath}`]
+            RegisteredRoutes: [`POST ${config.RootPath}`, `POST ${config.RootPath}/interact`]
         };
     }
 
@@ -233,6 +248,29 @@ export class SlackMessagingExtension extends BaseServerExtension {
             Message: `Slack extension loaded (Socket Mode) for agent ${settings.DefaultAgentName}`,
             RegisteredRoutes: ['WebSocket (Socket Mode)']
         };
+    }
+
+    // ─── Interactivity ─────────────────────────────────────────────────────
+
+    /**
+     * Handle Slack interactivity payloads (button clicks, modal submissions).
+     * Slack sends these as `application/x-www-form-urlencoded` with a `payload` JSON field.
+     */
+    private async handleInteraction(req: Request, res: Response): Promise<void> {
+        // Acknowledge immediately
+        res.status(200).send();
+
+        const payloadStr = req.body?.payload as string | undefined;
+        if (!payloadStr) {
+            LogStatus('Slack interact: no payload in request');
+            return;
+        }
+
+        try {
+            await handleSlackInteraction(payloadStr, this.interactClient!);
+        } catch (error) {
+            LogError('Error handling Slack interaction:', undefined, error);
+        }
     }
 
     // ─── Shared event processing ─────────────────────────────────────────
