@@ -601,8 +601,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
-                if (!this.canUseImmediateMutation(config)) {
-                    // Config has Filter/OrderBy — can't safely apply inline, need server fetch
+                // Skip the AdditionalLoading check because we call it ourselves after all mutations
+                if (!this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true)) {
                     return false;
                 }
 
@@ -847,9 +847,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
      *
      * @param config - The configuration to check
+     * @param skipAdditionalLoadingCheck - When true, skips the AdditionalLoading override check.
+     *   Use this when the caller will invoke AdditionalLoading() itself after applying mutations
+     *   (e.g., applyRemoteRecordData applies all config mutations then calls AdditionalLoading).
      * @returns true if immediate mutation is safe, false if a full view refresh is needed
      */
-    protected canUseImmediateMutation(config: BaseEnginePropertyConfig): boolean {
+    protected canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
         // If there's a filter, we can't safely do immediate mutations because:
         // - For creates: the new entity might not match the filter
         // - For updates: the entity might now match or no longer match the filter
@@ -865,8 +868,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         // Check if AdditionalLoading is overridden in the subclass
-        // If it is, we need to run full refresh to ensure post-processing happens
-        if (this.hasAdditionalLoadingOverride()) {
+        // If it is, we need to run full refresh to ensure post-processing happens.
+        // Callers that invoke AdditionalLoading() themselves can skip this check.
+        if (!skipAdditionalLoadingCheck && this.hasAdditionalLoadingOverride()) {
             return false;
         }
 
