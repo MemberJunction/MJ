@@ -39,25 +39,6 @@
   },
   {
     "fields": {
-      "Name": "YourMembership",
-      "Description": "YourMembership AMS integration for syncing members, membership types, events, and registrations",
-      "ClassName": "YourMembershipConnector",
-      "ImportPath": "@memberjunction/integration-connectors",
-      "NavigationBaseURL": null,
-      "BatchMaxRequestCount": 100,
-      "BatchRequestWaitTime": 250,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=YourMembership API"
-    },
-    "primaryKey": {
-      "ID": "B68743BB-0370-4E07-8DF1-501139403149"
-    },
-    "sync": {
-      "lastModified": "2026-03-05T20:56:35.387Z",
-      "checksum": "399648613effb0671aac35b7ef86c9824c1f5aa10fa49104f2128cfe515c1c78"
-    }
-  },
-  {
-    "fields": {
       "Name": "File Feed",
       "Description": "File-based data import from CSV, Excel, JSON, and XML files",
       "ClassName": "FileFeedConnector",

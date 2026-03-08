@@ -71,6 +71,15 @@ export type {
     DefaultObjectConfig,
 } from './BaseIntegrationConnector.js';
 
+// REST Connector Base
+export { BaseRESTIntegrationConnector } from './BaseRESTIntegrationConnector.js';
+export type {
+    RESTAuthContext,
+    RESTResponse,
+    PaginationState,
+    PaginationType,
+} from './BaseRESTIntegrationConnector.js';
+
 // Factory
 export { ConnectorFactory } from './ConnectorFactory.js';
 

@@ -1,14 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { YourMembershipConnector } from '../YourMembershipConnector.js';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
-import type { FetchContext } from '@memberjunction/integration-engine';
+import type { FetchContext, RESTResponse } from '@memberjunction/integration-engine';
 
 // ─── Test helpers ────────────────────────────────────────────────
 
 function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
     const configJson = JSON.stringify(config);
-    return { Get: (field: string) => field === 'Configuration' ? configJson : null } as unknown as MJCompanyIntegrationEntity;
+    return {
+        Get: (field: string) => field === 'Configuration' ? configJson : null,
+        IntegrationID: 'test-integration-id',
+    } as unknown as MJCompanyIntegrationEntity;
 }
 
 const VALID_CONFIG = {
@@ -19,6 +22,38 @@ const VALID_CONFIG = {
 
 const MOCK_CI = createMockCompanyIntegration(VALID_CONFIG);
 const contextUser = {} as UserInfo;
+
+/**
+ * Helper to create a testable connector with mocked HTTP/auth internals.
+ * Since the refactored connector delegates to BaseRESTIntegrationConnector
+ * for most operations, we mock at the HTTP layer.
+ */
+function createMockedConnector(
+    makeRequestFn: (...args: unknown[]) => Promise<RESTResponse>
+): YourMembershipConnector {
+    const connector = new YourMembershipConnector();
+
+    // Mock Authenticate to bypass real API auth
+    (connector as unknown as Record<string, unknown>)['Authenticate'] = vi.fn().mockResolvedValue({
+        SessionID: 'fake-session',
+        Config: { ClientID: '25363', APIKey: 'key', APIPassword: 'pass' },
+    });
+
+    // Mock ParseConfig for TestConnection
+    (connector as unknown as Record<string, unknown>)['ParseConfig'] = vi.fn().mockResolvedValue({
+        ClientID: '25363',
+        APIKey: 'key',
+        APIPassword: 'pass',
+    });
+
+    // Mock GetSession for session cache operations
+    (connector as unknown as Record<string, unknown>)['GetSession'] = vi.fn().mockResolvedValue('fake-session');
+
+    // Mock MakeHTTPRequest — this is the core HTTP transport
+    (connector as unknown as Record<string, unknown>)['MakeHTTPRequest'] = makeRequestFn;
+
+    return connector;
+}
 
 // ─── Unit Tests (no network) ─────────────────────────────────────
 
@@ -50,81 +85,6 @@ describe('YourMembershipConnector (unit)', () => {
         });
     });
 
-    describe('DiscoverObjects', () => {
-        it('should return all known YM objects', async () => {
-            const connector = new YourMembershipConnector();
-            const objects = await connector.DiscoverObjects(MOCK_CI, contextUser);
-            const names = objects.map(o => o.Name);
-
-            // Verify a sample of key endpoints
-            const expectedNames = [
-                'Members', 'Events', 'MemberTypes', 'Memberships', 'Groups',
-                'Products', 'DonationFunds', 'Certifications', 'InvoiceItems', 'DuesTransactions',
-                'EventRegistrations', 'EventSessions', 'EventTickets', 'EventCategories',
-                'MemberGroups', 'Connections', 'DonationHistory', 'EngagementScores',
-                'GroupTypes', 'DonationTransactions', 'StoreOrders', 'StoreOrderDetails',
-                'CertificationsJournals', 'CertificationCreditTypes', 'ProductCategories',
-                'CareerOpenings', 'Campaigns', 'GLCodes',
-                'MembersProfiles', 'PeopleIDs', 'MembersGroupsBulk',
-                'FinanceBatches', 'FinanceBatchDetails', 'AllCampaigns', 'CampaignEmailLists',
-                'EventAttendeeTypes', 'EventSessionGroups', 'EventCEUAwards',
-                'EventRegistrationForms', 'EventIDs', 'GroupMembershipLogs',
-                'DuesRules', 'MemberReferrals', 'MemberSubAccounts',
-                'Countries', 'Locations', 'ShippingMethods', 'PaymentProcessors',
-                'CustomTaxLocations', 'QBClasses', 'MembershipModifiers', 'MembershipPromoCodes',
-                'Announcements', 'EmailSuppressionList', 'SponsorRotators',
-                'MemberNetworks', 'MemberFavorites', 'TimeZones',
-            ];
-            for (const name of expectedNames) {
-                expect(names).toContain(name);
-            }
-            expect(objects.length).toBe(58);
-
-            for (const obj of objects) {
-                expect(obj.SupportsWrite).toBe(false);
-                expect(obj.Label).toBeTruthy();
-                expect(obj.Description).toBeTruthy();
-            }
-        });
-    });
-
-    describe('DiscoverFields', () => {
-        const connector = new YourMembershipConnector();
-
-        it('should return fields for Members', async () => {
-            const fields = await connector.DiscoverFields(MOCK_CI, 'Members', contextUser);
-            const names = fields.map(f => f.Name);
-
-            expect(names).toContain('ProfileID');
-            expect(names).toContain('FirstName');
-            expect(names).toContain('LastName');
-            expect(names).toContain('EmailAddr');
-            expect(names).toContain('MemberTypeCode');
-            expect(fields.length).toBeGreaterThan(10);
-
-            const profileId = fields.find(f => f.Name === 'ProfileID');
-            expect(profileId!.IsUniqueKey).toBe(true);
-            expect(profileId!.IsRequired).toBe(true);
-        });
-
-        it('should return fields for Events', async () => {
-            const fields = await connector.DiscoverFields(MOCK_CI, 'Events', contextUser);
-            expect(fields.find(f => f.Name === 'EventId')).toBeDefined();
-            expect(fields.find(f => f.Name === 'Name')).toBeDefined();
-        });
-
-        it('should return fields for Groups', async () => {
-            const fields = await connector.DiscoverFields(MOCK_CI, 'Groups', contextUser);
-            expect(fields.find(f => f.Name === 'Id')).toBeDefined();
-            expect(fields.find(f => f.Name === 'GroupTypeName')).toBeDefined();
-        });
-
-        it('should return empty for unknown object', async () => {
-            const fields = await connector.DiscoverFields(MOCK_CI, 'Unknown', contextUser);
-            expect(fields).toEqual([]);
-        });
-    });
-
     describe('ParseConfig', () => {
         it('should return failure on missing Configuration', async () => {
             const badCi = { Get: () => null } as unknown as MJCompanyIntegrationEntity;
@@ -144,118 +104,310 @@ describe('YourMembershipConnector (unit)', () => {
     });
 
     describe('GetDefaultConfiguration', () => {
-        it('should include Members with DetailPath', () => {
+        it('should return YourMembership schema name', () => {
             const connector = new YourMembershipConnector();
             const config = connector.GetDefaultConfiguration();
             expect(config.DefaultSchemaName).toBe('YourMembership');
-            expect(config.DefaultObjects.find(o => o.SourceObjectName === 'Members')).toBeDefined();
         });
+    });
+
+    describe('NormalizeResponse', () => {
+        it('should extract data from response using responseDataKey', () => {
+            const connector = new YourMembershipConnector();
+            const normalize = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['NormalizeResponse'].bind(connector);
+
+            const body = { Members: [{ id: 1 }, { id: 2 }], ResponseStatus: { ErrorCode: 'None' } };
+            const result = normalize(body, 'Members');
+            expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+        });
+
+        it('should handle raw array response (null responseDataKey)', () => {
+            const connector = new YourMembershipConnector();
+            const normalize = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['NormalizeResponse'].bind(connector);
+
+            const body = [{ id: 1 }, { id: 2 }];
+            const result = normalize(body, null);
+            expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+        });
+
+        it('should wrap single object response in array and filter metadata', () => {
+            const connector = new YourMembershipConnector();
+            const normalize = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['NormalizeResponse'].bind(connector);
+
+            const body = { EngagementScore: 85, ResponseStatus: { ErrorCode: 'None' }, UsingRedis: true, ServerID: 'WS-1' };
+            const result = normalize(body, null) as Record<string, unknown>[];
+            expect(result.length).toBe(1);
+            expect(result[0]['EngagementScore']).toBe(85);
+            expect(result[0]['UsingRedis']).toBeUndefined();
+            expect(result[0]['ServerID']).toBeUndefined();
+            expect(result[0]['ResponseStatus']).toBeUndefined();
+        });
+
+        it('should throw on API error response', () => {
+            const connector = new YourMembershipConnector();
+            const normalize = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['NormalizeResponse'].bind(connector);
+
+            const body = { ResponseStatus: { ErrorCode: 'InvalidSession', Message: 'Session expired' } };
+            expect(() => normalize(body, 'Data')).toThrow('Session expired');
+        });
+    });
+
+    describe('ExtractPaginationInfo', () => {
+        it('should detect more pages when records fill page', () => {
+            const connector = new YourMembershipConnector();
+            const extract = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['ExtractPaginationInfo'].bind(connector);
+
+            const body = { Items: [1, 2, 3, 4, 5] };
+            const result = extract(body, 'PageNumber', 1, 0, 5) as { HasMore: boolean; NextPage: number };
+            expect(result.HasMore).toBe(true);
+            expect(result.NextPage).toBe(2);
+        });
+
+        it('should detect last page when records fewer than page size', () => {
+            const connector = new YourMembershipConnector();
+            const extract = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['ExtractPaginationInfo'].bind(connector);
+
+            const body = { Items: [1, 2] };
+            const result = extract(body, 'PageNumber', 3, 0, 5) as { HasMore: boolean };
+            expect(result.HasMore).toBe(false);
+        });
+
+        it('should return HasMore=false for None pagination', () => {
+            const connector = new YourMembershipConnector();
+            const extract = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['ExtractPaginationInfo'].bind(connector);
+
+            const result = extract({}, 'None', 1, 0, 100) as { HasMore: boolean };
+            expect(result.HasMore).toBe(false);
+        });
+
+        it('should handle Offset pagination', () => {
+            const connector = new YourMembershipConnector();
+            const extract = (connector as unknown as Record<string, (...args: unknown[]) => unknown>)['ExtractPaginationInfo'].bind(connector);
+
+            const body = { Records: new Array(100) };
+            const result = extract(body, 'Offset', 1, 200, 100) as { HasMore: boolean; NextOffset: number };
+            expect(result.HasMore).toBe(true);
+            expect(result.NextOffset).toBe(300);
+        });
+    });
+});
+
+// ─── Groups fetching tests ──────────────────────────────────────
+
+describe('YourMembershipConnector (Groups)', () => {
+    it('should flatten nested Groups response', async () => {
+        const makeRequest = vi.fn().mockResolvedValue({
+            Status: 200,
+            Body: {
+                GroupTypeList: [
+                    {
+                        Id: 1, TypeName: 'Committee', SortIndex: 0,
+                        Groups: [
+                            { Id: 10, Name: 'Finance Committee' },
+                            { Id: 11, Name: 'Tech Committee' },
+                        ],
+                    },
+                    {
+                        Id: 2, TypeName: 'Chapter', SortIndex: 1,
+                        Groups: [{ Id: 20, Name: 'NYC Chapter' }],
+                    },
+                ],
+                ResponseStatus: { ErrorCode: 'None' },
+            },
+            Headers: {},
+        });
+
+        const connector = createMockedConnector(makeRequest);
+        const ctx: FetchContext = {
+            CompanyIntegration: MOCK_CI,
+            ObjectName: 'Groups',
+            WatermarkValue: null,
+            BatchSize: 500,
+            ContextUser: contextUser,
+        };
+
+        const result = await connector.FetchChanges(ctx);
+        expect(result.Records.length).toBe(3);
+        expect(result.HasMore).toBe(false);
+
+        const first = result.Records[0];
+        expect(first.Fields['Name']).toBe('Finance Committee');
+        expect(first.Fields['GroupTypeName']).toBe('Committee');
+        expect(first.Fields['GroupTypeId']).toBe(1);
+    });
+
+    it('should return GroupTypes only when requested', async () => {
+        const makeRequest = vi.fn().mockResolvedValue({
+            Status: 200,
+            Body: {
+                GroupTypeList: [
+                    { Id: 1, TypeName: 'Committee', SortIndex: 0, Groups: [{ Id: 10, Name: 'G1' }] },
+                    { Id: 2, TypeName: 'Chapter', SortIndex: 1, Groups: [] },
+                ],
+                ResponseStatus: { ErrorCode: 'None' },
+            },
+            Headers: {},
+        });
+
+        const connector = createMockedConnector(makeRequest);
+        const ctx: FetchContext = {
+            CompanyIntegration: MOCK_CI,
+            ObjectName: 'GroupTypes',
+            WatermarkValue: null,
+            BatchSize: 500,
+            ContextUser: contextUser,
+        };
+
+        const result = await connector.FetchChanges(ctx);
+        expect(result.Records.length).toBe(2);
+        expect(result.Records[0].Fields['TypeName']).toBe('Committee');
+        expect(result.Records[1].Fields['TypeName']).toBe('Chapter');
     });
 });
 
 // ─── Detail enrichment tests ────────────────────────────────────
 
 describe('YourMembershipConnector (enrichment)', () => {
-    it('should enrich records with detail data when detail endpoint is available', async () => {
-        const connector = new YourMembershipConnector();
+    it('should enrich Members records with detail data', async () => {
+        let callCount = 0;
+        const makeRequest = vi.fn().mockImplementation(
+            (_auth: unknown, url: string): Promise<RESTResponse> => {
+                callCount++;
+                if ((url as string).includes('Members/123')) {
+                    // Detail endpoint for ProfileID 123
+                    return Promise.resolve({
+                        Status: 200,
+                        Body: {
+                            id: 123,
+                            firstName: 'Jane',
+                            lastName: 'Doe',
+                            emailAddress: 'jane@example.com',
+                            organization: 'Acme Corp',
+                            primaryAddress: {
+                                phone: '555-1234',
+                                address1: '123 Main St',
+                                city: 'Portland',
+                                location: 'Oregon',
+                                postalCode: '97201',
+                                countryName: 'United States',
+                            },
+                            UsingRedis: true,
+                            ServerID: 'WS-1',
+                            ResponseStatus: { ErrorCode: 'None' },
+                        },
+                        Headers: {},
+                    });
+                }
+                // Any other request (shouldn't happen in this test path)
+                return Promise.resolve({ Status: 200, Body: {}, Headers: {} });
+            }
+        );
 
-        // Mock MakeRequest to return detail data
-        const mockMakeRequest = vi.fn()
-            // First call: list endpoint
-            .mockResolvedValueOnce({
-                Members: [
-                    { ProfileID: 123, FirstName: 'Jane', LastName: 'Doe' },
-                ],
-            })
-            // Second call: detail endpoint for ProfileID 123 (returns camelCase + nested)
-            .mockResolvedValueOnce({
-                id: 123,
-                firstName: 'Jane',
-                lastName: 'Doe',
-                emailAddress: 'jane@example.com',
-                organization: 'Acme Corp',
-                primaryAddress: {
-                    phone: '555-1234',
-                    address1: '123 Main St',
-                    city: 'Portland',
-                    location: 'Oregon',
-                    postalCode: '97201',
-                    countryName: 'United States',
-                },
-                UsingRedis: true,
-                ServerID: 'WS-1',
-                ResponseStatus: { ErrorCode: 'None' },
-            });
+        const connector = createMockedConnector(makeRequest);
 
-        (connector as unknown as Record<string, unknown>)['MakeRequest'] = mockMakeRequest;
-        (connector as unknown as Record<string, unknown>)['GetSession'] = vi.fn().mockResolvedValue('fake-session');
-        (connector as unknown as Record<string, unknown>)['ParseConfig'] = vi.fn().mockResolvedValue({
-            ClientID: '12345',
-            APIKey: 'key',
-            APIPassword: 'pass',
+        // Mock super.FetchChanges to return a basic Members result
+        // We do this by mocking the parent class's FetchChanges via prototype
+        const originalFetchChanges = Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges;
+        const superFetchMock = vi.fn().mockResolvedValue({
+            Records: [{
+                ExternalID: '123',
+                ObjectType: 'Members',
+                Fields: { ProfileID: 123, FirstName: 'Jane', LastName: 'Doe' },
+            }],
+            HasMore: false,
         });
+        // Temporarily replace the grandparent's FetchChanges
+        Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = superFetchMock;
 
-        const ctx: FetchContext = {
-            CompanyIntegration: MOCK_CI,
-            ObjectName: 'Members',
-            WatermarkValue: null,
-            BatchSize: 5,
-            ContextUser: contextUser,
-        };
+        try {
+            const ctx: FetchContext = {
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Members',
+                WatermarkValue: null,
+                BatchSize: 5,
+                ContextUser: contextUser,
+            };
 
-        const result = await connector.FetchChanges(ctx);
-        expect(result.Records.length).toBe(1);
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(1);
 
-        const record = result.Records[0];
-        // Should have enriched and normalized data from detail endpoint
-        expect(record.Fields['EmailAddr']).toBe('jane@example.com');
-        expect(record.Fields['Phone']).toBe('555-1234');
-        expect(record.Fields['City']).toBe('Portland');
-        expect(record.Fields['State']).toBe('Oregon');
-        expect(record.Fields['PostalCode']).toBe('97201');
-        expect(record.Fields['Organization']).toBe('Acme Corp');
-        expect(record.Fields['Address1']).toBe('123 Main St');
-        // Metadata keys should be filtered out
-        expect(record.Fields['UsingRedis']).toBeUndefined();
-        expect(record.Fields['ServerID']).toBeUndefined();
-        expect(record.Fields['ResponseStatus']).toBeUndefined();
-
-        // Verify detail endpoint was called with correct path
-        expect(mockMakeRequest).toHaveBeenCalledTimes(2);
-        expect(mockMakeRequest).toHaveBeenLastCalledWith(expect.anything(), 'Members/123');
+            const record = result.Records[0];
+            // Enriched fields from detail endpoint
+            expect(record.Fields['EmailAddr']).toBe('jane@example.com');
+            expect(record.Fields['Phone']).toBe('555-1234');
+            expect(record.Fields['City']).toBe('Portland');
+            expect(record.Fields['State']).toBe('Oregon');
+            expect(record.Fields['PostalCode']).toBe('97201');
+            expect(record.Fields['Organization']).toBe('Acme Corp');
+            expect(record.Fields['Address1']).toBe('123 Main St');
+            // Metadata keys should be filtered out by NormalizeMemberDetail
+            expect(record.Fields['UsingRedis']).toBeUndefined();
+            expect(record.Fields['ServerID']).toBeUndefined();
+        } finally {
+            // Restore original prototype method
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
     });
 
     it('should gracefully handle detail endpoint failures', async () => {
-        const connector = new YourMembershipConnector();
+        const makeRequest = vi.fn().mockImplementation(
+            (_auth: unknown, url: string): Promise<RESTResponse> => {
+                if ((url as string).includes('Members/456')) {
+                    return Promise.reject(new Error('API timeout'));
+                }
+                return Promise.resolve({ Status: 200, Body: {}, Headers: {} });
+            }
+        );
 
-        const mockMakeRequest = vi.fn()
-            .mockResolvedValueOnce({
-                Members: [
-                    { ProfileID: 456, FirstName: 'Bob', LastName: 'Smith' },
-                ],
-            })
-            .mockRejectedValueOnce(new Error('API timeout'));
+        const connector = createMockedConnector(makeRequest);
 
-        (connector as unknown as Record<string, unknown>)['MakeRequest'] = mockMakeRequest;
-        (connector as unknown as Record<string, unknown>)['GetSession'] = vi.fn().mockResolvedValue('fake-session');
-        (connector as unknown as Record<string, unknown>)['ParseConfig'] = vi.fn().mockResolvedValue({
-            ClientID: '12345',
-            APIKey: 'key',
-            APIPassword: 'pass',
+        const superFetchMock = vi.fn().mockResolvedValue({
+            Records: [{
+                ExternalID: '456',
+                ObjectType: 'Members',
+                Fields: { ProfileID: 456, FirstName: 'Bob', LastName: 'Smith' },
+            }],
+            HasMore: false,
         });
+        const originalFetchChanges = Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges;
+        Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = superFetchMock;
 
-        const ctx: FetchContext = {
-            CompanyIntegration: MOCK_CI,
-            ObjectName: 'Members',
-            WatermarkValue: null,
-            BatchSize: 5,
-            ContextUser: contextUser,
-        };
+        try {
+            const ctx: FetchContext = {
+                CompanyIntegration: MOCK_CI,
+                ObjectName: 'Members',
+                WatermarkValue: null,
+                BatchSize: 5,
+                ContextUser: contextUser,
+            };
 
-        const result = await connector.FetchChanges(ctx);
-        expect(result.Records.length).toBe(1);
-        // Should still have list data even though detail call failed
-        expect(result.Records[0].Fields['FirstName']).toBe('Bob');
+            const result = await connector.FetchChanges(ctx);
+            expect(result.Records.length).toBe(1);
+            // Should still have list data even though detail call failed
+            expect(result.Records[0].Fields['FirstName']).toBe('Bob');
+        } finally {
+            Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
+        }
+    });
+});
+
+// ─── GetBaseURL tests ───────────────────────────────────────────
+
+describe('YourMembershipConnector (GetBaseURL)', () => {
+    it('should build base URL from configuration ClientID', () => {
+        const connector = new YourMembershipConnector();
+        const getBaseURL = (connector as unknown as Record<string, (...args: unknown[]) => string>)['GetBaseURL'].bind(connector);
+
+        const ci = createMockCompanyIntegration({ ClientID: '12345', APIKey: 'k', APIPassword: 'p' });
+        expect(getBaseURL(ci)).toBe('https://ws.yourmembership.com/Ams/12345');
+    });
+
+    it('should throw when no ClientID in configuration', () => {
+        const connector = new YourMembershipConnector();
+        const getBaseURL = (connector as unknown as Record<string, (...args: unknown[]) => string>)['GetBaseURL'].bind(connector);
+
+        const ci = { Get: () => null } as unknown as MJCompanyIntegrationEntity;
+        expect(() => getBaseURL(ci)).toThrow('Cannot determine YM base URL');
     });
 });
 
@@ -281,148 +433,6 @@ describe('YourMembershipConnector (live API)', () => {
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('YourMembership');
             expect(result.ServerVersion).toContain(clientId);
-        });
-    });
-
-    describe('FetchChanges', () => {
-        it('should fetch members with pagination', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Members',
-                WatermarkValue: null,
-                BatchSize: 5,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.Records.length).toBeLessThanOrEqual(5);
-            expect(result.HasMore).toBe(true);
-
-            const firstMember = result.Records[0];
-            expect(firstMember.ExternalID).toBeTruthy();
-            expect(firstMember.ObjectType).toBe('Members');
-            expect(firstMember.Fields['ProfileID']).toBeDefined();
-            expect(firstMember.Fields['FirstName']).toBeDefined();
-        });
-
-        it('should fetch page 2 using watermark', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Members',
-                WatermarkValue: '2',
-                BatchSize: 3,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-        });
-
-        it('should fetch MemberTypes (non-paginated)', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'MemberTypes',
-                WatermarkValue: null,
-                BatchSize: 100,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.HasMore).toBe(false);
-            expect(result.Records[0].Fields['TypeCode']).toBeDefined();
-        });
-
-        it('should fetch Memberships', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Memberships',
-                WatermarkValue: null,
-                BatchSize: 100,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.HasMore).toBe(false);
-            expect(result.Records[0].Fields['Name']).toBeDefined();
-        });
-
-        it('should fetch Events', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Events',
-                WatermarkValue: null,
-                BatchSize: 5,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.Records[0].Fields['EventId']).toBeDefined();
-            expect(result.Records[0].Fields['Name']).toBeDefined();
-        });
-
-        it('should fetch Groups (nested/flattened)', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Groups',
-                WatermarkValue: null,
-                BatchSize: 500,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.HasMore).toBe(false);
-
-            const firstGroup = result.Records[0];
-            expect(firstGroup.Fields['Name']).toBeDefined();
-            expect(firstGroup.Fields['GroupTypeName']).toBeDefined();
-        });
-
-        it('should fetch Products (raw array)', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'Products',
-                WatermarkValue: null,
-                BatchSize: 500,
-                ContextUser: contextUser,
-            };
-
-            const result = await connector.FetchChanges(ctx);
-            expect(result.Records.length).toBeGreaterThan(0);
-            expect(result.HasMore).toBe(false);
-            expect(result.Records[0].Fields['description']).toBeDefined();
-        });
-
-        it('should throw on unknown object', async ({ skip }) => {
-            if (!hasCredentials) skip();
-            const connector = new YourMembershipConnector();
-            const ctx: FetchContext = {
-                CompanyIntegration: liveCi,
-                ObjectName: 'NonExistent',
-                WatermarkValue: null,
-                BatchSize: 10,
-                ContextUser: contextUser,
-            };
-
-            await expect(connector.FetchChanges(ctx)).rejects.toThrow('Unknown YourMembership object');
         });
     });
 });

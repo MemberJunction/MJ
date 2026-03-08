@@ -11,6 +11,8 @@ import type {
     MJCompanyIntegrationSyncWatermarkEntity,
     MJIntegrationEntity,
     MJIntegrationSourceTypeEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
 } from '@memberjunction/core-entities';
 import type {
     ICompanyIntegrationEntityMap,
@@ -886,6 +888,40 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     public GetIntegrationForCompanyIntegration(companyIntegrationID: string): MJIntegrationEntity | undefined {
         return this.Base.GetIntegrationForCompanyIntegration(companyIntegrationID);
+    }
+
+    // ── Integration Object Metadata (delegated to Base) ──────────────
+
+    public get IntegrationObjects(): MJIntegrationObjectEntity[] {
+        return this.Base.IntegrationObjects;
+    }
+
+    public get IntegrationObjectFields(): MJIntegrationObjectFieldEntity[] {
+        return this.Base.IntegrationObjectFields;
+    }
+
+    public GetIntegrationObjectsByIntegrationID(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetIntegrationObjectsByIntegrationID(integrationID);
+    }
+
+    public GetIntegrationObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        return this.Base.GetIntegrationObject(integrationID, objectName);
+    }
+
+    public GetIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
+        return this.Base.GetIntegrationObjectByID(objectID);
+    }
+
+    public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
+        return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetActiveIntegrationObjects(integrationID);
+    }
+
+    public GetObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetObjectsInDependencyOrder(integrationID);
     }
 
     // ── Singleton ─────────────────────────────────────────────────────

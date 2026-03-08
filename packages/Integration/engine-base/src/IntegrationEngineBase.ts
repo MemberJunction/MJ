@@ -7,6 +7,8 @@ import type {
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
 } from '@memberjunction/core-entities';
 
 /**
@@ -28,6 +30,8 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     private _entityMaps: MJCompanyIntegrationEntityMapEntity[] = [];
     private _fieldMaps: MJCompanyIntegrationFieldMapEntity[] = [];
     private _watermarks: MJCompanyIntegrationSyncWatermarkEntity[] = [];
+    private _integrationObjects: MJIntegrationObjectEntity[] = [];
+    private _integrationObjectFields: MJIntegrationObjectFieldEntity[] = [];
 
     // ── BaseEngine Config ─────────────────────────────────────────────
 
@@ -61,6 +65,16 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             {
                 PropertyName: '_watermarks',
                 EntityName: 'MJ: Company Integration Sync Watermarks',
+                CacheLocal: true,
+            },
+            {
+                PropertyName: '_integrationObjects',
+                EntityName: 'MJ: Integration Objects',
+                CacheLocal: true,
+            },
+            {
+                PropertyName: '_integrationObjectFields',
+                EntityName: 'MJ: Integration Object Fields',
                 CacheLocal: true,
             },
         ];
@@ -109,6 +123,16 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     /** All sync watermark records. */
     public get Watermarks(): MJCompanyIntegrationSyncWatermarkEntity[] {
         return this._watermarks;
+    }
+
+    /** All integration object definitions (external objects/endpoints per integration). */
+    public get IntegrationObjects(): MJIntegrationObjectEntity[] {
+        return this._integrationObjects;
+    }
+
+    /** All integration object field definitions. */
+    public get IntegrationObjectFields(): MJIntegrationObjectFieldEntity[] {
+        return this._integrationObjectFields;
     }
 
     // ── Convenience Lookup Methods ────────────────────────────────────
@@ -166,6 +190,119 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         const ci = this.GetCompanyIntegrationByID(companyIntegrationID);
         if (!ci) return undefined;
         return this.GetIntegrationByID(ci.IntegrationID);
+    }
+
+    // ── Integration Object Lookups ──────────────────────────────────
+
+    /** Get all IntegrationObjects for a given Integration ID. */
+    public GetIntegrationObjectsByIntegrationID(integrationID: string): MJIntegrationObjectEntity[] {
+        return this._integrationObjects.filter(o => UUIDsEqual(o.IntegrationID, integrationID));
+    }
+
+    /** Get a specific IntegrationObject by integration ID and object name. */
+    public GetIntegrationObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        return this._integrationObjects.find(
+            o => UUIDsEqual(o.IntegrationID, integrationID) && o.Name === objectName
+        );
+    }
+
+    /** Get a specific IntegrationObject by its ID. */
+    public GetIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
+        return this._integrationObjects.find(o => UUIDsEqual(o.ID, objectID));
+    }
+
+    /** Get all fields for a given IntegrationObject ID. */
+    public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
+        return this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID));
+    }
+
+    /** Get active IntegrationObjects for an integration, sorted by Sequence. */
+    public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.GetIntegrationObjectsByIntegrationID(integrationID)
+            .filter(o => o.Status === 'Active')
+            .sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /**
+     * Builds a topologically-sorted processing order for integration objects
+     * based on FK relationships between objects (RelatedIntegrationObjectID on fields).
+     * Objects with no dependencies come first; objects depending on others come after their parents.
+     *
+     * @param integrationID - The integration to build the DAG for
+     * @returns Objects sorted in dependency order (parents before children)
+     */
+    public GetObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
+        const objects = this.GetActiveIntegrationObjects(integrationID);
+        const objectMap = new Map(objects.map(o => [o.ID.toUpperCase(), o]));
+
+        // Build adjacency: object → set of object IDs it depends on
+        const deps = new Map<string, Set<string>>();
+        for (const obj of objects) {
+            const key = obj.ID.toUpperCase();
+            deps.set(key, new Set());
+        }
+
+        for (const field of this._integrationObjectFields) {
+            if (!field.RelatedIntegrationObjectID) continue;
+            const parentKey = field.IntegrationObjectID.toUpperCase();
+            const depKey = field.RelatedIntegrationObjectID.toUpperCase();
+            // Only track deps for objects in this integration
+            if (deps.has(parentKey) && objectMap.has(depKey) && parentKey !== depKey) {
+                deps.get(parentKey)!.add(depKey);
+            }
+        }
+
+        // Kahn's algorithm for topological sort
+        return this.topologicalSort(objects, deps);
+    }
+
+    /**
+     * Kahn's algorithm: iteratively remove nodes with no remaining dependencies.
+     */
+    private topologicalSort(
+        objects: MJIntegrationObjectEntity[],
+        deps: Map<string, Set<string>>
+    ): MJIntegrationObjectEntity[] {
+        const sorted: MJIntegrationObjectEntity[] = [];
+        const objectMap = new Map(objects.map(o => [o.ID.toUpperCase(), o]));
+        const remaining = new Map(deps);
+
+        while (remaining.size > 0) {
+            // Find all objects with no remaining dependencies
+            const ready: string[] = [];
+            for (const [key, depSet] of remaining) {
+                if (depSet.size === 0) ready.push(key);
+            }
+
+            if (ready.length === 0) {
+                // Circular dependency — add remaining objects in Sequence order
+                const leftover = [...remaining.keys()]
+                    .map(k => objectMap.get(k)!)
+                    .filter(Boolean)
+                    .sort((a, b) => a.Sequence - b.Sequence);
+                sorted.push(...leftover);
+                break;
+            }
+
+            // Sort ready nodes by Sequence for stable ordering
+            ready.sort((a, b) => {
+                const objA = objectMap.get(a);
+                const objB = objectMap.get(b);
+                return (objA?.Sequence ?? 0) - (objB?.Sequence ?? 0);
+            });
+
+            for (const key of ready) {
+                const obj = objectMap.get(key);
+                if (obj) sorted.push(obj);
+                remaining.delete(key);
+                // Remove this object from other objects' dependency sets
+                for (const depSet of remaining.values()) {
+                    depSet.delete(key);
+                }
+            }
+        }
+
+        return sorted;
     }
 
     // ── Singleton ─────────────────────────────────────────────────────
