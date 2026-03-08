@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/cli
 
+## 5.9.0
+
+### Minor Changes
+
+- 6214edf: feat: Provider-agnostic OpenApp Engine with configurable project layouts, package manager auto-detection, Azure SQL support, and MJ version fallback detection
+
+### Patch Changes
+
+- Updated dependencies [f991f6d]
+- Updated dependencies [194ddf2]
+  - @memberjunction/codegen-lib@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-cli@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/metadata-sync@5.9.0
+  - @memberjunction/query-gen@5.9.0
+  - @memberjunction/testing-cli@5.9.0
+  - @memberjunction/db-auto-doc@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/installer@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

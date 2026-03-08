@@ -1,5 +1,19 @@
 # @memberjunction/notifications
 
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/communication-types@5.9.0
+  - @memberjunction/communication-engine@5.9.0
+  - @memberjunction/templates@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai-vectors-pinecone
 
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-vectors@5.9.0
+  - @memberjunction/ai-vectordb@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes
