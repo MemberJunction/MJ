@@ -49,6 +49,13 @@ export class SlackAdapter extends BaseMessagingAdapter {
     /** Message ID of the "Thinking..." indicator, reused by the first streaming update. */
     private thinkingMessageId: string | null = null;
 
+    /**
+     * Slack's maximum message text length. Messages exceeding this cause `msg_too_long`.
+     * The `text` field is the plain-text fallback when blocks are present; the rich
+     * content is in Block Kit blocks (already limited to 50 blocks with "View Full" button).
+     */
+    private static readonly MAX_TEXT_LENGTH = 39_000;
+
     constructor(settings: MessagingAdapterSettings) {
         super(settings);
         this.client = new WebClient(settings.BotToken);
@@ -153,7 +160,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
             await this.client.chat.update({
                 channel: originalMessage.ChannelID,
                 ts: messageToUpdate,
-                text: currentContent + ' ...'
+                text: this.truncateForSlack(currentContent + ' ...')
             });
             return messageToUpdate;
         } else {
@@ -163,7 +170,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
             const result = await this.client.chat.postMessage({
                 channel: originalMessage.ChannelID,
                 thread_ts: threadTs,
-                text: currentContent + ' ...',
+                text: this.truncateForSlack(currentContent + ' ...'),
                 ...identityParams
             });
             return result.ts!;
@@ -188,7 +195,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         await this.client.chat.postMessage({
             channel: originalMessage.ChannelID,
             thread_ts: threadTs,
-            text: response.PlainText,
+            text: this.truncateForSlack(response.PlainText),
             blocks: response.RichPayload.blocks as KnownBlock[],
             ...identityParams
         });
@@ -205,7 +212,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         await this.client.chat.update({
             channel: originalMessage.ChannelID,
             ts: messageId,
-            text: response.PlainText,
+            text: this.truncateForSlack(response.PlainText),
             blocks: response.RichPayload.blocks as KnownBlock[]
         });
     }
@@ -260,6 +267,15 @@ export class SlackAdapter extends BaseMessagingAdapter {
     }
 
     // ─── Private helpers ─────────────────────────────────────────────
+
+    /**
+     * Truncate text to Slack's message length limit.
+     * Appends an ellipsis note if truncated so users know content was cut.
+     */
+    private truncateForSlack(text: string): string {
+        if (text.length <= SlackAdapter.MAX_TEXT_LENGTH) return text;
+        return text.slice(0, SlackAdapter.MAX_TEXT_LENGTH - 50) + '\n\n... (message truncated due to length)';
+    }
 
     /**
      * Build Slack API params for per-agent identity from an agent entity.
