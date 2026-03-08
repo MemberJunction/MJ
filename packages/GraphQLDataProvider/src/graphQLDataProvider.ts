@@ -5,7 +5,7 @@
  * so it is only included by the consumer of the entities library if they want to use it.
 **************************************************************************************************************/
 
-import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
+import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
@@ -16,7 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -2658,6 +2658,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._subscriptionCleanupTimer = null;
         }
 
+        // Unsubscribe from cache invalidation
+        this.UnsubscribeFromCacheInvalidation();
+
         // Complete all subjects and clear cache
         this.completeAllSubjects();
 
@@ -2666,6 +2669,105 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /**************************************************************************
+     * Cache Invalidation Subscription
+     *
+     * Subscribes to server-side cache invalidation events broadcast via
+     * GraphQL subscriptions. When a remote server updates an entity (via
+     * Redis pub/sub), the MJAPI server publishes a CACHE_INVALIDATION event.
+     * This client subscribes and fires MJGlobal BaseEntityEvent with
+     * type='remote-invalidate' so BaseEngine instances can re-fetch data.
+     **************************************************************************/
+
+    private _cacheInvalidationSubscription: Subscription | null = null;
+
+    /**
+     * Subscribes to server-side cache invalidation events and raises MJGlobal
+     * BaseEntityEvent with type='remote-invalidate' for each notification.
+     * This enables BaseEngine instances to automatically re-fetch stale data
+     * when another server modifies entities.
+     *
+     * Call this after the provider is configured and WebSocket URL is available.
+     * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
+     */
+    public SubscribeToCacheInvalidation(): void {
+        if (this._cacheInvalidationSubscription) {
+            return; // Already subscribed
+        }
+
+        if (!this.ConfigData?.WSURL) {
+            return; // No WebSocket URL configured, skip
+        }
+
+        const CACHE_INVALIDATION_SUB = gql`subscription CacheInvalidation {
+            cacheInvalidation {
+                EntityName
+                PrimaryKeyValues
+                Action
+                SourceServerID
+                Timestamp
+                OriginSessionID
+            }
+        }`;
+
+        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+
+        this._cacheInvalidationSubscription = observable.subscribe({
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string }>) => {
+                const event = data?.cacheInvalidation;
+                if (!event) return;
+
+                // Skip events that originated from this browser session — we already
+                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+                    console.log(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    return;
+                }
+
+                console.log(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+
+                // Raise a MJGlobal event so BaseEngine instances can react
+                const baseEntityEvent: BaseEntityEvent = {
+                    type: 'remote-invalidate',
+                    entityName: event.EntityName,
+                    baseEntity: null,
+                    payload: {
+                        primaryKeyValues: event.PrimaryKeyValues,
+                        action: event.Action,
+                        sourceServerId: event.SourceServerID,
+                        timestamp: event.Timestamp,
+                    },
+                };
+
+                MJGlobal.Instance.RaiseEvent({
+                    event: MJEventType.ComponentEvent,
+                    eventCode: BaseEntity.BaseEventCode,
+                    args: baseEntityEvent,
+                    component: this,
+                });
+            },
+            error: (error: unknown) => {
+                console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
+                // Clear the subscription so it can be re-established
+                this._cacheInvalidationSubscription = null;
+            },
+            complete: () => {
+                console.log('[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation');
+                this._cacheInvalidationSubscription = null;
+            },
+        });
+    }
+
+    /**
+     * Unsubscribes from cache invalidation events. Called during cleanup/logout.
+     */
+    public UnsubscribeFromCacheInvalidation(): void {
+        if (this._cacheInvalidationSubscription) {
+            this._cacheInvalidationSubscription.unsubscribe();
+            this._cacheInvalidationSubscription = null;
+        }
     }
 
     /**************************************************************************

@@ -12,7 +12,7 @@ import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
-import { LocalCacheManager } from "./localCacheManager";
+import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
@@ -163,6 +163,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
+    private _cacheChangeUnsubscribers: (() => void)[] = [];
 
     /**
      * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
@@ -465,6 +466,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
+            if (event.type === 'remote-invalidate') {
+                return await this.HandleRemoteInvalidateEvent(event);
+            }
+
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
                 const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
@@ -488,6 +493,47 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // At least one config requires full refresh, use debouncing
                     return this.DebounceIndividualBaseEntityEvent(event);
                 }
+            }
+
+            return true;
+        }
+        catch (e) {
+            LogError(e);
+            return false;
+        }
+    }
+
+    /**
+     * Handles remote-invalidate events from cross-server cache invalidation.
+     * These events are fired by GraphQLDataProvider when it receives a cache invalidation
+     * notification via GraphQL subscription (originating from Redis pub/sub on another server).
+     *
+     * For each matching config, we re-fetch the data from the server via LoadSingleConfig,
+     * then call AdditionalLoading if any refreshes occurred.
+     */
+    protected async HandleRemoteInvalidateEvent(event: BaseEntityEvent): Promise<boolean> {
+        try {
+            const entityName = event.entityName?.toLowerCase().trim();
+            if (!entityName) {
+                return true; // No entity name, nothing to do
+            }
+
+            const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
+            });
+
+            if (matchingConfigs.length === 0) {
+                return true;
+            }
+
+            let refreshCount = 0;
+            for (const config of matchingConfigs) {
+                await this.LoadSingleConfig(config, this._contextUser);
+                refreshCount++;
+            }
+
+            if (refreshCount > 0) {
+                await this.AdditionalLoading(this._contextUser);
             }
 
             return true;
@@ -926,6 +972,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
                            this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
+
+        // Register cross-server cache change callbacks for entity configs
+        this.RegisterCacheChangeCallbacks(entityConfigs);
     }
 
     /**
@@ -1061,6 +1110,89 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
         }
+    }
+
+    /**
+     * Registers cross-server cache change callbacks for entity configs.
+     * When another server instance updates cached data for an entity this engine
+     * tracks, the engine will automatically reload the affected config.
+     *
+     * This enables multi-server deployments to keep engine in-memory arrays
+     * synchronized without polling. Requires a Redis-backed storage provider
+     * with pub/sub enabled (via {@link RedisLocalStorageProvider.StartListening}).
+     *
+     * @param entityConfigs - The entity configurations to register callbacks for
+     */
+    protected RegisterCacheChangeCallbacks(entityConfigs: BaseEnginePropertyConfig[]): void {
+        // Unsubscribe any previous callbacks (e.g., on forceRefresh reload)
+        for (const unsub of this._cacheChangeUnsubscribers) {
+            unsub();
+        }
+        this._cacheChangeUnsubscribers = [];
+
+        if (!LocalCacheManager.Instance.IsInitialized) {
+            return;
+        }
+
+        const connectionPrefix = this.RunViewProviderToUse instanceof ProviderBase
+            ? (this.RunViewProviderToUse as ProviderBase).InstanceConnectionString
+            : undefined;
+
+        for (const config of entityConfigs) {
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                {
+                    EntityName: config.EntityName,
+                    ExtraFilter: config.Filter,
+                    OrderBy: config.OrderBy,
+                    ResultType: 'entity_object',
+                } as RunViewParams,
+                connectionPrefix
+            );
+
+            const unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+                fingerprint,
+                (event: CacheChangedEvent) => this.OnExternalCacheChange(config, event)
+            );
+            this._cacheChangeUnsubscribers.push(unsubscribe);
+        }
+    }
+
+    /**
+     * Called when another server instance updates cached data that this engine
+     * is tracking. Default behavior: reload the affected config from the database.
+     *
+     * Engines can override this for custom behavior (e.g., incremental update
+     * using the event's {@link CacheChangedEvent.Data} payload).
+     *
+     * @param config - The engine property config whose data changed
+     * @param event - The cache change event from the other server
+     */
+    protected async OnExternalCacheChange(
+        config: BaseEnginePropertyConfig,
+        event: CacheChangedEvent
+    ): Promise<void> {
+        // If the event includes the new data, try to apply it directly
+        if (event.Data && event.Action === 'set') {
+            try {
+                const parsed = JSON.parse(event.Data);
+                if (parsed?.results && Array.isArray(parsed.results)) {
+                    this.HandleSingleViewResult(config, {
+                        Success: true,
+                        Results: parsed.results,
+                        RowCount: parsed.results.length,
+                        TotalRowCount: parsed.results.length,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    });
+                    return;
+                }
+            } catch {
+                // Fall through to full reload
+            }
+        }
+        // Fallback: reload this config from the database
+        await this.LoadSingleConfig(config, this._contextUser);
     }
 
     /**
