@@ -144,6 +144,23 @@ export interface IncomingMessage {
 }
 
 /**
+ * Identity information for the agent sending the response.
+ * Used by platforms that support per-message identity customization
+ * (e.g., Slack's `chat:write.customize` scope).
+ */
+export interface AgentIdentity {
+    /** Display name for the agent (e.g., "Research Agent", "Sage"). */
+    Name: string;
+
+    /**
+     * HTTPS URL to the agent's avatar image.
+     * Must be an HTTPS URL — data URIs and HTTP URLs are not supported
+     * by most platforms. If not available, the platform's default bot icon is used.
+     */
+    IconURL?: string;
+}
+
+/**
  * Represents a formatted response ready to send back to the platform.
  * Contains both a plain text fallback and platform-specific rich format.
  */
@@ -157,6 +174,9 @@ export interface FormattedResponse {
      * - Teams: Adaptive Card JSON
      */
     RichPayload: Record<string, unknown>;
+
+    /** Optional agent identity for per-message branding. */
+    AgentIdentity?: AgentIdentity;
 }
 
 /**

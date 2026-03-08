@@ -46,6 +46,7 @@ export {
     MessagingAdapterSettings,
     IncomingMessage,
     FormattedResponse,
+    AgentIdentity,
     ThreadHistoryResult,
     MarkdownSection,
     RequestWithRawBody,
@@ -64,6 +65,18 @@ export { SlackMessagingExtension } from './slack/SlackMessagingExtension.js';
 export { SlackAdapter } from './slack/SlackAdapter.js';
 export { markdownToBlocks } from './slack/slack-formatter.js';
 export { verifySlackSignature } from './slack/slack-routes.js';
+export { handleSlackInteraction } from './slack/slack-interactivity.js';
+export {
+    buildRichResponse,
+    buildAgentContextBlock,
+    buildTextBlocks,
+    buildArtifactCard,
+    buildActionButtons,
+    buildMediaBlocks,
+    buildErrorBlocks,
+    buildMetadataFooter,
+    buildDivider,
+} from './slack/slack-block-builder.js';
 
 // Teams adapter
 export { TeamsMessagingExtension } from './teams/TeamsMessagingExtension.js';

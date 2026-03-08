@@ -10,6 +10,7 @@
  */
 
 import { TurnContext, ActivityTypes, Activity, ConversationReference } from 'botbuilder';
+import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
 import { markdownToAdaptiveCard } from './teams-formatter.js';
@@ -99,7 +100,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
      * Send a typing indicator to the Teams conversation.
      * Teams natively supports typing indicators via the Bot Framework.
      */
-    protected async showTypingIndicator(message: IncomingMessage): Promise<void> {
+    protected async showTypingIndicator(message: IncomingMessage, _agent?: MJAIAgentEntityExtended): Promise<void> {
         const turnContext = (message.RawEvent as Record<string, unknown>)['turnContext'] as TurnContext;
         if (turnContext) {
             await turnContext.sendActivity({ type: ActivityTypes.Typing });
@@ -132,7 +133,8 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     protected async sendOrUpdateStreamingMessage(
         originalMessage: IncomingMessage,
         currentContent: string,
-        existingMessageId: string | null
+        existingMessageId: string | null,
+        _agent?: MJAIAgentEntityExtended
     ): Promise<string> {
         const turnContext = (originalMessage.RawEvent as Record<string, unknown>)['turnContext'] as TurnContext;
 
@@ -187,10 +189,14 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     /**
      * Format agent response Markdown as a Teams Adaptive Card.
      */
-    protected async formatResponse(markdownText: string): Promise<FormattedResponse> {
+    protected async formatResponse(
+        _result: ExecuteAgentResult | null,
+        _agent: MJAIAgentEntityExtended,
+        responseText: string
+    ): Promise<FormattedResponse> {
         return {
-            PlainText: markdownText,
-            RichPayload: markdownToAdaptiveCard(markdownText)
+            PlainText: responseText,
+            RichPayload: markdownToAdaptiveCard(responseText)
         };
     }
 
