@@ -1,17 +1,17 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
+    BaseRESTIntegrationConnector,
+    type RESTAuthContext,
+    type RESTResponse,
+    type PaginationState,
+    type PaginationType,
     type ConnectionTestResult,
-    type ExternalObjectSchema,
-    type ExternalFieldSchema,
-    type FetchContext,
-    type FetchBatchResult,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
 } from '@memberjunction/integration-engine';
-import type { ExternalRecord } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -21,21 +21,9 @@ interface HubSpotCredentials {
     ApiVersion: string;
 }
 
-/** HubSpot API list response shape */
-interface HubSpotListResponse {
-    results: HubSpotObject[];
-    paging?: {
-        next?: { after: string; link?: string };
-    };
-}
-
-/** Single HubSpot CRM object */
-interface HubSpotObject {
-    id: string;
-    properties: Record<string, string | null>;
-    createdAt: string;
-    updatedAt: string;
-    archived: boolean;
+/** Extended auth context carrying HubSpot credentials */
+interface HubSpotAuthContext extends RESTAuthContext {
+    Credentials: HubSpotCredentials;
 }
 
 /** HubSpot property definition (from /crm/v3/properties/{objectType}) */
@@ -58,8 +46,15 @@ interface HubSpotPropertyDef {
 
 const HUBSPOT_API_BASE = 'https://api.hubapi.com';
 const DEFAULT_API_VERSION = 'v3';
-const DEFAULT_BATCH_SIZE = 100;
-const MAX_BATCH_SIZE = 100; // HubSpot max per request
+
+/** Maximum retries for rate-limited or failed requests */
+const MAX_RETRIES = 5;
+
+/** HTTP request timeout in milliseconds */
+const REQUEST_TIMEOUT_MS = 30000;
+
+/** Minimum milliseconds between API requests (HubSpot: 100 req/10s for private apps) */
+const MIN_REQUEST_INTERVAL_MS = 100;
 
 /**
  * Known properties to request per object type. HubSpot's list endpoint
@@ -155,140 +150,185 @@ const HUBSPOT_PROPERTIES: Record<string, string[]> = {
     ],
 };
 
-/** Standard CRM objects with their sync capabilities */
-const HUBSPOT_OBJECTS: Record<string, { Label: string; SupportsIncrementalSync: boolean; SupportsWrite: boolean }> = {
-    contacts:             { Label: 'Contacts',             SupportsIncrementalSync: true,  SupportsWrite: false },
-    companies:            { Label: 'Companies',            SupportsIncrementalSync: true,  SupportsWrite: false },
-    deals:                { Label: 'Deals',                SupportsIncrementalSync: true,  SupportsWrite: false },
-    tickets:              { Label: 'Tickets',              SupportsIncrementalSync: true,  SupportsWrite: false },
-    products:             { Label: 'Products',             SupportsIncrementalSync: false, SupportsWrite: false },
-    line_items:           { Label: 'Line Items',           SupportsIncrementalSync: true,  SupportsWrite: false },
-    quotes:               { Label: 'Quotes',               SupportsIncrementalSync: true,  SupportsWrite: false },
-    calls:                { Label: 'Calls',                SupportsIncrementalSync: true,  SupportsWrite: false },
-    emails:               { Label: 'Emails',               SupportsIncrementalSync: true,  SupportsWrite: false },
-    notes:                { Label: 'Notes',                SupportsIncrementalSync: true,  SupportsWrite: false },
-    tasks:                { Label: 'Tasks',                SupportsIncrementalSync: true,  SupportsWrite: false },
-    meetings:             { Label: 'Meetings',             SupportsIncrementalSync: true,  SupportsWrite: false },
-    feedback_submissions: { Label: 'Feedback Submissions', SupportsIncrementalSync: false, SupportsWrite: false },
-};
-
 // ─── Connector ────────────────────────────────────────────────────────
 
 /**
  * Connector for HubSpot CRM via the HubSpot REST API v3.
+ *
+ * Extends BaseRESTIntegrationConnector to leverage metadata-driven object/field
+ * discovery from IntegrationEngineBase cache and generic pagination handling.
+ *
  * Uses Bearer token authentication (private app key or OAuth access token).
- * Supports discovery of standard CRM objects and their properties,
- * incremental sync via cursor-based pagination, and default field mappings.
+ * Supports cursor-based pagination and automatic response flattening.
  *
  * DATA SAFETY: This connector is READ-ONLY. It never writes data back to HubSpot.
  */
 @RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
-export class HubSpotConnector extends BaseIntegrationConnector {
+export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
-    // ─── TestConnection ───────────────────────────────────────────
+    /** Timestamp of the last API request, used for throttling */
+    private lastRequestTime = 0;
 
+    // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
+
+    protected async Authenticate(
+        companyIntegration: MJCompanyIntegrationEntity
+    ): Promise<RESTAuthContext> {
+        const credentials = await this.LoadCredentials(companyIntegration);
+        const auth: HubSpotAuthContext = {
+            Token: credentials.AccessToken,
+            Credentials: credentials,
+        };
+        return auth;
+    }
+
+    protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
+        return {
+            'Authorization': `Bearer ${auth.Token}`,
+            'Accept': 'application/json',
+        };
+    }
+
+    protected async MakeHTTPRequest(
+        _auth: RESTAuthContext,
+        url: string,
+        method: string,
+        headers: Record<string, string>,
+        _body?: unknown
+    ): Promise<RESTResponse> {
+        // Throttle: ensure minimum interval between requests
+        const elapsed = Date.now() - this.lastRequestTime;
+        if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+            await this.Sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
+        }
+
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            const response = await this.FetchWithTimeout(url, method, headers);
+            this.lastRequestTime = Date.now();
+
+            if (response.status === 429) {
+                const delayMs = this.CalculateRetryDelay(response, attempt);
+                console.warn(
+                    `[HubSpot] Rate limited (429), retrying in ${delayMs}ms ` +
+                    `(attempt ${attempt + 1}/${MAX_RETRIES})`
+                );
+                await this.Sleep(delayMs);
+                continue;
+            }
+
+            const body = await response.json() as unknown;
+            return this.BuildRESTResponse(response, body);
+        }
+
+        throw new Error(`HubSpot API request failed after ${MAX_RETRIES} retries: ${url}`);
+    }
+
+    protected NormalizeResponse(
+        rawBody: unknown,
+        responseDataKey: string | null
+    ): Record<string, unknown>[] {
+        const body = rawBody as Record<string, unknown>;
+
+        // Extract the records array using the responseDataKey (typically "results")
+        let records: unknown[];
+        if (responseDataKey != null) {
+            const data = body[responseDataKey];
+            if (!data || !Array.isArray(data)) return [];
+            records = data;
+        } else if (Array.isArray(rawBody)) {
+            records = rawBody;
+        } else {
+            return [];
+        }
+
+        // Flatten HubSpot's nested { id, properties: {...}, createdAt, updatedAt, archived }
+        return records.map(r => this.FlattenHubSpotRecord(r as Record<string, unknown>));
+    }
+
+    protected ExtractPaginationInfo(
+        rawBody: unknown,
+        _paginationType: PaginationType,
+        _currentPage: number,
+        _currentOffset: number,
+        _pageSize: number
+    ): PaginationState {
+        const body = rawBody as Record<string, unknown>;
+        const paging = body['paging'] as { next?: { after?: string } } | undefined;
+        const nextCursor = paging?.next?.after;
+
+        if (nextCursor) {
+            return { HasMore: true, NextCursor: nextCursor };
+        }
+
+        return { HasMore: false };
+    }
+
+    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity): string {
+        return HUBSPOT_API_BASE;
+    }
+
+    // ─── HubSpot-specific pagination ─────────────────────────────────
+
+    /**
+     * Overrides base pagination URL building to use HubSpot's parameter names.
+     * HubSpot uses `after` for cursor pagination (not `cursor`), and needs
+     * `limit` instead of `pageSize`. Also appends `properties` query param.
+     */
+    protected override BuildPaginatedURL(
+        basePath: string,
+        obj: MJIntegrationObjectEntity,
+        _page: number,
+        _offset: number,
+        cursor?: string
+    ): string {
+        const separator = basePath.includes('?') ? '&' : '?';
+        const objectName = this.ExtractObjectNameFromPath(basePath);
+        const propertiesParam = this.BuildPropertiesParam(objectName);
+
+        if (cursor) {
+            return `${basePath}${separator}limit=${obj.DefaultPageSize}&after=${encodeURIComponent(cursor)}${propertiesParam}`;
+        }
+
+        return `${basePath}${separator}limit=${obj.DefaultPageSize}${propertiesParam}`;
+    }
+
+    // ─── TestConnection ─────────────────────────────────────────────
+
+    /** Tests connectivity by authenticating and fetching 1 contact. */
     public async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const creds = await this.GetCredentials(companyIntegration, contextUser);
-            // Minimal test: fetch 1 contact to validate auth
-            const response = await this.HubSpotGet(creds, '/crm/v3/objects/contacts?limit=1');
+            const auth = await this.Authenticate(companyIntegration);
+            const headers = this.BuildHeaders(auth);
+            const response = await this.MakeHTTPRequest(
+                auth,
+                `${HUBSPOT_API_BASE}/crm/v3/objects/contacts?limit=1`,
+                'GET',
+                headers
+            );
 
-            if (response.ok) {
+            if (response.Status >= 200 && response.Status < 300) {
+                const hubSpotAuth = auth as HubSpotAuthContext;
                 return {
                     Success: true,
                     Message: 'Successfully connected to HubSpot CRM API',
-                    ServerVersion: `HubSpot CRM API ${creds.ApiVersion}`,
+                    ServerVersion: `HubSpot CRM API ${hubSpotAuth.Credentials.ApiVersion}`,
                 };
             }
 
-            const errorBody = await response.text();
+            const bodyPreview = typeof response.Body === 'string'
+                ? response.Body.slice(0, 500)
+                : JSON.stringify(response.Body).slice(0, 500);
             return {
                 Success: false,
-                Message: `HubSpot API returned ${response.status}: ${errorBody}`,
+                Message: `HubSpot API returned ${response.Status}: ${bodyPreview}`,
             };
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            return {
-                Success: false,
-                Message: `Connection failed: ${message}`,
-            };
+            return { Success: false, Message: `Connection failed: ${message}` };
         }
-    }
-
-    // ─── DiscoverObjects ──────────────────────────────────────────
-
-    public async DiscoverObjects(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]> {
-        return Object.entries(HUBSPOT_OBJECTS).map(([name, meta]) => ({
-            Name: name,
-            Label: meta.Label,
-            SupportsIncrementalSync: meta.SupportsIncrementalSync,
-            SupportsWrite: meta.SupportsWrite,
-        }));
-    }
-
-    // ─── DiscoverFields ───────────────────────────────────────────
-
-    public async DiscoverFields(
-        companyIntegration: MJCompanyIntegrationEntity,
-        objectName: string,
-        contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const creds = await this.GetCredentials(companyIntegration, contextUser);
-        const response = await this.HubSpotGet(creds, `/crm/v3/properties/${objectName}`);
-
-        if (!response.ok) {
-            const body = await response.text();
-            throw new Error(`Failed to discover fields for "${objectName}": ${response.status} ${body}`);
-        }
-
-        const data = await response.json() as { results: HubSpotPropertyDef[] };
-        return data.results.map(prop => this.MapPropertyToField(prop));
-    }
-
-    // ─── FetchChanges ─────────────────────────────────────────────
-
-    /**
-     * Fetches a batch of records from HubSpot using cursor-based pagination.
-     * The watermark value is the cursor (`after` parameter) for the next page.
-     */
-    public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const creds = await this.GetCredentials(ctx.CompanyIntegration, ctx.ContextUser);
-        const batchSize = Math.min(ctx.BatchSize || DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE);
-
-        let url = `/crm/v3/objects/${ctx.ObjectName}?limit=${batchSize}`;
-
-        // Request all known properties for this object type so the API
-        // returns full record data instead of just default properties
-        const properties = HUBSPOT_PROPERTIES[ctx.ObjectName];
-        if (properties && properties.length > 0) {
-            url += `&properties=${properties.join(',')}`;
-        }
-
-        if (ctx.WatermarkValue) {
-            url += `&after=${encodeURIComponent(ctx.WatermarkValue)}`;
-        }
-
-        const response = await this.HubSpotGet(creds, url);
-        if (!response.ok) {
-            const body = await response.text();
-            throw new Error(`FetchChanges failed for "${ctx.ObjectName}": ${response.status} ${body}`);
-        }
-
-        const data = await response.json() as HubSpotListResponse;
-        const records: ExternalRecord[] = data.results.map(obj => this.MapHubSpotObject(obj, ctx.ObjectName));
-        const nextCursor = data.paging?.next?.after ?? undefined;
-
-        return {
-            Records: records,
-            HasMore: !!nextCursor,
-            NewWatermarkValue: nextCursor,
-        };
     }
 
     // ─── GetDefaultFieldMappings ──────────────────────────────────
@@ -331,84 +371,23 @@ export class HubSpotConnector extends BaseIntegrationConnector {
     // ─── Default Configuration ──────────────────────────────────────
 
     public override GetDefaultConfiguration(): DefaultIntegrationConfig {
-        const objects = Object.entries(HUBSPOT_OBJECTS);
         return {
             DefaultSchemaName: 'HubSpot',
-            DefaultObjects: objects.map(([name, meta]) => ({
-                SourceObjectName: name,
-                TargetTableName: meta.Label.replace(/\s+/g, ''),
-                TargetEntityName: `HubSpot ${meta.Label}`,
-                SyncEnabled: true,
-                FieldMappings: this.GetDefaultFieldMappings(name, meta.Label),
-            })),
+            DefaultObjects: [],  // Objects are auto-discovered from metadata via DiscoverObjects
         };
     }
 
-    // ─── Credential management ────────────────────────────────────
+    // ─── Schema Discovery Helpers ────────────────────────────────────
 
-    /**
-     * Reads credentials from CompanyIntegration.CredentialID → Credential.Values JSON,
-     * or falls back to CompanyIntegration Configuration JSON for backwards compat.
-     */
-    protected async GetCredentials(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<HubSpotCredentials> {
-        // Try loading from linked Credential entity first
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
-        if (credentialID) {
-            const md = new Metadata();
-            const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            const loaded = await credential.Load(credentialID);
-            if (loaded) {
-                const values = credential.Values;
-                if (values) {
-                    const parsed = JSON.parse(values) as Record<string, string>;
-                    const token = parsed['accessToken'] ?? parsed['AccessToken'] ?? parsed['apiKey'] ?? parsed['ApiKey'];
-                    if (token) {
-                        return {
-                            AccessToken: token,
-                            ApiVersion: parsed['apiVersion'] ?? DEFAULT_API_VERSION,
-                        };
-                    }
-                }
-            }
-        }
-
-        // Fallback: read from CompanyIntegration Configuration JSON
-        const configJson = companyIntegration.Get('Configuration') as string | null;
-        if (configJson) {
-            const config = JSON.parse(configJson) as Record<string, string>;
-            const token = config['accessToken'] ?? config['AccessToken'] ?? config['apiKey'] ?? config['ApiKey'];
-            if (token) {
-                return {
-                    AccessToken: token,
-                    ApiVersion: config['apiVersion'] ?? DEFAULT_API_VERSION,
-                };
-            }
-        }
-
-        throw new Error('No HubSpot credentials found. Attach a credential with an accessToken or apiKey, or set Configuration JSON on the CompanyIntegration.');
-    }
-
-    // ─── HTTP helpers ─────────────────────────────────────────────
-
-    /** Executes a GET request against the HubSpot API with Bearer auth */
-    private async HubSpotGet(creds: HubSpotCredentials, path: string): Promise<Response> {
-        const url = `${HUBSPOT_API_BASE}${path}`;
-        return fetch(url, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${creds.AccessToken}`,
-                'Accept': 'application/json',
-            },
-        });
-    }
-
-    // ─── Mapping helpers ──────────────────────────────────────────
-
-    /** Converts a HubSpot property definition to ExternalFieldSchema */
-    private MapPropertyToField(prop: HubSpotPropertyDef): ExternalFieldSchema {
+    /** Converts a HubSpot property definition to ExternalFieldSchema format */
+    public MapPropertyToField(prop: HubSpotPropertyDef): {
+        Name: string;
+        Label: string;
+        DataType: string;
+        IsRequired: boolean;
+        IsUniqueKey: boolean;
+        IsReadOnly: boolean;
+    } {
         return {
             Name: prop.name,
             Label: prop.label || prop.name,
@@ -420,7 +399,7 @@ export class HubSpotConnector extends BaseIntegrationConnector {
     }
 
     /** Maps HubSpot type + fieldType to a simplified data type string */
-    private MapHubSpotType(type: string, fieldType: string): string {
+    public MapHubSpotType(type: string, fieldType: string): string {
         switch (type) {
             case 'string':
                 if (fieldType === 'textarea') return 'text';
@@ -440,19 +419,153 @@ export class HubSpotConnector extends BaseIntegrationConnector {
         }
     }
 
-    /** Converts a HubSpot CRM object to an ExternalRecord */
-    private MapHubSpotObject(obj: HubSpotObject, objectName: string): ExternalRecord {
-        const fields: Record<string, unknown> = {
-            hs_object_id: obj.id,
-            ...obj.properties,
-        };
+    // ─── Credential management ────────────────────────────────────
 
-        return {
-            ExternalID: obj.id,
-            ObjectType: objectName,
-            Fields: fields,
-            ModifiedAt: obj.updatedAt ? new Date(obj.updatedAt) : new Date(),
-            IsDeleted: obj.archived,
-        };
+    /**
+     * Reads credentials from CompanyIntegration.CredentialID -> Credential.Values JSON,
+     * or falls back to CompanyIntegration Configuration JSON for backwards compat.
+     */
+    private async LoadCredentials(
+        companyIntegration: MJCompanyIntegrationEntity
+    ): Promise<HubSpotCredentials> {
+        // Try loading from linked Credential entity first
+        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        if (credentialID) {
+            const creds = await this.LoadFromCredentialEntity(credentialID);
+            if (creds) return creds;
+        }
+
+        // Fallback: read from CompanyIntegration Configuration JSON
+        const configJson = companyIntegration.Get('Configuration') as string | null;
+        if (configJson) {
+            const creds = this.ParseCredentialJson(configJson);
+            if (creds) return creds;
+        }
+
+        throw new Error(
+            'No HubSpot credentials found. Attach a credential with an accessToken or apiKey, ' +
+            'or set Configuration JSON on the CompanyIntegration.'
+        );
+    }
+
+    /** Loads credentials from a Credential entity by ID. */
+    private async LoadFromCredentialEntity(credentialID: string): Promise<HubSpotCredentials | null> {
+        const md = new Metadata();
+        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+        const loaded = await credential.Load(credentialID);
+        if (!loaded || !credential.Values) return null;
+
+        return this.ParseCredentialJson(credential.Values);
+    }
+
+    /** Parses a JSON string to extract HubSpot credentials. Returns null if no token found. */
+    private ParseCredentialJson(json: string): HubSpotCredentials | null {
+        try {
+            const parsed = JSON.parse(json) as Record<string, string>;
+            const token = parsed['accessToken'] ?? parsed['AccessToken'] ?? parsed['apiKey'] ?? parsed['ApiKey'];
+            if (token) {
+                return {
+                    AccessToken: token,
+                    ApiVersion: parsed['apiVersion'] ?? DEFAULT_API_VERSION,
+                };
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
+    // ─── Response flattening ─────────────────────────────────────────
+
+    /**
+     * Flattens a HubSpot CRM record from the nested format:
+     *   { id, properties: { field1, field2 }, createdAt, updatedAt, archived }
+     * into a flat record with all properties at the top level,
+     * plus system fields (hs_object_id, createdAt, updatedAt, archived).
+     */
+    private FlattenHubSpotRecord(record: Record<string, unknown>): Record<string, unknown> {
+        const properties = record['properties'] as Record<string, string | null> | undefined;
+        const result: Record<string, unknown> = {};
+
+        // Add flattened properties first
+        if (properties) {
+            for (const [key, value] of Object.entries(properties)) {
+                result[key] = value;
+            }
+        }
+
+        // Add system fields (these override any conflicting property names)
+        result['hs_object_id'] = record['id'];
+        result['createdAt'] = record['createdAt'];
+        result['updatedAt'] = record['updatedAt'];
+        result['archived'] = record['archived'];
+
+        return result;
+    }
+
+    // ─── URL helpers ─────────────────────────────────────────────────
+
+    /**
+     * Extracts the HubSpot object name from an API path.
+     * E.g., "/crm/v3/objects/contacts" -> "contacts"
+     */
+    private ExtractObjectNameFromPath(path: string): string {
+        // Remove query string
+        const pathOnly = path.split('?')[0];
+        // Get the last path segment
+        const segments = pathOnly.split('/').filter(s => s.length > 0);
+        return segments[segments.length - 1] ?? '';
+    }
+
+    /**
+     * Builds the `properties` query parameter for a HubSpot object type.
+     * Returns empty string if no properties are configured for the object.
+     */
+    private BuildPropertiesParam(objectName: string): string {
+        const properties = HUBSPOT_PROPERTIES[objectName];
+        if (properties && properties.length > 0) {
+            return `&properties=${properties.join(',')}`;
+        }
+        return '';
+    }
+
+    // ─── HTTP helpers ────────────────────────────────────────────────
+
+    /** Executes an HTTP request with a timeout. */
+    private async FetchWithTimeout(
+        url: string,
+        method: string,
+        headers: Record<string, string>
+    ): Promise<Response> {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+            return await fetch(url, { method, headers, signal: controller.signal });
+        } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                throw new Error(`HubSpot API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${url}`);
+            }
+            throw err;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    /** Calculates retry delay from Retry-After header or exponential backoff. */
+    private CalculateRetryDelay(response: Response, attempt: number): number {
+        const retryAfter = parseInt(response.headers.get('Retry-After') ?? '0', 10);
+        return retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * Math.pow(2, attempt), 30000);
+    }
+
+    /** Converts a fetch Response + parsed body into a RESTResponse. */
+    private BuildRESTResponse(response: Response, body: unknown): RESTResponse {
+        const headers: Record<string, string> = {};
+        response.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
+        return { Status: response.status, Body: body, Headers: headers };
+    }
+
+    /** Returns a promise that resolves after the specified number of milliseconds. */
+    private Sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }

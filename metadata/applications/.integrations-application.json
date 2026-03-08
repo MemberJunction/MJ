@@ -15,13 +15,7 @@
         "isDefault": true
       },
       {
-        "Label": "Pipelines",
-        "Icon": "fa-solid fa-diagram-project",
-        "ResourceType": "Custom",
-        "DriverClass": "IntegrationPipelines"
-      },
-      {
-        "Label": "Connections",
+        "Label": "Integrations",
         "Icon": "fa-solid fa-plug",
         "ResourceType": "Custom",
         "DriverClass": "IntegrationConnections"
@@ -228,7 +222,7 @@
     "ID": "1AE7EDAE-A057-497A-87CD-5DF72D0877CC"
   },
   "sync": {
-    "lastModified": "2026-03-08T16:58:07.713Z",
-    "checksum": "860a633a0c39b6e4dd686455abb9f0b41d4d266b9f3b9fec0542d244cd4af7a3"
+    "lastModified": "2026-03-08T17:44:18.097Z",
+    "checksum": "27efdc5dceb2fa868febc766c6042b5d9414e9ffad0cb7b7420342660c5afee9"
   }
 }

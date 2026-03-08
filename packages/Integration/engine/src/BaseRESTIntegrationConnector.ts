@@ -58,6 +58,9 @@ interface PaginatedFetchResult {
     HasMore: boolean;
 }
 
+/** Maximum number of pages to fetch before stopping (safety limit to prevent infinite loops) */
+const MAX_PAGINATION_PAGES = 200;
+
 // ─── BaseRESTIntegrationConnector ────────────────────────────────────
 
 /**
@@ -254,12 +257,13 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         templateVars: string[],
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
-        const parentInfo = this.ResolveParentInfo(fields, templateVars);
+        const parentInfo = this.ResolveParentInfo(fields, templateVars, ctx.CompanyIntegration.IntegrationID);
         if (!parentInfo) {
-            throw new Error(
-                `Template variables [${templateVars.join(', ')}] found in APIPath for "${obj.Name}" ` +
-                `but no matching FK field with RelatedIntegrationObjectID was found.`
+            console.warn(
+                `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variables ` +
+                `[${templateVars.join(', ')}] could not be resolved to a parent object.`
             );
+            return { Records: [], HasMore: false };
         }
 
         const parentIDs = await this.LoadParentIDs(parentInfo.parentObjectID, ctx.ContextUser);
@@ -285,17 +289,24 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
     /**
      * Resolves which template variable maps to which FK field + parent object.
-     * Returns null if no FK field matches any of the template variables.
+     *
+     * Resolution strategy (in order):
+     * 1. Explicit: FK field with RelatedIntegrationObjectID that matches a template var name
+     * 2. PK fallback: finds a sibling integration object whose primary key field name
+     *    matches the template var, allowing resolution without explicit FK metadata
+     *
+     * Returns null if no match is found by either strategy.
      */
     private ResolveParentInfo(
         fields: MJIntegrationObjectFieldEntity[],
-        templateVars: string[]
+        templateVars: string[],
+        integrationID: string
     ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
+        // Strategy 1: Explicit FK field with RelatedIntegrationObjectID
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
 
             for (const tVar of templateVars) {
-                // Match if the template var appears in the field name (case-insensitive)
                 if (field.Name.toLowerCase().includes(tVar.toLowerCase())) {
                     return {
                         templateVar: tVar,
@@ -305,6 +316,40 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
                 }
             }
         }
+
+        // Strategy 2: Match template var against PK fields of sibling objects
+        return this.ResolveParentByPKMatch(templateVars, integrationID);
+    }
+
+    /**
+     * Fallback resolution: finds a sibling integration object whose primary key
+     * field name matches one of the template variables (case-insensitive).
+     * E.g., {ProfileID} matches Members object which has PK field "ProfileID".
+     */
+    private ResolveParentByPKMatch(
+        templateVars: string[],
+        integrationID: string
+    ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
+        const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
+
+        for (const tVar of templateVars) {
+            const tVarLower = tVar.toLowerCase();
+
+            for (const sibling of siblingObjects) {
+                const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
+                const pkField = siblingFields.find(f => f.IsPrimaryKey);
+                if (!pkField) continue;
+
+                if (pkField.Name.toLowerCase() === tVarLower) {
+                    return {
+                        templateVar: tVar,
+                        fkFieldName: tVar, // Use the template var name as the FK field name
+                        parentObjectID: sibling.ID,
+                    };
+                }
+            }
+        }
+
         return null;
     }
 
@@ -402,8 +447,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         let offset = 0;
         let cursor: string | undefined;
         let hasMore = true;
+        let pageCount = 0;
+        let previousFirstRecordKey: string | undefined;
 
-        while (hasMore && allRecords.length < maxRecords) {
+        while (hasMore && allRecords.length < maxRecords && pageCount < MAX_PAGINATION_PAGES) {
+            pageCount++;
             const url = this.BuildPaginatedURL(basePath, obj, page, offset, cursor);
             const requestURL = this.AppendDefaultQueryParams(url, obj);
             const headers = this.BuildHeaders(auth);
@@ -411,7 +459,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
             this.ValidateHTTPResponse(response, requestURL);
             const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
-            if (records.length === 0) break;
+            if (records.length === 0) {
+                hasMore = false;
+                break;
+            }
+
+            // Detect duplicate pages: if the first record matches the previous page's first record,
+            // the API's pagination is broken (returning the same data repeatedly)
+            const currentFirstRecordKey = JSON.stringify(records[0]);
+            if (previousFirstRecordKey !== undefined && currentFirstRecordKey === previousFirstRecordKey) {
+                console.warn(
+                    `[BaseRESTIntegrationConnector] Duplicate page detected for "${obj.Name}" ` +
+                    `on page ${pageCount}. API pagination appears broken. Stopping.`
+                );
+                hasMore = false;
+                break;
+            }
+            previousFirstRecordKey = currentFirstRecordKey;
 
             allRecords.push(...records);
 
@@ -422,6 +486,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             page = paginationState.NextPage ?? page + 1;
             offset = paginationState.NextOffset ?? offset + records.length;
             cursor = paginationState.NextCursor;
+        }
+
+        if (pageCount >= MAX_PAGINATION_PAGES) {
+            console.warn(
+                `[BaseRESTIntegrationConnector] Pagination safety limit (${MAX_PAGINATION_PAGES} pages) ` +
+                `reached for "${obj.Name}". ${allRecords.length} records fetched so far.`
+            );
+            hasMore = false; // prevent the engine's outer loop from restarting pagination
         }
 
         return { Records: allRecords, HasMore: hasMore };
@@ -440,8 +512,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
     /**
      * Appends pagination parameters to a URL based on the object's PaginationType.
+     * Override in subclasses to use vendor-specific parameter names.
      */
-    private BuildPaginatedURL(
+    protected BuildPaginatedURL(
         basePath: string,
         obj: MJIntegrationObjectEntity,
         page: number,
@@ -467,8 +540,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Appends default query parameters from the IntegrationObject metadata.
      * DefaultQueryParams is stored as a JSON object like {"key": "value"}.
+     * Automatically skips params whose key (case-insensitive) already appears
+     * in the URL to avoid duplicates with pagination params.
      */
-    private AppendDefaultQueryParams(url: string, obj: MJIntegrationObjectEntity): string {
+    protected AppendDefaultQueryParams(url: string, obj: MJIntegrationObjectEntity): string {
         if (!obj.DefaultQueryParams) return url;
 
         try {
@@ -476,8 +551,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             const entries = Object.entries(params);
             if (entries.length === 0) return url;
 
+            // Extract existing param keys from the URL (case-insensitive) to avoid duplicates
+            const existingKeys = this.ExtractURLParamKeys(url);
+
+            // Filter out any default params whose key already exists in the URL
+            const filtered = entries.filter(([k]) => !existingKeys.has(k.toLowerCase()));
+            if (filtered.length === 0) return url;
+
             const separator = url.includes('?') ? '&' : '?';
-            const queryString = entries
+            const queryString = filtered
                 .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
                 .join('&');
             return `${url}${separator}${queryString}`;
@@ -485,6 +567,24 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             console.warn(`[BaseRESTIntegrationConnector] Invalid DefaultQueryParams JSON for object "${obj.Name}"`);
             return url;
         }
+    }
+
+    /**
+     * Extracts query parameter keys from a URL, returned as a Set of lowercase strings.
+     * Used to detect duplicates between pagination params and DefaultQueryParams.
+     */
+    private ExtractURLParamKeys(url: string): Set<string> {
+        const keys = new Set<string>();
+        const qIndex = url.indexOf('?');
+        if (qIndex < 0) return keys;
+
+        const queryString = url.substring(qIndex + 1);
+        for (const pair of queryString.split('&')) {
+            const eqIndex = pair.indexOf('=');
+            const key = eqIndex >= 0 ? pair.substring(0, eqIndex) : pair;
+            keys.add(decodeURIComponent(key).toLowerCase());
+        }
+        return keys;
     }
 
     // ── Template variable helpers ────────────────────────────────────

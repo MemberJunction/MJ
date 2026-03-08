@@ -45,37 +45,77 @@ describe('HubSpotConnector (unit)', () => {
         });
     });
 
-    describe('DiscoverObjects', () => {
-        it('should return standard CRM objects', async () => {
-            const connector = new HubSpotConnector();
-            // DiscoverObjects doesn't need real auth — returns hardcoded object list
-            const objects = await connector.DiscoverObjects(
-                {} as Parameters<typeof connector.DiscoverObjects>[0],
-                {} as Parameters<typeof connector.DiscoverObjects>[1]
-            );
-            const names = objects.map(o => o.Name);
-            expect(names).toContain('contacts');
-            expect(names).toContain('companies');
-            expect(names).toContain('deals');
-            expect(names).toContain('tickets');
-            expect(names).toContain('products');
-            expect(names).toContain('line_items');
-            expect(names).toContain('quotes');
-            expect(names).toContain('calls');
-            expect(names).toContain('emails');
-            expect(names).toContain('notes');
-            expect(names).toContain('tasks');
-            expect(names).toContain('meetings');
-            expect(names).toContain('feedback_submissions');
-            expect(objects.length).toBe(13);
+    describe('MapHubSpotType', () => {
+        const connector = new HubSpotConnector();
 
-            const contacts = objects.find(o => o.Name === 'contacts')!;
-            expect(contacts.Label).toBe('Contacts');
-            expect(contacts.SupportsIncrementalSync).toBe(true);
-            expect(contacts.SupportsWrite).toBe(false);
+        it('should map string types correctly', () => {
+            expect(connector.MapHubSpotType('string', 'text')).toBe('string');
+            expect(connector.MapHubSpotType('string', 'textarea')).toBe('text');
+            expect(connector.MapHubSpotType('string', 'html')).toBe('html');
+        });
 
-            const products = objects.find(o => o.Name === 'products')!;
-            expect(products.SupportsIncrementalSync).toBe(false);
+        it('should map numeric and date types', () => {
+            expect(connector.MapHubSpotType('number', 'number')).toBe('number');
+            expect(connector.MapHubSpotType('date', 'date')).toBe('datetime');
+            expect(connector.MapHubSpotType('datetime', 'date')).toBe('datetime');
+        });
+
+        it('should map boolean and enum types', () => {
+            expect(connector.MapHubSpotType('bool', 'booleancheckbox')).toBe('boolean');
+            expect(connector.MapHubSpotType('enumeration', 'select')).toBe('enum');
+        });
+
+        it('should pass through unknown types', () => {
+            expect(connector.MapHubSpotType('phone_number', 'phonenumber')).toBe('phone_number');
+        });
+    });
+
+    describe('MapPropertyToField', () => {
+        const connector = new HubSpotConnector();
+
+        it('should convert a HubSpot property definition to field schema', () => {
+            const result = connector.MapPropertyToField({
+                name: 'email',
+                label: 'Email',
+                type: 'string',
+                fieldType: 'text',
+                groupName: 'contactinformation',
+                description: 'Contact email',
+                hasUniqueValue: true,
+                calculated: false,
+                externalOptions: false,
+            });
+
+            expect(result.Name).toBe('email');
+            expect(result.Label).toBe('Email');
+            expect(result.DataType).toBe('string');
+            expect(result.IsUniqueKey).toBe(true);
+            expect(result.IsReadOnly).toBe(false);
+        });
+
+        it('should mark calculated properties as read-only', () => {
+            const result = connector.MapPropertyToField({
+                name: 'hs_object_id',
+                label: 'Object ID',
+                type: 'number',
+                fieldType: 'number',
+                groupName: 'contactinformation',
+                description: '',
+                hasUniqueValue: true,
+                calculated: true,
+                externalOptions: false,
+            });
+
+            expect(result.IsReadOnly).toBe(true);
+        });
+    });
+
+    describe('GetDefaultConfiguration', () => {
+        const connector = new HubSpotConnector();
+
+        it('should return HubSpot schema name', () => {
+            const config = connector.GetDefaultConfiguration();
+            expect(config.DefaultSchemaName).toBe('HubSpot');
         });
     });
 });

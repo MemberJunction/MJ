@@ -15,6 +15,7 @@ import {
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
 } from '@memberjunction/integration-engine';
+import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
 // ─── Configuration & Session Types ──────────────────────────────────
 
@@ -51,6 +52,9 @@ const MAX_RETRIES = 5;
 /** HTTP request timeout in milliseconds */
 const REQUEST_TIMEOUT_MS = 30000;
 
+/** Minimum milliseconds between API requests to avoid rate limiting */
+const MIN_REQUEST_INTERVAL_MS = 350;
+
 /** JSON parsing timeout in milliseconds */
 const JSON_TIMEOUT_MS = 30000;
 
@@ -83,6 +87,9 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Session cache keyed by ClientID */
     private sessionCache = new Map<string, YMSession>();
 
+    /** Timestamp of the last API request, used for throttling */
+    private lastRequestTime = 0;
+
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
     protected async Authenticate(
@@ -107,6 +114,12 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     ): Promise<RESTResponse> {
         const ymAuth = auth as YMAuthContext;
         const currentHeaders = { ...headers };
+
+        // Throttle: ensure minimum interval between requests
+        const elapsed = Date.now() - this.lastRequestTime;
+        if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+            await this.Sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
+        }
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             let response: Response;
@@ -133,6 +146,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 continue;
             }
 
+            this.lastRequestTime = Date.now();
             const body = await this.JsonWithTimeout(response, JSON_TIMEOUT_MS);
             return this.BuildRESTResponse(response, body);
         }
@@ -195,6 +209,37 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             if (clientId) return `${YM_API_BASE}/Ams/${clientId}`;
         }
         throw new Error('Cannot determine YM base URL: no ClientID in configuration');
+    }
+
+    // ─── YM-specific pagination parameter names ───────────────────────
+
+    /**
+     * Overrides base pagination URL building to use YM's expected parameter names:
+     * - PageNumber type: `PageNumber` / `PageSize` (not `page` / `pageSize`)
+     * - Offset type: `OffSet` (not `offset`); no explicit limit param — YM uses
+     *   its own default batch size (~200 records)
+     */
+    protected override BuildPaginatedURL(
+        basePath: string,
+        obj: MJIntegrationObjectEntity,
+        page: number,
+        offset: number,
+        cursor?: string
+    ): string {
+        const separator = basePath.includes('?') ? '&' : '?';
+
+        switch (obj.PaginationType) {
+            case 'PageNumber':
+                return `${basePath}${separator}PageNumber=${page}&PageSize=${obj.DefaultPageSize}`;
+            case 'Offset':
+                return `${basePath}${separator}OffSet=${offset}&PageSize=${obj.DefaultPageSize}`;
+            case 'Cursor':
+                return cursor
+                    ? `${basePath}${separator}cursor=${encodeURIComponent(cursor)}&limit=${obj.DefaultPageSize}`
+                    : `${basePath}${separator}limit=${obj.DefaultPageSize}`;
+            default:
+                return basePath;
+        }
     }
 
     // ─── FetchChanges override for YM-specific cases ──────────────────
