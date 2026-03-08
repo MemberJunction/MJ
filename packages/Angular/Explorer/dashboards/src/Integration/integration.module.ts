@@ -17,6 +17,7 @@ import { ActivityComponent } from './components/activity/activity.component';
 import { SchedulesComponent } from './components/schedules/schedules.component';
 import { IntegrationCardComponent } from './components/widgets/integration-card.component';
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
+import { VisualFieldEditorComponent } from './components/visual-editor/visual-editor.component';
 import { IntegrationDataService } from './services/integration-data.service';
 
 @NgModule({
@@ -28,7 +29,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     ActivityComponent,
     SchedulesComponent,
     IntegrationCardComponent,
-    RunHistoryPanelComponent
+    RunHistoryPanelComponent,
+    VisualFieldEditorComponent
   ],
   imports: [
     CommonModule,
@@ -52,7 +54,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     ActivityComponent,
     SchedulesComponent,
     IntegrationCardComponent,
-    RunHistoryPanelComponent
+    RunHistoryPanelComponent,
+    VisualFieldEditorComponent
   ]
 })
 export class IntegrationModule { }

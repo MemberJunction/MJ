@@ -4,7 +4,6 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
-import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -38,7 +37,7 @@ const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
 ];
 
 type StatusBadgeType = 'Connected' | 'Error' | 'Inactive' | 'Syncing';
-type WizardStepType = 1 | 2 | 3 | 4;
+type WizardStepType = 1 | 2 | 3;
 type CardMenuAction = 'edit' | 'disable' | 'delete';
 
 interface WizardStep {
@@ -51,19 +50,10 @@ interface CompanyRow {
   Name: string;
 }
 
-interface DiscoveredObject {
-  Name: string;
-  DisplayName: string;
-  Category: string;
-  Selected: boolean;
-  RecordCount: number | null;
-}
-
 const WIZARD_STEPS: WizardStep[] = [
   { Number: 1, Label: 'Choose Integration' },
   { Number: 2, Label: 'Configure' },
-  { Number: 3, Label: 'Test' },
-  { Number: 4, Label: 'Quick Setup' }
+  { Number: 3, Label: 'Test' }
 ];
 
 @RegisterClass(BaseResourceComponent, 'IntegrationConnections')
@@ -110,10 +100,6 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   TestResult: { Success: boolean; Message: string; ServerVersion?: string } | null = null;
   IsTesting = false;
 
-  // Step 4
-  DiscoveredObjects: DiscoveredObject[] = [];
-  IsDiscovering = false;
-
   // Save state
   IsSaving = false;
   SavedIntegrationID: string | null = null;
@@ -133,6 +119,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   EditIsActive = false;
   IsEditSaving = false;
   IsEditLoading = false;
+
+  // Detail view state (replaces card grid when an integration is selected)
+  SelectedSummary: IntegrationSummary | null = null;
+  DetailEntityMaps: EntityMapRow[] = [];
+  DetailFilteredMaps: EntityMapRow[] = [];
+  DetailSearchTerm = '';
+  IsDetailLoading = false;
+
+  // Entity map editor state (field mapping detail view)
+  EditorEntityMap: EntityMapRow | null = null;
 
   // Delete confirmation state
   DeleteConfirmID: string | null = null;
@@ -159,7 +155,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ---------------------------------------------------------------------------
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {
-    return 'Connections';
+    return 'Integrations';
   }
 
   async GetResourceIconClass(_data: ResourceData): Promise<string> {
@@ -465,6 +461,120 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   // ---------------------------------------------------------------------------
+  // Detail view (entity maps for a selected integration)
+  // ---------------------------------------------------------------------------
+
+  async SelectIntegrationCard(summary: IntegrationSummary): Promise<void> {
+    this.SelectedSummary = summary;
+    this.DetailSearchTerm = '';
+    this.IsDetailLoading = true;
+    this.cdr.detectChanges();
+
+    try {
+      const maps = await this.loadEntityMapsForIntegration(summary.Integration.ID);
+      this.DetailEntityMaps = maps;
+      this.DetailFilteredMaps = maps;
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to load entity maps:', err);
+    } finally {
+      this.IsDetailLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  CloseDetailView(): void {
+    this.SelectedSummary = null;
+    this.DetailEntityMaps = [];
+    this.DetailFilteredMaps = [];
+    this.DetailSearchTerm = '';
+    this.cdr.detectChanges();
+  }
+
+  OnDetailSearch(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.DetailSearchTerm = input.value;
+    this.DetailFilteredMaps = this.applyDetailFilter();
+    this.cdr.detectChanges();
+  }
+
+  DirectionLabel(direction: string): string {
+    if (direction === 'Pull') return '\u2192';
+    if (direction === 'Push') return '\u2190';
+    if (direction === 'Bidirectional') return '\u2194';
+    return '\u2192';
+  }
+
+  DirectionText(direction: string): string {
+    if (direction === 'Pull') return 'Pull \u2192';
+    if (direction === 'Push') return '\u2190 Push';
+    if (direction === 'Bidirectional') return '\u2194 Bi';
+    return 'Pull \u2192';
+  }
+
+  DirectionBadgeClass(direction: string): string {
+    if (direction === 'Pull') return 'direction-badge pull';
+    if (direction === 'Push') return 'direction-badge push';
+    if (direction === 'Bidirectional') return 'direction-badge bidirectional';
+    return 'direction-badge';
+  }
+
+  async OnToggleMapEnabled(em: EntityMapRow, event: Event): Promise<void> {
+    const checkbox = event.target as HTMLInputElement;
+    const newValue = checkbox.checked;
+    em.SyncEnabled = newValue;
+    this.cdr.detectChanges();
+    try {
+      await this.dataService.ToggleEntityMapEnabled(em.ID, newValue);
+    } catch (err) {
+      em.SyncEnabled = !newValue;
+      checkbox.checked = !newValue;
+      console.error('[IntegrationConnections] Failed to toggle SyncEnabled:', err);
+      this.cdr.detectChanges();
+    }
+  }
+
+  get DetailActiveMapCount(): number {
+    return this.DetailEntityMaps.filter(m => m.SyncEnabled).length;
+  }
+
+  private applyDetailFilter(): EntityMapRow[] {
+    if (!this.DetailSearchTerm.trim()) return this.DetailEntityMaps;
+    const term = this.DetailSearchTerm.toLowerCase();
+    return this.DetailEntityMaps.filter(m =>
+      (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
+      m.Entity.toLowerCase().includes(term)
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Entity map editor (field mapping detail)
+  // ---------------------------------------------------------------------------
+
+  OnEntityMapClick(em: EntityMapRow): void {
+    this.EditorEntityMap = em;
+    this.cdr.detectChanges();
+  }
+
+  CloseEntityMapEditor(): void {
+    this.EditorEntityMap = null;
+    this.cdr.detectChanges();
+  }
+
+  private async loadEntityMapsForIntegration(companyIntegrationID: string): Promise<EntityMapRow[]> {
+    const rv = new RunView(this.RunViewToUse ?? null);
+    const result = await rv.RunView<EntityMapRow>({
+      EntityName: 'MJ: Company Integration Entity Maps',
+      ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+      OrderBy: 'Priority, ExternalObjectName',
+      Fields: ['ID', 'CompanyIntegrationID', 'ExternalObjectName', 'ExternalObjectLabel',
+               'EntityID', 'SyncDirection', 'SyncEnabled', 'MatchStrategy',
+               'ConflictResolution', 'Priority', 'DeleteBehavior', 'Status', 'Entity'],
+      ResultType: 'simple'
+    });
+    return result.Results;
+  }
+
+  // ---------------------------------------------------------------------------
   // Wizard: open/close
   // ---------------------------------------------------------------------------
 
@@ -483,12 +593,6 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
   }
 
-  OnBackdropClick(event: Event): void {
-    if ((event.target as HTMLElement).classList.contains('wizard-backdrop')) {
-      this.CloseWizard();
-    }
-  }
-
   OnKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       this.CloseWizard();
@@ -500,7 +604,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ---------------------------------------------------------------------------
 
   NextStep(): void {
-    if (this.WizardStep < 4) {
+    if (this.WizardStep < 3) {
       this.WizardStep = (this.WizardStep + 1) as WizardStepType;
       if (this.WizardStep === 3) {
         this.TestResult = null;
@@ -524,9 +628,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   get NextButtonLabel(): string {
-    if (this.WizardStep === 3 && !this.TestResult?.Success) return 'Next';
-    if (this.WizardStep === 3) return 'Next';
-    if (this.WizardStep === 4) return 'Finish';
+    if (this.WizardStep === 3) return 'Finish';
     return 'Next';
   }
 
@@ -656,146 +758,45 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   // ---------------------------------------------------------------------------
-  // Wizard Step 4: Quick Setup
+  // Wizard: finish
   // ---------------------------------------------------------------------------
 
-  async SaveAndDiscover(): Promise<void> {
+  async FinishWizard(): Promise<void> {
+    if (this.WizardStep < 3) {
+      this.NextStep();
+      return;
+    }
+
+    // On step 3 with a successful test — activate the integration and close
     if (!this.SavedIntegrationID) return;
-    this.IsDiscovering = true;
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
     try {
-      // Activate the integration
       const md = new Metadata();
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(this.SavedIntegrationID);
       ci.IsActive = true;
       ci.Name = this.ConnectionName;
       await ci.Save();
-
-      // Load objects from IntegrationObject metadata via engine
-      const engine = IntegrationEngineBase.Instance;
-      const integration = engine.GetIntegrationForCompanyIntegration(this.SavedIntegrationID);
-      if (integration) {
-        const objects = engine.GetActiveIntegrationObjects(integration.ID);
-        this.DiscoveredObjects = objects.map(obj => ({
-          Name: obj.Name,
-          DisplayName: obj.DisplayName || obj.Name,
-          Category: obj.Category || 'Uncategorized',
-          Selected: false,
-          RecordCount: null
-        }));
-      }
     } catch (err) {
-      console.error('[IntegrationConnections] Discovery error:', err);
-    } finally {
-      this.IsDiscovering = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  ToggleDiscoveredObject(obj: DiscoveredObject): void {
-    obj.Selected = !obj.Selected;
-  }
-
-  get SelectedDiscoveredCount(): number {
-    return this.DiscoveredObjects.filter(o => o.Selected).length;
-  }
-
-  /** Group discovered objects by Category for wizard Step 4 display */
-  get DiscoveredObjectsByCategory(): Array<{ Category: string; Objects: DiscoveredObject[] }> {
-    const categoryMap = new Map<string, DiscoveredObject[]>();
-    for (const obj of this.DiscoveredObjects) {
-      const cat = obj.Category || 'Uncategorized';
-      if (!categoryMap.has(cat)) {
-        categoryMap.set(cat, []);
-      }
-      categoryMap.get(cat)!.push(obj);
-    }
-    return Array.from(categoryMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([Category, Objects]) => ({ Category, Objects }));
-  }
-
-  ToggleCategoryAll(category: string, selected: boolean): void {
-    for (const obj of this.DiscoveredObjects) {
-      if ((obj.Category || 'Uncategorized') === category) {
-        obj.Selected = selected;
-      }
-    }
-  }
-
-  IsCategoryFullySelected(category: string): boolean {
-    const inCategory = this.DiscoveredObjects.filter(
-      o => (o.Category || 'Uncategorized') === category
-    );
-    return inCategory.length > 0 && inCategory.every(o => o.Selected);
-  }
-
-  async ApplyQuickSetup(): Promise<void> {
-    if (!this.SavedIntegrationID) return;
-    const selected = this.DiscoveredObjects.filter(o => o.Selected);
-    if (selected.length === 0) return;
-
-    this.IsSaving = true;
-    this.cdr.detectChanges();
-
-    try {
-      const mjEntities = await this.dataService.LoadMJEntities();
-
-      for (const obj of selected) {
-        const targetEntity = mjEntities.find(e =>
-          e.Name.toLowerCase() === obj.Name.toLowerCase()
-        );
-        if (!targetEntity) continue;
-
-        await this.dataService.CreateEntityMap({
-          CompanyIntegrationID: this.SavedIntegrationID,
-          ExternalObjectName: obj.Name,
-          ExternalObjectLabel: obj.DisplayName !== obj.Name ? obj.DisplayName : undefined,
-          EntityID: targetEntity.ID,
-          SyncDirection: 'Pull'
-        });
-      }
-    } catch (err) {
-      console.error('[IntegrationConnections] Quick setup error:', err);
+      console.error('[IntegrationConnections] Failed to activate integration:', err);
     } finally {
       this.IsSaving = false;
-      this.CloseWizard();
-    }
-  }
+      this.WizardOpen = false;
+      await this.LoadData();
 
-  SkipQuickSetup(): void {
-    this.CloseWizard();
-  }
-
-  async OnStep4Enter(): Promise<void> {
-    if (this.DiscoveredObjects.length === 0) {
-      await this.SaveAndDiscover();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Wizard: finish
-  // ---------------------------------------------------------------------------
-
-  async FinishWizard(): Promise<void> {
-    if (this.isOnFinalStep()) {
-      if (this.SelectedDiscoveredCount > 0) {
-        await this.ApplyQuickSetup();
-      } else {
-        this.CloseWizard();
+      // Auto-select the newly created integration to show its detail view
+      if (this.SavedIntegrationID) {
+        const newSummary = this.Connections.find(c =>
+          UUIDsEqual(c.Integration.ID, this.SavedIntegrationID!)
+        );
+        if (newSummary) {
+          await this.SelectIntegrationCard(newSummary);
+        }
       }
-    } else {
-      this.NextStep();
-      if (this.isOnFinalStep()) {
-        await this.OnStep4Enter();
-      }
+      this.cdr.detectChanges();
     }
-  }
-
-  private isOnFinalStep(): boolean {
-    return this.WizardStep === 4;
   }
 
   // ---------------------------------------------------------------------------
@@ -925,8 +926,6 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.Companies = [];
     this.TestResult = null;
     this.IsTesting = false;
-    this.DiscoveredObjects = [];
-    this.IsDiscovering = false;
     this.IsSaving = false;
     this.SavedIntegrationID = null;
     this.OpenMenuID = null;

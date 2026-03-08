@@ -1,170 +1,321 @@
-<!-- Main view: Connection card grid -->
-<div class="connections-container">
+<!-- Main container -->
+<div class="connections-container" [class.detail-active]="!!SelectedSummary"
+     [class.editor-active]="!!EditorEntityMap">
 
-  <!-- Header -->
-  <div class="connections-header">
-    <div class="header-left">
-      <h2 class="header-title">Connections</h2>
-      <span class="header-count">{{ Connections.length }} integration{{ Connections.length !== 1 ? 's' : '' }}</span>
-    </div>
-    <button kendoButton (click)="OpenWizard()" class="add-connection-btn">
-      <i class="fa-solid fa-plus"></i>
-      Add Integration
-    </button>
-  </div>
-
-  <!-- Loading state -->
-  @if (IsLoading) {
-    <div class="loading-container">
-      <mj-loading text="Loading connections..."></mj-loading>
-    </div>
-  }
-
-  <!-- Empty state -->
-  @if (!IsLoading && Connections.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-plug empty-icon"></i>
-      <h3>No connections yet</h3>
-      <p>Connect your first external system to start syncing data.</p>
-      <button kendoButton (click)="OpenWizard()" themeColor="primary">
+  <!-- ======================================================================
+       CARD GRID VIEW (shown when no wizard and no detail selected)
+       ====================================================================== -->
+  @if (!WizardOpen && !SelectedSummary) {
+    <!-- Header -->
+    <div class="connections-header">
+      <div class="header-left">
+        <h2 class="header-title">Integrations</h2>
+        <span class="header-count">{{ Connections.length }} integration{{ Connections.length !== 1 ? 's' : '' }}</span>
+      </div>
+      <button kendoButton (click)="OpenWizard()" class="add-connection-btn">
         <i class="fa-solid fa-plus"></i>
-        Add Your First Integration
+        Add Integration
       </button>
     </div>
-  }
 
-  <!-- Card grid -->
-  @if (!IsLoading && Connections.length > 0) {
-    <div class="card-grid">
-      <!-- Connection cards -->
-      @for (summary of Connections; track summary.Integration.ID) {
-        <div class="connection-card">
-          <!-- Card header -->
-          <div class="card-header">
-            <div class="icon-circle" [style.background-color]="GetIconBrandColor(summary.Integration.Integration)">
-              <i [class]="GetIntegrationIcon(summary.Integration.Integration)" class="icon-large"></i>
-            </div>
-            <span [class]="GetStatusBadgeClass(summary)">{{ GetStatusBadge(summary) }}</span>
-          </div>
+    <!-- Loading state -->
+    @if (IsLoading) {
+      <div class="loading-container">
+        <mj-loading text="Loading integrations..."></mj-loading>
+      </div>
+    }
 
-          <!-- Card body -->
-          <div class="card-body">
-            <div class="card-name">{{ summary.Integration.Name }}</div>
-            <div class="card-company">{{ summary.Integration.Company }}</div>
-            <div class="card-meta">
-              <span class="meta-label">{{ GetSourceTypeLabel(summary) }}</span>
-              <span class="meta-separator">&middot;</span>
-              <span class="meta-value">{{ GetCredentialHint(summary) }}</span>
-            </div>
-            <div class="card-sync-info">
-              <i class="fa-solid fa-arrows-rotate"></i>
-              Syncing {{ GetEntityMapCount(summary.Integration.ID) }} entities
-            </div>
+    <!-- Empty state -->
+    @if (!IsLoading && Connections.length === 0) {
+      <div class="empty-state">
+        <i class="fa-solid fa-plug empty-icon"></i>
+        <h3>No integrations yet</h3>
+        <p>Connect your first external system to start syncing data.</p>
+        <button kendoButton (click)="OpenWizard()" themeColor="primary">
+          <i class="fa-solid fa-plus"></i>
+          Add Your First Integration
+        </button>
+      </div>
+    }
 
-            <!-- Inline test result -->
-            @if (GetCardTestResult(summary.Integration.ID); as testResult) {
-              <div class="card-test-result" [class.test-success]="testResult.Success" [class.test-failure]="!testResult.Success">
-                @if (testResult.Success) {
-                  <i class="fa-solid fa-circle-check"></i>
+    <!-- Card grid -->
+    @if (!IsLoading && Connections.length > 0) {
+      <div class="card-grid">
+        @for (summary of Connections; track summary.Integration.ID) {
+          <div class="connection-card">
+            <!-- Card header + body: clickable to open detail view -->
+            <div class="card-clickable" (click)="SelectIntegrationCard(summary)">
+              <div class="card-header">
+                <div class="icon-circle" [style.background-color]="GetIconBrandColor(summary.Integration.Integration)">
+                  <i [class]="GetIntegrationIcon(summary.Integration.Integration)" class="icon-large"></i>
+                </div>
+                <span [class]="GetStatusBadgeClass(summary)">{{ GetStatusBadge(summary) }}</span>
+              </div>
+
+              <!-- Card body -->
+              <div class="card-body">
+              <div class="card-name">{{ summary.Integration.Name }}</div>
+              <div class="card-company">{{ summary.Integration.Company }}</div>
+              <div class="card-meta">
+                <span class="meta-label">{{ GetSourceTypeLabel(summary) }}</span>
+                <span class="meta-separator">&middot;</span>
+                <span class="meta-value">{{ GetCredentialHint(summary) }}</span>
+              </div>
+              <div class="card-sync-info">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                Syncing {{ GetEntityMapCount(summary.Integration.ID) }} entities
+              </div>
+
+              <!-- Inline test result -->
+              @if (GetCardTestResult(summary.Integration.ID); as testResult) {
+                <div class="card-test-result" [class.test-success]="testResult.Success" [class.test-failure]="!testResult.Success">
+                  @if (testResult.Success) {
+                    <i class="fa-solid fa-circle-check"></i>
+                  } @else {
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  }
+                  <span>{{ testResult.Message }}</span>
+                </div>
+              }
+            </div>
+          </div><!-- /card-clickable -->
+
+            <!-- Delete confirmation overlay -->
+            @if (IsDeleteConfirming(summary.Integration.ID)) {
+              <div class="delete-confirm-overlay">
+                <div class="delete-confirm-content">
+                  <i class="fa-solid fa-triangle-exclamation delete-warn-icon"></i>
+                  <span class="delete-confirm-text">Delete this integration and all its entity maps?</span>
+                  <div class="delete-confirm-actions">
+                    <button kendoButton
+                            themeColor="error"
+                            [disabled]="IsDeleting"
+                            (click)="ConfirmDelete(summary.Integration.ID)">
+                      @if (IsDeleting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Deleting...
+                      } @else {
+                        Delete
+                      }
+                    </button>
+                    <button kendoButton look="outline" (click)="CancelDelete()">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Card footer -->
+            <div class="card-footer">
+              <button kendoButton
+                      look="outline"
+                      [disabled]="!!TestingCardID"
+                      (click)="TestExistingConnection(summary.Integration.ID)">
+                @if (IsTestingCard(summary.Integration.ID)) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
                 } @else {
-                  <i class="fa-solid fa-circle-xmark"></i>
+                  Test
                 }
-                <span>{{ testResult.Message }}</span>
-              </div>
-            }
-          </div>
-
-          <!-- Delete confirmation overlay -->
-          @if (IsDeleteConfirming(summary.Integration.ID)) {
-            <div class="delete-confirm-overlay">
-              <div class="delete-confirm-content">
-                <i class="fa-solid fa-triangle-exclamation delete-warn-icon"></i>
-                <span class="delete-confirm-text">Delete this connection and all its entity maps?</span>
-                <div class="delete-confirm-actions">
-                  <button kendoButton
-                          themeColor="error"
-                          [disabled]="IsDeleting"
-                          (click)="ConfirmDelete(summary.Integration.ID)">
-                    @if (IsDeleting) {
-                      <i class="fa-solid fa-spinner fa-spin"></i>
-                      Deleting...
-                    } @else {
-                      Delete
-                    }
-                  </button>
-                  <button kendoButton look="outline" (click)="CancelDelete()">
-                    Cancel
-                  </button>
-                </div>
+              </button>
+              <button kendoButton look="outline" (click)="OnMenuAction('edit', summary)">
+                Configure
+              </button>
+              @if (IsConnectionActive(summary)) {
+                <button kendoButton themeColor="primary" (click)="RunSync(summary.Integration.ID)">
+                  Sync Now
+                </button>
+              }
+              <div class="card-menu-wrapper">
+                <button class="menu-trigger" (click)="ToggleMenu(summary.Integration.ID, $event)">
+                  <i class="fa-solid fa-ellipsis-vertical"></i>
+                </button>
+                @if (IsMenuOpen(summary.Integration.ID)) {
+                  <div class="card-menu-dropdown">
+                    <button class="menu-item" (click)="OnMenuAction('edit', summary)">
+                      <i class="fa-solid fa-pen-to-square"></i> Edit
+                    </button>
+                    <button class="menu-item" (click)="OnMenuAction('disable', summary)">
+                      <i class="fa-solid fa-toggle-off"></i> {{ GetMenuActionLabel(summary) }}
+                    </button>
+                    <button class="menu-item menu-item-danger" (click)="OnMenuAction('delete', summary)">
+                      <i class="fa-solid fa-trash-can"></i> Delete
+                    </button>
+                  </div>
+                }
               </div>
             </div>
-          }
+          </div>
+        }
 
-          <!-- Card footer -->
-          <div class="card-footer">
-            <button kendoButton
-                    look="outline"
-                    [disabled]="!!TestingCardID"
-                    (click)="TestExistingConnection(summary.Integration.ID)">
-              @if (IsTestingCard(summary.Integration.ID)) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
-              } @else {
-                Test
-              }
-            </button>
-            <button kendoButton look="outline" (click)="OnMenuAction('edit', summary)">
-              Configure
-            </button>
-            @if (IsConnectionActive(summary)) {
-              <button kendoButton themeColor="primary" (click)="RunSync(summary.Integration.ID)">
-                Sync Now
-              </button>
-            }
-            <div class="card-menu-wrapper">
-              <button class="menu-trigger" (click)="ToggleMenu(summary.Integration.ID, $event)">
-                <i class="fa-solid fa-ellipsis-vertical"></i>
-              </button>
-              @if (IsMenuOpen(summary.Integration.ID)) {
-                <div class="card-menu-dropdown">
-                  <button class="menu-item" (click)="OnMenuAction('edit', summary)">
-                    <i class="fa-solid fa-pen-to-square"></i> Edit
-                  </button>
-                  <button class="menu-item" (click)="OnMenuAction('disable', summary)">
-                    <i class="fa-solid fa-toggle-off"></i> {{ GetMenuActionLabel(summary) }}
-                  </button>
-                  <button class="menu-item menu-item-danger" (click)="OnMenuAction('delete', summary)">
-                    <i class="fa-solid fa-trash-can"></i> Delete
-                  </button>
-                </div>
-              }
+        <!-- New connection card -->
+        <div class="connection-card new-connection-card" (click)="OpenWizard()">
+          <div class="new-card-content">
+            <div class="new-card-icon">
+              <i class="fa-solid fa-plus"></i>
             </div>
+            <span class="new-card-label">Add Integration</span>
           </div>
-        </div>
-      }
-
-      <!-- New connection card -->
-      <div class="connection-card new-connection-card" (click)="OpenWizard()">
-        <div class="new-card-content">
-          <div class="new-card-icon">
-            <i class="fa-solid fa-plus"></i>
-          </div>
-          <span class="new-card-label">Add Integration</span>
         </div>
       </div>
+    }
+  }
+
+  <!-- ======================================================================
+       DETAIL VIEW (entity maps for selected integration)
+       ====================================================================== -->
+  @if (!WizardOpen && SelectedSummary) {
+    <div class="detail-view">
+
+      <!-- ================================================================
+           ENTITY MAP EDITOR (field mapping detail for a selected map)
+           ================================================================ -->
+      @if (EditorEntityMap) {
+        <app-visual-field-editor
+          [EntityMap]="EditorEntityMap"
+          [CompanyIntegrationID]="SelectedSummary!.Integration.ID"
+          [RunViewProvider]="RunViewToUse"
+          (Close)="CloseEntityMapEditor()">
+        </app-visual-field-editor>
+
+      <!-- ================================================================
+           ENTITY MAPS LIST (shown when no editor map is selected)
+           ================================================================ -->
+      } @else {
+        <!-- Detail header -->
+        <div class="detail-header">
+          <button class="detail-back-btn" (click)="CloseDetailView()" title="Back to Integrations">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <div class="detail-header-info">
+            <div class="icon-circle" [style.background-color]="GetIconBrandColor(SelectedSummary.Integration.Integration)">
+              <i [class]="GetIntegrationIcon(SelectedSummary.Integration.Integration)" class="icon-large"></i>
+            </div>
+            <div class="detail-header-text">
+              <h2 class="detail-title">{{ SelectedSummary.Integration.Name }}</h2>
+              <span class="detail-subtitle">
+                {{ SelectedSummary.Integration.Company }}
+                <span class="meta-separator">&middot;</span>
+                {{ GetSourceTypeLabel(SelectedSummary) }}
+                <span class="meta-separator">&middot;</span>
+                <span [class]="GetStatusBadgeClass(SelectedSummary)">{{ GetStatusBadge(SelectedSummary) }}</span>
+              </span>
+            </div>
+          </div>
+          <div class="detail-header-actions">
+            <button class="detail-edit-btn" (click)="OpenEditPanel(SelectedSummary)" title="Configure">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            @if (IsConnectionActive(SelectedSummary)) {
+              <button kendoButton themeColor="primary" (click)="RunSync(SelectedSummary.Integration.ID)">
+                <i class="fa-solid fa-arrows-rotate"></i> Sync Now
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Entity maps toolbar -->
+        <div class="detail-toolbar">
+          <div class="detail-toolbar-left">
+            <span class="detail-map-count">
+              {{ DetailEntityMaps.length }} entity map{{ DetailEntityMaps.length !== 1 ? 's' : '' }}
+              <span class="meta-separator">&middot;</span>
+              {{ DetailActiveMapCount }} active
+            </span>
+          </div>
+          <div class="detail-toolbar-right">
+            <div class="detail-search">
+              <i class="fa-solid fa-filter"></i>
+              <input type="text"
+                     placeholder="Filter entity maps..."
+                     [value]="DetailSearchTerm"
+                     (input)="OnDetailSearch($event)" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Entity maps table -->
+        @if (IsDetailLoading) {
+          <div class="loading-container">
+            <mj-loading text="Loading entity maps..."></mj-loading>
+          </div>
+        } @else if (DetailEntityMaps.length === 0) {
+          <div class="detail-empty">
+            <i class="fa-solid fa-cube"></i>
+            <h3>No entity maps configured</h3>
+            <p>Entity maps define how external objects sync to MJ entities. Configure them to start syncing data.</p>
+          </div>
+        } @else {
+          <!-- Table header -->
+          <div class="detail-table-head">
+            <span class="dt-col-toggle">Sync</span>
+            <span class="dt-col-source">External Object</span>
+            <span class="dt-col-direction"></span>
+            <span class="dt-col-dest">MJ Entity</span>
+            <span class="dt-col-meta">Config</span>
+          </div>
+
+          <!-- Table body -->
+          <div class="detail-table-body">
+            @for (em of DetailFilteredMaps; track em.ID) {
+              <div class="detail-map-row" [class.sync-disabled]="!em.SyncEnabled" (click)="OnEntityMapClick(em)">
+                <span class="dt-col-toggle" (click)="$event.stopPropagation()">
+                  <label class="toggle-switch" [title]="em.SyncEnabled ? 'Sync enabled' : 'Sync disabled'">
+                    <input type="checkbox"
+                           [checked]="em.SyncEnabled"
+                           (change)="OnToggleMapEnabled(em, $event)" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </span>
+                <span class="dt-col-source" [title]="em.ExternalObjectName">
+                  {{ em.ExternalObjectLabel ?? em.ExternalObjectName }}
+                </span>
+                <span class="dt-col-direction">
+                  <span [class]="DirectionBadgeClass(em.SyncDirection)">
+                    {{ DirectionText(em.SyncDirection) }}
+                  </span>
+                </span>
+                <span class="dt-col-dest" [title]="em.Entity">
+                  {{ em.Entity }}
+                </span>
+                <span class="dt-col-meta">
+                  @if (em.MatchStrategy) {
+                    <span class="detail-config-badge" title="Match strategy configured">
+                      <i class="fa-solid fa-link"></i>
+                    </span>
+                  }
+                  <span class="detail-config-badge" [title]="'Conflict: ' + em.ConflictResolution">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                  </span>
+                  <span class="map-edit-hint">
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </span>
+                </span>
+              </div>
+            } @empty {
+              <div class="detail-table-empty">
+                No entity maps match your filter.
+              </div>
+            }
+          </div>
+        }
+      }
+
     </div>
   }
-</div>
 
-<!-- Wizard modal -->
-@if (WizardOpen) {
-  <div class="wizard-backdrop" (click)="OnBackdropClick($event)" (keydown)="OnKeydown($event)">
-    <div class="wizard-modal">
-      <!-- Modal header -->
+  <!-- ======================================================================
+       WIZARD (inline, replaces card grid when open)
+       ====================================================================== -->
+  @if (WizardOpen) {
+    <div class="wizard-inline">
+      <!-- Wizard header -->
       <div class="wizard-header">
-        <h2 class="wizard-title">New Connection</h2>
-        <button class="wizard-close" (click)="CloseWizard()">
-          <i class="fa-solid fa-xmark"></i>
+        <button class="wizard-back-btn" (click)="CloseWizard()">
+          <i class="fa-solid fa-arrow-left"></i>
+          Back to Integrations
         </button>
+        <h2 class="wizard-title">New Integration</h2>
       </div>
 
       <!-- Step indicator -->
@@ -369,105 +520,34 @@
           </div>
         }
 
-        <!-- Step 4: Quick Setup -->
-        @if (WizardStep === 4) {
-          <div class="step-content">
-            <h3 class="step-title">Configure what to sync</h3>
-
-            @if (IsDiscovering) {
-              <div class="discovery-loading">
-                <mj-loading text="Discovering available objects..."></mj-loading>
-              </div>
-            }
-
-            @if (!IsDiscovering && DiscoveredObjects.length === 0) {
-              <div class="no-integrations">
-                <i class="fa-solid fa-cube"></i>
-                <p>No objects discovered</p>
-                <span class="no-integrations-hint">You can configure entity maps manually later.</span>
-              </div>
-            }
-
-            @if (!IsDiscovering && DiscoveredObjects.length > 0) {
-              <div class="discovered-list">
-                @for (group of DiscoveredObjectsByCategory; track group.Category) {
-                  <div class="discovered-category">
-                    <div class="discovered-category-header">
-                      <span class="discovered-category-name">{{ group.Category }}</span>
-                      <span class="discovered-category-count">{{ group.Objects.length }}</span>
-                      <label class="toggle-switch toggle-switch-sm"
-                             title="Select/deselect all in this category">
-                        <input type="checkbox"
-                               [checked]="IsCategoryFullySelected(group.Category)"
-                               (change)="ToggleCategoryAll(group.Category, !IsCategoryFullySelected(group.Category))" />
-                        <span class="toggle-slider"></span>
-                      </label>
-                    </div>
-                    @for (obj of group.Objects; track obj.Name) {
-                      <div class="discovered-item">
-                        <div class="discovered-info">
-                          <span class="discovered-name">{{ obj.DisplayName }}</span>
-                          @if (obj.DisplayName !== obj.Name) {
-                            <span class="discovered-api-name">{{ obj.Name }}</span>
-                          }
-                        </div>
-                        <label class="toggle-switch">
-                          <input type="checkbox" [checked]="obj.Selected" (change)="ToggleDiscoveredObject(obj)" />
-                          <span class="toggle-slider"></span>
-                        </label>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-              <div class="quick-setup-summary">
-                {{ SelectedDiscoveredCount }} object{{ SelectedDiscoveredCount !== 1 ? 's' : '' }} selected
-              </div>
-            }
-          </div>
-        }
       </div>
 
-      <!-- Modal footer -->
+      <!-- Wizard footer -->
       <div class="wizard-footer">
-        <div class="footer-left">
-          @if (WizardStep === 4) {
-            <button kendoButton look="flat" (click)="SkipQuickSetup()">
-              Skip for now
-            </button>
-          }
-        </div>
+        <div class="footer-left"></div>
         <div class="footer-right">
           @if (WizardStep > 1) {
             <button kendoButton look="outline" (click)="PreviousStep()">
               Back
             </button>
           }
-          @if (WizardStep < 4) {
-            <button kendoButton
-                    themeColor="primary"
-                    [disabled]="IsNextDisabled"
-                    (click)="NextStep()">
+          <button kendoButton
+                  themeColor="primary"
+                  [disabled]="IsNextDisabled || IsSaving"
+                  (click)="FinishWizard()">
+            @if (IsSaving) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Saving...
+            } @else {
               {{ NextButtonLabel }}
-            </button>
-          } @else {
-            <button kendoButton
-                    themeColor="primary"
-                    [disabled]="IsSaving"
-                    (click)="FinishWizard()">
-              @if (IsSaving) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
-                Saving...
-              } @else {
-                Finish
-              }
-            </button>
-          }
+            }
+          </button>
         </div>
       </div>
     </div>
-  </div>
-}
+  }
+
+</div>
 
 <!-- Edit panel (slide-in) -->
 <div class="edit-panel-backdrop"
@@ -482,7 +562,7 @@
              [style.background-color]="GetIconBrandColor(EditingSummary.Integration.Integration)">
           <i [class]="GetIntegrationIcon(EditingSummary.Integration.Integration)"></i>
         </div>
-        <span>Configure Connection</span>
+        <span>Configure Integration</span>
       </div>
       <button class="edit-close-btn" (click)="CloseEditPanel()">
         <i class="fa-solid fa-xmark"></i>
