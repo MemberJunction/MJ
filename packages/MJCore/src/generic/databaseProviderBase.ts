@@ -1144,6 +1144,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         if (!updateRLSPass) {
                             entityResult.Success = false;
                             entityResult.EndedAt = new Date();
+                            // Use a generic message to avoid leaking whether a record exists — distinguishing
+                            // "not found" from "access denied" would let an attacker enumerate valid record IDs.
                             entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
                             throw new Error(entityResult.Message);
                         }
@@ -1278,6 +1280,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (!deleteRLSPass) {
                     entityResult.Success = false;
                     entityResult.EndedAt = new Date();
+                    // Use a generic message to avoid leaking whether a record exists — distinguishing
+                    // "not found" from "access denied" would let an attacker enumerate valid record IDs.
                     entityResult.Message = `Record not found or access denied for ${entity.EntityInfo.Name}`;
                     throw new Error(entityResult.Message);
                 }

@@ -1070,7 +1070,8 @@ export class ResolverBase {
             entityObject.SetMany(input);
           }
         } else {
-          // save failed, return null
+          // Use a generic message to avoid leaking whether a record exists — distinguishing
+          // "not found" from "access denied" would let an attacker enumerate valid record IDs.
           throw new GraphQLError(`Record not found or access denied`, {
             extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
           });
@@ -1307,6 +1308,8 @@ export class ResolverBase {
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       const loadSuccess = await entityObject.InnerLoad(key);
       if (!loadSuccess) {
+        // Use a generic message to avoid leaking whether a record exists — distinguishing
+        // "not found" from "access denied" would let an attacker enumerate valid record IDs.
         throw new GraphQLError(`Record not found or access denied`, {
           extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
         });
