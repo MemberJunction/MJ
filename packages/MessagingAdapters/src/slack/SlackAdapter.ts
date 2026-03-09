@@ -232,7 +232,9 @@ export class SlackAdapter extends BaseMessagingAdapter {
         const identity = this.buildAgentIdentity(agent);
 
         // Build rich Block Kit layout
-        const blocks = buildRichResponse(result, agent, responseText);
+        const blocks = buildRichResponse(result, agent, responseText, {
+            explorerBaseURL: this.settings.ExplorerBaseURL
+        });
 
         return {
             PlainText: responseText,
