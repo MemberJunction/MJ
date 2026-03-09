@@ -91,6 +91,10 @@ export interface ArtifactSource {
 export interface BuildRichResponseOptions {
   /** Base URL of MJ Explorer for deep-linking `open:resource` commands. */
   explorerBaseURL?: string;
+  /** MJ Conversation Artifact ID — when provided, the Explorer link points to the artifact viewer. */
+  artifactId?: string;
+  /** MJ Conversation ID — when no artifact exists, links to the conversation in MJ Explorer. */
+  conversationId?: string;
 }
 
 /**
@@ -190,7 +194,7 @@ export function buildRichResponse(
   }
 
   // "Open in MJ Explorer" link — shown for all successful agent runs when ExplorerBaseURL is configured
-  const explorerLink = buildExplorerArtifactLink(result, options?.explorerBaseURL);
+  const explorerLink = buildExplorerArtifactLink(result, options?.explorerBaseURL, options?.artifactId, options?.conversationId);
   if (explorerLink) {
     blocks.push(...explorerLink);
   }
@@ -443,27 +447,38 @@ const RESOURCE_TYPE_ICONS: Record<string, string> = {
 };
 
 /**
- * Build an "Open in MJ Explorer" link for agent responses.
- * Shown for all successful agent runs when ExplorerBaseURL is configured,
- * giving users a way to access the full artifact viewer and side panel.
+ * Build MJ Explorer deep-link context blocks.
+ *
+ * - No artifact: single "Open conversation in MJ Explorer" link
+ * - With artifact: two links — conversation + artifact
+ * - Neither ID present: returns `null`
  */
 function buildExplorerArtifactLink(
-  result: ExecuteAgentResult | null,
+  _result: ExecuteAgentResult | null,
   explorerBaseURL: string | undefined,
+  artifactId?: string,
+  conversationId?: string,
 ): Record<string, unknown>[] | null {
-  if (!explorerBaseURL || !result?.agentRun?.ID) return null;
+  if (!explorerBaseURL) return null;
+  if (!conversationId && !artifactId) return null;
 
   const base = explorerBaseURL.replace(/\/+$/, '');
-  const runId = encodeURIComponent(result.agentRun.ID);
-  const deepLink = `${base}/resource/record/${encodeURIComponent('MJ: AI Agent Runs')}/${runId}`;
+  const links: string[] = [];
+
+  if (conversationId) {
+    const convoLink = `${base}/app/Chat/Conversations?conversationId=${encodeURIComponent(conversationId)}`;
+    links.push(`:speech_balloon: <${convoLink}|Open conversation in MJ Explorer>`);
+  }
+
+  if (artifactId) {
+    const artifactLink = `${base}/resource/artifact/${encodeURIComponent(artifactId)}`;
+    links.push(`:desktop_computer: <${artifactLink}|View full artifact in MJ Explorer>`);
+  }
 
   return [
     {
       type: 'context',
-      elements: [{
-        type: 'mrkdwn',
-        text: `:desktop_computer: <${deepLink}|View full artifact in MJ Explorer>`
-      }]
+      elements: links.map(text => ({ type: 'mrkdwn', text }))
     }
   ];
 }

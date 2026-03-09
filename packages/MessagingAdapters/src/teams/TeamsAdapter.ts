@@ -12,7 +12,7 @@
 import { TurnContext, ActivityTypes, Activity, ConversationReference } from 'botbuilder';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
-import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
+import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { markdownToAdaptiveCard } from './teams-formatter.js';
 
 /**
@@ -192,7 +192,8 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     protected async formatResponse(
         _result: ExecuteAgentResult | null,
         _agent: MJAIAgentEntityExtended,
-        responseText: string
+        responseText: string,
+        _metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
         return {
             PlainText: responseText,

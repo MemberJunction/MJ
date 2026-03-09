@@ -415,7 +415,7 @@ describe('slack-block-builder', () => {
     });
 
     describe('Explorer artifact link', () => {
-        it('should include Explorer link when explorerBaseURL is configured and agentRun has ID', () => {
+        it('should include Explorer link when explorerBaseURL and conversationId are configured', () => {
             const agent = createMockAgent();
             const result = createMockResult({
                 agentRun: {
@@ -427,7 +427,8 @@ describe('slack-block-builder', () => {
                 },
             });
             const blocks = buildRichResponse(result as never, agent as never, 'Response', {
-                explorerBaseURL: 'https://explorer.example.com'
+                explorerBaseURL: 'https://explorer.example.com',
+                conversationId: 'convo-123',
             });
 
             const explorerLink = blocks.find(b => {
@@ -436,6 +437,29 @@ describe('slack-block-builder', () => {
                 return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
             });
             expect(explorerLink).toBeDefined();
+        });
+
+        it('should NOT include Explorer link when explorerBaseURL is set but no artifactId or conversationId', () => {
+            const agent = createMockAgent();
+            const result = createMockResult({
+                agentRun: {
+                    ID: 'run-123',
+                    StartedAt: new Date('2025-01-01T00:00:00Z'),
+                    CompletedAt: new Date('2025-01-01T00:00:04.2Z'),
+                    Steps: [{ StepNumber: 1 }],
+                    TotalTokensUsed: 1240,
+                },
+            });
+            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+                explorerBaseURL: 'https://explorer.example.com',
+            });
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeUndefined();
         });
 
         it('should NOT include Explorer link when explorerBaseURL is not configured', () => {
@@ -457,6 +481,68 @@ describe('slack-block-builder', () => {
                 return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
             });
             expect(explorerLink).toBeUndefined();
+        });
+
+        it('should show both conversation and artifact links when both IDs are provided', () => {
+            const agent = createMockAgent();
+            const result = createMockResult({
+                agentRun: {
+                    ID: 'run-456',
+                    StartedAt: new Date('2025-01-01T00:00:00Z'),
+                    CompletedAt: new Date('2025-01-01T00:00:04.2Z'),
+                    Steps: [{ StepNumber: 1 }],
+                    TotalTokensUsed: 1240,
+                },
+            });
+            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+                explorerBaseURL: 'https://explorer.example.com',
+                artifactId: 'artifact-abc-123',
+                conversationId: 'convo-456',
+            });
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeDefined();
+            const elements = (explorerLink as Record<string, unknown>).elements as Record<string, unknown>[];
+            expect(elements).toHaveLength(2);
+            const convoText = (elements[0] as Record<string, unknown>).text as string;
+            const artifactText = (elements[1] as Record<string, unknown>).text as string;
+            expect(convoText).toContain('Open conversation');
+            expect(convoText).toContain('/app/Chat/Conversations?conversationId=convo-456');
+            expect(artifactText).toContain('View full artifact');
+            expect(artifactText).toContain('/resource/artifact/artifact-abc-123');
+        });
+
+        it('should link to conversation when conversationId provided but no artifactId', () => {
+            const agent = createMockAgent();
+            const result = createMockResult({
+                agentRun: {
+                    ID: 'run-456',
+                    StartedAt: new Date('2025-01-01T00:00:00Z'),
+                    CompletedAt: new Date('2025-01-01T00:00:04.2Z'),
+                    Steps: [{ StepNumber: 1 }],
+                    TotalTokensUsed: 1240,
+                },
+            });
+            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+                explorerBaseURL: 'https://explorer.example.com',
+                conversationId: 'convo-789',
+            });
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeDefined();
+            const elements = (explorerLink as Record<string, unknown>).elements as Record<string, unknown>[];
+            const text = (elements[0] as Record<string, unknown>).text as string;
+            expect(text).toContain('/app/Chat/Conversations?conversationId=convo-789');
+            expect(text).toContain('Open conversation');
+            expect(text).not.toContain('/resource/artifact/');
         });
 
         it('should NOT include Explorer link when agentRun has no ID', () => {

@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
-import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
+import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 
 // ─── Mock external modules ──────────────────────────────────────────────────
 
@@ -40,18 +40,33 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+/**
+ * Helper: wrap an ExecuteAgentResult in the RunAgentInConversation return shape.
+ */
+function wrapInConversationResult(agentResult: Record<string, unknown>) {
+    return {
+        agentResult,
+        conversationId: 'mock-convo-id',
+        userMessageDetailId: 'mock-user-detail-id',
+        agentResponseDetailId: 'mock-agent-detail-id',
+        artifactInfo: undefined,
+    };
+}
+
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: vi.fn().mockImplementation(() => ({
-        RunAgent: vi.fn().mockResolvedValue({
-            success: true,
-            payload: 'Test response from agent',
-            agentRun: {
-                Steps: [{
-                    OutputData: 'Agent step output text',
-                    Status: 'Completed'
-                }]
-            }
-        })
+        RunAgentInConversation: vi.fn().mockResolvedValue(
+            wrapInConversationResult({
+                success: true,
+                payload: 'Test response from agent',
+                agentRun: {
+                    Steps: [{
+                        OutputData: 'Agent step output text',
+                        Status: 'Completed'
+                    }]
+                }
+            })
+        )
     }))
 }));
 
@@ -107,7 +122,8 @@ class TestAdapter extends BaseMessagingAdapter {
     protected async formatResponse(
         _result: ExecuteAgentResult | null,
         _agent: MJAIAgentEntityExtended,
-        responseText: string
+        responseText: string,
+        _metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
         return {
             PlainText: responseText,
@@ -408,7 +424,7 @@ describe('BaseMessagingAdapter', () => {
         it('should use agentRun.Message as top priority extraction (matches Explorer/AICLI)', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     payload: 'payload fallback',
                     agentRun: {
@@ -419,7 +435,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -431,7 +447,7 @@ describe('BaseMessagingAdapter', () => {
         it('should append payload content when agentRun.Message is a short delegation note', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: "I'll have Codesmith handle this calculation.",
@@ -440,7 +456,7 @@ describe('BaseMessagingAdapter', () => {
                         }),
                         Steps: []
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -454,14 +470,14 @@ describe('BaseMessagingAdapter', () => {
         it('should NOT append payload when agentRun.Message is already substantial', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: 'Here is a detailed response about quantum computing that covers all the key concepts including superposition, entanglement, quantum gates, and decoherence. Quantum computers use qubits which can exist in superposition states unlike classical bits.',
                         FinalPayload: JSON.stringify({ summary: 'Quantum computing overview' }),
                         Steps: []
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -474,7 +490,7 @@ describe('BaseMessagingAdapter', () => {
         it('should skip empty agentRun.Message and fall through to step outputs', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: '   ',
@@ -483,7 +499,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -495,7 +511,7 @@ describe('BaseMessagingAdapter', () => {
         it('should extract nextStep.message from structured JSON', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -503,7 +519,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -515,7 +531,7 @@ describe('BaseMessagingAdapter', () => {
         it('should extract top-level message field from JSON', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -523,7 +539,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -535,7 +551,7 @@ describe('BaseMessagingAdapter', () => {
         it('should extract output field from JSON', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -543,7 +559,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -555,7 +571,7 @@ describe('BaseMessagingAdapter', () => {
         it('should extract result field from JSON', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -563,7 +579,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -575,7 +591,7 @@ describe('BaseMessagingAdapter', () => {
         it('should use plain text when OutputData is not JSON', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -583,7 +599,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -595,11 +611,11 @@ describe('BaseMessagingAdapter', () => {
         it('should fall back to payload string when no step output', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     payload: 'Payload fallback text',
                     agentRun: { Steps: [] }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -611,7 +627,7 @@ describe('BaseMessagingAdapter', () => {
         it('should stringify JSON fallback when no recognized fields', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -619,7 +635,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -632,10 +648,10 @@ describe('BaseMessagingAdapter', () => {
         it('should show error message on agent failure', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: false,
                     agentRun: { ErrorMessage: 'Something went wrong', Steps: [] }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -647,7 +663,7 @@ describe('BaseMessagingAdapter', () => {
         it('should skip orchestration metadata in step outputs and use agentRun.Result', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Result: JSON.stringify({ summary: 'Quantum computing is a paradigm...' }),
@@ -661,7 +677,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -674,7 +690,7 @@ describe('BaseMessagingAdapter', () => {
         it('should compose text from structured research payload with findings', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         FinalPayload: JSON.stringify({
@@ -697,7 +713,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -712,7 +728,7 @@ describe('BaseMessagingAdapter', () => {
         it('should compose readable text from Research Agent state payload', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Steps: [{
@@ -736,7 +752,7 @@ describe('BaseMessagingAdapter', () => {
                             Status: 'Completed'
                         }]
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -751,7 +767,7 @@ describe('BaseMessagingAdapter', () => {
         it('should extract Codesmith-style payload with code and results', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: "I'll have Codesmith calculate this for you.",
@@ -764,7 +780,7 @@ describe('BaseMessagingAdapter', () => {
                         }),
                         Steps: []
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -779,7 +795,7 @@ describe('BaseMessagingAdapter', () => {
         it('should NOT leak taskGraph JSON into response text', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: "I'll have the Marketing Agent write the blog for you.",
@@ -791,7 +807,7 @@ describe('BaseMessagingAdapter', () => {
                         }),
                         Steps: []
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -805,7 +821,7 @@ describe('BaseMessagingAdapter', () => {
         it('should NOT leak actionResult JSON into response text', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
                         Message: "I'll have the Marketing Agent write a blog for you.",
@@ -821,7 +837,7 @@ describe('BaseMessagingAdapter', () => {
                         }),
                         Steps: []
                     }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -836,11 +852,11 @@ describe('BaseMessagingAdapter', () => {
         it('should extract summary field from payload object', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     payload: { summary: 'Here is the executive summary' },
                     agentRun: { Steps: [] }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -859,22 +875,22 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
                     if (callCount === 1) {
                         // First call: Sage delegates to Marketing Agent
-                        return Promise.resolve({
+                        return Promise.resolve(wrapInConversationResult({
                             success: true,
                             payload: { invokeAgent: 'Marketing Agent', reasoning: 'Writing blog' },
                             agentRun: { Message: 'Delegating to Marketing Agent...', Steps: [] }
-                        });
+                        }));
                     }
                     // Second call: Marketing Agent produces the blog
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: { title: 'My Blog', body: 'Full blog content here' },
                         agentRun: { Message: 'Here is your blog post.', Steps: [] }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
@@ -900,11 +916,11 @@ describe('BaseMessagingAdapter', () => {
         it('should fall back to source result when delegation target is not found', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     payload: { invokeAgent: 'Nonexistent Agent' },
                     agentRun: { Message: 'I will delegate.', Steps: [] }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -921,11 +937,11 @@ describe('BaseMessagingAdapter', () => {
         it('should not follow delegation for failed results', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockResolvedValue({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: false,
                     payload: { invokeAgent: 'Marketing Agent' },
                     agentRun: { ErrorMessage: 'Something went wrong', Steps: [] }
-                })
+                }))
             }) as ReturnType<typeof vi.fn>);
 
             const msg = createMessage({ IsDirectMessage: true });
@@ -942,11 +958,11 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
                     if (callCount === 1) {
                         // Sage returns no in-memory payload but FinalPayload has invokeAgent
-                        return Promise.resolve({
+                        return Promise.resolve(wrapInConversationResult({
                             success: true,
                             payload: undefined,
                             agentRun: {
@@ -955,13 +971,13 @@ describe('BaseMessagingAdapter', () => {
                                 FinalPayload: JSON.stringify({ invokeAgent: 'Marketing Agent', reasoning: 'Blog writing' }),
                                 Steps: []
                             }
-                        });
+                        }));
                     }
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: 'Blog post content here',
                         agentRun: { Message: 'Here is your blog post', FinalStep: 'Success', Steps: [] }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
@@ -975,11 +991,11 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
                     if (callCount === 1) {
                         // Sage describes delegation in text but doesn't set payload.invokeAgent
-                        return Promise.resolve({
+                        return Promise.resolve(wrapInConversationResult({
                             success: true,
                             payload: { reasoning: 'Need blog expertise' },
                             agentRun: {
@@ -987,13 +1003,13 @@ describe('BaseMessagingAdapter', () => {
                                 FinalStep: 'Success',
                                 Steps: []
                             }
-                        });
+                        }));
                     }
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: 'Great blog post about AI',
                         agentRun: { Message: 'Here is your blog post', FinalStep: 'Success', Steps: [] }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
@@ -1007,9 +1023,9 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: { reasoning: 'Just chatting' },
                         agentRun: {
@@ -1017,7 +1033,7 @@ describe('BaseMessagingAdapter', () => {
                             FinalStep: 'Success',
                             Steps: []
                         }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
@@ -1031,10 +1047,10 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
                     if (callCount === 1) {
-                        return Promise.resolve({
+                        return Promise.resolve(wrapInConversationResult({
                             success: true,
                             payload: {},
                             agentRun: {
@@ -1042,13 +1058,13 @@ describe('BaseMessagingAdapter', () => {
                                 FinalStep: 'Success',
                                 Steps: []
                             }
-                        });
+                        }));
                     }
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: 'function hello() {}',
                         agentRun: { Message: 'Code generated', FinalStep: 'Success', Steps: [] }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
@@ -1061,14 +1077,14 @@ describe('BaseMessagingAdapter', () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgent: vi.fn().mockImplementation(() => {
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
                     callCount++;
                     // Every agent delegates to Marketing Agent (infinite loop)
-                    return Promise.resolve({
+                    return Promise.resolve(wrapInConversationResult({
                         success: true,
                         payload: { invokeAgent: 'Marketing Agent' },
                         agentRun: { Message: `Delegation hop ${callCount}`, Steps: [] }
-                    });
+                    }));
                 })
             }) as ReturnType<typeof vi.fn>);
 
