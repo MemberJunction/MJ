@@ -1,10 +1,15 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
 import { AggregateExpression, RunViewParams } from "../views/runView";
-import { LogError, LogStatus } from "./logging";
+import { LogError, LogStatusEx } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
+
+/** Verbose-only status logging — hidden unless verbose logging is enabled */
+function LogStatusVerbose(message: string): void {
+    LogStatusEx({ message, verboseOnly: true });
+}
 
 // ============================================================================
 // TYPES AND INTERFACES
@@ -383,7 +388,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Persist the registry to the new provider
         await this.persistRegistry();
 
-        LogStatus(`LocalCacheManager.SetStorageProvider: Migrated ${migratedCount}/${entries.length} entries to new storage provider`);
+        LogStatusVerbose(`LocalCacheManager.SetStorageProvider: Migrated ${migratedCount}/${entries.length} entries to new storage provider`);
     }
 
     // ========================================================================
@@ -459,7 +464,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * data stays consistent, not just engine-managed data.
      */
     private subscribeToBaseEntityEvents(): void {
-        LogStatus('LocalCacheManager: Subscribed to BaseEntity events for universal cache invalidation');
+        LogStatusVerbose('LocalCacheManager: Subscribed to BaseEntity events for universal cache invalidation');
         MJGlobal.Instance.GetEventListener(false).subscribe((mjEvent) => {
             if (mjEvent.event !== MJEventType.ComponentEvent) return;
             if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
@@ -509,7 +514,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, baseEntity.GetAll());
         if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) return;
 
-        LogStatus(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
+        LogStatusVerbose(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
 
         const fingerprintSnapshot = [...fingerprints];
         const nowISO = new Date().toISOString();
@@ -549,7 +554,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         if (!entityInfo) {
-            LogStatus(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
+            LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {
                 await this.InvalidateRunViewResult(fp);
             }
@@ -558,7 +563,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const primaryKeys = entityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) {
-            LogStatus(`LocalCacheManager: remote-invalidate — no PKs for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
+            LogStatusVerbose(`LocalCacheManager: remote-invalidate — no PKs for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
             for (const fp of [...fingerprints]) {
                 await this.InvalidateRunViewResult(fp);
             }
@@ -572,14 +577,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (action === 'delete') {
             const key = this.parseCompositeKeyFromJSON(payload?.primaryKeyValues);
             if (!key) {
-                LogStatus(`LocalCacheManager: remote-invalidate (delete) — no PK values for "${entityName}", invalidating caches`);
+                LogStatusVerbose(`LocalCacheManager: remote-invalidate (delete) — no PK values for "${entityName}", invalidating caches`);
                 for (const fp of fingerprintSnapshot) {
                     await this.InvalidateRunViewResult(fp);
                 }
                 return;
             }
 
-            LogStatus(`LocalCacheManager: remote-invalidate (delete) for "${entityName}" PK=${key.ToConcatenatedString()}, removing from ${fingerprints.size} cached fingerprint(s)`);
+            LogStatusVerbose(`LocalCacheManager: remote-invalidate (delete) for "${entityName}" PK=${key.ToConcatenatedString()}, removing from ${fingerprints.size} cached fingerprint(s)`);
             for (const fingerprint of fingerprintSnapshot) {
                 try {
                     await this.RemoveSingleEntity(fingerprint, key, nowISO);
@@ -599,7 +604,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const key = this.buildCompositeKeyFromRow(recordData, primaryKeys.map(pk => pk.Name));
                 if (key.KeyValuePairs.some(kv => kv.Value == null)) return;
 
-                LogStatus(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
+                LogStatusVerbose(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
 
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
@@ -622,7 +627,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         // Fallback: no record data or unrecognized action — invalidate
-        LogStatus(`LocalCacheManager: remote-invalidate (${action || 'unknown'}) for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
+        LogStatusVerbose(`LocalCacheManager: remote-invalidate (${action || 'unknown'}) for "${entityName}", invalidating ${fingerprints.size} cached fingerprint(s)`);
         for (const fp of fingerprintSnapshot) {
             await this.InvalidateRunViewResult(fp);
         }
@@ -664,16 +669,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<void> {
         const keyStr = key.ToConcatenatedString();
         if (eventType === 'delete') {
-            LogStatus(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
+            LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
             await this.RemoveSingleEntity(fingerprint, key, nowISO);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
             // Unfiltered cache: update the record in place
-            LogStatus(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
+            LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
             await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
         } else {
             // Filtered cache: conservatively invalidate (can't verify filter match)
-            LogStatus(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
+            LogStatusVerbose(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
             await this.InvalidateRunViewResult(fingerprint);
         }
     }
@@ -751,7 +756,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public DispatchCacheChange(event: CacheChangedEvent): void {
         const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
-        LogStatus(`LocalCacheManager: DispatchCacheChange received — action="${event.Action}", key="${event.CacheKey}", source="${sourceShort}"`);
+        LogStatusVerbose(`LocalCacheManager: DispatchCacheChange received — action="${event.Action}", key="${event.CacheKey}", source="${sourceShort}"`);
 
         if (event.Action === 'category_cleared') {
             // For category-level clearing, notify ALL registered callbacks
@@ -1086,7 +1091,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
             this.addToEntityIndex(fingerprint);
-            LogStatus(`LocalCacheManager.SetRunViewResult: Cached ${results.length} rows for "${fingerprint.substring(0, 60)}" (${sizeBytes} bytes)`);
+            LogStatusVerbose(`LocalCacheManager.SetRunViewResult: Cached ${results.length} rows for "${fingerprint.substring(0, 60)}" (${sizeBytes} bytes)`);
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
         }
@@ -1265,10 +1270,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             const cached = await this.GetRunViewResult(fingerprint);
             if (!cached) {
-                LogStatus(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
+                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                 return false;
             }
-            LogStatus(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
+            LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
 
             const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
             const keyStr = key.ToConcatenatedString();

@@ -2723,11 +2723,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Skip events that originated from this browser session — we already
                 // handled the cache update locally via the BaseEntity.Save()/Delete() event.
                 if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    console.log(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
                     return;
                 }
 
-                console.log(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
 
                 // Raise a MJGlobal event so BaseEngine instances can react
                 const baseEntityEvent: BaseEntityEvent = {
