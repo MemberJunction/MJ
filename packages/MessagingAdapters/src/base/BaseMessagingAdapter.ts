@@ -21,6 +21,16 @@ import {
     AgentIdentity,
 } from './types.js';
 
+/** Fields that are unlikely to contain user-facing document content. O(1) lookup. */
+const NON_CONTENT_FIELDS = new Set([
+    'id', 'ID', 'uuid', 'status', 'type', 'step', 'nextStep',
+    'createdAt', 'updatedAt', 'timestamp', 'metadata',
+    'subAgentResult', 'payloadChangeResult', 'shouldTerminate',
+    'terminateAfter', 'iterationNumber', 'number',
+    'taskGraph', 'actionResult', 'resultCode', 'allMatches',
+    'similarityScore', 'systemPrompt', 'matchCount',
+]);
+
 /**
  * Abstract base class for messaging platform adapters.
  *
@@ -274,6 +284,12 @@ export abstract class BaseMessagingAdapter {
         const bareMatched = this.matchBareAgentNames(cleanText);
         if (bareMatched.length > 0) return bareMatched;
 
+        // Pass 4: Agent name anywhere in the message — handles "write a blog for me marketing agent"
+        // where the agent name is at the end or middle. Only matches full agent names
+        // with word boundaries, longest-first, to avoid false positives.
+        const anywhereMatched = this.matchAnywhereAgentNames(cleanText);
+        if (anywhereMatched.length > 0) return anywhereMatched;
+
         return [];
     }
 
@@ -342,6 +358,35 @@ export abstract class BaseMessagingAdapter {
             }
         }
         return [];
+    }
+
+    /**
+     * Match agent names appearing anywhere in the message text.
+     *
+     * This is the lowest-priority matching pass. It handles cases like
+     * "write a blog for me marketing agent" where the agent name is at the
+     * end or middle of the message. Uses word boundary matching and checks
+     * longest names first to avoid false positives.
+     *
+     * Only returns a match if exactly one agent is found, to avoid ambiguity.
+     */
+    private matchAnywhereAgentNames(text: string): string[] {
+        const lowerText = text.trim().toLowerCase();
+        const matched: string[] = [];
+        for (const agent of this.availableAgents) {
+            const agentName = agent.Name;
+            if (!agentName || agentName.length < 3) continue; // Skip very short names
+            const lowerName = agentName.toLowerCase();
+            // Check for the agent name with word boundaries on both sides
+            const pattern = new RegExp(`(?:^|\\W)${this.escapeRegex(lowerName)}(?:\\W|$)`, 'i');
+            if (pattern.test(lowerText)) {
+                matched.push(agentName);
+                // For anywhere matching, only accept unambiguous results
+                // If we find more than one agent, it's ambiguous — skip
+                if (matched.length > 1) return [];
+            }
+        }
+        return matched;
     }
 
     /**
@@ -476,8 +521,13 @@ export abstract class BaseMessagingAdapter {
         return null;
     }
 
+    /** Maximum number of delegation hops to prevent infinite loops. */
+    private static readonly MAX_DELEGATION_HOPS = 3;
+
     /**
      * Execute the agent and send the response, with streaming support.
+     * Handles delegation automatically: when the agent returns `payload.invokeAgent`,
+     * the target agent is auto-executed (matching MJ Explorer behavior).
      */
     private async executeAgentAndRespond(
         message: IncomingMessage,
@@ -486,99 +536,331 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null
     ): Promise<void> {
+        let result: ExecuteAgentResult;
+        try {
+            result = await this.runAgentWithStreaming(message, agent, contextUser, conversationMessages);
+        } catch (error) {
+            // runAgentWithStreaming already sent an error message to the user
+            LogError('executeAgentAndRespond caught error from runAgentWithStreaming:', undefined, error);
+            return;
+        }
+
+        // Check for delegation: payload.invokeAgent indicates the agent wants to hand off
+        const delegationTarget = this.detectDelegation(result);
+        if (delegationTarget) {
+            await this.handleDelegation(
+                message, agent, result, delegationTarget,
+                contextUser, conversationMessages, multiAgentNote
+            );
+            return;
+        }
+
+        // Log diagnostic info when no delegation detected (helps debug routing issues)
+        if (result.success && result.agentRun?.FinalStep === 'Success') {
+            const payloadKeys = result.payload != null && typeof result.payload === 'object'
+                ? Object.keys(result.payload as Record<string, unknown>).join(', ')
+                : '(no payload)';
+            LogStatus(`No delegation detected. Agent='${agent.Name}', FinalStep='${result.agentRun.FinalStep}', payloadKeys=[${payloadKeys}]`);
+        }
+
+        // No delegation — send the result directly
+        await this.sendAgentResult(message, agent, result, multiAgentNote);
+    }
+
+    /**
+     * Run an agent with streaming progress updates.
+     * Returns the raw ExecuteAgentResult for further processing.
+     */
+    private async runAgentWithStreaming(
+        message: IncomingMessage,
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo,
+        conversationMessages: ChatMessage[]
+    ): Promise<ExecuteAgentResult> {
         const runner = new AgentRunner();
         let streamBuffer = '';
         let lastUpdateTime = 0;
         const updateInterval = this.settings.StreamingUpdateIntervalMs ?? 1000;
-        let progressMessageId: string | null = null;
         const agentName = agent.Name ?? 'Agent';
 
-        try {
-            // Send initial "thinking" message with agent name
-            const thinkingText = `_${agentName} is thinking..._`;
-            progressMessageId = await this.sendOrUpdateStreamingMessage(
-                message, thinkingText, null, agent
-            );
-            lastUpdateTime = Date.now();
+        // Send initial "thinking" message with agent name
+        const thinkingText = `_${agentName} is thinking..._`;
+        let progressMessageId: string | null = await this.sendOrUpdateStreamingMessage(
+            message, thinkingText, null, agent
+        );
+        lastUpdateTime = Date.now();
 
-            // Track the latest progress label for display before streamed text arrives
-            let progressLabel = '';
+        const params: ExecuteAgentParams = {
+            agent,
+            conversationMessages,
+            contextUser,
+            onProgress: (progress) => {
+                if (progress.displayMode === 'historical') return;
 
-            const params: ExecuteAgentParams = {
-                agent,
-                conversationMessages,
-                contextUser,
-                onProgress: (progress) => {
-                    if (progress.displayMode === 'historical') return;
+                const stepCount = (progress.metadata?.stepCount as number) ?? undefined;
+                const stepNumber = (progress.metadata?.stepNumber as number) ?? undefined;
+                const stepSuffix = stepNumber != null && stepCount != null
+                    ? ` (Step ${stepNumber} of ${stepCount})`
+                    : '';
+                const progressLabel = `_${progress.message}${stepSuffix}_`;
 
-                    // Build a step-level progress indicator
-                    const stepCount = (progress.metadata?.stepCount as number) ?? undefined;
-                    const stepNumber = (progress.metadata?.stepNumber as number) ?? undefined;
-                    const stepSuffix = stepNumber != null && stepCount != null
-                        ? ` (Step ${stepNumber} of ${stepCount})`
-                        : '';
-                    progressLabel = `_${progress.message}${stepSuffix}_`;
-
-                    // If we haven't started receiving streamed text yet, show progress
-                    if (!streamBuffer) {
-                        const now = Date.now();
-                        if (now - lastUpdateTime >= updateInterval) {
-                            lastUpdateTime = now;
-                            this.sendOrUpdateStreamingMessage(
-                                message, progressLabel, progressMessageId, agent
-                            ).then(msgId => {
-                                progressMessageId = msgId;
-                            }).catch((err) => {
-                                LogError('Progress update failed:', undefined, err);
-                            });
-                        }
-                    }
-                },
-                onStreaming: (chunk) => {
-                    streamBuffer += chunk.content;
+                if (!streamBuffer) {
                     const now = Date.now();
                     if (now - lastUpdateTime >= updateInterval) {
                         lastUpdateTime = now;
                         this.sendOrUpdateStreamingMessage(
-                            message, streamBuffer, progressMessageId, agent
+                            message, progressLabel, progressMessageId, agent
                         ).then(msgId => {
                             progressMessageId = msgId;
                         }).catch((err) => {
-                            LogError('Streaming update failed:', undefined, err);
+                            LogError('Progress update failed:', undefined, err);
                         });
                     }
                 }
-            };
-
-            const result: ExecuteAgentResult = await runner.RunAgent(params);
-
-            // Extract response text
-            const responseText = this.extractResponseText(result);
-
-            // Prepend multi-agent note if applicable
-            const fullResponse = multiAgentNote
-                ? multiAgentNote + '\n\n' + responseText
-                : responseText;
-
-            // Format and send final response
-            const formatted = await this.formatResponse(result, agent, fullResponse);
-
-            if (progressMessageId) {
-                await this.updateFinalMessage(message, progressMessageId, formatted);
-            } else {
-                await this.sendFinalMessage(message, formatted);
+            },
+            onStreaming: (chunk) => {
+                streamBuffer += chunk.content;
+                const now = Date.now();
+                if (now - lastUpdateTime >= updateInterval) {
+                    lastUpdateTime = now;
+                    this.sendOrUpdateStreamingMessage(
+                        message, streamBuffer, progressMessageId, agent
+                    ).then(msgId => {
+                        progressMessageId = msgId;
+                    }).catch((err) => {
+                        LogError('Streaming update failed:', undefined, err);
+                    });
+                }
             }
+        };
+
+        try {
+            return await runner.RunAgent(params);
         } catch (error) {
             LogError('Error running agent for messaging adapter:', undefined, error);
+            // Send error message using the progress message if available
             const errorMessage = "I'm sorry, I encountered an error processing your request. Please try again.";
             const errorFormatted = await this.formatResponse(null, agent, errorMessage);
-
             if (progressMessageId) {
                 await this.updateFinalMessage(message, progressMessageId, errorFormatted);
             } else {
                 await this.sendFinalMessage(message, errorFormatted);
             }
+            throw error;
         }
+    }
+
+    /**
+     * Detect if an agent result contains a delegation request.
+     *
+     * Three detection strategies, tried in order:
+     * 1. `payload.invokeAgent` — formal delegation field (same as MJ Explorer)
+     * 2. `agentRun.FinalPayload` — serialized payload fallback (in case in-memory payload is empty)
+     * 3. Message text pattern matching — detects "I'll have the {Agent Name}..." phrasing
+     *    when the agent describes delegation intent without formally setting the payload
+     *
+     * @returns The target agent name, or null if no delegation.
+     */
+    private detectDelegation(result: ExecuteAgentResult): string | null {
+        if (!result.success) return null;
+
+        // Strategy 1: Check in-memory payload.invokeAgent (primary, matches MJ Explorer)
+        const fromPayload = this.extractInvokeAgentFromPayload(result.payload);
+        if (fromPayload) {
+            LogStatus(`Delegation detected via payload.invokeAgent: '${fromPayload}'`);
+            return fromPayload;
+        }
+
+        // Strategy 2: Check FinalPayload (serialized string on agentRun)
+        const fromFinalPayload = this.extractInvokeAgentFromFinalPayload(result.agentRun);
+        if (fromFinalPayload) {
+            LogStatus(`Delegation detected via FinalPayload: '${fromFinalPayload}'`);
+            return fromFinalPayload;
+        }
+
+        // Strategy 3: Detect delegation intent from message text
+        // Handles cases where the agent says "I'll have the Marketing Agent..." without
+        // setting payload.invokeAgent (common when conversation context is less structured)
+        const fromMessage = this.extractDelegationFromMessage(result.agentRun?.Message);
+        if (fromMessage) {
+            LogStatus(`Delegation detected via message text: '${fromMessage}'`);
+            return fromMessage;
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract `invokeAgent` from the in-memory payload object.
+     */
+    private extractInvokeAgentFromPayload(payload: unknown): string | null {
+        if (payload == null || typeof payload !== 'object') return null;
+        const obj = payload as Record<string, unknown>;
+        if (typeof obj.invokeAgent === 'string' && obj.invokeAgent.trim()) {
+            return obj.invokeAgent.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Extract `invokeAgent` from the serialized FinalPayload string on the agentRun.
+     * Fallback for cases where the in-memory payload is empty but FinalPayload was persisted.
+     */
+    private extractInvokeAgentFromFinalPayload(agentRun: ExecuteAgentResult['agentRun']): string | null {
+        const fpStr = agentRun?.FinalPayload;
+        if (!fpStr || typeof fpStr !== 'string') return null;
+        try {
+            const parsed = JSON.parse(fpStr);
+            if (parsed != null && typeof parsed === 'object' && typeof parsed.invokeAgent === 'string') {
+                return parsed.invokeAgent.trim() || null;
+            }
+        } catch {
+            // Not valid JSON — ignore
+        }
+        return null;
+    }
+
+    /**
+     * Detect delegation intent from the agent's message text.
+     *
+     * Matches patterns like:
+     * - "I'll have the Marketing Agent write..."
+     * - "I'll delegate to the Research Agent..."
+     * - "Routing to Marketing Agent"
+     * - "Let me have the Codesmith Agent handle this"
+     *
+     * Only matches against known agent names from `availableAgents` to avoid false positives.
+     */
+    private extractDelegationFromMessage(message: string | null | undefined): string | null {
+        if (!message || typeof message !== 'string') return null;
+
+        const lowerMessage = message.toLowerCase();
+
+        // Quick gate: must contain a delegation-intent phrase
+        const delegationPhrases = [
+            "i'll have the", "i'll delegate to", "i will have the", "i will delegate to",
+            "routing to", "delegating to", "let me have the", "i'll ask the",
+            "i will ask the", "handing off to", "passing to", "let me route to",
+            "i'll get the", "i will get the", "i'll invoke the", "i will invoke the"
+        ];
+        const hasDelegationPhrase = delegationPhrases.some(phrase => lowerMessage.includes(phrase));
+        if (!hasDelegationPhrase) return null;
+
+        // Check if any known agent name appears in the message
+        // availableAgents is sorted longest-first, so we'll match the most specific name
+        for (const agent of this.availableAgents) {
+            const agentName = agent.Name;
+            if (!agentName) continue;
+            if (lowerMessage.includes(agentName.toLowerCase())) {
+                return agentName;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle agent delegation: send a delegation note, then auto-execute the target agent.
+     *
+     * Mirrors MJ Explorer's `handleSubAgentInvocation()`:
+     * 1. Show the delegating agent's message (e.g., "Delegating to Marketing Agent")
+     * 2. Find the target agent in availableAgents
+     * 3. Execute the target agent with the same conversation context
+     * 4. Send the target agent's result
+     *
+     * Supports chained delegation up to MAX_DELEGATION_HOPS.
+     */
+    private async handleDelegation(
+        message: IncomingMessage,
+        sourceAgent: MJAIAgentEntityExtended,
+        sourceResult: ExecuteAgentResult,
+        targetAgentName: string,
+        contextUser: UserInfo,
+        conversationMessages: ChatMessage[],
+        multiAgentNote: string | null,
+        hopCount: number = 0
+    ): Promise<void> {
+        // Prevent infinite delegation loops
+        if (hopCount >= BaseMessagingAdapter.MAX_DELEGATION_HOPS) {
+            LogError(`Delegation loop detected: exceeded ${BaseMessagingAdapter.MAX_DELEGATION_HOPS} hops`);
+            await this.sendAgentResult(message, sourceAgent, sourceResult, multiAgentNote);
+            return;
+        }
+
+        // Find the target agent
+        const targetAgent = this.availableAgents.find(
+            a => a.Name != null && a.Name.toLowerCase() === targetAgentName.toLowerCase()
+        );
+        if (!targetAgent) {
+            LogError(`Delegation target '${targetAgentName}' not found in available agents`);
+            await this.sendAgentResult(message, sourceAgent, sourceResult, multiAgentNote);
+            return;
+        }
+
+        // Send the delegating agent's message as a brief note
+        const sourceMessage = sourceResult.agentRun?.Message;
+        const delegationNote = sourceMessage && typeof sourceMessage === 'string' && sourceMessage.trim()
+            ? sourceMessage
+            : `_Delegating to ${targetAgent.Name}..._`;
+
+        const delegationFormatted = await this.formatResponse(sourceResult, sourceAgent, delegationNote);
+        await this.sendFinalMessage(message, delegationFormatted);
+
+        LogStatus(`Delegation: ${sourceAgent.Name} → ${targetAgent.Name} (hop ${hopCount + 1})`);
+
+        // Build conversation context including the delegation payload
+        const updatedMessages = [...conversationMessages];
+        const delegationPayload = sourceResult.payload as Record<string, unknown> | undefined;
+        if (delegationPayload?.inputPayload != null) {
+            // Pass the source agent's input payload as context for the target agent
+            updatedMessages.push({
+                role: 'assistant',
+                content: typeof delegationPayload.inputPayload === 'string'
+                    ? delegationPayload.inputPayload
+                    : JSON.stringify(delegationPayload.inputPayload)
+            });
+        }
+
+        // Execute the target agent
+        try {
+            const targetResult = await this.runAgentWithStreaming(
+                message, targetAgent, contextUser, updatedMessages
+            );
+
+            // Check if the target agent also delegates
+            const nextDelegation = this.detectDelegation(targetResult);
+            if (nextDelegation) {
+                await this.handleDelegation(
+                    message, targetAgent, targetResult, nextDelegation,
+                    contextUser, updatedMessages, null, hopCount + 1
+                );
+                return;
+            }
+
+            // Send the target agent's result
+            await this.sendAgentResult(message, targetAgent, targetResult, null);
+        } catch (error) {
+            // runAgentWithStreaming already sent an error message
+            LogError(`Delegation target '${targetAgent.Name}' failed:`, undefined, error);
+        }
+    }
+
+    /**
+     * Extract response text, format it, and send the final message.
+     */
+    private async sendAgentResult(
+        message: IncomingMessage,
+        agent: MJAIAgentEntityExtended,
+        result: ExecuteAgentResult,
+        multiAgentNote: string | null
+    ): Promise<void> {
+        const responseText = this.extractResponseText(result);
+        const fullResponse = multiAgentNote
+            ? multiAgentNote + '\n\n' + responseText
+            : responseText;
+
+        const formatted = await this.formatResponse(result, agent, fullResponse);
+        await this.sendFinalMessage(message, formatted);
     }
 
     /**
@@ -641,20 +923,42 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Check if a message looks like a brief summary rather than the actual response.
+     * Check if a message looks like a brief summary rather than the actual response,
+     * AND the richer content looks like genuine prose (not JSON/metadata).
      *
-     * This covers two cases:
-     * - Delegation notes: parent agent (e.g., Sage) delegates to sub-agent, Message is a handoff note
-     * - Summary-only messages: agent sets Message to a status line but the real content is in the payload
-     *   (e.g., Marketing Agent: "Your blog post is finalized" but the blog text is in FinalPayload)
+     * This covers the case where an agent sets Message to a status line but the real
+     * content is in the payload (e.g., Marketing Agent: "Your blog post is finalized"
+     * but the actual blog text is in FinalPayload).
      *
-     * The heuristic: Message is short AND the payload has substantially more content.
+     * IMPORTANT: Only appends if the richer content is human-readable prose.
+     * JSON blobs, structured metadata, and serialized data are NEVER appended.
      */
     private isDelegationNote(message: string, richerContent: string): boolean {
         const messageLen = message.trim().length;
         const richLen = richerContent.trim().length;
-        // Message is short AND payload has significantly more content
-        return messageLen < 300 && richLen > messageLen * 1.5;
+        // Message must be short AND payload must have significantly more content
+        if (messageLen >= 300 || richLen <= messageLen * 1.5) return false;
+        // Richer content must look like actual prose, not JSON/metadata
+        if (!this.looksLikeProseContent(richerContent)) return false;
+        return true;
+    }
+
+    /**
+     * Check if text looks like human-readable prose content (a blog post, report, etc.)
+     * vs. structured data (JSON, metadata, code).
+     */
+    private looksLikeProseContent(text: string): boolean {
+        const trimmed = text.trim();
+        // JSON-like content is not prose
+        if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('"')) return false;
+        // Contains many JSON key-value patterns → structured data
+        const jsonPatternCount = (trimmed.match(/"[\w]+"\s*:/g) ?? []).length;
+        if (jsonPatternCount > 3) return false;
+        // Contains orchestration markers → internal metadata
+        if (this.isOrchestrationMetadata(trimmed)) return false;
+        // Must have meaningful word content (not just symbols/IDs)
+        const wordCount = trimmed.split(/\s+/).filter(w => /[a-zA-Z]{2,}/.test(w)).length;
+        return wordCount >= 10;
     }
 
     /**
@@ -812,6 +1116,10 @@ export abstract class BaseMessagingAdapter {
             '"step": "Sub-Agent"',
             '"subAgent"',
             '"terminateAfter"',
+            '"taskGraph"',
+            '"actionResult"',
+            '"resultCode"',
+            '"similarityScore"',
         ];
         return orchestrationMarkers.some(marker => text.includes(marker));
     }
@@ -840,25 +1148,9 @@ export abstract class BaseMessagingAdapter {
             }
         }
 
-        // Pattern: { message: "..." }
-        if (typeof obj.message === 'string' && obj.message.trim()) {
-            return obj.message;
-        }
-
-        // Pattern: { output: "..." }
-        if (typeof obj.output === 'string' && obj.output.trim()) {
-            return obj.output;
-        }
-
-        // Pattern: { result: "..." }
-        if (typeof obj.result === 'string' && obj.result.trim()) {
-            return obj.result;
-        }
-
-        // Pattern: { summary: "..." }
-        if (typeof obj.summary === 'string' && obj.summary.trim()) {
-            return obj.summary;
-        }
+        // Direct text fields: message, output, result, summary
+        const directField = this.tryStringFields(obj, ['message', 'output', 'result', 'summary']);
+        if (directField) return directField;
 
         // Skip orchestration metadata — return empty to let caller try next source
         if (this.looksLikeOrchestrationObject(obj)) {
@@ -888,12 +1180,8 @@ export abstract class BaseMessagingAdapter {
         if (codesmithText) return codesmithText;
 
         // Direct text fields (for simpler payloads)
-        const directFields = ['summary', 'message', 'output', 'result', 'content', 'text', 'report'];
-        for (const field of directFields) {
-            if (typeof obj[field] === 'string' && (obj[field] as string).trim()) {
-                return obj[field] as string;
-            }
-        }
+        const directField = this.tryStringFields(obj, ['summary', 'message', 'output', 'result', 'content', 'text', 'report']);
+        if (directField) return directField;
 
         // Check nested objects for common patterns
         const nestedFields = ['data', 'response', 'payload', 'results'];
@@ -938,8 +1226,10 @@ export abstract class BaseMessagingAdapter {
             if (this.isNonContentField(key)) continue;
 
             if (typeof value === 'string' && value.trim().length > MIN_CONTENT_LENGTH) {
-                // Prefer longer text — it's more likely to be the primary document content
-                if (value.length > bestLength) {
+                // Skip strings that are serialized JSON — they're structured data, not prose
+                const trimmedVal = value.trim();
+                const isSerializedJson = (trimmedVal.startsWith('{') || trimmedVal.startsWith('[')) && trimmedVal.length > 200;
+                if (!isSerializedJson && value.length > bestLength) {
                     bestLength = value.length;
                     bestText = value;
                 }
@@ -970,13 +1260,7 @@ export abstract class BaseMessagingAdapter {
      * Check if a field name is unlikely to contain user-facing document content.
      */
     private isNonContentField(key: string): boolean {
-        const nonContentFields = [
-            'id', 'ID', 'uuid', 'status', 'type', 'step', 'nextStep',
-            'createdAt', 'updatedAt', 'timestamp', 'metadata',
-            'subAgentResult', 'payloadChangeResult', 'shouldTerminate',
-            'terminateAfter', 'iterationNumber', 'number'
-        ];
-        return nonContentFields.includes(key);
+        return NON_CONTENT_FIELDS.has(key);
     }
 
     /**
@@ -1216,10 +1500,22 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
+     * Check multiple field names on an object, returning the first non-empty string value found.
+     */
+    private tryStringFields(obj: Record<string, unknown>, fieldNames: string[]): string | null {
+        for (const field of fieldNames) {
+            if (typeof obj[field] === 'string' && (obj[field] as string).trim()) {
+                return obj[field] as string;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Check if an object looks like orchestration/control metadata.
      */
     private looksLikeOrchestrationObject(obj: Record<string, unknown>): boolean {
-        const orchestrationKeys = ['subAgentResult', 'payloadChangeResult', 'shouldTerminate'];
+        const orchestrationKeys = ['subAgentResult', 'payloadChangeResult', 'shouldTerminate', 'taskGraph', 'actionResult'];
         if (orchestrationKeys.some(key => key in obj)) return true;
 
         // nextStep with subAgent or step type is orchestration control flow

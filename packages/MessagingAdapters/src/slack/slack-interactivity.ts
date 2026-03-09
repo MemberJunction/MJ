@@ -18,7 +18,7 @@
 import { WebClient } from '@slack/web-api';
 import { LogError, LogStatus } from '@memberjunction/core';
 import type { AgentResponseForm } from '@memberjunction/ai-core-plus';
-import { buildFormModal } from './slack-block-builder.js';
+import { buildFormModal, getFullResponseText } from './slack-block-builder.js';
 import type { SlackAdapter } from './SlackAdapter.js';
 import type { IncomingMessage } from '../base/types.js';
 
@@ -53,7 +53,7 @@ interface SlackInteractionPayload {
     trigger_id: string;
     user: { id: string; name: string };
     channel?: { id: string };
-    message?: { ts: string; text: string; blocks: Record<string, unknown>[] };
+    message?: { ts: string; thread_ts?: string; text: string; blocks: Record<string, unknown>[] };
     actions?: SlackAction[];
     view?: {
         callback_id: string;
@@ -151,9 +151,13 @@ async function handleViewFull(
     client: WebClient
 ): Promise<void> {
     try {
-        // Extract text from the original message blocks
+        // Try to retrieve stored full text first (preserves content lost during truncation)
+        const storeKey = action.value;
+        const storedText = storeKey ? getFullResponseText(storeKey) : null;
+
+        // Fall back to extracting from already-truncated blocks
         const messageBlocks = payload.message?.blocks ?? [];
-        const fullText = extractTextFromBlocks(messageBlocks);
+        const fullText = storedText ?? extractTextFromBlocks(messageBlocks);
 
         // Split content into modal blocks (modal has same 50-block limit)
         const modalBlocks = buildModalContentBlocks(fullText);
@@ -220,7 +224,9 @@ async function handleFormModalOpen(
 ): Promise<void> {
     try {
         const channelId = payload.channel?.id;
-        const threadTs = payload.message?.ts;
+        // Use thread_ts (thread root) if available, fall back to message ts.
+        // This ensures form responses post back to the original thread, not a sub-thread.
+        const threadTs = payload.message?.thread_ts ?? payload.message?.ts;
         if (!channelId) {
             LogStatus('Slack form modal: missing channel');
             return;
@@ -341,41 +347,15 @@ async function handleModalSubmission(
 
         LogStatus(`Slack modal submit: user='${payload.user?.name}', fields=${fields.length}`);
 
-        // Build @{_mode:"form"} message
-        const formResponse = JSON.stringify({
-            _mode: 'form',
-            action: 'formSubmit',
-            fields
+        await postFormSubmission({
+            fields,
+            channelId,
+            threadTs,
+            userId: payload.user.id,
+            userName: payload.user.name,
+            client,
+            adapter
         });
-        const messageText = `@${formResponse}`;
-
-        // Post as a visible message in the thread
-        const displayText = fields.map(f => `${f.label}: ${f.displayValue}`).join(', ');
-        const postResult = await client.chat.postMessage({
-            channel: channelId,
-            thread_ts: threadTs,
-            text: displayText
-        });
-
-        // Route through adapter for agent re-execution
-        if (adapter && postResult.ts) {
-            const incomingMessage: IncomingMessage = {
-                MessageID: postResult.ts,
-                Text: messageText,
-                SenderID: payload.user.id,
-                SenderName: payload.user.name,
-                ChannelID: channelId,
-                ThreadID: threadTs ?? null,
-                IsDirectMessage: false,
-                IsBotMention: true,
-                Timestamp: new Date(),
-                RawEvent: {}
-            };
-
-            adapter.HandleMessage(incomingMessage).catch(err => {
-                LogError('Failed to re-execute agent after modal submit:', undefined, err);
-            });
-        }
     } catch (error) {
         LogError('Failed to handle modal submission:', undefined, error);
     }
@@ -403,57 +383,85 @@ async function handleFormChoice(
         const parts = action.action_id.split(':');
         const questionId = parts[2] ?? 'unknown';
         const chosenValue = parts.slice(3).join(':') || action.value || 'unknown';
-        // Use the value as display — it's the option label we set on the button
         const displayValue = action.value || chosenValue;
 
         LogStatus(`Slack form choice: user='${payload.user?.name}', question='${questionId}', value='${chosenValue}'`);
 
         const channelId = payload.channel?.id;
-        const threadTs = payload.message?.ts;
+        const threadTs = payload.message?.thread_ts ?? payload.message?.ts;
         if (!channelId) return;
 
-        // Build the @{_mode:"form"} message matching Explorer's format
-        const formResponse = JSON.stringify({
-            _mode: 'form',
-            action: 'formSubmit',
+        await postFormSubmission({
             fields: [{
                 name: questionId,
                 value: chosenValue,
                 label: questionId,
                 displayValue
-            }]
+            }],
+            channelId,
+            threadTs,
+            userId: payload.user.id,
+            userName: payload.user.name,
+            client,
+            adapter
         });
-        const messageText = `@${formResponse}`;
-
-        // Post the choice as a visible user message in the thread
-        const postResult = await client.chat.postMessage({
-            channel: channelId,
-            thread_ts: threadTs,
-            text: displayValue  // Show the friendly label as fallback text
-        });
-
-        // Route through the adapter for agent re-execution
-        if (adapter && postResult.ts) {
-            const incomingMessage: IncomingMessage = {
-                MessageID: postResult.ts,
-                Text: messageText,
-                SenderID: payload.user.id,
-                SenderName: payload.user.name,
-                ChannelID: channelId,
-                ThreadID: threadTs ?? null,
-                IsDirectMessage: false,
-                IsBotMention: true, // Treat as bot mention so it triggers a response
-                Timestamp: new Date(),
-                RawEvent: {}
-            };
-
-            // Fire-and-forget: let the adapter handle re-execution asynchronously
-            adapter.HandleMessage(incomingMessage).catch(err => {
-                LogError('Failed to re-execute agent after form choice:', undefined, err);
-            });
-        }
     } catch (error) {
         LogError('Failed to handle form choice interaction:', undefined, error);
+    }
+}
+
+/**
+ * Post a form submission back to a Slack thread and route it through the adapter.
+ *
+ * Shared by handleFormChoice() and handleModalSubmission() — both build
+ * `@{_mode:"form",...}` JSON and post it as a visible message in the thread,
+ * then hand it to the adapter for agent re-execution.
+ */
+async function postFormSubmission(params: {
+    fields: Array<{ name: string; value: string; label: string; displayValue: string }>;
+    channelId: string;
+    threadTs: string | undefined;
+    userId: string;
+    userName: string;
+    client: WebClient;
+    adapter?: SlackAdapter;
+}): Promise<void> {
+    const { fields, channelId, threadTs, userId, userName, client, adapter } = params;
+
+    // Build @{_mode:"form"} message matching Explorer's format
+    const formResponse = JSON.stringify({
+        _mode: 'form',
+        action: 'formSubmit',
+        fields
+    });
+    const messageText = `@${formResponse}`;
+
+    // Post as a visible message in the thread
+    const displayText = fields.map(f => `${f.label}: ${f.displayValue}`).join(', ');
+    const postResult = await client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: displayText
+    });
+
+    // Route through adapter for agent re-execution
+    if (adapter && postResult.ts) {
+        const incomingMessage: IncomingMessage = {
+            MessageID: postResult.ts,
+            Text: messageText,
+            SenderID: userId,
+            SenderName: userName,
+            ChannelID: channelId,
+            ThreadID: threadTs ?? null,
+            IsDirectMessage: false,
+            IsBotMention: true,
+            Timestamp: new Date(),
+            RawEvent: {}
+        };
+
+        adapter.HandleMessage(incomingMessage).catch(err => {
+            LogError('Failed to re-execute agent after form submission:', undefined, err);
+        });
     }
 }
 

@@ -9,7 +9,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...orig, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
-import { handleSlackInteraction } from '../slack/slack-interactivity.js';
+import { handleSlackInteraction, registerActiveForm } from '../slack/slack-interactivity.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -141,6 +141,222 @@ describe('slack-interactivity', () => {
             expect(mockClient.views.open).toHaveBeenCalledOnce();
             const viewBlocks = mockClient.views.open.mock.calls[0][0].view.blocks;
             expect(viewBlocks.length).toBeGreaterThan(0);
+        });
+    });
+
+    // ─── Phase 5b: New test coverage ─────────────────────────────────────────
+
+    describe('handleModalSubmission', () => {
+        function createModalSubmissionPayload(fields: Record<string, Record<string, Record<string, { value?: string; selected_option?: { value: string }; selected_options?: Array<{ value: string }> }>>>, metadata?: string): string {
+            return JSON.stringify({
+                type: 'view_submission',
+                trigger_id: 'trigger-modal',
+                user: { id: 'U123', name: 'testuser' },
+                view: {
+                    callback_id: 'mj:form_modal:submit',
+                    private_metadata: metadata ?? JSON.stringify({ channelId: 'C123', threadTs: 'thread-ts' }),
+                    state: { values: fields }
+                },
+                token: 'test'
+            });
+        }
+
+        it('should extract text field values from modal state', async () => {
+            const mockChat = { postMessage: vi.fn().mockResolvedValue({ ts: 'new-ts' }) };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createModalSubmissionPayload({
+                mj_form_name: {
+                    'mj:form_field:name': { value: 'John Doe' }
+                }
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postMessage).toHaveBeenCalledOnce();
+            const msgArgs = mockChat.postMessage.mock.calls[0][0];
+            expect(msgArgs.channel).toBe('C123');
+            expect(msgArgs.thread_ts).toBe('thread-ts');
+            expect(msgArgs.text).toContain('John Doe');
+        });
+
+        it('should extract selected_option values from modal state', async () => {
+            const mockChat = { postMessage: vi.fn().mockResolvedValue({ ts: 'new-ts' }) };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createModalSubmissionPayload({
+                mj_form_color: {
+                    'mj:form_field:color': { selected_option: { value: 'blue' } }
+                }
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postMessage).toHaveBeenCalledOnce();
+            const msgArgs = mockChat.postMessage.mock.calls[0][0];
+            expect(msgArgs.text).toContain('blue');
+        });
+
+        it('should extract multi-select values from modal state', async () => {
+            const mockChat = { postMessage: vi.fn().mockResolvedValue({ ts: 'new-ts' }) };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createModalSubmissionPayload({
+                mj_form_toppings: {
+                    'mj:form_field:toppings': {
+                        selected_options: [{ value: 'cheese' }, { value: 'pepperoni' }]
+                    }
+                }
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postMessage).toHaveBeenCalledOnce();
+            const msgArgs = mockChat.postMessage.mock.calls[0][0];
+            expect(msgArgs.text).toContain('cheese,pepperoni');
+        });
+
+        it('should skip submissions with no extractable fields', async () => {
+            const mockChat = { postMessage: vi.fn() };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createModalSubmissionPayload({
+                mj_form_empty: {
+                    'mj:form_field:empty': {}
+                }
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postMessage).not.toHaveBeenCalled();
+        });
+
+        it('should skip submissions with missing channel metadata', async () => {
+            const mockChat = { postMessage: vi.fn() };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createModalSubmissionPayload(
+                { mj_form_q: { 'mj:form_field:q': { value: 'test' } } },
+                'invalid-json'
+            );
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+            expect(mockChat.postMessage).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleFormChoice', () => {
+        it('should parse action_id and post choice back to thread', async () => {
+            const mockChat = { postMessage: vi.fn().mockResolvedValue({ ts: 'new-ts' }) };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createBlockActionsPayload([
+                { action_id: 'mj:form_choice:color:blue', block_id: 'b1', type: 'button', value: 'Blue' }
+            ]);
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postMessage).toHaveBeenCalledOnce();
+            const msgArgs = mockChat.postMessage.mock.calls[0][0];
+            expect(msgArgs.channel).toBe('C123');
+            expect(msgArgs.text).toContain('Blue');
+        });
+
+        it('should handle missing channel gracefully', async () => {
+            const mockChat = { postMessage: vi.fn() };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = JSON.stringify({
+                type: 'block_actions',
+                trigger_id: 'trigger-123',
+                user: { id: 'U123', name: 'testuser' },
+                // No channel
+                message: { ts: 'msg-ts', text: 'text', blocks: [] },
+                actions: [{ action_id: 'mj:form_choice:q:val', block_id: 'b1', type: 'button', value: 'Val' }],
+                token: 'test'
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+            expect(mockChat.postMessage).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleFormModalOpen', () => {
+        it('should open modal from button value JSON', async () => {
+            const form = {
+                title: 'Test',
+                submitLabel: 'Go',
+                questions: [
+                    { id: 'q1', label: 'Q1', required: true, type: { type: 'text' } }
+                ]
+            };
+            const payload = createBlockActionsPayload([
+                {
+                    action_id: 'mj:form_modal:open',
+                    block_id: 'b1',
+                    type: 'button',
+                    value: JSON.stringify(form)
+                }
+            ]);
+
+            await handleSlackInteraction(payload, mockClient as never);
+
+            expect(mockClient.views.open).toHaveBeenCalledOnce();
+            const viewArgs = mockClient.views.open.mock.calls[0][0];
+            expect(viewArgs.view.type).toBe('modal');
+            expect(viewArgs.view.callback_id).toBe('mj:form_modal:submit');
+        });
+
+        it('should fall back to activeFormStore when button value is "too_large"', async () => {
+            const form = {
+                title: 'Stored Form',
+                submitLabel: 'Submit',
+                questions: [
+                    { id: 'q1', label: 'Q1', required: true, type: { type: 'text' } }
+                ]
+            };
+            // Register the form in the store
+            registerActiveForm('C123', 'msg-ts', form as never);
+
+            const payload = createBlockActionsPayload([
+                {
+                    action_id: 'mj:form_modal:open',
+                    block_id: 'b1',
+                    type: 'button',
+                    value: 'too_large'
+                }
+            ]);
+
+            await handleSlackInteraction(payload, mockClient as never);
+
+            expect(mockClient.views.open).toHaveBeenCalledOnce();
+            const viewArgs = mockClient.views.open.mock.calls[0][0];
+            expect(viewArgs.view.type).toBe('modal');
+        });
+
+        it('should post ephemeral when form is expired/not found', async () => {
+            const mockChat = {
+                postMessage: vi.fn(),
+                postEphemeral: vi.fn().mockResolvedValue({})
+            };
+            const clientWithChat = { ...mockClient, chat: mockChat };
+
+            const payload = createBlockActionsPayload([
+                {
+                    action_id: 'mj:form_modal:open',
+                    block_id: 'b1',
+                    type: 'button',
+                    value: 'too_large'
+                }
+            ], {
+                channel: { id: 'C999' },
+                message: { ts: 'expired-ts', text: 'old', blocks: [] }
+            });
+
+            await handleSlackInteraction(payload, clientWithChat as never);
+
+            expect(mockChat.postEphemeral).toHaveBeenCalledOnce();
+            expect(mockClient.views.open).not.toHaveBeenCalled();
         });
     });
 });

@@ -65,7 +65,7 @@ export { SlackMessagingExtension } from './slack/SlackMessagingExtension.js';
 export { SlackAdapter } from './slack/SlackAdapter.js';
 export { markdownToBlocks } from './slack/slack-formatter.js';
 export { verifySlackSignature } from './slack/slack-routes.js';
-export { handleSlackInteraction } from './slack/slack-interactivity.js';
+export { handleSlackInteraction, registerActiveForm } from './slack/slack-interactivity.js';
 export {
     buildRichResponse,
     buildAgentContextBlock,
@@ -76,6 +76,9 @@ export {
     buildErrorBlocks,
     buildMetadataFooter,
     buildDivider,
+    buildResponseForm,
+    buildFormModal,
+    getFullResponseText,
 } from './slack/slack-block-builder.js';
 
 // Teams adapter
