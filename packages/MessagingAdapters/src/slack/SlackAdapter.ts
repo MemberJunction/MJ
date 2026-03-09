@@ -14,7 +14,7 @@
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
-import { IncomingMessage, FormattedResponse, MessagingAdapterSettings } from '../base/types.js';
+import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
 import { markdownToBlocks } from './slack-formatter.js';
 
@@ -227,13 +227,16 @@ export class SlackAdapter extends BaseMessagingAdapter {
     protected async formatResponse(
         result: ExecuteAgentResult | null,
         agent: MJAIAgentEntityExtended,
-        responseText: string
+        responseText: string,
+        metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
         const identity = this.buildAgentIdentity(agent);
 
         // Build rich Block Kit layout
         const blocks = buildRichResponse(result, agent, responseText, {
-            explorerBaseURL: this.settings.ExplorerBaseURL
+            explorerBaseURL: this.settings.ExplorerBaseURL,
+            artifactId: metadata?.ArtifactId,
+            conversationId: metadata?.ConversationId,
         });
 
         return {

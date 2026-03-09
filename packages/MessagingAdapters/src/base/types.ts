@@ -215,6 +215,17 @@ export interface ThreadHistoryResult {
 }
 
 /**
+ * Metadata about the conversation and artifact created during agent execution.
+ * Passed to `formatResponse()` so platform adapters can include deep links.
+ */
+export interface AgentResponseMetadata {
+    /** MJ Conversation Artifact ID, if one was created from the agent's payload. */
+    ArtifactId?: string;
+    /** MJ Conversation ID for this interaction. */
+    ConversationId?: string;
+}
+
+/**
  * Section parsed from Markdown content for platform-specific formatting.
  */
 export interface MarkdownSection {

@@ -10,7 +10,10 @@
  *
  * 1. Create a Slack App at https://api.slack.com/apps
  * 2. Enable Event Subscriptions and point the Request URL to `{your-server}/webhook/slack`
- * 3. Subscribe to bot events: `message.im`, `app_mention`
+ * 3. Subscribe to bot events: `message.im`, `message.channels`, `message.groups`, `app_mention`
+ *    - `message.im` — direct messages to the bot
+ *    - `message.channels` / `message.groups` — thread replies in public/private channels
+ *    - `app_mention` — @mentions of the bot in channels
  * 4. Add OAuth scopes: `chat:write`, `channels:history`, `groups:history`,
  *    `im:history`, `users:read`, `users:read.email`, `app_mentions:read`
  * 5. Install the app to your workspace

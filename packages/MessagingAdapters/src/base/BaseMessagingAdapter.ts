@@ -19,7 +19,21 @@ import {
     IncomingMessage,
     FormattedResponse,
     AgentIdentity,
+    AgentResponseMetadata,
 } from './types.js';
+
+/**
+ * Result from `runAgentWithStreaming`, wrapping the ExecuteAgentResult with
+ * conversation/artifact metadata from `RunAgentInConversation`.
+ */
+interface ConversationAgentResult {
+    /** The agent execution result. */
+    result: ExecuteAgentResult;
+    /** The MJ Conversation Artifact ID, if one was created. */
+    artifactId?: string;
+    /** The MJ Conversation ID for this interaction. */
+    conversationId?: string;
+}
 
 /** Fields that are unlikely to contain user-facing document content. O(1) lookup. */
 const NON_CONTENT_FIELDS = new Set([
@@ -85,6 +99,13 @@ export abstract class BaseMessagingAdapter {
 
     /** All active agents, loaded at init for multi-word name matching. Sorted longest-name-first. */
     protected availableAgents: MJAIAgentEntityExtended[] = [];
+
+    /**
+     * Maps platform thread IDs to MJ Conversation IDs.
+     * Ensures all messages in the same Slack/Teams thread share a single MJ Conversation,
+     * preserving context across follow-up messages.
+     */
+    private threadConversationMap = new Map<string, string>();
 
     constructor(settings: MessagingAdapterSettings) {
         this.settings = settings;
@@ -216,11 +237,13 @@ export abstract class BaseMessagingAdapter {
      * @param result - The full agent execution result.
      * @param agent - The agent that produced the result.
      * @param responseText - Extracted human-readable response text.
+     * @param metadata - Optional metadata about the conversation/artifact for deep linking.
      */
     protected abstract formatResponse(
         result: ExecuteAgentResult | null,
         agent: MJAIAgentEntityExtended,
-        responseText: string
+        responseText: string,
+        metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse>;
 
     /**
@@ -391,10 +414,20 @@ export abstract class BaseMessagingAdapter {
 
     /**
      * Determine whether the bot should respond to this message.
-     * Default: respond to DMs and explicit @mentions. Subclasses can override.
+     *
+     * Responds to:
+     * - Direct messages (DMs)
+     * - Explicit @mentions (`app_mention` events)
+     * - Thread replies (any reply in a thread the bot is participating in)
+     *
+     * Thread replies are included because the bot only has threads it started
+     * (via slash commands or @mention responses), so a reply in such a thread
+     * is implicitly directed at the bot.
+     *
+     * Subclasses can override for platform-specific logic.
      */
     protected shouldRespond(message: IncomingMessage): boolean {
-        return message.IsDirectMessage || message.IsBotMention;
+        return message.IsDirectMessage || message.IsBotMention || message.ThreadID != null;
     }
 
     /**
@@ -529,6 +562,14 @@ export abstract class BaseMessagingAdapter {
      * Handles delegation automatically: when the agent returns `payload.invokeAgent`,
      * the target agent is auto-executed (matching MJ Explorer behavior).
      */
+    /**
+     * Get the thread key for conversation mapping.
+     * Uses ThreadID if in a thread, otherwise MessageID (for thread-root messages).
+     */
+    private getThreadKey(message: IncomingMessage): string {
+        return `${message.ChannelID}:${message.ThreadID ?? message.MessageID}`;
+    }
+
     private async executeAgentAndRespond(
         message: IncomingMessage,
         agent: MJAIAgentEntityExtended,
@@ -536,13 +577,26 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null
     ): Promise<void> {
-        let result: ExecuteAgentResult;
+        // Look up existing MJ Conversation for this thread
+        const threadKey = this.getThreadKey(message);
+        const existingConversationId = this.threadConversationMap.get(threadKey);
+
+        let agentResult: ConversationAgentResult;
         try {
-            result = await this.runAgentWithStreaming(message, agent, contextUser, conversationMessages);
+            agentResult = await this.runAgentWithStreaming(
+                message, agent, contextUser, conversationMessages, existingConversationId
+            );
         } catch (error) {
             // runAgentWithStreaming already sent an error message to the user
             LogError('executeAgentAndRespond caught error from runAgentWithStreaming:', undefined, error);
             return;
+        }
+
+        const { result, artifactId, conversationId } = agentResult;
+
+        // Store the conversation ID for future messages in this thread
+        if (conversationId) {
+            this.threadConversationMap.set(threadKey, conversationId);
         }
 
         // Check for delegation: payload.invokeAgent indicates the agent wants to hand off
@@ -550,7 +604,8 @@ export abstract class BaseMessagingAdapter {
         if (delegationTarget) {
             await this.handleDelegation(
                 message, agent, result, delegationTarget,
-                contextUser, conversationMessages, multiAgentNote
+                contextUser, conversationMessages, multiAgentNote,
+                0, conversationId
             );
             return;
         }
@@ -564,19 +619,27 @@ export abstract class BaseMessagingAdapter {
         }
 
         // No delegation — send the result directly
-        await this.sendAgentResult(message, agent, result, multiAgentNote);
+        const metadata: AgentResponseMetadata = { ArtifactId: artifactId, ConversationId: conversationId };
+        await this.sendAgentResult(message, agent, result, multiAgentNote, metadata);
     }
 
     /**
-     * Run an agent with streaming progress updates.
-     * Returns the raw ExecuteAgentResult for further processing.
+     * Run an agent within a conversation context, with streaming progress updates.
+     *
+     * Uses `AgentRunner.RunAgentInConversation()` so that:
+     * - An MJ Conversation is created (or reused) for the interaction
+     * - Artifacts are automatically created from the agent's payload
+     * - The artifact ID is returned for deep-linking into MJ Explorer
+     *
+     * @returns The agent result plus conversation/artifact metadata.
      */
     private async runAgentWithStreaming(
         message: IncomingMessage,
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
-        conversationMessages: ChatMessage[]
-    ): Promise<ExecuteAgentResult> {
+        conversationMessages: ChatMessage[],
+        conversationId?: string
+    ): Promise<ConversationAgentResult> {
         const runner = new AgentRunner();
         let streamBuffer = '';
         let lastUpdateTime = 0;
@@ -635,8 +698,22 @@ export abstract class BaseMessagingAdapter {
             }
         };
 
+        // Extract the user's message text (last user message in the conversation)
+        const userMessageText = this.stripBotMention(message.Text);
+
         try {
-            return await runner.RunAgent(params);
+            const conversationResult = await runner.RunAgentInConversation(params, {
+                conversationId,
+                userMessage: userMessageText,
+                createArtifacts: true,
+                conversationName: `Slack: ${userMessageText.substring(0, 80)}`,
+            });
+
+            return {
+                result: conversationResult.agentResult,
+                artifactId: conversationResult.artifactInfo?.artifactId,
+                conversationId: conversationResult.conversationId,
+            };
         } catch (error) {
             LogError('Error running agent for messaging adapter:', undefined, error);
             // Send error message using the progress message if available
@@ -779,7 +856,8 @@ export abstract class BaseMessagingAdapter {
         contextUser: UserInfo,
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null,
-        hopCount: number = 0
+        hopCount: number = 0,
+        conversationId?: string
     ): Promise<void> {
         // Prevent infinite delegation loops
         if (hopCount >= BaseMessagingAdapter.MAX_DELEGATION_HOPS) {
@@ -822,24 +900,29 @@ export abstract class BaseMessagingAdapter {
             });
         }
 
-        // Execute the target agent
+        // Execute the target agent (reuse the same MJ Conversation for continuity)
         try {
-            const targetResult = await this.runAgentWithStreaming(
-                message, targetAgent, contextUser, updatedMessages
+            const targetAgentResult = await this.runAgentWithStreaming(
+                message, targetAgent, contextUser, updatedMessages, conversationId
             );
 
             // Check if the target agent also delegates
-            const nextDelegation = this.detectDelegation(targetResult);
+            const nextDelegation = this.detectDelegation(targetAgentResult.result);
             if (nextDelegation) {
                 await this.handleDelegation(
-                    message, targetAgent, targetResult, nextDelegation,
-                    contextUser, updatedMessages, null, hopCount + 1
+                    message, targetAgent, targetAgentResult.result, nextDelegation,
+                    contextUser, updatedMessages, null, hopCount + 1,
+                    targetAgentResult.conversationId ?? conversationId
                 );
                 return;
             }
 
             // Send the target agent's result
-            await this.sendAgentResult(message, targetAgent, targetResult, null);
+            const metadata: AgentResponseMetadata = {
+                ArtifactId: targetAgentResult.artifactId,
+                ConversationId: targetAgentResult.conversationId ?? conversationId,
+            };
+            await this.sendAgentResult(message, targetAgent, targetAgentResult.result, null, metadata);
         } catch (error) {
             // runAgentWithStreaming already sent an error message
             LogError(`Delegation target '${targetAgent.Name}' failed:`, undefined, error);
@@ -853,14 +936,15 @@ export abstract class BaseMessagingAdapter {
         message: IncomingMessage,
         agent: MJAIAgentEntityExtended,
         result: ExecuteAgentResult,
-        multiAgentNote: string | null
+        multiAgentNote: string | null,
+        metadata?: AgentResponseMetadata
     ): Promise<void> {
         const responseText = this.extractResponseText(result);
         const fullResponse = multiAgentNote
             ? multiAgentNote + '\n\n' + responseText
             : responseText;
 
-        const formatted = await this.formatResponse(result, agent, fullResponse);
+        const formatted = await this.formatResponse(result, agent, fullResponse, metadata);
         await this.sendFinalMessage(message, formatted);
     }
 
