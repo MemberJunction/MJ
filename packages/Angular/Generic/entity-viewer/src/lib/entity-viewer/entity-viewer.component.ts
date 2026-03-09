@@ -1004,6 +1004,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Increment sequence to track this load request
     const loadId = ++this._loadSequence;
 
+    console.debug(`[entity-viewer] loadData() called: entity=${entity.Name}, page=${this.pagination.currentPage}, isInitial=${this.isInitialLoad}, loadId=${loadId}`);
+
     // If a load is already in progress, mark that we need to reload when it completes
     // This handles the case where view/filter changes occur during an active load
     if (this.isLoading) {

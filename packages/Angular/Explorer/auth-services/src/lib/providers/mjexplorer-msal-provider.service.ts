@@ -94,17 +94,17 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
 
   private async _performInitialization(): Promise<void> {
-    console.log('[MSAL] Starting initialization...');
+    console.debug('[MSAL] Starting initialization...');
     await this.auth.instance.initialize();
-    console.log('[MSAL] MSAL instance initialized');
+    console.debug('[MSAL] MSAL instance initialized');
 
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
-    console.log('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
+    console.debug('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
 
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
-      console.log('[MSAL] Processing redirect login');
+      console.debug('[MSAL] Processing redirect login');
       this.auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
 
@@ -113,14 +113,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       this.updateUserInfo(userInfo);
 
       this._initializationCompleted$.next(true);
-      console.log('[MSAL] Initialization completed (redirect login)');
+      console.debug('[MSAL] Initialization completed (redirect login)');
     } else {
       // Set active account if we have one from cache
       const accounts = this.auth.instance.getAllAccounts();
-      console.log('[MSAL] Cached accounts found:', accounts.length);
+      console.debug('[MSAL] Cached accounts found:', accounts.length);
 
       if (accounts.length > 0) {
-        console.log('[MSAL] Restoring session from cached account:', accounts[0].username);
+        console.debug('[MSAL] Restoring session from cached account:', accounts[0].username);
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
 
@@ -129,9 +129,9 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         this.updateUserInfo(userInfo);
 
         this._initializationCompleted$.next(true);
-        console.log('[MSAL] Initialization completed (cached session restored)');
+        console.debug('[MSAL] Initialization completed (cached session restored)');
       } else {
-        console.log('[MSAL] No cached accounts, user needs to log in');
+        console.debug('[MSAL] No cached accounts, user needs to log in');
       }
     }
 
@@ -223,7 +223,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         }
 
         // Token expired or near-expiry — force a silent refresh
-        console.log('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
+        console.debug('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
         try {
           const response = await this.auth.instance.acquireTokenSilent({
             scopes: ['User.Read', 'email', 'profile'],
@@ -614,7 +614,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    * After authentication, the app will reload and re-initialize with a fresh token.
    */
   protected async handleSessionExpiryInternal(): Promise<void> {
-    console.log('[MSAL] Redirecting to Microsoft login for re-authentication...');
+    console.debug('[MSAL] Redirecting to Microsoft login for re-authentication...');
 
     // Initiate redirect authentication - page will navigate away
     this.auth.loginRedirect({
