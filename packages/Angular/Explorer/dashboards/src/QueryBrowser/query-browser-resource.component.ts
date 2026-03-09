@@ -39,6 +39,8 @@ interface CategoryNode {
 })
 export class QueryBrowserResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     private static readonly SETTINGS_KEY = 'QueryBrowser/panelWidth';
+    private static readonly STATUS_FILTERS_KEY = 'QueryBrowser/statusFilters';
+    private static readonly EXPANDED_STATE_KEY = 'QueryBrowser/expandedCategories';
     private static readonly DEFAULT_PANEL_WIDTH = 320;
     private static readonly MIN_PANEL_WIDTH = 200;
     private static readonly MAX_PANEL_WIDTH = 600;
@@ -46,12 +48,27 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public isLoading = true;
     public categories: QueryCategoryInfo[] = [];
     public categoryTree: CategoryNode[] = [];
+    /** All queries the user has permission to run */
     public queries: QueryInfo[] = [];
     public filteredQueries: QueryInfo[] = [];
     public selectedQuery: QueryInfo | null = null;
     public searchText = '';
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
+
+    /** Status filter toggles — which statuses to show in the tree */
+    public StatusFilters: Record<string, boolean> = {
+        'Approved': true,
+        'Pending': true,
+        'Rejected': false,
+        'Expired': false
+    };
+
+    /** Ordered list of all possible statuses for the filter bar */
+    public readonly AllStatuses: string[] = ['Approved', 'Pending', 'Rejected', 'Expired'];
+
+    /** Tracks expanded state by category ID — persisted across sessions */
+    private expandedState = new Map<string, boolean>();
 
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
@@ -75,6 +92,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     ngOnInit(): void {
         this.loadSavedPanelWidth();
+        this.loadSavedStatusFilters();
+        this.loadSavedExpandedState();
         this.loadData();
 
         // Subscribe to router NavigationEnd events for back/forward button support
@@ -123,13 +142,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 await this.metadata.Refresh();
             }
 
-            // Load from metadata
+            // Load all queries the user has permission to run (regardless of status)
             this.categories = this.metadata.QueryCategories || [];
             this.queries = (this.metadata.Queries || []).filter(q =>
-                q.Status === 'Approved' && q.UserCanRun(this.metadata.CurrentUser)
+                q.UserCanRun(this.metadata.CurrentUser)
             );
 
-            this.filteredQueries = [...this.queries];
+            this.applyFilters();
             this.buildCategoryTree();
 
             // Mark data as loaded and apply any query params for deep linking
@@ -160,14 +179,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private buildCategoryTree(): void {
         const categoryMap = new Map<string, CategoryNode>();
 
-        // Create nodes for all categories
+        // Use filtered queries (status + search filters applied)
+        const visibleQueries = this.filteredQueries;
+
+        // Create nodes for all categories, restoring expanded state
         for (const category of this.categories) {
-            const queriesInCategory = this.queries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
+            const queriesInCategory = visibleQueries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
             categoryMap.set(category.ID, {
                 category,
                 children: [],
                 queries: queriesInCategory,
-                expanded: true,
+                expanded: this.expandedState.get(category.ID) ?? false,
                 level: 0
             });
         }
@@ -190,7 +212,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
 
         // Add uncategorized queries to a virtual root
-        const uncategorizedQueries = this.queries.filter(q => !q.CategoryID);
+        const uncategorizedQueries = visibleQueries.filter(q => !q.CategoryID);
         if (uncategorizedQueries.length > 0) {
             const uncategorizedCategory = new QueryCategoryInfo({
                 ID: '__uncategorized__',
@@ -201,7 +223,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 category: uncategorizedCategory,
                 children: [],
                 queries: uncategorizedQueries,
-                expanded: true,
+                expanded: this.expandedState.get('__uncategorized__') ?? false,
                 level: 0
             });
         }
@@ -225,19 +247,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public onSearchChange(value: string): void {
         this.searchText = value;
+        this.applyFilters();
+        this.buildCategoryTree();
 
-        if (!value.trim()) {
-            this.filteredQueries = [...this.queries];
-        } else {
-            const searchLower = value.toLowerCase();
-            this.filteredQueries = this.queries.filter(q =>
-                q.Name.toLowerCase().includes(searchLower) ||
-                q.Description?.toLowerCase().includes(searchLower) ||
-                q.Category?.toLowerCase().includes(searchLower)
-            );
-        }
-
-        // Expand all categories when searching
+        // Expand all categories when searching so results are visible
         if (value) {
             this.expandAll();
         }
@@ -247,8 +260,122 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public clearSearch(): void {
         this.searchText = '';
-        this.filteredQueries = [...this.queries];
+        this.applyFilters();
+        this.buildCategoryTree();
         this.cdr.markForCheck();
+    }
+
+    // ========================================
+    // Status Filters
+    // ========================================
+
+    /** Toggle a status filter on/off and rebuild the tree */
+    public toggleStatusFilter(status: string): void {
+        this.StatusFilters[status] = !this.StatusFilters[status];
+        this.applyFilters();
+        this.buildCategoryTree();
+        this.saveStatusFilters();
+        this.cdr.markForCheck();
+    }
+
+    /** Get the count of queries with a given status */
+    public getStatusCount(status: string): number {
+        return this.queries.filter(q => q.Status === status).length;
+    }
+
+    /** Get the CSS color for a query status */
+    public getStatusColor(status: string): string {
+        switch (status) {
+            case 'Approved':  return '#28a745';
+            case 'Pending':   return '#f59e0b';
+            case 'Rejected':  return '#dc3545';
+            case 'Expired':   return '#6c757d';
+            default:          return '#6c757d';
+        }
+    }
+
+    /** Get the Font Awesome icon for a query status */
+    public getStatusIcon(status: string): string {
+        switch (status) {
+            case 'Approved':  return 'fa-check-circle';
+            case 'Pending':   return 'fa-clock';
+            case 'Rejected':  return 'fa-times-circle';
+            case 'Expired':   return 'fa-archive';
+            default:          return 'fa-question-circle';
+        }
+    }
+
+    /** Apply both status and search filters to produce filteredQueries */
+    private applyFilters(): void {
+        // First filter by status
+        let result = this.queries.filter(q => this.StatusFilters[q.Status] === true);
+
+        // Then filter by search text
+        if (this.searchText.trim()) {
+            const searchLower = this.searchText.toLowerCase();
+            result = result.filter(q =>
+                q.Name.toLowerCase().includes(searchLower) ||
+                q.Description?.toLowerCase().includes(searchLower) ||
+                q.Category?.toLowerCase().includes(searchLower)
+            );
+        }
+
+        this.filteredQueries = result;
+    }
+
+    /** Load saved status filter preferences */
+    private loadSavedStatusFilters(): void {
+        const saved = UserInfoEngine.Instance.GetSetting(QueryBrowserResourceComponent.STATUS_FILTERS_KEY);
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // Merge saved values onto defaults (preserves any new statuses added later)
+                for (const key of Object.keys(this.StatusFilters)) {
+                    if (typeof parsed[key] === 'boolean') {
+                        this.StatusFilters[key] = parsed[key];
+                    }
+                }
+            } catch {
+                // Ignore invalid JSON, keep defaults
+            }
+        }
+    }
+
+    /** Save status filter preferences with debouncing */
+    private saveStatusFilters(): void {
+        UserInfoEngine.Instance.SetSettingDebounced(
+            QueryBrowserResourceComponent.STATUS_FILTERS_KEY,
+            JSON.stringify(this.StatusFilters)
+        );
+    }
+
+    /** Load saved expanded/collapsed state for category nodes */
+    private loadSavedExpandedState(): void {
+        const saved = UserInfoEngine.Instance.GetSetting(QueryBrowserResourceComponent.EXPANDED_STATE_KEY);
+        if (saved) {
+            try {
+                const parsed: Record<string, boolean> = JSON.parse(saved);
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (typeof value === 'boolean') {
+                        this.expandedState.set(key, value);
+                    }
+                }
+            } catch {
+                // Ignore invalid JSON, start fresh
+            }
+        }
+    }
+
+    /** Save expanded/collapsed state with debouncing */
+    private saveExpandedState(): void {
+        const obj: Record<string, boolean> = {};
+        for (const [key, value] of this.expandedState.entries()) {
+            obj[key] = value;
+        }
+        UserInfoEngine.Instance.SetSettingDebounced(
+            QueryBrowserResourceComponent.EXPANDED_STATE_KEY,
+            JSON.stringify(obj)
+        );
     }
 
     // ========================================
@@ -260,6 +387,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             event.stopPropagation();
         }
         node.expanded = !node.expanded;
+        this.expandedState.set(node.category.ID, node.expanded);
+        this.saveExpandedState();
         this.cdr.markForCheck();
     }
 
@@ -267,10 +396,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const expand = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = true;
+                this.expandedState.set(node.category.ID, true);
                 expand(node.children);
             }
         };
         expand(this.categoryTree);
+        this.saveExpandedState();
         this.cdr.markForCheck();
     }
 
@@ -278,10 +409,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const collapse = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = false;
+                this.expandedState.set(node.category.ID, false);
                 collapse(node.children);
             }
         };
         collapse(this.categoryTree);
+        this.saveExpandedState();
         this.cdr.markForCheck();
     }
 
@@ -316,9 +449,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-        // Open the entity record using navigation service
-        // Convert the recordId string to a CompositeKey (assumes single-field primary key)
-        const compositeKey = CompositeKey.FromID(event.recordId);
+        // Look up the entity's actual primary key field name from metadata
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.Name === event.entityName);
+        const pkField = entity?.FirstPrimaryKey;
+        const pkFieldName = pkField?.Name || 'ID';
+
+        const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
         this.navigationService.OpenEntityRecord(event.entityName, compositeKey);
     }
 
@@ -472,38 +609,25 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private expandCategoryForQuery(query: QueryInfo): void {
         if (!query.CategoryID) return;
 
-        const expandCategory = (nodes: CategoryNode[], targetCategoryId: string): boolean => {
+        const expandToTarget = (nodes: CategoryNode[], targetCategoryId: string): boolean => {
             for (const node of nodes) {
                 if (UUIDsEqual(node.category.ID, targetCategoryId)) {
                     node.expanded = true;
+                    this.expandedState.set(node.category.ID, true);
                     return true;
                 }
-                if (this.expandCategoryForQueryRecursive(node.children, targetCategoryId)) {
+                if (expandToTarget(node.children, targetCategoryId)) {
                     node.expanded = true;
+                    this.expandedState.set(node.category.ID, true);
                     return true;
                 }
             }
             return false;
         };
 
-        expandCategory(this.categoryTree, query.CategoryID);
-    }
-
-    /**
-     * Helper for recursive category expansion
-     */
-    private expandCategoryForQueryRecursive(nodes: CategoryNode[], targetCategoryId: string): boolean {
-        for (const node of nodes) {
-            if (UUIDsEqual(node.category.ID, targetCategoryId)) {
-                node.expanded = true;
-                return true;
-            }
-            if (node.children.length > 0 && this.expandCategoryForQueryRecursive(node.children, targetCategoryId)) {
-                node.expanded = true;
-                return true;
-            }
+        if (expandToTarget(this.categoryTree, query.CategoryID)) {
+            this.saveExpandedState();
         }
-        return false;
     }
 
     // ========================================

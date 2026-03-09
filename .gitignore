@@ -157,3 +157,7 @@ docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt
 docker/workbench/.env.database
+
+# Integration e2e scripts (may contain secrets)
+packages/Integration/e2e/
+packages/Integration/e2e-screenshots/

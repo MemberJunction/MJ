@@ -8495,7 +8495,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)`),
     IsActive: z.boolean().nullable().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Description: Controls whether this integration is currently active for the company.`),
     AccessToken: z.string().nullable().describe(`
@@ -8576,13 +8576,71 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).`),
+    ScheduleEnabled: z.boolean().describe(`
+        * * Field Name: ScheduleEnabled
+        * * Display Name: Schedule Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether automatic sync scheduling is enabled for this integration`),
+    ScheduleType: z.union([z.literal('Cron'), z.literal('Interval'), z.literal('Manual')]).describe(`
+        * * Field Name: ScheduleType
+        * * Display Name: Schedule Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cron
+    *   * Interval
+    *   * Manual
+        * * Description: Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)`),
+    ScheduleIntervalMinutes: z.number().nullable().describe(`
+        * * Field Name: ScheduleIntervalMinutes
+        * * Display Name: Schedule Interval (Minutes)
+        * * SQL Data Type: int
+        * * Description: Interval in minutes for Interval schedule type`),
+    CronExpression: z.string().nullable().describe(`
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Cron expression for Cron schedule type (e.g., "0 *\/6 * * *" for every 6 hours)`),
+    NextScheduledRunAt: z.date().nullable().describe(`
+        * * Field Name: NextScheduledRunAt
+        * * Display Name: Next Scheduled Run
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the next scheduled sync should run. Updated after each run based on schedule config.`),
+    LastScheduledRunAt: z.date().nullable().describe(`
+        * * Field Name: LastScheduledRunAt
+        * * Display Name: Last Scheduled Run
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the last scheduled sync was initiated`),
+    IsLocked: z.boolean().describe(`
+        * * Field Name: IsLocked
+        * * Display Name: Is Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether a sync is currently locked/running for this integration`),
+    LockedAt: z.date().nullable().describe(`
+        * * Field Name: LockedAt
+        * * Display Name: Locked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lock was acquired`),
+    LockedByInstance: z.string().nullable().describe(`
+        * * Field Name: LockedByInstance
+        * * Display Name: Locked By Instance
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Server instance identifier that holds the lock (hostname-pid)`),
+    LockExpiresAt: z.date().nullable().describe(`
+        * * Field Name: LockExpiresAt
+        * * Display Name: Lock Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lock should be considered stale and eligible for cleanup`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company Name
+        * * Display Name: Company
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8594,7 +8652,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run
+        * * Display Name: Last Run ID
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -14600,6 +14658,279 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Integration Object Fields
+ */
+export const MJIntegrationObjectFieldSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    IntegrationObjectID: z.string().describe(`
+        * * Field Name: IntegrationObjectID
+        * * Display Name: Integration Object
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+        * * Description: Foreign key to the IntegrationObject this field belongs to`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Field name as returned by the external API`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly display label for the field`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this field represents`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: UI grouping category within the object`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
+    Length: z.number().nullable().describe(`
+        * * Field Name: Length
+        * * Display Name: Length
+        * * SQL Data Type: int
+        * * Description: Maximum length for string types`),
+    Precision: z.number().nullable().describe(`
+        * * Field Name: Precision
+        * * Display Name: Precision
+        * * SQL Data Type: int
+        * * Description: Numeric precision`),
+    Scale: z.number().nullable().describe(`
+        * * Field Name: Scale
+        * * Display Name: Scale
+        * * SQL Data Type: int
+        * * Description: Numeric scale`),
+    AllowsNull: z.boolean().describe(`
+        * * Field Name: AllowsNull
+        * * Display Name: Allows Null
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the field can contain NULL values`),
+    DefaultValue: z.string().nullable().describe(`
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Default value from the source system`),
+    IsPrimaryKey: z.boolean().describe(`
+        * * Field Name: IsPrimaryKey
+        * * Display Name: Primary Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is part of the object primary key`),
+    IsUniqueKey: z.boolean().describe(`
+        * * Field Name: IsUniqueKey
+        * * Display Name: Unique Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether values must be unique across all records`),
+    IsReadOnly: z.boolean().describe(`
+        * * Field Name: IsReadOnly
+        * * Display Name: Read Only
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field cannot be written back to the source system`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is required for create/update operations`),
+    RelatedIntegrationObjectID: z.string().nullable().describe(`
+        * * Field Name: RelatedIntegrationObjectID
+        * * Display Name: Related Integration Object
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+        * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
+    RelatedIntegrationObjectFieldName: z.string().nullable().describe(`
+        * * Field Name: RelatedIntegrationObjectFieldName
+        * * Display Name: Related Field Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field name on the related IntegrationObject that this FK points to (typically the PK field)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display and processing order within the object. Lower numbers appear first.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Freeform JSON for connector-specific field configuration`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    IntegrationObject: z.string().describe(`
+        * * Field Name: IntegrationObject
+        * * Display Name: Integration Object Name
+        * * SQL Data Type: nvarchar(255)`),
+    RelatedIntegrationObject: z.string().nullable().describe(`
+        * * Field Name: RelatedIntegrationObject
+        * * Display Name: Related Object Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJIntegrationObjectFieldEntityType = z.infer<typeof MJIntegrationObjectFieldSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Integration Objects
+ */
+export const MJIntegrationObjectSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    IntegrationID: z.string().describe(`
+        * * Field Name: IntegrationID
+        * * Display Name: Integration
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+        * * Description: Foreign key to the Integration that owns this object`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Internal Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Internal/programmatic name of the external object (e.g., Members, Events)`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly display label`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this external object represents`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: UI grouping category (e.g., Membership, Events, Finance)`),
+    APIPath: z.string().describe(`
+        * * Field Name: APIPath
+        * * Display Name: API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records`),
+    ResponseDataKey: z.string().nullable().describe(`
+        * * Field Name: ResponseDataKey
+        * * Display Name: Response Data Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.`),
+    DefaultPageSize: z.number().describe(`
+        * * Field Name: DefaultPageSize
+        * * Display Name: Default Page Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of records to request per page from the API`),
+    SupportsPagination: z.boolean().describe(`
+        * * Field Name: SupportsPagination
+        * * Display Name: Supports Pagination
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this endpoint supports paginated fetching`),
+    PaginationType: z.union([z.literal('Cursor'), z.literal('None'), z.literal('Offset'), z.literal('PageNumber')]).describe(`
+        * * Field Name: PaginationType
+        * * Display Name: Pagination Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: PageNumber
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cursor
+    *   * None
+    *   * Offset
+    *   * PageNumber
+        * * Description: Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None`),
+    SupportsIncrementalSync: z.boolean().describe(`
+        * * Field Name: SupportsIncrementalSync
+        * * Display Name: Supports Incremental Sync
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports watermark-based incremental sync`),
+    SupportsWrite: z.boolean().describe(`
+        * * Field Name: SupportsWrite
+        * * Display Name: Supports Write
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether data can be pushed back to this object via the API`),
+    DefaultQueryParams: z.string().nullable().describe(`
+        * * Field Name: DefaultQueryParams
+        * * Display Name: Default Query Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of default query parameters to include with every API request for this object`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Freeform JSON for connector-specific configuration not covered by standard columns`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Processing and display order. Lower numbers are processed first.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Integration: z.string().describe(`
+        * * Field Name: Integration
+        * * Display Name: Integration Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJIntegrationObjectEntityType = z.infer<typeof MJIntegrationObjectSchema>;
 
 /**
  * zod schema definition for the entity MJ: Integration Source Types
@@ -45139,7 +45470,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Description: Controls whether this integration is currently active for the company.
     */
@@ -45343,8 +45674,146 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: ScheduleEnabled
+    * * Display Name: Schedule Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether automatic sync scheduling is enabled for this integration
+    */
+    get ScheduleEnabled(): boolean {
+        return this.Get('ScheduleEnabled');
+    }
+    set ScheduleEnabled(value: boolean) {
+        this.Set('ScheduleEnabled', value);
+    }
+
+    /**
+    * * Field Name: ScheduleType
+    * * Display Name: Schedule Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cron
+    *   * Interval
+    *   * Manual
+    * * Description: Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)
+    */
+    get ScheduleType(): 'Cron' | 'Interval' | 'Manual' {
+        return this.Get('ScheduleType');
+    }
+    set ScheduleType(value: 'Cron' | 'Interval' | 'Manual') {
+        this.Set('ScheduleType', value);
+    }
+
+    /**
+    * * Field Name: ScheduleIntervalMinutes
+    * * Display Name: Schedule Interval (Minutes)
+    * * SQL Data Type: int
+    * * Description: Interval in minutes for Interval schedule type
+    */
+    get ScheduleIntervalMinutes(): number | null {
+        return this.Get('ScheduleIntervalMinutes');
+    }
+    set ScheduleIntervalMinutes(value: number | null) {
+        this.Set('ScheduleIntervalMinutes', value);
+    }
+
+    /**
+    * * Field Name: CronExpression
+    * * Display Name: Cron Expression
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Cron expression for Cron schedule type (e.g., "0 *\/6 * * *" for every 6 hours)
+    */
+    get CronExpression(): string | null {
+        return this.Get('CronExpression');
+    }
+    set CronExpression(value: string | null) {
+        this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: NextScheduledRunAt
+    * * Display Name: Next Scheduled Run
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the next scheduled sync should run. Updated after each run based on schedule config.
+    */
+    get NextScheduledRunAt(): Date | null {
+        return this.Get('NextScheduledRunAt');
+    }
+    set NextScheduledRunAt(value: Date | null) {
+        this.Set('NextScheduledRunAt', value);
+    }
+
+    /**
+    * * Field Name: LastScheduledRunAt
+    * * Display Name: Last Scheduled Run
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the last scheduled sync was initiated
+    */
+    get LastScheduledRunAt(): Date | null {
+        return this.Get('LastScheduledRunAt');
+    }
+    set LastScheduledRunAt(value: Date | null) {
+        this.Set('LastScheduledRunAt', value);
+    }
+
+    /**
+    * * Field Name: IsLocked
+    * * Display Name: Is Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether a sync is currently locked/running for this integration
+    */
+    get IsLocked(): boolean {
+        return this.Get('IsLocked');
+    }
+    set IsLocked(value: boolean) {
+        this.Set('IsLocked', value);
+    }
+
+    /**
+    * * Field Name: LockedAt
+    * * Display Name: Locked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lock was acquired
+    */
+    get LockedAt(): Date | null {
+        return this.Get('LockedAt');
+    }
+    set LockedAt(value: Date | null) {
+        this.Set('LockedAt', value);
+    }
+
+    /**
+    * * Field Name: LockedByInstance
+    * * Display Name: Locked By Instance
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Server instance identifier that holds the lock (hostname-pid)
+    */
+    get LockedByInstance(): string | null {
+        return this.Get('LockedByInstance');
+    }
+    set LockedByInstance(value: string | null) {
+        this.Set('LockedByInstance', value);
+    }
+
+    /**
+    * * Field Name: LockExpiresAt
+    * * Display Name: Lock Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lock should be considered stale and eligible for cleanup
+    */
+    get LockExpiresAt(): Date | null {
+        return this.Get('LockExpiresAt');
+    }
+    set LockExpiresAt(value: Date | null) {
+        this.Set('LockExpiresAt', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company Name
+    * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -45353,7 +45822,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -45380,7 +45849,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run
+    * * Display Name: Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -60779,6 +61248,666 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Integration Object Fields - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IntegrationObjectField
+ * * Base View: vwIntegrationObjectFields
+ * * @description Describes a field on an integration object, mirroring EntityField column patterns for type compatibility
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Integration Object Fields')
+export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObjectFieldEntityType> {
+    /**
+    * Loads the MJ: Integration Object Fields record from the database
+    * @param ID: string - primary key value to load the MJ: Integration Object Fields record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIntegrationObjectFieldEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationObjectID
+    * * Display Name: Integration Object
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+    * * Description: Foreign key to the IntegrationObject this field belongs to
+    */
+    get IntegrationObjectID(): string {
+        return this.Get('IntegrationObjectID');
+    }
+    set IntegrationObjectID(value: string) {
+        this.Set('IntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Field name as returned by the external API
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly display label for the field
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this field represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: UI grouping category within the object
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+    set Type(value: string) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Length
+    * * Display Name: Length
+    * * SQL Data Type: int
+    * * Description: Maximum length for string types
+    */
+    get Length(): number | null {
+        return this.Get('Length');
+    }
+    set Length(value: number | null) {
+        this.Set('Length', value);
+    }
+
+    /**
+    * * Field Name: Precision
+    * * Display Name: Precision
+    * * SQL Data Type: int
+    * * Description: Numeric precision
+    */
+    get Precision(): number | null {
+        return this.Get('Precision');
+    }
+    set Precision(value: number | null) {
+        this.Set('Precision', value);
+    }
+
+    /**
+    * * Field Name: Scale
+    * * Display Name: Scale
+    * * SQL Data Type: int
+    * * Description: Numeric scale
+    */
+    get Scale(): number | null {
+        return this.Get('Scale');
+    }
+    set Scale(value: number | null) {
+        this.Set('Scale', value);
+    }
+
+    /**
+    * * Field Name: AllowsNull
+    * * Display Name: Allows Null
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the field can contain NULL values
+    */
+    get AllowsNull(): boolean {
+        return this.Get('AllowsNull');
+    }
+    set AllowsNull(value: boolean) {
+        this.Set('AllowsNull', value);
+    }
+
+    /**
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Default value from the source system
+    */
+    get DefaultValue(): string | null {
+        return this.Get('DefaultValue');
+    }
+    set DefaultValue(value: string | null) {
+        this.Set('DefaultValue', value);
+    }
+
+    /**
+    * * Field Name: IsPrimaryKey
+    * * Display Name: Primary Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is part of the object primary key
+    */
+    get IsPrimaryKey(): boolean {
+        return this.Get('IsPrimaryKey');
+    }
+    set IsPrimaryKey(value: boolean) {
+        this.Set('IsPrimaryKey', value);
+    }
+
+    /**
+    * * Field Name: IsUniqueKey
+    * * Display Name: Unique Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether values must be unique across all records
+    */
+    get IsUniqueKey(): boolean {
+        return this.Get('IsUniqueKey');
+    }
+    set IsUniqueKey(value: boolean) {
+        this.Set('IsUniqueKey', value);
+    }
+
+    /**
+    * * Field Name: IsReadOnly
+    * * Display Name: Read Only
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field cannot be written back to the source system
+    */
+    get IsReadOnly(): boolean {
+        return this.Get('IsReadOnly');
+    }
+    set IsReadOnly(value: boolean) {
+        this.Set('IsReadOnly', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is required for create/update operations
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: RelatedIntegrationObjectID
+    * * Display Name: Related Integration Object
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+    * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
+    */
+    get RelatedIntegrationObjectID(): string | null {
+        return this.Get('RelatedIntegrationObjectID');
+    }
+    set RelatedIntegrationObjectID(value: string | null) {
+        this.Set('RelatedIntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: RelatedIntegrationObjectFieldName
+    * * Display Name: Related Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field name on the related IntegrationObject that this FK points to (typically the PK field)
+    */
+    get RelatedIntegrationObjectFieldName(): string | null {
+        return this.Get('RelatedIntegrationObjectFieldName');
+    }
+    set RelatedIntegrationObjectFieldName(value: string | null) {
+        this.Set('RelatedIntegrationObjectFieldName', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and processing order within the object. Lower numbers appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Freeform JSON for connector-specific field configuration
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IntegrationObject
+    * * Display Name: Integration Object Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get IntegrationObject(): string {
+        return this.Get('IntegrationObject');
+    }
+
+    /**
+    * * Field Name: RelatedIntegrationObject
+    * * Display Name: Related Object Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedIntegrationObject(): string | null {
+        return this.Get('RelatedIntegrationObject');
+    }
+}
+
+
+/**
+ * MJ: Integration Objects - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IntegrationObject
+ * * Base View: vwIntegrationObjects
+ * * @description Describes an external object or endpoint exposed by an integration (e.g., Members, Events, Invoices)
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Integration Objects')
+export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEntityType> {
+    /**
+    * Loads the MJ: Integration Objects record from the database
+    * @param ID: string - primary key value to load the MJ: Integration Objects record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIntegrationObjectEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationID
+    * * Display Name: Integration
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+    * * Description: Foreign key to the Integration that owns this object
+    */
+    get IntegrationID(): string {
+        return this.Get('IntegrationID');
+    }
+    set IntegrationID(value: string) {
+        this.Set('IntegrationID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Internal Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Internal/programmatic name of the external object (e.g., Members, Events)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly display label
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this external object represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: UI grouping category (e.g., Membership, Events, Finance)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: APIPath
+    * * Display Name: API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records
+    */
+    get APIPath(): string {
+        return this.Get('APIPath');
+    }
+    set APIPath(value: string) {
+        this.Set('APIPath', value);
+    }
+
+    /**
+    * * Field Name: ResponseDataKey
+    * * Display Name: Response Data Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.
+    */
+    get ResponseDataKey(): string | null {
+        return this.Get('ResponseDataKey');
+    }
+    set ResponseDataKey(value: string | null) {
+        this.Set('ResponseDataKey', value);
+    }
+
+    /**
+    * * Field Name: DefaultPageSize
+    * * Display Name: Default Page Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of records to request per page from the API
+    */
+    get DefaultPageSize(): number {
+        return this.Get('DefaultPageSize');
+    }
+    set DefaultPageSize(value: number) {
+        this.Set('DefaultPageSize', value);
+    }
+
+    /**
+    * * Field Name: SupportsPagination
+    * * Display Name: Supports Pagination
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this endpoint supports paginated fetching
+    */
+    get SupportsPagination(): boolean {
+        return this.Get('SupportsPagination');
+    }
+    set SupportsPagination(value: boolean) {
+        this.Set('SupportsPagination', value);
+    }
+
+    /**
+    * * Field Name: PaginationType
+    * * Display Name: Pagination Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: PageNumber
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cursor
+    *   * None
+    *   * Offset
+    *   * PageNumber
+    * * Description: Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None
+    */
+    get PaginationType(): 'Cursor' | 'None' | 'Offset' | 'PageNumber' {
+        return this.Get('PaginationType');
+    }
+    set PaginationType(value: 'Cursor' | 'None' | 'Offset' | 'PageNumber') {
+        this.Set('PaginationType', value);
+    }
+
+    /**
+    * * Field Name: SupportsIncrementalSync
+    * * Display Name: Supports Incremental Sync
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports watermark-based incremental sync
+    */
+    get SupportsIncrementalSync(): boolean {
+        return this.Get('SupportsIncrementalSync');
+    }
+    set SupportsIncrementalSync(value: boolean) {
+        this.Set('SupportsIncrementalSync', value);
+    }
+
+    /**
+    * * Field Name: SupportsWrite
+    * * Display Name: Supports Write
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether data can be pushed back to this object via the API
+    */
+    get SupportsWrite(): boolean {
+        return this.Get('SupportsWrite');
+    }
+    set SupportsWrite(value: boolean) {
+        this.Set('SupportsWrite', value);
+    }
+
+    /**
+    * * Field Name: DefaultQueryParams
+    * * Display Name: Default Query Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of default query parameters to include with every API request for this object
+    */
+    get DefaultQueryParams(): string | null {
+        return this.Get('DefaultQueryParams');
+    }
+    set DefaultQueryParams(value: string | null) {
+        this.Set('DefaultQueryParams', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Freeform JSON for connector-specific configuration not covered by standard columns
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Processing and display order. Lower numbers are processed first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Integration
+    * * Display Name: Integration Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Integration(): string {
+        return this.Get('Integration');
     }
 }
 

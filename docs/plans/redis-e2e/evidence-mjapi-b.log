@@ -1,0 +1,31 @@
+Config file found at /workspace/MJ/packages/MJAPI/mj.config.cjs
+Registered auth provider: auth0 with issuer: https://bluecypress-dev.us.auth0.com/
+Registered auth provider: auth0 (type: auth0)
+🚀 MemberJunction Server Bootstrap
+=====================================
+
+
+Loading generated packages...
+No codeGeneration.packages configuration found - skipping auto-import of generated packages
+
+Starting MemberJunction Server...
+
+Database type: SQL Server
+(node:19433) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+LocalCacheManager initialized in 0ms
+Data Source has been initialized. 338 entities loaded.
+Server telemetry enabled with level: standard
+Redis: connected
+Redis pub/sub subscriber: connected
+Redis: ready to accept commands
+Redis pub/sub: subscribed to channel "mj:__pubsub__"
+Redis cache provider connected: redis://redis-claude:6379
+LocalCacheManager initialized
+[OAuth] publicUrl: http://localhost:4002/
+[OAuth] Callback route registered at /oauth/callback
+[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange
+REST API endpoints are disabled
+📅 Scheduled Jobs: 2 active job(s), polling every 10 second(s)
+  🔍 Checking for stale locks (current time: 2026-03-07T22:53:47.840Z)...
+--- END OF INIT ---

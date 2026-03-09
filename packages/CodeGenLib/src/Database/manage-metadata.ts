@@ -2840,7 +2840,7 @@ export class ManageMetadataBase {
          const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
 
-         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')}`;
+         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence`;
          const allEntityFieldValuesResult = await this.runQuery(pool, efvSQL);
          const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
@@ -3051,7 +3051,10 @@ export class ManageMetadataBase {
             let numUpdated = 0;
             for (const v of possibleValues) {
                const ev = existingValues.find((ev: { Value: string; }) => ev.Value === v);
-               if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
+
+               // NOTE: We are using != below for comparing Sequence instead of strict !== in case the 
+               //       DB returns a string for Sequence instead of a number.
+               if (ev && ev.Sequence != 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityFieldValue')} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await this.LogSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence`);

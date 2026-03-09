@@ -15,12 +15,10 @@ import {
     DeleteSQLResult,
     LogError,
     TransactionGroupBase,
-    ILocalStorageProvider,
     IMetadataProvider,
-    InMemoryLocalStorageProvider,
     RunQuerySQLFilterManager,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+
 
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
@@ -48,7 +46,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
     private _transaction: pg.PoolClient | null = null;
-    private _localStorageProvider: ILocalStorageProvider = new InMemoryLocalStorageProvider();
 
     // ─── Platform Identity ───────────────────────────────────────────
 
@@ -184,10 +181,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     get MJCoreSchemaName(): string {
         return this._schemaName;
-    }
-
-    get LocalStorageProvider(): ILocalStorageProvider {
-        return this._localStorageProvider;
     }
 
     protected get Metadata(): IMetadataProvider {
@@ -331,14 +324,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         };
 
         try {
-            // Look up the query from metadata
-            const queryInfo = this.Queries.find(q =>
-                (params.QueryID && UUIDsEqual(q.ID, params.QueryID)) ||
-                (params.QueryName && q.Name === params.QueryName)
-            );
+            // Look up the query via QueryEngine (fresh) with ProviderBase cache fallback
+            const queryInfo = this.resolveQueryInfo(params);
             if (!queryInfo) {
                 return { ...emptyResult, ErrorMessage: `Query not found: ${queryId || queryName}` };
             }
+
+            // Validate permissions and status
+            this.ValidateQueryForExecution(queryInfo, contextUser);
 
             const querySQL = queryInfo.GetPlatformSQL(this.PlatformKey);
             if (!querySQL) {

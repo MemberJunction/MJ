@@ -16,6 +16,7 @@ import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
+import { HookRegistry, PreRunViewHook, PostRunViewHook } from "./hookRegistry";
 
 
 
@@ -607,6 +608,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Resolve any PlatformSQL values to plain strings for the active platform
         this.ResolvePlatformSQLInParams(params);
 
+        // Run registered PreRunView hooks (e.g., tenant filter injection)
+        // Hooks run after PlatformSQL resolution so they see plain-string filters,
+        // and before cache fingerprinting so injected filters affect the cache key.
+        params = await this.RunPreRunViewHooks(params, contextUser);
+
         // Start telemetry tracking
         const telemetryStart = performance.now();
         // After ResolvePlatformSQLInParams, ExtraFilter/OrderBy are guaranteed to be strings
@@ -696,6 +702,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Resolve any PlatformSQL values to plain strings for the active platform
         for (const p of params) {
             this.ResolvePlatformSQLInParams(p);
+        }
+
+        // Run registered PreRunView hooks on each param in the batch
+        for (let i = 0; i < params.length; i++) {
+            params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
         }
 
         // Start telemetry tracking for batch operation
@@ -1142,6 +1153,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
+        // Run registered PostRunView hooks (e.g., data masking, audit logging)
+        result = await this.RunPostRunViewHooks(params, result, contextUser);
+
         // Store in local cache if enabled and we have a successful result
         if (params.CacheLocal && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             // Extract maxUpdatedAt from results if available
@@ -1152,6 +1166,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults // Include aggregate results in cache
+            );
+        }
+
+        // Register OnDataChanged callback if provided and we have a fingerprint
+        if (params.OnDataChanged && preResult.fingerprint) {
+            result.Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+                preResult.fingerprint,
+                params.OnDataChanged
             );
         }
 
@@ -1181,15 +1203,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         contextUser?: UserInfo
     ): Promise<void> {
         // Transform results in parallel
-        const promises: Promise<void>[] = [];
+        const transformPromises: Promise<void>[] = [];
         for (let i = 0; i < results.length; i++) {
-            promises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
+            transformPromises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
+        }
+        await Promise.all(transformPromises);
 
+        // Run registered PostRunView hooks on each result in the batch
+        for (let i = 0; i < results.length; i++) {
+            results[i] = await this.RunPostRunViewHooks(params[i], results[i], contextUser);
+        }
+
+        // Store in local cache if enabled
+        const cachePromises: Promise<void>[] = [];
+        for (let i = 0; i < results.length; i++) {
             // Store in local cache if enabled
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
             if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
-                promises.push(LocalCacheManager.Instance.SetRunViewResult(
+                cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
                     params[i],
                     results[i].Results,
@@ -1197,8 +1229,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].AggregateResults // Include aggregate results in cache
                 ));
             }
+
+            // Register OnDataChanged callback if provided
+            if (params[i].OnDataChanged && fingerprint) {
+                results[i].Unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+                    fingerprint,
+                    params[i].OnDataChanged
+                );
+            }
         }
-        await Promise.all(promises);
+        await Promise.all(cachePromises);
 
         // End telemetry tracking with batch info
         if (preResult.telemetryEventId) {
@@ -1215,6 +1255,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 totalResultCount: totalResults
             });
         }
+    }
+
+    /**
+     * Runs all registered PreRunView hooks against a single RunViewParams,
+     * returning the (possibly mutated) params.
+     */
+    private async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
+        const hooks = HookRegistry.GetHooks<PreRunViewHook>('PreRunView');
+        for (const hook of hooks) {
+            params = await hook(params, contextUser);
+        }
+        return params;
+    }
+
+    /**
+     * Runs all registered PostRunView hooks against a single result,
+     * returning the (possibly mutated) result.
+     */
+    private async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
+        const hooks = HookRegistry.GetHooks<PostRunViewHook>('PostRunView');
+        for (const hook of hooks) {
+            result = await hook(params, result, contextUser);
+        }
+        return result;
     }
 
     /**
