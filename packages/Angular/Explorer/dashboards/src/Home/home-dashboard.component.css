@@ -1,7 +1,7 @@
 .home-dashboard {
   display: flex;
   height: 100%;
-  background: linear-gradient(135deg, var(--mj-bg-page) 0%, var(--mj-bg-surface-sunken) 100%);
+  background: var(--mj-bg-page);
   overflow: hidden;
   position: relative;
 }
@@ -135,7 +135,7 @@
   align-items: flex-start;
   gap: 16px;
   padding: 20px;
-  background: var(--mj-bg-surface);
+  background: var(--mj-bg-surface-card);
   border-radius: var(--mj-radius-lg);
   border: 1px solid var(--mj-border-default);
   box-shadow: var(--mj-shadow-sm);

@@ -96,6 +96,44 @@ Dark mode is controlled by the `[data-theme="dark"]` attribute on `<html>`, not 
 /* (just delete the block) */
 ```
 
+#### 4. No background gradients on page containers — use flat `var(--mj-bg-page)`
+Page-level containers (dashboards, views, full-page layouts) must use `background: var(--mj-bg-page)` — **never** a gradient. Gradients create inconsistent backgrounds across different pages/apps, which is especially jarring in dark mode. If the original code had a gradient like `linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)`, replace it with the flat page token.
+
+```css
+/* ❌ BAD — gradient creates inconsistent page backgrounds */
+.my-dashboard {
+  background: linear-gradient(135deg, var(--mj-bg-page) 0%, var(--mj-bg-surface-sunken) 100%);
+}
+
+/* ✅ GOOD — consistent flat page background */
+.my-dashboard {
+  background: var(--mj-bg-page);
+}
+```
+
+#### 5. All cards must use `var(--mj-bg-surface-card)` — not `var(--mj-bg-surface)`
+Any element that visually appears as a "card" (metric cards, app cards, panels, list items with backgrounds) must use `var(--mj-bg-surface-card)` so they are visually distinct from the page background in dark mode. `var(--mj-bg-surface)` is reserved for large container areas (sidebars, overlays, modals).
+
+```css
+/* ❌ BAD — card blends into page in dark mode */
+.my-card {
+  background: var(--mj-bg-surface);
+}
+
+/* ✅ GOOD — card is visibly distinct from page */
+.my-card {
+  background: var(--mj-bg-surface-card);
+}
+```
+
+#### 6. Kendo dropdown popups need global-level overrides
+Kendo's `<kendo-dropdownlist>` popup (`.k-list`, `.k-list-item`) renders outside component scope and uses hardcoded white backgrounds. The selectors in `_kendo-theme-override.scss` (`.k-popup`, `.k-list-container`) do not override `.k-list` which Kendo sets to `#ffffff`. Our `!important` overrides on `.k-list` and `.k-list-item` are not winning against Kendo's specificity. **Needs investigation** — may require overriding Kendo's internal CSS custom properties or higher specificity selectors.
+
+#### 7. CodeMirror (`mj-code-editor`) needs programmatic theming
+The `mj-code-editor` component wraps CodeMirror 6. CSS `::ng-deep` overrides in the component CSS do not reach CodeMirror's dynamically created DOM elements due to Angular's emulated ViewEncapsulation scoping. The correct fix is to use CodeMirror's `EditorView.theme()` API to define a dark-mode-aware theme extension that reads `--mj-*` tokens, and inject it via the existing `_themeConf` compartment in the component TypeScript. The component CSS wrapper (borders, toolbar) has been tokenized but the editor surface, gutters, and syntax highlighting colors are not yet themed.
+
+---
+
 ### Font Size Mapping
 
 | Hardcoded Value | Token |

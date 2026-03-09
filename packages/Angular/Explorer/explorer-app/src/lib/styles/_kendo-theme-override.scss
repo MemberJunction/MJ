@@ -655,49 +655,46 @@ kendo-buttongroup {
 .k-combobox,
 .k-multiselect,
 .k-autocomplete {
-  border: 2px solid var(--gray-700);
-  border-radius: 12px;
-  background: var(--white-color);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  transition: all var(--mj-transition-base);
+  box-shadow: var(--mj-shadow-sm);
   min-height: 48px;
 
   &:hover:not(.k-disabled) {
-    border-color: var(--mj-blue);
-    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.15);
-    transform: translateY(-1px);
+    border-color: var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-md);
   }
 
   &:focus-within,
   &.k-focus {
-    border-color: var(--mj-blue);
-    box-shadow: 
-      0 0 0 3px rgba(0, 118, 182, 0.15),
-      0 4px 16px rgba(0, 118, 182, 0.2);
-    transform: translateY(-1px);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   }
 
   // Dropdown arrow button
   .k-select {
-    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+    background: var(--mj-brand-primary);
     border: none;
-    border-radius: 0 10px 10px 0;
+    border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
     width: 40px;
-    transition: all 0.3s ease;
+    transition: all var(--mj-transition-base);
 
     .k-icon,
     .k-svg-icon {
-      color: var(--white-color);
+      color: var(--mj-text-inverse);
     }
 
     &:hover {
-      background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+      background: var(--mj-brand-primary-hover);
     }
   }
 
   // Active state
   &.k-state-active .k-select {
-    background: var(--navy);
+    background: var(--mj-brand-primary-hover);
   }
 }
 
@@ -705,13 +702,18 @@ kendo-buttongroup {
 .k-popup,
 .k-dropdown-popup,
 .k-list-container {
-  border: 2px solid var(--mj-blue);
-  background: var(--white-color);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.15),
-    0 8px 24px rgba(0, 118, 182, 0.2);
-  margin-top: 8px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-lg);
+  margin-top: 4px;
+  border-radius: var(--mj-radius-md);
   animation: dropdown-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// Dropdown list container
+.k-list {
+  background: var(--mj-bg-surface) !important;
+  color: var(--mj-text-primary) !important;
 }
 
 // Dropdown items
@@ -720,17 +722,20 @@ kendo-buttongroup {
   padding: 12px 16px;
   transition: all 0.2s ease;
   position: relative;
+  background: var(--mj-bg-surface) !important;
+  color: var(--mj-text-primary) !important;
 
   &:hover {
-    background: var(--light-blue);
-    color: var(--navy);
+    background: var(--mj-bg-surface-hover) !important;
+    color: var(--mj-text-primary) !important;
     padding-left: 20px;
   }
 
   &.k-selected,
-  &.k-state-selected {
-    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
-    color: var(--white-color);
+  &.k-state-selected,
+  &.k-focus.k-selected {
+    background: var(--mj-brand-primary) !important;
+    color: var(--mj-text-inverse) !important;
     font-weight: 600;
   }
 }
