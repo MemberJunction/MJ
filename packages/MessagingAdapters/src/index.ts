@@ -78,8 +78,10 @@ export {
     buildDivider,
     buildResponseForm,
     buildFormModal,
+    buildNotificationBlocks,
     getFullResponseText,
 } from './slack/slack-block-builder.js';
+export type { BuildRichResponseOptions } from './slack/slack-block-builder.js';
 
 // Teams adapter
 export { TeamsMessagingExtension } from './teams/TeamsMessagingExtension.js';

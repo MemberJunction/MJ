@@ -14,6 +14,7 @@ import {
     buildDivider,
     buildResponseForm,
     buildFormModal,
+    buildNotificationBlocks,
     getFullResponseText,
 } from '../slack/slack-block-builder.js';
 
@@ -159,35 +160,117 @@ describe('slack-block-builder', () => {
     });
 
     describe('buildActionButtons', () => {
-        it('should create an actions block with buttons', () => {
-            const commands = [
-                { type: 'open:url' as const, label: 'Open Report', url: 'https://example.com' },
-                { type: 'open:resource' as const, label: 'View Record', resourceType: 'Record' as const, resourceId: '123' }
-            ];
-            const block = buildActionButtons(commands);
-            expect(block.type).toBe('actions');
-            const elements = block.elements as Record<string, unknown>[];
-            expect(elements).toHaveLength(2);
-        });
-
-        it('should include URL for open:url commands', () => {
+        it('should create URL buttons for open:url commands', () => {
             const commands = [
                 { type: 'open:url' as const, label: 'Visit', url: 'https://example.com' }
             ];
-            const block = buildActionButtons(commands);
-            const elements = block.elements as Record<string, unknown>[];
+            const blocks = buildActionButtons(commands);
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].type).toBe('actions');
+            const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
             expect(elements[0].url).toBe('https://example.com');
         });
 
-        it('should limit to 5 buttons', () => {
+        it('should render open:resource as info context when no explorer URL', () => {
+            const commands = [
+                { type: 'open:resource' as const, label: 'View Customer', resourceType: 'Record' as const, entityName: 'Customers', resourceId: '123' }
+            ];
+            const blocks = buildActionButtons(commands);
+            // No buttons (no URL), just a context block with resource info
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].type).toBe('context');
+            const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
+            expect(elements[0].text).toContain('View Customer');
+            expect(elements[0].text).toContain('Customers');
+            expect(elements[0].text).toContain('MJ Explorer');
+        });
+
+        it('should deep-link open:resource when explorer URL is provided', () => {
+            const commands = [
+                { type: 'open:resource' as const, label: 'View Customer', resourceType: 'Record' as const, entityName: 'Customers', resourceId: 'abc-123' }
+            ];
+            const blocks = buildActionButtons(commands, 'https://explorer.myco.com');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].type).toBe('actions');
+            const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
+            expect(elements[0].url).toBe('https://explorer.myco.com/entity/Customers/abc-123');
+        });
+
+        it('should deep-link dashboard resources', () => {
+            const commands = [
+                { type: 'open:resource' as const, label: 'Sales Dashboard', resourceType: 'Dashboard' as const, resourceId: 'dash-1' }
+            ];
+            const blocks = buildActionButtons(commands, 'https://explorer.myco.com/');
+            const elements = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[]);
+            expect(elements[0].url).toBe('https://explorer.myco.com/dashboard/dash-1');
+        });
+
+        it('should mix URL buttons and resource info when both present', () => {
+            const commands = [
+                { type: 'open:url' as const, label: 'Docs', url: 'https://docs.example.com' },
+                { type: 'open:resource' as const, label: 'View Record', resourceType: 'Record' as const, entityName: 'Orders', resourceId: '456' }
+            ];
+            const blocks = buildActionButtons(commands); // no explorer URL
+            // Should have actions block (URL button) + context block (resource info)
+            expect(blocks).toHaveLength(2);
+            expect(blocks[0].type).toBe('actions');
+            expect(blocks[1].type).toBe('context');
+        });
+
+        it('should limit to 5 commands', () => {
             const commands = Array.from({ length: 8 }, (_, i) => ({
                 type: 'open:url' as const,
                 label: `Action ${i}`,
                 url: `https://example.com/${i}`
             }));
-            const block = buildActionButtons(commands);
-            const elements = block.elements as Record<string, unknown>[];
+            const blocks = buildActionButtons(commands);
+            const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
             expect(elements).toHaveLength(5);
+        });
+    });
+
+    describe('buildNotificationBlocks', () => {
+        it('should render notification commands as styled context blocks', () => {
+            const commands = [
+                { type: 'notification' as const, message: 'Record saved successfully', severity: 'success' as const },
+                { type: 'notification' as const, message: 'Cache refreshed', severity: 'info' as const }
+            ];
+            const blocks = buildNotificationBlocks(commands);
+            expect(blocks).toHaveLength(2);
+            expect(blocks[0].type).toBe('context');
+            const el0 = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
+            expect(el0.text).toContain(':white_check_mark:');
+            expect(el0.text).toContain('Record saved successfully');
+            const el1 = ((blocks[1] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
+            expect(el1.text).toContain(':information_source:');
+        });
+
+        it('should skip non-notification automatic commands', () => {
+            const commands = [
+                { type: 'refresh:data' as const, scope: 'entity' as const, entityNames: ['Users'] },
+                { type: 'notification' as const, message: 'Done', severity: 'success' as const }
+            ];
+            const blocks = buildNotificationBlocks(commands);
+            expect(blocks).toHaveLength(1); // only the notification
+            const el = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
+            expect(el.text).toContain('Done');
+        });
+
+        it('should return empty array for undefined commands', () => {
+            expect(buildNotificationBlocks(undefined)).toHaveLength(0);
+            expect(buildNotificationBlocks([])).toHaveLength(0);
+        });
+
+        it('should use warning and error icons', () => {
+            const commands = [
+                { type: 'notification' as const, message: 'Low disk space', severity: 'warning' as const },
+                { type: 'notification' as const, message: 'Connection failed', severity: 'error' as const }
+            ];
+            const blocks = buildNotificationBlocks(commands);
+            const el0 = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
+            expect(el0.text).toContain(':warning:');
+            const el1 = ((blocks[1] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
+            expect(el1.text).toContain(':x:');
         });
     });
 

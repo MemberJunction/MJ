@@ -84,6 +84,14 @@ export interface MessagingAdapterSettings {
     StreamingUpdateIntervalMs?: number;
 
     /**
+     * Base URL of the MJ Explorer instance (e.g., `https://explorer.mycompany.com`).
+     * When provided, `open:resource` actionable commands become deep-link buttons
+     * that open the corresponding entity/record in MJ Explorer.
+     * Without this, `open:resource` commands render as informational context blocks.
+     */
+    ExplorerBaseURL?: string;
+
+    /**
      * Microsoft App ID for Teams Bot Framework authentication.
      * Only needed for Teams adapters.
      */

@@ -9,7 +9,7 @@
  * @see https://api.slack.com/reference/block-kit
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { markdownToBlocks } from './slack-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
@@ -85,6 +85,14 @@ export interface ArtifactSource {
 }
 
 /**
+ * Options for building a rich response layout.
+ */
+export interface BuildRichResponseOptions {
+  /** Base URL of MJ Explorer for deep-linking `open:resource` commands. */
+  explorerBaseURL?: string;
+}
+
+/**
  * Build the complete Block Kit layout for an agent response.
  *
  * Layout:
@@ -94,6 +102,7 @@ export interface ArtifactSource {
  * [Text Content Blocks]      — markdown → mrkdwn sections
  * [Artifact Card]            — if structured payload detected
  * [Media Blocks]             — if mediaOutputs present
+ * [Notification Blocks]      — if automatic notification commands present
  * [Divider]
  * [Action Buttons]           — if actionableCommands present
  * [Metadata Footer]          — timing and token info
@@ -102,7 +111,12 @@ export interface ArtifactSource {
  * Enforces Slack's 50-block limit. If exceeded, truncates text blocks
  * and adds a truncation notice.
  */
-export function buildRichResponse(result: ExecuteAgentResult | null, agent: MJAIAgentEntityExtended, responseText: string): Record<string, unknown>[] {
+export function buildRichResponse(
+  result: ExecuteAgentResult | null,
+  agent: MJAIAgentEntityExtended,
+  responseText: string,
+  options?: BuildRichResponseOptions
+): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
 
   // Agent context header
@@ -144,11 +158,17 @@ export function buildRichResponse(result: ExecuteAgentResult | null, agent: MJAI
     blocks.push(...buildMediaBlocks(result.mediaOutputs.map((m) => mediaOutputToRecord(m))));
   }
 
+  // Notification blocks from automatic commands
+  const notificationBlocks = buildNotificationBlocks(result?.automaticCommands);
+  if (notificationBlocks.length > 0) {
+    blocks.push(...notificationBlocks);
+  }
+
   // Action buttons (if actionableCommands present)
   const commands = result?.actionableCommands;
   if (commands && commands.length > 0) {
     blocks.push(buildDivider());
-    blocks.push(buildActionButtons(commands));
+    blocks.push(...buildActionButtons(commands, options?.explorerBaseURL));
   }
 
   // Response form (choice buttons for structured input)
@@ -298,31 +318,146 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
 
 /**
  * Build action buttons from agent actionable commands.
+ *
+ * Handles both command types:
+ * - `open:url` → Slack URL button (opens external link)
+ * - `open:resource` → Deep-link button to MJ Explorer if `explorerBaseURL` is configured,
+ *   otherwise rendered as an informational context block showing entity/resource info
+ *
+ * Returns an array of blocks (may include both action and context blocks).
  */
-export function buildActionButtons(commands: ActionableCommand[]): Record<string, unknown> {
-  const buttons = commands.slice(0, 5).map((cmd, index) => {
-    const label = cmd.label ?? `Action ${index + 1}`;
-    const actionId = `mj:action_${index}`;
+export function buildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
+  const blocks: Record<string, unknown>[] = [];
+  const buttons: Record<string, unknown>[] = [];
+  const resourceInfoItems: string[] = [];
 
-    const button: Record<string, unknown> = {
-      type: 'button',
-      text: { type: 'plain_text', text: truncateToLength(label, 75), emoji: true },
-      action_id: actionId,
-    };
-
-    // OpenURLCommand has a url field
+  for (const cmd of commands.slice(0, 5)) {
     if (cmd.type === 'open:url' && 'url' in cmd) {
-      button.url = cmd.url;
+      buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
+    } else if (cmd.type === 'open:resource') {
+      const resourceCmd = cmd as OpenResourceCommand;
+      const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
+      if (deepLink) {
+        buttons.push(buildURLButton(cmd.label, deepLink, buttons.length));
+      } else {
+        resourceInfoItems.push(formatResourceInfo(resourceCmd));
+      }
     }
+  }
 
-    return button;
-  });
+  // Add clickable buttons
+  if (buttons.length > 0) {
+    blocks.push({ type: 'actions', elements: buttons });
+  }
 
+  // Add resource info context for open:resource without deep-link
+  if (resourceInfoItems.length > 0) {
+    blocks.push({
+      type: 'context',
+      elements: resourceInfoItems.map(text => ({
+        type: 'mrkdwn',
+        text
+      }))
+    });
+  }
+
+  return blocks;
+}
+
+/**
+ * Build a single Slack URL button.
+ */
+function buildURLButton(label: string | undefined, url: string, index: number): Record<string, unknown> {
   return {
-    type: 'actions',
-    elements: buttons,
+    type: 'button',
+    text: { type: 'plain_text', text: truncateToLength(label ?? `Link ${index + 1}`, 75), emoji: true },
+    action_id: `mj:action_${index}`,
+    url
   };
 }
+
+/**
+ * Build a deep link URL into MJ Explorer for an `open:resource` command.
+ * Returns null if no explorer base URL is configured.
+ */
+function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
+  if (!explorerBaseURL) return null;
+  const base = explorerBaseURL.replace(/\/+$/, '');
+
+  switch (cmd.resourceType) {
+    case 'Record':
+      if (cmd.entityName && cmd.resourceId) {
+        const entity = encodeURIComponent(cmd.entityName);
+        const id = encodeURIComponent(cmd.resourceId);
+        return `${base}/entity/${entity}/${id}`;
+      }
+      break;
+    case 'Dashboard':
+      return `${base}/dashboard/${encodeURIComponent(cmd.resourceId)}`;
+    case 'Report':
+      return `${base}/report/${encodeURIComponent(cmd.resourceId)}`;
+    case 'View':
+      return `${base}/view/${encodeURIComponent(cmd.resourceId)}`;
+  }
+
+  return null;
+}
+
+/**
+ * Format an `open:resource` command as descriptive text for a context block.
+ * Used when no MJ Explorer URL is configured for deep-linking.
+ */
+function formatResourceInfo(cmd: OpenResourceCommand): string {
+  const label = cmd.label ?? 'Resource';
+  const typeIcon = RESOURCE_TYPE_ICONS[cmd.resourceType] ?? '';
+  const entityNote = cmd.entityName ? ` (${cmd.entityName})` : '';
+  return `${typeIcon} ${label}${entityNote} — _open in MJ Explorer_`;
+}
+
+/** Icons for resource types in context blocks. */
+const RESOURCE_TYPE_ICONS: Record<string, string> = {
+  Record: ':page_facing_up:',
+  Dashboard: ':bar_chart:',
+  Report: ':clipboard:',
+  Form: ':pencil:',
+  View: ':mag:',
+};
+
+/**
+ * Build notification blocks from automatic commands.
+ *
+ * Only handles `notification` type automatic commands — other types
+ * (like `refresh:data`) have no meaningful Slack representation.
+ *
+ * Renders notifications as styled context blocks with severity icons.
+ */
+export function buildNotificationBlocks(commands: AutomaticCommand[] | undefined): Record<string, unknown>[] {
+  if (!commands || commands.length === 0) return [];
+
+  const blocks: Record<string, unknown>[] = [];
+
+  for (const cmd of commands) {
+    if (cmd.type !== 'notification') continue;
+    const icon = NOTIFICATION_ICONS[cmd.severity ?? 'info'];
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `${icon} ${cmd.message}`
+      }]
+    });
+  }
+
+  return blocks;
+}
+
+/** Severity icons for notification automatic commands. */
+const NOTIFICATION_ICONS: Record<string, string> = {
+  success: ':white_check_mark:',
+  info: ':information_source:',
+  warning: ':warning:',
+  error: ':x:',
+};
 
 /**
  * Build image blocks from media outputs.
