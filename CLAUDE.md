@@ -26,7 +26,11 @@ To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to 
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
-### 3. NO MODIFICATIONS TO MERGED PRs
+### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
+- **NEVER run `git reset --hard`** without explicit approval
+- These commands destroy uncommitted work (staged and unstaged) and cannot be undone
+- If you need to undo YOUR changes to a file, use `git diff` to identify only your changes and reverse them with targeted `Edit` tool calls — this preserves the user's other in-progress work
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
