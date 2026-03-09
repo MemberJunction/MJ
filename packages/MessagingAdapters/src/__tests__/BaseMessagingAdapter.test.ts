@@ -191,7 +191,9 @@ describe('BaseMessagingAdapter', () => {
                     Results: [
                         { ID: 'agent-guid-123', Name: 'Default Agent' },
                         { ID: 'sage-id', Name: 'Sage' },
-                        { ID: 'research-id', Name: 'Research Bot' }
+                        { ID: 'research-id', Name: 'Research Bot' },
+                        { ID: 'marketing-id', Name: 'Marketing Agent' },
+                        { ID: 'codesmith-id', Name: 'Codesmith' }
                     ]
                 };
             })
@@ -774,6 +776,63 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).toContain('71');
         });
 
+        it('should NOT leak taskGraph JSON into response text', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: "I'll have the Marketing Agent write the blog for you.",
+                        FinalPayload: JSON.stringify({
+                            taskGraph: {
+                                workflowName: 'Write Blog',
+                                tasks: [{ name: 'Write Blog', agentName: 'Marketing Agent' }]
+                            }
+                        }),
+                        Steps: []
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain("I'll have the Marketing Agent write the blog for you.");
+            expect(sent?.PlainText).not.toContain('taskGraph');
+            expect(sent?.PlainText).not.toContain('workflowName');
+        });
+
+        it('should NOT leak actionResult JSON into response text', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    agentRun: {
+                        Message: "I'll have the Marketing Agent write a blog for you.",
+                        FinalPayload: JSON.stringify({
+                            actionResult: {
+                                success: true,
+                                resultCode: 'SUCCESS',
+                                message: JSON.stringify({
+                                    message: 'Found 5 accessible agents',
+                                    allMatches: [{ agentName: 'Marketing Agent', similarityScore: 0.73 }]
+                                })
+                            }
+                        }),
+                        Steps: []
+                    }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain("I'll have the Marketing Agent write a blog for you.");
+            expect(sent?.PlainText).not.toContain('actionResult');
+            expect(sent?.PlainText).not.toContain('similarityScore');
+            expect(sent?.PlainText).not.toContain('allMatches');
+        });
+
         it('should extract summary field from payload object', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
@@ -788,6 +847,237 @@ describe('BaseMessagingAdapter', () => {
             await adapter.HandleMessage(msg);
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
             expect(sent?.PlainText).toContain('executive summary');
+        });
+    });
+
+    describe('delegation follow-through', () => {
+        beforeEach(async () => {
+            await adapter.Initialize();
+        });
+
+        it('should auto-execute target agent when payload.invokeAgent is set', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    if (callCount === 1) {
+                        // First call: Sage delegates to Marketing Agent
+                        return Promise.resolve({
+                            success: true,
+                            payload: { invokeAgent: 'Marketing Agent', reasoning: 'Writing blog' },
+                            agentRun: { Message: 'Delegating to Marketing Agent...', Steps: [] }
+                        });
+                    }
+                    // Second call: Marketing Agent produces the blog
+                    return Promise.resolve({
+                        success: true,
+                        payload: { title: 'My Blog', body: 'Full blog content here' },
+                        agentRun: { Message: 'Here is your blog post.', Steps: [] }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            // Collect all output from both sendFinalMessage and updateFinalMessage
+            const allMessages = [
+                ...adapter.FinalMessages,
+                ...adapter.FinalUpdates.map(u => u.response)
+            ];
+            // Should have at least 2 responses: delegation note + target agent result
+            expect(allMessages.length).toBeGreaterThanOrEqual(2);
+
+            // First should be Sage's delegation note
+            const allTexts = allMessages.map(m => m.PlainText);
+            expect(allTexts.some(t => t.includes('Delegating to Marketing Agent'))).toBe(true);
+
+            // Second should be Marketing Agent's result
+            expect(allTexts.some(t => t.includes('blog post'))).toBe(true);
+        });
+
+        it('should fall back to source result when delegation target is not found', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: true,
+                    payload: { invokeAgent: 'Nonexistent Agent' },
+                    agentRun: { Message: 'I will delegate.', Steps: [] }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            const allMessages = [
+                ...adapter.FinalMessages,
+                ...adapter.FinalUpdates.map(u => u.response)
+            ];
+            expect(allMessages.length).toBeGreaterThanOrEqual(1);
+            expect(allMessages.some(m => m.PlainText.includes('I will delegate'))).toBe(true);
+        });
+
+        it('should not follow delegation for failed results', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockResolvedValue({
+                    success: false,
+                    payload: { invokeAgent: 'Marketing Agent' },
+                    agentRun: { ErrorMessage: 'Something went wrong', Steps: [] }
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            const allMessages = [
+                ...adapter.FinalMessages,
+                ...adapter.FinalUpdates.map(u => u.response)
+            ];
+            expect(allMessages.some(m => m.PlainText.includes('went wrong') || m.PlainText.includes('error'))).toBe(true);
+        });
+
+        it('should detect delegation from FinalPayload when in-memory payload is empty', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    if (callCount === 1) {
+                        // Sage returns no in-memory payload but FinalPayload has invokeAgent
+                        return Promise.resolve({
+                            success: true,
+                            payload: undefined,
+                            agentRun: {
+                                Message: 'Delegating to Marketing Agent...',
+                                FinalStep: 'Success',
+                                FinalPayload: JSON.stringify({ invokeAgent: 'Marketing Agent', reasoning: 'Blog writing' }),
+                                Steps: []
+                            }
+                        });
+                    }
+                    return Promise.resolve({
+                        success: true,
+                        payload: 'Blog post content here',
+                        agentRun: { Message: 'Here is your blog post', FinalStep: 'Success', Steps: [] }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            // Should have delegated: 2 agent runs
+            expect(callCount).toBe(2);
+        });
+
+        it('should detect delegation from message text when payload lacks invokeAgent', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    if (callCount === 1) {
+                        // Sage describes delegation in text but doesn't set payload.invokeAgent
+                        return Promise.resolve({
+                            success: true,
+                            payload: { reasoning: 'Need blog expertise' },
+                            agentRun: {
+                                Message: "I'll have the Marketing Agent write a blog post for you.",
+                                FinalStep: 'Success',
+                                Steps: []
+                            }
+                        });
+                    }
+                    return Promise.resolve({
+                        success: true,
+                        payload: 'Great blog post about AI',
+                        agentRun: { Message: 'Here is your blog post', FinalStep: 'Success', Steps: [] }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            // Should have delegated: 2 agent runs (Sage + Marketing Agent)
+            expect(callCount).toBe(2);
+        });
+
+        it('should NOT detect delegation from message text for unknown agent names', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    return Promise.resolve({
+                        success: true,
+                        payload: { reasoning: 'Just chatting' },
+                        agentRun: {
+                            Message: "I'll have the Imaginary Agent do this for you.",
+                            FinalStep: 'Success',
+                            Steps: []
+                        }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            // Should NOT delegate — "Imaginary Agent" is not in availableAgents
+            expect(callCount).toBe(1);
+        });
+
+        it('should detect "routing to" delegation phrase', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    if (callCount === 1) {
+                        return Promise.resolve({
+                            success: true,
+                            payload: {},
+                            agentRun: {
+                                Message: 'Routing to Codesmith for this code task.',
+                                FinalStep: 'Success',
+                                Steps: []
+                            }
+                        });
+                    }
+                    return Promise.resolve({
+                        success: true,
+                        payload: 'function hello() {}',
+                        agentRun: { Message: 'Code generated', FinalStep: 'Success', Steps: [] }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            expect(callCount).toBe(2);
+        });
+
+        it('should cap delegation at MAX_DELEGATION_HOPS', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let callCount = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgent: vi.fn().mockImplementation(() => {
+                    callCount++;
+                    // Every agent delegates to Marketing Agent (infinite loop)
+                    return Promise.resolve({
+                        success: true,
+                        payload: { invokeAgent: 'Marketing Agent' },
+                        agentRun: { Message: `Delegation hop ${callCount}`, Steps: [] }
+                    });
+                })
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            // Should stop after MAX_DELEGATION_HOPS (3) + 1 initial run = 4 total
+            // But each delegation sends a note, so there should be messages
+            expect(callCount).toBeLessThanOrEqual(5);
         });
     });
 });

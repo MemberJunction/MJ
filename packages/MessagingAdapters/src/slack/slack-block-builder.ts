@@ -19,25 +19,69 @@ const SLACK_MAX_BLOCKS = 50;
 const RESERVED_BLOCK_SLOTS = 8;
 
 /**
+ * Approximate max payload size in bytes. Slack's actual limit is ~50KB,
+ * but we leave headroom for the API envelope (metadata, token, etc.).
+ */
+const SLACK_MAX_PAYLOAD_BYTES = 38_000;
+
+// ─── Full Response Text Store ─────────────────────────────────────────────
+// Stores full response text for retrieval by the "View Full" modal.
+// This prevents content loss when blocks are truncated for payload size.
+
+/** In-memory store for full response text, keyed by unique ID. Entries expire after 30 min. */
+const fullResponseStore = new Map<string, { text: string; timestamp: number }>();
+const FULL_RESPONSE_TTL_MS = 30 * 60 * 1000;
+let fullResponseCounter = 0;
+
+/**
+ * Store full response text and return a retrieval key.
+ */
+function storeFullResponseText(text: string): string {
+  const key = `fr_${Date.now()}_${++fullResponseCounter}`;
+  fullResponseStore.set(key, { text, timestamp: Date.now() });
+  // Cleanup expired entries
+  for (const [k, v] of fullResponseStore) {
+    if (Date.now() - v.timestamp > FULL_RESPONSE_TTL_MS) {
+      fullResponseStore.delete(k);
+    }
+  }
+  return key;
+}
+
+/**
+ * Retrieve full response text by store key.
+ * Returns null if expired or not found.
+ */
+export function getFullResponseText(key: string): string | null {
+  const entry = fullResponseStore.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > FULL_RESPONSE_TTL_MS) {
+    fullResponseStore.delete(key);
+    return null;
+  }
+  return entry.text;
+}
+
+/**
  * Structured payload detected in an agent result.
  * Used for rendering rich artifact cards.
  */
 export interface ArtifactPayload {
-    Title?: string;
-    Summary?: string;
-    Sections?: ArtifactSection[];
-    Sources?: ArtifactSource[];
-    URL?: string;
+  Title?: string;
+  Summary?: string;
+  Sections?: ArtifactSection[];
+  Sources?: ArtifactSource[];
+  URL?: string;
 }
 
 export interface ArtifactSection {
-    Heading: string;
-    Content: string;
+  Heading: string;
+  Content: string;
 }
 
 export interface ArtifactSource {
-    Title: string;
-    URL: string;
+  Title: string;
+  URL: string;
 }
 
 /**
@@ -58,89 +102,95 @@ export interface ArtifactSource {
  * Enforces Slack's 50-block limit. If exceeded, truncates text blocks
  * and adds a truncation notice.
  */
-export function buildRichResponse(
-    result: ExecuteAgentResult | null,
-    agent: MJAIAgentEntityExtended,
-    responseText: string
-): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
+export function buildRichResponse(result: ExecuteAgentResult | null, agent: MJAIAgentEntityExtended, responseText: string): Record<string, unknown>[] {
+  const blocks: Record<string, unknown>[] = [];
 
-    // Agent context header
-    blocks.push(buildAgentContextBlock(agent));
+  // Agent context header
+  blocks.push(buildAgentContextBlock(agent));
+  blocks.push(buildDivider());
+
+  // Structured payload rendering — detect rich payloads and render natively
+  // before falling back to generic markdown→blocks conversion
+  const structuredBlocks = buildStructuredPayloadBlocks(result);
+  if (structuredBlocks) {
+    blocks.push(...structuredBlocks);
+  } else {
+    // Fallback: generic markdown → Block Kit conversion
+    const textBlocks = buildTextBlocks(responseText);
+    blocks.push(...textBlocks);
+  }
+
+  // Artifact card (check both in-memory payload and FinalPayload)
+  const artifact = detectArtifactFromResult(result);
+  if (artifact) {
     blocks.push(buildDivider());
+    blocks.push(...buildArtifactCard(artifact));
+  }
 
-    // Structured payload rendering — detect rich payloads and render natively
-    // before falling back to generic markdown→blocks conversion
-    const structuredBlocks = buildStructuredPayloadBlocks(result);
-    if (structuredBlocks) {
-        blocks.push(...structuredBlocks);
-    } else {
-        // Fallback: generic markdown → Block Kit conversion
-        const textBlocks = buildTextBlocks(responseText);
-        blocks.push(...textBlocks);
+  // Catch-all: if no structured blocks and no artifact were rendered,
+  // check for substantive payload content (e.g., blog post, report, code output)
+  // that would otherwise be lost. In MJ Explorer this content appears as a
+  // clickable artifact; in Slack we render it inline with a "View Full" button.
+  if (!structuredBlocks && !artifact) {
+    const payloadContent = extractPayloadContent(result);
+    if (payloadContent && !isContentSimilar(payloadContent.content, responseText)) {
+      blocks.push(buildDivider());
+      blocks.push(...buildPayloadContentCard(payloadContent.title, payloadContent.content));
     }
+  }
 
-    // Artifact card (check both in-memory payload and FinalPayload)
-    const artifact = detectArtifactFromResult(result);
-    if (artifact) {
-        blocks.push(buildDivider());
-        blocks.push(...buildArtifactCard(artifact));
-    }
+  // Media blocks (images from agent)
+  if (result?.mediaOutputs && result.mediaOutputs.length > 0) {
+    blocks.push(...buildMediaBlocks(result.mediaOutputs.map((m) => mediaOutputToRecord(m))));
+  }
 
-    // Media blocks (images from agent)
-    if (result?.mediaOutputs && result.mediaOutputs.length > 0) {
-        blocks.push(...buildMediaBlocks(
-            result.mediaOutputs.map(m => mediaOutputToRecord(m))
-        ));
-    }
+  // Action buttons (if actionableCommands present)
+  const commands = result?.actionableCommands;
+  if (commands && commands.length > 0) {
+    blocks.push(buildDivider());
+    blocks.push(buildActionButtons(commands));
+  }
 
-    // Action buttons (if actionableCommands present)
-    const commands = result?.actionableCommands;
-    if (commands && commands.length > 0) {
-        blocks.push(buildDivider());
-        blocks.push(buildActionButtons(commands));
-    }
+  // Response form (choice buttons for structured input)
+  if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
+    blocks.push(...buildResponseForm(result.responseForm));
+  }
 
-    // Response form (choice buttons for structured input)
-    if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
-        blocks.push(...buildResponseForm(result.responseForm));
-    }
+  // Metadata footer
+  if (result?.agentRun) {
+    blocks.push(buildDivider());
+    blocks.push(buildMetadataFooter(result));
+  }
 
-    // Metadata footer
-    if (result?.agentRun) {
-        blocks.push(buildDivider());
-        blocks.push(buildMetadataFooter(result));
-    }
-
-    // Enforce 50-block limit (adds "View Full" button when truncating)
-    return enforceBlockLimit(blocks, responseText);
+  // Enforce 50-block limit (adds "View Full" button when truncating)
+  return enforceBlockLimit(blocks, responseText);
 }
 
 /**
  * Build a context block showing the agent's avatar and name.
  */
 export function buildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<string, unknown> {
-    const elements: Record<string, unknown>[] = [];
-    const agentName = agent.Name ?? 'Agent';
+  const elements: Record<string, unknown>[] = [];
+  const agentName = agent.Name ?? 'Agent';
 
-    const logoURL = agent.LogoURL;
-    if (logoURL && typeof logoURL === 'string' && logoURL.startsWith('https://')) {
-        elements.push({
-            type: 'image',
-            image_url: logoURL,
-            alt_text: agentName
-        });
-    }
-
+  const logoURL = agent.LogoURL;
+  if (logoURL && typeof logoURL === 'string' && logoURL.startsWith('https://')) {
     elements.push({
-        type: 'mrkdwn',
-        text: `*${agentName}*`
+      type: 'image',
+      image_url: logoURL,
+      alt_text: agentName,
     });
+  }
 
-    return {
-        type: 'context',
-        elements
-    };
+  elements.push({
+    type: 'mrkdwn',
+    text: `*${agentName}*`,
+  });
+
+  return {
+    type: 'context',
+    elements,
+  };
 }
 
 /**
@@ -148,7 +198,7 @@ export function buildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<s
  * Reuses the existing `markdownToBlocks` logic from `slack-formatter.ts`.
  */
 export function buildTextBlocks(markdown: string): Record<string, unknown>[] {
-    return markdownToBlocks(markdown);
+  return markdownToBlocks(markdown);
 }
 
 /**
@@ -156,193 +206,217 @@ export function buildTextBlocks(markdown: string): Record<string, unknown>[] {
  * Renders title, summary, source links, and an optional "View Full" button.
  */
 export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
+  const blocks: Record<string, unknown>[] = [];
 
-    // Title section
-    if (artifact.Title) {
-        blocks.push({
-            type: 'header',
-            text: {
-                type: 'plain_text',
-                text: truncateToLength(artifact.Title, 150),
-                emoji: true
-            }
-        });
+  // Title section
+  if (artifact.Title) {
+    blocks.push({
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: truncateToLength(artifact.Title, 150),
+        emoji: true,
+      },
+    });
+  }
+
+  // Summary / Body content — render as inline preview with "View Full" for long content
+  if (artifact.Summary) {
+    const PREVIEW_LIMIT = 1500;
+    const needsModal = artifact.Summary.length > PREVIEW_LIMIT;
+    const preview = needsModal
+      ? artifact.Summary.substring(0, PREVIEW_LIMIT) + '\n\n_... content continues ..._'
+      : artifact.Summary;
+
+    // Render preview as markdown blocks
+    const previewBlocks = markdownToBlocks(preview);
+    blocks.push(...previewBlocks.slice(0, 10));
+
+    // "View Full Content" button for long content
+    if (needsModal) {
+      const storeKey = storeFullResponseText(artifact.Summary);
+      blocks.push({
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'View Full Content', emoji: true },
+            action_id: 'mj:view_full:artifact',
+            value: storeKey,
+          },
+        ],
+      });
     }
+  }
 
-    // Summary
-    if (artifact.Summary) {
-        blocks.push({
-            type: 'section',
-            text: {
-                type: 'mrkdwn',
-                text: truncateToLength(artifact.Summary, 3000)
-            }
-        });
+  // Sections
+  if (artifact.Sections && artifact.Sections.length > 0) {
+    for (const section of artifact.Sections.slice(0, 5)) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${section.Heading}*\n${truncateToLength(section.Content, 2900)}`,
+        },
+      });
     }
+  }
 
-    // Sections
-    if (artifact.Sections && artifact.Sections.length > 0) {
-        for (const section of artifact.Sections.slice(0, 5)) {
-            blocks.push({
-                type: 'section',
-                text: {
-                    type: 'mrkdwn',
-                    text: `*${section.Heading}*\n${truncateToLength(section.Content, 2900)}`
-                }
-            });
-        }
-    }
+  // Sources
+  if (artifact.Sources && artifact.Sources.length > 0) {
+    const sourceLinks = artifact.Sources.slice(0, 10)
+      .map((s) => `<${s.URL}|${s.Title}>`)
+      .join(' · ');
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `📎 Sources: ${sourceLinks}`,
+        },
+      ],
+    });
+  }
 
-    // Sources
-    if (artifact.Sources && artifact.Sources.length > 0) {
-        const sourceLinks = artifact.Sources.slice(0, 10)
-            .map(s => `<${s.URL}|${s.Title}>`)
-            .join(' · ');
-        blocks.push({
-            type: 'context',
-            elements: [{
-                type: 'mrkdwn',
-                text: `📎 Sources: ${sourceLinks}`
-            }]
-        });
-    }
+  // "View Full" button if URL is available
+  if (artifact.URL) {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'View Full Report', emoji: true },
+          url: artifact.URL,
+          action_id: 'mj:view_artifact',
+        },
+      ],
+    });
+  }
 
-    // "View Full" button if URL is available
-    if (artifact.URL) {
-        blocks.push({
-            type: 'actions',
-            elements: [{
-                type: 'button',
-                text: { type: 'plain_text', text: 'View Full Report', emoji: true },
-                url: artifact.URL,
-                action_id: 'mj:view_artifact'
-            }]
-        });
-    }
-
-    return blocks;
+  return blocks;
 }
 
 /**
  * Build action buttons from agent actionable commands.
  */
 export function buildActionButtons(commands: ActionableCommand[]): Record<string, unknown> {
-    const buttons = commands.slice(0, 5).map((cmd, index) => {
-        const label = cmd.label ?? `Action ${index + 1}`;
-        const actionId = `mj:action_${index}`;
+  const buttons = commands.slice(0, 5).map((cmd, index) => {
+    const label = cmd.label ?? `Action ${index + 1}`;
+    const actionId = `mj:action_${index}`;
 
-        const button: Record<string, unknown> = {
-            type: 'button',
-            text: { type: 'plain_text', text: truncateToLength(label, 75), emoji: true },
-            action_id: actionId,
-        };
-
-        // OpenURLCommand has a url field
-        if (cmd.type === 'open:url' && 'url' in cmd) {
-            button.url = cmd.url;
-        }
-
-        return button;
-    });
-
-    return {
-        type: 'actions',
-        elements: buttons
+    const button: Record<string, unknown> = {
+      type: 'button',
+      text: { type: 'plain_text', text: truncateToLength(label, 75), emoji: true },
+      action_id: actionId,
     };
+
+    // OpenURLCommand has a url field
+    if (cmd.type === 'open:url' && 'url' in cmd) {
+      button.url = cmd.url;
+    }
+
+    return button;
+  });
+
+  return {
+    type: 'actions',
+    elements: buttons,
+  };
 }
 
 /**
  * Build image blocks from media outputs.
  */
 export function buildMediaBlocks(mediaOutputs: Record<string, unknown>[]): Record<string, unknown>[] {
-    return mediaOutputs
-        .filter(m => typeof m.url === 'string' && (m.url as string).startsWith('https://'))
-        .slice(0, 5)
-        .map(m => ({
-            type: 'image',
-            image_url: m.url,
-            alt_text: (m.title as string) ?? (m.alt as string) ?? 'Agent output',
-            title: m.title ? { type: 'plain_text', text: truncateToLength(m.title as string, 200) } : undefined
-        }));
+  return mediaOutputs
+    .filter((m) => typeof m.url === 'string' && (m.url as string).startsWith('https://'))
+    .slice(0, 5)
+    .map((m) => ({
+      type: 'image',
+      image_url: m.url,
+      alt_text: (m.title as string) ?? (m.alt as string) ?? 'Agent output',
+      title: m.title ? { type: 'plain_text', text: truncateToLength(m.title as string, 200) } : undefined,
+    }));
 }
 
 /**
  * Build a warning-styled error display block.
  */
 export function buildErrorBlocks(errorMessage: string): Record<string, unknown>[] {
-    return [
-        {
-            type: 'section',
-            text: {
-                type: 'mrkdwn',
-                text: `⚠️ ${errorMessage}`
-            }
-        }
-    ];
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⚠️ ${errorMessage}`,
+      },
+    },
+  ];
 }
 
 /**
  * Build a metadata footer with timing and token information.
  */
 export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
-    const parts: string[] = [];
+  const parts: string[] = [];
 
-    // Timing
-    const agentRun = result.agentRun;
-    if (agentRun) {
-        const startTime = agentRun.StartedAt;
-        const endTime = agentRun.CompletedAt;
-        if (startTime && endTime) {
-            const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
-            const durationSec = (durationMs / 1000).toFixed(1);
-            parts.push(`Completed in ${durationSec}s`);
-        }
-
-        // Steps count
-        const stepCount = agentRun.Steps?.length ?? 0;
-        if (stepCount > 0) {
-            parts.push(`${stepCount} step${stepCount === 1 ? '' : 's'}`);
-        }
-
-        // Token usage
-        const tokens = agentRun.TotalTokensUsed;
-        if (tokens != null && tokens > 0) {
-            parts.push(`${tokens.toLocaleString()} tokens`);
-        }
-
-        // Cost (prefer rollup which includes sub-agents)
-        const cost = agentRun.TotalCostRollup ?? agentRun.TotalCost;
-        if (cost != null && cost > 0) {
-            parts.push(`$${cost.toFixed(cost < 0.01 ? 4 : 2)}`);
-        }
+  // Timing
+  const agentRun = result.agentRun;
+  if (agentRun) {
+    const startTime = agentRun.StartedAt;
+    const endTime = agentRun.CompletedAt;
+    if (startTime && endTime) {
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
+      const durationSec = (durationMs / 1000).toFixed(1);
+      parts.push(`Completed in ${durationSec}s`);
     }
 
-    return {
-        type: 'context',
-        elements: [{
-            type: 'mrkdwn',
-            text: parts.length > 0 ? parts.join(' · ') : 'Completed'
-        }]
-    };
+    // Steps count
+    const stepCount = agentRun.Steps?.length ?? 0;
+    if (stepCount > 0) {
+      parts.push(`${stepCount} step${stepCount === 1 ? '' : 's'}`);
+    }
+
+    // Token usage
+    const tokens = agentRun.TotalTokensUsed;
+    if (tokens != null && tokens > 0) {
+      parts.push(`${tokens.toLocaleString()} tokens`);
+    }
+
+    // Cost (prefer rollup which includes sub-agents)
+    const cost = agentRun.TotalCostRollup ?? agentRun.TotalCost;
+    if (cost != null && cost > 0) {
+      parts.push(`$${cost.toFixed(cost < 0.01 ? 4 : 2)}`);
+    }
+  }
+
+  return {
+    type: 'context',
+    elements: [
+      {
+        type: 'mrkdwn',
+        text: parts.length > 0 ? parts.join(' · ') : 'Completed',
+      },
+    ],
+  };
 }
 
 /**
  * Build a divider block.
  */
 export function buildDivider(): Record<string, unknown> {
-    return { type: 'divider' };
+  return { type: 'divider' };
 }
 
 /**
  * Convert a strongly-typed MediaOutput to a plain record for buildMediaBlocks.
  */
 function mediaOutputToRecord(m: MediaOutput): Record<string, unknown> {
-    return {
-        url: m.url,
-        title: m.label ?? m.description,
-        alt: m.description ?? m.label ?? 'Agent output'
-    };
+  return {
+    url: m.url,
+    title: m.label ?? m.description,
+    alt: m.description ?? m.label ?? 'Agent output',
+  };
 }
 
 /**
@@ -351,27 +425,27 @@ function mediaOutputToRecord(m: MediaOutput): Record<string, unknown> {
  * 2. `result.agentRun.FinalPayload` (persisted, includes sub-agent payloads)
  */
 function detectArtifactFromResult(result: ExecuteAgentResult | null): ArtifactPayload | null {
-    if (!result) return null;
+  if (!result) return null;
 
-    // Check in-memory payload first
-    if (result.payload != null) {
-        const artifact = detectArtifactPayload(result.payload);
-        if (artifact) return artifact;
+  // Check in-memory payload first
+  if (result.payload != null) {
+    const artifact = detectArtifactPayload(result.payload);
+    if (artifact) return artifact;
+  }
+
+  // Check FinalPayload (persisted payload, may contain sub-agent output)
+  const finalPayloadStr = result.agentRun?.FinalPayload;
+  if (finalPayloadStr && typeof finalPayloadStr === 'string') {
+    try {
+      const parsed = JSON.parse(finalPayloadStr) as unknown;
+      const artifact = detectArtifactPayload(parsed);
+      if (artifact) return artifact;
+    } catch {
+      // Not JSON, skip
     }
+  }
 
-    // Check FinalPayload (persisted payload, may contain sub-agent output)
-    const finalPayloadStr = result.agentRun?.FinalPayload;
-    if (finalPayloadStr && typeof finalPayloadStr === 'string') {
-        try {
-            const parsed = JSON.parse(finalPayloadStr) as unknown;
-            const artifact = detectArtifactPayload(parsed);
-            if (artifact) return artifact;
-        } catch {
-            // Not JSON, skip
-        }
-    }
-
-    return null;
+  return null;
 }
 
 /**
@@ -381,31 +455,37 @@ function detectArtifactFromResult(result: ExecuteAgentResult | null): ArtifactPa
  * - Research Agent: object with metadata.researchGoal, plan, findings
  */
 function detectArtifactPayload(payload: unknown): ArtifactPayload | null {
-    if (payload == null || typeof payload !== 'object') {
-        return null;
-    }
+  if (payload == null || typeof payload !== 'object') {
+    return null;
+  }
 
-    const obj = payload as Record<string, unknown>;
+  const obj = payload as Record<string, unknown>;
 
-    // Research Agent pattern: { metadata: { researchGoal }, plan: {...} }
-    const researchArtifact = detectResearchPayload(obj);
-    if (researchArtifact) return researchArtifact;
+  // Research Agent pattern: { metadata: { researchGoal }, plan: {...} }
+  const researchArtifact = detectResearchPayload(obj);
+  if (researchArtifact) return researchArtifact;
 
-    // Standard artifact: must have at least a title or sections
-    const hasTitle = typeof obj.title === 'string' || typeof obj.Title === 'string';
-    const hasSections = Array.isArray(obj.sections) || Array.isArray(obj.Sections);
+  // Standard artifact: must have at least a title or sections
+  const hasTitle = typeof obj.title === 'string' || typeof obj.Title === 'string';
+  const hasSections = Array.isArray(obj.sections) || Array.isArray(obj.Sections);
 
-    if (!hasTitle && !hasSections) {
-        return null;
-    }
+  if (!hasTitle && !hasSections) {
+    return null;
+  }
 
-    return {
-        Title: (obj.title as string) ?? (obj.Title as string),
-        Summary: (obj.summary as string) ?? (obj.Summary as string),
-        Sections: normalizeSections((obj.sections ?? obj.Sections) as unknown[]),
-        Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
-        URL: (obj.url as string) ?? (obj.URL as string),
-    };
+  // Look for body/content text to use as Summary when no explicit summary exists
+  const summary = (obj.summary as string) ?? (obj.Summary as string)
+    ?? (obj.body as string) ?? (obj.Body as string)
+    ?? (obj.content as string) ?? (obj.Content as string)
+    ?? (obj.text as string) ?? (obj.Text as string);
+
+  return {
+    Title: (obj.title as string) ?? (obj.Title as string),
+    Summary: summary ?? undefined,
+    Sections: normalizeSections((obj.sections ?? obj.Sections) as unknown[]),
+    Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
+    URL: (obj.url as string) ?? (obj.URL as string),
+  };
 }
 
 /**
@@ -416,34 +496,34 @@ function detectArtifactPayload(payload: unknown): ArtifactPayload | null {
  * - `{ findings: [...], sources: [...] }` — research results artifact
  */
 function detectResearchPayload(obj: Record<string, unknown>): ArtifactPayload | null {
-    // Pattern: { metadata: { researchGoal: "..." }, plan: { ... } }
-    if (obj.metadata != null && typeof obj.metadata === 'object') {
-        const meta = obj.metadata as Record<string, unknown>;
-        const goal = (meta.researchGoal as string) ?? (meta.ResearchGoal as string);
-        if (goal) {
-            return {
-                Title: goal,
-                Summary: (obj.summary as string) ?? (obj.Summary as string),
-                Sections: normalizeSections((obj.sections ?? obj.Sections ?? obj.findings ?? obj.Findings) as unknown[]),
-                Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
-            };
-        }
+  // Pattern: { metadata: { researchGoal: "..." }, plan: { ... } }
+  if (obj.metadata != null && typeof obj.metadata === 'object') {
+    const meta = obj.metadata as Record<string, unknown>;
+    const goal = (meta.researchGoal as string) ?? (meta.ResearchGoal as string);
+    if (goal) {
+      return {
+        Title: goal,
+        Summary: (obj.summary as string) ?? (obj.Summary as string),
+        Sections: normalizeSections((obj.sections ?? obj.Sections ?? obj.findings ?? obj.Findings) as unknown[]),
+        Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
+      };
     }
+  }
 
-    // Pattern: { findings: [...], sources: [...] }
-    const hasFindings = Array.isArray(obj.findings) || Array.isArray(obj.Findings);
-    const hasSources = Array.isArray(obj.sources) || Array.isArray(obj.Sources);
-    if (hasFindings && hasSources) {
-        const findings = (obj.findings ?? obj.Findings) as unknown[];
-        return {
-            Title: (obj.title as string) ?? (obj.Title as string) ?? 'Research Findings',
-            Summary: (obj.summary as string) ?? (obj.Summary as string),
-            Sections: normalizeSections(findings),
-            Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
-        };
-    }
+  // Pattern: { findings: [...], sources: [...] }
+  const hasFindings = Array.isArray(obj.findings) || Array.isArray(obj.Findings);
+  const hasSources = Array.isArray(obj.sources) || Array.isArray(obj.Sources);
+  if (hasFindings && hasSources) {
+    const findings = (obj.findings ?? obj.Findings) as unknown[];
+    return {
+      Title: (obj.title as string) ?? (obj.Title as string) ?? 'Research Findings',
+      Summary: (obj.summary as string) ?? (obj.Summary as string),
+      Sections: normalizeSections(findings),
+      Sources: normalizeSources((obj.sources ?? obj.Sources) as unknown[]),
+    };
+  }
 
-    return null;
+  return null;
 }
 
 /**
@@ -454,93 +534,45 @@ function detectResearchPayload(obj: Record<string, unknown>): ArtifactPayload | 
  * everything in the modal and submits once.
  */
 export function buildResponseForm(form: AgentResponseForm): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
+  const blocks: Record<string, unknown>[] = [];
 
-    // Form title
-    if (form.title) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*${form.title}*` }
-        });
-    }
-    if (form.description) {
-        blocks.push({
-            type: 'context',
-            elements: [{ type: 'mrkdwn', text: form.description }]
-        });
-    }
-
-    // Compact summary of fields
-    const fieldNames = form.questions.map(q => q.label).join(', ');
+  // Form title
+  if (form.title) {
     blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `_Fields: ${truncateToLength(fieldNames, 280)}_` }]
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*${form.title}*` },
     });
-
-    // Single green button opens the full modal
-    const formJson = JSON.stringify(form);
+  }
+  if (form.description) {
     blocks.push({
-        type: 'actions',
-        elements: [{
-            type: 'button',
-            text: { type: 'plain_text', text: form.submitLabel ?? 'Fill Out Form', emoji: true },
-            action_id: 'mj:form_modal:open',
-            value: formJson.length <= 2000 ? formJson : 'too_large',
-            style: 'primary'
-        }]
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: form.description }],
     });
+  }
 
-    return blocks;
-}
+  // Compact summary of fields
+  const fieldNames = form.questions.map((q) => q.label).join(', ');
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: `_Fields: ${truncateToLength(fieldNames, 280)}_` }],
+  });
 
-function isChoiceQuestion(question: FormQuestion): boolean {
-    const t = question.type.type;
-    return t === 'buttongroup' || t === 'radio' || t === 'dropdown' || t === 'checkbox';
-}
+  // Single green button opens the full modal
+  const formJson = JSON.stringify(form);
+  blocks.push({
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: form.submitLabel ?? 'Fill Out Form', emoji: true },
+        action_id: 'mj:form_modal:open',
+        value: formJson.length <= 2000 ? formJson : 'too_large',
+        style: 'primary',
+      },
+    ],
+  });
 
-/**
- * Build inline action blocks for a choice question.
- */
-function buildInlineChoiceQuestion(question: FormQuestion): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
-    const questionType = question.type.type;
-
-    blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: question.label }
-    });
-
-    if (questionType === 'checkbox') {
-        // Checkbox → Slack checkboxes element
-        const choiceType = question.type as { options: Array<{ value: string | number | boolean; label: string }> };
-        blocks.push({
-            type: 'actions',
-            elements: [{
-                type: 'checkboxes',
-                action_id: `mj:form_choice:${question.id}:multi`,
-                options: choiceType.options.slice(0, 10).map(opt => ({
-                    text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
-                    value: String(opt.value)
-                }))
-            }]
-        });
-    } else {
-        // buttongroup / radio / dropdown → buttons
-        const choiceType = question.type as { options: Array<{ value: string | number | boolean; label: string }> };
-        const buttons = choiceType.options.slice(0, 5).map(opt => ({
-            type: 'button',
-            text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75), emoji: true },
-            action_id: `mj:form_choice:${question.id}:${String(opt.value)}`,
-            value: String(opt.value)
-        }));
-
-        blocks.push({
-            type: 'actions',
-            elements: buttons
-        });
-    }
-
-    return blocks;
+  return blocks;
 }
 
 /**
@@ -551,113 +583,113 @@ function buildInlineChoiceQuestion(question: FormQuestion): Record<string, unkno
  * radio_buttons, static_select, and multi_static_select.
  */
 export function buildFormModal(form: AgentResponseForm): Record<string, unknown> {
-    const modalBlocks: Record<string, unknown>[] = [];
+  const modalBlocks: Record<string, unknown>[] = [];
 
-    for (const question of form.questions) {
-        const element = buildModalInputElement(question);
-        if (element) {
-            modalBlocks.push({
-                type: 'input',
-                block_id: `mj_form_${question.id}`,
-                label: { type: 'plain_text', text: truncateToLength(question.label, 2000) },
-                element,
-                optional: !question.required
-            });
-        }
+  for (const question of form.questions) {
+    const element = buildModalInputElement(question);
+    if (element) {
+      modalBlocks.push({
+        type: 'input',
+        block_id: `mj_form_${question.id}`,
+        label: { type: 'plain_text', text: truncateToLength(question.label, 2000) },
+        element,
+        optional: !question.required,
+      });
     }
+  }
 
-    return {
-        type: 'modal',
-        callback_id: 'mj:form_modal:submit',
-        title: { type: 'plain_text', text: truncateToLength(form.title ?? 'Form', 24) },
-        submit: { type: 'plain_text', text: form.submitLabel ?? 'Submit' },
-        close: { type: 'plain_text', text: 'Cancel' },
-        blocks: modalBlocks
-    };
+  return {
+    type: 'modal',
+    callback_id: 'mj:form_modal:submit',
+    title: { type: 'plain_text', text: truncateToLength(form.title ?? 'Form', 24) },
+    submit: { type: 'plain_text', text: form.submitLabel ?? 'Submit' },
+    close: { type: 'plain_text', text: 'Cancel' },
+    blocks: modalBlocks,
+  };
 }
 
 /**
  * Build the appropriate Slack input element for a form question type.
  */
 function buildModalInputElement(question: FormQuestion): Record<string, unknown> | null {
-    const qType = question.type;
+  const qType = question.type;
 
-    switch (qType.type) {
-        case 'text':
-        case 'textarea':
-        case 'email': {
-            const textType = qType as { type: string; placeholder?: string; maxLength?: number };
-            return {
-                type: 'plain_text_input',
-                action_id: `mj:form_field:${question.id}`,
-                multiline: textType.type === 'textarea',
-                ...(textType.placeholder ? { placeholder: { type: 'plain_text', text: textType.placeholder } } : {}),
-                ...(textType.maxLength ? { max_length: textType.maxLength } : {})
-            };
-        }
-
-        case 'number':
-        case 'currency':
-            return {
-                type: 'number_input',
-                action_id: `mj:form_field:${question.id}`,
-                is_decimal_allowed: qType.type === 'currency',
-                ...(qType.min != null ? { min_value: String(qType.min) } : {}),
-                ...(qType.max != null ? { max_value: String(qType.max) } : {})
-            };
-
-        case 'date':
-        case 'datetime':
-            return {
-                type: 'datepicker',
-                action_id: `mj:form_field:${question.id}`
-            };
-
-        case 'buttongroup':
-        case 'radio': {
-            const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
-            return {
-                type: 'radio_buttons',
-                action_id: `mj:form_field:${question.id}`,
-                options: opts.slice(0, 10).map(opt => ({
-                    text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
-                    value: String(opt.value)
-                }))
-            };
-        }
-
-        case 'dropdown': {
-            const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
-            return {
-                type: 'static_select',
-                action_id: `mj:form_field:${question.id}`,
-                options: opts.slice(0, 100).map(opt => ({
-                    text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
-                    value: String(opt.value)
-                }))
-            };
-        }
-
-        case 'checkbox': {
-            const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
-            return {
-                type: 'checkboxes',
-                action_id: `mj:form_field:${question.id}`,
-                options: opts.slice(0, 10).map(opt => ({
-                    text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
-                    value: String(opt.value)
-                }))
-            };
-        }
-
-        default:
-            // Fallback for slider, time, date_range, etc. — use text input
-            return {
-                type: 'plain_text_input',
-                action_id: `mj:form_field:${question.id}`,
-                placeholder: { type: 'plain_text', text: `Enter ${question.label}` }
-            };
+  switch (qType.type) {
+    case 'text':
+    case 'textarea':
+    case 'email': {
+      const textType = qType as { type: string; placeholder?: string; maxLength?: number };
+      return {
+        type: 'plain_text_input',
+        action_id: `mj:form_field:${question.id}`,
+        multiline: textType.type === 'textarea',
+        ...(textType.placeholder ? { placeholder: { type: 'plain_text', text: textType.placeholder } } : {}),
+        ...(textType.maxLength ? { max_length: textType.maxLength } : {}),
+      };
     }
+
+    case 'number':
+    case 'currency':
+      return {
+        type: 'number_input',
+        action_id: `mj:form_field:${question.id}`,
+        is_decimal_allowed: qType.type === 'currency',
+        ...(qType.min != null ? { min_value: String(qType.min) } : {}),
+        ...(qType.max != null ? { max_value: String(qType.max) } : {}),
+      };
+
+    case 'date':
+    case 'datetime':
+      return {
+        type: 'datepicker',
+        action_id: `mj:form_field:${question.id}`,
+      };
+
+    case 'buttongroup':
+    case 'radio': {
+      const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
+      return {
+        type: 'radio_buttons',
+        action_id: `mj:form_field:${question.id}`,
+        options: opts.slice(0, 10).map((opt) => ({
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          value: String(opt.value),
+        })),
+      };
+    }
+
+    case 'dropdown': {
+      const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
+      return {
+        type: 'static_select',
+        action_id: `mj:form_field:${question.id}`,
+        options: opts.slice(0, 100).map((opt) => ({
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          value: String(opt.value),
+        })),
+      };
+    }
+
+    case 'checkbox': {
+      const opts = (qType as { options: Array<{ value: string | number | boolean; label: string }> }).options;
+      return {
+        type: 'checkboxes',
+        action_id: `mj:form_field:${question.id}`,
+        options: opts.slice(0, 10).map((opt) => ({
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          value: String(opt.value),
+        })),
+      };
+    }
+
+    default:
+      // Fallback for slider, time, date_range, etc. — use text input
+      return {
+        type: 'plain_text_input',
+        action_id: `mj:form_field:${question.id}`,
+        placeholder: { type: 'plain_text', text: `Enter ${question.label}` },
+      };
+  }
 }
 
 // ─── Structured Payload Block Builders ───────────────────────────────────
@@ -666,8 +698,8 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
  * Structured payload representation detected from an agent result.
  */
 interface StructuredPayload {
-    Type: 'code' | 'research' | 'structured';
-    Data: Record<string, unknown>;
+  Type: 'code' | 'research' | 'structured';
+  Data: Record<string, unknown>;
 }
 
 /**
@@ -678,65 +710,65 @@ interface StructuredPayload {
  * Returns `null` if no structured payload is detected — caller falls back to markdown.
  */
 function buildStructuredPayloadBlocks(result: ExecuteAgentResult | null): Record<string, unknown>[] | null {
-    if (!result) return null;
+  if (!result) return null;
 
-    const payload = detectStructuredPayload(result);
-    if (!payload) return null;
+  const payload = detectStructuredPayload(result);
+  if (!payload) return null;
 
-    switch (payload.Type) {
-        case 'code':
-            return buildCodePayloadBlocks(payload.Data);
-        case 'research':
-            return buildResearchPayloadBlocks(payload.Data);
-        case 'structured':
-            return buildStructuredContentBlocks(payload.Data);
-        default:
-            return null;
-    }
+  switch (payload.Type) {
+    case 'code':
+      return buildCodePayloadBlocks(payload.Data);
+    case 'research':
+      return buildResearchPayloadBlocks(payload.Data);
+    case 'structured':
+      return buildStructuredContentBlocks(payload.Data);
+    default:
+      return null;
+  }
 }
 
 /**
  * Detect a structured payload from the agent result, checking multiple sources.
  */
 function detectStructuredPayload(result: ExecuteAgentResult): StructuredPayload | null {
-    // Check in-memory payload first, then FinalPayload
-    const candidates: Record<string, unknown>[] = [];
+  // Check in-memory payload first, then FinalPayload
+  const candidates: Record<string, unknown>[] = [];
 
-    if (result.payload != null && typeof result.payload === 'object') {
-        candidates.push(result.payload as Record<string, unknown>);
+  if (result.payload != null && typeof result.payload === 'object') {
+    candidates.push(result.payload as Record<string, unknown>);
+  }
+
+  const finalPayloadStr = result.agentRun?.FinalPayload;
+  if (finalPayloadStr && typeof finalPayloadStr === 'string') {
+    try {
+      const parsed = JSON.parse(finalPayloadStr);
+      if (parsed != null && typeof parsed === 'object') {
+        candidates.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      // Not JSON
     }
+  }
 
-    const finalPayloadStr = result.agentRun?.FinalPayload;
-    if (finalPayloadStr && typeof finalPayloadStr === 'string') {
-        try {
-            const parsed = JSON.parse(finalPayloadStr);
-            if (parsed != null && typeof parsed === 'object') {
-                candidates.push(parsed as Record<string, unknown>);
-            }
-        } catch {
-            // Not JSON
-        }
+  for (const obj of candidates) {
+    // Skip orchestration metadata (delegation, sub-agent control flow)
+    if (isOrchestrationPayload(obj)) continue;
+
+    // Code payload: must have `code` + `results`
+    if (typeof obj.code === 'string' && 'results' in obj) {
+      return { Type: 'code', Data: obj };
     }
-
-    for (const obj of candidates) {
-        // Skip orchestration metadata (delegation, sub-agent control flow)
-        if (isOrchestrationPayload(obj)) continue;
-
-        // Code payload: must have `code` + `results`
-        if (typeof obj.code === 'string' && 'results' in obj) {
-            return { Type: 'code', Data: obj };
-        }
-        // Research state: metadata.researchGoal + plan
-        if (isResearchState(obj)) {
-            return { Type: 'research', Data: obj };
-        }
-        // Generic structured: title/summary + findings/sections arrays
-        if (isStructuredContent(obj)) {
-            return { Type: 'structured', Data: obj };
-        }
+    // Research state: metadata.researchGoal + plan
+    if (isResearchState(obj)) {
+      return { Type: 'research', Data: obj };
     }
+    // Generic structured: title/summary + findings/sections arrays
+    if (isStructuredContent(obj)) {
+      return { Type: 'structured', Data: obj };
+    }
+  }
 
-    return null;
+  return null;
 }
 
 /**
@@ -744,31 +776,36 @@ function detectStructuredPayload(result: ExecuteAgentResult): StructuredPayload 
  * These payloads contain delegation instructions, sub-agent routing, etc.
  */
 function isOrchestrationPayload(obj: Record<string, unknown>): boolean {
-    const orchestrationKeys = ['subAgentResult', 'payloadChangeResult', 'shouldTerminate'];
-    if (orchestrationKeys.some(key => key in obj)) return true;
+  const orchestrationKeys = ['subAgentResult', 'payloadChangeResult', 'shouldTerminate', 'taskGraph', 'actionResult'];
+  if (orchestrationKeys.some((key) => key in obj)) return true;
 
-    if (obj.nextStep != null && typeof obj.nextStep === 'object') {
-        const nextStep = obj.nextStep as Record<string, unknown>;
-        if (nextStep.subAgent != null || nextStep.step === 'Sub-Agent' || nextStep.terminate === true) {
-            return true;
-        }
+  if (obj.nextStep != null && typeof obj.nextStep === 'object') {
+    const nextStep = obj.nextStep as Record<string, unknown>;
+    if (nextStep.subAgent != null || nextStep.step === 'Sub-Agent' || nextStep.terminate === true) {
+      return true;
     }
-    return false;
+  }
+  return false;
 }
 
 function isResearchState(obj: Record<string, unknown>): boolean {
-    const meta = obj.metadata as Record<string, unknown> | undefined;
-    return meta != null && typeof meta === 'object'
-        && (typeof meta.researchGoal === 'string' || typeof meta.ResearchGoal === 'string')
-        && obj.plan != null && typeof obj.plan === 'object';
+  const meta = obj.metadata as Record<string, unknown> | undefined;
+  return (
+    meta != null &&
+    typeof meta === 'object' &&
+    (typeof meta.researchGoal === 'string' || typeof meta.ResearchGoal === 'string') &&
+    obj.plan != null &&
+    typeof obj.plan === 'object'
+  );
 }
 
 function isStructuredContent(obj: Record<string, unknown>): boolean {
-    const hasTitle = typeof obj.title === 'string' || typeof obj.Title === 'string';
-    const hasSummary = typeof obj.summary === 'string' || typeof obj.Summary === 'string';
-    const hasArrayContent = ['findings', 'Findings', 'sections', 'Sections', 'items', 'results']
-        .some(f => Array.isArray(obj[f]) && (obj[f] as unknown[]).length > 0);
-    return (hasTitle || hasSummary) && hasArrayContent;
+  const hasTitle = typeof obj.title === 'string' || typeof obj.Title === 'string';
+  const hasSummary = typeof obj.summary === 'string' || typeof obj.Summary === 'string';
+  const hasArrayContent = ['findings', 'Findings', 'sections', 'Sections', 'items', 'results'].some(
+    (f) => Array.isArray(obj[f]) && (obj[f] as unknown[]).length > 0,
+  );
+  return (hasTitle || hasSummary) && hasArrayContent;
 }
 
 /**
@@ -784,81 +821,85 @@ function isStructuredContent(obj: Record<string, unknown>): boolean {
  * ```
  */
 function buildCodePayloadBlocks(obj: Record<string, unknown>): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
+  const blocks: Record<string, unknown>[] = [];
 
-    // Task description
-    if (typeof obj.task === 'string' && (obj.task as string).trim()) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*Task:* ${truncateToLength(obj.task as string, 2900)}` }
-        });
+  // Task description
+  if (typeof obj.task === 'string' && (obj.task as string).trim()) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Task:* ${truncateToLength(obj.task as string, 2900)}` },
+    });
+  }
+
+  // Results — the primary output the user cares about
+  const results = obj.results;
+  if (results != null) {
+    blocks.push(buildDivider());
+    if (typeof results === 'string') {
+      // Plain text results — render as mrkdwn sections
+      const resultBlocks = markdownToBlocks(results);
+      blocks.push(...resultBlocks.slice(0, 10));
+    } else {
+      // JSON results — render as code block
+      const json = JSON.stringify(results, null, 2);
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '*Results:*' },
+      });
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '```\n' + truncateToLength(json, 2990) + '\n```' },
+      });
     }
+  }
 
-    // Results — the primary output the user cares about
-    const results = obj.results;
-    if (results != null) {
-        blocks.push(buildDivider());
-        if (typeof results === 'string') {
-            // Plain text results — render as mrkdwn sections
-            const resultBlocks = markdownToBlocks(results);
-            blocks.push(...resultBlocks.slice(0, 10));
-        } else {
-            // JSON results — render as code block
-            const json = JSON.stringify(results, null, 2);
-            blocks.push({
-                type: 'section',
-                text: { type: 'mrkdwn', text: '*Results:*' }
-            });
-            blocks.push({
-                type: 'section',
-                text: { type: 'mrkdwn', text: '```\n' + truncateToLength(json, 2990) + '\n```' }
-            });
-        }
+  // Code — show in a preformatted block
+  const code = obj.code as string;
+  if (code && code.trim()) {
+    blocks.push(buildDivider());
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Code:*' },
+    });
+
+    const codePreview = code.length > 2900 ? code.slice(0, 2900) + '\n// ...(truncated)' : code;
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '```\n' + codePreview + '\n```' },
+    });
+  }
+
+  // Errors
+  if (Array.isArray(obj.errors) && (obj.errors as unknown[]).length > 0) {
+    const errors = (obj.errors as string[]).filter(Boolean);
+    if (errors.length > 0) {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `⚠️ *Errors:* ${errors.slice(0, 5).join('; ')}`,
+          },
+        ],
+      });
     }
+  }
 
-    // Code — show in a preformatted block
-    const code = obj.code as string;
-    if (code && code.trim()) {
-        blocks.push(buildDivider());
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: '*Code:*' }
-        });
+  // Iteration count
+  const iterations = obj.iterations;
+  if (typeof iterations === 'number' && iterations > 1) {
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `Completed in ${iterations} iterations`,
+        },
+      ],
+    });
+  }
 
-        const codePreview = code.length > 2900 ? code.slice(0, 2900) + '\n// ...(truncated)' : code;
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: '```\n' + codePreview + '\n```' }
-        });
-    }
-
-    // Errors
-    if (Array.isArray(obj.errors) && (obj.errors as unknown[]).length > 0) {
-        const errors = (obj.errors as string[]).filter(Boolean);
-        if (errors.length > 0) {
-            blocks.push({
-                type: 'context',
-                elements: [{
-                    type: 'mrkdwn',
-                    text: `⚠️ *Errors:* ${errors.slice(0, 5).join('; ')}`
-                }]
-            });
-        }
-    }
-
-    // Iteration count
-    const iterations = obj.iterations;
-    if (typeof iterations === 'number' && iterations > 1) {
-        blocks.push({
-            type: 'context',
-            elements: [{
-                type: 'mrkdwn',
-                text: `Completed in ${iterations} iterations`
-            }]
-        });
-    }
-
-    return blocks.length > 0 ? blocks : [];
+  return blocks.length > 0 ? blocks : [];
 }
 
 /**
@@ -876,286 +917,571 @@ function buildCodePayloadBlocks(obj: Record<string, unknown>): Record<string, un
  * ```
  */
 function buildResearchPayloadBlocks(obj: Record<string, unknown>): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
-    const metadata = obj.metadata as Record<string, unknown>;
-    const plan = obj.plan as Record<string, unknown>;
+  const blocks: Record<string, unknown>[] = [];
+  const metadata = obj.metadata as Record<string, unknown>;
+  const plan = obj.plan as Record<string, unknown>;
 
-    // Research goal as header
-    const goal = (metadata.researchGoal ?? metadata.ResearchGoal) as string;
-    if (goal) {
-        blocks.push({
-            type: 'header',
-            text: { type: 'plain_text', text: truncateToLength(goal, 150), emoji: true }
-        });
+  // Research goal as header
+  const goal = (metadata.researchGoal ?? metadata.ResearchGoal) as string;
+  if (goal) {
+    blocks.push({
+      type: 'header',
+      text: { type: 'plain_text', text: truncateToLength(goal, 150), emoji: true },
+    });
+  }
+
+  // Status indicator
+  const status = metadata.status as string | undefined;
+  if (status === 'in_progress') {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Research is in progress..._' }],
+    });
+  }
+
+  // Plan description
+  const initialPlan = plan.initialPlan as string | undefined;
+  if (initialPlan) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: truncateToLength(initialPlan, 3000) },
+    });
+  }
+
+  // Research questions
+  const questions = plan.researchQuestions as string[] | undefined;
+  if (Array.isArray(questions) && questions.length > 0) {
+    const questionList = questions
+      .slice(0, 10)
+      .map((q, i) => `${i + 1}. ${q}`)
+      .join('\n');
+    blocks.push(buildDivider());
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Research Questions*\n${truncateToLength(questionList, 2900)}` },
+    });
+  }
+
+  // Iterations
+  const iterations = obj.iterations as Record<string, unknown>[] | undefined;
+  if (Array.isArray(iterations) && iterations.length > 0) {
+    blocks.push(buildDivider());
+    for (const iteration of iterations.slice(0, 5)) {
+      const iterBlocks = buildIterationBlocks(iteration);
+      blocks.push(...iterBlocks);
     }
+  }
 
-    // Status indicator
-    const status = metadata.status as string | undefined;
-    if (status === 'in_progress') {
-        blocks.push({
-            type: 'context',
-            elements: [{ type: 'mrkdwn', text: '_Research is in progress..._' }]
-        });
+  // Extracted findings
+  const findingsFields = ['extractedFindings', 'findings', 'Findings'];
+  for (const field of findingsFields) {
+    if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
+      blocks.push(buildDivider());
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '*Findings*' },
+      });
+      for (const item of (obj[field] as Record<string, unknown>[]).slice(0, 8)) {
+        const block = buildFindingItemBlock(item);
+        if (block) blocks.push(block);
+      }
+      break;
     }
+  }
 
-    // Plan description
-    const initialPlan = plan.initialPlan as string | undefined;
-    if (initialPlan) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: truncateToLength(initialPlan, 3000) }
-        });
-    }
+  // Sources
+  const sourcesBlock = findFirstSourcesBlock(obj, ['sources', 'Sources']);
+  if (sourcesBlock) blocks.push(sourcesBlock);
 
-    // Research questions
-    const questions = plan.researchQuestions as string[] | undefined;
-    if (Array.isArray(questions) && questions.length > 0) {
-        const questionList = questions.slice(0, 10).map((q, i) => `${i + 1}. ${q}`).join('\n');
-        blocks.push(buildDivider());
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*Research Questions*\n${truncateToLength(questionList, 2900)}` }
-        });
-    }
-
-    // Iterations
-    const iterations = obj.iterations as Record<string, unknown>[] | undefined;
-    if (Array.isArray(iterations) && iterations.length > 0) {
-        blocks.push(buildDivider());
-        for (const iteration of iterations.slice(0, 5)) {
-            const iterBlocks = buildIterationBlocks(iteration);
-            blocks.push(...iterBlocks);
-        }
-    }
-
-    // Extracted findings
-    const findingsFields = ['extractedFindings', 'findings', 'Findings'];
-    for (const field of findingsFields) {
-        if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
-            blocks.push(buildDivider());
-            blocks.push({
-                type: 'section',
-                text: { type: 'mrkdwn', text: '*Findings*' }
-            });
-            const items = obj[field] as Record<string, unknown>[];
-            for (const item of items.slice(0, 8)) {
-                const heading = (item.heading ?? item.Heading ?? item.title ?? item.Title) as string | undefined;
-                const content = (item.content ?? item.Content ?? item.text ?? item.Text ?? item.finding ?? item.Finding) as string | undefined;
-                if (heading || content) {
-                    const text = heading && content
-                        ? `*${heading}*\n${truncateToLength(content, 2800)}`
-                        : truncateToLength((heading ?? content) as string, 2900);
-                    blocks.push({ type: 'section', text: { type: 'mrkdwn', text } });
-                }
-            }
-            break;
-        }
-    }
-
-    // Sources
-    const sourceFields = ['sources', 'Sources'];
-    for (const field of sourceFields) {
-        if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
-            const sources = (obj[field] as Record<string, unknown>[]).slice(0, 10);
-            const links = sources
-                .map(s => {
-                    const title = (s.title ?? s.Title ?? s.name ?? 'Source') as string;
-                    const url = (s.url ?? s.URL ?? s.link) as string | undefined;
-                    return url ? `<${url}|${title}>` : title;
-                })
-                .join(' · ');
-            blocks.push({
-                type: 'context',
-                elements: [{ type: 'mrkdwn', text: `📎 Sources: ${links}` }]
-            });
-            break;
-        }
-    }
-
-    return blocks.length > 0 ? blocks : [];
+  return blocks.length > 0 ? blocks : [];
 }
 
 /**
  * Build blocks for a single research iteration.
  */
 function buildIterationBlocks(iteration: Record<string, unknown>): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
-    const iterNum = iteration.iterationNumber ?? iteration.number;
+  const blocks: Record<string, unknown>[] = [];
+  const iterNum = iteration.iterationNumber ?? iteration.number;
 
-    if (iterNum != null) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*Iteration ${iterNum}*` }
-        });
+  if (iterNum != null) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Iteration ${iterNum}*` },
+    });
+  }
+
+  // Summary or content
+  const summary = (iteration.summary ?? iteration.findings ?? iteration.content ?? iteration.result) as string | undefined;
+  if (typeof summary === 'string' && summary.trim()) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: truncateToLength(summary, 3000) },
+    });
+  }
+
+  // Nested findings
+  const findings = iteration.extractedFindings as Record<string, unknown>[] | undefined;
+  if (Array.isArray(findings) && findings.length > 0) {
+    for (const f of findings.slice(0, 5)) {
+      const block = buildFindingItemBlock(f);
+      if (block) blocks.push(block);
     }
+  }
 
-    // Summary or content
-    const summary = (iteration.summary ?? iteration.findings ?? iteration.content ?? iteration.result) as string | undefined;
-    if (typeof summary === 'string' && summary.trim()) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: truncateToLength(summary, 3000) }
-        });
-    }
-
-    // Nested findings
-    const findings = iteration.extractedFindings as Record<string, unknown>[] | undefined;
-    if (Array.isArray(findings) && findings.length > 0) {
-        for (const f of findings.slice(0, 5)) {
-            const heading = (f.heading ?? f.Heading ?? f.title ?? f.Title) as string | undefined;
-            const content = (f.content ?? f.Content ?? f.text ?? f.Text) as string | undefined;
-            if (heading || content) {
-                const text = heading && content
-                    ? `*${heading}*\n${truncateToLength(content, 2800)}`
-                    : truncateToLength((heading ?? content) as string, 2900);
-                blocks.push({ type: 'section', text: { type: 'mrkdwn', text } });
-            }
-        }
-    }
-
-    return blocks;
+  return blocks;
 }
 
 /**
  * Build rich Block Kit blocks for a generic structured payload with title/sections/findings.
- *
- * Layout:
- * ```
- * [Title header]          — payload title
- * [Summary section]       — summary text
- * [Finding sections]      — heading + content pairs
- * [Sources context]       — source links
- * ```
  */
 function buildStructuredContentBlocks(obj: Record<string, unknown>): Record<string, unknown>[] {
-    const blocks: Record<string, unknown>[] = [];
+  const blocks: Record<string, unknown>[] = [];
 
-    // Title
-    const title = (obj.title ?? obj.Title) as string | undefined;
-    if (title) {
-        blocks.push({
-            type: 'header',
-            text: { type: 'plain_text', text: truncateToLength(title, 150), emoji: true }
-        });
+  // Title
+  const title = (obj.title ?? obj.Title) as string | undefined;
+  if (title) {
+    blocks.push({
+      type: 'header',
+      text: { type: 'plain_text', text: truncateToLength(title, 150), emoji: true },
+    });
+  }
+
+  // Summary
+  const summary = (obj.summary ?? obj.Summary) as string | undefined;
+  if (summary) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: truncateToLength(summary, 3000) },
+    });
+  }
+
+  // Findings / Sections — first matching array
+  const arrayFields = ['findings', 'Findings', 'extractedFindings', 'sections', 'Sections', 'items', 'results'];
+  for (const field of arrayFields) {
+    if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
+      blocks.push(buildDivider());
+      for (const item of (obj[field] as Record<string, unknown>[]).slice(0, 10)) {
+        const block = buildFindingItemBlock(item);
+        if (block) blocks.push(block);
+      }
+      break;
     }
+  }
 
-    // Summary
-    const summary = (obj.summary ?? obj.Summary) as string | undefined;
-    if (summary) {
-        blocks.push({
-            type: 'section',
-            text: { type: 'mrkdwn', text: truncateToLength(summary, 3000) }
-        });
-    }
+  // Sources
+  const sourcesBlock = findFirstSourcesBlock(obj, ['sources', 'Sources', 'sourceRecords', 'references']);
+  if (sourcesBlock) blocks.push(sourcesBlock);
 
-    // Findings / Sections — first matching array
-    const arrayFields = ['findings', 'Findings', 'extractedFindings', 'sections', 'Sections', 'items', 'results'];
-    for (const field of arrayFields) {
-        if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
-            blocks.push(buildDivider());
-            const items = obj[field] as Record<string, unknown>[];
-            for (const item of items.slice(0, 10)) {
-                const heading = (item.heading ?? item.Heading ?? item.title ?? item.Title ?? item.name ?? item.Name) as string | undefined;
-                const content = (item.content ?? item.Content ?? item.text ?? item.Text ?? item.description ?? item.Description ?? item.finding ?? item.Finding) as string | undefined;
-                if (heading || content) {
-                    const text = heading && content
-                        ? `*${heading}*\n${truncateToLength(content, 2800)}`
-                        : truncateToLength((heading ?? content) as string, 2900);
-                    blocks.push({ type: 'section', text: { type: 'mrkdwn', text } });
-                }
-            }
-            break;
-        }
-    }
-
-    // Sources
-    const sourceFields = ['sources', 'Sources', 'sourceRecords', 'references'];
-    for (const field of sourceFields) {
-        if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
-            const sources = (obj[field] as Record<string, unknown>[]).slice(0, 10);
-            const links = sources
-                .map(s => {
-                    const sTitle = (s.title ?? s.Title ?? s.name ?? 'Source') as string;
-                    const url = (s.url ?? s.URL ?? s.link) as string | undefined;
-                    return url ? `<${url}|${sTitle}>` : sTitle;
-                })
-                .join(' · ');
-            blocks.push({
-                type: 'context',
-                elements: [{ type: 'mrkdwn', text: `📎 Sources: ${links}` }]
-            });
-            break;
-        }
-    }
-
-    return blocks.length > 0 ? blocks : [];
+  return blocks.length > 0 ? blocks : [];
 }
 
-function normalizeSections(raw: unknown[] | undefined): ArtifactSection[] {
-    if (!Array.isArray(raw)) return [];
-    return raw
-        .filter(s => s != null && typeof s === 'object')
-        .map(s => {
-            const section = s as Record<string, unknown>;
-            return {
-                Heading: (section.heading as string) ?? (section.Heading as string) ?? (section.title as string) ?? '',
-                Content: (section.content as string) ?? (section.Content as string) ?? (section.text as string) ?? ''
-            };
-        })
-        .filter(s => s.Heading || s.Content);
-}
+// ─── Catch-All Payload Content Extraction ─────────────────────────────────
 
-function normalizeSources(raw: unknown[] | undefined): ArtifactSource[] {
-    if (!Array.isArray(raw)) return [];
-    return raw
-        .filter(s => s != null && typeof s === 'object')
-        .map(s => {
-            const source = s as Record<string, unknown>;
-            return {
-                Title: (source.title as string) ?? (source.Title as string) ?? (source.name as string) ?? 'Source',
-                URL: (source.url as string) ?? (source.URL as string) ?? (source.link as string) ?? ''
-            };
-        })
-        .filter(s => s.URL);
+/** Minimum text length to be considered substantial payload content. */
+const MIN_PAYLOAD_CONTENT_LENGTH = 200;
+
+/**
+ * Extract substantive text content from the agent result payload.
+ *
+ * This is the catch-all for when structured payload detection and artifact
+ * detection both fail. It deep-walks the payload looking for the longest
+ * text value — catching blog posts, reports, and other content buried under
+ * arbitrary agent-specific field names.
+ *
+ * Returns null if no substantial content is found.
+ */
+function extractPayloadContent(result: ExecuteAgentResult | null): { title: string | null; content: string } | null {
+  if (!result) return null;
+
+  // Collect candidate payloads
+  const candidates: Record<string, unknown>[] = [];
+
+  if (result.payload != null && typeof result.payload === 'object') {
+    candidates.push(result.payload as Record<string, unknown>);
+  }
+
+  const finalPayloadStr = result.agentRun?.FinalPayload;
+  if (finalPayloadStr && typeof finalPayloadStr === 'string') {
+    try {
+      const parsed = JSON.parse(finalPayloadStr);
+      if (parsed != null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        candidates.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      // Plain text FinalPayload
+      if (finalPayloadStr.trim().length > MIN_PAYLOAD_CONTENT_LENGTH) {
+        return { title: null, content: finalPayloadStr };
+      }
+    }
+  }
+
+  for (const obj of candidates) {
+    // Skip orchestration payloads
+    if (isOrchestrationPayload(obj)) continue;
+
+    // Try to extract a title
+    const title = extractTitle(obj);
+
+    // Deep-walk for the longest text content
+    const content = deepExtractText(obj, 4);
+    if (content && content.length >= MIN_PAYLOAD_CONTENT_LENGTH) {
+      return { title, content };
+    }
+  }
+
+  return null;
 }
 
 /**
- * Enforce the Slack 50-block limit by truncating text blocks if needed.
- * When truncating, adds a "View Full Response" button that opens the modal handler.
+ * Extract a title from common field names in a payload object.
+ * Checks the top level first, then one level deep in nested objects.
+ */
+function extractTitle(obj: Record<string, unknown>): string | null {
+  const titleFields = ['title', 'Title', 'name', 'Name', 'heading', 'Heading', 'subject', 'Subject', 'topic', 'Topic'];
+  // Top-level check
+  for (const field of titleFields) {
+    if (typeof obj[field] === 'string' && (obj[field] as string).trim()) {
+      return (obj[field] as string).trim();
+    }
+  }
+  // One level deep
+  for (const value of Object.values(obj)) {
+    if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = value as Record<string, unknown>;
+      for (const field of titleFields) {
+        if (typeof nested[field] === 'string' && (nested[field] as string).trim()) {
+          return (nested[field] as string).trim();
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Fields that are unlikely to contain user-facing document content. */
+const PAYLOAD_NON_CONTENT_FIELDS = new Set([
+  'id', 'ID', 'uuid', 'status', 'type', 'step', 'nextStep',
+  'createdAt', 'updatedAt', 'timestamp', 'metadata',
+  'subAgentResult', 'payloadChangeResult', 'shouldTerminate',
+  'terminateAfter', 'iterationNumber', 'number',
+  'taskGraph', 'actionResult', 'resultCode', 'allMatches',
+  'similarityScore', 'systemPrompt', 'matchCount',
+]);
+
+/**
+ * Deep-walk an object to find the longest text value that looks like content.
+ * Skips known non-content fields, serialized JSON strings, and short values.
+ */
+function deepExtractText(obj: Record<string, unknown>, maxDepth: number): string | null {
+  if (maxDepth <= 0) return null;
+
+  let bestText: string | null = null;
+  let bestLength = 0;
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (PAYLOAD_NON_CONTENT_FIELDS.has(key)) continue;
+
+    if (typeof value === 'string' && value.trim().length > 50) {
+      const trimmed = value.trim();
+      // Skip serialized JSON
+      if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && trimmed.length > 200) continue;
+      if (value.length > bestLength) {
+        bestLength = value.length;
+        bestText = value;
+      }
+    } else if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = deepExtractText(value as Record<string, unknown>, maxDepth - 1);
+      if (nested && nested.length > bestLength) {
+        bestLength = nested.length;
+        bestText = nested;
+      }
+    } else if (Array.isArray(value) && value.length > 0) {
+      // Check arrays of objects (e.g., sections: [{ content: "..." }])
+      for (const item of value) {
+        if (item != null && typeof item === 'object' && !Array.isArray(item)) {
+          const nested = deepExtractText(item as Record<string, unknown>, maxDepth - 1);
+          if (nested && nested.length > bestLength) {
+            bestLength = nested.length;
+            bestText = nested;
+          }
+        }
+      }
+    }
+  }
+
+  return bestText;
+}
+
+/**
+ * Check if two texts are similar enough that showing both would be redundant.
+ * Uses a simple prefix/containment check — not a full diff.
+ */
+function isContentSimilar(payloadContent: string, responseText: string): boolean {
+  const a = payloadContent.trim().toLowerCase();
+  const b = responseText.trim().toLowerCase();
+  if (a.length === 0 || b.length === 0) return false;
+  // If one contains the other, they're similar
+  if (a.includes(b) || b.includes(a)) return true;
+  // If first 200 chars match, similar enough
+  if (a.substring(0, 200) === b.substring(0, 200)) return true;
+  return false;
+}
+
+/**
+ * Build blocks to display payload content inline with a "View Full Content" button.
+ *
+ * Renders:
+ * - Title header (if available)
+ * - Inline preview (first ~1500 chars of content)
+ * - "View Full Content" button if content exceeds preview length
+ */
+function buildPayloadContentCard(title: string | null, content: string): Record<string, unknown>[] {
+  const blocks: Record<string, unknown>[] = [];
+
+  // Title
+  if (title) {
+    blocks.push({
+      type: 'header',
+      text: { type: 'plain_text', text: truncateToLength(title, 150), emoji: true },
+    });
+  }
+
+  // Inline content preview — render as markdown blocks
+  const PREVIEW_LENGTH = 1500;
+  const needsTruncation = content.length > PREVIEW_LENGTH;
+  const preview = needsTruncation
+    ? content.substring(0, PREVIEW_LENGTH) + '\n\n_... content continues ..._'
+    : content;
+
+  const contentBlocks = markdownToBlocks(preview);
+  blocks.push(...contentBlocks.slice(0, 15)); // Cap at 15 blocks for the preview
+
+  // "View Full Content" button when content is long
+  if (needsTruncation) {
+    const storeKey = storeFullResponseText(content);
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'View Full Content', emoji: true },
+          action_id: 'mj:view_full:payload',
+          value: storeKey,
+        },
+      ],
+    });
+  }
+
+  return blocks;
+}
+
+// ─── Shared Block Helpers ─────────────────────────────────────────────────
+
+/**
+ * Build a section block for a finding/item with heading and/or content.
+ * Extracts heading and content from common field names used across agent payloads.
+ * Returns null if no displayable content is found.
+ */
+function buildFindingItemBlock(item: Record<string, unknown>): Record<string, unknown> | null {
+  const heading = (item.heading ?? item.Heading ?? item.title ?? item.Title ?? item.name ?? item.Name) as string | undefined;
+  const content = (item.content ?? item.Content ?? item.text ?? item.Text ?? item.description ?? item.Description ?? item.finding ?? item.Finding) as
+    | string
+    | undefined;
+  if (!heading && !content) return null;
+  const text = heading && content
+    ? `*${heading}*\n${truncateToLength(content, 2800)}`
+    : truncateToLength((heading ?? content) as string, 2900);
+  return { type: 'section', text: { type: 'mrkdwn', text } };
+}
+
+/**
+ * Build a context block with formatted source links.
+ * Returns null if the sources array is empty or contains no valid entries.
+ */
+function buildSourceLinksBlock(sources: Record<string, unknown>[]): Record<string, unknown> | null {
+  const entries = sources.slice(0, 10);
+  if (entries.length === 0) return null;
+  const links = entries
+    .map((s) => {
+      const title = (s.title ?? s.Title ?? s.name ?? 'Source') as string;
+      const url = (s.url ?? s.URL ?? s.link) as string | undefined;
+      return url ? `<${url}|${title}>` : title;
+    })
+    .join(' · ');
+  return {
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: `📎 Sources: ${links}` }],
+  };
+}
+
+/**
+ * Search an object for the first non-empty sources array from the given field names
+ * and build a source links block from it.
+ */
+function findFirstSourcesBlock(obj: Record<string, unknown>, fieldNames: string[]): Record<string, unknown> | null {
+  for (const field of fieldNames) {
+    if (Array.isArray(obj[field]) && (obj[field] as unknown[]).length > 0) {
+      return buildSourceLinksBlock(obj[field] as Record<string, unknown>[]);
+    }
+  }
+  return null;
+}
+
+function normalizeSections(raw: unknown[] | undefined): ArtifactSection[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s) => s != null && typeof s === 'object')
+    .map((s) => {
+      const section = s as Record<string, unknown>;
+      return {
+        Heading: (section.heading as string) ?? (section.Heading as string) ?? (section.title as string) ?? '',
+        Content: (section.content as string) ?? (section.Content as string) ?? (section.text as string) ?? '',
+      };
+    })
+    .filter((s) => s.Heading || s.Content);
+}
+
+function normalizeSources(raw: unknown[] | undefined): ArtifactSource[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s) => s != null && typeof s === 'object')
+    .map((s) => {
+      const source = s as Record<string, unknown>;
+      return {
+        Title: (source.title as string) ?? (source.Title as string) ?? (source.name as string) ?? 'Source',
+        URL: (source.url as string) ?? (source.URL as string) ?? (source.link as string) ?? '',
+      };
+    })
+    .filter((s) => s.URL);
+}
+
+/**
+ * Enforce Slack's block count (≤ 50) AND payload byte size (~38KB) limits.
+ *
+ * Strategy when over budget:
+ * 1. Trim block count to ≤ 50
+ * 2. If still over byte budget, progressively truncate long section text
+ * 3. If still over, remove tail blocks
+ * 4. Always reserve last 2 slots for truncation notice + "View Full" button
  *
  * @param blocks - The full set of blocks to potentially truncate.
- * @param _fullText - The full response text (stored as value on the button for modal retrieval).
+ * @param fullText - The full response text, stored for retrieval in the "View Full" modal.
  */
-function enforceBlockLimit(blocks: Record<string, unknown>[], _fullText?: string): Record<string, unknown>[] {
-    if (blocks.length <= SLACK_MAX_BLOCKS) {
-        return blocks;
+function enforceBlockLimit(blocks: Record<string, unknown>[], fullText?: string): Record<string, unknown>[] {
+  // Store full text for later retrieval by the "View Full" modal
+  const storeKey = fullText ? storeFullResponseText(fullText) : undefined;
+
+  // Phase 1: block count enforcement
+  let result = blocks.length > SLACK_MAX_BLOCKS
+    ? blocks.slice(0, SLACK_MAX_BLOCKS - 2)
+    : blocks;
+
+  // Phase 2: byte size enforcement
+  result = trimBlocksForPayloadSize(result, SLACK_MAX_PAYLOAD_BYTES);
+
+  // If we trimmed anything (block count or byte size), add notice + button
+  if (result.length < blocks.length || result !== blocks) {
+    // Check if we already added truncation elements (trimBlocksForPayloadSize may have)
+    const lastBlock = result[result.length - 1];
+    const hasNotice = lastBlock && (lastBlock as Record<string, unknown>).type === 'actions' &&
+      Array.isArray((lastBlock as Record<string, unknown>).elements) &&
+      ((lastBlock as Record<string, unknown>).elements as Record<string, unknown>[]).some(
+        (e) => (e as Record<string, unknown>).action_id === 'mj:view_full:response'
+      );
+
+    if (!hasNotice) {
+      result = appendTruncationNotice(result, storeKey);
     }
+  }
 
-    // Keep the first blocks up to the limit - 2 (notice + button)
-    const truncated = blocks.slice(0, SLACK_MAX_BLOCKS - 2);
-    truncated.push({
-        type: 'context',
-        elements: [{
-            type: 'mrkdwn',
-            text: '⋯ _Response truncated due to length._'
-        }]
-    });
-    truncated.push({
-        type: 'actions',
-        elements: [{
-            type: 'button',
-            text: { type: 'plain_text', text: 'View Full Response', emoji: true },
-            action_id: 'mj:view_full:response'
-        }]
-    });
+  return result;
+}
 
-    return truncated;
+/**
+ * Progressively trim blocks to fit within the byte budget.
+ * First truncates long text fields, then removes tail blocks.
+ */
+function trimBlocksForPayloadSize(blocks: Record<string, unknown>[], maxBytes: number): Record<string, unknown>[] {
+  let serialized = JSON.stringify(blocks);
+  if (serialized.length <= maxBytes) return blocks;
+
+  // Pass 1: truncate section text to 500 chars
+  let trimmed = truncateBlockTexts(blocks, 500);
+  serialized = JSON.stringify(trimmed);
+  if (serialized.length <= maxBytes) return trimmed;
+
+  // Pass 2: truncate section text to 200 chars
+  trimmed = truncateBlockTexts(blocks, 200);
+  serialized = JSON.stringify(trimmed);
+  if (serialized.length <= maxBytes) return trimmed;
+
+  // Pass 3: remove blocks from the tail until under budget (reserve 2 for notice)
+  const reduced = [...trimmed];
+  while (reduced.length > 2 && JSON.stringify(reduced).length > maxBytes) {
+    reduced.splice(reduced.length - 1, 1);
+  }
+
+  return reduced;
+}
+
+/**
+ * Clone blocks with section text fields truncated to maxChars.
+ */
+function truncateBlockTexts(blocks: Record<string, unknown>[], maxChars: number): Record<string, unknown>[] {
+  return blocks.map((block) => {
+    if (block.type !== 'section') return block;
+    const textObj = block.text as Record<string, unknown> | undefined;
+    if (!textObj || typeof textObj.text !== 'string') return block;
+    if ((textObj.text as string).length <= maxChars) return block;
+    return {
+      ...block,
+      text: {
+        ...textObj,
+        text: (textObj.text as string).substring(0, maxChars) + '...',
+      },
+    };
+  });
+}
+
+/**
+ * Append truncation notice and "View Full Response" button to a block array.
+ */
+function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: string): Record<string, unknown>[] {
+  // Ensure room for 2 extra blocks
+  const trimmed = blocks.length > SLACK_MAX_BLOCKS - 2
+    ? blocks.slice(0, SLACK_MAX_BLOCKS - 2)
+    : [...blocks];
+
+  trimmed.push({
+    type: 'context',
+    elements: [
+      {
+        type: 'mrkdwn',
+        text: '⋯ _Response truncated due to length._',
+      },
+    ],
+  });
+
+  const buttonValue = storeKey ?? 'no_stored_text';
+  trimmed.push({
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'View Full Response', emoji: true },
+        action_id: 'mj:view_full:response',
+        value: buttonValue,
+      },
+    ],
+  });
+
+  return trimmed;
 }
 
 /**
  * Truncate a string to a given length with ellipsis.
  */
 function truncateToLength(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 3) + '...';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
 }

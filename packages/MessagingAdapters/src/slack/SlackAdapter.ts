@@ -195,7 +195,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         await this.client.chat.postMessage({
             channel: originalMessage.ChannelID,
             thread_ts: threadTs,
-            text: this.truncateForSlack(response.PlainText),
+            text: this.truncateForSlackFallback(response.PlainText),
             blocks: response.RichPayload.blocks as KnownBlock[],
             ...identityParams
         });
@@ -212,7 +212,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         await this.client.chat.update({
             channel: originalMessage.ChannelID,
             ts: messageId,
-            text: this.truncateForSlack(response.PlainText),
+            text: this.truncateForSlackFallback(response.PlainText),
             blocks: response.RichPayload.blocks as KnownBlock[]
         });
     }
@@ -278,37 +278,37 @@ export class SlackAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Build Slack API params for per-agent identity from an agent entity.
-     * Uses `username` and `icon_url` which require the `chat:write.customize` scope.
-     * Only includes `icon_url` if it's a valid HTTPS URL.
+     * Truncate text for use as the `text` fallback when Block Kit blocks are present.
+     * The `text` field is only shown in notifications/accessibility — the blocks contain
+     * the rich content. Keeping it short avoids `msg_too_long` when blocks are large.
      */
-    private buildSlackIdentityParams(agent: MJAIAgentEntityExtended): Record<string, string> {
-        const params: Record<string, string> = {};
-
-        if (agent.Name) {
-            params.username = agent.Name;
-        }
-
-        const logoURL = agent.LogoURL;
-        if (logoURL && typeof logoURL === 'string' && logoURL.startsWith('https://')) {
-            params.icon_url = logoURL;
-        }
-
-        return params;
+    private truncateForSlackFallback(text: string): string {
+        const MAX_FALLBACK = 4000;
+        if (text.length <= MAX_FALLBACK) return text;
+        return text.slice(0, MAX_FALLBACK - 30) + '\n\n(See full response above)';
     }
 
     /**
-     * Build Slack API params from an AgentIdentity object.
+     * Build Slack API params for per-agent identity.
+     * Uses `username` and `icon_url` which require the `chat:write.customize` scope.
+     * Only includes `icon_url` if it's a valid HTTPS URL.
      */
-    private buildSlackIdentityParamsFromIdentity(identity: { Name: string; IconURL?: string }): Record<string, string> {
-        const params: Record<string, string> = {
-            username: identity.Name
-        };
-
-        if (identity.IconURL) {
-            params.icon_url = identity.IconURL;
+    private buildIdentityParams(name?: string | null, iconUrl?: string | null): Record<string, string> {
+        const params: Record<string, string> = {};
+        if (name) params.username = name;
+        if (iconUrl && typeof iconUrl === 'string' && iconUrl.startsWith('https://')) {
+            params.icon_url = iconUrl;
         }
-
         return params;
+    }
+
+    /** Build identity params from an agent entity. */
+    private buildSlackIdentityParams(agent: MJAIAgentEntityExtended): Record<string, string> {
+        return this.buildIdentityParams(agent.Name, agent.LogoURL);
+    }
+
+    /** Build identity params from an AgentIdentity object. */
+    private buildSlackIdentityParamsFromIdentity(identity: { Name: string; IconURL?: string }): Record<string, string> {
+        return this.buildIdentityParams(identity.Name, identity.IconURL);
     }
 }
