@@ -302,7 +302,7 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
                 const val = (user as unknown as Record<string, unknown>)[key]
-                if (val != null && typeof val !== 'object') {
+                if (val !== null && typeof val !== 'object') {
                     ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
                 }
             }
