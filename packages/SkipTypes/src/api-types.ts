@@ -212,6 +212,13 @@ export class SkipAPIRequest {
      * The payload is separate from artifacts - it represents work-in-progress data that hasn't been finalized yet.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip, this contains the MJ-side Agent Run ID, enabling correlation between
+     * the caller's execution tracking and Skip's execution tracking.
+     */
+    externalReferenceID?: string;
 }
 
 /**
