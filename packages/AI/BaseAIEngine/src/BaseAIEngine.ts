@@ -298,7 +298,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
                 return UUIDsEqual(prompt.CategoryID, PromptCategory.ID);
             }).forEach((prompt: MJAIPromptEntityExtended) => {
-                PromptCategory.Prompts.push(prompt);
+                if (!PromptCategory.Prompts) {
+                    // this is a duck typing check and means that at runtime
+                    // we didn't get MJAIPromptEntityExtended, but prob got the 
+                    // MJAIPromptEntity class instead that doesn't have a Prompts property
+                    // in which case we need to emit a console error with clear information next
+                    console.error(`PromptCategory class does not have a Prompts property. This is indicative of
+                                a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
+                                not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`)
+                }
+                else {
+                    PromptCategory.Prompts.push(prompt);
+                }
             });
         }
 
