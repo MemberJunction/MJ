@@ -1,5 +1,18 @@
 # @memberjunction/ai-core-plus
 
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/templates-base-types@5.9.0
+  - @memberjunction/ai@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/generic-database-provider@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-vector-dupe@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/encryption@5.9.0
+  - @memberjunction/queue@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/query-processor@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes
