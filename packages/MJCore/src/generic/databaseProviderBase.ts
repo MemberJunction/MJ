@@ -1366,28 +1366,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Checks whether an existing record passes RLS for a given permission type (Update or Delete).
-     * Default implementation returns true (no-op for providers without SQL access).
-     * Override in GenericDatabaseProvider with actual SQL-based check.
+     * Subclasses must implement the actual RLS check logic.
      */
-    protected async CheckRecordRLS(
+    protected abstract CheckRecordRLS(
         entity: BaseEntity,
         user: UserInfo,
         type: EntityPermissionType
-    ): Promise<boolean> {
-        return true;
-    }
+    ): Promise<boolean>;
 
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
-     * Default implementation returns true (no-op for providers without SQL access).
-     * Override in GenericDatabaseProvider with actual SQL-based check.
+     * Subclasses must implement the actual RLS check logic.
      */
-    protected async CheckCreateRLS(
+    protected abstract CheckCreateRLS(
         entity: BaseEntity,
         user: UserInfo
-    ): Promise<boolean> {
-        return true;
-    }
+    ): Promise<boolean>;
 
     /**************************************************************************/
     // END ---- Save/Delete Orchestration
