@@ -62,6 +62,9 @@ vi.mock('@memberjunction/core', () => {
 vi.mock('@memberjunction/core-entities', () => {
     const cls = () => class { ID = ''; Name = '' };
     return {
+        ArtifactMetadataEngine: {
+            Instance: { ArtifactTypes: [] },
+        },
         MJAIActionEntity: cls(), MJAIAgentActionEntity: cls(), MJAIAgentNoteEntity: cls(),
         MJAIAgentNoteTypeEntity: cls(), MJAIModelActionEntity: cls(), MJAIPromptModelEntity: cls(),
         MJAIPromptTypeEntity: cls(), MJAIResultCacheEntity: cls(), MJAIVendorTypeDefinitionEntity: cls(),

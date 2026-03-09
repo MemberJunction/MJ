@@ -1,4 +1,5 @@
 import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { HookRegistry, PreSaveHook } from './hookRegistry';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -578,8 +579,9 @@ export class BaseEntityEvent {
      * - `save`, `delete`, `load_complete`: Raised when an operation completes successfully
      * - `new_record`: Raised when NewRecord() is called
      * - `transaction_ready`: Used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
+     * - `remote-invalidate`: Raised when a remote server (via Redis pub/sub → GraphQL subscription) notifies this client that cached data for an entity has changed. Used to trigger BaseEngine re-fetch from server.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'other';
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
@@ -589,12 +591,19 @@ export class BaseEntityEvent {
     /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
-    payload: any;
+    payload: unknown;
 
     /**
      * The BaseEntity object that is raising the event.
+     * Null for remote-invalidate events where no local BaseEntity instance is available.
      */
-    baseEntity: BaseEntity;
+    baseEntity: BaseEntity | null;
+
+    /**
+     * The entity name for the event. Used primarily for remote-invalidate events
+     * where baseEntity is null but the entity name is known from the remote notification.
+     */
+    entityName?: string;
 }
 
 /**
@@ -1984,6 +1993,9 @@ export abstract class BaseEntity<T = unknown> {
                         }
                     }
                     if (valResult.Success) {
+                        // Run registered PreSave hooks (e.g., tenant validation)
+                        await this.RunPreSaveHooks();
+
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
@@ -2043,6 +2055,23 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Runs all registered PreSave hooks. If any hook returns false or a string
+     * (error message), the save is rejected by throwing an Error.
+     */
+    private async RunPreSaveHooks(): Promise<void> {
+        const preSaveHooks = HookRegistry.GetHooks<PreSaveHook>('PreSave');
+        for (const hook of preSaveHooks) {
+            const hookResult = await hook(this, this.ActiveUser);
+            if (hookResult === false) {
+                throw new Error('Save rejected by pre-save hook');
+            }
+            if (typeof hookResult === 'string') {
+                throw new Error(hookResult);
+            }
         }
     }
 

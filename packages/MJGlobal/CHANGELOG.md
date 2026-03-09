@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
 ## 5.8.0
 
 ## 5.7.0
