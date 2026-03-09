@@ -112,6 +112,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _refresh = false;
 
+    // ── Request Deduplication + Linger Window ──────────────────────────
+    /**
+     * How long (ms) a resolved RunViews result stays available for instant
+     * replay.  Set to 0 to disable the linger window (in-flight dedup
+     * still applies).  Default 5 000 ms.
+     */
+    public static DedupLingerMs: number = 5000;
+
+    /**
+     * In-flight + linger cache keyed by a deterministic fingerprint of
+     * the RunViewParams batch.  While a request is in-flight, concurrent
+     * identical calls share the same promise.  After resolution the entry
+     * lingers so that near-sequential identical calls return immediately.
+     */
+    private _inflightViews = new Map<string, {
+        promise: Promise<RunViewResult[]>;
+        resolvedResults?: RunViewResult[];
+        resolvedAt?: number;
+    }>();
+
     /******** ABSTRACT SECTION ****************************************************************** */
     /**
      * Determines if a refresh is currently allowed or not.
@@ -370,12 +390,95 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Runs multiple views based on the provided parameters.
-     * This method orchestrates the full execution flow for batch operations.
+     * Wraps the execution pipeline with request deduplication and a linger
+     * window so that concurrent (and near-sequential) identical calls share
+     * a single server round-trip.  Every caller receives a shallow-copied
+     * Results array to protect against cross-caller mutations (push/sort/splice).
+     *
      * @param params - Array of view parameters
      * @param contextUser - Optional user context for permissions (required server-side)
-     * @returns Array of view results
+     * @returns Array of view results (shallow-copied Results per caller)
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // Bypass dedup for side-effect calls (SaveViewResults creates DB records)
+        if (this.ShouldBypassDedup(params)) {
+            return this.ExecuteRunViewsPipeline<T>(params, contextUser);
+        }
+
+        const key = this.GenerateDedupKey(params, contextUser);
+        const existing = this._inflightViews.get(key);
+
+        // ── Linger hit: resolved result still within the linger window ──
+        if (existing?.resolvedResults && existing.resolvedAt) {
+            const age = Date.now() - existing.resolvedAt;
+            if (age < ProviderBase.DedupLingerMs) {
+                const entities = params.map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
+                LogStatusEx({
+                    message: `[Dedup] Linger hit for [${entities}] — returning cached result (age ${age}ms, window ${ProviderBase.DedupLingerMs}ms)`,
+                    verboseOnly: true
+                });
+                return existing.resolvedResults.map(r => this.ShallowCopyResult<T>(r));
+            }
+            // Linger expired — fall through to fresh execution
+            this._inflightViews.delete(key);
+        }
+
+        // ── In-flight hit: another caller is already executing this exact request ──
+        if (existing && !existing.resolvedResults) {
+            const entities = params.map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
+            LogStatusEx({
+                message: `[Dedup] In-flight hit for [${entities}] — sharing pending execution`,
+                verboseOnly: true
+            });
+            const results = await existing.promise;
+            return results.map(r => this.ShallowCopyResult<T>(r));
+        }
+
+        // ── Fresh execution ──
+        const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
+            .then(results => {
+                // Stash resolved results for the linger window
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    entry.resolvedResults = results as RunViewResult[];
+                    entry.resolvedAt = Date.now();
+
+                    // Schedule cleanup after linger expires
+                    if (ProviderBase.DedupLingerMs > 0) {
+                        setTimeout(() => {
+                            const current = this._inflightViews.get(key);
+                            if (current && current.promise === promise) {
+                                this._inflightViews.delete(key);
+                            }
+                        }, ProviderBase.DedupLingerMs);
+                    } else {
+                        this._inflightViews.delete(key);
+                    }
+                }
+                return results as RunViewResult[];
+            })
+            .catch(err => {
+                // Clean up so retries aren't stuck on a failed entry
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    this._inflightViews.delete(key);
+                }
+                throw err;
+            });
+
+        this._inflightViews.set(key, { promise });
+
+        const results = await promise;
+        return results.map(r => this.ShallowCopyResult<T>(r));
+    }
+
+    // ── Dedup helpers ──────────────────────────────────────────────────
+
+    /**
+     * The original RunViews execution pipeline (pre-processing, cache,
+     * internal execution, post-processing).
+     */
+    private async ExecuteRunViewsPipeline<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Pre-processing for batch
         const preResult = await this.PreRunViews(params, contextUser);
 
@@ -408,6 +511,48 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.PostRunViews(finalResults, params, preResult, contextUser);
 
         return finalResults as RunViewResult<T>[];
+    }
+
+    /**
+     * Generates a deterministic dedup key for a batch of RunViewParams.
+     * Extends the local-cache fingerprint with additional fields that
+     * affect result identity (Fields, UserSearchString, ViewID, ViewName,
+     * contextUser).
+     */
+    private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
+        const parts = params.map(p => {
+            const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
+            const extras = [
+                p.Fields?.join(',') ?? '',
+                p.UserSearchString ?? '',
+                p.ViewID ?? '',
+                p.ViewName ?? '',
+                contextUser?.ID ?? ''
+            ].join('|');
+            return `${base}|${extras}`;
+        });
+        return parts.join('||');
+    }
+
+    /**
+     * Returns true if any param in the batch has SaveViewResults set,
+     * which means the call has a side effect (creating UserViewRun records)
+     * and must not be deduplicated.
+     */
+    private ShouldBypassDedup(params: RunViewParams[]): boolean {
+        return params.some(p => p.SaveViewResults === true);
+    }
+
+    /**
+     * Returns a shallow copy of a RunViewResult: the Results array is a
+     * new array instance (protecting against push/sort/splice by other
+     * callers) but the individual row objects inside are shared references.
+     */
+    private ShallowCopyResult<T>(result: RunViewResult): RunViewResult<T> {
+        return {
+            ...result,
+            Results: [...result.Results]
+        } as RunViewResult<T>;
     }
 
     /**
