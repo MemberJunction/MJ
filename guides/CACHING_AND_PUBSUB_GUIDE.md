@@ -74,6 +74,26 @@ graph TB
 | **L2** | Browser persistent | IndexedDB / localStorage | Cross-session | Survive page refresh, reduce server load |
 | **L3** | Server | Redis or in-memory | Process lifetime (or Redis TTL) | Shared across requests, cross-server sync |
 
+### Server-Side vs Client-Side Cache Behavior
+
+A critical architectural distinction: **server-side providers trust the cache completely, while client-side providers validate before trusting.**
+
+| Environment | Provider | Cache Hit Behavior | Why |
+|-------------|----------|-------------------|-----|
+| **Server (MJAPI)** | `SQLServerDataProvider` / `PostgreSQLDataProvider` | Return cached data immediately, **zero DB queries** | Cache is kept perfectly in sync via BaseEntity save/delete events + Redis pub/sub |
+| **Client (Browser)** | `GraphQLDataProvider` | Lightweight smart cache check against server before returning | Browser cache doesn't have the same event-driven sync guarantees |
+
+This is controlled by the `TrustLocalCacheCompletely` property on `ProviderBase`:
+- **Default (`false`)**: Client-side behavior — uses smart cache check (see [Smart Cache Validation](#smart-cache-validation-runviewswithcachecheck))
+- **Overridden to `true` in `DatabaseProviderBase`**: Server-side behavior — cache hits return instantly
+
+This means that on the server, once data is loaded into the cache (Redis or in-memory), subsequent `RunView` calls for the same query fingerprint are served entirely from cache with no database interaction whatsoever. The cache stays accurate because:
+
+1. All entity mutations flow through `BaseEntity.Save()` / `BaseEntity.Delete()`
+2. These fire `MJGlobal` events that `LocalCacheManager` catches
+3. `LocalCacheManager` updates or invalidates affected cached query results in-place
+4. In multi-server deployments, Redis pub/sub propagates changes to all MJAPI nodes
+
 ### End-to-End Data Flow
 
 When a user saves an entity in their browser, the following chain executes:
@@ -709,6 +729,39 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
 ### Loading Flow with CacheLocal
 
+The loading flow differs between server-side and client-side because of `TrustLocalCacheCompletely`:
+
+#### Server-Side (MJAPI) — Cache Trusted Completely
+
+On the server, cached data is returned immediately with **zero database queries**. The cache is guaranteed accurate by BaseEntity event-driven invalidation and Redis pub/sub.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Server Code / Engine
+    participant PB as ProviderBase
+    participant LCM as LocalCacheManager
+    participant DB as Database
+
+    Caller->>PB: RunView({CacheLocal: true, ...})
+    PB->>LCM: GetRunViewResult(fingerprint)
+
+    alt Cache Hit
+        LCM-->>PB: Cached results (plain objects)
+        PB->>PB: TransformSimpleObjectToEntityObject()
+        PB-->>Caller: Instant response — zero DB queries
+    else Cache Miss (first load)
+        PB->>DB: Execute SQL query
+        DB-->>PB: Raw results
+        PB->>LCM: SetRunViewResult (cache plain objects)
+        PB->>PB: TransformSimpleObjectToEntityObject()
+        PB-->>Caller: Fresh results (now cached for next time)
+    end
+```
+
+#### Client-Side (Browser) — Smart Cache Validation
+
+In the browser, cached data is validated against the server via a lightweight check before being trusted:
+
 ```mermaid
 sequenceDiagram
     participant UI as Angular Component
@@ -721,11 +774,8 @@ sequenceDiagram
     Engine->>LCM: GetRunViewResult(fingerprint)
 
     alt Cache Hit (within TTL)
-        LCM-->>Engine: Cached results
-        Engine-->>UI: Instant response
-    else Cache Miss or Expired
-        Engine->>Server: RunViewsWithCacheCheck
-        Server->>DB: SELECT with maxUpdatedAt check
+        Engine->>Server: RunViewsWithCacheCheck<br/>{maxUpdatedAt, rowCount}
+        Server->>DB: SELECT MAX(__mj_UpdatedAt), COUNT(*)
 
         alt Data unchanged
             Server-->>Engine: status: 'current'
@@ -739,8 +789,36 @@ sequenceDiagram
             Engine->>LCM: SetRunViewResult
             Engine-->>UI: Fresh results
         end
+    else Cache Miss
+        Engine->>Server: RunViews (full query)
+        Server->>DB: SELECT * ...
+        Server-->>Engine: Full results
+        Engine->>LCM: SetRunViewResult
+        Engine-->>UI: Fresh results
     end
 ```
+
+#### Why Server-Side Can Trust the Cache
+
+The server-side cache is kept in perfect sync through this chain:
+
+1. **All writes go through BaseEntity** — `Save()` and `Delete()` fire MJGlobal events
+2. **LocalCacheManager subscribes** to all BaseEntity events and updates/invalidates affected cached queries
+3. **Redis pub/sub** (when configured) propagates changes across all MJAPI nodes
+4. **No external writes bypass this** — in normal MJ operation, all DB mutations flow through BaseEntity
+
+This eliminates the need for the lightweight `MAX(__mj_UpdatedAt)` + `COUNT(*)` validation query that client-side providers use. The result is that server-side engine loads (which happen frequently during MJAPI startup and on-demand) are served from cache with zero database overhead after the initial load.
+
+#### Cache Serialization Order
+
+The cache stores **plain JSON objects**, not BaseEntity instances. This is critical because BaseEntity objects contain RxJS `Subject` instances with circular subscriber references that cannot be serialized with `JSON.stringify`.
+
+The processing order in `PostRunView` / `PostRunViews` is:
+1. **Cache plain objects** via `LocalCacheManager.SetRunViewResult()` — before any transformation
+2. **Transform to entity objects** via `TransformSimpleObjectToEntityObject()` — only if `ResultType === 'entity_object'`
+3. **Run post-hooks** via `RunPostRunViewHooks()`
+
+On cache read, `TransformSimpleObjectToEntityObject()` is called to restore BaseEntity instances from the cached plain objects when `ResultType === 'entity_object'`.
 
 ### Real-Time Array Updates (Event Handling)
 
@@ -867,7 +945,9 @@ This separation means engines don't need to worry about cache sync — LocalCach
 
 ## Smart Cache Validation (RunViewsWithCacheCheck)
 
-When `CacheLocal` is enabled, MemberJunction uses a **smart cache check** protocol to minimize data transfer between client and server.
+> **Important**: Smart cache validation is used **only by client-side providers** (e.g., `GraphQLDataProvider` in the browser). Server-side providers (`SQLServerDataProvider`, `PostgreSQLDataProvider`) skip this entirely and trust the cache completely — see [Server-Side vs Client-Side Cache Behavior](#server-side-vs-client-side-cache-behavior) above.
+
+When `CacheLocal` is enabled on a **client-side provider**, MemberJunction uses a **smart cache check** protocol to minimize data transfer between client and server.
 
 ```mermaid
 sequenceDiagram
@@ -1384,6 +1464,17 @@ If `DBSIZE = 0` after server startup, the storage provider hot-swap may have fai
 1. Engines load before Redis connects → data goes to in-memory
 2. `SetStorageProvider()` should migrate entries → check for `"Migrated"` log
 3. If missing, verify `SetStorageProvider` is called after Redis connects in `index.ts`
+
+### "Converting circular structure to JSON" Errors During Startup
+
+This was a known bug (now fixed) caused by `PostRunView`/`PostRunViews` calling `TransformSimpleObjectToEntityObject()` **before** caching. BaseEntity objects contain RxJS `Subject` instances (`_eventSubject`) with circular subscriber references that break `JSON.stringify`.
+
+**Fix**: Cache storage now happens *before* entity transformation. The cache stores plain JSON-serializable objects, and `TransformSimpleObjectToEntityObject` is called on cache read when `ResultType === 'entity_object'`.
+
+If you see these errors, ensure you're on the latest version of `@memberjunction/core`. The ordering in `PostRunView` and `PostRunViews` must be:
+1. Cache plain objects via `LocalCacheManager.SetRunViewResult()`
+2. Transform to entity objects via `TransformSimpleObjectToEntityObject()`
+3. Run post-hooks via `RunPostRunViewHooks()`
 
 ### Differential Update Issues
 
