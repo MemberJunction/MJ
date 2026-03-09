@@ -1132,7 +1132,34 @@ GO
     addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
         const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
-        return `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} ${nullClause}${defaultClause}`;
+        const standardSQL = `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} ${nullClause}${defaultClause}`;
+
+        if (!nullable && defaultExpression && dataType.toUpperCase() === 'DATETIMEOFFSET') {
+            // On SQL Azure (EngineEdition 5 or 8), ALTER TABLE ADD <col> DATETIMEOFFSET NOT NULL
+            // DEFAULT GETUTCDATE() fails with "Implicit conversion from data type sql_variant to
+            // datetimeoffset is not allowed" because Azure evaluates the DEFAULT through a
+            // sql_variant intermediate when backfilling existing rows. Work around by adding as
+            // NULL, populating via UPDATE, then altering to NOT NULL with a clean DEFAULT.
+            // On regular SQL Server the standard single-statement form works fine.
+            const constraintName = `DF_${schema}_${CodeNameFromString(tableName)}_${columnName}`;
+            const azureSQL = [
+                `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} NULL`,
+                `    UPDATE [${schema}].[${tableName}] SET ${columnName} = ${defaultExpression} WHERE ${columnName} IS NULL`,
+                `    ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN ${columnName} ${dataType} NOT NULL`,
+                `    ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT ${constraintName} DEFAULT ${defaultExpression} FOR [${columnName}]`,
+            ].join(';\n');
+
+            return `IF SERVERPROPERTY('EngineEdition') IN (5, 8)
+BEGIN
+    ${azureSQL};
+END
+ELSE
+BEGIN
+    ${standardSQL};
+END`;
+        }
+
+        return standardSQL;
     }
 
     /** @inheritdoc */
