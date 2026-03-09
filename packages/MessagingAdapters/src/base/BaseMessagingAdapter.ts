@@ -594,6 +594,7 @@ export abstract class BaseMessagingAdapter {
             agent,
             conversationMessages,
             contextUser,
+            payload: {}, // Provide empty starting payload so loop agents can apply payloadChangeRequests
             onProgress: (progress) => {
                 if (progress.displayMode === 'historical') return;
 

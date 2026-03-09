@@ -221,6 +221,15 @@ module.exports = {
         ConnectionMode: 'http',
         MaxThreadMessages: 50,
         StreamingUpdateIntervalMs: 1500,
+        ExplorerBaseURL: 'http://localhost:4201',
+        SlashCommands: {
+          '/sage': 'Sage',
+          '/skip': 'Skip',
+          '/research': 'Research Agent',
+          '/marketing': 'Marketing Agent',
+          '/codesmith': 'Codesmith Agent',
+          '/query': 'Query Builder',
+        },
       }
     },
     {

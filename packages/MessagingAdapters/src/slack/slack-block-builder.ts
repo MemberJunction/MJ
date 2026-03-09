@@ -10,6 +10,7 @@
  */
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
@@ -124,10 +125,18 @@ export function buildRichResponse(
   blocks.push(buildDivider());
 
   // Structured payload rendering — detect rich payloads and render natively
-  // before falling back to generic markdown→blocks conversion
-  const structuredBlocks = buildStructuredPayloadBlocks(result);
+  // before falling back to generic markdown→blocks conversion.
+  // Track whether we found "rich" content (code, DB results, data) that warrants
+  // a link to MJ Explorer — text-heavy content (research, summaries) stays in Slack.
+  let hasRichArtifact = false;
+  const structuredPayload = result ? detectStructuredPayload(result) : null;
+  const structuredBlocks = structuredPayload ? buildStructuredPayloadBlocksFromType(structuredPayload) : null;
   if (structuredBlocks) {
     blocks.push(...structuredBlocks);
+    // Code payloads (DB queries, Codesmith output) are "rich" — need Explorer for full view
+    if (structuredPayload!.Type === 'code') {
+      hasRichArtifact = true;
+    }
   } else {
     // Fallback: generic markdown → Block Kit conversion
     const textBlocks = buildTextBlocks(responseText);
@@ -139,6 +148,10 @@ export function buildRichResponse(
   if (artifact) {
     blocks.push(buildDivider());
     blocks.push(...buildArtifactCard(artifact));
+    // Artifacts with sections (reports, multi-part outputs) are rich
+    if (artifact.Sections && artifact.Sections.length > 0) {
+      hasRichArtifact = true;
+    }
   }
 
   // Catch-all: if no structured blocks and no artifact were rendered,
@@ -174,6 +187,12 @@ export function buildRichResponse(
   // Response form (choice buttons for structured input)
   if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
     blocks.push(...buildResponseForm(result.responseForm));
+  }
+
+  // "Open in MJ Explorer" link — shown for all successful agent runs when ExplorerBaseURL is configured
+  const explorerLink = buildExplorerArtifactLink(result, options?.explorerBaseURL);
+  if (explorerLink) {
+    blocks.push(...explorerLink);
   }
 
   // Metadata footer
@@ -389,15 +408,15 @@ function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: strin
       if (cmd.entityName && cmd.resourceId) {
         const entity = encodeURIComponent(cmd.entityName);
         const id = encodeURIComponent(cmd.resourceId);
-        return `${base}/entity/${entity}/${id}`;
+        return `${base}/resource/record/${entity}/${id}`;
       }
       break;
     case 'Dashboard':
-      return `${base}/dashboard/${encodeURIComponent(cmd.resourceId)}`;
+      return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
     case 'Report':
-      return `${base}/report/${encodeURIComponent(cmd.resourceId)}`;
+      return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
     case 'View':
-      return `${base}/view/${encodeURIComponent(cmd.resourceId)}`;
+      return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
   }
 
   return null;
@@ -422,6 +441,32 @@ const RESOURCE_TYPE_ICONS: Record<string, string> = {
   Form: ':pencil:',
   View: ':mag:',
 };
+
+/**
+ * Build an "Open in MJ Explorer" link for agent responses.
+ * Shown for all successful agent runs when ExplorerBaseURL is configured,
+ * giving users a way to access the full artifact viewer and side panel.
+ */
+function buildExplorerArtifactLink(
+  result: ExecuteAgentResult | null,
+  explorerBaseURL: string | undefined,
+): Record<string, unknown>[] | null {
+  if (!explorerBaseURL || !result?.agentRun?.ID) return null;
+
+  const base = explorerBaseURL.replace(/\/+$/, '');
+  const runId = encodeURIComponent(result.agentRun.ID);
+  const deepLink = `${base}/resource/record/${encodeURIComponent('MJ: AI Agent Runs')}/${runId}`;
+
+  return [
+    {
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `:desktop_computer: <${deepLink}|View full artifact in MJ Explorer>`
+      }]
+    }
+  ];
+}
 
 /**
  * Build notification blocks from automatic commands.
@@ -838,18 +883,9 @@ interface StructuredPayload {
 }
 
 /**
- * Detect and build rich Block Kit blocks from structured payloads in the result.
- *
- * Checks both in-memory `result.payload` and `agentRun.FinalPayload` for
- * known structured patterns (Codesmith, Research Agent, generic structured).
- * Returns `null` if no structured payload is detected — caller falls back to markdown.
+ * Build blocks from an already-detected structured payload type.
  */
-function buildStructuredPayloadBlocks(result: ExecuteAgentResult | null): Record<string, unknown>[] | null {
-  if (!result) return null;
-
-  const payload = detectStructuredPayload(result);
-  if (!payload) return null;
-
+function buildStructuredPayloadBlocksFromType(payload: StructuredPayload): Record<string, unknown>[] | null {
   switch (payload.Type) {
     case 'code':
       return buildCodePayloadBlocks(payload.Data);
@@ -885,14 +921,32 @@ function detectStructuredPayload(result: ExecuteAgentResult): StructuredPayload 
     }
   }
 
+  // Also check agentRun.Result as a candidate — some agents populate Result but not FinalPayload
+  const resultStr = result.agentRun?.Result;
+  if (resultStr && typeof resultStr === 'string' && !finalPayloadStr) {
+    try {
+      const parsed = JSON.parse(resultStr);
+      if (parsed != null && typeof parsed === 'object') {
+        candidates.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      // Not JSON
+    }
+  }
+
   for (const obj of candidates) {
+    // Code payload detection runs FIRST — before orchestration filtering.
+    // Loop agents (Codesmith, Query Builder) may include loop control fields
+    // (e.g., shouldTerminate) alongside code+results. We don't want to discard
+    // the actual output just because orchestration keys are also present.
+    // Detection: `code` field is sufficient — `results` may live in Message or be omitted.
+    if (typeof obj.code === 'string' && (obj.code as string).length > 10) {
+      return { Type: 'code', Data: obj };
+    }
+
     // Skip orchestration metadata (delegation, sub-agent control flow)
     if (isOrchestrationPayload(obj)) continue;
 
-    // Code payload: must have `code` + `results`
-    if (typeof obj.code === 'string' && 'results' in obj) {
-      return { Type: 'code', Data: obj };
-    }
     // Research state: metadata.researchGoal + plan
     if (isResearchState(obj)) {
       return { Type: 'research', Data: obj };

@@ -133,7 +133,7 @@ describe('SlackMessagingExtension', () => {
 
             expect(result.Success).toBe(true);
             expect(result.Message).toContain('Slack extension loaded (HTTP mode)');
-            expect(result.RegisteredRoutes).toEqual(['POST /webhook/slack', 'POST /webhook/slack/interact']);
+            expect(result.RegisteredRoutes).toEqual(['POST /webhook/slack', 'POST /webhook/slack/interact', 'POST /webhook/slack/slash']);
         });
 
         it('should mount router on the configured root path', async () => {
