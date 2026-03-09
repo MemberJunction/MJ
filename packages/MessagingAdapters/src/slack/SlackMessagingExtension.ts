@@ -79,6 +79,9 @@ export class SlackMessagingExtension extends BaseServerExtension {
     /** The signing secret for webhook verification. */
     private signingSecret: string = '';
 
+    /** Slash command → agent name mapping from config. */
+    private slashCommands: Record<string, string> = {};
+
     /** Socket Mode client (only used when ConnectionMode is 'socket'). */
     private socketModeClient: SocketModeClient | null = null;
 
@@ -94,7 +97,13 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
+            // The Zod config pipeline may strip unknown keys from Settings, so we
+            // fall back to env vars for settings that may be missing.
             const settings = config.Settings as unknown as MessagingAdapterSettings;
+            if (!settings.ExplorerBaseURL && process.env.MJ_EXPLORER_BASE_URL) {
+                settings.ExplorerBaseURL = process.env.MJ_EXPLORER_BASE_URL;
+            }
+            LogStatus(`[Slack] Extension settings keys: ${Object.keys(settings).join(', ')}, ExplorerBaseURL=${settings.ExplorerBaseURL ?? 'NOT SET'}`);
             this.signingSecret = settings.SigningSecret ?? '';
             this.connectionMode = settings.ConnectionMode ?? 'http';
 
@@ -102,6 +111,9 @@ export class SlackMessagingExtension extends BaseServerExtension {
             this.adapter = new SlackAdapter(settings);
             this.interactClient = new WebClient(settings.BotToken);
             await this.adapter.Initialize();
+
+            // Build slash command map: auto-generate from loaded agents + merge config overrides
+            this.slashCommands = this.buildSlashCommandMap(settings.SlashCommands);
 
             if (this.connectionMode === 'socket') {
                 return await this.initializeSocketMode(settings);
@@ -173,12 +185,24 @@ export class SlackMessagingExtension extends BaseServerExtension {
         interactRouter.post('/', this.handleInteraction.bind(this));
         app.use(config.RootPath + '/interact', interactRouter);
 
+        // Slash command endpoint — Slack sends these as application/x-www-form-urlencoded
+        const slashRouter = Router();
+        slashRouter.use(express.urlencoded({ extended: true }));
+        slashRouter.post('/', this.handleSlashCommand.bind(this));
+        app.use(config.RootPath + '/slash', slashRouter);
+
         app.use(config.RootPath, router);
+
+        const registeredRoutes = [
+            `POST ${config.RootPath}`,
+            `POST ${config.RootPath}/interact`,
+            `POST ${config.RootPath}/slash`,
+        ];
 
         return {
             Success: true,
             Message: `Slack extension loaded (HTTP mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: [`POST ${config.RootPath}`, `POST ${config.RootPath}/interact`]
+            RegisteredRoutes: registeredRoutes
         };
     }
 
@@ -271,6 +295,150 @@ export class SlackMessagingExtension extends BaseServerExtension {
         } catch (error) {
             LogError('Error handling Slack interaction:', undefined, error);
         }
+    }
+
+    // ─── Slash Commands ─────────────────────────────────────────────────
+
+    /**
+     * Handle a Slack slash command (e.g., `/research what is quantum computing?`).
+     *
+     * Slack sends slash commands as `application/x-www-form-urlencoded` with fields:
+     * `command`, `text`, `user_id`, `user_name`, `channel_id`, `channel_name`, `trigger_id`.
+     *
+     * Must respond within 3 seconds. We acknowledge immediately with a brief message,
+     * then route to the agent pipeline asynchronously (which posts results to the channel).
+     */
+    private async handleSlashCommand(req: Request, res: Response): Promise<void> {
+        const { command, text, user_id, user_name, channel_id } = req.body as Record<string, string>;
+
+        LogStatus(`Slack slash command: command=${command}, text="${text}", user=${user_id}, channel=${channel_id}`);
+
+        // Look up the agent for this command
+        const agentName = this.resolveSlashCommandAgent(command);
+        if (!agentName) {
+            res.json({
+                response_type: 'ephemeral',
+                text: `Unknown command \`${command}\`. Configured commands: ${this.listSlashCommands()}`
+            });
+            return;
+        }
+
+        // Acknowledge within 3 seconds — visible only to the user
+        res.json({
+            response_type: 'ephemeral',
+            text: `_Routing to *${agentName}*..._`
+        });
+
+        // Process asynchronously — post a thread-root message first, then route to the agent
+        this.processSlashCommandAsync(agentName, text ?? '', user_id, user_name, channel_id).catch(error => {
+            LogError(`Error processing slash command for agent '${agentName}':`, undefined, error);
+        });
+    }
+
+    /**
+     * Resolve a slash command string (e.g., `/research`) to an agent name.
+     * Tries exact match first, then strips the leading `/` and matches case-insensitively.
+     */
+    private resolveSlashCommandAgent(command: string): string | null {
+        // Exact match (e.g., `/research` → 'Research Agent')
+        if (this.slashCommands[command]) {
+            return this.slashCommands[command];
+        }
+
+        // Case-insensitive match
+        const lowerCmd = command.toLowerCase();
+        for (const [key, value] of Object.entries(this.slashCommands)) {
+            if (key.toLowerCase() === lowerCmd) {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Build the slash command → agent name map.
+     * Auto-generates a command for every loaded agent using its first word
+     * (e.g., "Research Agent" → `/research`). Explicit config overrides take precedence.
+     */
+    private buildSlashCommandMap(configuredCommands?: Record<string, string>): Record<string, string> {
+        const autoCommands: Record<string, string> = {};
+        for (const name of this.adapter!.AvailableAgentNames) {
+            const firstWord = name.split(/\s+/)[0].toLowerCase();
+            const cmd = `/${firstWord}`;
+            if (!autoCommands[cmd]) {
+                autoCommands[cmd] = name;
+            }
+        }
+
+        const merged = { ...autoCommands, ...(configuredCommands ?? {}) };
+        LogStatus(`Slack slash commands: ${Object.keys(merged).length} available (${Object.keys(configuredCommands ?? {}).length} from config, ${Object.keys(autoCommands).length} auto-generated)`);
+        return merged;
+    }
+
+    /** Format the list of configured slash commands for display. */
+    private listSlashCommands(): string {
+        const entries = Object.entries(this.slashCommands);
+        if (entries.length === 0) return '_none configured_';
+        return entries.map(([cmd, agent]) => `\`${cmd}\` → ${agent}`).join(', ');
+    }
+
+    /**
+     * Post a visible thread-root message for the slash command, then construct
+     * an IncomingMessage with that thread's `ts` so all responses appear as replies.
+     */
+    private async processSlashCommandAsync(
+        agentName: string,
+        text: string,
+        userId: string,
+        userName: string,
+        channelId: string,
+    ): Promise<void> {
+        const now = new Date();
+
+        // Post a visible message to serve as the thread root
+        let threadRootTs: string | undefined;
+        if (this.interactClient) {
+            try {
+                const displayText = text || `(invoked via slash command)`;
+                const result = await this.interactClient.chat.postMessage({
+                    channel: channelId,
+                    text: `*/${agentName.split(/\s+/)[0].toLowerCase()}* ${displayText}`,
+                    blocks: [
+                        {
+                            type: 'section',
+                            text: {
+                                type: 'mrkdwn',
+                                text: `<@${userId}> used \`/${agentName.split(/\s+/)[0].toLowerCase()}\`\n>${displayText}`
+                            }
+                        }
+                    ]
+                });
+                threadRootTs = result.ts ?? undefined;
+            } catch (error) {
+                LogError('Failed to post slash command thread root:', undefined, error);
+            }
+        }
+
+        const messageTs = threadRootTs ?? (now.getTime() / 1000).toFixed(6);
+
+        const incomingMessage = {
+            MessageID: messageTs,
+            Text: text || `(invoked via slash command)`,
+            SenderID: userId,
+            SenderName: userName ?? '',
+            ChannelID: channelId,
+            ThreadID: threadRootTs ?? null, // Thread under the root message if we posted one
+            IsDirectMessage: false,
+            IsBotMention: true, // Treat slash commands like @mentions so shouldRespond passes
+            MentionedAgentNames: [agentName],
+            Timestamp: now,
+            RawEvent: { type: 'slash_command', command: agentName, text }
+        };
+
+        this.adapter!.HandleMessage(incomingMessage).catch(error => {
+            LogError(`Error handling slash command for agent '${agentName}':`, undefined, error);
+        });
     }
 
     // ─── Shared event processing ─────────────────────────────────────────

@@ -193,7 +193,7 @@ describe('slack-block-builder', () => {
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('actions');
             const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
-            expect(elements[0].url).toBe('https://explorer.myco.com/entity/Customers/abc-123');
+            expect(elements[0].url).toBe('https://explorer.myco.com/resource/record/Customers/abc-123');
         });
 
         it('should deep-link dashboard resources', () => {
@@ -202,7 +202,7 @@ describe('slack-block-builder', () => {
             ];
             const blocks = buildActionButtons(commands, 'https://explorer.myco.com/');
             const elements = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[]);
-            expect(elements[0].url).toBe('https://explorer.myco.com/dashboard/dash-1');
+            expect(elements[0].url).toBe('https://explorer.myco.com/resource/dashboard/dash-1');
         });
 
         it('should mix URL buttons and resource info when both present', () => {
@@ -411,6 +411,67 @@ describe('slack-block-builder', () => {
             // Should have header block for the artifact title
             const headerBlocks = blocks.filter(b => b.type === 'header');
             expect(headerBlocks.length).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe('Explorer artifact link', () => {
+        it('should include Explorer link when explorerBaseURL is configured and agentRun has ID', () => {
+            const agent = createMockAgent();
+            const result = createMockResult({
+                agentRun: {
+                    ID: 'run-123',
+                    StartedAt: new Date('2025-01-01T00:00:00Z'),
+                    CompletedAt: new Date('2025-01-01T00:00:04.2Z'),
+                    Steps: [{ StepNumber: 1 }],
+                    TotalTokensUsed: 1240,
+                },
+            });
+            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+                explorerBaseURL: 'https://explorer.example.com'
+            });
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeDefined();
+        });
+
+        it('should NOT include Explorer link when explorerBaseURL is not configured', () => {
+            const agent = createMockAgent();
+            const result = createMockResult({
+                agentRun: {
+                    ID: 'run-789',
+                    StartedAt: new Date('2025-01-01T00:00:00Z'),
+                    CompletedAt: new Date('2025-01-01T00:00:04.2Z'),
+                    Steps: [{ StepNumber: 1 }],
+                    TotalTokensUsed: 1240,
+                },
+            });
+            const blocks = buildRichResponse(result as never, agent as never, 'Response');
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeUndefined();
+        });
+
+        it('should NOT include Explorer link when agentRun has no ID', () => {
+            const agent = createMockAgent();
+            const result = createMockResult(); // default mock has no ID
+            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+                explorerBaseURL: 'https://explorer.example.com'
+            });
+
+            const explorerLink = blocks.find(b => {
+                if (b.type !== 'context') return false;
+                const elements = (b as Record<string, unknown>).elements as Record<string, unknown>[];
+                return elements?.some(e => ((e as Record<string, unknown>).text as string)?.includes('MJ Explorer'));
+            });
+            expect(explorerLink).toBeUndefined();
         });
     });
 

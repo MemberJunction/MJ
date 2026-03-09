@@ -92,6 +92,22 @@ export interface MessagingAdapterSettings {
     ExplorerBaseURL?: string;
 
     /**
+     * Slash command to agent name mapping for Slack.
+     * Keys are command names (e.g., `/research`), values are MJ Agent names.
+     *
+     * @example
+     * ```javascript
+     * SlashCommands: {
+     *     '/research': 'Research Agent',
+     *     '/marketing': 'Marketing Agent',
+     *     '/sage': 'Sage',
+     *     '/skip': 'Skip',
+     * }
+     * ```
+     */
+    SlashCommands?: Record<string, string>;
+
+    /**
      * Microsoft App ID for Teams Bot Framework authentication.
      * Only needed for Teams adapters.
      */
