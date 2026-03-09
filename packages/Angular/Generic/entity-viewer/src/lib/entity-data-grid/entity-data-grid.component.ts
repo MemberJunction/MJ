@@ -1751,7 +1751,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     if (!hasExplicitOrderBy && !hasSortFromGridState && this._sortState.length === 0) {
       const sortInfo = this._viewEntity.ViewSortInfo;
       if (sortInfo?.length) {
-        this._sortState = sortInfo.map((s, index) => ({
+        // Validate sort fields exist on the current entity to prevent stale
+        // sort fields from a previously viewed entity leaking into ORDER BY
+        const validSorts = this._entityInfo
+          ? sortInfo.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+          : sortInfo;
+        this._sortState = validSorts.map((s, index) => ({
           field: s.field,
           direction: (typeof s.direction === 'string' ? s.direction.toLowerCase() : s.direction === 2 ? 'desc' : 'asc') === 'desc' ? 'desc' : 'asc',
           index
@@ -1762,7 +1767,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // includes the correct ORDER BY clause. Without this, _sortState remains
       // empty and buildOrderByClause() returns '' — causing the SQL to omit
       // ORDER BY on the first page load.
-      this._sortState = this._gridState!.sortSettings!.map((sortSetting, index) => ({
+      // Validate sort fields exist on the current entity
+      const validSorts = this._entityInfo
+        ? this._gridState!.sortSettings!.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+        : this._gridState!.sortSettings!;
+      this._sortState = validSorts.map((sortSetting, index) => ({
         field: sortSetting.field,
         direction: sortSetting.dir,
         index: index
@@ -1772,23 +1781,48 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private onGridStateChanged(): void {
     if (this._gridState && this._entityInfo) {
+      // Suppress sort events for the entire operation. AG Grid fires sortChanged
+      // asynchronously when columnDefs are rebuilt (clears sort model) and when
+      // applyColumnState re-applies sort. Without this, those async events leak
+      // through to the parent (entity-viewer) and trigger redundant unsorted reloads.
+      // setTimeout clears the flag after AG Grid's async events have been processed.
+      this.suppressSortEvents = true;
+
       this.buildAgColumnDefs();
 
       // Update AG Grid with new column definitions to apply header styles
-      if (this.gridApi) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
         this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
         // Refresh header to apply new header styles
         this.gridApi.refreshHeader();
       }
 
       // Apply sort if present - support multi-column sort
-      if (this._gridState.sortSettings?.length && this.gridApi) {
-        this._sortState = this._gridState.sortSettings.map((sortSetting, index) => ({
+      // Validate sort fields against current entity to prevent stale sort from a previous entity
+      if (this._gridState.sortSettings?.length && this.gridApi && !this.gridApi.isDestroyed()) {
+        const validSorts = this._entityInfo
+          ? this._gridState.sortSettings.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+          : this._gridState.sortSettings;
+        this._sortState = validSorts.map((sortSetting, index) => ({
           field: sortSetting.field,
           direction: sortSetting.dir,
           index: index
         }));
-        this.applySortStateToGrid();
+        // Apply directly — suppressSortEvents is already true for the whole operation
+        if (this.gridApi && !this.gridApi.isDestroyed()) {
+          const currentColumnState = this.gridApi.getColumnState();
+          if (currentColumnState) {
+            const columnState = currentColumnState.map(col => {
+              const sort = this._sortState.find(s => s.field === col.colId);
+              return {
+                ...col,
+                sort: sort ? sort.direction : null,
+                sortIndex: sort ? sort.index : null
+              };
+            });
+            this.gridApi.applyColumnState({ state: columnState });
+          }
+        }
       }
 
       // Apply aggregates from GridState if present and fetch their values
@@ -1797,6 +1831,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         // Fetch aggregate values when gridState aggregates change
         this.refreshAggregates();
       }
+
+      // Clear suppression after AG Grid's async events have been processed.
+      // setTimeout(0) fires after microtasks and rAF, catching all async sort events.
+      setTimeout(() => { this.suppressSortEvents = false; }, 0);
     }
   }
 
@@ -3686,7 +3724,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private applySortStateToGrid(): void {
-    if (!this.gridApi || this._sortState.length === 0) {
+    if (!this.gridApi || this.gridApi.isDestroyed() || this._sortState.length === 0) {
       return;
     }
 
@@ -3695,20 +3733,21 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Suppress sort events while we programmatically apply sort state.
+    // AG Grid fires sortChanged ASYNCHRONOUSLY (via setTimeout) after applyColumnState,
+    // so we must keep the flag true across the async boundary and clear it with setTimeout(0).
     this.suppressSortEvents = true;
-    try {
-      const columnState = currentColumnState.map(col => {
-        const sort = this._sortState.find(s => s.field === col.colId);
-        return {
-          ...col,
-          sort: sort ? sort.direction : null,
-          sortIndex: sort ? sort.index : null
-        };
-      });
-      this.gridApi.applyColumnState({ state: columnState });
-    } finally {
-      this.suppressSortEvents = false;
-    }
+    const columnState = currentColumnState.map(col => {
+      const sort = this._sortState.find(s => s.field === col.colId);
+      return {
+        ...col,
+        sort: sort ? sort.direction : null,
+        sortIndex: sort ? sort.index : null
+      };
+    });
+    this.gridApi.applyColumnState({ state: columnState });
+    // Clear after AG Grid's async event queue drains
+    setTimeout(() => { this.suppressSortEvents = false; }, 0);
   }
 
   private updateSelection(): void {

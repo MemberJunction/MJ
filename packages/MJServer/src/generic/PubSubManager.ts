@@ -38,7 +38,6 @@ export class PubSubManager extends BaseSingleton<PubSubManager> {
      */
     public Publish(topic: string, payload: Record<string, unknown>): void {
         if (this._pubSub) {
-            console.debug(`[PubSubManager] Publishing to topic "${topic}":`, JSON.stringify(payload).substring(0, 200));
             this._pubSub.publish(topic, payload);
         } else {
             console.warn(`[PubSubManager] Cannot publish to "${topic}" — PubSubEngine not set`);
