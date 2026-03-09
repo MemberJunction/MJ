@@ -372,8 +372,8 @@ ${fields}
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n and \t are removed and replaced with actual newlines and tabs
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
+        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 

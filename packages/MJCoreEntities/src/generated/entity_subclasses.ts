@@ -28891,7 +28891,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -28899,7 +28899,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateFinalPayloadValidationResultAllowedValues(result);
+        this.ValidateFinalPayloadValidationResultStatus(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -28907,24 +28907,22 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
-    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	// Ensure the value is either null or one of the permitted statuses
-    	if (this.FinalPayloadValidationResult != null &&
-    		!(this.FinalPayloadValidationResult === 'Warn' ||
-    		  this.FinalPayloadValidationResult === 'Fail' ||
-    		  this.FinalPayloadValidationResult === 'Retry' ||
-    		  this.FinalPayloadValidationResult === 'Pass')) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FinalPayloadValidationResult",
-    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
-    			this.FinalPayloadValidationResult,
-    			ValidationErrorType.Failure
-    		));
+    public ValidateFinalPayloadValidationResultStatus(result: ValidationResult) {
+    	if (this.FinalPayloadValidationResult != null) {
+    		const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    		if (allowedValues.indexOf(this.FinalPayloadValidationResult) === -1) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalPayloadValidationResult",
+    				"The validation result must be one of the following values: " + allowedValues.join(", ") + ".",
+    				this.FinalPayloadValidationResult,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
