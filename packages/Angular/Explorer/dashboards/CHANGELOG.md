@@ -1,5 +1,56 @@
 # @memberjunction/ng-dashboards
 
+## 5.10.0
+
+### Patch Changes
+
+- 3df5e4b: no migration
+- Updated dependencies [f2df653]
+- Updated dependencies [3df5e4b]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/skip-types@5.10.0
+  - @memberjunction/ng-core-entity-forms@5.10.0
+  - @memberjunction/ng-query-viewer@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/api-keys-base@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/ng-base-application@5.10.0
+  - @memberjunction/ng-explorer-settings@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-testing@5.10.0
+  - @memberjunction/ng-action-gallery@5.10.0
+  - @memberjunction/ng-actions@5.10.0
+  - @memberjunction/ng-agents@5.10.0
+  - @memberjunction/ng-ai-test-harness@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-container-directives@5.10.0
+  - @memberjunction/ng-credentials@5.10.0
+  - @memberjunction/ng-dashboard-viewer@5.10.0
+  - @memberjunction/ng-entity-relationship-diagram@5.10.0
+  - @memberjunction/ng-entity-viewer@5.10.0
+  - @memberjunction/ng-filter-builder@5.10.0
+  - @memberjunction/ng-list-management@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-react@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-trees@5.10.0
+  - @memberjunction/ng-versions@5.10.0
+  - @memberjunction/integration-engine-base@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/templates-base-types@5.10.0
+  - @memberjunction/testing-engine-base@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/export-engine@5.10.0
+  - @memberjunction/global@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes
