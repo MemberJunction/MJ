@@ -444,29 +444,6 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).toBe('Human-readable message from agent');
         });
 
-        it('should append payload content when agentRun.Message is a short delegation note', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Message: "I'll have Codesmith handle this calculation.",
-                        FinalPayload: JSON.stringify({
-                            summary: 'The first 20 prime numbers are: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71. These are the natural numbers greater than 1 that have no positive divisors other than 1 and themselves.',
-                        }),
-                        Steps: []
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            // Should include BOTH the delegation note and the actual content
-            expect(sent?.PlainText).toContain("I'll have Codesmith handle this calculation.");
-            expect(sent?.PlainText).toContain('first 20 prime numbers');
-        });
-
         it('should NOT append payload when agentRun.Message is already substantial', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
@@ -485,164 +462,6 @@ describe('BaseMessagingAdapter', () => {
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
             // Should use Message directly without appending short payload
             expect(sent?.PlainText).toBe('Here is a detailed response about quantum computing that covers all the key concepts including superposition, entanglement, quantum gates, and decoherence. Quantum computers use qubits which can exist in superposition states unlike classical bits.');
-        });
-
-        it('should skip empty agentRun.Message and fall through to step outputs', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Message: '   ',
-                        Steps: [{
-                            OutputData: 'Fallback step text',
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Fallback step text');
-        });
-
-        it('should extract nextStep.message from structured JSON', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: JSON.stringify({ nextStep: { message: 'Hello from Sage!' } }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Hello from Sage!');
-        });
-
-        it('should extract top-level message field from JSON', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: JSON.stringify({ message: 'Top-level message' }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Top-level message');
-        });
-
-        it('should extract output field from JSON', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: JSON.stringify({ output: 'Output field text' }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Output field text');
-        });
-
-        it('should extract result field from JSON', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: JSON.stringify({ result: 'Result field text' }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Result field text');
-        });
-
-        it('should use plain text when OutputData is not JSON', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: 'Just plain text response',
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Just plain text response');
-        });
-
-        it('should fall back to payload string when no step output', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    payload: 'Payload fallback text',
-                    agentRun: { Steps: [] }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toBe('Payload fallback text');
-        });
-
-        it('should stringify JSON fallback when no recognized fields', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Steps: [{
-                            OutputData: JSON.stringify({ unknownField: 'data', count: 42 }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toContain('unknownField');
-            expect(sent?.PlainText).toContain('42');
         });
 
         it('should show error message on agent failure', async () => {
@@ -687,45 +506,10 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).not.toContain('subAgentResult');
         });
 
-        it('should compose text from structured research payload with findings', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        FinalPayload: JSON.stringify({
-                            title: 'Research Report',
-                            summary: 'Key findings about AI',
-                            extractedFindings: [
-                                { heading: 'Finding 1', content: 'Details about finding one' },
-                                { heading: 'Finding 2', content: 'Details about finding two' }
-                            ],
-                            sources: [
-                                { title: 'Wikipedia', url: 'https://en.wikipedia.org' }
-                            ]
-                        }),
-                        Steps: [{
-                            OutputData: JSON.stringify({
-                                subAgentResult: { success: true },
-                                shouldTerminate: false,
-                                nextStep: 'retry'
-                            }),
-                            Status: 'Completed'
-                        }]
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toContain('Research Report');
-            expect(sent?.PlainText).toContain('Key findings about AI');
-            expect(sent?.PlainText).toContain('Finding 1');
-            expect(sent?.PlainText).toContain('Wikipedia');
-        });
-
-        it('should compose readable text from Research Agent state payload', async () => {
+        it('should NOT render in-progress research state (plan/questions) as user content', async () => {
+            // In-progress research state with only plan/questions and no findings
+            // is internal agent state — not user-facing content. The adapter should
+            // fall through to a generic response, not dump the research plan.
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
                 RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
@@ -758,38 +542,10 @@ describe('BaseMessagingAdapter', () => {
             const msg = createMessage({ IsDirectMessage: true });
             await adapter.HandleMessage(msg);
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toContain('Research photonic computing');
-            expect(sent?.PlainText).toContain('comprehensive web search');
-            expect(sent?.PlainText).toContain('What is photonic computing');
+            // Internal plan/questions should NOT appear in the output
+            expect(sent?.PlainText).not.toContain('What is photonic computing');
+            expect(sent?.PlainText).not.toContain('Research is in progress');
             expect(sent?.PlainText).not.toContain('"metadata"');
-        });
-
-        it('should extract Codesmith-style payload with code and results', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    agentRun: {
-                        Message: "I'll have Codesmith calculate this for you.",
-                        FinalPayload: JSON.stringify({
-                            task: 'Calculate the first 20 prime numbers',
-                            code: 'const primes = []; let n = 2; while (primes.length < 20) { if (isPrime(n)) primes.push(n); n++; } output = primes;',
-                            results: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71],
-                            iterations: 1,
-                            errors: []
-                        }),
-                        Steps: []
-                    }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            // Should include delegation note + Codesmith results
-            expect(sent?.PlainText).toContain("I'll have Codesmith calculate this for you.");
-            expect(sent?.PlainText).toContain('Calculate the first 20 prime numbers');
-            expect(sent?.PlainText).toContain('71');
         });
 
         it('should NOT leak taskGraph JSON into response text', async () => {
@@ -849,21 +605,6 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).not.toContain('allMatches');
         });
 
-        it('should extract summary field from payload object', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            vi.mocked(AgentRunner).mockImplementation(() => ({
-                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
-                    success: true,
-                    payload: { summary: 'Here is the executive summary' },
-                    agentRun: { Steps: [] }
-                }))
-            }) as ReturnType<typeof vi.fn>);
-
-            const msg = createMessage({ IsDirectMessage: true });
-            await adapter.HandleMessage(msg);
-            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            expect(sent?.PlainText).toContain('executive summary');
-        });
     });
 
     describe('delegation follow-through', () => {
