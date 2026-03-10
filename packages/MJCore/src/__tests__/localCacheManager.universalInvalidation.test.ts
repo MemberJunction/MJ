@@ -38,15 +38,15 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                 .extractEntityFromFingerprint(fp);
 
         it('should extract entity name from a standard fingerprint', () => {
-            expect(extract('Users|Active=1|Name ASC|simple|100|0|_')).toBe('Users');
+            expect(extract('Users|Active=1|Name ASC|100|0|_')).toBe('Users');
         });
 
         it('should extract entity name from a fingerprint with connection suffix', () => {
-            expect(extract('AI Models|_|_|entity_object|-1|0|_|localhost')).toBe('AI Models');
+            expect(extract('AI Models|_|_|-1|0|_|localhost')).toBe('AI Models');
         });
 
         it('should extract entity name with "MJ: " prefix', () => {
-            expect(extract('MJ: AI Agent Runs|Status=Running|_|simple|50|0|_')).toBe('MJ: AI Agent Runs');
+            expect(extract('MJ: AI Agent Runs|Status=Running|_|50|0|_')).toBe('MJ: AI Agent Runs');
         });
 
         it('should return null for a fingerprint with no pipe separator', () => {
@@ -72,19 +72,19 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                 .isFilteredFingerprint(fp);
 
         it('should return false for unfiltered fingerprint (underscore filter)', () => {
-            expect(isFiltered('Users|_|Name ASC|simple|100|0|_')).toBe(false);
+            expect(isFiltered('Users|_|Name ASC|100|0|_')).toBe(false);
         });
 
         it('should return false for empty filter', () => {
-            expect(isFiltered('Users||Name ASC|simple|100|0|_')).toBe(false);
+            expect(isFiltered('Users||Name ASC|100|0|_')).toBe(false);
         });
 
         it('should return true for a filtered fingerprint', () => {
-            expect(isFiltered('Users|Active=1|Name ASC|simple|100|0|_')).toBe(true);
+            expect(isFiltered('Users|Active=1|Name ASC|100|0|_')).toBe(true);
         });
 
         it('should return true for a complex filter', () => {
-            expect(isFiltered('Users|Status=Active AND Role=Admin|_|simple|-1|0|_')).toBe(true);
+            expect(isFiltered('Users|Status=Active AND Role=Admin|_|-1|0|_')).toBe(true);
         });
 
         it('should return false for a fingerprint with only one part', () => {
@@ -98,7 +98,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
     describe('Entity→Fingerprint Index', () => {
         it('should index fingerprints when SetRunViewResult is called', async () => {
-            const fingerprint = 'Users|_|_|simple|-1|0|_';
+            const fingerprint = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fingerprint,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -111,7 +111,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should remove fingerprints from index when InvalidateRunViewResult is called', async () => {
-            const fingerprint = 'Users|_|_|simple|-1|0|_';
+            const fingerprint = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fingerprint,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -125,8 +125,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should track multiple fingerprints for the same entity', async () => {
-            const fp1 = 'Users|_|_|simple|-1|0|_';
-            const fp2 = 'Users|Active=1|_|simple|-1|0|_';
+            const fp1 = 'Users|_|_|-1|0|_';
+            const fp2 = 'Users|Active=1|_|-1|0|_';
 
             await cacheManager.SetRunViewResult(
                 fp1,
@@ -148,7 +148,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should clean up entity key when all fingerprints are removed', async () => {
-            const fingerprint = 'Users|_|_|simple|-1|0|_';
+            const fingerprint = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fingerprint,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -194,7 +194,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
         it('should upsert entity in unfiltered cache on save', async () => {
             // Set up an unfiltered cache
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -226,7 +226,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should remove entity from cache on delete', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -251,7 +251,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should invalidate filtered cache on save (conservative)', async () => {
-            const fp = 'Users|Active=1|_|simple|-1|0|_';
+            const fp = 'Users|Active=1|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users', ExtraFilter: 'Active=1' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -301,7 +301,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should handle delete on filtered cache by invalidating', async () => {
-            const fp = 'Users|Status=Active|_|simple|-1|0|_';
+            const fp = 'Users|Status=Active|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users', ExtraFilter: 'Status=Active' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -327,7 +327,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should add new entity to unfiltered cache on save (create)', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -389,8 +389,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
         it('should invalidate all fingerprints for composite PK entity on save', async () => {
             // Set up caches for an entity with composite PK
-            const fp1 = 'UserRoles|_|_|simple|-1|0|_';
-            const fp2 = 'UserRoles|Active=1|_|simple|-1|0|_';
+            const fp1 = 'UserRoles|_|_|-1|0|_';
+            const fp2 = 'UserRoles|Active=1|_|-1|0|_';
 
             await cacheManager.SetRunViewResult(
                 fp1,
@@ -428,7 +428,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should invalidate all fingerprints for composite PK entity on delete', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -453,7 +453,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should handle single PK normally (not invalidate)', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -493,8 +493,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             // Configure a very small cache to force eviction
             cacheManager.UpdateConfig({ maxEntries: 2, maxSizeBytes: 10_000_000 });
 
-            const fp1 = 'EntityA|_|_|simple|-1|0|_';
-            const fp2 = 'EntityB|_|_|simple|-1|0|_';
+            const fp1 = 'EntityA|_|_|-1|0|_';
+            const fp2 = 'EntityB|_|_|-1|0|_';
 
             await cacheManager.SetRunViewResult(
                 fp1,
@@ -514,7 +514,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             expect(cacheManager.GetFingerprintsForEntity('EntityB').has(fp2)).toBe(true);
 
             // Adding a third entry should trigger eviction of the oldest (fp1)
-            const fp3 = 'EntityC|_|_|simple|-1|0|_';
+            const fp3 = 'EntityC|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp3,
                 { EntityName: 'EntityC' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -542,7 +542,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
     describe('Registry Index Rebuild', () => {
         it('should rebuild entity index from persisted registry on re-initialization', async () => {
             // Cache some data
-            const fp = 'Products|_|_|simple|-1|0|_';
+            const fp = 'Products|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Products' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -573,7 +573,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
     describe('Edge Cases', () => {
         it('should handle event with null PK value gracefully', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -604,7 +604,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should handle event with empty PrimaryKeys array gracefully', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
@@ -652,8 +652,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
 
         it('should handle multiple entities independently', async () => {
-            const fpUsers = 'Users|_|_|simple|-1|0|_';
-            const fpProducts = 'Products|_|_|simple|-1|0|_';
+            const fpUsers = 'Users|_|_|-1|0|_';
+            const fpProducts = 'Products|_|_|-1|0|_';
 
             await cacheManager.SetRunViewResult(
                 fpUsers,

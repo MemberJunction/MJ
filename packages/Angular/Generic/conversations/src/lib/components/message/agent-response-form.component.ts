@@ -26,7 +26,7 @@ export class AgentResponseFormComponent implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
-    console.log('AgentResponseForm ngOnInit:', {
+    console.debug('AgentResponseForm ngOnInit:', {
       hasResponseForm: !!this.responseForm,
       responseForm: this.responseForm,
       disabled: this.disabled,
