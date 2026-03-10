@@ -27,6 +27,7 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 17. [Cache Statistics and Monitoring](#cache-statistics-and-monitoring)
 18. [Configuration Reference](#configuration-reference)
 19. [Troubleshooting](#troubleshooting)
+20. [Server-Side Dataset Caching](#server-side-dataset-caching)
 
 ---
 
@@ -1608,6 +1609,88 @@ LocalCacheManager.Instance.GetStats()
 LocalCacheManager.Instance.GetHitRate()
 LocalCacheManager.Instance.GetAllEntries()
 ```
+
+---
+
+## Server-Side Dataset Caching
+
+Datasets (`GetDatasetByName` and `GetDatasetStatusByName`) are a batch-loading mechanism used heavily at startup — the `MJ_Metadata` dataset alone loads ~22 entity types. Without caching, **every client connection** re-executes all of those SQL queries even though the data hasn't changed.
+
+### How It Works
+
+The dataset caching layer in `GenericDatabaseProvider` integrates with `LocalCacheManager` to avoid redundant database queries. It uses the same fingerprint system as RunView, so cache entries are shared between both paths.
+
+#### GetDatasetByName — Cache-Aware Resolution
+
+When a dataset is requested, each dataset item is resolved individually:
+
+1. **Phase 1 — Cache Check**: For each dataset item, generate a `LocalCacheManager` fingerprint using the item's entity name and combined filter (WhereClause + ItemFilter). Check cache for a hit.
+2. **Phase 2 — SQL for Misses Only**: Build and execute SQL (`SELECT columns FROM baseView WHERE filter`) only for items that had cache misses. Items with cache hits skip SQL entirely.
+3. **Phase 3 — Write-Through**: After SQL execution, store results in `LocalCacheManager` via `SetRunViewResult` so future requests find them cached.
+4. **Merge**: Results are assembled in original item order regardless of hit/miss status.
+
+```
+First client connect (after server bootstrap):
+  Dataset items: 22 → Cache hits: 22, SQL queries: 0, elapsed: <1ms
+
+Server cold start (no cache):
+  Dataset items: 22 → Cache hits: 0, SQL queries: 22 (batched), elapsed: ~400ms
+  Next request: Cache hits: 22, SQL queries: 0, elapsed: <1ms
+```
+
+#### GetDatasetStatusByName — Cache-Derived Status
+
+Status checks (`MAX(dateField)` and `COUNT(*)` per item) are also cache-aware:
+
+1. **Cache Hit**: Derive `LatestUpdateDate` and `TotalRowCount` directly from the in-memory cached rows — sub-millisecond.
+2. **Cache Miss**: Fall back to the traditional SQL status query.
+
+This eliminates the "status round-trip" that previously preceded every dataset fetch.
+
+#### Fingerprint Compatibility
+
+Dataset items generate fingerprints identical to RunView queries:
+
+```typescript
+const fingerprint = cache.GenerateRunViewFingerprint(
+    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+    this.InstanceConnectionString
+);
+```
+
+This means:
+- **RunView populates dataset cache**: If a RunView call loads `Entities` with the same filter, a subsequent dataset request finds it cached.
+- **Dataset populates RunView cache**: After the dataset loads `Entities`, any RunView call with the same filter gets a cache hit.
+- **Entity event invalidation**: When an entity record changes, `LocalCacheManager` invalidates entries for that entity — both RunView and dataset cache entries are cleared together.
+
+### Why This Matters
+
+| Metric | Before | After (warm cache) |
+|--------|--------|---------------------|
+| DB queries per client connect | ~44 (22 data + 22 status) | 0 |
+| Dataset response time | ~400-500ms | <1ms |
+| DB load at 100 concurrent users | 4,400 queries | 0 queries |
+
+The server bootstrap (first boot) still hits the database to populate the cache, but every subsequent client connection — including the dozens that happen during peak usage — gets assembled entirely from memory.
+
+### Logging
+
+Both methods emit `LogStatusEx` messages with elapsed time and hit/miss counts:
+
+```
+GetDatasetByName: MJ_Metadata - 22 items, 22 cache hits, 0 misses, elapsed: 0.3ms
+GetDatasetStatusByName: MJ_Metadata - 22 items, 22 cache hits, 0 misses, elapsed: 0.1ms
+```
+
+These log entries use standard MJ logging and appear in the server console during startup and client connections.
+
+### Conditions
+
+Dataset caching is active when:
+- `LocalCacheManager.Instance` is available
+- `TrustLocalCacheCompletely` is `true` (server-side default)
+
+On the client side (`TrustLocalCacheCompletely = false`), dataset requests pass through to the server without local cache checks.
 
 ---
 
