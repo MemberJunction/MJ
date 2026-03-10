@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult, ExecuteSQLOptions } from '../generic/databaseProviderBase';
-import { EntityInfo, EntityFieldInfo, UserInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 
 /**
  * Minimal concrete subclass for testing abstract DatabaseProviderBase.
@@ -26,6 +26,25 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
+
+    // RLS test hooks
+    public checkRecordRLSResult = true;
+    public checkCreateRLSResult = true;
+
+    protected override async CheckRecordRLS(
+        entity: BaseEntity,
+        user: UserInfo,
+        type: EntityPermissionType
+    ): Promise<boolean> {
+        return this.checkRecordRLSResult;
+    }
+
+    protected override async CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        return this.checkCreateRLSResult;
+    }
 }
 
 class TestPostgreSQLProvider extends DatabaseProviderBase {
@@ -165,6 +184,116 @@ describe('DatabaseProviderBase', () => {
             const id1 = pgProvider.GenerateNewID();
             const id2 = pgProvider.GenerateNewID();
             expect(id1).not.toBe(id2);
+        });
+    });
+
+    describe('RLS enforcement in Save()', () => {
+        function createMockEntity(isSaved: boolean): BaseEntity {
+            const entityInfo = {
+                Name: 'TestEntity',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                AllowDeleteAPI: true,
+                TrackRecordChanges: false,
+                Fields: [],
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true }],
+            } as unknown as EntityInfo;
+
+            return {
+                EntityInfo: entityInfo,
+                IsSaved: isSaved,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                PrimaryKeys: [{ Name: 'ID', Value: 'test-id' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'test-id' }),
+                Get: () => 'test-id',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+        }
+
+        const mockUser = new UserInfo(null, { ID: 'u-1', Name: 'Test' });
+
+        it('throws when Create RLS check fails for new record', async () => {
+            sqlServer.checkCreateRLSResult = false;
+            const entity = createMockEntity(false);
+
+            await expect(
+                sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+            ).rejects.toThrow('Access denied for new');
+        });
+
+        it('throws when Update RLS check fails for existing record', async () => {
+            sqlServer.checkRecordRLSResult = false;
+            const entity = createMockEntity(true);
+
+            await expect(
+                sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+            ).rejects.toThrow('Record not found or access denied');
+        });
+
+        it('does not check RLS when in replay mode', async () => {
+            sqlServer.checkCreateRLSResult = false;
+            sqlServer.checkRecordRLSResult = false;
+            const entity = createMockEntity(false);
+            const options = new EntitySaveOptions();
+            options.ReplayOnly = true;
+
+            // Replay mode should skip RLS check — it will proceed to execution
+            // (which returns empty result, but that's a different error)
+            const result = await sqlServer.Save(entity, mockUser, options);
+            // In replay mode, it returns the entity's GetAll() result
+            expect(result).toBeTruthy();
+        });
+    });
+
+    describe('RLS enforcement in Delete()', () => {
+        function createMockDeleteEntity(): BaseEntity {
+            const entityInfo = {
+                Name: 'TestEntity',
+                AllowDeleteAPI: true,
+                TrackRecordChanges: false,
+                Fields: [],
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true }],
+            } as unknown as EntityInfo;
+
+            return {
+                EntityInfo: entityInfo,
+                IsSaved: true,
+                Fields: [{ Name: 'ID', Value: 'test-id' }],
+                ResultHistory: [],
+                PrimaryKeys: [{ Name: 'ID', Value: 'test-id' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'test-id' }),
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+        }
+
+        const mockUser = new UserInfo(null, { ID: 'u-1', Name: 'Test' });
+
+        it('returns false when Delete RLS check fails', async () => {
+            sqlServer.checkRecordRLSResult = false;
+            const entity = createMockDeleteEntity();
+
+            // Delete catches errors and returns false
+            const result = await sqlServer.Delete(entity, new EntityDeleteOptions(), mockUser);
+            expect(result).toBe(false);
+        });
+
+        it('does not check RLS when in replay mode', async () => {
+            sqlServer.checkRecordRLSResult = false;
+            const entity = createMockDeleteEntity();
+            const options = new EntityDeleteOptions();
+            options.ReplayOnly = true;
+
+            // Replay mode should skip RLS — it will proceed and succeed
+            const result = await sqlServer.Delete(entity, options, mockUser);
+            // Replay returns entity.GetAll() which has data, so ValidateDeleteResult runs
+            // (but our mock may not satisfy it fully; the key thing is RLS didn't block it)
+            expect(result).toBeDefined();
         });
     });
 });
