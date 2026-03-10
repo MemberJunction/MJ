@@ -26,20 +26,20 @@
 .form-group > label {
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--mj-text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
 .form-group > label i {
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
     font-size: 14px;
     width: 16px;
 }
 
 .form-group > label .required {
-    color: #d32f2f;
+    color: var(--mj-status-error);
 }
 
 /* ========================================
@@ -48,11 +48,11 @@
 
 .form-input {
     padding: 14px 16px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--mj-border-default);
     border-radius: 10px;
     font-size: 15px;
-    color: #333;
-    background: #fff;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
     transition: all 0.2s ease;
     width: 100%;
     box-sizing: border-box;
@@ -60,20 +60,20 @@
 
 .form-input:focus {
     outline: none;
-    border-color: #5c6bc0;
-    box-shadow: 0 0 0 4px rgba(92, 107, 192, 0.12);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
 }
 
 .form-input::placeholder {
-    color: #aaa;
+    color: var(--mj-text-disabled);
 }
 
 .form-input.error {
-    border-color: #d32f2f;
+    border-color: var(--mj-status-error);
 }
 
 .form-input.error:focus {
-    box-shadow: 0 0 0 4px rgba(211, 47, 47, 0.12);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-status-error) 12%, transparent);
 }
 
 .input-with-action {
@@ -91,19 +91,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--mj-border-default);
     border-radius: 10px;
-    background: #fff;
-    color: #666;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
 }
 
 .input-action-btn:hover {
-    border-color: #5c6bc0;
-    background: #e8eaf6;
-    color: #5c6bc0;
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 /* ========================================
@@ -112,13 +112,13 @@
 
 .form-hint {
     font-size: 13px;
-    color: #888;
+    color: var(--mj-text-muted);
     line-height: 1.4;
 }
 
 .form-error {
     font-size: 13px;
-    color: #d32f2f;
+    color: var(--mj-status-error);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -146,21 +146,21 @@
     align-items: center;
     gap: 12px;
     padding: 14px 16px;
-    border: 2px solid #e8eaf6;
+    border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: #fff;
+    background: var(--mj-bg-surface);
 }
 
 .radio-option:hover {
-    border-color: #c5cae9;
-    background: #fafafa;
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
+    background: var(--mj-bg-surface-card);
 }
 
 .radio-option.selected {
-    border-color: #5c6bc0;
-    background: #e8eaf6;
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .radio-option input[type="radio"] {
@@ -170,7 +170,7 @@
 .radio-mark {
     width: 20px;
     height: 20px;
-    border: 2px solid #ccc;
+    border: 2px solid var(--mj-border-strong);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -180,14 +180,14 @@
 }
 
 .radio-option.selected .radio-mark {
-    border-color: #5c6bc0;
+    border-color: var(--mj-brand-primary);
 }
 
 .radio-option.selected .radio-mark::after {
     content: '';
     width: 10px;
     height: 10px;
-    background: #5c6bc0;
+    background: var(--mj-brand-primary);
     border-radius: 50%;
 }
 
@@ -201,7 +201,7 @@
 .radio-label {
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--mj-text-primary);
 }
 
 .radio-badge {
@@ -213,18 +213,18 @@
 }
 
 .radio-badge.recommended {
-    background: #e8f5e9;
-    color: #2e7d32;
+    background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
 }
 
 .radio-badge.secure {
-    background: #e3f2fd;
-    color: #1565c0;
+    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    color: var(--mj-color-info-500);
 }
 
 .radio-badge.warning {
-    background: #fff3e0;
-    color: #ef6c00;
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-warning);
 }
 
 /* ========================================
@@ -242,16 +242,16 @@
     align-items: flex-start;
     gap: 12px;
     padding: 14px 16px;
-    border: 2px solid #e8eaf6;
+    border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: #fff;
+    background: var(--mj-bg-surface);
 }
 
 .checkbox-option:hover {
-    border-color: #c5cae9;
-    background: #fafafa;
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
+    background: var(--mj-bg-surface-card);
 }
 
 .checkbox-option input[type="checkbox"] {
@@ -261,7 +261,7 @@
 .checkbox-mark {
     width: 22px;
     height: 22px;
-    border: 2px solid #ccc;
+    border: 2px solid var(--mj-border-strong);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -272,8 +272,8 @@
 }
 
 .checkbox-option input:checked + .checkbox-mark {
-    background: #5c6bc0;
-    border-color: #5c6bc0;
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
 }
 
 .checkbox-option input:checked + .checkbox-mark::after {
@@ -281,7 +281,7 @@
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
     font-size: 12px;
-    color: #fff;
+    color: var(--mj-text-inverse);
 }
 
 .checkbox-content {
@@ -294,12 +294,12 @@
 .checkbox-label {
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--mj-text-primary);
 }
 
 .checkbox-desc {
     font-size: 12px;
-    color: #888;
+    color: var(--mj-text-muted);
 }
 
 /* ========================================
@@ -308,11 +308,11 @@
 
 .form-select {
     padding: 14px 40px 14px 16px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--mj-border-default);
     border-radius: 10px;
     font-size: 15px;
-    color: #333;
-    background: #fff;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
     transition: all 0.2s ease;
     width: 100%;
     box-sizing: border-box;
@@ -325,8 +325,8 @@
 
 .form-select:focus {
     outline: none;
-    border-color: #5c6bc0;
-    box-shadow: 0 0 0 4px rgba(92, 107, 192, 0.12);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
 }
 
 /* ========================================
@@ -358,7 +358,7 @@
 .optional-tag {
     font-weight: 400;
     font-size: 12px;
-    color: #888;
+    color: var(--mj-text-muted);
 }
 
 /* ========================================
@@ -366,11 +366,11 @@
    ======================================== */
 
 .form-hint--selected {
-    color: #2e7d32;
+    color: var(--mj-status-success);
 }
 
 .form-hint--selected i {
-    color: #2e7d32;
+    color: var(--mj-status-success);
 }
 
 /* ========================================
@@ -378,7 +378,7 @@
    ======================================== */
 
 .collapsible-section {
-    border: 1px solid #e8eaf6;
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     border-radius: 10px;
     overflow: hidden;
 }
@@ -390,13 +390,13 @@
     width: 100%;
     padding: 12px 16px;
     border: none;
-    background: #f5f7fa;
+    background: var(--mj-bg-page);
     cursor: pointer;
     transition: background 0.2s ease;
 }
 
 .collapsible-header:hover {
-    background: #e8eaf6;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .collapsible-title {
@@ -405,23 +405,23 @@
     gap: 8px;
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--mj-text-primary);
 }
 
 .collapsible-title i {
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
     font-size: 14px;
 }
 
 .collapsible-chevron {
-    color: #888;
+    color: var(--mj-text-muted);
     font-size: 12px;
     transition: transform 0.2s ease;
 }
 
 .collapsible-content {
     padding: 16px;
-    border-top: 1px solid #e8eaf6;
+    border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -451,7 +451,7 @@
 }
 
 .radio-option--compact .radio-label i {
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
     font-size: 12px;
 }
 
@@ -492,9 +492,9 @@
    ======================================== */
 
 mj-tree-dropdown.error {
-    --dropdown-border-color: #d32f2f;
+    --dropdown-border-color: var(--mj-status-error);
 }
 
 mj-tree-dropdown.error:focus-within {
-    --dropdown-border-focus: #d32f2f;
+    --dropdown-border-focus: var(--mj-status-error);
 }

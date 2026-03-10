@@ -12,7 +12,7 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
-    background: #f5f5f5;
+    background: var(--mj-bg-surface-card);
     position: relative;
 }
 
@@ -32,8 +32,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 24px 0 0;
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     gap: 16px;
 }
 
@@ -49,11 +49,11 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    background: var(--mj-bg-info);
     border-radius: 16px;
     font-size: 12px;
     font-weight: 500;
-    color: #1565c0;
+    color: var(--mj-color-info-500);
     white-space: nowrap;
 }
 
@@ -70,15 +70,15 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 24px;
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     transition: background 0.2s, border-color 0.2s;
 }
 
 /* Edit mode header styling */
 .viewer-header.editing {
-    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
-    border-bottom: 2px solid #5c6bc0;
+    background: var(--mj-bg-brand);
+    border-bottom: 2px solid var(--mj-brand-primary);
 }
 
 .viewer-header .header-left {
@@ -92,7 +92,7 @@
     margin: 0;
     font-size: 18px;
     font-weight: 500;
-    color: #333;
+    color: var(--mj-text-primary);
 }
 
 .viewer-header .header-right {
@@ -109,15 +109,15 @@
     justify-content: center;
     border: none;
     border-radius: 6px;
-    background: #f5f5f5;
-    color: #666;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .back-btn:hover {
-    background: #e0e0e0;
-    color: #333;
+    background: var(--mj-border-default);
+    color: var(--mj-text-primary);
 }
 
 /* Add Part button (left side in edit mode) */
@@ -128,19 +128,19 @@
     padding: 8px 16px;
     border: none;
     border-radius: 6px;
-    background: #5c6bc0;
-    color: #fff;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 .btn-add-part:hover {
-    background: #3f51b5;
+    background: var(--mj-brand-primary-hover);
     transform: translateY(-1px);
-    box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
+    box-shadow: 0 3px 6px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 .btn-add-part i {
@@ -151,7 +151,7 @@
 .header-separator {
     width: 1px;
     height: 28px;
-    background: rgba(92, 107, 192, 0.3);
+    background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
     margin: 0 4px;
 }
 
@@ -166,8 +166,8 @@
     padding: 10px 18px;
     border: none;
     border-radius: 6px;
-    background: #5c6bc0;
-    color: #fff;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -175,7 +175,7 @@
 }
 
 .btn-primary:hover {
-    background: #3f51b5;
+    background: var(--mj-brand-primary-hover);
 }
 
 .btn-icon {
@@ -184,22 +184,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
-    background: #fff;
-    color: #666;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-icon:hover {
-    background: #f5f5f5;
+    background: var(--mj-bg-surface-card);
 }
 
 .btn-icon.active {
-    background: #e3f2fd;
-    border-color: #5c6bc0;
-    color: #5c6bc0;
+    background: var(--mj-bg-info);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
 }
 
 /* Cancel button styling */
@@ -208,19 +208,19 @@
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--mj-border-strong);
     border-radius: 6px;
-    background: #fff;
-    color: #666;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-cancel:hover {
-    background: #f5f5f5;
-    border-color: #bbb;
-    color: #333;
+    background: var(--mj-bg-surface-card);
+    border-color: var(--mj-border-strong);
+    color: var(--mj-text-primary);
 }
 
 /* ========================================
@@ -240,8 +240,8 @@
     padding: 6px 12px;
     font-size: 16px;
     font-weight: 500;
-    color: #333;
-    background: rgba(255, 255, 255, 0.7);
+    color: var(--mj-text-primary);
+    background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
     outline: none;
     min-width: 200px;
     max-width: 300px;
@@ -249,13 +249,13 @@
 }
 
 .dashboard-name-input:hover {
-    background: rgba(255, 255, 255, 0.9);
+    background: color-mix(in srgb, var(--mj-bg-surface) 90%, transparent);
 }
 
 .dashboard-name-input:focus {
-    background: #fff;
-    border-color: #5c6bc0;
-    box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+    background: var(--mj-bg-surface);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .dashboard-description-input {
@@ -263,8 +263,8 @@
     border-radius: 4px;
     padding: 6px 12px;
     font-size: 13px;
-    color: #555;
-    background: rgba(255, 255, 255, 0.5);
+    color: var(--mj-text-secondary);
+    background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
     outline: none;
     flex: 1;
     min-width: 150px;
@@ -273,17 +273,17 @@
 }
 
 .dashboard-description-input:hover {
-    background: rgba(255, 255, 255, 0.8);
+    background: color-mix(in srgb, var(--mj-bg-surface) 80%, transparent);
 }
 
 .dashboard-description-input:focus {
-    background: #fff;
-    border-color: #5c6bc0;
-    box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+    background: var(--mj-bg-surface);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .dashboard-description-input::placeholder {
-    color: #888;
+    color: var(--mj-text-disabled);
     font-style: normal;
 }
 

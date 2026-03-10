@@ -8,9 +8,9 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #f0f0f0;
+  background-color: var(--mj-bg-surface-sunken);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  border: 1px solid #ccc;
+  border: 1px solid var(--mj-border-strong);
 }
 
 /* Mobile Header */
@@ -18,28 +18,28 @@
   display: none;
   align-items: center;
   padding: 8px 12px;
-  background-color: #ffffff;
-  border-bottom: 1px solid #ccc;
+  background-color: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-strong);
 }
 
 .mobile-header .browser-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #000;
+  color: var(--mj-text-primary);
 }
 
 .sidebar-toggle {
   margin-right: 12px;
   background: none;
-  border: 1px solid #ccc;
+  border: 1px solid var(--mj-border-strong);
   padding: 6px 12px;
   cursor: pointer;
   border-radius: 3px;
 }
 
 .sidebar-toggle:hover {
-  background-color: #f0f0f0;
+  background-color: var(--mj-bg-surface-sunken);
 }
 
 /* Main Container - Two Panel Layout */
@@ -54,8 +54,8 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  background-color: #f8f8f8;
-  border-right: 1px solid #ccc;
+  background-color: var(--mj-bg-surface-card);
+  border-right: 1px solid var(--mj-border-strong);
   width: 220px;
   min-width: 220px;
   overflow: hidden;
@@ -73,7 +73,7 @@
 .sidebar-section {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .sidebar-section:last-child {
@@ -83,15 +83,15 @@
 
 .section-header {
   padding: 8px 12px;
-  background-color: #e8e8e8;
-  border-bottom: 1px solid #ccc;
+  background-color: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-strong);
 }
 
 .section-header h3 {
   margin: 0;
   font-size: 11px;
   font-weight: 600;
-  color: #666;
+  color: var(--mj-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -105,8 +105,8 @@
 /* Right Main Panel */
 .main-panel {
   flex: 1;
-  background-color: #fff;
-  border-left: 1px solid #ccc;
+  background-color: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-strong);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -118,16 +118,16 @@
 }
 
 .section-content::-webkit-scrollbar-track {
-  background: #f0f0f0;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .section-content::-webkit-scrollbar-thumb {
-  background: #c0c0c0;
+  background: var(--mj-border-strong);
   border-radius: 4px;
 }
 
 .section-content::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
+  background: var(--mj-text-disabled);
 }
 
 /* ===========================
@@ -161,7 +161,7 @@
     width: 280px;
     min-width: 280px;
     z-index: 1000;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 2px 0 8px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
   }
 
   .sidebar.collapsed {

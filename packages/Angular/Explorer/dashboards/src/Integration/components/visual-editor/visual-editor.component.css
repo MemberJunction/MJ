@@ -557,7 +557,7 @@
   border: 1px solid var(--mj-border-default);
   border-radius: 5px;
   font-size: 12px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   background: var(--mj-bg-page);
   outline: none;
   transition: border-color 150ms ease;
@@ -633,7 +633,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   font-weight: 500;
 }
 
@@ -950,7 +950,7 @@
   border: 1px solid var(--mj-border-default);
   border-radius: 5px;
   font-size: 12px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   background: var(--mj-bg-surface);
   outline: none;
   cursor: pointer;
@@ -1004,7 +1004,7 @@
   border: 1px solid var(--mj-border-default);
   border-radius: 5px;
   font-size: 12px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   background: var(--mj-bg-page);
   outline: none;
   font-family: 'SF Mono', 'Fira Code', monospace;
@@ -1034,7 +1034,7 @@
   border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   font-size: 11px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   background: var(--mj-bg-surface);
   outline: none;
   cursor: pointer;

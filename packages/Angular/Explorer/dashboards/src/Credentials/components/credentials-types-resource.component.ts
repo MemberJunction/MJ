@@ -393,14 +393,14 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
     public getCategoryColor(category: string): string {
         const colorMap: Record<string, string> = {
-            'AI': '#8b5cf6',
-            'Communication': '#3b82f6',
-            'Storage': '#06b6d4',
-            'Database': '#f59e0b',
-            'Authentication': '#10b981',
-            'Integration': '#ec4899'
+            'AI': 'var(--mj-brand-primary)',
+            'Communication': 'var(--mj-color-info-500)',
+            'Storage': 'var(--mj-color-info-500)',
+            'Database': 'var(--mj-status-warning)',
+            'Authentication': 'var(--mj-status-success)',
+            'Integration': 'var(--mj-brand-primary)'
         };
-        return colorMap[category] || '#6366f1';
+        return colorMap[category] || 'var(--mj-brand-primary)';
     }
 
     public getTypesByCategory(): Map<string, TypeWithStats[]> {

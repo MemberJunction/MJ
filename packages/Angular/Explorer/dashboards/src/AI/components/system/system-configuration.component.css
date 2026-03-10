@@ -235,7 +235,7 @@
 }
 
 .empty-state h3 {
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   font-size: 22px;
   font-weight: 600;
   margin: 0 0 12px 0;
@@ -509,7 +509,7 @@
 
 .stat-value {
   font-size: 14px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   font-weight: 600;
 }
 

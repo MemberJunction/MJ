@@ -454,14 +454,14 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
 
     public getTypeColor(type: MJCredentialTypeEntity): string {
         const colorMap: Record<string, string> = {
-            'AI': '#8b5cf6',
-            'Communication': '#3b82f6',
-            'Storage': '#06b6d4',
-            'Database': '#f59e0b',
-            'Authentication': '#10b981',
-            'Integration': '#ec4899'
+            'AI': 'var(--mj-brand-primary)',
+            'Communication': 'var(--mj-color-info-500)',
+            'Storage': 'var(--mj-color-info-500)',
+            'Database': 'var(--mj-status-warning)',
+            'Authentication': 'var(--mj-status-success)',
+            'Integration': 'var(--mj-brand-primary)'
         };
-        return colorMap[type.Category] || '#6366f1';
+        return colorMap[type.Category] || 'var(--mj-brand-primary)';
     }
 
     public onValueChange(fieldName: string, value: string): void {

@@ -307,8 +307,10 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   private applyThemeToDOM(): void {
     if (this.IsDarkMode) {
       this.document.documentElement.setAttribute('data-theme', 'dark');
+      this.document.documentElement.setAttribute('data-ag-theme-mode', 'dark');
     } else {
       this.document.documentElement.removeAttribute('data-theme');
+      this.document.documentElement.removeAttribute('data-ag-theme-mode');
     }
   }
 

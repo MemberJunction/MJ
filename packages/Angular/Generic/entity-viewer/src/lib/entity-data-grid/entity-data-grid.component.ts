@@ -28,7 +28,9 @@ import {
   RowSelectionOptions,
   GetRowIdParams,
   themeAlpine,
+  colorSchemeVariable,
   SortChangedEvent as AgSortChangedEvent,
+  type Theme,
   ColumnResizedEvent,
   ColumnMovedEvent,
   SelectionChangedEvent,
@@ -1215,9 +1217,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private gridApi: GridApi | null = null;
 
   /** AG Grid theme (v34+) with custom selection colors */
-  public agGridTheme = themeAlpine.withParams({
-    selectedRowBackgroundColor: '#fff3cd',  // More visible mellow yellow selection
-    rowHoverColor: '#f5f5f5'
+  public agGridTheme: Theme = themeAlpine.withPart(colorSchemeVariable).withParams({
+    headerBackgroundColor: 'var(--mj-bg-surface-card)',
+    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+    borderColor: 'var(--mj-border-default)',
   });
 
   /** AG Grid row selection configuration */

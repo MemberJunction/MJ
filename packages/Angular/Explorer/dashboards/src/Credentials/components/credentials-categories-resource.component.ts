@@ -404,7 +404,15 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     }
 
     public getCategoryColor(index: number): string {
-        const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4'];
+        const colors = [
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)',
+            'var(--mj-status-warning)',
+            'var(--mj-status-success)',
+            'var(--mj-color-info-500)',
+            'var(--mj-color-info-500)'
+        ];
         return colors[index % colors.length];
     }
 

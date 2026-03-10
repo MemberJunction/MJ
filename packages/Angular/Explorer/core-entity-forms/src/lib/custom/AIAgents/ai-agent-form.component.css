@@ -121,7 +121,7 @@
 .agent-header-mini-name {
     font-size: 13px;
     font-weight: 600;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -161,7 +161,7 @@
 
 .agent-header-mini-btn:hover:not(:disabled) {
     background: var(--mj-bg-surface-sunken);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     border-color: var(--mj-border-strong);
 }
 

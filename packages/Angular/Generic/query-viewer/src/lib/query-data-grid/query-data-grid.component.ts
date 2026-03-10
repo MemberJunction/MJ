@@ -27,7 +27,9 @@ import {
     RowSelectionOptions,
     GetRowIdParams,
     themeAlpine,
+    colorSchemeVariable,
     SortChangedEvent as AgSortChangedEvent,
+    type Theme,
     ColumnResizedEvent,
     ColumnMovedEvent,
     SelectionChangedEvent,
@@ -287,7 +289,11 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     public Columns: QueryGridColumnConfig[] = [];
     public SortState: QueryGridSortState[] = [];
     public SelectedRows: Record<string, unknown>[] = [];
-    public Theme = themeAlpine;
+    public Theme: Theme = themeAlpine.withPart(colorSchemeVariable).withParams({
+        headerBackgroundColor: 'var(--mj-bg-surface-card)',
+        oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+        borderColor: 'var(--mj-border-default)',
+    });
 
     private destroy$ = new Subject<void>();
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();

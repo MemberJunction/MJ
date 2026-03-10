@@ -308,13 +308,13 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
 
     public getOperationColor(operation: string): string {
         switch (operation.toLowerCase()) {
-            case 'access': return '#6366f1';
-            case 'create': return '#10b981';
-            case 'update': return '#f59e0b';
-            case 'delete': return '#ef4444';
-            case 'rotate': return '#8b5cf6';
-            case 'validate': return '#06b6d4';
-            default: return '#6b7280';
+            case 'access': return 'var(--mj-brand-primary)';
+            case 'create': return 'var(--mj-status-success)';
+            case 'update': return 'var(--mj-status-warning)';
+            case 'delete': return 'var(--mj-status-error)';
+            case 'rotate': return 'var(--mj-brand-primary)';
+            case 'validate': return 'var(--mj-color-info-500)';
+            default: return 'var(--mj-text-secondary)';
         }
     }
 

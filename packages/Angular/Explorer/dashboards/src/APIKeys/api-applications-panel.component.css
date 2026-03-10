@@ -520,7 +520,7 @@
 
 .slideout-close:hover {
     background: var(--mj-bg-surface-hover);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 /* Panel Tabs */
@@ -550,7 +550,7 @@
 
 .slideout-tab:hover {
     background: var(--mj-border-default);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .slideout-tab.active {
@@ -577,7 +577,7 @@
 
 .slideout-tab:not(.active) .tab-badge {
     background: var(--mj-border-default);  /* tab badge neutral bg */
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 /* Panel Content */
@@ -617,7 +617,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     margin-bottom: 8px;
     letter-spacing: 0.01em;
 }
@@ -699,7 +699,7 @@
 
 .checkbox-label span:first-of-type {
     font-weight: 600;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     font-size: 14px;
 }
 
@@ -897,7 +897,7 @@
     border-radius: 4px;
     font-family: 'SF Mono', 'Consolas', monospace;
     font-size: 11px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .pattern-tag.include {

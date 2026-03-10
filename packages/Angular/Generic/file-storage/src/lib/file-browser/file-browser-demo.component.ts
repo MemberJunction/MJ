@@ -9,9 +9,9 @@ import { Component } from '@angular/core';
   selector: 'mj-file-browser-demo',
   template: `
     <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column;">
-      <div style="padding: 16px; background-color: #f0f0f0; border-bottom: 1px solid #ccc;">
+      <div style="padding: 16px; background-color: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-strong);">
         <h1 style="margin: 0; font-size: 20px;">File Browser Demo</h1>
-        <p style="margin: 4px 0 0 0; font-size: 14px; color: #666;">
+        <p style="margin: 4px 0 0 0; font-size: 14px; color: var(--mj-text-secondary);">
           Testing the Mac Finder-style file browser component
         </p>
       </div>

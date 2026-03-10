@@ -89,7 +89,7 @@
 .empty-state h3 {
   font-size: 20px;
   font-weight: 600;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   margin: 0 0 8px;
 }
 
@@ -311,7 +311,7 @@
   background: none;
   cursor: pointer;
   font-size: 13px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   border-radius: 6px;
   transition: background 0.15s;
   text-align: left;
@@ -797,7 +797,7 @@
   padding: 10px 14px;
   cursor: pointer;
   font-size: 14px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   border-bottom: 1px solid var(--mj-border-subtle);
   transition: background 0.15s;
 }
@@ -899,7 +899,7 @@
 .test-result-message {
   font-size: 15px;
   font-weight: 500;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   text-align: center;
 }
 
@@ -1061,7 +1061,7 @@
 .delete-confirm-text {
   font-size: 13px;
   font-weight: 500;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   max-width: 220px;
 }
 
@@ -1247,7 +1247,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
 }
 
 .edit-credential-info i {
@@ -1296,7 +1296,7 @@
   gap: 8px;
   padding: 8px 12px;
   font-size: 13px;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
   cursor: pointer;
   transition: background 150ms ease;
 }

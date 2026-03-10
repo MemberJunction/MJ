@@ -3,11 +3,11 @@
 .aggregate-panel {
   display: flex;
   flex-direction: column;
-  background: var(--mj-panel-bg, #ffffff);
-  border: 1px solid var(--mj-border-color, #e0e0e0);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
 }
 
 /* Position variants */
@@ -39,20 +39,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--mj-panel-header-bg, #f8f9fa);
-  border-bottom: 1px solid var(--mj-border-color, #e0e0e0);
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
   cursor: pointer;
   user-select: none;
 }
 
 .panel-header:hover {
-  background: var(--mj-panel-header-hover-bg, #f0f1f2);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .panel-title {
   font-weight: 600;
   font-size: 14px;
-  color: var(--mj-text-primary, #333333);
+  color: var(--mj-text-primary);
 }
 
 .panel-header-right {
@@ -62,7 +62,7 @@
 }
 
 .loading-indicator {
-  color: var(--mj-primary-color, #007bff);
+  color: var(--mj-brand-primary);
   font-size: 14px;
 }
 
@@ -71,15 +71,15 @@
   border: none;
   padding: 4px 8px;
   cursor: pointer;
-  color: var(--mj-text-secondary, #666666);
+  color: var(--mj-text-secondary);
   font-size: 12px;
   border-radius: 4px;
   transition: background-color 0.2s, color 0.2s;
 }
 
 .collapse-toggle:hover {
-  background: var(--mj-button-hover-bg, rgba(0, 0, 0, 0.05));
-  color: var(--mj-text-primary, #333333);
+  background: color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  color: var(--mj-text-primary);
 }
 
 /* Panel Content */
@@ -96,7 +96,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  color: var(--mj-text-muted, #999999);
+  color: var(--mj-text-disabled);
   text-align: center;
 }
 
@@ -137,16 +137,16 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  background: var(--mj-card-bg, #ffffff);
-  border: 1px solid var(--mj-border-color, #e0e0e0);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .aggregate-card:hover {
-  border-color: var(--mj-primary-color, #007bff);
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   transform: translateY(-1px);
 }
 
@@ -157,9 +157,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: var(--mj-icon-bg, #f0f4f8);
+  background: var(--mj-bg-surface-card);
   border-radius: 8px;
-  color: var(--mj-primary-color, #007bff);
+  color: var(--mj-brand-primary);
   font-size: 18px;
   flex-shrink: 0;
 }
@@ -173,19 +173,19 @@
 .card-value {
   font-size: 20px;
   font-weight: 700;
-  color: var(--mj-text-primary, #333333);
+  color: var(--mj-text-primary);
   line-height: 1.2;
   margin-bottom: 4px;
   word-break: break-word;
 }
 
 .card-value.loading {
-  color: var(--mj-text-muted, #999999);
+  color: var(--mj-text-disabled);
 }
 
 .card-label {
   font-size: 12px;
-  color: var(--mj-text-secondary, #666666);
+  color: var(--mj-text-secondary);
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,68 +194,68 @@
 
 /* Conditional Style Classes */
 .style-success {
-  border-left: 4px solid var(--mj-success-color, #28a745);
+  border-left: 4px solid var(--mj-status-success);
 }
 
 .style-success .card-value {
-  color: var(--mj-success-color, #28a745);
+  color: var(--mj-status-success);
 }
 
 .style-success .card-icon {
-  background: var(--mj-success-bg, #d4edda);
-  color: var(--mj-success-color, #28a745);
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success);
 }
 
 .style-warning {
-  border-left: 4px solid var(--mj-warning-color, #ffc107);
+  border-left: 4px solid var(--mj-status-warning);
 }
 
 .style-warning .card-value {
-  color: var(--mj-warning-dark, #856404);
+  color: var(--mj-status-warning-text);
 }
 
 .style-warning .card-icon {
-  background: var(--mj-warning-bg, #fff3cd);
-  color: var(--mj-warning-dark, #856404);
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
 }
 
 .style-danger {
-  border-left: 4px solid var(--mj-danger-color, #dc3545);
+  border-left: 4px solid var(--mj-status-error);
 }
 
 .style-danger .card-value {
-  color: var(--mj-danger-color, #dc3545);
+  color: var(--mj-status-error);
 }
 
 .style-danger .card-icon {
-  background: var(--mj-danger-bg, #f8d7da);
-  color: var(--mj-danger-color, #dc3545);
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
 }
 
 .style-info {
-  border-left: 4px solid var(--mj-info-color, #17a2b8);
+  border-left: 4px solid var(--mj-color-info-500);
 }
 
 .style-info .card-value {
-  color: var(--mj-info-color, #17a2b8);
+  color: var(--mj-color-info-500);
 }
 
 .style-info .card-icon {
-  background: var(--mj-info-bg, #d1ecf1);
-  color: var(--mj-info-color, #17a2b8);
+  background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+  color: var(--mj-color-info-500);
 }
 
 .style-muted {
-  border-left: 4px solid var(--mj-muted-color, #6c757d);
+  border-left: 4px solid var(--mj-text-muted);
 }
 
 .style-muted .card-value {
-  color: var(--mj-muted-color, #6c757d);
+  color: var(--mj-text-muted);
 }
 
 .style-muted .card-icon {
-  background: var(--mj-muted-bg, #e9ecef);
-  color: var(--mj-muted-color, #6c757d);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
 }
 
 /* Responsive adjustments for bottom position */
@@ -267,19 +267,4 @@
 .position-bottom .cards-container.layout-vertical .aggregate-card {
   flex: 1 1 200px;
   max-width: 300px;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .aggregate-panel {
-    --mj-panel-bg: #1e1e1e;
-    --mj-panel-header-bg: #252525;
-    --mj-panel-header-hover-bg: #2a2a2a;
-    --mj-border-color: #3c3c3c;
-    --mj-text-primary: #ffffff;
-    --mj-text-secondary: #b0b0b0;
-    --mj-text-muted: #808080;
-    --mj-card-bg: #252525;
-    --mj-icon-bg: #333333;
-  }
 }

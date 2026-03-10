@@ -114,7 +114,7 @@
   background: var(--mj-bg-surface);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
 }
 
 .filter-group .filter-input:focus,

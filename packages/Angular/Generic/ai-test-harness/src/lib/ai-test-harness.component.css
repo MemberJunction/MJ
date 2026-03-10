@@ -1174,7 +1174,7 @@
 }
 
 ::ng-deep .ai-agent-test-harness .k-dialog-titlebar {
-    background: var(--mj-color-neutral-700);
+    background: var(--mj-bg-surface-card);
     color: var(--mj-text-inverse);
 }
 
