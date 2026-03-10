@@ -78,6 +78,28 @@
             </div>
           }
         </div>
+        <!-- Technical Description Section -->
+        @if (QueryInfo.TechnicalDescription) {
+          <div class="info-section" [class.expanded]="IsSectionExpanded('technical')">
+            <div class="section-header" (click)="ToggleSection('technical')">
+              <i class="fa-solid section-icon"
+                [class.fa-chevron-down]="IsSectionExpanded('technical')"
+                [class.fa-chevron-right]="!IsSectionExpanded('technical')"></i>
+              <span class="section-title">Technical Description</span>
+            </div>
+            @if (IsSectionExpanded('technical')) {
+              <div class="section-content technical-description-content">
+                <mj-markdown
+                  [data]="QueryInfo.TechnicalDescription || ''"
+                  [enableMermaid]="true"
+                  [enableHighlight]="true"
+                  [enableCollapsibleHeadings]="false"
+                  [enableSmartypants]="true">
+                </mj-markdown>
+              </div>
+            }
+          </div>
+        }
         <!-- Fields Section -->
         <div class="info-section" [class.expanded]="IsSectionExpanded('fields')">
           <div class="section-header" (click)="ToggleSection('fields')">

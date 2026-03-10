@@ -120,6 +120,11 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public SQL: string = null
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    public TechnicalDescription: string | null = null
+    /**
      * The original SQL before any optimization or modification, kept for reference and comparison
      */
     public OriginalSQL: string = null

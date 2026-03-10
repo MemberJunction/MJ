@@ -462,6 +462,7 @@ export class SkipSDK {
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -497,7 +498,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }
