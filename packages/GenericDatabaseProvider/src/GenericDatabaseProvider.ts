@@ -51,8 +51,10 @@ import {
     DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
     UserInfo,
+    LocalCacheManager,
     LogError,
     LogStatus,
+    LogStatusEx,
     StripStopWords,
 } from '@memberjunction/core';
 
@@ -1203,9 +1205,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
-            // Separate items that need cache check from those that don't
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+            // Separate items by type: no cache check, needs validation
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+            const itemsNeedingValidation: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
             const errorResults: RunViewWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
@@ -1225,54 +1227,116 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 try {
                     this.CheckUserReadPermissions(entityInfo.Name, user);
-                    const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                    itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+                    itemsNeedingValidation.push({ index: i, item, entityInfo });
                 } catch (e) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                 }
             }
 
-            // Execute batched cache status check
-            const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+            // Phase 1: Check server's LocalCacheManager first (zero DB hits)
+            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
-            // Determine which items are current vs stale, and whether they support differential updates
+            for (const { index, item, entityInfo } of itemsNeedingValidation) {
+                const entityLabel = item.params.EntityName || 'unknown';
+                const resolved = await this.resolveFromServerCache(item, index, entityLabel);
+                if (resolved) {
+                    if (resolved.status === 'current') {
+                        currentResults.push(resolved.result);
+                    } else {
+                        serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
+                    }
+                } else {
+                    serverCacheMissItems.push({ index, item, entityInfo });
+                }
+            }
+
+            // Phase 2: For server cache misses, fall back to DB validation
             const differentialItems: Array<{
                 index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
                 clientMaxUpdatedAt: string; clientRowCount: number;
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
-            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
 
-            for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
-                const serverStatus = cacheStatusResults.get(index);
-                if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
-                    continue;
+            if (serverCacheMissItems.length > 0) {
+                // Build WHERE clauses and run batched DB status check only for cache misses
+                const itemsForDBCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+                for (const { index, item, entityInfo } of serverCacheMissItems) {
+                    try {
+                        const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL });
+                    } catch (e) {
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
+                    }
                 }
 
-                if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ viewIndex: index, status: 'current' });
-                } else if (entityInfo.TrackRecordChanges) {
-                    differentialItems.push({
-                        index, params: item.params, entityInfo, whereSQL,
-                        clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                        clientRowCount: item.cacheStatus!.rowCount,
-                        serverStatus,
-                    });
-                } else {
-                    staleItemsNoTracking.push({ index, params: item.params });
+                const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsForDBCheck, contextUser);
+
+                for (const { index, item, entityInfo, whereSQL } of itemsForDBCheck) {
+                    const serverStatus = cacheStatusResults.get(index);
+                    if (!serverStatus || !serverStatus.success) {
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                        continue;
+                    }
+
+                    const entityLabel = item.params.EntityName || 'unknown';
+                    if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                        LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
+                        currentResults.push({ viewIndex: index, status: 'current' });
+                    } else if (entityInfo.TrackRecordChanges) {
+                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
+                        differentialItems.push({
+                            index, params: item.params, entityInfo, whereSQL,
+                            clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                            clientRowCount: item.cacheStatus!.rowCount,
+                            serverStatus,
+                        });
+                    } else {
+                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
+                        staleItemsNoTracking.push({ index, params: item.params });
+                    }
                 }
             }
 
-            // Run queries in parallel
+            // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+
+            for (const entry of itemsWithoutCacheCheck) {
+                if (LocalCacheManager.Instance.IsInitialized) {
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString);
+                    const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+                    if (cached) {
+                        const entityLabel = entry.item.params.EntityName || 'unknown';
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — client has no cache, serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+                        noCacheStatusServedFromCache.push({ index: entry.index, serverCached: cached });
+                        continue;
+                    }
+                }
+                noCacheStatusNeedsDB.push(entry);
+            }
+
+            // Phase 4: Run queries in parallel for items needing data
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
-                ...itemsWithoutCacheCheck.map(({ index, item }) =>
-                    this.runFullQueryAndReturn<T>(item.params, index, contextUser),
+                // Items without cache check — served from server cache
+                ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached),
                 ),
+                // Items without cache check — server cache miss, must hit DB
+                ...noCacheStatusNeedsDB.map(({ index, item }) =>
+                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser),
+                ),
+                // Server cache stale — serve from server's cached data (zero DB)
+                ...serverCacheStaleItems.map(({ index, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached),
+                ),
+                // DB-validated stale items (no change tracking)
                 ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
-                    this.runFullQueryAndReturn<T>(viewParams, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser),
                 ),
+                // DB-validated differential items
                 ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
                     this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser),
                 ),
@@ -1281,6 +1345,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fullQueryResults = await Promise.all(queryPromises);
             const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
             allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+            const entities = params.map(p => p.params.EntityName || 'unknown').join(', ');
+            const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;
+            const totalChecked = itemsNeedingValidation.length + itemsWithoutCacheCheck.length;
+            const totalDBQueries = noCacheStatusNeedsDB.length + staleItemsNoTracking.length + differentialItems.length;
+            LogStatusEx({ message: `  📊 [SmartCache] Batch [${entities}] — ${currentResults.length} current, ${serverCacheStaleItems.length + noCacheStatusServedFromCache.length} served-from-cache, ${differentialItems.length} differential, ${totalDBQueries} full-query, ${errorResults.length} errors (server cache: ${totalServerCacheHits}/${totalChecked} hits)`, verboseOnly: true });
 
             return { success: true, results: allResults };
         } catch (e) {
@@ -1379,6 +1449,68 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
         return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+    }
+
+    /**
+     * Runs a full query and stores the result in the server's LocalCacheManager.
+     * Used by RunViewsWithCacheCheck to populate the server cache for future requests.
+     */
+    protected async runFullQueryAndCacheResult<T = unknown>(
+        params: RunViewParams,
+        viewIndex: number,
+        contextUser?: UserInfo,
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+        // Cache the result so subsequent RunViewsWithCacheCheck calls can skip DB
+        if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt);
+        }
+        return result;
+    }
+
+    /**
+     * Checks the server's LocalCacheManager for cached data matching the client's request.
+     * Returns the resolution if found (either 'current' or server-cached data to serve),
+     * or null if the server cache doesn't have this data.
+     */
+    private async resolveFromServerCache(
+        item: RunViewWithCacheCheckParams,
+        index: number,
+        entityLabel: string,
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } } | null> {
+        if (!LocalCacheManager.Instance.IsInitialized) return null;
+
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
+        const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+        if (!cached) return null;
+
+        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount };
+        if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+            LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`, verboseOnly: true });
+            return { status: 'current', result: { viewIndex: index, status: 'current' } };
+        }
+
+        // Server has newer data than client — we can serve it directly from cache
+        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+        return { status: 'stale', serverCached: cached };
+    }
+
+    /**
+     * Packages server-cached data as a RunViewWithCacheCheckResult for return to the client.
+     */
+    private async serveFromServerCache<T = unknown>(
+        viewIndex: number,
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number },
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        return {
+            viewIndex,
+            status: 'stale',
+            results: serverCached.results as T[],
+            maxUpdatedAt: serverCached.maxUpdatedAt,
+            rowCount: serverCached.rowCount,
+        };
     }
 
     /**

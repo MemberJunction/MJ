@@ -3,7 +3,7 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeDropdownComponent } from '@memberjunction/ng-trees';
 import { SchemaPreviewObjectInput, SchemaPreviewResult } from '@memberjunction/graphql-dataprovider';
@@ -11,7 +11,6 @@ import {
   IntegrationDataService,
   ResolveIntegrationIcon,
   IntegrationSummary,
-  IntegrationDefinitionRow,
   EntityMapRow
 } from '../../services/integration-data.service';
 
@@ -81,11 +80,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   WizardOpen = false;
   WizardStep: WizardStepType = 1;
   WizardSteps = WIZARD_STEPS;
-  AvailableIntegrations: IntegrationDefinitionRow[] = [];
+  AvailableIntegrations: MJIntegrationEntity[] = [];
   SearchQuery = '';
 
   // Step 1
-  SelectedIntegration: IntegrationDefinitionRow | null = null;
+  SelectedIntegration: MJIntegrationEntity | null = null;
 
   // Step 2
   ConnectionName = '';
@@ -879,16 +878,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Wizard Step 1: Choose integration
   // ---------------------------------------------------------------------------
 
-  SelectIntegration(def: IntegrationDefinitionRow): void {
+  SelectIntegration(def: MJIntegrationEntity): void {
     this.SelectedIntegration = def;
     this.ConnectionName = def.Name;
   }
 
-  IsSelectedIntegration(def: IntegrationDefinitionRow): boolean {
+  IsSelectedIntegration(def: MJIntegrationEntity): boolean {
     return UUIDsEqual(this.SelectedIntegration?.ID, def.ID);
   }
 
-  get FilteredIntegrations(): IntegrationDefinitionRow[] {
+  get FilteredIntegrations(): MJIntegrationEntity[] {
     if (!this.SearchQuery.trim()) return this.AvailableIntegrations;
     const query = this.SearchQuery.toLowerCase();
     return this.AvailableIntegrations.filter(i =>

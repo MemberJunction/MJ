@@ -889,7 +889,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             CacheLocal: config.CacheLocal ?? true
         });
 
-        console.log('[TreeComponent] Branches query result:', {
+        console.debug('[TreeComponent] Branches query result:', {
             entityName: config.EntityName,
             filter: config.ExtraFilter || '(none)',
             cacheLocal: config.CacheLocal ?? true,
@@ -918,7 +918,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             CacheLocal: config.CacheLocal ?? true
         });
 
-        console.log('[TreeComponent] Leaves query result:', {
+        console.debug('[TreeComponent] Leaves query result:', {
             entityName: config.EntityName,
             filter: config.ExtraFilter || '(none)',
             cacheLocal: config.CacheLocal ?? true,
@@ -953,7 +953,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             CacheLocal: junctionConfig.CacheLocal ?? true
         });
 
-        console.log('[TreeComponent] Junction query result:', {
+        console.debug('[TreeComponent] Junction query result:', {
             entityName: junctionConfig.EntityName,
             filter: junctionConfig.ExtraFilter || '(none)',
             cacheLocal: junctionConfig.CacheLocal ?? true,
@@ -981,7 +981,7 @@ export class TreeComponent implements OnInit, OnDestroy {
                 CacheLocal: indirect.CacheLocal ?? true
             });
 
-            console.log('[TreeComponent] Intermediate entity query result:', {
+            console.debug('[TreeComponent] Intermediate entity query result:', {
                 entityName: indirect.IntermediateEntity,
                 filter: indirect.ExtraFilter || '(none)',
                 cacheLocal: indirect.CacheLocal ?? true,
@@ -1005,7 +1005,7 @@ export class TreeComponent implements OnInit, OnDestroy {
                 }
             }
 
-            console.log('[TreeComponent] Intermediate to leaf mapping:', {
+            console.debug('[TreeComponent] Intermediate to leaf mapping:', {
                 mapSize: intermediateToLeaf.size,
                 entries: Array.from(intermediateToLeaf.entries())
             });
@@ -1046,7 +1046,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             }
         }
 
-        console.log('[TreeComponent] Final junction mappings (leafId -> branchIds):', {
+        console.debug('[TreeComponent] Final junction mappings (leafId -> branchIds):', {
             mapSize: mappings.size,
             entries: Array.from(mappings.entries())
         });
@@ -1135,7 +1135,7 @@ export class TreeComponent implements OnInit, OnDestroy {
         const displayField = config.DisplayField || 'Name';
         const useJunction = !!junctionMappings && junctionMappings.size > 0;
 
-        console.log('[TreeComponent] attachLeavesToBranches input:', {
+        console.debug('[TreeComponent] attachLeavesToBranches input:', {
             leafDataCount: leafData.length,
             leafIds: leafData.map((d: Record<string, unknown>) => ({ id: d[idField], name: d[displayField] })),
             branchMapKeys: Array.from(branchMap.keys()),
@@ -1152,7 +1152,7 @@ export class TreeComponent implements OnInit, OnDestroy {
 
             // If using junction mappings, only include leaves that have junction entries
             if (useJunction && !junctionMappings!.has(id)) {
-                console.log(`[TreeComponent] Skipping leaf ${id} (${data[displayField]}) - not in junction mappings`);
+                console.debug(`[TreeComponent] Skipping leaf ${id} (${data[displayField]}) - not in junction mappings`);
                 continue; // Skip leaves not in any branch via junction
             }
 
@@ -1169,19 +1169,19 @@ export class TreeComponent implements OnInit, OnDestroy {
             });
 
             allLeaves.push(leaf);
-            console.log(`[TreeComponent] Processing leaf ${id} (${leaf.Label})`);
+            console.debug(`[TreeComponent] Processing leaf ${id} (${leaf.Label})`);
 
             if (useJunction) {
                 // M2M relationship: attach to all mapped branches
                 const branchIds = junctionMappings!.get(id) || [];
                 let attached = false;
 
-                console.log(`[TreeComponent] Leaf ${id} junction branchIds:`, branchIds);
+                console.debug(`[TreeComponent] Leaf ${id} junction branchIds:`, branchIds);
 
                 for (const branchId of branchIds) {
                     if (branchMap.has(branchId)) {
                         const parent = branchMap.get(branchId)!;
-                        console.log(`[TreeComponent] Attaching leaf ${id} to branch ${branchId} (${parent.Label})`);
+                        console.debug(`[TreeComponent] Attaching leaf ${id} to branch ${branchId} (${parent.Label})`);
 
                         if (!attached) {
                             // First attachment: use the original leaf
@@ -1202,13 +1202,13 @@ export class TreeComponent implements OnInit, OnDestroy {
                             parent.Children.push(leafClone);
                         }
                     } else {
-                        console.log(`[TreeComponent] Branch ${branchId} NOT FOUND in branchMap for leaf ${id}`);
+                        console.debug(`[TreeComponent] Branch ${branchId} NOT FOUND in branchMap for leaf ${id}`);
                     }
                 }
 
                 // If no valid branch found, add to root
                 if (!attached) {
-                    console.log(`[TreeComponent] Leaf ${id} not attached to any branch, adding to root`);
+                    console.debug(`[TreeComponent] Leaf ${id} not attached to any branch, adding to root`);
                     rootNodes.push(leaf);
                     leaf.Level = 0;
                 }

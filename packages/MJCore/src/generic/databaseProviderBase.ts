@@ -59,6 +59,15 @@ export interface DeleteSQLResult {
  */
 export abstract class DatabaseProviderBase extends ProviderBase {
     /**
+     * Server-side providers trust the local cache completely because it is
+     * kept in perfect sync via BaseEntity save/delete events and cross-server
+     * Redis pub/sub.  No lightweight DB validation needed on cache hits.
+     */
+    protected override get TrustLocalCacheCompletely(): boolean {
+        return true;
+    }
+
+    /**
      * Executes a SQL query with optional parameters and options.
      * @param query
      * @param parameters
