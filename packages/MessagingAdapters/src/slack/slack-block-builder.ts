@@ -128,46 +128,45 @@ export function buildRichResponse(
   blocks.push(buildAgentContextBlock(agent));
   blocks.push(buildDivider());
 
-  // Structured payload rendering — detect rich payloads and render natively
-  // before falling back to generic markdown→blocks conversion.
-  // Track whether we found "rich" content (code, DB results, data) that warrants
-  // a link to MJ Explorer — text-heavy content (research, summaries) stays in Slack.
-  let hasRichArtifact = false;
-  const structuredPayload = result ? detectStructuredPayload(result) : null;
-  const structuredBlocks = structuredPayload ? buildStructuredPayloadBlocksFromType(structuredPayload) : null;
-  if (structuredBlocks) {
-    blocks.push(...structuredBlocks);
-    // Code payloads (DB queries, Codesmith output) are "rich" — need Explorer for full view
-    if (structuredPayload!.Type === 'code') {
-      hasRichArtifact = true;
+  // When an artifact exists (artifactId provided), MJ Explorer shows the Message
+  // text inline and puts the full payload in a separate artifact viewer. Mirror that
+  // here: render responseText as the primary content and let the Explorer deep-link
+  // handle the full payload. Only render structured payloads inline when there is
+  // NO artifact — meaning Slack is the only way to see the content.
+  const hasArtifact = !!options?.artifactId;
+
+  if (!hasArtifact) {
+    // No artifact — try structured payload rendering so content isn't lost.
+    const structuredPayload = result ? detectStructuredPayload(result) : null;
+    const structuredBlocks = structuredPayload ? buildStructuredPayloadBlocksFromType(structuredPayload) : null;
+
+    if (structuredBlocks) {
+      blocks.push(...structuredBlocks);
+    } else {
+      // No structured payload — fall through to text rendering below
+      blocks.push(...buildTextBlocks(responseText));
+    }
+
+    // Artifact card from payload structure (no artifactId but payload looks artifact-like)
+    const artifact = detectArtifactFromResult(result);
+    if (artifact) {
+      blocks.push(buildDivider());
+      blocks.push(...buildArtifactCard(artifact));
+    }
+
+    // Catch-all: if nothing structured was found, check for buried content
+    if (!structuredBlocks && !artifact) {
+      const payloadContent = extractPayloadContent(result);
+      if (payloadContent && !isContentSimilar(payloadContent.content, responseText)) {
+        blocks.push(buildDivider());
+        blocks.push(...buildPayloadContentCard(payloadContent.title, payloadContent.content));
+      }
     }
   } else {
-    // Fallback: generic markdown → Block Kit conversion
-    const textBlocks = buildTextBlocks(responseText);
-    blocks.push(...textBlocks);
-  }
-
-  // Artifact card (check both in-memory payload and FinalPayload)
-  const artifact = detectArtifactFromResult(result);
-  if (artifact) {
-    blocks.push(buildDivider());
-    blocks.push(...buildArtifactCard(artifact));
-    // Artifacts with sections (reports, multi-part outputs) are rich
-    if (artifact.Sections && artifact.Sections.length > 0) {
-      hasRichArtifact = true;
-    }
-  }
-
-  // Catch-all: if no structured blocks and no artifact were rendered,
-  // check for substantive payload content (e.g., blog post, report, code output)
-  // that would otherwise be lost. In MJ Explorer this content appears as a
-  // clickable artifact; in Slack we render it inline with a "View Full" button.
-  if (!structuredBlocks && !artifact) {
-    const payloadContent = extractPayloadContent(result);
-    if (payloadContent && !isContentSimilar(payloadContent.content, responseText)) {
-      blocks.push(buildDivider());
-      blocks.push(...buildPayloadContentCard(payloadContent.title, payloadContent.content));
-    }
+    // Artifact exists — show only the user-facing Message text.
+    // The "View full artifact in MJ Explorer" link (rendered below) gives access
+    // to the complete structured payload, just like the artifact viewer in Explorer.
+    blocks.push(...buildTextBlocks(responseText));
   }
 
   // Media blocks (images from agent)

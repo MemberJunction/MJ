@@ -12,7 +12,8 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
     MessagingAdapterSettings,
@@ -245,6 +246,12 @@ export abstract class BaseMessagingAdapter {
         responseText: string,
         metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse>;
+
+    /**
+     * Human-readable platform name (e.g., "Slack", "Teams") used in conversation names
+     * and log messages. Subclasses must return their platform identifier.
+     */
+    protected abstract get PlatformName(): string;
 
     /**
      * Get the bot's own user ID on this platform (to identify bot messages in thread history).
@@ -706,12 +713,25 @@ export abstract class BaseMessagingAdapter {
                 conversationId,
                 userMessage: userMessageText,
                 createArtifacts: true,
-                conversationName: `Slack: ${userMessageText.substring(0, 80)}`,
+                conversationName: `${this.PlatformName}: ${userMessageText.substring(0, 80)}`,
             });
+
+            let artifactId = conversationResult.artifactInfo?.artifactId;
+
+            // If no artifact was created but the agent produced a response,
+            // create one directly from the Message text so the artifact link works.
+            if (!artifactId && conversationResult.agentResponseDetailId) {
+                artifactId = await this.synthesizeArtifact(
+                    conversationResult.agentResult,
+                    conversationResult.agentResponseDetailId,
+                    agent,
+                    contextUser
+                );
+            }
 
             return {
                 result: conversationResult.agentResult,
-                artifactId: conversationResult.artifactInfo?.artifactId,
+                artifactId,
                 conversationId: conversationResult.conversationId,
             };
         } catch (error) {
@@ -725,6 +745,69 @@ export abstract class BaseMessagingAdapter {
                 await this.sendFinalMessage(message, errorFormatted);
             }
             throw error;
+        }
+    }
+
+    /**
+     * Create an artifact from the agent's Message text when the agent didn't
+     * produce a structured payload. This ensures every Slack response has an
+     * artifact link for the full MJ Explorer experience.
+     */
+    private async synthesizeArtifact(
+        agentResult: ExecuteAgentResult,
+        conversationDetailId: string,
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo
+    ): Promise<string | undefined> {
+        const messageText = agentResult.agentRun?.Message || agentResult.agentRun?.Result;
+        if (!messageText || messageText.length === 0) return undefined;
+
+        try {
+            const md = new Metadata();
+            const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+            const agentName = agent.Name ?? 'Agent';
+
+            // Create artifact record
+            const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+            artifact.Name = `${agentName} Response - ${new Date().toLocaleString()}`;
+            artifact.Description = `Response from ${agentName} via ${this.PlatformName}`;
+            artifact.TypeID = JSON_ARTIFACT_TYPE_ID;
+            artifact.UserID = contextUser.ID;
+            artifact.Visibility = 'Always';
+
+            if (!await artifact.Save()) {
+                LogError('Failed to save synthesized artifact');
+                return undefined;
+            }
+
+            // Create version with the message content
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+            version.ArtifactID = artifact.ID;
+            version.VersionNumber = 1;
+            version.Content = JSON.stringify({ message: messageText }, null, 2);
+            version.UserID = contextUser.ID;
+
+            if (!await version.Save()) {
+                LogError('Failed to save synthesized artifact version — cleaning up orphaned artifact');
+                await artifact.Delete();
+                return undefined;
+            }
+
+            // Link artifact version to conversation detail
+            const link = await md.GetEntityObject<MJConversationDetailArtifactEntity>('MJ: Conversation Detail Artifacts', contextUser);
+            link.ConversationDetailID = conversationDetailId;
+            link.ArtifactVersionID = version.ID;
+            link.Direction = 'Output';
+            if (!await link.Save()) {
+                LogError('Failed to save conversation detail artifact link');
+                // Artifact + version exist but aren't linked — not critical, continue
+            }
+
+            LogStatus(`Synthesized artifact ${artifact.ID} from ${agentName} message (${messageText.length} chars)`);
+            return artifact.ID;
+        } catch (error) {
+            LogError('Failed to synthesize artifact:', undefined, error);
+            return undefined;
         }
     }
 
