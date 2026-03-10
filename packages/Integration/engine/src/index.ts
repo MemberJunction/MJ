@@ -28,6 +28,8 @@ export type {
     SyncNotificationSeverity,
     SyncNotification,
     OnNotificationCallback,
+    IntegrationSyncOptions,
+    EntityMapSyncResult,
     SourceSchemaInfo,
     SourceObjectInfo,
     SourceFieldInfo,

@@ -176,6 +176,7 @@
 }
 
 .job-card {
+    position: relative;
     background: white;
     border-radius: 16px;
     border: 1px solid #e2e8f0;
@@ -368,57 +369,97 @@
     border-color: #999;
 }
 
-/* ── Slideout Panel ──────────────────────────────────────── */
-.slideout-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
-    z-index: 999;
-    animation: fadeInBackdrop 0.2s ease;
-}
-
-@keyframes fadeInBackdrop {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.slideout-panel {
-    position: fixed;
-    top: 0;
-    right: -100%;
-    height: 100vh;
-    background: white;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-    z-index: 1000;
-    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow-y: auto;
-}
-
-.slideout-panel.open {
-    right: 0;
-}
-
-.slideout-resize-handle {
+/* ── Delete Confirmation Overlay ─────────────────────────── */
+.delete-confirm-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 5px;
-    height: 100%;
-    cursor: col-resize;
-    background: transparent;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 10;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.delete-confirm-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+}
+
+.delete-warn-icon {
+    font-size: 1.5rem;
+    color: #ef4444;
+}
+
+.delete-confirm-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.delete-confirm-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.delete-confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
     transition: background 0.2s;
 }
 
-.slideout-resize-handle:hover {
-    background: rgba(0, 118, 182, 0.3);
+.delete-confirm-btn:hover:not(:disabled) {
+    background: #dc2626;
 }
 
-.slideout-resize-handle:active {
-    background: rgba(0, 118, 182, 0.5);
+.delete-confirm-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.delete-cancel-btn {
+    padding: 6px 16px;
+    background: white;
+    color: #475569;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.delete-cancel-btn:hover {
+    background: #f3f4f6;
+    border-color: #999;
+}
+
+/* ── Danger Action Button ───────────────────────────────── */
+.action-btn-danger {
+    margin-left: auto;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.action-btn-danger:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #dc2626;
 }
 
 /* ── Responsive ──────────────────────────────────────────── */
@@ -442,11 +483,5 @@
     .search-box {
         min-width: auto;
         flex: 1;
-    }
-    .slideout-panel {
-        width: 100% !important;
-    }
-    .slideout-resize-handle {
-        display: none;
     }
 }

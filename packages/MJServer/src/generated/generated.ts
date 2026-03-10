@@ -23268,6 +23268,10 @@ export class MJCompanyIntegrationRun_ {
     @Field({nullable: true, description: `Optional configuration data in JSON format for the request that started the integration run for audit purposes.`}) 
     ConfigData?: string;
         
+    @Field({nullable: true, description: `Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`}) 
+    @MaxLength(36)
+    ScheduledJobRunID?: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -23325,6 +23329,9 @@ export class CreateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ConfigData: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID: string | null;
 }
     
 
@@ -23362,6 +23369,9 @@ export class UpdateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ConfigData?: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23777,6 +23787,10 @@ export class MJCompanyIntegration_ {
     @Field({nullable: true, description: `When the lock should be considered stale and eligible for cleanup`}) 
     LockExpiresAt?: Date;
         
+    @Field({nullable: true, description: `Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`}) 
+    @MaxLength(36)
+    ScheduledJobID?: string;
+        
     @Field() 
     @MaxLength(50)
     Company: string;
@@ -23905,6 +23919,9 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     LockExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledJobID: string | null;
 }
     
 
@@ -23993,6 +24010,9 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     LockExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledJobID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -56303,6 +56323,9 @@ export class MJScheduledJobRun_ {
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
+    @Field(() => [MJCompanyIntegrationRun_])
+    MJCompanyIntegrationRuns_ScheduledJobRunIDArray: MJCompanyIntegrationRun_[]; // Link to MJCompanyIntegrationRuns
+    
 }
 
 //****************************************************************************
@@ -56445,6 +56468,16 @@ export class MJScheduledJobRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCompanyIntegrationRun_])
+    async MJCompanyIntegrationRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Company Integration Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -56788,6 +56821,9 @@ export class MJScheduledJob_ {
     @Field(() => [MJScheduledJobRun_])
     MJScheduledJobRuns_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to MJScheduledJobRuns
     
+    @Field(() => [MJCompanyIntegration_])
+    MJCompanyIntegrations_ScheduledJobIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
+    
 }
 
 //****************************************************************************
@@ -57026,6 +57062,16 @@ export class MJScheduledJobResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwScheduledJobRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCompanyIntegration_])
+    async MJCompanyIntegrations_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrations')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

@@ -184,6 +184,7 @@ export class SoftFKConfigEmitter {
             FilePath: configPath,
             Content: JSON.stringify(mergedConfig, null, 4) + '\n',
             Description: 'Updated additionalSchemaInfo with soft PK and FK definitions for integration tables',
+            Category: 'schemaInfo',
         };
     }
 }

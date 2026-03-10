@@ -1,0 +1,20 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Integration Sync",
+      "Description": "Executes a company integration sync, processing all configured entity maps to synchronize data between MemberJunction and the external system.",
+      "DriverClass": "IntegrationSyncScheduledJobDriver",
+      "DomainRunEntity": "MJ: Company Integration Runs",
+      "DomainRunEntityFKey": "ScheduledJobRunID",
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "4CD34733-4751-4572-B946-17DF6CB3EC90"
+    },
+    "sync": {
+      "lastModified": "2026-03-10T21:25:53.816Z",
+      "checksum": "636ee5eb2383ee7333041eea0540039cded1bf34b7737fedbe5b020bca00e5f7"
+    }
+  }
+]

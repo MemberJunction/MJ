@@ -82,7 +82,6 @@ import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.
 import { SchedulingOverviewComponent } from './Scheduling/components/scheduling-overview.component';
 import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
 import { SchedulingActivityComponent } from './Scheduling/components/scheduling-activity.component';
-import { JobSlideoutComponent } from './Scheduling/components/job-slideout.component';
 import { SchedulingOverviewResourceComponent } from './Scheduling/components/scheduling-overview-resource.component';
 import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
 import { SchedulingActivityResourceComponent } from './Scheduling/components/scheduling-activity-resource.component';
@@ -178,6 +177,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 import { VersionsModule } from '@memberjunction/ng-versions';
 // Integration Dashboard Module
 import { IntegrationModule } from './Integration/integration.module';
+// Scheduling Module from generic package (reusable panels and dialogs)
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
 
 
 
@@ -239,7 +240,6 @@ import { IntegrationModule } from './Integration/integration.module';
     SchedulingOverviewComponent,
     SchedulingJobsComponent,
     SchedulingActivityComponent,
-    JobSlideoutComponent,
     SchedulingOverviewResourceComponent,
     SchedulingJobsResourceComponent,
     SchedulingActivityResourceComponent,
@@ -353,7 +353,8 @@ import { IntegrationModule } from './Integration/integration.module';
     AgentsModule,
     MarkdownModule,
     VersionsModule,
-    IntegrationModule
+    IntegrationModule,
+    SchedulingModule
   ],
   providers: [
     AIInstrumentationService,

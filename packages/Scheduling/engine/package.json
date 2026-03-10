@@ -22,6 +22,7 @@
     "@memberjunction/ai-core-plus": "5.9.0",
     "@memberjunction/ai-agents": "5.9.0",
     "@memberjunction/core": "5.9.0",
+    "@memberjunction/integration-engine": "5.9.0",
     "@memberjunction/core-entities": "5.9.0",
     "@memberjunction/global": "5.9.0",
     "@memberjunction/scheduling-base-types": "5.9.0",

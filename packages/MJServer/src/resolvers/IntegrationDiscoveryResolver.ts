@@ -140,6 +140,9 @@ class SchemaPreviewFileOutput {
 
     @Field()
     Description: string;
+
+    @Field()
+    Category: string;
 }
 
 @ObjectType()
@@ -427,7 +430,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Files: allFiles.map(f => ({
                     FilePath: f.FilePath,
                     Content: f.Content,
-                    Description: f.Description
+                    Description: f.Description,
+                    Category: f.Category,
                 })),
                 Warnings: output.Warnings.length > 0 ? output.Warnings : undefined
             };

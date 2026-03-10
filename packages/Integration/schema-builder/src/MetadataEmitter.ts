@@ -43,6 +43,7 @@ export class MetadataEmitter {
             FilePath: `${metadataDir}/entity-settings/.integration-write-allowed.json`,
             Content: JSON.stringify(records, null, 2) + '\n',
             Description: `EntitySettings: IntegrationWriteAllowed=true for ${entityNames.join(', ')}`,
+            Category: 'metadata',
         };
     }
 
@@ -59,6 +60,7 @@ export class MetadataEmitter {
             FilePath: `${metadataDir}/entity-settings/.mj-sync.json`,
             Content: JSON.stringify(config, null, 2) + '\n',
             Description: 'mj-sync configuration for entity-settings directory',
+            Category: 'metadata',
         };
     }
 }

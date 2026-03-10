@@ -49,6 +49,7 @@ export class MigrationFileWriter {
             FilePath: filePath,
             Content: header + ddl + '\n',
             Description: `Migration: ${metadata.Action} for ${metadata.SourceType}.${metadata.ObjectName}`,
+            Category: 'migration',
         };
     }
 

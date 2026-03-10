@@ -145,6 +145,9 @@ export interface TypeMappingEntry {
 
 // ─── Emitted Files ──────────────────────────────────────────────────
 
+/** Category of an emitted file — tells consumers where/how to handle it. */
+export type EmittedFileCategory = 'migration' | 'schemaInfo' | 'metadata';
+
 /** A single file produced by the Schema Builder. */
 export interface EmittedFile {
     /** Relative path from repo root (e.g., "migrations/v2/V2026...sql"). */
@@ -153,6 +156,8 @@ export interface EmittedFile {
     Content: string;
     /** Human-readable description of what this file does. */
     Description: string;
+    /** File category: migration (SQL DDL), schemaInfo (soft PK/FK JSON), or metadata (mj-sync). */
+    Category: EmittedFileCategory;
 }
 
 /** Metadata for a migration file header comment. */

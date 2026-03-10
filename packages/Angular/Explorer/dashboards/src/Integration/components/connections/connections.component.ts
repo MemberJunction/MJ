@@ -129,6 +129,10 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   DetailSearchTerm = '';
   IsDetailLoading = false;
 
+  // Schedule state (for the selected integration)
+  ScheduledJobID: string | null = null;
+  ShowScheduleSlidePanel = false;
+
   // Entity map editor state (field mapping detail view)
   EditorEntityMap: EntityMapRow | null = null;
 
@@ -508,11 +512,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   async SelectIntegrationCard(summary: IntegrationSummary): Promise<void> {
     this.SelectedSummary = summary;
     this.DetailSearchTerm = '';
+    this.ScheduledJobID = null;
     this.IsDetailLoading = true;
     this.cdr.detectChanges();
 
     try {
-      const maps = await this.loadEntityMapsForIntegration(summary.Integration.ID);
+      const [maps] = await Promise.all([
+        this.loadEntityMapsForIntegration(summary.Integration.ID),
+        this.loadScheduledJobForIntegration(summary.Integration.ID)
+      ]);
       this.DetailEntityMaps = maps;
       this.DetailFilteredMaps = maps;
     } catch (err) {
@@ -528,7 +536,76 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.DetailEntityMaps = [];
     this.DetailFilteredMaps = [];
     this.DetailSearchTerm = '';
+    this.ScheduledJobID = null;
+    this.ShowScheduleSlidePanel = false;
     this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Schedule management
+  // ---------------------------------------------------------------------------
+
+  OpenSchedulePanel(): void {
+    this.ShowScheduleSlidePanel = true;
+    this.cdr.detectChanges();
+  }
+
+  CloseSchedulePanel(): void {
+    this.ShowScheduleSlidePanel = false;
+    this.cdr.detectChanges();
+  }
+
+  async OnScheduleSaved(): Promise<void> {
+    this.ShowScheduleSlidePanel = false;
+    if (this.SelectedSummary) {
+      await this.loadScheduledJobForIntegration(this.SelectedSummary.Integration.ID);
+    }
+    this.cdr.detectChanges();
+  }
+
+  async OnScheduleDeleted(): Promise<void> {
+    this.ShowScheduleSlidePanel = false;
+    this.ScheduledJobID = null;
+    this.cdr.detectChanges();
+  }
+
+  get ScheduleDefaultConfiguration(): string {
+    if (!this.SelectedSummary) return '{}';
+    return JSON.stringify({
+      CompanyIntegrationID: this.SelectedSummary.Integration.ID
+    }, null, 2);
+  }
+
+  get IntegrationSyncJobTypeID(): string | null {
+    return this.integrationSyncJobTypeID;
+  }
+
+  private integrationSyncJobTypeID: string | null = null;
+
+  private async loadScheduledJobForIntegration(companyIntegrationID: string): Promise<void> {
+    try {
+      const md = new Metadata();
+      const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+      await ci.Load(companyIntegrationID);
+      const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
+      this.ScheduledJobID = scheduledJobID ?? null;
+
+      // Also look up the Integration Sync job type ID for pre-populating new schedules
+      if (!this.integrationSyncJobTypeID) {
+        const rv = new RunView();
+        const typeResult = await rv.RunView<{ ID: string }>({
+          EntityName: 'MJ: Scheduled Job Types',
+          ExtraFilter: `Name='Integration Sync'`,
+          Fields: ['ID'],
+          ResultType: 'simple'
+        });
+        if (typeResult.Success && typeResult.Results.length > 0) {
+          this.integrationSyncJobTypeID = typeResult.Results[0].ID;
+        }
+      }
+    } catch (err) {
+      console.warn('[IntegrationConnections] Failed to load schedule info:', err);
+    }
   }
 
   OnDetailSearch(event: Event): void {

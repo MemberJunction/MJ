@@ -699,8 +699,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 provider: 'credentials',
-                UserName: config.APIPassword,
-                Password: config.APIKey,
+                UserName: config.APIKey,
+                Password: config.APIPassword,
                 UserType: 'Admin',
                 ClientID: Number(config.ClientID),
             }),

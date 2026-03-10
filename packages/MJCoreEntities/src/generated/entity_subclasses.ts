@@ -8385,9 +8385,15 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Description: Optional error log information for the integration run.`),
     ConfigData: z.string().nullable().describe(`
         * * Field Name: ConfigData
-        * * Display Name: Config Data
+        * * Display Name: Configuration Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -8495,7 +8501,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)`),
     IsActive: z.boolean().nullable().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Description: Controls whether this integration is currently active for the company.`),
     AccessToken: z.string().nullable().describe(`
@@ -8525,7 +8531,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: The company's identifier in the external system, used for API calls.`),
     IsExternalSystemReadOnly: z.boolean().describe(`
         * * Field Name: IsExternalSystemReadOnly
-        * * Display Name: External System Read Only
+        * * Display Name: Read Only External System
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if data can only be read from the external system, not written back.`),
@@ -8634,13 +8640,19 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Lock Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: When the lock should be considered stale and eligible for cleanup`),
+    ScheduledJobID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobID
+        * * Display Name: Scheduled Job
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+        * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8652,7 +8664,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -45194,7 +45206,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: ConfigData
-    * * Display Name: Config Data
+    * * Display Name: Configuration Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
     */
@@ -45203,6 +45215,20 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     }
     set ConfigData(value: string | null) {
         this.Set('ConfigData', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
     }
 
     /**
@@ -45470,7 +45496,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Description: Controls whether this integration is currently active for the company.
     */
@@ -45548,7 +45574,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsExternalSystemReadOnly
-    * * Display Name: External System Read Only
+    * * Display Name: Read Only External System
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if data can only be read from the external system, not written back.
@@ -45812,8 +45838,22 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: ScheduledJobID
+    * * Display Name: Scheduled Job
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+    * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.
+    */
+    get ScheduledJobID(): string | null {
+        return this.Get('ScheduledJobID');
+    }
+    set ScheduledJobID(value: string | null) {
+        this.Set('ScheduledJobID', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -45822,7 +45862,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -45849,7 +45889,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {

@@ -55,6 +55,7 @@
     "@memberjunction/ng-container-directives": "5.9.0",
     "@memberjunction/ng-core-entity-forms": "5.9.0",
     "@memberjunction/ng-credentials": "5.9.0",
+    "@memberjunction/ng-scheduling": "5.9.0",
     "@memberjunction/ng-dashboard-viewer": "5.9.0",
     "@memberjunction/ng-entity-viewer": "5.9.0",
     "@memberjunction/ng-export-service": "5.9.0",
