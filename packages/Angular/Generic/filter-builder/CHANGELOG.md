@@ -1,5 +1,16 @@
 # @memberjunction/ng-filter-builder
 
+## 5.9.0
+
+### Minor Changes
+
+- 89b6abe: migration
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/core@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

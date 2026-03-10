@@ -1,17 +1,23 @@
 // Services
 export * from './services/integration-data.service';
 
-// Control Tower
-export * from './components/control-tower/control-tower.component';
+// Overview (default landing page)
+export * from './components/overview/overview.component';
 
-// Connection Studio
-export * from './components/connection-studio/connection-studio.component';
+// Pipelines (visual SVG canvas)
+export * from './components/pipelines/pipelines.component';
 
-// Mapping Workspace
+// Connections (connection management + wizard)
+export * from './components/connections/connections.component';
+
+// Mapping Workspace (field mapping editor)
 export * from './components/mapping-workspace/mapping-workspace.component';
 
-// Sync Activity
-export * from './components/sync-activity/sync-activity.component';
+// Activity (sync history + monitoring)
+export * from './components/activity/activity.component';
+
+// Schedules (sync schedule management)
+export * from './components/schedules/schedules.component';
 
 // Widgets
 export * from './components/widgets/integration-card.component';

@@ -492,7 +492,7 @@
 
 .list-header {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 70px 100px 100px 1fr;
+    grid-template-columns: 50px 1fr 1fr 100px 70px 100px 100px 1fr;
     gap: 12px;
     padding: 12px 20px;
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
@@ -548,7 +548,7 @@
 
 .list-row {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 70px 100px 100px 1fr;
+    grid-template-columns: 50px 1fr 1fr 100px 70px 100px 100px 1fr;
     gap: 12px;
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-light);
@@ -610,6 +610,20 @@
 }
 
 .field-name-text {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12px;
+}
+
+.col-display-name {
+    min-width: 0;
+}
+
+.display-name-text {
     font-weight: 500;
     color: var(--text-primary);
     white-space: nowrap;
@@ -1007,6 +1021,13 @@
     font-size: 14px;
     font-weight: 500;
     color: var(--text-primary);
+}
+
+.field-db-name {
+    font-size: 11px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    color: var(--text-secondary);
+    margin-top: 2px;
 }
 
 .field-meta {
@@ -1847,6 +1868,14 @@
     margin: 0 0 12px 0;
 }
 
+.detail-field-db-name {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
 .field-description {
     font-size: 14px;
     color: var(--text-secondary);
@@ -2366,4 +2395,19 @@
 
 .isa-child-count i {
     font-size: 10px;
+}
+
+/* ============================================================
+   DATA SECTION
+   ============================================================ */
+.data-section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.data-viewer-container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }

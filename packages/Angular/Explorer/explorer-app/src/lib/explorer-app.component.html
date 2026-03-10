@@ -23,6 +23,8 @@
 }
 <!-- Login - shows when NOT authenticated AND not on OAuth callback -->
 @if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {
+  <!-- Show environment validation errors on login page -->
+  <mj-system-validation-banner></mj-system-validation-banner>
   <div class="login-wrapper">
     <button class="theme-toggle" (click)="ToggleTheme()" [attr.aria-label]="IsDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
       <i class="fa-solid" [class.fa-sun]="IsDarkMode" [class.fa-moon]="!IsDarkMode"></i>

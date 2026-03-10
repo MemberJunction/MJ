@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -23744,6 +23744,39 @@ export class MJCompanyIntegration_ {
     @MaxLength(36)
     CredentialID?: string;
         
+    @Field(() => Boolean, {description: `Whether automatic sync scheduling is enabled for this integration`}) 
+    ScheduleEnabled: boolean;
+        
+    @Field({description: `Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)`}) 
+    @MaxLength(20)
+    ScheduleType: string;
+        
+    @Field(() => Int, {nullable: true, description: `Interval in minutes for Interval schedule type`}) 
+    ScheduleIntervalMinutes?: number;
+        
+    @Field({nullable: true, description: `Cron expression for Cron schedule type (e.g., "0 */6 * * *" for every 6 hours)`}) 
+    @MaxLength(200)
+    CronExpression?: string;
+        
+    @Field({nullable: true, description: `When the next scheduled sync should run. Updated after each run based on schedule config.`}) 
+    NextScheduledRunAt?: Date;
+        
+    @Field({nullable: true, description: `When the last scheduled sync was initiated`}) 
+    LastScheduledRunAt?: Date;
+        
+    @Field(() => Boolean, {description: `Whether a sync is currently locked/running for this integration`}) 
+    IsLocked: boolean;
+        
+    @Field({nullable: true, description: `When the lock was acquired`}) 
+    LockedAt?: Date;
+        
+    @Field({nullable: true, description: `Server instance identifier that holds the lock (hostname-pid)`}) 
+    @MaxLength(200)
+    LockedByInstance?: string;
+        
+    @Field({nullable: true, description: `When the lock should be considered stale and eligible for cleanup`}) 
+    LockExpiresAt?: Date;
+        
     @Field() 
     @MaxLength(50)
     Company: string;
@@ -23842,6 +23875,36 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CredentialID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ScheduleType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ScheduleIntervalMinutes: number | null;
+
+    @Field({ nullable: true })
+    CronExpression: string | null;
+
+    @Field({ nullable: true })
+    NextScheduledRunAt: Date | null;
+
+    @Field({ nullable: true })
+    LastScheduledRunAt: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLocked?: boolean;
+
+    @Field({ nullable: true })
+    LockedAt: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance: string | null;
+
+    @Field({ nullable: true })
+    LockExpiresAt: Date | null;
 }
     
 
@@ -23900,6 +23963,36 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     CredentialID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ScheduleType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ScheduleIntervalMinutes?: number | null;
+
+    @Field({ nullable: true })
+    CronExpression?: string | null;
+
+    @Field({ nullable: true })
+    NextScheduledRunAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastScheduledRunAt?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLocked?: boolean;
+
+    @Field({ nullable: true })
+    LockedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance?: string | null;
+
+    @Field({ nullable: true })
+    LockExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -42333,6 +42426,635 @@ export class MJGeneratedCodeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Integration Object Fields
+//****************************************************************************
+@ObjectType({ description: `Describes a field on an integration object, mirroring EntityField column patterns for type compatibility` })
+export class MJIntegrationObjectField_ {
+    @Field({description: `Primary key`}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the IntegrationObject this field belongs to`}) 
+    @MaxLength(36)
+    IntegrationObjectID: string;
+        
+    @Field({description: `Field name as returned by the external API`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-friendly display label for the field`}) 
+    @MaxLength(255)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `Description of what this field represents`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `UI grouping category within the object`}) 
+    @MaxLength(100)
+    Category?: string;
+        
+    @Field({description: `Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`}) 
+    @MaxLength(100)
+    Type: string;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum length for string types`}) 
+    Length?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Numeric precision`}) 
+    Precision?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Numeric scale`}) 
+    Scale?: number;
+        
+    @Field(() => Boolean, {description: `Whether the field can contain NULL values`}) 
+    AllowsNull: boolean;
+        
+    @Field({nullable: true, description: `Default value from the source system`}) 
+    @MaxLength(255)
+    DefaultValue?: string;
+        
+    @Field(() => Boolean, {description: `Whether this field is part of the object primary key`}) 
+    IsPrimaryKey: boolean;
+        
+    @Field(() => Boolean, {description: `Whether values must be unique across all records`}) 
+    IsUniqueKey: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this field cannot be written back to the source system`}) 
+    IsReadOnly: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this field is required for create/update operations`}) 
+    IsRequired: boolean;
+        
+    @Field({nullable: true, description: `Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`}) 
+    @MaxLength(36)
+    RelatedIntegrationObjectID?: string;
+        
+    @Field({nullable: true, description: `The field name on the related IntegrationObject that this FK points to (typically the PK field)`}) 
+    @MaxLength(255)
+    RelatedIntegrationObjectFieldName?: string;
+        
+    @Field(() => Int, {description: `Display and processing order within the object. Lower numbers appear first.`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `Freeform JSON for connector-specific field configuration`}) 
+    Configuration?: string;
+        
+    @Field({description: `Active, Deprecated, or Disabled. Mirrors EntityField status values.`}) 
+    @MaxLength(25)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    IntegrationObject: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RelatedIntegrationObject?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Integration Object Fields
+//****************************************************************************
+@InputType()
+export class CreateMJIntegrationObjectFieldInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    IntegrationObjectID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Category: string | null;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => Int, { nullable: true })
+    Length: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Precision: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Scale: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowsNull?: boolean;
+
+    @Field({ nullable: true })
+    DefaultValue: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUniqueKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsReadOnly?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field({ nullable: true })
+    RelatedIntegrationObjectID: string | null;
+
+    @Field({ nullable: true })
+    RelatedIntegrationObjectFieldName: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Integration Object Fields
+//****************************************************************************
+@InputType()
+export class UpdateMJIntegrationObjectFieldInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    IntegrationObjectID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Category?: string | null;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => Int, { nullable: true })
+    Length?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Precision?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Scale?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowsNull?: boolean;
+
+    @Field({ nullable: true })
+    DefaultValue?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUniqueKey?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsReadOnly?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field({ nullable: true })
+    RelatedIntegrationObjectID?: string | null;
+
+    @Field({ nullable: true })
+    RelatedIntegrationObjectFieldName?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Integration Object Fields
+//****************************************************************************
+@ObjectType()
+export class RunMJIntegrationObjectFieldViewResult {
+    @Field(() => [MJIntegrationObjectField_])
+    Results: MJIntegrationObjectField_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJIntegrationObjectField_)
+export class MJIntegrationObjectFieldResolver extends ResolverBase {
+    @Query(() => RunMJIntegrationObjectFieldViewResult)
+    async RunMJIntegrationObjectFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJIntegrationObjectFieldViewResult)
+    async RunMJIntegrationObjectFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJIntegrationObjectFieldViewResult)
+    async RunMJIntegrationObjectFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Integration Object Fields';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJIntegrationObjectField_, { nullable: true })
+    async MJIntegrationObjectField(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJIntegrationObjectField_ | null> {
+        this.CheckUserReadPermissions('MJ: Integration Object Fields', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrationObjectFields')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integration Object Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Integration Object Fields', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJIntegrationObjectField_)
+    async CreateMJIntegrationObjectField(
+        @Arg('input', () => CreateMJIntegrationObjectFieldInput) input: CreateMJIntegrationObjectFieldInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Integration Object Fields', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJIntegrationObjectField_)
+    async UpdateMJIntegrationObjectField(
+        @Arg('input', () => UpdateMJIntegrationObjectFieldInput) input: UpdateMJIntegrationObjectFieldInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Integration Object Fields', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJIntegrationObjectField_)
+    async DeleteMJIntegrationObjectField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Integration Object Fields', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Integration Objects
+//****************************************************************************
+@ObjectType({ description: `Describes an external object or endpoint exposed by an integration (e.g., Members, Events, Invoices)` })
+export class MJIntegrationObject_ {
+    @Field({description: `Primary key`}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the Integration that owns this object`}) 
+    @MaxLength(36)
+    IntegrationID: string;
+        
+    @Field({description: `Internal/programmatic name of the external object (e.g., Members, Events)`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-friendly display label`}) 
+    @MaxLength(255)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `Description of what this external object represents`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `UI grouping category (e.g., Membership, Events, Finance)`}) 
+    @MaxLength(100)
+    Category?: string;
+        
+    @Field({description: `API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records`}) 
+    @MaxLength(500)
+    APIPath: string;
+        
+    @Field({nullable: true, description: `JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.`}) 
+    @MaxLength(255)
+    ResponseDataKey?: string;
+        
+    @Field(() => Int, {description: `Number of records to request per page from the API`}) 
+    DefaultPageSize: number;
+        
+    @Field(() => Boolean, {description: `Whether this endpoint supports paginated fetching`}) 
+    SupportsPagination: boolean;
+        
+    @Field({description: `Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None`}) 
+    @MaxLength(20)
+    PaginationType: string;
+        
+    @Field(() => Boolean, {description: `Whether this object supports watermark-based incremental sync`}) 
+    SupportsIncrementalSync: boolean;
+        
+    @Field(() => Boolean, {description: `Whether data can be pushed back to this object via the API`}) 
+    SupportsWrite: boolean;
+        
+    @Field({nullable: true, description: `JSON object of default query parameters to include with every API request for this object`}) 
+    DefaultQueryParams?: string;
+        
+    @Field({nullable: true, description: `Freeform JSON for connector-specific configuration not covered by standard columns`}) 
+    Configuration?: string;
+        
+    @Field(() => Int, {description: `Processing and display order. Lower numbers are processed first.`}) 
+    Sequence: number;
+        
+    @Field({description: `Active, Deprecated, or Disabled. Mirrors EntityField status values.`}) 
+    @MaxLength(25)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Integration: string;
+        
+    @Field(() => [MJIntegrationObjectField_])
+    MJIntegrationObjectFields_IntegrationObjectIDArray: MJIntegrationObjectField_[]; // Link to MJIntegrationObjectFields
+    
+    @Field(() => [MJIntegrationObjectField_])
+    MJIntegrationObjectFields_RelatedIntegrationObjectIDArray: MJIntegrationObjectField_[]; // Link to MJIntegrationObjectFields
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Integration Objects
+//****************************************************************************
+@InputType()
+export class CreateMJIntegrationObjectInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    IntegrationID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Category: string | null;
+
+    @Field({ nullable: true })
+    APIPath?: string;
+
+    @Field({ nullable: true })
+    ResponseDataKey: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPageSize?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPagination?: boolean;
+
+    @Field({ nullable: true })
+    PaginationType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsIncrementalSync?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsWrite?: boolean;
+
+    @Field({ nullable: true })
+    DefaultQueryParams: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Integration Objects
+//****************************************************************************
+@InputType()
+export class UpdateMJIntegrationObjectInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    IntegrationID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Category?: string | null;
+
+    @Field({ nullable: true })
+    APIPath?: string;
+
+    @Field({ nullable: true })
+    ResponseDataKey?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPageSize?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPagination?: boolean;
+
+    @Field({ nullable: true })
+    PaginationType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsIncrementalSync?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsWrite?: boolean;
+
+    @Field({ nullable: true })
+    DefaultQueryParams?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Integration Objects
+//****************************************************************************
+@ObjectType()
+export class RunMJIntegrationObjectViewResult {
+    @Field(() => [MJIntegrationObject_])
+    Results: MJIntegrationObject_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJIntegrationObject_)
+export class MJIntegrationObjectResolver extends ResolverBase {
+    @Query(() => RunMJIntegrationObjectViewResult)
+    async RunMJIntegrationObjectViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJIntegrationObjectViewResult)
+    async RunMJIntegrationObjectViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJIntegrationObjectViewResult)
+    async RunMJIntegrationObjectDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Integration Objects';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJIntegrationObject_, { nullable: true })
+    async MJIntegrationObject(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJIntegrationObject_ | null> {
+        this.CheckUserReadPermissions('MJ: Integration Objects', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrationObjects')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integration Objects', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Integration Objects', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJIntegrationObjectField_])
+    async MJIntegrationObjectFields_IntegrationObjectIDArray(@Root() mjintegrationobject_: MJIntegrationObject_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Integration Object Fields', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrationObjectFields')} WHERE ${provider.QuoteIdentifier('IntegrationObjectID')}='${mjintegrationobject_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integration Object Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Integration Object Fields', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJIntegrationObjectField_])
+    async MJIntegrationObjectFields_RelatedIntegrationObjectIDArray(@Root() mjintegrationobject_: MJIntegrationObject_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Integration Object Fields', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrationObjectFields')} WHERE ${provider.QuoteIdentifier('RelatedIntegrationObjectID')}='${mjintegrationobject_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integration Object Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Integration Object Fields', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJIntegrationObject_)
+    async CreateMJIntegrationObject(
+        @Arg('input', () => CreateMJIntegrationObjectInput) input: CreateMJIntegrationObjectInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Integration Objects', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJIntegrationObject_)
+    async UpdateMJIntegrationObject(
+        @Arg('input', () => UpdateMJIntegrationObjectInput) input: UpdateMJIntegrationObjectInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Integration Objects', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJIntegrationObject_)
+    async DeleteMJIntegrationObject(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Integration Objects', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Integration Source Types
 //****************************************************************************
 @ObjectType({ description: `Defines categories of integration sources such as SaaS API, Relational Database, or File Feed.` })
@@ -42763,6 +43485,9 @@ export class MJIntegration_ {
     @Field(() => [MJRecordChange_])
     MJRecordChanges_IntegrationIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
+    @Field(() => [MJIntegrationObject_])
+    MJIntegrationObjects_IntegrationIDArray: MJIntegrationObject_[]; // Link to MJIntegrationObjects
+    
 }
 
 //****************************************************************************
@@ -42929,6 +43654,16 @@ export class MJIntegrationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${provider.QuoteIdentifier('IntegrationID')}='${mjintegration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Changes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJIntegrationObject_])
+    async MJIntegrationObjects_IntegrationIDArray(@Root() mjintegration_: MJIntegration_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Integration Objects', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwIntegrationObjects')} WHERE ${provider.QuoteIdentifier('IntegrationID')}='${mjintegration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Integration Objects', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Integration Objects', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

@@ -1,8 +1,8 @@
 import express from 'express';
-import { 
-    BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo, 
-    EntityPermissionType, EntitySaveOptions, LogError, Metadata, 
-    RunView, RunViewParams 
+import {
+    BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo,
+    EntityPermissionType, EntitySaveOptions, LogError, Metadata,
+    RunView, RunViewParams, UserInfo
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
@@ -145,8 +145,8 @@ export class RESTEndpointHandler {
      * Set up all the API routes for the REST endpoints
      */
     private setupRoutes() {
-        // Middleware to extract MJ user
-        this.router.use(this.extractMJUser);
+        // Middleware to verify MJ user was set by upstream auth
+        this.router.use(this.extractMJUser.bind(this));
         
         // Middleware to check entity allowlist/blocklist
         this.router.use('/entities/:entityName', this.checkEntityAccess.bind(this));
@@ -194,7 +194,7 @@ export class RESTEndpointHandler {
         this.router.post('/queries/run', this.runQuery.bind(this));
         
         // Error handling
-        this.router.use(this.errorHandler);
+        this.router.use(this.errorHandler.bind(this));
     }
 
     /**
@@ -220,47 +220,30 @@ export class RESTEndpointHandler {
     }
     
     /**
-     * Middleware to extract MJ user from request
+     * Guard middleware: verifies that the unified auth middleware (or a custom
+     * per-route authMiddleware) has already set req['mjUser'] to a UserInfo.
+     * Does NOT overwrite the value — just returns 401 if it is missing.
      */
-    private async extractMJUser(req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> {
-        try {
-            // If authentication middleware has already set req.user with basic info
-            if (req['user']) {
-                // Get the full MemberJunction user
-                const md = new Metadata();
-                const userInfo = req['user'];
-                // Get user info based on email or ID
-                // Note: The actual implementation here would depend on how the MemberJunction core handles user lookup
-                // This is a simplification that would need to be implemented properly
-                req['mjUser'] = userInfo;
-                
-                if (!req['mjUser']) {
-                    res.status(401).json({ error: 'User not found in MemberJunction' });
-                    return;
-                }
-            } else {
-                res.status(401).json({ error: 'Authentication required' });
-                return;
-            }
-            
-            next();
-        } catch (error) {
-            next(error);
+    private extractMJUser(req: express.Request, res: express.Response, next: express.NextFunction): void {
+        if (!req['mjUser']) {
+            res.status(401).json({ error: 'Authentication required' });
+            return;
         }
+        next();
     }
 
     /**
      * Error handling middleware
      */
-    private errorHandler(err: any, req: express.Request, res: express.Response, next: express.NextFunction): void {
+    private errorHandler(err: Error, req: express.Request, res: express.Response, next: express.NextFunction): void {
         LogError(err);
-        
+
         if (err.name === 'UnauthorizedError') {
             res.status(401).json({ error: 'Invalid token' });
             return;
         }
-        
-        res.status(500).json({ error: (err as Error)?.message || 'Internal server error' });
+
+        res.status(500).json({ error: err.message || 'Internal server error' });
     }
 
     /**
@@ -268,8 +251,8 @@ export class RESTEndpointHandler {
      */
     private async getCurrentUser(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const user = req['mjUser'];
-            
+            const user = req['mjUser'] as UserInfo;
+
             // Return user info without sensitive data
             res.json({
                 ID: user.ID,
@@ -277,11 +260,9 @@ export class RESTEndpointHandler {
                 Email: user.Email,
                 FirstName: user.FirstName,
                 LastName: user.LastName,
-                IsAdmin: user.IsAdmin,
                 UserRoles: user.UserRoles.map(role => ({
-                    ID: role.ID,
-                    Name: role.Name,
-                    Description: role.Description
+                    RoleID: role.RoleID,
+                    Role: role.Role
                 }))
             });
         } catch (error) {

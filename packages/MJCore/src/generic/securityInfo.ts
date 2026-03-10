@@ -6,6 +6,36 @@ import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } f
 import { UUIDsEqual } from "@memberjunction/global";
 
 /**
+ * Represents the tenant context for a given request in a multi-tenant deployment.
+ * Attached to `UserInfo.TenantContext` by server middleware when multi-tenancy is enabled.
+ *
+ * **Extensibility**: This interface is intentionally minimal. Middle-layer packages
+ * (e.g., a SaaS layer) should **extend** it with richer properties rather than
+ * widening this base:
+ *
+ * ```typescript
+ * export interface MySaaSTenantContext extends TenantContext {
+ *     organizationName: string;
+ *     contactID: string;
+ *     // ... additional fields
+ * }
+ * ```
+ *
+ * Because `UserInfo.TenantContext` is typed as `TenantContext`, any subtype satisfies
+ * it via structural typing. Hooks in the extending layer can downcast:
+ *
+ * ```typescript
+ * const ctx = contextUser.TenantContext as MySaaSTenantContext;
+ * ```
+ */
+export interface TenantContext {
+    /** The unique identifier of the tenant (e.g., OrganizationID value) */
+    TenantID: string;
+    /** How this tenant context was determined */
+    Source: 'header' | 'linkedEntity' | 'custom';
+}
+
+/**
  * A list of all users who have or had access to the system.
  * Contains user profile information, authentication details, and role assignments.
  */
@@ -110,6 +140,24 @@ export class UserInfo extends BaseInfo {
      * Email address of the employee's supervisor
      */
     EmployeeSupervisorEmail: string = null
+
+    private _TenantContext?: TenantContext = undefined;
+
+    /**
+     * Tenant context for multi-tenant data isolation.
+     * Set at request time by server middleware when multi-tenancy is enabled.
+     * When undefined, no tenant filtering is applied.
+     *
+     * Uses a getter/setter so that `Object.keys()` does not enumerate it —
+     * the GraphQLDataProvider builds CurrentUser queries from `Object.keys(new UserInfo())`,
+     * and TenantContext is not a database/GraphQL field.
+     */
+    public get TenantContext(): TenantContext | undefined {
+        return this._TenantContext;
+    }
+    public set TenantContext(value: TenantContext | undefined) {
+        this._TenantContext = value;
+    }
 
     private _UserRoles: UserRoleInfo[] = []
     /**

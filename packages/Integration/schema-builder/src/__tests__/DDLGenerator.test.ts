@@ -22,6 +22,7 @@ function MakeTableConfig(overrides: Partial<TargetTableConfig> = {}): TargetTabl
         SchemaName: 'hubspot',
         TableName: 'Contact',
         EntityName: 'HubSpot Contact',
+        PrimaryKeyFields: ['ContactID'],
         Columns: [MakeColumn()],
         SoftForeignKeys: [],
         ...overrides,
@@ -54,21 +55,23 @@ describe('DDLGenerator', () => {
         it('should include standard integration columns for SQL Server', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'sqlserver');
-            expect(sql).toContain('[ID] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID()');
-            expect(sql).toContain('[SourceRecordID] NVARCHAR(255) NOT NULL');
-            expect(sql).toContain('[SourceJSON] NVARCHAR(MAX) NULL');
-            expect(sql).toContain('[SyncStatus] NVARCHAR(50) NOT NULL');
-            expect(sql).toContain('[LastSyncedAt] DATETIMEOFFSET NULL');
+            expect(sql).toContain('[__mj_integration_SyncStatus] NVARCHAR(50) NOT NULL');
+            expect(sql).toContain('[__mj_integration_LastSyncedAt] DATETIMEOFFSET NULL');
+            // Should NOT contain old column names
+            expect(sql).not.toContain('[ID] UNIQUEIDENTIFIER');
+            expect(sql).not.toContain('[SourceRecordID]');
+            expect(sql).not.toContain('[SourceJSON]');
         });
 
         it('should include standard integration columns for PostgreSQL', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'postgresql');
-            expect(sql).toContain('"ID" UUID NOT NULL DEFAULT gen_random_uuid()');
-            expect(sql).toContain('"SourceRecordID" VARCHAR(255) NOT NULL');
-            expect(sql).toContain('"SourceJSON" TEXT NULL');
-            expect(sql).toContain('"SyncStatus" VARCHAR(50) NOT NULL');
-            expect(sql).toContain('"LastSyncedAt" TIMESTAMPTZ NULL');
+            expect(sql).toContain('"__mj_integration_SyncStatus" VARCHAR(50) NOT NULL');
+            expect(sql).toContain('"__mj_integration_LastSyncedAt" TIMESTAMPTZ NULL');
+            // Should NOT contain old column names
+            expect(sql).not.toContain('"ID" UUID');
+            expect(sql).not.toContain('"SourceRecordID"');
+            expect(sql).not.toContain('"SourceJSON"');
         });
 
         it('should include user-defined columns', () => {
@@ -83,11 +86,12 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('[FirstName] NVARCHAR(100) NOT NULL');
         });
 
-        it('should include primary key and unique constraints', () => {
+        it('should include UNIQUE constraint on PK fields', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'sqlserver');
-            expect(sql).toContain('CONSTRAINT [PK_hubspot_Contact] PRIMARY KEY ([ID])');
-            expect(sql).toContain('CONSTRAINT [UQ_hubspot_Contact_SourceRecordID] UNIQUE ([SourceRecordID])');
+            expect(sql).toContain('CONSTRAINT [UQ_hubspot_Contact_PK] UNIQUE ([ContactID])');
+            // Should NOT contain old PK constraint
+            expect(sql).not.toContain('PRIMARY KEY ([ID])');
         });
 
         it('should include default values when specified', () => {

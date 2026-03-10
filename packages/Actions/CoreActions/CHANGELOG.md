@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.9.0
+
+### Patch Changes
+
+- c6a0df2: Fix extensionless ESM barrel re-exports by adding .js extensions for Node.js 22+ compatibility
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-agent-manager@5.9.0
+  - @memberjunction/ai-agents@5.9.0
+  - @memberjunction/ai-engine-base@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-mcp-client@5.9.0
+  - @memberjunction/ai-prompts@5.9.0
+  - @memberjunction/ai-vector-sync@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/communication-types@5.9.0
+  - @memberjunction/communication-engine@5.9.0
+  - @memberjunction/content-autotagging@5.9.0
+  - @memberjunction/external-change-detection@5.9.0
+  - @memberjunction/core-entities-server@5.9.0
+  - @memberjunction/storage@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/ai-betty-bot@5.9.0
+  - @memberjunction/code-execution@5.9.0
+  - @memberjunction/export-engine@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

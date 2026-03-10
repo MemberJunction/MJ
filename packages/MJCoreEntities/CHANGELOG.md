@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.9.0
+
+### Patch Changes
+
+- c6a0df2: Fix extensionless ESM barrel re-exports by adding .js extensions for Node.js 22+ compatibility
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes
