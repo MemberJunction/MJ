@@ -6,7 +6,7 @@
 **************************************************************************************************************/
 
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
-         EntityInfo, EntityFieldInfo, EntityFieldTSType,
+         EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
@@ -138,6 +138,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _sessionId: string;
     private _aiClient: GraphQLAIClient;
     private _refreshPromise: Promise<void> | null = null;
+    private _dynamicHeaders: Map<string, string> = new Map();
 
     public get ConfigData(): GraphQLProviderConfigData {
         return this._configData;
@@ -310,6 +311,62 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
+    /**
+     * Sets a dynamic header that will be included in all subsequent GraphQL requests.
+     * Dynamic headers survive token refreshes and client re-creation.
+     *
+     * This is useful for passing per-session context (e.g., organization selection)
+     * that the server needs on every request but isn't part of the auth token.
+     *
+     * @param key The header name (e.g., 'x-organization-id')
+     * @param value The header value
+     */
+    public SetDynamicHeader(key: string, value: string): void {
+        this._dynamicHeaders.set(key, value);
+        if (this._client) {
+            this._client.setHeader(key, value);
+        }
+        // Also update the singleton's client if this instance is the singleton
+        if (GraphQLDataProvider.Instance &&
+            GraphQLDataProvider.Instance !== this &&
+            GraphQLDataProvider.Instance._configData === this._configData) {
+            GraphQLDataProvider.Instance._dynamicHeaders.set(key, value);
+            if (GraphQLDataProvider.Instance._client) {
+                GraphQLDataProvider.Instance._client.setHeader(key, value);
+            }
+        }
+    }
+
+    /**
+     * Removes a previously set dynamic header. The header will no longer be
+     * included in subsequent GraphQL requests.
+     *
+     * @param key The header name to remove
+     */
+    public RemoveDynamicHeader(key: string): void {
+        this._dynamicHeaders.delete(key);
+        if (this._client) {
+            // graphql-request's setHeader with empty string effectively removes it;
+            // but to be safe, we recreate with all current headers
+            this._client.setHeader(key, '');
+        }
+        if (GraphQLDataProvider.Instance &&
+            GraphQLDataProvider.Instance !== this &&
+            GraphQLDataProvider.Instance._configData === this._configData) {
+            GraphQLDataProvider.Instance._dynamicHeaders.delete(key);
+            if (GraphQLDataProvider.Instance._client) {
+                GraphQLDataProvider.Instance._client.setHeader(key, '');
+            }
+        }
+    }
+
+    /**
+     * Returns a read-only copy of all currently set dynamic headers.
+     */
+    public GetDynamicHeaders(): ReadonlyMap<string, string> {
+        return this._dynamicHeaders;
+    }
+
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
@@ -317,7 +374,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const u = this.ConvertBackToMJFields(d.CurrentUser);
             const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
             u.MJUserRoles_UserIDArray = roles;
-            return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
+            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+
+            // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
+            // The server serializes whatever TenantContext the middleware set.
+            // This makes plugins stack-layer agnostic — no client-side code needed.
+            if (d.CurrentUserTenantContext && typeof d.CurrentUserTenantContext === 'object') {
+                userInfo.TenantContext = d.CurrentUserTenantContext as TenantContext;
+            }
+
+            return userInfo;
         }
     }
 
@@ -2212,9 +2278,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (userAPIKey)
             headers['x-api-key'] = userAPIKey;
 
-        return new GraphQLClient(url, {
+        const client = new GraphQLClient(url, {
             headers
         });
+
+        // Re-apply any dynamic headers so they survive client re-creation (e.g., token refresh)
+        for (const [key, value] of this._dynamicHeaders) {
+            client.setHeader(key, value);
+        }
+
+        return client;
     }
 
     private _innerCurrentUserQueryString = `CurrentUser {
@@ -2228,6 +2301,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _currentUserQuery = gql`query CurrentUserAndRoles {
         ${this._innerCurrentUserQueryString}
+        CurrentUserTenantContext
     }`
 
 
