@@ -4,7 +4,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--mj-bg-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -13,7 +13,7 @@
 }
 
 .dialog-container {
-    background: white;
+    background: var(--mj-bg-surface-card);
     border-radius: 8px;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
     max-width: 700px;
@@ -29,8 +29,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background: var(--mj-bg-surface-elevated);
+    border-bottom: 1px solid var(--mj-border-default);
 }
 
 .dialog-title {
@@ -39,11 +39,11 @@
     gap: 12px;
     font-size: 1.1rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--mj-text-primary);
 }
 
 .dialog-title i {
-    color: #6f42c1;
+    color: var(--mj-color-violet-500);
 }
 
 .dialog-close-btn {
@@ -51,7 +51,7 @@
     border: none;
     padding: 8px;
     cursor: pointer;
-    color: #6c757d;
+    color: var(--mj-text-muted);
     border-radius: 4px;
     transition: all 0.2s;
     display: flex;
@@ -60,8 +60,8 @@
 }
 
 .dialog-close-btn:hover {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-secondary);
 }
 
 .dialog-content {
@@ -77,7 +77,7 @@
 .loading-state {
     padding: 40px;
     text-align: center;
-    color: #6c757d;
+    color: var(--mj-text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -93,8 +93,8 @@
     display: flex;
     justify-content: flex-end;
     padding: 12px 20px;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
+    background: var(--mj-bg-surface-elevated);
+    border-top: 1px solid var(--mj-border-default);
 }
 
 /* Button styles */
@@ -113,14 +113,14 @@
 }
 
 .btn-outline {
-    background: white;
-    color: #495057;
-    border-color: #ced4da;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
+    border-color: var(--mj-border-default);
 }
 
 .btn-outline:hover {
-    background: #f8f9fa;
-    border-color: #adb5bd;
+    background: var(--mj-bg-surface-elevated);
+    border-color: var(--mj-border-strong);
 }
 
 /* Responsive */

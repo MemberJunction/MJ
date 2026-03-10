@@ -12,6 +12,8 @@
  */
 
 :root {
+  color-scheme: light;
+
   /* ========================================
      PRIMITIVE TOKENS
      Raw values - DO NOT use directly in components
@@ -344,6 +346,7 @@
    ======================================== */
 
 [data-theme="dark"] {
+  color-scheme: dark;
 
   /* Background Colors */
   

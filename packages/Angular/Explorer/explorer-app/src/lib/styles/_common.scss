@@ -4,6 +4,33 @@
     box-sizing: border-box;
 }
 
+// Global scrollbar theming
+* {
+    scrollbar-color: var(--mj-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--mj-border-strong);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--mj-text-disabled);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 // Normalization
 body,
 h1,

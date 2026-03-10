@@ -27,7 +27,7 @@
 .mj-isa-panel__cards mj-isa-related-card:not(:last-child) .mj-isa-card {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mj-border-default);
   box-shadow: none;
 }
 
@@ -42,9 +42,9 @@
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--mj-bg-surface-card);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .mj-isa-panel__collapsed-icon {
@@ -54,8 +54,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f5f6fa;
-  color: #667eea;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-brand-primary);
   font-size: 12px;
   cursor: default;
 }

@@ -375,10 +375,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     // UI Helper Methods
     getStatusColor(): string {
         switch (this.record.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#dc3545';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -392,7 +392,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     getTypeColor(): string {
-        return this.record.Type === 'Generated' ? '#6f42c1' : '#007bff';
+        return this.record.Type === 'Generated' ? 'var(--mj-color-violet-500)' : 'var(--mj-brand-primary)';
     }
 
     getTypeIcon(): string {
@@ -401,10 +401,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getApprovalStatusColor(): string {
         switch (this.record.CodeApprovalStatus) {
-            case 'Approved': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Rejected': return '#dc3545';
-            default: return '#6c757d';
+            case 'Approved': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Rejected': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -428,10 +428,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getParamTypeColor(type: string): string {
         switch (type) {
-            case 'Input': return '#007bff';
-            case 'Output': return '#28a745';
-            case 'Both': return '#6f42c1';
-            default: return '#6c757d';
+            case 'Input': return 'var(--mj-brand-primary)';
+            case 'Output': return 'var(--mj-status-success)';
+            case 'Both': return 'var(--mj-color-violet-500)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -570,9 +570,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getSuccessRateColor(): string {
         const rate = this.executionStats.successRate;
-        if (rate >= 80) return '#28a745'; // green
-        if (rate >= 60) return '#ffc107'; // yellow
-        return '#dc3545'; // red
+        if (rate >= 80) return 'var(--mj-status-success)';
+        if (rate >= 60) return 'var(--mj-status-warning)';
+        return 'var(--mj-status-error)';
     }
 
     // Parameter management methods

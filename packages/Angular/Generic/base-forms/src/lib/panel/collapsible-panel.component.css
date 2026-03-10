@@ -1,18 +1,4 @@
 mj-collapsible-panel {
-  --mj-card-bg: #ffffff;
-  --mj-card-radius: 8px;
-  --mj-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --mj-accent: #667eea;
-  --mj-accent-light: rgba(102, 126, 234, 0.08);
-  --mj-text-primary: #1f2937;
-  --mj-text-secondary: #6b7280;
-  --mj-text-muted: #9ca3af;
-  --mj-border: #e5e7eb;
-  --mj-success: #10b981;
-  --mj-isa-parent: #8b5cf6;
-  --mj-related-accent: #3b82f6;
-  --mj-transition: 200ms;
-
   display: block;
 }
 
@@ -21,18 +7,18 @@ mj-collapsible-panel.mj-search-hidden {
 }
 
 mj-collapsible-panel.mj-drag-over {
-  border: 2px dashed var(--mj-accent);
-  border-radius: var(--mj-card-radius);
+  border: 2px dashed var(--mj-brand-primary);
+  border-radius: var(--mj-radius-md);
 }
 
 /* ============================================
    PANEL CARD
    ============================================ */
 .mj-forms-panel {
-  background: var(--mj-card-bg);
-  border-radius: var(--mj-card-radius);
-  box-shadow: var(--mj-card-shadow);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: var(--mj-bg-surface-card);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-sm);
+  border: 1px solid var(--mj-border-default);
   overflow: hidden;
   transition: all 0.3s ease;
 }
@@ -45,16 +31,16 @@ mj-collapsible-panel.mj-drag-over {
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
-  border-bottom: 2px solid var(--mj-border);
+  background: var(--mj-bg-surface-elevated);
+  border-bottom: 2px solid var(--mj-border-default);
   cursor: pointer;
   user-select: none;
   transition: all 0.3s ease;
 }
 
 .mj-forms-panel-header:hover {
-  background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%);
-  border-bottom-color: var(--mj-accent);
+  background: var(--mj-bg-surface-hover);
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 /* Drag handle */
@@ -68,7 +54,7 @@ mj-collapsible-panel.mj-drag-over {
   cursor: grab;
   opacity: 0;
   overflow: hidden;
-  transition: width var(--mj-transition) ease, opacity var(--mj-transition) ease;
+  transition: width var(--mj-transition-base) ease, opacity var(--mj-transition-base) ease;
   flex-shrink: 0;
 }
 
@@ -78,7 +64,7 @@ mj-collapsible-panel.mj-drag-over {
 }
 
 .mj-forms-drag-handle:hover {
-  color: var(--mj-accent);
+  color: var(--mj-brand-primary);
 }
 
 .mj-forms-drag-handle:active {
@@ -88,7 +74,7 @@ mj-collapsible-panel.mj-drag-over {
 mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
   width: 24px;
   opacity: 1;
-  color: var(--mj-accent);
+  color: var(--mj-brand-primary);
 }
 
 /* Title group */
@@ -101,7 +87,7 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
 
 .mj-forms-panel-icon {
   font-size: 18px;
-  color: var(--mj-accent);
+  color: var(--mj-brand-primary);
   width: 24px;
   text-align: center;
 }
@@ -122,10 +108,10 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
 
 /* Row count badge */
 .mj-forms-row-count-badge {
-  background: var(--mj-success);
-  color: white;
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--mj-radius-full);
   font-size: 12px;
   font-weight: 600;
   margin-left: 8px;
@@ -144,20 +130,20 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    INHERITED VARIANT (IS-A parent fields)
    ============================================ */
 .mj-forms-panel--inherited {
-  border-left: 3px solid var(--mj-isa-parent);
+  border-left: 3px solid var(--mj-color-violet-500);
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-header {
-  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
+  background: color-mix(in srgb, var(--mj-color-violet-500) 8%, var(--mj-bg-surface-elevated));
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-header:hover {
-  background: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
-  border-bottom-color: var(--mj-isa-parent);
+  background: color-mix(in srgb, var(--mj-color-violet-500) 14%, var(--mj-bg-surface-elevated));
+  border-bottom-color: var(--mj-color-violet-500);
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-icon {
-  color: var(--mj-isa-parent);
+  color: var(--mj-color-violet-500);
 }
 
 .mj-forms-inherited-badge {
@@ -168,18 +154,18 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 4px;
-  background: #f3f0ff;
-  color: var(--mj-isa-parent);
-  border: 1px solid #e0d5ff;
+  background: color-mix(in srgb, var(--mj-color-violet-500) 10%, var(--mj-bg-surface));
+  color: var(--mj-color-violet-500);
+  border: 1px solid color-mix(in srgb, var(--mj-color-violet-500) 25%, transparent);
   cursor: pointer;
-  transition: all var(--mj-transition) ease;
+  transition: all var(--mj-transition-base) ease;
   text-decoration: none;
 }
 
 .mj-forms-inherited-badge:hover {
-  background: #e8e0ff;
-  border-color: var(--mj-isa-parent);
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2);
+  background: color-mix(in srgb, var(--mj-color-violet-500) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-color-violet-500);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-color-violet-500) 20%, transparent);
 }
 
 .mj-forms-inherited-badge i {
@@ -190,20 +176,20 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    RELATED ENTITY VARIANT
    ============================================ */
 .mj-forms-panel--related {
-  border-left: 3px solid var(--mj-related-accent);
+  border-left: 3px solid var(--mj-color-info-500);
 }
 
 .mj-forms-panel--related .mj-forms-panel-header {
-  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  background: color-mix(in srgb, var(--mj-color-info-500) 8%, var(--mj-bg-surface-elevated));
 }
 
 .mj-forms-panel--related .mj-forms-panel-header:hover {
-  background: linear-gradient(135deg, #bfdbfe 0%, #e0f2fe 100%);
-  border-bottom-color: var(--mj-related-accent);
+  background: color-mix(in srgb, var(--mj-color-info-500) 14%, var(--mj-bg-surface-elevated));
+  border-bottom-color: var(--mj-color-info-500);
 }
 
 .mj-forms-panel--related .mj-forms-panel-icon {
-  color: var(--mj-related-accent);
+  color: var(--mj-color-info-500);
 }
 
 /* Related entity content — 400px default, user can drag-resize vertically */
@@ -257,10 +243,10 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    SEARCH HIGHLIGHTING
    ============================================ */
 .mj-forms-panel-title ::ng-deep .mj-forms-search-highlight {
-  background-color: #fef08a;
-  color: #854d0e;
+  background-color: var(--mj-color-warning-200, #fef08a);
+  color: var(--mj-color-warning-800, #854d0e);
   padding: 0;
   border-radius: 2px;
   font-weight: 700;
-  box-shadow: 0 0 0 2px #fef08a;
+  box-shadow: 0 0 0 2px var(--mj-color-warning-200, #fef08a);
 }
