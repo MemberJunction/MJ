@@ -1019,10 +1019,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             cachedResults.push(null); // Placeholder for uncached
         }
 
+        const hasCacheHits = cacheStatusMap.size > 0 && [...cacheStatusMap.values()].some(v => v.status === 'hit');
         return {
             telemetryEventId,
             allCached,
-            cachedResults: allCached ? cachedResults.filter(r => r !== null) as RunViewResult[] : undefined,
+            cachedResults: allCached
+                ? cachedResults.filter(r => r !== null) as RunViewResult[]
+                : (hasCacheHits ? cachedResults as RunViewResult[] : undefined),
             uncachedParams: allCached ? undefined : uncachedParams,
             cacheStatusMap
         };
@@ -1460,6 +1463,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         const cachePromises: Promise<void>[] = [];
         for (let i = 0; i < results.length; i++) {
+            // Skip results that came from cache hits — they're already cached and
+            // already transformed to entity objects (would break JSON.stringify).
+            const cacheInfo = preResult.cacheStatusMap?.get(i);
+            if (cacheInfo?.status === 'hit') {
+                continue;
+            }
+
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
             if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -1492,9 +1502,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         await Promise.all(cachePromises);
 
-        // Transform results to entity objects AFTER caching plain objects
+        // Transform results to entity objects AFTER caching plain objects.
+        // Skip results that came from cache hits — they're already entity objects.
         const transformPromises: Promise<void>[] = [];
         for (let i = 0; i < results.length; i++) {
+            const cacheInfo = preResult.cacheStatusMap?.get(i);
+            if (cacheInfo?.status === 'hit') {
+                continue;
+            }
             transformPromises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
         }
         await Promise.all(transformPromises);
@@ -1901,6 +1916,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
 
+        // Initialize LocalCacheManager early so dataset loading can use the cache.
+        // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
+        if (!LocalCacheManager.Instance.IsInitialized) {
+            const storageProvider = this.LocalStorageProvider;
+            await LocalCacheManager.Instance.Initialize(storageProvider);
+        }
+
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
         // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
         if (Metadata.Provider && !data.IgnoreExistingMetadata) {
@@ -2019,14 +2041,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async GetAllMetadata(providerToUse?: IMetadataProvider): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
-            //const start1 = new Date().getTime();
-            const f = this.BuildDatasetFilterFromConfig();
+            // NOTE: Schema filters (IncludeSchemas/ExcludeSchemas) are for CodeGen only, not for runtime
+            // metadata loading. We always load all schemas — there are no sys/staging entities in metadata anyway.
 
             // Get the dataset and cache it for anyone else who wants to use it
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse);            
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse);
             if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
-                await this.CacheDataset(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, d);
+                await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
 
                 // got the results, let's build our response in the format we need
                 const simpleMetadata: any = {};
@@ -2696,8 +2718,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Array of metadata update information
      */
     protected async GetLatestMetadataUpdates(providerToUse?: IMetadataProvider): Promise<MetadataInfo[]> {
-        const f = this.BuildDatasetFilterFromConfig();
-        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse)
+        // No schema filters for metadata — see comment in GetAllMetadata
+        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse)
         if (d && d.Success) {
             const ret = d.EntityUpdateDates.map(e => {
                 return {

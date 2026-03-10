@@ -1145,6 +1145,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     public async InvalidateRunViewResult(fingerprint: string): Promise<void> {
         if (!this._storageProvider) return;
 
+        LogStatusEx({ message: `    🗑️ [Cache INVALIDATE] fingerprint="${fingerprint}"`, verboseOnly: true });
+
         // Remove from entity→fingerprint index before removing the cache entry
         this.removeFromEntityIndex(fingerprint);
 
@@ -1394,6 +1396,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (entry.type === 'runview' && entry.name.toLowerCase().trim() === normalizedName) {
                 toRemove.push(key);
             }
+        }
+
+        if (toRemove.length > 0) {
+            LogStatusEx({ message: `    🗑️ [Cache INVALIDATE-ENTITY] "${entityName}" — removing ${toRemove.length} entries: ${toRemove.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
         }
 
         for (const key of toRemove) {
@@ -1907,6 +1913,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             toDelete.push(entry.key);
             freedBytes += entry.sizeBytes;
             freedCount++;
+        }
+
+        if (toDelete.length > 0) {
+            LogStatusEx({ message: `    🗑️ [Cache EVICT] Evicting ${toDelete.length} entries to free ${freedBytes} bytes: ${toDelete.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
         }
 
         for (const key of toDelete) {
