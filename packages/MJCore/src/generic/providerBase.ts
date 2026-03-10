@@ -418,6 +418,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             if (preResult.cachedResult) {
                 // Cache hit — transform and return directly
+                LogStatus(`  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`);
                 await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
@@ -434,6 +435,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             // Cache miss — execute query, then post-process (stores in cache)
+            LogStatus(`  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`);
             const result = await this.InternalRunView<T>(params, contextUser);
             await this.PostRunView(result, params, preResult, contextUser);
             return result;
@@ -546,7 +548,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Check for cached results - if all are cached, end telemetry and return early
         if (preResult.allCached && preResult.cachedResults) {
+            const entities = params.map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
             const totalResults = preResult.cachedResults.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
+            LogStatus(`  ✅ [Cache HIT] RunViews batch [${entities}] — all ${params.length} views served from cache (${totalResults} total rows), no DB queries`);
             TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                 cacheHit: true,
                 allCached: true,
@@ -557,6 +561,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // Execute the internal implementation for non-cached items
+        const uncachedEntities = (preResult.uncachedParams || params).map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
+        LogStatus(`  🔍 [Cache MISS] RunViews batch [${uncachedEntities}] — querying database for ${(preResult.uncachedParams || params).length} view(s)`);
         const results = await this.InternalRunViews<T>(preResult.uncachedParams || params, contextUser);
 
         // Merge cached and fresh results if needed
@@ -973,10 +979,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
 
+                    LogStatus(`    ✅ [Cache HIT] "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows from cache`);
                     cacheStatusMap.set(i, { status: 'hit', result: cachedViewResult });
                     cachedResults.push(cachedViewResult);
                     continue;
                 }
+                LogStatus(`    🔍 [Cache MISS] "${param.EntityName || param.ViewName || 'unknown'}" — will query database`);
                 cacheStatusMap.set(i, { status: 'miss' });
             } else {
                 cacheStatusMap.set(i, { status: 'disabled' });
