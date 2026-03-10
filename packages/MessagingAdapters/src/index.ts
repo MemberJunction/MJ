@@ -87,6 +87,18 @@ export type { BuildRichResponseOptions } from './slack/slack-block-builder.js';
 export { TeamsMessagingExtension } from './teams/TeamsMessagingExtension.js';
 export { TeamsAdapter } from './teams/TeamsAdapter.js';
 export { markdownToAdaptiveCard } from './teams/teams-formatter.js';
+export {
+    buildRichAdaptiveCard,
+    buildAgentHeader as buildTeamsAgentHeader,
+    buildTextBody as buildTeamsTextBody,
+    buildArtifactCard as buildTeamsArtifactCard,
+    buildActionButtons as buildTeamsActionButtons,
+    buildExplorerLink as buildTeamsExplorerLink,
+    buildMetadataFooter as buildTeamsMetadataFooter,
+    buildErrorCard as buildTeamsErrorCard,
+    buildResponseFormElements as buildTeamsResponseFormElements,
+} from './teams/teams-card-builder.js';
+export type { BuildRichCardOptions } from './teams/teams-card-builder.js';
 
 /**
  * Tree-shaking prevention function.

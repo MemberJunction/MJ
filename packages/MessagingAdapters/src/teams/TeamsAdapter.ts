@@ -14,6 +14,7 @@ import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { markdownToAdaptiveCard } from './teams-formatter.js';
+import { buildRichAdaptiveCard } from './teams-card-builder.js';
 
 /**
  * Microsoft Teams-specific adapter that implements all platform operations
@@ -189,17 +190,29 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Format agent response Markdown as a Teams Adaptive Card.
+     * Format agent response as a rich Teams Adaptive Card.
+     *
+     * When a full `ExecuteAgentResult` is available, builds a rich card with
+     * agent header, action buttons, explorer links, and metadata footer.
+     * Falls back to basic markdown-to-TextBlock conversion otherwise.
      */
     protected async formatResponse(
-        _result: ExecuteAgentResult | null,
-        _agent: MJAIAgentEntityExtended,
+        result: ExecuteAgentResult | null,
+        agent: MJAIAgentEntityExtended,
         responseText: string,
-        _metadata?: AgentResponseMetadata
+        metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
+        const richPayload = result
+            ? buildRichAdaptiveCard(result, agent, responseText, {
+                explorerBaseURL: this.settings.ExplorerBaseURL,
+                artifactId: metadata?.ArtifactId,
+                conversationId: metadata?.ConversationId,
+            })
+            : markdownToAdaptiveCard(responseText);
+
         return {
             PlainText: responseText,
-            RichPayload: markdownToAdaptiveCard(responseText)
+            RichPayload: richPayload,
         };
     }
 
