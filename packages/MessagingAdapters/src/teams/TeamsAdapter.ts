@@ -44,6 +44,8 @@ export class TeamsAdapter extends BaseMessagingAdapter {
      */
     private conversationReferences: Map<string, Partial<ConversationReference>> = new Map();
 
+    protected get PlatformName(): string { return 'Teams'; }
+
     constructor(settings: MessagingAdapterSettings) {
         super(settings);
     }

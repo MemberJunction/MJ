@@ -56,6 +56,8 @@ export class SlackAdapter extends BaseMessagingAdapter {
      */
     private static readonly MAX_TEXT_LENGTH = 39_000;
 
+    protected get PlatformName(): string { return 'Slack'; }
+
     constructor(settings: MessagingAdapterSettings) {
         super(settings);
         this.client = new WebClient(settings.BotToken);
