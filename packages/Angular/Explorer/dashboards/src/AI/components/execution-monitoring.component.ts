@@ -592,7 +592,7 @@ export interface ExecutionMonitoringState {
   styles: [`
     .execution-monitoring {
       padding: 0;
-      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+      background: var(--mj-bg-surface-card);
       width: 100%;
       height: 100%;
       position: relative;
@@ -612,7 +612,7 @@ export interface ExecutionMonitoringState {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255, 255, 255, 0.7);
+      background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
       z-index: 999;
       display: flex;
       align-items: center;
@@ -622,15 +622,15 @@ export interface ExecutionMonitoringState {
 
     /* === Dashboard Header - Clean White Style === */
     .monitoring-header {
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 16px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-      border-bottom: 1px solid #e0e6ed;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+      border-bottom: 1px solid var(--mj-border-default);
       position: relative;
       z-index: 10;
     }
@@ -639,14 +639,14 @@ export interface ExecutionMonitoringState {
       margin: 0;
       font-size: 20px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
     .monitoring-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-size: 22px;
     }
 
@@ -665,30 +665,30 @@ export interface ExecutionMonitoringState {
     }
 
     .time-range-control label {
-      color: #64748b;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .time-range-control select {
       padding: 8px 14px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
-      background: #f8fafc;
-      color: #1e293b;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-primary);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .time-range-control select:hover:not(:disabled) {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .time-range-control select:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .time-range-control select:disabled {
@@ -697,13 +697,13 @@ export interface ExecutionMonitoringState {
     }
 
     .time-range-control select option {
-      background: white;
-      color: #1e293b;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .refresh-btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 8px 16px;
       border-radius: 8px;
@@ -714,13 +714,13 @@ export interface ExecutionMonitoringState {
       align-items: center;
       gap: 8px;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .refresh-btn:hover:not(:disabled) {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
 
     .refresh-btn:disabled {
@@ -755,19 +755,19 @@ export interface ExecutionMonitoringState {
     }
 
     .dashboard-section {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       overflow: hidden;
       height: 100%;
       display: flex;
       flex-direction: column;
-      border: 1px solid rgba(99, 102, 241, 0.08);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .dashboard-section:hover {
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     }
 
     /* Ensure splitter panes take full height */
@@ -803,14 +803,14 @@ export interface ExecutionMonitoringState {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .chart-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
     }
 
     .cost-bars, .efficiency-items {
@@ -825,7 +825,7 @@ export interface ExecutionMonitoringState {
       align-items: center;
       gap: 12px;
       padding: 8px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .cost-bar-item:last-child {
@@ -842,33 +842,33 @@ export interface ExecutionMonitoringState {
     .model-name {
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .cost-value {
       font-size: 11px;
-      color: #8b5cf6;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
     .cost-bar-container {
       flex: 1;
       height: 8px;
-      background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .cost-bar {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+      background: var(--mj-brand-primary);
       border-radius: 4px;
       transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .token-info {
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-muted);
       min-width: 80px;
       text-align: right;
     }
@@ -876,7 +876,7 @@ export interface ExecutionMonitoringState {
     /* Token Efficiency Styles */
     .efficiency-item {
       padding: 12px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .efficiency-item:last-child {
@@ -892,7 +892,7 @@ export interface ExecutionMonitoringState {
 
     .efficiency-ratio {
       font-size: 11px;
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
@@ -904,7 +904,7 @@ export interface ExecutionMonitoringState {
 
     .token-bar {
       height: 8px;
-      background: rgba(99, 102, 241, 0.1);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
       border-radius: 4px;
       overflow: hidden;
       display: flex;
@@ -916,33 +916,33 @@ export interface ExecutionMonitoringState {
     }
 
     .token-segment--input {
-      background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%);
+      background: var(--mj-brand-primary);
     }
 
     .token-segment--output {
-      background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
+      background: var(--mj-brand-accent);
     }
 
     .token-labels {
       display: flex;
       justify-content: space-between;
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .input-label {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-weight: 500;
     }
 
     .output-label {
-      color: #8b5cf6;
+      color: var(--mj-brand-accent);
       font-weight: 500;
     }
 
     .cost-per-token {
       font-size: 10px;
-      color: #999;
+      color: var(--mj-text-disabled);
       margin-top: 4px;
     }
 
@@ -959,7 +959,7 @@ export interface ExecutionMonitoringState {
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
     }
 
@@ -974,23 +974,23 @@ export interface ExecutionMonitoringState {
     }
 
     .status-icon--success {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .status-icon--warning {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%);
-      color: #f59e0b;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .status-icon--info {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-icon--primary {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
-      color: #8b5cf6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-info {
@@ -999,20 +999,20 @@ export interface ExecutionMonitoringState {
 
     .status-label {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .status-value {
       font-size: 18px;
       font-weight: 700;
-      color: #333;
+      color: var(--mj-text-primary);
       margin: 2px 0;
     }
 
     .status-subtitle {
       font-size: 10px;
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     /* Execution Modal Styles */
@@ -1022,7 +1022,7 @@ export interface ExecutionMonitoringState {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.5);
+      background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1031,7 +1031,7 @@ export interface ExecutionMonitoringState {
     }
 
     .execution-modal-content {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       max-width: 800px;
       width: 100%;
@@ -1043,7 +1043,7 @@ export interface ExecutionMonitoringState {
 
     .execution-modal-header {
       padding: 20px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1053,7 +1053,7 @@ export interface ExecutionMonitoringState {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .modal-header-actions {
@@ -1063,8 +1063,8 @@ export interface ExecutionMonitoringState {
     }
 
     .open-record-btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 8px 16px;
       border-radius: 8px;
@@ -1075,13 +1075,13 @@ export interface ExecutionMonitoringState {
       align-items: center;
       gap: 6px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .open-record-btn:hover {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
 
     .open-record-btn i {
@@ -1092,13 +1092,13 @@ export interface ExecutionMonitoringState {
       background: none;
       border: none;
       font-size: 16px;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 4px;
     }
 
     .close-btn:hover {
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .execution-modal-body {
@@ -1117,8 +1117,8 @@ export interface ExecutionMonitoringState {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 1px solid #f0f0f0;
+      color: var(--mj-text-primary);
+      border-bottom: 1px solid var(--mj-border-default);
       padding-bottom: 6px;
     }
 
@@ -1136,7 +1136,7 @@ export interface ExecutionMonitoringState {
 
     .detail-item label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1144,7 +1144,7 @@ export interface ExecutionMonitoringState {
 
     .detail-item span {
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .status-badge {
@@ -1157,27 +1157,27 @@ export interface ExecutionMonitoringState {
     }
 
     .status-badge--completed {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .status-badge--running {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-badge--failed {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
-      color: #ef4444;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .error-message {
-      background: #fff3e0;
-      border: 1px solid #ffcc02;
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-warning);
       border-radius: 4px;
       padding: 12px;
       font-size: 12px;
-      color: #e65100;
+      color: var(--mj-color-error-700);
       font-family: monospace;
     }
 
@@ -1188,7 +1188,7 @@ export interface ExecutionMonitoringState {
     }
 
     .child-execution {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 4px;
       padding: 12px;
       display: flex;
@@ -1205,15 +1205,15 @@ export interface ExecutionMonitoringState {
     .child-name {
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .child-type {
       font-size: 10px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       padding: 2px 6px;
       border-radius: 3px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .child-status {
@@ -1226,7 +1226,7 @@ export interface ExecutionMonitoringState {
       display: flex;
       gap: 12px;
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .loading-details {
@@ -1253,8 +1253,8 @@ export interface ExecutionMonitoringState {
 
     .tab-header {
       display: flex;
-      border-bottom: 1px solid rgba(99, 102, 241, 0.1);
-      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      background: var(--mj-bg-surface-card);
       min-height: 44px;
       overflow-x: auto;
     }
@@ -1270,7 +1270,7 @@ export interface ExecutionMonitoringState {
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--mj-text-muted);
       white-space: nowrap;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 120px;
@@ -1278,14 +1278,14 @@ export interface ExecutionMonitoringState {
     }
 
     .tab-item:hover {
-      background: rgba(99, 102, 241, 0.05);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .tab-item.active {
-      background: white;
-      color: #6366f1;
-      border-bottom-color: #6366f1;
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
+      border-bottom-color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
@@ -1298,7 +1298,7 @@ export interface ExecutionMonitoringState {
     .tab-close {
       background: none;
       border: none;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 2px;
       border-radius: 2px;
@@ -1312,8 +1312,8 @@ export interface ExecutionMonitoringState {
     }
 
     .tab-close:hover {
-      background: rgba(0, 0, 0, 0.1);
-      color: #333;
+      background: color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      color: var(--mj-text-primary);
     }
 
     .tab-content {
@@ -1359,14 +1359,14 @@ export interface ExecutionMonitoringState {
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 12px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .drill-down-header h4 {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1380,19 +1380,19 @@ export interface ExecutionMonitoringState {
     }
 
     .timestamp {
-      color: #666;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 4px 8px;
       border-radius: 4px;
     }
 
     .metric-badge {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       padding: 4px 10px;
       border-radius: 6px;
       font-weight: 600;
-      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .loading-spinner {
@@ -1400,7 +1400,7 @@ export interface ExecutionMonitoringState {
       align-items: center;
       justify-content: center;
       padding: 40px;
-      color: #666;
+      color: var(--mj-text-muted);
       gap: 12px;
     }
 
@@ -1408,7 +1408,7 @@ export interface ExecutionMonitoringState {
       display: flex;
       flex-direction: column;
       gap: 0;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -1417,11 +1417,11 @@ export interface ExecutionMonitoringState {
       display: grid;
       grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
       gap: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 12px 16px;
       font-size: 11px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -1431,27 +1431,27 @@ export interface ExecutionMonitoringState {
       grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
       gap: 12px;
       padding: 12px 16px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-bg-surface-sunken);
       cursor: pointer;
       transition: background 0.2s ease;
       align-items: center;
     }
 
     .table-row:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .table-cell {
       font-size: 12px;
-      color: #333;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .type-badge {
-      background: linear-gradient(135deg, rgba(100, 116, 139, 0.1) 0%, rgba(71, 85, 105, 0.1) 100%);
-      color: #64748b;
+      background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
+      color: var(--mj-text-muted);
       padding: 3px 8px;
       border-radius: 4px;
       font-size: 10px;
@@ -1461,13 +1461,13 @@ export interface ExecutionMonitoringState {
     }
 
     .type-badge--prompt {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .type-badge--agent {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .no-data {
@@ -1476,13 +1476,13 @@ export interface ExecutionMonitoringState {
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 16px;
     }
 
     .no-data i {
       font-size: 48px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-data p {
@@ -1513,13 +1513,13 @@ export interface ExecutionMonitoringState {
       flex-direction: column;
       gap: 6px;
       padding: 16px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
     }
 
     .info-item label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1528,7 +1528,7 @@ export interface ExecutionMonitoringState {
 
     .info-item span {
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
       font-weight: 500;
     }
 
@@ -1540,20 +1540,20 @@ export interface ExecutionMonitoringState {
     }
 
     .status-indicator.active {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .status-indicator.active::before {
       content: '';
       width: 6px;
       height: 6px;
-      background: #4caf50;
+      background: var(--mj-status-success);
       border-radius: 50%;
     }
 
     .model-description {
       padding: 20px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
     }
 
@@ -1561,13 +1561,13 @@ export interface ExecutionMonitoringState {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .model-description p {
       margin: 0;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-muted);
       line-height: 1.5;
     }
 
@@ -1579,7 +1579,7 @@ export interface ExecutionMonitoringState {
 
     .clickable:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
     }
 
     /* Collapsible Panel Styles */
@@ -1587,21 +1587,21 @@ export interface ExecutionMonitoringState {
       padding: 12px;
       height: 100%;
       overflow-y: auto;
-      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
+      background: var(--mj-bg-surface-card);
     }
 
     .analysis-panel {
       margin-bottom: 12px;
       border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
-      background: white;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+      background: var(--mj-bg-surface);
       overflow: hidden;
-      border: 1px solid rgba(99, 102, 241, 0.08);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .analysis-panel:hover {
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     }
 
     .analysis-panel:last-child {
@@ -1610,8 +1610,8 @@ export interface ExecutionMonitoringState {
 
     .panel-header {
       padding: 14px 18px;
-      background: linear-gradient(180deg, #fafbff 0%, #f8f9fc 100%);
-      border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       cursor: pointer;
       display: flex;
       justify-content: space-between;
@@ -1620,7 +1620,7 @@ export interface ExecutionMonitoringState {
     }
 
     .panel-header:hover {
-      background: linear-gradient(180deg, #f0f1ff 0%, #e8e9ff 100%);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .panel-title {
@@ -1628,24 +1628,24 @@ export interface ExecutionMonitoringState {
       align-items: center;
       gap: 10px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       font-size: 14px;
     }
 
     .panel-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       width: 18px;
     }
 
     .panel-toggle-icon {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-size: 12px;
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .panel-content {
       padding: 18px;
-      border-top: 1px solid rgba(99, 102, 241, 0.05);
+      border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
       animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -1759,7 +1759,7 @@ export interface ExecutionMonitoringState {
       .table-cell:before {
         content: attr(data-label) ': ';
         font-weight: 600;
-        color: #666;
+        color: var(--mj-text-muted);
         font-size: 11px;
         text-transform: uppercase;
       }

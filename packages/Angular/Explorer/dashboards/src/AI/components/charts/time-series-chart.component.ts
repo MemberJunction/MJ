@@ -55,9 +55,9 @@ export interface DataPointClickEvent {
   `,
   styles: [`
     .time-series-chart {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
       padding: 12px;
       height: 100%;
       display: flex;
@@ -79,7 +79,7 @@ export interface DataPointClickEvent {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .chart-legend {
@@ -108,7 +108,7 @@ export interface DataPointClickEvent {
     }
 
     .legend-label {
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
@@ -126,8 +126,8 @@ export interface DataPointClickEvent {
 
     .chart-tooltip {
       position: absolute;
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
+      background: color-mix(in srgb, var(--mj-color-neutral-900) 80%, transparent);
+      color: var(--mj-text-inverse);
       padding: 8px 12px;
       border-radius: 4px;
       font-size: 12px;
@@ -152,33 +152,33 @@ export interface DataPointClickEvent {
     }
 
     :host ::ng-deep .chart-dot:hover {
-      filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-color-neutral-900) 30%, transparent));
     }
 
     :host ::ng-deep .grid-line {
-      stroke: #f0f0f0;
+      stroke: var(--mj-bg-surface-sunken);
       stroke-width: 1;
     }
 
     :host ::ng-deep .axis {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     :host ::ng-deep .axis path {
-      stroke: #ddd;
+      stroke: var(--mj-border-default);
     }
 
     :host ::ng-deep .axis .tick line {
-      stroke: #ddd;
+      stroke: var(--mj-border-default);
     }
 
     :host ::ng-deep .axis-y-left {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     :host ::ng-deep .axis-y-right {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     :host ::ng-deep .axis-label {
@@ -220,8 +220,8 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private height = 0;
   private margin = { top: 10, right: 70, bottom: 50, left: 70 }; // Increased bottom margin for x-axis labels
 
-  // Chart configuration
-  private defaultColors = ['#2196f3', '#4caf50', '#ff9800', '#f44336', '#9c27b0'];
+  // Chart configuration — resolved from CSS custom properties for D3 color interpolation
+  private defaultColors: string[] = [];
   
   // Metrics configuration
   visibleMetrics = ['executions', 'cost', 'tokens', 'avgTime', 'errors'];
@@ -229,7 +229,23 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
 
   ngOnInit() {
+    this.defaultColors = this.getDefaultColors();
     this.applyConfig();
+  }
+
+  /**
+   * Reads chart-series colors from CSS custom properties so D3 can use
+   * resolved values for color interpolation while remaining themeable.
+   */
+  private getDefaultColors(): string[] {
+    const style = getComputedStyle(document.documentElement);
+    return [
+      style.getPropertyValue('--mj-brand-primary').trim() || '#0076b6',
+      style.getPropertyValue('--mj-status-success').trim() || '#22c55e',
+      style.getPropertyValue('--mj-status-warning').trim() || '#f59e0b',
+      style.getPropertyValue('--mj-status-error').trim() || '#ef4444',
+      style.getPropertyValue('--mj-color-violet-500').trim() || '#8b5cf6',
+    ];
   }
 
   ngAfterViewInit() {
@@ -450,7 +466,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
           .attr('x', 0 - (this.height / 2))
           .style('text-anchor', 'middle')
           .style('font-size', '12px')
-          .style('fill', '#666')
+          .style('fill', 'var(--mj-text-muted)')
           .text('Cost ($) / Time (s)');
       }
 
@@ -478,7 +494,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
           .attr('x', this.height / 2)
           .style('text-anchor', 'middle')
           .style('font-size', '12px')
-          .style('fill', '#666')
+          .style('fill', 'var(--mj-text-muted)')
           .text('Count (Executions / Tokens)');
       }
     } else {
@@ -576,7 +592,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('r', 4) // Slightly larger for easier clicking
         .attr('stroke', color)
         .attr('stroke-width', 2)
-        .attr('fill', 'white')
+        .attr('fill', 'var(--mj-bg-surface)')
         .style('cursor', 'pointer')
         .style('pointer-events', 'all') // Ensure clicks are captured
         .style('z-index', 1000) // Ensure dots are on top
@@ -638,7 +654,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
       <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
       <div>Errors: ${data.errors}</div>
-      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 11px; color: rgba(255,255,255,0.8);">
+      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--mj-bg-surface) 30%, transparent); font-size: 11px; color: color-mix(in srgb, var(--mj-bg-surface) 80%, transparent);">
         Click data points to drill down
       </div>
     `;

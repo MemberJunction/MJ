@@ -9,7 +9,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: color-mix(in srgb, var(--mj-color-neutral-900) 40%, transparent);
     z-index: 1000;
     animation: fadeIn 0.2s ease-out;
 }
@@ -27,8 +27,8 @@
     top: 0;
     right: 0;
     bottom: 0;
-    background: white;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+    background: var(--mj-bg-surface);
+    box-shadow: -4px 0 20px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -65,13 +65,13 @@
 
 .resize-handle:hover,
 .resize-handle.active {
-    background: rgba(33, 150, 243, 0.1);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .resize-grip {
     width: 3px;
     height: 40px;
-    background: #ccc;
+    background: var(--mj-border-strong);
     border-radius: 2px;
     opacity: 0;
     transition: opacity 0.15s ease;
@@ -80,7 +80,7 @@
 .resize-handle:hover .resize-grip,
 .resize-handle.active .resize-grip {
     opacity: 1;
-    background: var(--mj-primary-color, #2196f3);
+    background: var(--mj-brand-primary);
 }
 
 /* ========================================
@@ -91,8 +91,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
-    background: white;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 
@@ -103,11 +103,11 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: var(--mj-text-color, #333);
+    color: var(--mj-text-primary);
 }
 
 .panel-title i {
-    color: var(--mj-primary-color, #2196f3);
+    color: var(--mj-brand-primary);
 }
 
 .close-btn {
@@ -120,13 +120,13 @@
     background: transparent;
     border-radius: 50%;
     cursor: pointer;
-    color: #666;
+    color: var(--mj-text-muted);
     transition: all 0.15s ease;
 }
 
 .close-btn:hover {
-    background: #f5f5f5;
-    color: #333;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-primary);
 }
 
 .close-btn i {
@@ -157,33 +157,33 @@
 }
 
 .status-banner.status-success {
-    background: rgba(76, 175, 80, 0.1);
-    color: #388e3c;
+    background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+    color: var(--mj-color-success-700);
 }
 
 .status-banner.status-success i {
     font-size: 24px;
-    color: #4caf50;
+    color: var(--mj-status-success);
 }
 
 .status-banner.status-error {
-    background: rgba(244, 67, 54, 0.1);
-    color: #c62828;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    color: var(--mj-color-error-700);
 }
 
 .status-banner.status-error i {
     font-size: 24px;
-    color: #f44336;
+    color: var(--mj-status-error);
 }
 
 .status-banner.status-running {
-    background: rgba(33, 150, 243, 0.1);
-    color: #1976d2;
+    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 .status-banner.status-running i {
     font-size: 24px;
-    color: #2196f3;
+    color: var(--mj-color-info-500);
 }
 
 .status-banner .status-text {
@@ -193,7 +193,7 @@
 .status-banner .duration {
     font-size: 14px;
     font-weight: normal;
-    background: rgba(0, 0, 0, 0.05);
+    background: color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
     padding: 4px 10px;
     border-radius: 4px;
 }
@@ -212,22 +212,22 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: var(--mj-text-secondary-color, #666);
+    color: var(--mj-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .section-title i {
     font-size: 14px;
-    color: var(--mj-primary-color, #2196f3);
+    color: var(--mj-brand-primary);
 }
 
 .section-title.error {
-    color: #c62828;
+    color: var(--mj-color-error-700);
 }
 
 .section-title.error i {
-    color: #f44336;
+    color: var(--mj-status-error);
 }
 
 /* ========================================
@@ -249,7 +249,7 @@
 }
 
 .expandable-section .section-header.clickable:hover {
-    background: rgba(0, 0, 0, 0.03);
+    background: color-mix(in srgb, var(--mj-color-neutral-900) 3%, transparent);
 }
 
 .section-title-row {
@@ -260,7 +260,7 @@
 
 .expand-icon {
     font-size: 12px;
-    color: #999;
+    color: var(--mj-text-disabled);
     transition: transform 0.2s ease;
 }
 
@@ -272,9 +272,9 @@
    Info Cards
    ======================================== */
 .info-card {
-    background: #fafafa;
+    background: var(--mj-bg-surface-card);
     border-radius: 8px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--mj-border-default);
     padding: 12px 16px;
 }
 
@@ -287,32 +287,32 @@
 }
 
 .info-row:not(:last-child) {
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--mj-border-default);
 }
 
 .info-label {
-    color: var(--mj-text-secondary-color, #666);
+    color: var(--mj-text-muted);
 }
 
 .info-value {
     font-weight: 500;
-    color: var(--mj-text-color, #333);
+    color: var(--mj-text-primary);
 }
 
 .info-value.tool-name {
     font-family: 'Consolas', 'Monaco', monospace;
-    background: rgba(33, 150, 243, 0.1);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     padding: 2px 8px;
     border-radius: 4px;
-    color: var(--mj-primary-color, #2196f3);
+    color: var(--mj-brand-primary);
 }
 
 /* ========================================
    Error Card
    ======================================== */
 .error-card {
-    background: #fff5f5;
-    border: 1px solid rgba(244, 67, 54, 0.2);
+    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, transparent);
     border-radius: 8px;
     padding: 16px;
 }
@@ -322,7 +322,7 @@
     font-family: monospace;
     font-size: 13px;
     line-height: 1.5;
-    color: #c62828;
+    color: var(--mj-color-error-700);
     white-space: pre-wrap;
     word-break: break-word;
 }
@@ -331,7 +331,7 @@
    Code Card
    ======================================== */
 .code-card {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     overflow: hidden;
     height: 200px;
@@ -349,8 +349,8 @@
     display: flex;
     gap: 8px;
     padding: 16px 20px;
-    background: white;
-    border-top: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-top: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 

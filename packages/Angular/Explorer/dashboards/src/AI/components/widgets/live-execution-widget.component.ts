@@ -50,7 +50,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
                   cy="12"
                   r="10"
                   fill="none"
-                  stroke="#e0e0e0"
+                  stroke="var(--mj-border-default)"
                   stroke-width="2"
                 />
                 <circle
@@ -58,7 +58,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
                   cy="12"
                   r="10"
                   fill="none"
-                  stroke="#2196f3"
+                  stroke="var(--mj-brand-primary)"
                   stroke-width="2"
                   stroke-linecap="round"
                   [style.stroke-dasharray]="circumference"
@@ -99,9 +99,9 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
   `,
   styles: [`
     .live-execution-widget {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
       height: 400px;
       display: flex;
       flex-direction: column;
@@ -109,7 +109,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
 
     .widget-header {
       padding: 20px 20px 16px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -119,19 +119,19 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .widget-title i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .active-count {
-      background: #e3f2fd;
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       padding: 4px 12px;
       border-radius: 12px;
       font-size: 12px;
@@ -166,21 +166,21 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     }
 
     .execution-item:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .execution-item--running {
-      border-left-color: #2196f3;
-      background: rgba(33, 150, 243, 0.02);
+      border-left-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 2%, var(--mj-bg-surface));
     }
 
     .execution-item--completed {
-      border-left-color: #4caf50;
+      border-left-color: var(--mj-status-success);
     }
 
     .execution-item--failed {
-      border-left-color: #f44336;
-      background: rgba(244, 67, 54, 0.02);
+      border-left-color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 2%, var(--mj-bg-surface));
     }
 
     .execution-icon {
@@ -195,18 +195,18 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     }
 
     .execution-item--running .execution-icon {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .execution-item--completed .execution-icon {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .execution-item--failed .execution-icon {
-      background: rgba(244, 67, 54, 0.1);
-      color: #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .execution-info {
@@ -216,7 +216,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
 
     .execution-name {
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       font-size: 14px;
       white-space: nowrap;
       overflow: hidden;
@@ -229,22 +229,22 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       align-items: center;
       gap: 8px;
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .execution-type {
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 6px;
       border-radius: 3px;
       font-weight: 500;
     }
 
     .execution-duration {
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     .execution-cost {
-      color: #ff9800;
+      color: var(--mj-status-warning);
       font-weight: 500;
     }
 
@@ -274,7 +274,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       transform: translate(-50%, -50%);
       font-size: 8px;
       font-weight: 600;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .status-indicator {
@@ -288,31 +288,31 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     }
 
     .status-indicator--running {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       animation: pulse 2s infinite;
     }
 
     .status-indicator--completed {
-      background: #4caf50;
-      color: white;
+      background: var(--mj-status-success);
+      color: var(--mj-text-inverse);
     }
 
     .status-indicator--failed {
-      background: #f44336;
-      color: white;
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
     }
 
     .show-more {
       padding: 12px 20px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .show-more-btn {
       width: 100%;
       background: none;
       border: none;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -326,7 +326,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     }
 
     .show-more-btn:hover {
-      background: rgba(33, 150, 243, 0.1);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .no-executions {
@@ -335,13 +335,13 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 12px;
     }
 
     .no-executions i {
       font-size: 32px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-executions p {
@@ -349,29 +349,11 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       font-size: 14px;
     }
 
-    /* Custom scrollbar */
-    .execution-list::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .execution-list::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-
-    .execution-list::-webkit-scrollbar-thumb {
-      background: #ccc;
-      border-radius: 2px;
-    }
-
-    .execution-list::-webkit-scrollbar-thumb:hover {
-      background: #999;
-    }
-
     @media (max-width: 768px) {
       .execution-item {
         padding: 10px 16px;
       }
-      
+
       .execution-meta {
         flex-direction: column;
         align-items: flex-start;

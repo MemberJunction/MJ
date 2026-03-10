@@ -9,15 +9,15 @@
     align-items: center;
     gap: 8px;
     padding: 12px;
-    background: #ffebee;
-    border: 1px solid #f44336;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-error);
     border-radius: 6px;
-    color: #c62828;
+    color: var(--mj-color-error-700);
     font-size: 14px;
 }
 
 .form-section {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     padding: 16px;
 }
@@ -29,11 +29,11 @@
     margin: 0 0 16px 0;
     font-size: 14px;
     font-weight: 600;
-    color: var(--mj-text-color, #333);
+    color: var(--mj-text-primary);
 }
 
 .form-section h3 i {
-    color: var(--mj-primary-color, #2196f3);
+    color: var(--mj-brand-primary);
 }
 
 .form-group {
@@ -49,11 +49,11 @@
     margin-bottom: 6px;
     font-size: 13px;
     font-weight: 500;
-    color: var(--mj-text-color, #333);
+    color: var(--mj-text-primary);
 }
 
 .form-group label .required {
-    color: #f44336;
+    color: var(--mj-status-error);
 }
 
 .form-group input,
@@ -65,14 +65,14 @@
     display: block;
     margin-top: 4px;
     font-size: 12px;
-    color: #999;
+    color: var(--mj-text-disabled);
 }
 
 .form-group .error-text {
     display: block;
     margin-top: 4px;
     font-size: 12px;
-    color: #f44336;
+    color: var(--mj-status-error);
 }
 
 .form-row {
@@ -100,43 +100,43 @@
 .transport-desc,
 .auth-desc {
     font-size: 12px;
-    color: #666;
+    color: var(--mj-text-muted);
 }
 
 /* OAuth Section Styles */
 .oauth-section {
-    background-color: rgba(33, 150, 243, 0.04);
-    border-color: rgba(33, 150, 243, 0.3);
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 .oauth-section h3 i {
-    color: #ff9800;
+    color: var(--mj-status-warning);
 }
 
 .oauth-client-section {
     margin-top: 20px;
     padding-top: 16px;
-    border-top: 1px dashed #ccc;
+    border-top: 1px dashed var(--mj-border-strong);
 }
 
 .oauth-client-section h4 {
     margin: 0 0 8px 0;
     font-size: 13px;
     font-weight: 600;
-    color: var(--mj-text-color, #333);
+    color: var(--mj-text-primary);
 }
 
 .section-hint {
     margin: 0 0 16px 0;
     font-size: 12px;
-    color: #666;
+    color: var(--mj-text-muted);
     font-style: italic;
 }
 
 /* Kendo overrides */
 :host ::ng-deep .k-dialog-actions {
     padding: 16px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--mj-border-default);
 }
 
 :host ::ng-deep .k-dialog-content {
