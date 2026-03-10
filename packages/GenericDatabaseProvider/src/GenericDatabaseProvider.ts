@@ -54,6 +54,7 @@ import {
     LocalCacheManager,
     LogError,
     LogStatus,
+    LogStatusEx,
     StripStopWords,
 } from '@memberjunction/core';
 
@@ -1282,10 +1283,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                     const entityLabel = item.params.EntityName || 'unknown';
                     if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                        LogStatus(`    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`);
+                        LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges) {
-                        LogStatus(`    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`);
+                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
                         differentialItems.push({
                             index, params: item.params, entityInfo, whereSQL,
                             clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
@@ -1293,7 +1294,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             serverStatus,
                         });
                     } else {
-                        LogStatus(`    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`);
+                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
                     }
                 }
@@ -1309,7 +1310,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
-                        LogStatus(`    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — client has no cache, serving ${cached.rowCount} rows from server cache, no DB hit`);
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — client has no cache, serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
                         noCacheStatusServedFromCache.push({ index: entry.index, serverCached: cached });
                         continue;
                     }
@@ -1349,7 +1350,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;
             const totalChecked = itemsNeedingValidation.length + itemsWithoutCacheCheck.length;
             const totalDBQueries = noCacheStatusNeedsDB.length + staleItemsNoTracking.length + differentialItems.length;
-            LogStatus(`  📊 [SmartCache] Batch [${entities}] — ${currentResults.length} current, ${serverCacheStaleItems.length + noCacheStatusServedFromCache.length} served-from-cache, ${differentialItems.length} differential, ${totalDBQueries} full-query, ${errorResults.length} errors (server cache: ${totalServerCacheHits}/${totalChecked} hits)`);
+            LogStatusEx({ message: `  📊 [SmartCache] Batch [${entities}] — ${currentResults.length} current, ${serverCacheStaleItems.length + noCacheStatusServedFromCache.length} served-from-cache, ${differentialItems.length} differential, ${totalDBQueries} full-query, ${errorResults.length} errors (server cache: ${totalServerCacheHits}/${totalChecked} hits)`, verboseOnly: true });
 
             return { success: true, results: allResults };
         } catch (e) {
@@ -1487,12 +1488,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount };
         if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-            LogStatus(`    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`);
+            LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`, verboseOnly: true });
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
         }
 
         // Server has newer data than client — we can serve it directly from cache
-        LogStatus(`    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`);
+        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
         return { status: 'stale', serverCached: cached };
     }
 

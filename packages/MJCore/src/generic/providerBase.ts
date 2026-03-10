@@ -123,6 +123,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _lastRefreshCheckAt: number = 0;
 
+    // ── Server-Side Auto-Cache ────────────────────────────────────────
+    /**
+     * Maximum row count for auto-caching on the server side. When
+     * `TrustLocalCacheCompletely` is true and a RunView result has no
+     * ExtraFilter, no OrderBy, and the result count is at or below this
+     * threshold, the result is automatically stored in LocalCacheManager
+     * even without an explicit `CacheLocal` flag.
+     *
+     * This captures small reference/lookup tables that are repeatedly
+     * queried by multiple clients while avoiding caching large ad-hoc
+     * result sets. Invalidation is handled by the standard BaseEntity
+     * event-driven upsert (safe because unfiltered caches can be updated
+     * in-place).
+     *
+     * Set to 0 to disable auto-caching. Default 250.
+     */
+    public static ServerAutoCacheMaxRows: number = 250;
+
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
      * How long (ms) a resolved RunViews result stays available for instant
@@ -418,7 +436,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             if (preResult.cachedResult) {
                 // Cache hit — transform and return directly
-                LogStatus(`  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`);
+                LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
                 await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
@@ -435,7 +453,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             // Cache miss — execute query, then post-process (stores in cache)
-            LogStatus(`  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`);
+            LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
             const result = await this.InternalRunView<T>(params, contextUser);
             await this.PostRunView(result, params, preResult, contextUser);
             return result;
@@ -550,7 +568,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (preResult.allCached && preResult.cachedResults) {
             const entities = params.map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
             const totalResults = preResult.cachedResults.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
-            LogStatus(`  ✅ [Cache HIT] RunViews batch [${entities}] — all ${params.length} views served from cache (${totalResults} total rows), no DB queries`);
+            LogStatusEx({ message: `  ✅ [Cache HIT] RunViews batch [${entities}] — all ${params.length} views served from cache (${totalResults} total rows), no DB queries`, verboseOnly: true });
             TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                 cacheHit: true,
                 allCached: true,
@@ -562,7 +580,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Execute the internal implementation for non-cached items
         const uncachedEntities = (preResult.uncachedParams || params).map(p => p.EntityName || p.ViewName || 'unknown').join(', ');
-        LogStatus(`  🔍 [Cache MISS] RunViews batch [${uncachedEntities}] — querying database for ${(preResult.uncachedParams || params).length} view(s)`);
+        LogStatusEx({ message: `  🔍 [Cache MISS] RunViews batch [${uncachedEntities}] — querying database for ${(preResult.uncachedParams || params).length} view(s)`, verboseOnly: true });
         const results = await this.InternalRunViews<T>(preResult.uncachedParams || params, contextUser);
 
         // Merge cached and fresh results if needed
@@ -864,7 +882,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        if (params.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
@@ -880,6 +898,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     AggregateResults: cached.aggregateResults // Include cached aggregate results
                 };
                 cacheStatus = 'hit';
+                if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
+                    LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
+                }
             } else {
                 cacheStatus = 'miss';
             }
@@ -961,8 +982,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
-            // Check local cache if enabled
-            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+            // Check local cache if enabled or if server trusts its cache completely
+            if ((param.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -979,12 +1000,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
 
-                    LogStatus(`    ✅ [Cache HIT] "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows from cache`);
+                    if (!param.CacheLocal && this.TrustLocalCacheCompletely) {
+                        LogStatusEx({ message: `    ✅ [Server Cache HIT] RunViews "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
+                    }
+                    LogStatusEx({ message: `    ✅ [Cache HIT] "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows from cache`, verboseOnly: true });
                     cacheStatusMap.set(i, { status: 'hit', result: cachedViewResult });
                     cachedResults.push(cachedViewResult);
                     continue;
                 }
-                LogStatus(`    🔍 [Cache MISS] "${param.EntityName || param.ViewName || 'unknown'}" — will query database`);
+                LogStatusEx({ message: `    🔍 [Cache MISS] "${param.EntityName || param.ViewName || 'unknown'}" — will query database`, verboseOnly: true });
                 cacheStatusMap.set(i, { status: 'miss' });
             } else {
                 cacheStatusMap.set(i, { status: 'disabled' });
@@ -1376,6 +1400,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 maxUpdatedAt,
                 result.AggregateResults
             );
+        } else if (this.shouldAutoCache(params, result)) {
+            // Server-side auto-cache: small, unfiltered, unsorted results are
+            // automatically cached even without explicit CacheLocal. These are
+            // safe for in-place upsert on entity changes (no filter to evaluate).
+            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+            await LocalCacheManager.Instance.SetRunViewResult(
+                fingerprint,
+                params,
+                result.Results,
+                maxUpdatedAt,
+                result.AggregateResults
+            );
+            LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
 
         // Transform the result set into BaseEntity-derived objects, if needed
@@ -1432,6 +1470,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults
                 ));
+            } else if (this.shouldAutoCache(params[i], results[i])) {
+                const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
+                cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
+                    fingerprint,
+                    params[i],
+                    results[i].Results,
+                    maxUpdatedAt,
+                    results[i].AggregateResults
+                ));
+                LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
 
             // Register OnDataChanged callback if provided
@@ -1567,6 +1615,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param results - Array of result objects that may contain __mj_UpdatedAt
      * @returns ISO string of the max timestamp, or current time if none found
      */
+    /**
+     * Determines if a RunView result should be automatically cached on the
+     * server side. Auto-caching is limited to small, unfiltered, unsorted
+     * result sets that are safe for in-place upsert on entity changes.
+     *
+     * Criteria (all must be true):
+     * - `TrustLocalCacheCompletely` is true (server-side only)
+     * - `CacheLocal` is NOT already set (already handled by explicit path)
+     * - `LocalCacheManager` is initialized
+     * - Result was successful
+     * - Result row count is at or below `ServerAutoCacheMaxRows`
+     * - No `ExtraFilter` (empty or undefined)
+     * - No `OrderBy` (empty or undefined)
+     */
+    protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
+        if (!this.TrustLocalCacheCompletely) return false;
+        if (params.CacheLocal) return false; // already handled
+        if (!LocalCacheManager.Instance.IsInitialized) return false;
+        if (!result.Success) return false;
+        if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
+        if ((result.Results?.length ?? 0) > ProviderBase.ServerAutoCacheMaxRows) return false;
+
+        // Only auto-cache unfiltered, unsorted queries — these are safe for
+        // in-place upsert because LocalCacheManager doesn't need to evaluate
+        // SQL predicates or sort expressions.
+        const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter.trim() : '';
+        const orderBy = typeof params.OrderBy === 'string' ? params.OrderBy.trim() : '';
+        if (filter.length > 0 || orderBy.length > 0) return false;
+
+        return true;
+    }
+
     protected extractMaxUpdatedAt(results: unknown[]): string {
         let maxDate: Date | null = null;
 

@@ -666,6 +666,17 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 
 ## Performance Best Practices
 
+### Server-Side Caching (Critical Architecture)
+
+MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
+
+Key principles:
+- **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
+- **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries
+- **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
+- **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
+- **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
 - Group related queries together in a single batch operation
