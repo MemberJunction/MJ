@@ -231,6 +231,12 @@ export interface IQueryInfoBase {
      */
     EmbeddingModelName?: string | null;
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    TechnicalDescription: string | null;
+
+    /**
      * Field metadata for this query
      */
     Fields: IQueryFieldInfoBase[];

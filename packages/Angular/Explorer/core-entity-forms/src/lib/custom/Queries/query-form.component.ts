@@ -41,6 +41,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public parametersPanelExpanded = false;
     public fieldsPanelExpanded = false;
     public entitiesPanelExpanded = false;
+    public technicalDescriptionPanelExpanded = false;
     public detailsPanelExpanded = false;
     public permissionsPanelExpanded = false;
     
