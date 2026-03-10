@@ -122,6 +122,7 @@ export * from './resolvers/UserFavoriteResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
+export * from './resolvers/CurrentUserContextResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
