@@ -103,11 +103,11 @@
 .form-input {
     width: 100%;
     padding: 10px 14px;
-    border: 1px solid var(--mj-border-default);
+    border: 1px solid var(--mj-border-strong);
     border-radius: 10px;
     font-size: 0.85rem;
     color: var(--mj-text-primary);
-    background: var(--mj-bg-surface-card);
+    background: var(--mj-bg-surface);
     outline: none;
     transition: border-color 0.2s;
     box-sizing: border-box;
@@ -121,11 +121,11 @@
 .form-textarea {
     width: 100%;
     padding: 10px 14px;
-    border: 1px solid var(--mj-border-default);
+    border: 1px solid var(--mj-border-strong);
     border-radius: 10px;
     font-size: 0.85rem;
     color: var(--mj-text-primary);
-    background: var(--mj-bg-surface-card);
+    background: var(--mj-bg-surface);
     outline: none;
     transition: border-color 0.2s;
     resize: vertical;
@@ -216,7 +216,7 @@
     align-items: center;
     padding: 16px 24px;
     border-top: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-surface-sunken);
+    background: var(--mj-bg-surface-card);
     flex-shrink: 0;
     box-shadow: var(--mj-shadow-sm);
     position: relative;

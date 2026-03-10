@@ -305,7 +305,7 @@ interface ReviewFormState {
           <div class="gauge-display">
             <div class="gauge-ring">
               <svg viewBox="0 0 120 120" class="gauge-svg">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" stroke-width="10" />
+                <circle cx="60" cy="60" r="52" fill="none" class="gauge-track" stroke-width="10" />
                 <circle cx="60" cy="60" r="52" fill="none"
                         [attr.stroke]="AgreementColor"
                         stroke-width="10"
@@ -342,7 +342,7 @@ interface ReviewFormState {
       padding: 20px;
       height: 100%;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
@@ -352,10 +352,10 @@ interface ReviewFormState {
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 20px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .header-left {
@@ -368,14 +368,14 @@ interface ReviewFormState {
       margin: 0;
       font-size: 22px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
     .header-left h2 i {
-      color: #3b82f6;
+      color: var(--mj-brand-primary);
     }
 
     .pending-badge {
@@ -383,14 +383,14 @@ interface ReviewFormState {
       align-items: center;
       gap: 8px;
       padding: 6px 14px;
-      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-      border: 1px solid #fb923c;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-warning);
       border-radius: 20px;
     }
 
     .badge-count {
-      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-      color: white;
+      background: var(--mj-status-warning);
+      color: var(--mj-text-inverse);
       min-width: 24px;
       height: 24px;
       padding: 0 6px;
@@ -405,7 +405,7 @@ interface ReviewFormState {
     .badge-text {
       font-size: 12px;
       font-weight: 600;
-      color: #ea580c;
+      color: var(--mj-status-warning);
     }
 
     .refresh-btn {
@@ -413,10 +413,10 @@ interface ReviewFormState {
       align-items: center;
       gap: 8px;
       padding: 10px 18px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      background: white;
-      color: #64748b;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-muted);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -424,8 +424,8 @@ interface ReviewFormState {
     }
 
     .refresh-btn:hover:not(:disabled) {
-      background: #f8fafc;
-      border-color: #cbd5e1;
+      background: var(--mj-bg-surface-card);
+      border-color: var(--mj-border-strong);
     }
 
     .refresh-btn:disabled {
@@ -442,10 +442,10 @@ interface ReviewFormState {
     }
 
     .kpi-card {
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 20px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
       display: flex;
       align-items: center;
       gap: 16px;
@@ -459,14 +459,14 @@ interface ReviewFormState {
       align-items: center;
       justify-content: center;
       font-size: 20px;
-      color: white;
+      color: var(--mj-text-inverse);
       flex-shrink: 0;
     }
 
-    .kpi-icon.orange { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
-    .kpi-icon.green { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
-    .kpi-icon.gold { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); }
-    .kpi-icon.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .kpi-icon.orange { background: var(--mj-status-warning); }
+    .kpi-icon.green { background: var(--mj-status-success); }
+    .kpi-icon.gold { background: var(--mj-status-warning); }
+    .kpi-icon.blue { background: var(--mj-brand-primary); }
 
     .kpi-content {
       flex: 1;
@@ -476,7 +476,7 @@ interface ReviewFormState {
     .kpi-value {
       font-size: 26px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       line-height: 1;
       margin-bottom: 4px;
     }
@@ -484,12 +484,12 @@ interface ReviewFormState {
     .kpi-unit {
       font-size: 14px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .kpi-label {
       font-size: 11px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -502,9 +502,9 @@ interface ReviewFormState {
 
     .toggle-group {
       display: inline-flex;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -514,8 +514,8 @@ interface ReviewFormState {
       gap: 8px;
       padding: 12px 24px;
       border: none;
-      background: white;
-      color: #64748b;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-muted);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
@@ -523,19 +523,19 @@ interface ReviewFormState {
     }
 
     .toggle-btn:hover:not(.active) {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .toggle-btn.active {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     /* Content Card */
     .content-card {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
       margin-bottom: 20px;
     }
@@ -547,12 +547,12 @@ interface ReviewFormState {
     }
 
     .queue-item {
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       transition: background 0.2s ease;
     }
 
     .queue-item.expanded {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .queue-item:last-child {
@@ -569,7 +569,7 @@ interface ReviewFormState {
     }
 
     .queue-item-header:hover {
-      background: rgba(59, 130, 246, 0.04);
+      background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
     }
 
     .item-info {
@@ -580,7 +580,7 @@ interface ReviewFormState {
     .item-name {
       font-size: 14px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       margin-bottom: 6px;
       white-space: nowrap;
       overflow: hidden;
@@ -591,7 +591,7 @@ interface ReviewFormState {
       display: flex;
       gap: 14px;
       font-size: 12px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       align-items: center;
       flex-wrap: wrap;
     }
@@ -620,24 +620,24 @@ interface ReviewFormState {
     }
 
     .reason-no-feedback {
-      background: #dbeafe;
-      color: #1e40af;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .reason-high-score-failed {
-      background: #ffedd5;
-      color: #c2410c;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .reason-low-score-passed {
-      background: #fef9c3;
-      color: #a16207;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .expand-toggle {
       background: none;
       border: none;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 8px;
       border-radius: 6px;
@@ -646,15 +646,15 @@ interface ReviewFormState {
     }
 
     .expand-toggle:hover {
-      background: #e2e8f0;
-      color: #64748b;
+      background: var(--mj-border-default);
+      color: var(--mj-text-muted);
     }
 
     /* Review Form */
     .review-form-panel {
       padding: 20px 20px 20px 36px;
-      border-top: 1px solid #e2e8f0;
-      background: white;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
     }
 
     .form-section {
@@ -669,7 +669,7 @@ interface ReviewFormState {
       display: block;
       font-size: 12px;
       font-weight: 700;
-      color: #475569;
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 10px;
@@ -686,9 +686,9 @@ interface ReviewFormState {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      border: 2px solid #e2e8f0;
-      background: white;
-      color: #94a3b8;
+      border: 2px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-disabled);
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
@@ -699,29 +699,29 @@ interface ReviewFormState {
     }
 
     .rating-circle:hover {
-      border-color: #3b82f6;
-      color: #3b82f6;
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
       transform: scale(1.1);
     }
 
     .rating-circle.selected {
-      background: #3b82f6;
-      border-color: #3b82f6;
-      color: white;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .rating-circle.current {
-      background: #2563eb;
-      border-color: #1d4ed8;
-      color: white;
-      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+      background: var(--mj-brand-primary-hover);
+      border-color: var(--mj-brand-primary-hover);
+      color: var(--mj-text-inverse);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .rating-display {
       margin-left: 12px;
       font-size: 16px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     /* Correctness Buttons */
@@ -738,28 +738,28 @@ interface ReviewFormState {
       justify-content: center;
       gap: 8px;
       padding: 12px 20px;
-      border: 2px solid #e2e8f0;
+      border: 2px solid var(--mj-border-default);
       border-radius: 10px;
-      background: white;
+      background: var(--mj-bg-surface);
       font-size: 14px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .correctness-btn.correct:hover,
     .correctness-btn.correct.active {
-      border-color: #22c55e;
-      background: #f0fdf4;
-      color: #166534;
+      border-color: var(--mj-status-success);
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .correctness-btn.incorrect:hover,
     .correctness-btn.incorrect.active {
-      border-color: #ef4444;
-      background: #fef2f2;
-      color: #991b1b;
+      border-color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     /* Notes */
@@ -767,19 +767,21 @@ interface ReviewFormState {
       width: 100%;
       max-width: 500px;
       padding: 12px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
       resize: vertical;
       min-height: 72px;
       box-sizing: border-box;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .notes-textarea:focus {
       outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     /* Form Actions */
@@ -795,8 +797,8 @@ interface ReviewFormState {
       padding: 11px 22px;
       border: none;
       border-radius: 8px;
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
@@ -805,7 +807,7 @@ interface ReviewFormState {
 
     .submit-btn:hover:not(:disabled) {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .submit-btn:disabled {
@@ -818,10 +820,10 @@ interface ReviewFormState {
       align-items: center;
       gap: 8px;
       padding: 11px 20px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      background: white;
-      color: #64748b;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-muted);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -829,8 +831,8 @@ interface ReviewFormState {
     }
 
     .skip-btn:hover {
-      border-color: #cbd5e1;
-      background: #f8fafc;
+      border-color: var(--mj-border-strong);
+      background: var(--mj-bg-surface-card);
     }
 
     /* History Filters */
@@ -838,7 +840,7 @@ interface ReviewFormState {
       display: flex;
       gap: 16px;
       padding: 16px 20px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       align-items: center;
     }
 
@@ -852,22 +854,24 @@ interface ReviewFormState {
     .search-wrapper > i {
       position: absolute;
       left: 12px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       font-size: 13px;
     }
 
     .search-wrapper input {
       width: 100%;
       padding: 10px 12px 10px 36px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .search-wrapper input:focus {
       outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .sort-control {
@@ -875,16 +879,17 @@ interface ReviewFormState {
       align-items: center;
       gap: 8px;
       font-size: 12px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       flex-shrink: 0;
     }
 
     .sort-control select {
       padding: 8px 12px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     /* History List */
@@ -895,7 +900,7 @@ interface ReviewFormState {
 
     .history-item {
       padding: 16px 20px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       display: flex;
       align-items: center;
       gap: 16px;
@@ -914,13 +919,13 @@ interface ReviewFormState {
     .history-name {
       font-size: 14px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       margin-bottom: 4px;
     }
 
     .history-date {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       display: flex;
       align-items: center;
       gap: 5px;
@@ -941,17 +946,17 @@ interface ReviewFormState {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #e2e8f0;
+      background: var(--mj-border-default);
     }
 
     .rating-dot.filled {
-      background: #f59e0b;
+      background: var(--mj-status-warning);
     }
 
     .rating-label {
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .history-verdict {
@@ -969,13 +974,13 @@ interface ReviewFormState {
     }
 
     .verdict.correct {
-      background: #dcfce7;
-      color: #166534;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .verdict.incorrect {
-      background: #fee2e2;
-      color: #991b1b;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .history-auto-score {
@@ -986,16 +991,16 @@ interface ReviewFormState {
       width: 100%;
       margin-top: 8px;
       padding: 10px 14px;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      border-left: 3px solid #3b82f6;
+      border-left: 3px solid var(--mj-brand-primary);
       cursor: pointer;
     }
 
     .history-comments p {
       margin: 0;
       font-size: 13px;
-      color: #475569;
+      color: var(--mj-text-secondary);
       line-height: 1.5;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1015,42 +1020,42 @@ interface ReviewFormState {
     .empty-state i {
       font-size: 52px;
       margin-bottom: 16px;
-      color: #22c55e;
+      color: var(--mj-status-success);
     }
 
     .empty-state h3 {
       font-size: 18px;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       margin: 0 0 8px 0;
       font-weight: 600;
     }
 
     .empty-state p {
       font-size: 14px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       margin: 0;
     }
 
     /* Calibration Section */
     .calibration-section {
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 24px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .calibration-section h3 {
       margin: 0 0 20px 0;
       font-size: 16px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
     .calibration-section h3 i {
-      color: #3b82f6;
+      color: var(--mj-brand-primary);
     }
 
     .calibration-body {
@@ -1074,6 +1079,10 @@ interface ReviewFormState {
       height: 100%;
     }
 
+    .gauge-track {
+      stroke: var(--mj-border-default);
+    }
+
     .gauge-value {
       position: absolute;
       inset: 0;
@@ -1082,7 +1091,7 @@ interface ReviewFormState {
       justify-content: center;
       font-size: 24px;
       font-weight: 800;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     .calibration-text {
@@ -1092,7 +1101,7 @@ interface ReviewFormState {
     .calibration-description {
       margin: 0 0 12px 0;
       font-size: 14px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       line-height: 1.6;
     }
 
@@ -1101,16 +1110,16 @@ interface ReviewFormState {
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: #fef3c7;
-      border: 1px solid #fbbf24;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-warning);
       border-radius: 8px;
       font-size: 13px;
       font-weight: 500;
-      color: #92400e;
+      color: var(--mj-status-warning);
     }
 
     .calibration-warning i {
-      color: #d97706;
+      color: var(--mj-status-warning);
       font-size: 16px;
       flex-shrink: 0;
     }

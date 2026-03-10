@@ -41,19 +41,19 @@ import { Component, Input } from '@angular/core';
     }
 
     .cost-display--low {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .cost-display--medium {
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .cost-display--high {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .cost-display--normal {
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     @media (max-width: 768px) {

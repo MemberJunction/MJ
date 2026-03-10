@@ -357,7 +357,7 @@ interface VersionRow {
       padding: 24px;
       height: 100%;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     /* ------------------------------------------------------------------ */
@@ -369,22 +369,22 @@ interface VersionRow {
       align-items: center;
       flex-wrap: wrap;
       gap: 12px;
-      background: #fff;
+      background: var(--mj-bg-surface);
       padding: 20px 24px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       margin-bottom: 24px;
     }
     .header-left h2 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .header-left h2 i { color: #2196f3; }
+    .header-left h2 i { color: var(--mj-brand-primary); }
     .header-actions {
       display: flex;
       align-items: center;
@@ -396,7 +396,7 @@ interface VersionRow {
     .time-range-pills {
       display: flex;
       gap: 4px;
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 8px;
       padding: 3px;
     }
@@ -406,16 +406,16 @@ interface VersionRow {
       border-radius: 6px;
       font-size: 12px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       background: transparent;
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .pill:hover { background: #e0e0e0; }
+    .pill:hover { background: var(--mj-border-default); }
     .pill.active {
-      background: #2196f3;
-      color: #fff;
-      box-shadow: 0 1px 4px rgba(33,150,243,0.3);
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .refresh-btn {
@@ -423,16 +423,16 @@ interface VersionRow {
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      background: #fff;
-      color: #555;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .refresh-btn:hover { background: #f5f5f5; border-color: #bbb; }
+    .refresh-btn:hover { background: var(--mj-bg-surface-card); border-color: var(--mj-border-strong); }
 
     /* ------------------------------------------------------------------ */
     /*  Section titles                                                     */
@@ -443,14 +443,14 @@ interface VersionRow {
       gap: 8px;
       font-size: 15px;
       font-weight: 600;
-      color: #444;
+      color: var(--mj-text-secondary);
       margin-bottom: 14px;
     }
-    .section-title i { color: #2196f3; }
+    .section-title i { color: var(--mj-brand-primary); }
     .section-subtitle {
       font-size: 12px;
       font-weight: 400;
-      color: #888;
+      color: var(--mj-text-disabled);
       margin-left: 4px;
     }
 
@@ -458,26 +458,26 @@ interface VersionRow {
     /*  Cards                                                              */
     /* ------------------------------------------------------------------ */
     .card {
-      background: #fff;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       padding: 20px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      box-shadow: var(--mj-shadow-md);
     }
     .card h4 {
       margin: 0 0 14px 0;
       font-size: 13px;
       font-weight: 600;
-      color: #555;
+      color: var(--mj-text-secondary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .card h4 i { color: #2196f3; font-size: 14px; }
+    .card h4 i { color: var(--mj-brand-primary); font-size: 14px; }
 
     /* ------------------------------------------------------------------ */
     /*  Trend grid (2 columns)                                             */
@@ -503,14 +503,14 @@ interface VersionRow {
     }
     .bar-label {
       font-size: 10px;
-      color: #888;
+      color: var(--mj-text-disabled);
       font-weight: 500;
       text-align: right;
       white-space: nowrap;
     }
     .bar-track {
       height: 14px;
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 7px;
       overflow: hidden;
       position: relative;
@@ -526,36 +526,36 @@ interface VersionRow {
     .bar-value {
       font-size: 11px;
       font-weight: 600;
-      color: #555;
+      color: var(--mj-text-secondary);
       text-align: right;
     }
 
     /* colour classes for bars */
     .pass-rate-bar {
-      background: linear-gradient(90deg, #66bb6a, #43a047);
+      background: var(--mj-status-success);
     }
     .cost-bar {
-      background: linear-gradient(90deg, #ffa726, #f57c00);
+      background: var(--mj-status-warning);
     }
-    .score-excellent { background: linear-gradient(90deg, #66bb6a, #43a047); }
-    .score-good      { background: linear-gradient(90deg, #42a5f5, #1e88e5); }
-    .score-fair      { background: linear-gradient(90deg, #ffa726, #f57c00); }
-    .score-poor      { background: linear-gradient(90deg, #ef5350, #e53935); }
+    .score-excellent { background: var(--mj-status-success); }
+    .score-good      { background: var(--mj-brand-primary); }
+    .score-fair      { background: var(--mj-status-warning); }
+    .score-poor      { background: var(--mj-status-error); }
 
     /* text colour classes */
-    .text-excellent { color: #43a047; }
-    .text-good      { color: #1e88e5; }
-    .text-fair      { color: #f57c00; }
-    .text-poor      { color: #e53935; }
-    .text-pass-good { color: #43a047; }
-    .text-pass-warn { color: #f57c00; }
-    .text-pass-bad  { color: #e53935; }
+    .text-excellent { color: var(--mj-status-success); }
+    .text-good      { color: var(--mj-brand-primary); }
+    .text-fair      { color: var(--mj-status-warning); }
+    .text-poor      { color: var(--mj-status-error); }
+    .text-pass-good { color: var(--mj-status-success); }
+    .text-pass-warn { color: var(--mj-status-warning); }
+    .text-pass-bad  { color: var(--mj-status-error); }
 
     /* stacked segments */
     .bar-segment { height: 100%; transition: width 0.4s ease; }
-    .passed-seg  { background: #66bb6a; }
-    .failed-seg  { background: #ef5350; }
-    .skipped-seg { background: #bdbdbd; }
+    .passed-seg  { background: var(--mj-status-success); }
+    .failed-seg  { background: var(--mj-status-error); }
+    .skipped-seg { background: var(--mj-text-disabled); }
 
     .legend-row {
       display: flex;
@@ -563,7 +563,7 @@ interface VersionRow {
       gap: 6px;
       margin-top: 8px;
       font-size: 10px;
-      color: #888;
+      color: var(--mj-text-disabled);
     }
     .legend-dot {
       width: 8px;
@@ -573,9 +573,9 @@ interface VersionRow {
       margin-left: 8px;
     }
     .legend-dot:first-child { margin-left: 0; }
-    .legend-dot.passed-seg  { background: #66bb6a; }
-    .legend-dot.failed-seg  { background: #ef5350; }
-    .legend-dot.skipped-seg { background: #bdbdbd; }
+    .legend-dot.passed-seg  { background: var(--mj-status-success); }
+    .legend-dot.failed-seg  { background: var(--mj-status-error); }
+    .legend-dot.skipped-seg { background: var(--mj-text-disabled); }
 
     .trend-direction {
       margin-top: 10px;
@@ -585,9 +585,9 @@ interface VersionRow {
       align-items: center;
       gap: 6px;
     }
-    .trend-up      { color: #43a047; }
-    .trend-down    { color: #e53935; }
-    .trend-neutral { color: #9e9e9e; }
+    .trend-up      { color: var(--mj-status-success); }
+    .trend-down    { color: var(--mj-status-error); }
+    .trend-neutral { color: var(--mj-text-disabled); }
 
     /* ------------------------------------------------------------------ */
     /*  Insights grid (3 columns)                                          */
@@ -613,18 +613,18 @@ interface VersionRow {
       border-radius: 6px;
       transition: background 0.15s ease;
     }
-    .insight-row:hover { background: #f8f9fa; }
+    .insight-row:hover { background: var(--mj-bg-surface-card); }
     .insight-name {
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .badge-fail {
-      background: #ffebee;
-      color: #e53935;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
       font-size: 11px;
       font-weight: 700;
       padding: 2px 8px;
@@ -633,12 +633,12 @@ interface VersionRow {
     .insight-primary {
       font-size: 12px;
       font-weight: 700;
-      color: #1e88e5;
+      color: var(--mj-brand-primary);
     }
     .insight-secondary {
       font-size: 11px;
       font-weight: 500;
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     /* ------------------------------------------------------------------ */
@@ -661,11 +661,11 @@ interface VersionRow {
     .dist-label {
       font-size: 12px;
       font-weight: 600;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
     .dist-track {
       height: 22px;
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -677,13 +677,13 @@ interface VersionRow {
     .dist-count {
       font-size: 12px;
       font-weight: 700;
-      color: #333;
+      color: var(--mj-text-primary);
       text-align: right;
     }
     .dist-pct {
       font-size: 11px;
       font-weight: 600;
-      color: #888;
+      color: var(--mj-text-disabled);
       text-align: right;
     }
 
@@ -705,30 +705,30 @@ interface VersionRow {
       text-align: left;
       font-size: 11px;
       font-weight: 600;
-      color: #888;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       padding: 10px 12px;
-      border-bottom: 2px solid #eee;
+      border-bottom: 2px solid var(--mj-border-default);
     }
     .version-table th.num,
     .version-table td.num { text-align: right; }
     .version-table td {
       padding: 10px 12px;
-      border-bottom: 1px solid #f0f0f0;
-      color: #333;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
       vertical-align: middle;
     }
-    .version-table tbody tr:hover { background: #f8f9fa; }
+    .version-table tbody tr:hover { background: var(--mj-bg-surface-card); }
     .version-label {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-weight: 600;
       font-size: 12px;
-      color: #1e88e5;
+      color: var(--mj-brand-primary);
     }
     .version-agent {
       display: block;
       font-size: 11px;
-      color: #999;
+      color: var(--mj-text-disabled);
       margin-top: 2px;
     }
 
@@ -743,9 +743,9 @@ interface VersionRow {
       border-radius: 4px;
     }
     .delta i { font-size: 9px; }
-    .delta-up   { background: #e8f5e9; color: #43a047; }
-    .delta-down { background: #ffebee; color: #e53935; }
-    .delta-neutral { background: #f5f5f5; color: #9e9e9e; }
+    .delta-up   { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+    .delta-down { background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+    .delta-neutral { background: var(--mj-bg-surface-card); color: var(--mj-text-disabled); }
 
     /* ------------------------------------------------------------------ */
     /*  Empty / mini empty states                                          */
@@ -756,7 +756,7 @@ interface VersionRow {
       align-items: center;
       justify-content: center;
       padding: 32px 16px;
-      color: #bbb;
+      color: var(--mj-border-strong);
       gap: 8px;
     }
     .empty-mini i { font-size: 28px; opacity: 0.5; }
