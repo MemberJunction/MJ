@@ -300,20 +300,20 @@ ${fields}
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
             sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}', 
+                        Source='${source}',
                         Code='${code}',
                         Description='${description}',
                         Name='${name}',
                         GeneratedAt=GETUTCDATE(),
                         GeneratedByModelID='${v.aiModelID}'
-                     WHERE 
+                     WHERE
                         ID='${v.generatedCodeId}';`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
             sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
                       VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
-  
+
             `
           }
         }
@@ -336,7 +336,7 @@ ${fields}
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
-    const validators = unsortedValidators.sort((a, b) => {
+    const sortedValidators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
         const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
@@ -353,6 +353,18 @@ ${fields}
       return a.generatedCodeId.localeCompare(b.generatedCodeId);
     });
 
+    // Deduplicate by functionName — duplicate GeneratedCode records can exist if the view JOIN
+    // previously failed to match (e.g., whitespace differences in CHECK constraint text).
+    // Keep the first occurrence of each functionName (which is the earliest by sort order).
+    const seenFunctionNames = new Set<string>();
+    const validators = sortedValidators.filter((v) => {
+      if (seenFunctionNames.has(v.functionName)) {
+        return false;
+      }
+      seenFunctionNames.add(v.functionName);
+      return true;
+    });
+
     if (validators.length === 0) {
       return null;
     }
@@ -360,8 +372,8 @@ ${fields}
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n and \t are removed and replaced with actual newlines and tabs
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
+        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 

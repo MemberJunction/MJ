@@ -50,7 +50,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
 
     describe('UpsertSingleEntity with CompositeKey', () => {
         it('should upsert a record using a single-field CompositeKey', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,
@@ -77,7 +77,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should upsert a record using a two-field CompositeKey', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as SetParams,
@@ -113,7 +113,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should insert a new record when CompositeKey does not match any existing', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as SetParams,
@@ -140,7 +140,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         it('should return false when no cache exists for the fingerprint', async () => {
             const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', '1')]);
             const result = await cacheManager.UpsertSingleEntity(
-                'nonexistent|_|_|simple|-1|0|_',
+                'nonexistent|_|_|-1|0|_',
                 { ID: '1', Name: 'Test' },
                 key,
                 '2024-01-01T00:00:00Z'
@@ -149,7 +149,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should handle three-field CompositeKey correctly', async () => {
-            const fp = 'Permissions|_|_|simple|-1|0|_';
+            const fp = 'Permissions|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Permissions' } as SetParams,
@@ -190,7 +190,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
 
     describe('RemoveSingleEntity with CompositeKey', () => {
         it('should remove a record using a single-field CompositeKey', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,
@@ -208,7 +208,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should remove a record using a two-field CompositeKey', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as SetParams,
@@ -240,7 +240,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should return true (no-op) when CompositeKey does not match any record', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as SetParams,
@@ -262,7 +262,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         it('should return false when no cache exists', async () => {
             const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', '1')]);
             const result = await cacheManager.RemoveSingleEntity(
-                'nonexistent|_|_|simple|-1|0|_',
+                'nonexistent|_|_|-1|0|_',
                 key,
                 '2024-01-01T00:00:00Z'
             );
@@ -270,7 +270,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should update registry rowCount after removal', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,
@@ -313,7 +313,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         }
 
         it('should upsert composite PK entity in unfiltered cache', async () => {
-            const fp = 'OrderItems|_|_|simple|-1|0|_';
+            const fp = 'OrderItems|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'OrderItems' } as SetParams,
@@ -343,7 +343,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should delete composite PK entity from cache', async () => {
-            const fp = 'OrderItems|_|_|simple|-1|0|_';
+            const fp = 'OrderItems|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'OrderItems' } as SetParams,
@@ -376,7 +376,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should add new composite PK record to unfiltered cache', async () => {
-            const fp = 'OrderItems|_|_|simple|-1|0|_';
+            const fp = 'OrderItems|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'OrderItems' } as SetParams,
@@ -398,7 +398,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should invalidate filtered cache even with composite PK on save', async () => {
-            const fp = 'OrderItems|OrderID=o1|_|simple|-1|0|_';
+            const fp = 'OrderItems|OrderID=o1|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'OrderItems', ExtraFilter: 'OrderID=o1' } as SetParams,
@@ -421,8 +421,8 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should update multiple unfiltered fingerprints for the same entity', async () => {
-            const fp1 = 'OrderItems|_|_|simple|-1|0|_';
-            const fp2 = 'OrderItems|_|_|simple|-1|0|_|otherconn';
+            const fp1 = 'OrderItems|_|_|-1|0|_';
+            const fp2 = 'OrderItems|_|_|-1|0|_|otherconn';
 
             await cacheManager.SetRunViewResult(
                 fp1,
@@ -463,7 +463,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         // We mock it minimally — the event needs entityName in the payload.
 
         it('should upsert record data on remote save event', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,
@@ -506,7 +506,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should remove record on remote delete event', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,
@@ -547,7 +547,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should handle composite PK delete via remote event', async () => {
-            const fp = 'UserRoles|_|_|simple|-1|0|_';
+            const fp = 'UserRoles|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'UserRoles' } as SetParams,
@@ -598,7 +598,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should invalidate when entity not found in metadata', async () => {
-            const fp = 'Unknown|_|_|simple|-1|0|_';
+            const fp = 'Unknown|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Unknown' } as SetParams,
@@ -633,7 +633,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should invalidate when primaryKeyValues JSON is malformed on delete', async () => {
-            const fp = 'Users|_|_|simple|-1|0|_';
+            const fp = 'Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
                 { EntityName: 'Users' } as SetParams,

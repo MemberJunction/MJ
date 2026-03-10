@@ -254,6 +254,11 @@ export class SkipQueryInfo implements IQueryInfoBase {
      */
     EmbeddingModelName?: string;
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    TechnicalDescription: string | null = null;
+    /**
      * Field metadata for this query
      */
     Fields: SkipQueryFieldInfo[];

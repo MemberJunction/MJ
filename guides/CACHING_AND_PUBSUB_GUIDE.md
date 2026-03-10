@@ -19,13 +19,15 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 9. [Storage Providers](#storage-providers)
 10. [BaseEngine Integration](#baseengine-integration)
 11. [Smart Cache Validation (RunViewsWithCacheCheck)](#smart-cache-validation-runviewswithcachecheck)
-12. [Cross-Server Synchronization (Redis)](#cross-server-synchronization-redis)
-13. [Server-to-Browser Synchronization (GraphQL Subscriptions)](#server-to-browser-synchronization-graphql-subscriptions)
-14. [Deployment Topologies](#deployment-topologies)
-15. [PubSubManager](#pubsubmanager)
-16. [Cache Statistics and Monitoring](#cache-statistics-and-monitoring)
-17. [Configuration Reference](#configuration-reference)
-18. [Troubleshooting](#troubleshooting)
+12. [Server-Side Opportunistic Cache (All RunView/RunViews Calls)](#server-side-opportunistic-cache-all-runviewrunviews-calls)
+13. [Cross-Server Synchronization (Redis)](#cross-server-synchronization-redis)
+14. [Server-to-Browser Synchronization (GraphQL Subscriptions)](#server-to-browser-synchronization-graphql-subscriptions)
+15. [Deployment Topologies](#deployment-topologies)
+16. [PubSubManager](#pubsubmanager)
+17. [Cache Statistics and Monitoring](#cache-statistics-and-monitoring)
+18. [Configuration Reference](#configuration-reference)
+19. [Troubleshooting](#troubleshooting)
+20. [Server-Side Dataset Caching](#server-side-dataset-caching)
 
 ---
 
@@ -73,6 +75,26 @@ graph TB
 | **L1** | Browser in-memory | BaseEngine arrays | Session | Instant access, reactive UI |
 | **L2** | Browser persistent | IndexedDB / localStorage | Cross-session | Survive page refresh, reduce server load |
 | **L3** | Server | Redis or in-memory | Process lifetime (or Redis TTL) | Shared across requests, cross-server sync |
+
+### Server-Side vs Client-Side Cache Behavior
+
+A critical architectural distinction: **server-side providers trust the cache completely, while client-side providers validate before trusting.**
+
+| Environment | Provider | Cache Hit Behavior | Why |
+|-------------|----------|-------------------|-----|
+| **Server (MJAPI)** | `SQLServerDataProvider` / `PostgreSQLDataProvider` | Return cached data immediately, **zero DB queries** | Cache is kept perfectly in sync via BaseEntity save/delete events + Redis pub/sub |
+| **Client (Browser)** | `GraphQLDataProvider` | Lightweight smart cache check against server before returning | Browser cache doesn't have the same event-driven sync guarantees |
+
+This is controlled by the `TrustLocalCacheCompletely` property on `ProviderBase`:
+- **Default (`false`)**: Client-side behavior — uses smart cache check (see [Smart Cache Validation](#smart-cache-validation-runviewswithcachecheck))
+- **Overridden to `true` in `DatabaseProviderBase`**: Server-side behavior — cache hits return instantly
+
+This means that on the server, once data is loaded into the cache (Redis or in-memory), subsequent `RunView` calls for the same query fingerprint are served entirely from cache with no database interaction whatsoever. The cache stays accurate because:
+
+1. All entity mutations flow through `BaseEntity.Save()` / `BaseEntity.Delete()`
+2. These fire `MJGlobal` events that `LocalCacheManager` catches
+3. `LocalCacheManager` updates or invalidates affected cached query results in-place
+4. In multi-server deployments, Redis pub/sub propagates changes to all MJAPI nodes
 
 ### End-to-End Data Flow
 
@@ -201,20 +223,22 @@ Every cached result is identified by a **fingerprint** — a deterministic, huma
 
 **Format:**
 ```
-EntityName|Filter|OrderBy|ResultType|MaxRows|StartRow|AggregateHash|ConnectionPrefix
+EntityName|Filter|OrderBy|MaxRows|StartRow|AggregateHash[|ConnectionPrefix]
 ```
+
+> **Note:** `ResultType` is intentionally excluded from the fingerprint. The cache always stores plain JSON objects regardless of whether the caller requested `'simple'` or `'entity_object'`. Transformation to BaseEntity objects happens post-cache at consumption time via `TransformSimpleObjectToEntityObject()`. This ensures that an engine loading with `ResultType: 'entity_object'` and a GraphQL resolver requesting `ResultType: 'simple'` share the same cached data.
 
 **Examples:**
 ```
-Users|Status='Active'|Name ASC|simple|100|0|_|localhost_4000
-AI Models|_|_|entity_object|-1|0|_|localhost_4000
-Users|_|_|simple|50|100|a1b2c3d4|prod-db
+Users|Status='Active'|Name ASC|100|0|_|localhost_4000
+AI Models|_|_|-1|0|_|localhost_4000
+Users|_|_|50|100|a1b2c3d4|prod-db
 ```
 
 Key rules:
 - Empty values are represented as `_` for readability
 - The aggregate hash uses a djb2 hash function when aggregate expressions are present (otherwise `_`)
-- Connection prefix enables multi-connection cache isolation (different servers/databases)
+- Connection prefix is appended only when provided — enables multi-connection cache isolation
 - Pipe-delimited for easy parsing and debugging
 
 ### Aggregate Hashing
@@ -247,8 +271,8 @@ Similar pattern but keyed on query name/SQL and query parameters instead of enti
 The `connectionPrefix` parameter ensures cache isolation when the same browser or server connects to multiple backends:
 
 ```
-Users|Active=1|Name ASC|simple|100|0|_|prod-server
-Users|Active=1|Name ASC|simple|100|0|_|dev-server
+Users|Active=1|Name ASC|100|0|_|prod-server
+Users|Active=1|Name ASC|100|0|_|dev-server
 ```
 
 These are treated as completely separate cache entries even though the query is identical.
@@ -301,7 +325,7 @@ The reverse index maps entity names (lowercase, trimmed) to Sets of fingerprint 
 graph LR
     subgraph "Reverse Index"
         E1["'users'"] --> F1["Users|Status='Active'|Name ASC|...<br/>Users|Role='Admin'|LastLogin DESC|..."]
-        E2["'ai models'"] --> F2["AI Models|_|_|entity_object|...<br/>AI Models|Vendor='OpenAI'|Name|..."]
+        E2["'ai models'"] --> F2["AI Models|_|_|-1|0|_<br/>AI Models|Vendor='OpenAI'|Name|..."]
     end
 ```
 
@@ -500,7 +524,6 @@ protected async syncLocalCacheForConfig(
         EntityName: config.EntityName,
         ExtraFilter: config.Filter || '',
         OrderBy: config.OrderBy || '',
-        ResultType: 'entity_object',
         MaxRows: -1, StartRow: 0,
     }, connectionPrefix);
 
@@ -651,7 +674,7 @@ graph TD
 **Pub/sub message format:**
 ```json
 {
-    "CacheKey": "AI Models|_|_|entity_object|-1|0|_",
+    "CacheKey": "AI Models|_|_|-1|0|_",
     "Action": "set",
     "Category": "RunViewCache",
     "SourceServerId": "b931917f-...",
@@ -709,6 +732,39 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
 ### Loading Flow with CacheLocal
 
+The loading flow differs between server-side and client-side because of `TrustLocalCacheCompletely`:
+
+#### Server-Side (MJAPI) — Cache Trusted Completely
+
+On the server, cached data is returned immediately with **zero database queries**. The cache is guaranteed accurate by BaseEntity event-driven invalidation and Redis pub/sub.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Server Code / Engine
+    participant PB as ProviderBase
+    participant LCM as LocalCacheManager
+    participant DB as Database
+
+    Caller->>PB: RunView({CacheLocal: true, ...})
+    PB->>LCM: GetRunViewResult(fingerprint)
+
+    alt Cache Hit
+        LCM-->>PB: Cached results (plain objects)
+        PB->>PB: TransformSimpleObjectToEntityObject()
+        PB-->>Caller: Instant response — zero DB queries
+    else Cache Miss (first load)
+        PB->>DB: Execute SQL query
+        DB-->>PB: Raw results
+        PB->>LCM: SetRunViewResult (cache plain objects)
+        PB->>PB: TransformSimpleObjectToEntityObject()
+        PB-->>Caller: Fresh results (now cached for next time)
+    end
+```
+
+#### Client-Side (Browser) — Smart Cache Validation
+
+In the browser, cached data is validated against the server via a lightweight check before being trusted:
+
 ```mermaid
 sequenceDiagram
     participant UI as Angular Component
@@ -721,11 +777,8 @@ sequenceDiagram
     Engine->>LCM: GetRunViewResult(fingerprint)
 
     alt Cache Hit (within TTL)
-        LCM-->>Engine: Cached results
-        Engine-->>UI: Instant response
-    else Cache Miss or Expired
-        Engine->>Server: RunViewsWithCacheCheck
-        Server->>DB: SELECT with maxUpdatedAt check
+        Engine->>Server: RunViewsWithCacheCheck<br/>{maxUpdatedAt, rowCount}
+        Server->>DB: SELECT MAX(__mj_UpdatedAt), COUNT(*)
 
         alt Data unchanged
             Server-->>Engine: status: 'current'
@@ -739,8 +792,36 @@ sequenceDiagram
             Engine->>LCM: SetRunViewResult
             Engine-->>UI: Fresh results
         end
+    else Cache Miss
+        Engine->>Server: RunViews (full query)
+        Server->>DB: SELECT * ...
+        Server-->>Engine: Full results
+        Engine->>LCM: SetRunViewResult
+        Engine-->>UI: Fresh results
     end
 ```
+
+#### Why Server-Side Can Trust the Cache
+
+The server-side cache is kept in perfect sync through this chain:
+
+1. **All writes go through BaseEntity** — `Save()` and `Delete()` fire MJGlobal events
+2. **LocalCacheManager subscribes** to all BaseEntity events and updates/invalidates affected cached queries
+3. **Redis pub/sub** (when configured) propagates changes across all MJAPI nodes
+4. **No external writes bypass this** — in normal MJ operation, all DB mutations flow through BaseEntity
+
+This eliminates the need for the lightweight `MAX(__mj_UpdatedAt)` + `COUNT(*)` validation query that client-side providers use. The result is that server-side engine loads (which happen frequently during MJAPI startup and on-demand) are served from cache with zero database overhead after the initial load.
+
+#### Cache Serialization Order
+
+The cache stores **plain JSON objects**, not BaseEntity instances. This is critical because BaseEntity objects contain RxJS `Subject` instances with circular subscriber references that cannot be serialized with `JSON.stringify`.
+
+The processing order in `PostRunView` / `PostRunViews` is:
+1. **Cache plain objects** via `LocalCacheManager.SetRunViewResult()` — before any transformation
+2. **Transform to entity objects** via `TransformSimpleObjectToEntityObject()` — only if `ResultType === 'entity_object'`
+3. **Run post-hooks** via `RunPostRunViewHooks()`
+
+On cache read, `TransformSimpleObjectToEntityObject()` is called to restore BaseEntity instances from the cached plain objects when `ResultType === 'entity_object'`.
 
 ### Real-Time Array Updates (Event Handling)
 
@@ -867,7 +948,9 @@ This separation means engines don't need to worry about cache sync — LocalCach
 
 ## Smart Cache Validation (RunViewsWithCacheCheck)
 
-When `CacheLocal` is enabled, MemberJunction uses a **smart cache check** protocol to minimize data transfer between client and server.
+> **Important**: Smart cache validation is used **only by client-side providers** (e.g., `GraphQLDataProvider` in the browser). Server-side providers (`SQLServerDataProvider`, `PostgreSQLDataProvider`) skip this entirely and trust the cache completely — see [Server-Side vs Client-Side Cache Behavior](#server-side-vs-client-side-cache-behavior) above.
+
+When `CacheLocal` is enabled on a **client-side provider**, MemberJunction uses a **smart cache check** protocol to minimize data transfer between client and server.
 
 ```mermaid
 sequenceDiagram
@@ -908,6 +991,110 @@ sequenceDiagram
 | `stale` | **Full dataset** | Many changes or first load |
 
 For engines that load metadata tables with hundreds of rows that rarely change, the `current` response dramatically reduces server load and network traffic.
+
+### Server-Side Pre-Check for RunViewsWithCacheCheck
+
+When a `RunViewsWithCacheCheck` request arrives at the server, the server checks its own `LocalCacheManager` **before** hitting the database — even for the lightweight `MAX/COUNT` validation query. This is a four-phase pipeline:
+
+```mermaid
+flowchart TD
+    A["Client sends RunViewsWithCacheCheck<br/>(N items, some with cacheStatus)"] --> B["Phase 1: Items WITH cacheStatus<br/>Check server LocalCacheManager"]
+
+    B --> C{Server cache hit?}
+    C -->|"Hit + maxUpdatedAt/rowCount match"| D["Return status: 'current'<br/>Zero DB queries"]
+    C -->|"Hit but stale"| E["Serve from server cache<br/>(client will get fresh data)"]
+    C -->|Miss| F["Phase 2: DB validation<br/>(only for server cache misses)"]
+
+    F --> G["SELECT MAX, COUNT<br/>Compare with client cacheStatus"]
+
+    A --> H["Phase 3: Items WITHOUT cacheStatus<br/>(empty client cache)"]
+    H --> I{Server cache hit?}
+    I -->|Hit| J["Serve from server cache<br/>Zero DB queries"]
+    I -->|Miss| K["Phase 4: Full DB query<br/>Store result in server cache"]
+```
+
+This means:
+- **Second client connecting** with an empty cache gets all data from server cache — zero DB queries
+- **Returning client** with valid cache gets `status: 'current'` — zero DB queries and zero data transfer
+- Only genuinely new queries (never seen before) hit the database
+
+---
+
+## Server-Side Opportunistic Cache (All RunView/RunViews Calls)
+
+Beyond the explicit `CacheLocal` and `RunViewsWithCacheCheck` paths, the server **opportunistically checks** its `LocalCacheManager` for **every** `RunView`/`RunViews` call — even when `CacheLocal` is not set by the caller.
+
+### How It Works
+
+On the server (`TrustLocalCacheCompletely = true`), `PreRunView` and `PreRunViews` check the cache for a matching fingerprint regardless of the `CacheLocal` flag. If the data exists in cache (put there by engines, `RunViewsWithCacheCheck`, or auto-cache), it's returned immediately with zero DB queries.
+
+```mermaid
+flowchart TD
+    A["GraphQL RunViewsQuery arrives<br/>(no CacheLocal flag)"] --> B["ProviderBase.PreRunView"]
+    B --> C{"TrustLocalCacheCompletely<br/>AND cache initialized?"}
+    C -->|No| D["Skip cache check<br/>(client-side behavior)"]
+    C -->|Yes| E["Generate fingerprint<br/>Check LocalCacheManager"]
+    E --> F{Cache hit?}
+    F -->|Yes| G["Return cached data<br/>Zero DB queries ✅"]
+    F -->|No| H["Execute DB query"]
+    H --> I{"shouldAutoCache?<br/>(small + unfiltered)"}
+    I -->|Yes| J["Store in cache<br/>for future hits 📦"]
+    I -->|No| K["Return without caching"]
+```
+
+### Important Distinction: Read vs Write
+
+| Operation | Condition | Behavior |
+|-----------|-----------|----------|
+| **Cache Read** (check before DB) | `TrustLocalCacheCompletely` is true | Always checks — if data is there, serve it |
+| **Cache Write** (store after DB) | `CacheLocal` is explicitly set, OR auto-cache criteria met | Selective — only stores when intent is clear or data is safe to cache |
+
+This asymmetry is intentional:
+- **Reading** from cache is always safe — if data is there, it's guaranteed fresh by BaseEntity event invalidation
+- **Writing** to cache must be selective to avoid memory bloat from large ad-hoc queries (e.g., 10K customer rows browsed in a grid)
+
+### Auto-Cache for Small Reference Data
+
+When a `RunView` result meets all of the following criteria, it's automatically stored in the server cache even without an explicit `CacheLocal` flag:
+
+| Criterion | Why |
+|-----------|-----|
+| `TrustLocalCacheCompletely` is true | Server-side only |
+| Result is successful | Don't cache errors |
+| Row count ≤ `ServerAutoCacheMaxRows` (default: 250) | Small reference/lookup data |
+| No `ExtraFilter` | Unfiltered queries are safe for in-place upsert |
+| No `OrderBy` | Unsorted queries don't need sort-order maintenance |
+
+```typescript
+// Configurable threshold (on ProviderBase)
+ProviderBase.ServerAutoCacheMaxRows = 250;  // default
+```
+
+**Why unfiltered + unsorted only?**
+
+When a BaseEntity is saved or deleted, `LocalCacheManager` must update all cached fingerprints for that entity. For **unfiltered** caches, it can safely do an in-place upsert or removal — the record always belongs in the result set. For **filtered** caches, it cannot evaluate arbitrary SQL predicates (which may include subqueries, functions, JOINs, etc.), so it must conservatively **invalidate** the entire cached result. Similarly, **sorted** caches would need SQL-compatible sort evaluation to maintain correct order.
+
+```mermaid
+flowchart TD
+    A["BaseEntity.Save() fires event"] --> B["LocalCacheManager receives event"]
+    B --> C["Find all cached fingerprints<br/>for this entity"]
+    C --> D{isFilteredFingerprint?}
+    D -->|"No (filter = '_' or empty)"| E["UpsertSingleEntity<br/>In-place update ✅"]
+    D -->|"Yes (has ExtraFilter)"| F["InvalidateRunViewResult<br/>Blow away cache entry 🗑️"]
+    F --> G["Next request repopulates<br/>from database"]
+```
+
+By limiting auto-cache to unfiltered+unsorted results, we guarantee that **every auto-cached entry can be maintained in-place** without ever serving stale data.
+
+### Examples of What Gets Auto-Cached
+
+| Query | Rows | Auto-Cached? | Why |
+|-------|------|-------------|-----|
+| `RunView('Roles')` | 15 | Yes | Small, no filter, no sort |
+| `RunView('Entity Fields')` | 200 | Yes | Under threshold, no filter |
+| `RunView('Users', filter: "Status='Active'")` | 50 | No | Has ExtraFilter |
+| `RunView('Customers')` | 5,000 | No | Exceeds threshold |
+| `RunView('AI Models', orderBy: 'Name')` | 12 | No | Has OrderBy |
 
 ---
 
@@ -1326,6 +1513,13 @@ const status = LocalCacheManager.Instance.GetRunViewCacheStatus(fingerprint);
 | `defaultTTLMs` | 300,000 (5 min) | Time-to-live for cached entries |
 | `evictionPolicy` | `'lru'` | Eviction strategy: `lru`, `lfu`, or `fifo` |
 
+### ProviderBase Server-Side Cache
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ServerAutoCacheMaxRows` | 250 | Max row count for auto-caching unfiltered RunView results (0 = disabled) |
+| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay |
+
 ### Redis Configuration
 
 Set `REDIS_URL` environment variable on MJAPI:
@@ -1385,6 +1579,17 @@ If `DBSIZE = 0` after server startup, the storage provider hot-swap may have fai
 2. `SetStorageProvider()` should migrate entries → check for `"Migrated"` log
 3. If missing, verify `SetStorageProvider` is called after Redis connects in `index.ts`
 
+### "Converting circular structure to JSON" Errors During Startup
+
+This was a known bug (now fixed) caused by `PostRunView`/`PostRunViews` calling `TransformSimpleObjectToEntityObject()` **before** caching. BaseEntity objects contain RxJS `Subject` instances (`_eventSubject`) with circular subscriber references that break `JSON.stringify`.
+
+**Fix**: Cache storage now happens *before* entity transformation. The cache stores plain JSON-serializable objects, and `TransformSimpleObjectToEntityObject` is called on cache read when `ResultType === 'entity_object'`.
+
+If you see these errors, ensure you're on the latest version of `@memberjunction/core`. The ordering in `PostRunView` and `PostRunViews` must be:
+1. Cache plain objects via `LocalCacheManager.SetRunViewResult()`
+2. Transform to entity objects via `TransformSimpleObjectToEntityObject()`
+3. Run post-hooks via `RunPostRunViewHooks()`
+
 ### Differential Update Issues
 
 1. **Composite PK entities**: Check that primary key format matches `Field1|Value1||Field2|Value2`
@@ -1404,6 +1609,88 @@ LocalCacheManager.Instance.GetStats()
 LocalCacheManager.Instance.GetHitRate()
 LocalCacheManager.Instance.GetAllEntries()
 ```
+
+---
+
+## Server-Side Dataset Caching
+
+Datasets (`GetDatasetByName` and `GetDatasetStatusByName`) are a batch-loading mechanism used heavily at startup — the `MJ_Metadata` dataset alone loads ~22 entity types. Without caching, **every client connection** re-executes all of those SQL queries even though the data hasn't changed.
+
+### How It Works
+
+The dataset caching layer in `GenericDatabaseProvider` integrates with `LocalCacheManager` to avoid redundant database queries. It uses the same fingerprint system as RunView, so cache entries are shared between both paths.
+
+#### GetDatasetByName — Cache-Aware Resolution
+
+When a dataset is requested, each dataset item is resolved individually:
+
+1. **Phase 1 — Cache Check**: For each dataset item, generate a `LocalCacheManager` fingerprint using the item's entity name and combined filter (WhereClause + ItemFilter). Check cache for a hit.
+2. **Phase 2 — SQL for Misses Only**: Build and execute SQL (`SELECT columns FROM baseView WHERE filter`) only for items that had cache misses. Items with cache hits skip SQL entirely.
+3. **Phase 3 — Write-Through**: After SQL execution, store results in `LocalCacheManager` via `SetRunViewResult` so future requests find them cached.
+4. **Merge**: Results are assembled in original item order regardless of hit/miss status.
+
+```
+First client connect (after server bootstrap):
+  Dataset items: 22 → Cache hits: 22, SQL queries: 0, elapsed: <1ms
+
+Server cold start (no cache):
+  Dataset items: 22 → Cache hits: 0, SQL queries: 22 (batched), elapsed: ~400ms
+  Next request: Cache hits: 22, SQL queries: 0, elapsed: <1ms
+```
+
+#### GetDatasetStatusByName — Cache-Derived Status
+
+Status checks (`MAX(dateField)` and `COUNT(*)` per item) are also cache-aware:
+
+1. **Cache Hit**: Derive `LatestUpdateDate` and `TotalRowCount` directly from the in-memory cached rows — sub-millisecond.
+2. **Cache Miss**: Fall back to the traditional SQL status query.
+
+This eliminates the "status round-trip" that previously preceded every dataset fetch.
+
+#### Fingerprint Compatibility
+
+Dataset items generate fingerprints identical to RunView queries:
+
+```typescript
+const fingerprint = cache.GenerateRunViewFingerprint(
+    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+    this.InstanceConnectionString
+);
+```
+
+This means:
+- **RunView populates dataset cache**: If a RunView call loads `Entities` with the same filter, a subsequent dataset request finds it cached.
+- **Dataset populates RunView cache**: After the dataset loads `Entities`, any RunView call with the same filter gets a cache hit.
+- **Entity event invalidation**: When an entity record changes, `LocalCacheManager` invalidates entries for that entity — both RunView and dataset cache entries are cleared together.
+
+### Why This Matters
+
+| Metric | Before | After (warm cache) |
+|--------|--------|---------------------|
+| DB queries per client connect | ~44 (22 data + 22 status) | 0 |
+| Dataset response time | ~400-500ms | <1ms |
+| DB load at 100 concurrent users | 4,400 queries | 0 queries |
+
+The server bootstrap (first boot) still hits the database to populate the cache, but every subsequent client connection — including the dozens that happen during peak usage — gets assembled entirely from memory.
+
+### Logging
+
+Both methods emit `LogStatusEx` messages with elapsed time and hit/miss counts:
+
+```
+GetDatasetByName: MJ_Metadata - 22 items, 22 cache hits, 0 misses, elapsed: 0.3ms
+GetDatasetStatusByName: MJ_Metadata - 22 items, 22 cache hits, 0 misses, elapsed: 0.1ms
+```
+
+These log entries use standard MJ logging and appear in the server console during startup and client connections.
+
+### Conditions
+
+Dataset caching is active when:
+- `LocalCacheManager.Instance` is available
+- `TrustLocalCacheCompletely` is `true` (server-side default)
+
+On the client side (`TrustLocalCacheCompletely = false`), dataset requests pass through to the server without local cache checks.
 
 ---
 
