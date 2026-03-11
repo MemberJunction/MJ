@@ -1,5 +1,25 @@
 # @memberjunction/core-entities-server
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-prompts@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-vector-dupe@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/doc-utils@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sql-converter@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+- @memberjunction/skip-types@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

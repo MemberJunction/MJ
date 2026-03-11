@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/communication-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

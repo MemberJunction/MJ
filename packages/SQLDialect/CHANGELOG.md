@@ -1,5 +1,7 @@
 # @memberjunction/sql-dialect
 
+## 5.10.1
+
 ## 5.10.0
 
 ## 5.9.0

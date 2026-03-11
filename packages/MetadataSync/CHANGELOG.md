@@ -1,5 +1,19 @@
 # @memberjunction/metadata-sync
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/config@5.10.1
+- @memberjunction/generic-database-provider@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/core-entities-server@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+- @memberjunction/server-bootstrap-lite@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes
