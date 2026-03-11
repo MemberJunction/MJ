@@ -58,6 +58,7 @@ import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
+import { MarkdownModule } from "@memberjunction/ng-markdown";
 import { MJTestRunFormComponentExtended } from "./Tests/test-run-form.component";
 import { MJTestFormComponentExtended } from "./Tests/test-form.component";
 import { MJTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
@@ -151,7 +152,8 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         ListManagementModule,
         ActionsModule,
         AgentsModule,
-        EntityViewerModule
+        EntityViewerModule,
+        MarkdownModule
     ],
     exports: [
         MJEntityFormComponentExtended,

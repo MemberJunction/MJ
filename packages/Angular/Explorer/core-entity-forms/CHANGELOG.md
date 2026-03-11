@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/ng-base-application@5.10.0
+  - @memberjunction/ng-link-directives@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-testing@5.10.0
+  - @memberjunction/ng-action-gallery@5.10.0
+  - @memberjunction/ng-actions@5.10.0
+  - @memberjunction/ng-agents@5.10.0
+  - @memberjunction/ng-ai-test-harness@5.10.0
+  - @memberjunction/ng-base-forms@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-deep-diff@5.10.0
+  - @memberjunction/ng-entity-relationship-diagram@5.10.0
+  - @memberjunction/ng-entity-viewer@5.10.0
+  - @memberjunction/ng-flow-editor@5.10.0
+  - @memberjunction/ng-join-grid@5.10.0
+  - @memberjunction/ng-list-management@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-timeline@5.10.0
+  - @memberjunction/templates-base-types@5.10.0
+  - @memberjunction/ng-tabstrip@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/global@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes

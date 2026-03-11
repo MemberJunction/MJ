@@ -28,7 +28,7 @@ describe('LocalCacheManager Cache Change Callbacks', () => {
 
     function createEvent(overrides?: Partial<CacheChangedEvent>): CacheChangedEvent {
         return {
-            CacheKey: 'TestEntity|Active=1||entity_object|||',
+            CacheKey: 'TestEntity|Active=1|||||',
             Category: 'RunViewCache',
             Action: 'set',
             Timestamp: Date.now(),

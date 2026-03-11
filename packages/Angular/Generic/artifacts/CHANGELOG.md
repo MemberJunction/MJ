@@ -1,5 +1,28 @@
 # @memberjunction/ng-artifacts
 
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [3df5e4b]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-query-viewer@5.10.0
+  - @memberjunction/ng-base-types@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-react@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-trees@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/global@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes

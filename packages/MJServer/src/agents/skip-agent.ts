@@ -152,6 +152,7 @@ export class SkipProxyAgent extends BaseAgent {
             includeRequests: false,
             forceEntityRefresh: context.forceEntityRefresh || false,
             includeCallbackAuth: true,
+            externalReferenceID: this.AgentRun?.ID ?? undefined,
             onStatusUpdate: (message: string, responsePhase?: string) => {
                 // Forward Skip status updates to MJ progress callback
                 if (params.onProgress) {

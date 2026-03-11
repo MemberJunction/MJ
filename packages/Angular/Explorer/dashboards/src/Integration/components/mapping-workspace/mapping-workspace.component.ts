@@ -2,11 +2,10 @@ import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJIntegrationObjectFieldEntity, MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   IntegrationDataService,
-  IntegrationRow,
   IntegrationRunRow,
   EntityMapRow,
   FieldMapRow,
@@ -119,7 +118,7 @@ type PreviewRecord = Record<string, string | number | boolean | null>;
 export class MappingWorkspaceComponent extends BaseResourceComponent implements OnInit {
 
   // --- Core data ---
-  Integrations: IntegrationRow[] = [];
+  Integrations: MJCompanyIntegrationEntity[] = [];
   EntityMaps: EntityMapRow[] = [];
   FieldMaps: FieldMapRow[] = [];
   RunEntityDetails: RunDetailRow[] = [];

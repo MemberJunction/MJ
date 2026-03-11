@@ -62,6 +62,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="ExternalReferenceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="RootParentRunID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -137,7 +145,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AgentState"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -161,7 +169,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FinalPayload"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -177,7 +185,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StartingPayload"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -193,7 +201,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Data"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -427,20 +435,10 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SecondaryScopes"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
-        [Form]="this"
-        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
@@ -499,10 +497,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Runs (Parent Run ID) Section -->
+    <!-- AI Agent Runs (Parent Run) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunsParentRunID"
-        SectionName="AI Agent Runs (Parent Run ID)"
+        SectionName="AI Agent Runs (Parent Run)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -624,10 +622,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Runs (Last Run ID) Section -->
+    <!-- AI Agent Runs (Last Run) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRunsLastRunID"
-        SectionName="AI Agent Runs (Last Run ID)"
+        SectionName="AI Agent Runs (Last Run)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

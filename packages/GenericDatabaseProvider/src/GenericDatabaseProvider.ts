@@ -51,8 +51,10 @@ import {
     DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
     UserInfo,
+    LocalCacheManager,
     LogError,
     LogStatus,
+    LogStatusEx,
     StripStopWords,
 } from '@memberjunction/core';
 
@@ -1203,9 +1205,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
-            // Separate items that need cache check from those that don't
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+            // Separate items by type: no cache check, needs validation
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+            const itemsNeedingValidation: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
             const errorResults: RunViewWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
@@ -1225,54 +1227,116 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 try {
                     this.CheckUserReadPermissions(entityInfo.Name, user);
-                    const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                    itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+                    itemsNeedingValidation.push({ index: i, item, entityInfo });
                 } catch (e) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                 }
             }
 
-            // Execute batched cache status check
-            const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+            // Phase 1: Check server's LocalCacheManager first (zero DB hits)
+            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
-            // Determine which items are current vs stale, and whether they support differential updates
+            for (const { index, item, entityInfo } of itemsNeedingValidation) {
+                const entityLabel = item.params.EntityName || 'unknown';
+                const resolved = await this.resolveFromServerCache(item, index, entityLabel);
+                if (resolved) {
+                    if (resolved.status === 'current') {
+                        currentResults.push(resolved.result);
+                    } else {
+                        serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
+                    }
+                } else {
+                    serverCacheMissItems.push({ index, item, entityInfo });
+                }
+            }
+
+            // Phase 2: For server cache misses, fall back to DB validation
             const differentialItems: Array<{
                 index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
                 clientMaxUpdatedAt: string; clientRowCount: number;
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
-            const currentResults: RunViewWithCacheCheckResult<T>[] = [];
 
-            for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
-                const serverStatus = cacheStatusResults.get(index);
-                if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
-                    continue;
+            if (serverCacheMissItems.length > 0) {
+                // Build WHERE clauses and run batched DB status check only for cache misses
+                const itemsForDBCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+                for (const { index, item, entityInfo } of serverCacheMissItems) {
+                    try {
+                        const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL });
+                    } catch (e) {
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
+                    }
                 }
 
-                if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ viewIndex: index, status: 'current' });
-                } else if (entityInfo.TrackRecordChanges) {
-                    differentialItems.push({
-                        index, params: item.params, entityInfo, whereSQL,
-                        clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                        clientRowCount: item.cacheStatus!.rowCount,
-                        serverStatus,
-                    });
-                } else {
-                    staleItemsNoTracking.push({ index, params: item.params });
+                const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsForDBCheck, contextUser);
+
+                for (const { index, item, entityInfo, whereSQL } of itemsForDBCheck) {
+                    const serverStatus = cacheStatusResults.get(index);
+                    if (!serverStatus || !serverStatus.success) {
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                        continue;
+                    }
+
+                    const entityLabel = item.params.EntityName || 'unknown';
+                    if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                        LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
+                        currentResults.push({ viewIndex: index, status: 'current' });
+                    } else if (entityInfo.TrackRecordChanges) {
+                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
+                        differentialItems.push({
+                            index, params: item.params, entityInfo, whereSQL,
+                            clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                            clientRowCount: item.cacheStatus!.rowCount,
+                            serverStatus,
+                        });
+                    } else {
+                        LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
+                        staleItemsNoTracking.push({ index, params: item.params });
+                    }
                 }
             }
 
-            // Run queries in parallel
+            // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+
+            for (const entry of itemsWithoutCacheCheck) {
+                if (LocalCacheManager.Instance.IsInitialized) {
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString);
+                    const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+                    if (cached) {
+                        const entityLabel = entry.item.params.EntityName || 'unknown';
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — client has no cache, serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+                        noCacheStatusServedFromCache.push({ index: entry.index, serverCached: cached });
+                        continue;
+                    }
+                }
+                noCacheStatusNeedsDB.push(entry);
+            }
+
+            // Phase 4: Run queries in parallel for items needing data
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
-                ...itemsWithoutCacheCheck.map(({ index, item }) =>
-                    this.runFullQueryAndReturn<T>(item.params, index, contextUser),
+                // Items without cache check — served from server cache
+                ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached),
                 ),
+                // Items without cache check — server cache miss, must hit DB
+                ...noCacheStatusNeedsDB.map(({ index, item }) =>
+                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser),
+                ),
+                // Server cache stale — serve from server's cached data (zero DB)
+                ...serverCacheStaleItems.map(({ index, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached),
+                ),
+                // DB-validated stale items (no change tracking)
                 ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
-                    this.runFullQueryAndReturn<T>(viewParams, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser),
                 ),
+                // DB-validated differential items
                 ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
                     this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser),
                 ),
@@ -1281,6 +1345,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fullQueryResults = await Promise.all(queryPromises);
             const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
             allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+            const entities = params.map(p => p.params.EntityName || 'unknown').join(', ');
+            const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;
+            const totalChecked = itemsNeedingValidation.length + itemsWithoutCacheCheck.length;
+            const totalDBQueries = noCacheStatusNeedsDB.length + staleItemsNoTracking.length + differentialItems.length;
+            LogStatusEx({ message: `  📊 [SmartCache] Batch [${entities}] — ${currentResults.length} current, ${serverCacheStaleItems.length + noCacheStatusServedFromCache.length} served-from-cache, ${differentialItems.length} differential, ${totalDBQueries} full-query, ${errorResults.length} errors (server cache: ${totalServerCacheHits}/${totalChecked} hits)`, verboseOnly: true });
 
             return { success: true, results: allResults };
         } catch (e) {
@@ -1379,6 +1449,68 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
         return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+    }
+
+    /**
+     * Runs a full query and stores the result in the server's LocalCacheManager.
+     * Used by RunViewsWithCacheCheck to populate the server cache for future requests.
+     */
+    protected async runFullQueryAndCacheResult<T = unknown>(
+        params: RunViewParams,
+        viewIndex: number,
+        contextUser?: UserInfo,
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+        // Cache the result so subsequent RunViewsWithCacheCheck calls can skip DB
+        if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt);
+        }
+        return result;
+    }
+
+    /**
+     * Checks the server's LocalCacheManager for cached data matching the client's request.
+     * Returns the resolution if found (either 'current' or server-cached data to serve),
+     * or null if the server cache doesn't have this data.
+     */
+    private async resolveFromServerCache(
+        item: RunViewWithCacheCheckParams,
+        index: number,
+        entityLabel: string,
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } } | null> {
+        if (!LocalCacheManager.Instance.IsInitialized) return null;
+
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
+        const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+        if (!cached) return null;
+
+        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount };
+        if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+            LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`, verboseOnly: true });
+            return { status: 'current', result: { viewIndex: index, status: 'current' } };
+        }
+
+        // Server has newer data than client — we can serve it directly from cache
+        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+        return { status: 'stale', serverCached: cached };
+    }
+
+    /**
+     * Packages server-cached data as a RunViewWithCacheCheckResult for return to the client.
+     */
+    private async serveFromServerCache<T = unknown>(
+        viewIndex: number,
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number },
+    ): Promise<RunViewWithCacheCheckResult<T>> {
+        return {
+            viewIndex,
+            status: 'stale',
+            results: serverCached.results as T[],
+            maxUpdatedAt: serverCached.maxUpdatedAt,
+            rowCount: serverCached.rowCount,
+        };
     }
 
     /**
@@ -1801,7 +1933,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${where}`;
+        // Append Read RLS filter if user is not exempt
+        let fullWhere = where;
+        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                fullWhere = `${where} AND (${rlsWhereClause})`;
+            }
+        }
+
+        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${fullWhere}`;
         const rawData = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
@@ -1847,6 +1988,89 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return ret;
         }
         return null;
+    }
+
+    /**************************************************************************/
+    // Row-Level Security Checks
+    /**************************************************************************/
+
+    /**
+     * Checks whether an existing record passes the RLS filter for a given permission type.
+     * Executes: SELECT COUNT(*) AS cnt FROM view WHERE PK=value AND (RLS filter)
+     * Returns true if the record matches (cnt > 0), false otherwise.
+     */
+    protected override async CheckRecordRLS(
+        entity: BaseEntity,
+        user: UserInfo,
+        type: EntityPermissionType
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
+            return true;
+        }
+
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const pkWhere = entity.PrimaryKeys.map(pk => {
+            const fieldInfo = entityInfo.Fields.find(f => f.Name === pk.Name);
+            const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
+            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
+        }).join(' AND ');
+
+        const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['cnt']) > 0;
+    }
+
+    /**
+     * Checks whether a new record's field values pass the Create RLS filter.
+     * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     */
+    protected override async CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
+            return true;
+        }
+
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const projections = this.BuildCreateRLSProjections(entity, entityInfo);
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['pass']) === 1;
+    }
+
+    /**
+     * Builds field projections for the Create RLS synthetic row subquery.
+     * Only includes non-virtual fields that have non-null values.
+     */
+    private BuildCreateRLSProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+        const parts: string[] = [];
+        for (const field of entityInfo.Fields) {
+            if (field.IsVirtual) continue;
+            const val = entity.Get(field.Name);
+            if (val == null) continue;
+
+            let sqlVal: string;
+            if (typeof val === 'boolean') {
+                sqlVal = val ? '1' : '0';
+            } else if (field.NeedsQuotes) {
+                sqlVal = `'${String(val).replace(/'/g, "''")}'`;
+            } else {
+                sqlVal = String(val);
+            }
+            parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
+        }
+        return parts.join(', ');
     }
 
     /**************************************************************************/
@@ -1901,10 +2125,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             };
         }
 
-        // Phase 1: Build all item SQL queries
-        const queries: string[] = [];
-        const validItems: Record<string, unknown>[] = [];
+        // Phase 1: Check LocalCacheManager for each item, build SQL only for cache misses
+        const overallStart = performance.now();
+        const cache = LocalCacheManager.Instance;
+        const cacheAvailable = cache.IsInitialized && this.TrustLocalCacheCompletely;
+
         const errorResults: DatasetItemResultType[] = [];
+        const cachedResults: DatasetItemResultType[] = [];
+        const uncachedQueries: string[] = [];
+        const uncachedItems: Record<string, unknown>[] = [];
+        // Track fingerprints for uncached items so we can write-through after SQL
+        const uncachedFingerprints: string[] = [];
+
+        let cacheHitCount = 0;
+        let cacheMissCount = 0;
 
         for (const item of items) {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
@@ -1914,12 +2148,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const entityID = String(item['EntityID']);
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
-            let filterSQL = '';
+            // Build effective filter (WhereClause + optional runtime ItemFilter)
+            let effectiveFilter = whereClause;
             if (itemFilters && itemFilters.length > 0) {
                 const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) filterSQL = (whereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
+                if (filter) {
+                    effectiveFilter = whereClause
+                        ? `${whereClause} AND (${filter.Filter})`
+                        : filter.Filter;
+                }
             }
 
+            // Try cache first
+            if (cacheAvailable) {
+                const fingerprint = cache.GenerateRunViewFingerprint(
+                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    this.InstanceConnectionString
+                );
+                const cached = await cache.GetRunViewResult(fingerprint);
+                if (cached) {
+                    cacheHitCount++;
+                    const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+                    const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
+                    cachedResults.push({
+                        EntityID: entityID,
+                        EntityName: entityName,
+                        Code: code,
+                        Results: cached.results as Record<string, unknown>[],
+                        LatestUpdateDate: latestUpdateDate,
+                        Success: true,
+                    });
+                    continue; // Skip SQL for this item
+                }
+            }
+
+            // Cache miss — validate columns and build SQL
+            cacheMissCount++;
             const columns = provider.getColumnsForDatasetItem(item, datasetName);
             if (!columns) {
                 errorResults.push({
@@ -1934,24 +2198,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            queries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${whereClause ? 'WHERE ' + whereClause : ''}${filterSQL}`);
-            validItems.push(item);
+            const filterSQL = effectiveFilter ? 'WHERE ' + effectiveFilter : '';
+            uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
+            uncachedItems.push(item);
+            // Store fingerprint for write-through caching after SQL
+            const fp = cacheAvailable
+                ? cache.GenerateRunViewFingerprint(
+                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    this.InstanceConnectionString
+                )
+                : '';
+            uncachedFingerprints.push(fp);
         }
 
-        // Phase 2: Execute all queries via ExecuteSQLBatch (true batch on SQL Server, parallel on PG)
+        // Phase 2: Execute SQL only for cache misses
         let batchResults: Record<string, unknown>[][] = [];
-        try {
-            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
-        } catch (err) {
-            LogError(`GetDatasetByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-            // Fall through with empty results
+        if (uncachedQueries.length > 0) {
+            try {
+                batchResults = await provider.ExecuteSQLBatch(uncachedQueries, undefined, undefined, contextUser);
+            } catch (err) {
+                LogError(`GetDatasetByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
+                // Fall through with empty results
+            }
         }
 
-        // Phase 3: Process results per item
-        const results: DatasetItemResultType[] = [...errorResults];
+        // Phase 3: Process SQL results and write-through to cache
+        const sqlResults: DatasetItemResultType[] = [];
 
-        for (let i = 0; i < validItems.length; i++) {
-            const item = validItems[i];
+        for (let i = 0; i < uncachedItems.length; i++) {
+            const item = uncachedItems[i];
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
             const code = String(item['Code']);
@@ -1969,22 +2244,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
             }
 
-            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
-            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
-            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+            const latestUpdateDate = this.computeLatestUpdateDate(itemData, dateFieldToCheck, item);
 
-            let latestUpdateDate = new Date(1900, 1, 1);
-            if (itemData && itemData.length > 0) {
-                for (const data of itemData) {
-                    if (data[dateFieldToCheck] && new Date(String(data[dateFieldToCheck])) > latestUpdateDate) {
-                        latestUpdateDate = new Date(String(data[dateFieldToCheck]));
-                    }
-                }
+            // Write-through: cache this result for future requests (including empty results)
+            if (cacheAvailable && uncachedFingerprints[i]) {
+                const maxUpdatedAt = itemData.length > 0
+                    ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
+                    : new Date(0).toISOString();
+                const syntheticParams = { EntityName: entityName } as RunViewParams;
+                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt);
             }
 
-            if (datasetMaxUpdatedAt > latestUpdateDate) latestUpdateDate = datasetMaxUpdatedAt;
-
-            results.push({
+            sqlResults.push({
                 EntityID: entityID,
                 EntityName: entityName,
                 Code: code,
@@ -1993,6 +2264,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Success: itemData !== null && itemData !== undefined,
             });
         }
+
+        // Merge results: errors + cached + SQL (maintain original item order via code matching)
+        const results: DatasetItemResultType[] = [];
+        for (const item of items) {
+            const code = String(item['Code']);
+            const found = errorResults.find(r => r.Code === code)
+                ?? cachedResults.find(r => r.Code === code)
+                ?? sqlResults.find(r => r.Code === code);
+            if (found) results.push(found);
+        }
+
+        const elapsedMs = (performance.now() - overallStart).toFixed(1);
+        LogStatusEx({
+            message: `📊 [Dataset] GetDatasetByName("${datasetName}"): ${cacheHitCount} cache hits, ${cacheMissCount} cache misses, ${errorResults.length} errors — ${elapsedMs}ms`,
+            verboseOnly: true
+        });
 
         // Aggregate results
         const bSuccess = results.every(result => result.Success);
@@ -2031,10 +2318,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
     ): Promise<DatasetStatusResultType> {
+        const overallStart = performance.now();
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
+        const cache = LocalCacheManager.Instance;
+        const cacheAvailable = cache.IsInitialized && this.TrustLocalCacheCompletely;
 
-        // Fetch dataset items metadata
+        // Fetch dataset items metadata (lightweight — just the dataset definition, not entity data)
         const sSQL = `SELECT di.*, ` +
             `e.${provider.QuoteIdentifier('BaseView')} AS ${provider.QuoteIdentifier('EntityBaseView')}, ` +
             `e.${provider.QuoteIdentifier('SchemaName')} AS ${provider.QuoteIdentifier('EntitySchemaName')}, ` +
@@ -2058,67 +2348,128 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             };
         }
 
-        // Build per-item status queries
-        const queries: string[] = [];
-        const itemMeta: Array<{ entityID: string; entityName: string; datasetMaxUpdatedAt: string }> = [];
+        // Phase 1: Try to derive status from cached data for each item
+        const updateDates: DatasetStatusEntityUpdateDateType[] = [];
+        let overallLatestDate = new Date(1900, 1, 1);
+        let cacheHitCount = 0;
+        let cacheMissCount = 0;
+
+        // Collect items that need SQL fallback
+        const uncachedItems: Record<string, unknown>[] = [];
+        const uncachedItemMeta: Array<{ entityID: string; entityName: string; datasetMaxUpdatedAt: string }> = [];
 
         for (const item of items) {
-            const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
-            const entityBaseView = String(item['EntityBaseView']);
             const entityID = String(item['EntityID']);
             const entityName = String(item['Entity']);
+            const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
-            let filterSQL = '';
+            // Build effective filter for fingerprint
+            let effectiveFilter = whereClause;
             if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === String(item['Code']));
-                if (filter) filterSQL = ' WHERE ' + filter.Filter;
+                const filter = itemFilters.find(f => f.ItemCode === code);
+                if (filter) {
+                    effectiveFilter = whereClause
+                        ? `${whereClause} AND (${filter.Filter})`
+                        : filter.Filter;
+                }
             }
 
             const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
             const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
-            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
+            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
 
-            const statusSQL = `SELECT ` +
-                `CASE ` +
-                `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
-                `ELSE '${datasetMaxUpdatedAt}' ` +
-                `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
-                `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
-                `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
+            // Try to derive status from cached data
+            if (cacheAvailable) {
+                const fingerprint = cache.GenerateRunViewFingerprint(
+                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    this.InstanceConnectionString
+                );
+                const cached = await cache.GetRunViewResult(fingerprint);
+                if (cached) {
+                    cacheHitCount++;
+                    // Derive MAX(dateField) and COUNT(*) directly from cached rows
+                    let maxDateFromRows = new Date(1900, 1, 1);
+                    for (const row of cached.results) {
+                        const record = row as Record<string, unknown>;
+                        if (record[dateFieldToCheck]) {
+                            const d = new Date(String(record[dateFieldToCheck]));
+                            if (d > maxDateFromRows) maxDateFromRows = d;
+                        }
+                    }
+                    const updateDate = maxDateFromRows > datasetMaxUpdatedAt ? maxDateFromRows : datasetMaxUpdatedAt;
+                    updateDates.push({
+                        EntityID: entityID,
+                        EntityName: entityName,
+                        RowCount: cached.results.length,
+                        UpdateDate: updateDate,
+                    });
+                    if (updateDate > overallLatestDate) overallLatestDate = updateDate;
+                    continue; // No SQL needed for this item
+                }
+            }
 
-            queries.push(statusSQL);
-            itemMeta.push({ entityID, entityName, datasetMaxUpdatedAt });
+            // Cache miss — need SQL fallback
+            cacheMissCount++;
+            uncachedItems.push(item);
+            uncachedItemMeta.push({ entityID, entityName, datasetMaxUpdatedAt: datasetMaxUpdatedAt.toISOString() });
         }
 
-        // Execute all status queries via ExecuteSQLBatch
-        let batchResults: Record<string, unknown>[][] = [];
-        try {
-            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
-        } catch (err) {
-            LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        // Phase 2: Execute SQL only for cache misses
+        if (uncachedItems.length > 0) {
+            const queries = uncachedItems.map((item, idx) => {
+                const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
+                const entityBaseView = String(item['EntityBaseView']);
+                const code = String(item['Code']);
+                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+                const meta = uncachedItemMeta[idx];
 
-        // Process results
-        const updateDates: DatasetStatusEntityUpdateDateType[] = [];
-        let overallLatestDate = new Date(1900, 1, 1);
+                let filterSQL = '';
+                if (itemFilters && itemFilters.length > 0) {
+                    const filter = itemFilters.find(f => f.ItemCode === code);
+                    if (filter) filterSQL = ' WHERE ' + filter.Filter;
+                }
 
-        for (let i = 0; i < itemMeta.length; i++) {
-            const meta = itemMeta[i];
-            const statusRows = batchResults[i];
-            if (statusRows && statusRows.length > 0) {
-                const updateDate = new Date(String(statusRows[0]['UpdateDate']));
-                updateDates.push({
-                    EntityID: meta.entityID,
-                    EntityName: meta.entityName,
-                    RowCount: Number(statusRows[0]['TheRowCount']),
-                    UpdateDate: updateDate,
-                });
-                if (updateDate > overallLatestDate) {
-                    overallLatestDate = updateDate;
+                return `SELECT ` +
+                    `CASE ` +
+                    `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${meta.datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
+                    `ELSE '${meta.datasetMaxUpdatedAt}' ` +
+                    `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
+                    `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
+                    `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
+            });
+
+            let batchResults: Record<string, unknown>[][] = [];
+            try {
+                batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+            } catch (err) {
+                LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+
+            for (let i = 0; i < uncachedItemMeta.length; i++) {
+                const meta = uncachedItemMeta[i];
+                const statusRows = batchResults[i];
+                if (statusRows && statusRows.length > 0) {
+                    const updateDate = new Date(String(statusRows[0]['UpdateDate']));
+                    updateDates.push({
+                        EntityID: meta.entityID,
+                        EntityName: meta.entityName,
+                        RowCount: Number(statusRows[0]['TheRowCount']),
+                        UpdateDate: updateDate,
+                    });
+                    if (updateDate > overallLatestDate) {
+                        overallLatestDate = updateDate;
+                    }
                 }
             }
         }
+
+        const elapsedMs = (performance.now() - overallStart).toFixed(1);
+        LogStatusEx({
+            message: `📊 [Dataset Status] GetDatasetStatusByName("${datasetName}"): ${cacheHitCount} cache-derived, ${cacheMissCount} SQL queries — ${elapsedMs}ms`,
+            verboseOnly: true
+        });
 
         if (updateDates.length === 0) {
             return {
@@ -2177,5 +2528,63 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return specifiedColumns.length > 0 ? specifiedColumns.map(col => this.QuoteIdentifier(col.trim())).join(',') : '*';
+    }
+
+    /**************************************************************************/
+    // Dataset Cache Helpers
+    /**************************************************************************/
+
+    /**
+     * Computes the latest update date for a dataset item from its result rows and dataset metadata.
+     * Used by both the cache-hit and cache-miss paths in GetDatasetByName.
+     * @param rows - The result rows (from cache or SQL)
+     * @param dateFieldToCheck - The field name to scan for latest date
+     * @param item - The dataset item metadata row (contains DatasetItemUpdatedAt, DatasetUpdatedAt)
+     * @returns The latest date across all rows and dataset metadata
+     */
+    protected computeLatestUpdateDate(
+        rows: unknown[],
+        dateFieldToCheck: string,
+        item: Record<string, unknown>
+    ): Date {
+        const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
+        const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
+        const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+        let latestUpdateDate = new Date(1900, 1, 1);
+        if (rows && rows.length > 0) {
+            for (const data of rows) {
+                const record = data as Record<string, unknown>;
+                if (record[dateFieldToCheck]) {
+                    const d = new Date(String(record[dateFieldToCheck]));
+                    if (d > latestUpdateDate) latestUpdateDate = d;
+                }
+            }
+        }
+
+        if (datasetMaxUpdatedAt > latestUpdateDate) latestUpdateDate = datasetMaxUpdatedAt;
+        return latestUpdateDate;
+    }
+
+    /**
+     * Extracts the MAX value of a specified date field from result rows as an ISO string.
+     * Used for write-through caching of dataset item results.
+     * @param rows - The result rows
+     * @param dateFieldToCheck - The field name to scan
+     * @returns ISO string of the max date, or current time if no dates found
+     */
+    protected extractMaxUpdatedAtFromRows(rows: unknown[], dateFieldToCheck: string): string {
+        let maxDate: Date | null = null;
+        for (const row of rows) {
+            const record = row as Record<string, unknown>;
+            const val = record[dateFieldToCheck];
+            if (val) {
+                const d = val instanceof Date ? val : new Date(val as string);
+                if (!isNaN(d.getTime()) && (!maxDate || d > maxDate)) {
+                    maxDate = d;
+                }
+            }
+        }
+        return maxDate ? maxDate.toISOString() : new Date().toISOString();
     }
 }
