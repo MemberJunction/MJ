@@ -1,11 +1,12 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
-import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
+import { Metadata, RunView, RUN_QUERY_SQL_FILTERS, CompositeKey, QueryInfo, QueryDependencyInfo } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
+import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { Subject } from 'rxjs';
 
 interface CategoryTreeNode {
@@ -35,7 +36,8 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public showFiltersHelp = false;
     public showRunDialog = false;
     public showCategoryDialog = false;
-    
+    public categoryPathDisplay = '';
+
     // Expansion panel states
     public sqlPanelExpanded = true;
     public parametersPanelExpanded = false;
@@ -44,6 +46,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public technicalDescriptionPanelExpanded = false;
     public detailsPanelExpanded = false;
     public permissionsPanelExpanded = false;
+    public dependentsPanelExpanded = false;
     
     // Category data
     public categoryOptions: Array<{text: string, value: string}> = [
@@ -65,7 +68,23 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     // SQL Filters for help display
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
+
+    /**
+     * Gets the QueryInfo metadata object for the current record, used to access Dependents.
+     */
+    public get CurrentQueryInfo(): QueryInfo | undefined {
+        if (!this.record?.ID) return undefined;
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.record.ID));
+    }
+
+    /**
+     * Gets queries that depend on (reference) this query via composition.
+     */
+    public get DependentQueries(): QueryDependencyInfo[] {
+        return this.CurrentQueryInfo?.Dependents ?? [];
+    }
     private isUpdatingEditorValue = false;
     private isInitialLoad = true;
 
@@ -271,7 +290,10 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 
                 // Build tree data after options are set
                 this.categoryTreeData = this.buildCategoryTree(this.categories);
-                
+
+                // Update cached category path display
+                this.updateCategoryPathDisplay();
+
                 // Trigger change detection to update the view (skip during init)
                 if (!this.isInitialLoad) this.cdr.detectChanges();
             }
@@ -322,19 +344,23 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     getCategoryPath(): string {
-        if (!this.record.CategoryID) return '';
-        
+        if (!this.record?.CategoryID) return '';
+
         const findPath = (categoryId: string): string[] => {
             const category = this.categories.find(c => UUIDsEqual(c.ID, categoryId));
             if (!category) return [];
-            
+
             if (category.ParentID) {
                 return [...findPath(category.ParentID), category.Name];
             }
             return [category.Name];
         };
-        
+
         return findPath(this.record.CategoryID).join(' / ');
+    }
+
+    private updateCategoryPathDisplay(): void {
+        this.categoryPathDisplay = this.getCategoryPath();
     }
 
     async onCategoryChange(value: string) {
@@ -630,7 +656,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         
         if (result) {
             this.updateUnsavedChangesFlag();
-            
+
             // Reload related data after successful save as server-side processes may have updated them
             if (this.record && this.record.ID) {
                 await Promise.all([
@@ -638,6 +664,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     this.loadQueryFields(),
                     this.loadQueryEntities()
                 ]);
+                this.updateCategoryPathDisplay();
                 this.cdr.detectChanges();
             }
         }
@@ -674,9 +701,53 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     /**
+     * Handle composition token click — navigate to the referenced query
+     */
+    onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        const md = new Metadata();
+        const segments = event.FullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+        if (segments.length === 0) return;
+
+        const queryName = segments[segments.length - 1];
+        const categorySegments = segments.slice(0, -1);
+
+        // First try: exact match on Name + CategoryPath
+        let targetQuery = md.Queries.find(q => {
+            if (q.Name !== queryName) return false;
+            if (categorySegments.length === 0) return true;
+            const expectedPath = '/' + categorySegments.join('/') + '/';
+            return q.CategoryPath === expectedPath;
+        });
+
+        // Fallback: match on Name alone
+        if (!targetQuery) {
+            targetQuery = md.Queries.find(q => q.Name === queryName);
+        }
+
+        if (targetQuery) {
+            const compositeKey = CompositeKey.FromID(targetQuery.ID);
+            this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+        } else {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Referenced query "${event.FullPath}" not found.`,
+                'warning',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Navigate to a dependent query's record
+     */
+    onDependentQueryClick(dep: QueryDependencyInfo): void {
+        const compositeKey = CompositeKey.FromID(dep.QueryID);
+        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+    }
+
+    /**
      * Handle SQL value changes from the code editor
      */
-    onSQLChange(value: any) {
+    onSQLChange(value: string) {
         if (this.isUpdatingEditorValue || !this.record) {
             return;
         }

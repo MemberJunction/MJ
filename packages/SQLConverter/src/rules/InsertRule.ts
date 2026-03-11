@@ -3,6 +3,7 @@ import {
   convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
   quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
   convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
+  transformCodeOnly,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -70,8 +71,12 @@ export class InsertRule implements IConversionRule {
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
     result = this.quoteInsertColumnList(result);
     // Quote __mj_ prefixed columns (e.g. __mj_UpdatedAt, __mj_CreatedAt) — these start
-    // with underscores so quotePascalCaseIdentifiers (which requires [A-Z] start) misses them
-    result = result.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")/g, '"$1"');
+    // with underscores so quotePascalCaseIdentifiers (which requires [A-Z] start) misses them.
+    // Uses transformCodeOnly to skip string literals — otherwise values like '__mj_CreatedAt'
+    // inside INSERT VALUES would get incorrectly quoted to '"__mj_CreatedAt"'.
+    result = transformCodeOnly(result, (code) =>
+      code.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")/g, '"$1"')
+    );
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
     // Convert T-SQL UPDATE alias FROM pattern to PG syntax

@@ -35,6 +35,7 @@ export { GrantRule } from './GrantRule.js';
 export { ExtendedPropertyRule } from './ExtendedPropertyRule.js';
 export { ConditionalDDLRule } from './ConditionalDDLRule.js';
 export { ExecBlockRule } from './ExecBlockRule.js';
+export { DeclareDmlBlockRule } from './DeclareDmlBlockRule.js';
 
 // Rule registry (central + T-SQL -> Postgres convenience)
 export { RuleRegistry } from './RuleRegistry.js';

@@ -16,6 +16,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { QueryDataGridComponent } from '../query-data-grid/query-data-grid.component';
 import {
     QueryGridSelectionMode,
@@ -144,6 +145,11 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
      * Fired when user wants to open the full query record
      */
     @Output() OpenQueryRecord = new EventEmitter<{ queryId: string; queryName: string }>();
+
+    /**
+     * Fired when a composition token ({{query:"..."}}) is clicked in the SQL info panel
+     */
+    @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
 
     // ========================================
     // View Children
@@ -433,6 +439,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
 
     public OnOpenQueryRecord(event: { queryId: string; queryName: string }): void {
         this.OpenQueryRecord.emit(event);
+    }
+
+    public OnCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        this.CompositionTokenClick.emit(event);
     }
 
     public Refresh(): void {

@@ -1,3 +1,25 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
+-- ============================================================================
+
+-- Extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Schema
+CREATE SCHEMA IF NOT EXISTS __mj;
+SET search_path TO __mj, public;
+
+-- Ensure backslashes in string literals are treated literally (not as escape sequences)
+SET standard_conforming_strings = on;
+
+-- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
+-- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
+-- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
+UPDATE pg_cast SET castcontext = 'i'
+WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
+
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -56,42 +78,26 @@ CREATE TABLE __mj."QuerySQL" (
 -- 4. Add SQLDialectID to Query table (defaults to T-SQL)
 -- ============================================================================
 ALTER TABLE __mj."Query"
-ADD "SQLDialectID" UUID NULL;
+ ADD COLUMN "SQLDialectID" UUID NULL
+    CONSTRAINT "FK_Query_SQLDialect" REFERENCES __mj."SQLDialect"("ID");
 
-ALTER TABLE __mj."Query"
-ADD CONSTRAINT "FK_Query_SQLDialect" FOREIGN KEY ("SQLDialectID")
-    REFERENCES __mj."SQLDialect"("ID") DEFERRABLE INITIALLY DEFERRED;
-
--- Seed SQLDialect rows (must come before NOT NULL constraint)
-INSERT INTO __mj."SQLDialect" ("ID", "Name", "PlatformKey", "DatabaseName", "LanguageName", "VendorName", "WebURL", "Icon", "Description")
-VALUES
-    ('1F203987-A37B-4BC1-85B3-BA50DC33C3E0', 'T-SQL', 'sqlserver', 'SQL Server', 'T-SQL', 'Microsoft', 'https://learn.microsoft.com/en-us/sql/', 'fa-brands fa-microsoft', 'Transact-SQL dialect used by Microsoft SQL Server and Azure SQL Database'),
-    ('426915F2-D4FE-4AB9-97A8-39063561DE9F', 'PostgreSQL', 'postgresql', 'PostgreSQL', 'PL/pgSQL', 'PostgreSQL Global Development Group', 'https://www.postgresql.org/', 'fa-solid fa-database', 'PostgreSQL SQL dialect with PL/pgSQL procedural extensions');
-
--- Set existing queries to T-SQL dialect
-UPDATE __mj."Query"
-SET "SQLDialectID" = '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
-
--- Now make it NOT NULL with a default
-ALTER TABLE __mj."Query"
-ALTER COLUMN "SQLDialectID" SET NOT NULL;
-
-ALTER TABLE __mj."Query"
-ALTER COLUMN "SQLDialectID" SET DEFAULT '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
-
-ALTER TABLE __mj."SQLDialect" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."SQLDialect"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SQLDialect" */;
 
-ALTER TABLE __mj."SQLDialect" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."SQLDialect"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."QuerySQL" */;
 
-ALTER TABLE __mj."QuerySQL" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."QuerySQL"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."QuerySQL" */;
 
-ALTER TABLE __mj."QuerySQL" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."QuerySQL"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to insert new entity field */;
 
@@ -776,6 +782,25 @@ CREATE TRIGGER "trgUpdateQuery"
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
+-- ============================================================================
+-- 2. Seed SQLDialect rows
+-- ============================================================================
+INSERT INTO __mj."SQLDialect" ("ID", "Name", "PlatformKey", "DatabaseName", "LanguageName", "VendorName", "WebURL", "Icon", "Description")
+VALUES
+    ('1F203987-A37B-4BC1-85B3-BA50DC33C3E0', 'T-SQL', 'sqlserver', 'SQL Server', 'T-SQL', 'Microsoft', 'https://learn.microsoft.com/en-us/sql/', 'fa-brands fa-microsoft', 'Transact-SQL dialect used by Microsoft SQL Server and Azure SQL Database'),
+    ('426915F2-D4FE-4AB9-97A8-39063561DE9F', 'PostgreSQL', 'postgresql', 'PostgreSQL', 'PL/pgSQL', 'PostgreSQL Global Development Group', 'https://www.postgresql.org/', 'fa-solid fa-database', 'PostgreSQL SQL dialect with PL/pgSQL procedural extensions');
+
+-- Set existing queries to T-SQL dialect
+UPDATE __mj."Query"
+SET "SQLDialectID" = '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
+
+-- Now make it NOT NULL with a default
+ALTER TABLE __mj."Query"
+ALTER COLUMN "SQLDialectID" SET NOT NULL;
+
+ALTER TABLE __mj."Query"
+ALTER COLUMN "SQLDialectID" SET DEFAULT '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
+
 INSERT INTO "__mj"."Entity" (
          "ID",
          "Name",
@@ -948,7 +973,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -1533,7 +1558,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1598,7 +1623,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1728,7 +1753,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -1988,7 +2013,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -2053,7 +2078,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
