@@ -27,12 +27,19 @@ export function classifyBatch(batch: string): StatementType {
   // Strip leading comments to detect the real SQL keyword
   const upper = stripLeadingComments(batch).trimStart().toUpperCase() || rawUpper;
 
-  // Session settings to skip
+  // Session settings: strip them from the batch start and re-classify the remainder.
+  // Previously we returned SKIP_SESSION for the entire batch, but that caused real
+  // DML statements after SET NOCOUNT ON to be silently dropped.
   const sessionPattern = new RegExp(
-    `^SET\\s+(${SESSION_SETTINGS.join('|')})\\b`, 'i'
+    `^SET\\s+(${SESSION_SETTINGS.join('|')})\\b[^\\n]*;?`, 'i'
   );
   if (sessionPattern.test(upper)) {
-    return 'SKIP_SESSION';
+    const remainder = stripSessionSettings(batch);
+    if (!remainder.trim()) {
+      return 'SKIP_SESSION';
+    }
+    // Re-classify the remainder (which no longer starts with a session setting)
+    return classifyBatch(remainder);
   }
 
   // Error handling to skip
@@ -74,7 +81,12 @@ export function classifyBatch(batch: string): StatementType {
     if (/\bEXEC\s+\[?\w+\]?\s*\.\s*\[?\w+\]?\s/i.test(upper)) {
       return 'EXEC_BLOCK';
     }
-    // DECLARE blocks without EXEC → SQL Server-specific variable declarations
+    // DECLARE blocks with DML (UPDATE/INSERT/DELETE) → need conversion to DO $$ block
+    // Example: DECLARE @var; SELECT @var = ...; UPDATE ... WHERE col = @var;
+    if (/\b(?:UPDATE\s+\w+|INSERT\s+INTO\b|DELETE\s+FROM\b)/i.test(upper)) {
+      return 'DECLARE_DML_BLOCK';
+    }
+    // DECLARE blocks without EXEC or DML → SQL Server-specific variable declarations
     return 'SKIP_SQLSERVER';
   }
 
@@ -224,6 +236,22 @@ function stripLeadingComments(sql: string): string {
     }
   }
   return s;
+}
+
+/** Strip leading comments and SET session-setting lines from a batch, returning the remainder */
+function stripSessionSettings(batch: string): string {
+  const sessionPattern = new RegExp(
+    `^\\s*SET\\s+(${SESSION_SETTINGS.join('|')})\\b[^\\n]*;?\\s*`, 'i'
+  );
+  // First strip leading comments so we can find the session settings
+  let result = stripLeadingComments(batch);
+  // Strip one session setting line at a time (there may be several stacked)
+  while (sessionPattern.test(result)) {
+    result = result.replace(sessionPattern, '');
+    // Strip any comments between session settings
+    result = stripLeadingComments(result);
+  }
+  return result.trim();
 }
 
 /** Check if batch is comment-only (no SQL after removing comments) */

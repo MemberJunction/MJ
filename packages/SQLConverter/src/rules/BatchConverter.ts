@@ -27,7 +27,7 @@ const FK_TYPES = new Set<StatementType>(['FK_CONSTRAINT', 'CHECK_CONSTRAINT', 'U
 const VIEW_TYPES = new Set<StatementType>(['CREATE_VIEW']);
 const FUNC_TYPES = new Set<StatementType>(['CREATE_PROCEDURE', 'CREATE_FUNCTION']);
 const TRIGGER_TYPES = new Set<StatementType>(['CREATE_TRIGGER']);
-const DATA_TYPES = new Set<StatementType>(['INSERT', 'UPDATE', 'DELETE', 'EXEC_BLOCK']);
+const DATA_TYPES = new Set<StatementType>(['INSERT', 'UPDATE', 'DELETE', 'EXEC_BLOCK', 'DECLARE_DML_BLOCK']);
 const GRANT_TYPES = new Set<StatementType>(['GRANT', 'REVOKE']);
 const COMMENT_TYPES = new Set<StatementType>(['EXTENDED_PROPERTY']);
 
@@ -384,7 +384,7 @@ function updateStats(batchType: StatementType, stats: ConversionStats): void {
     case 'CREATE_PROCEDURE': stats.ProceduresConverted++; break;
     case 'CREATE_FUNCTION': stats.FunctionsConverted++; break;
     case 'CREATE_TRIGGER': stats.TriggersConverted++; break;
-    case 'INSERT': case 'UPDATE': case 'DELETE': case 'EXEC_BLOCK': stats.InsertsConverted++; break;
+    case 'INSERT': case 'UPDATE': case 'DELETE': case 'EXEC_BLOCK': case 'DECLARE_DML_BLOCK': stats.InsertsConverted++; break;
     case 'GRANT': case 'REVOKE': stats.GrantsConverted++; break;
     case 'FK_CONSTRAINT': stats.FKConstraints++; break;
     case 'CHECK_CONSTRAINT': stats.CheckConstraints++; break;

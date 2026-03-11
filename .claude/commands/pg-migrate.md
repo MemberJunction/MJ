@@ -44,19 +44,27 @@ The container entrypoint is `tail -f /dev/null` (keeps it alive). Run essential 
 docker exec claude-dev bash -c "npm update -g @anthropic-ai/claude-code @memberjunction/cli 2>/dev/null || true"
 ```
 
-### Step 0c: Sync the repo inside Docker
+### Step 0c: Sync the repo inside Docker on a dedicated branch
 
-Ensure the Docker copy of MJ matches the host's current branch:
+Docker always works on a **dedicated branch** named `pg-migrate/<source-branch>` to keep the local branch clean. All conversion work, toolchain fixes, and test databases happen on this branch. Files are copied back to the host repo in Phase 5.
+
 ```bash
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 CURRENT_SHA=$(git rev-parse HEAD)
+PG_BRANCH="pg-migrate/${CURRENT_BRANCH}"
 
 # If /workspace/MJ doesn't exist yet, clone it
 docker exec claude-dev bash -c "test -d /workspace/MJ/.git || git clone https://github.com/MemberJunction/MJ.git /workspace/MJ"
 
-# Fetch and checkout the same branch and commit
-docker exec claude-dev bash -c "cd /workspace/MJ && git fetch origin && git checkout $CURRENT_BRANCH 2>/dev/null || git checkout -b $CURRENT_BRANCH origin/$CURRENT_BRANCH && git reset --hard $CURRENT_SHA"
+# Fetch, checkout source branch to get latest code, then create/reset the pg-migrate branch
+docker exec claude-dev bash -c "cd /workspace/MJ && git fetch origin && git stash 2>/dev/null; git checkout $CURRENT_BRANCH 2>/dev/null || git checkout -b $CURRENT_BRANCH origin/$CURRENT_BRANCH; git reset --hard $CURRENT_SHA; git checkout -B $PG_BRANCH"
 ```
+
+This ensures:
+- Docker starts from the exact same commit as the host
+- All Docker changes are isolated on `pg-migrate/<source-branch>`
+- The host's working branch is never modified inside Docker
+- `docker cp` is used to bring results back to the host in Phase 5
 
 ### Step 0d: Check Claude Code authentication inside Docker
 
@@ -106,7 +114,7 @@ comm -23 \
 
 Report: "Found N migrations needing PG conversion" with the full list.
 
-If zero missing, skip to Phase 3.
+If zero missing, skip to Phase 3. **Phase 3 and Phase 4 ALWAYS run** — even when all conversions succeed perfectly, these phases provide essential confidence that the full migration stack works end-to-end.
 
 ---
 
@@ -263,7 +271,7 @@ Poll for completion, read results, report to user.
 
 ## Phase 4: Smoke Testing
 
-**Only run if Phase 3 passes with zero or minor variances.**
+**ALWAYS run this phase** regardless of Phase 3 results. Even with perfect parity, smoke tests validate end-to-end functionality.
 
 Send a task to CC in Docker:
 

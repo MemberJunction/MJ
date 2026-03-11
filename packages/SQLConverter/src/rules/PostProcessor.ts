@@ -181,6 +181,14 @@ export function postProcess(sql: string): string {
     (_match, grantStmt: string) => `DO $$ BEGIN ${grantStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
   );
 
+  // Strip IF NOT EXISTS (SELECT ... FROM sys.indexes ...) wrappers around CREATE INDEX.
+  // These T-SQL pre-flight checks reference sys.indexes and OBJECT_ID() which don't exist
+  // in PostgreSQL. The CREATE INDEX IF NOT EXISTS below provides the same idempotency.
+  sql = sql.replace(
+    /IF\s+NOT\s+EXISTS\s*\([\s\S]*?sys\.indexes[\s\S]*?\)\s*\n?\s*(?=CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\b)/gi,
+    ''
+  );
+
   // Convert CREATE INDEX → CREATE INDEX IF NOT EXISTS (idempotency)
   sql = sql.replace(
     /\bCREATE\s+((?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX)\s+(?!IF\s+NOT\s+EXISTS)/gi,
