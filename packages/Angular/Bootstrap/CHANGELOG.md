@@ -1,5 +1,27 @@
 # @memberjunction/ng-bootstrap
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/ng-auth-services@5.10.1
+- @memberjunction/ng-core-entity-forms@5.10.1
+- @memberjunction/ng-dashboards@5.10.1
+- @memberjunction/ng-explorer-core@5.10.1
+- @memberjunction/ng-explorer-settings@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-artifacts@5.10.1
+- @memberjunction/ng-dashboard-viewer@5.10.1
+- @memberjunction/ng-file-storage@5.10.1
+- @memberjunction/communication-types@5.10.1
+- @memberjunction/entity-communications-base@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

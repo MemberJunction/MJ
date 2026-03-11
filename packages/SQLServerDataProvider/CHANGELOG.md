@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-vector-dupe@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/actions@5.10.1
+- @memberjunction/encryption@5.10.1
+- @memberjunction/generic-database-provider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/queue@5.10.1
+- @memberjunction/query-processor@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

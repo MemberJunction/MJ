@@ -1,5 +1,17 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-auth-services@5.10.1
+- @memberjunction/ng-explorer-core@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/global@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes
