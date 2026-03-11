@@ -1,5 +1,7 @@
 # @memberjunction/integration-ui-types
 
+## 5.10.0
+
 ## 5.9.0
 
 ### Minor Changes

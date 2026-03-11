@@ -1,5 +1,23 @@
 # @memberjunction/ng-query-viewer
 
+## 5.10.0
+
+### Patch Changes
+
+- 3df5e4b: no migration
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/export-engine@5.10.0
+  - @memberjunction/global@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes

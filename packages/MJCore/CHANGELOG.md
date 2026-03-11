@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.10.0
+
+### Minor Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+
+### Patch Changes
+
+- 75dd36b: no migration
+  - @memberjunction/global@5.10.0
+
 ## 5.9.0
 
 ### Minor Changes

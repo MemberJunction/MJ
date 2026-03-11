@@ -6581,6 +6581,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true, description: `JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`}) 
     SecondaryScopes?: string;
         
+    @Field({nullable: true, description: `Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`}) 
+    @MaxLength(200)
+    ExternalReferenceID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -6789,6 +6793,9 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     SecondaryScopes: string | null;
+
+    @Field({ nullable: true })
+    ExternalReferenceID: string | null;
 }
     
 
@@ -6922,6 +6929,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     SecondaryScopes?: string | null;
+
+    @Field({ nullable: true })
+    ExternalReferenceID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
