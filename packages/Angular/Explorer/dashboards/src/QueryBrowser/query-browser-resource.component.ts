@@ -10,6 +10,7 @@ import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
+import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 /**
  * Tree node for the query category hierarchy
  */
@@ -467,6 +468,69 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Open the Query entity record using navigation service
         const compositeKey = CompositeKey.FromID(event.queryId);
         this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+    }
+
+    public onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        // Find the referenced query by matching name and category path
+        const targetQuery = this.findQueryByCompositionPath(event.FullPath);
+        if (targetQuery) {
+            this.expandTreeToQuery(targetQuery);
+            this.selectQuery(targetQuery);
+        } else {
+            // Query not in the current list — could be filtered out or in a different status
+            console.warn(`Composition target query not found: "${event.FullPath}"`);
+        }
+    }
+
+    /**
+     * Find a query by its composition path (e.g., "Demos/Active Users").
+     * Matches the last segment as query name and preceding segments as category hierarchy.
+     */
+    private findQueryByCompositionPath(fullPath: string): QueryInfo | null {
+        const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+        if (segments.length === 0) return null;
+
+        const queryName = segments[segments.length - 1];
+        const categorySegments = segments.slice(0, -1);
+
+        // First try: exact match on Name + CategoryPath
+        let result = this.queries.find(q => {
+            if (q.Name !== queryName) return false;
+            if (categorySegments.length === 0) return true;
+            const expectedPath = '/' + categorySegments.join('/') + '/';
+            return q.CategoryPath === expectedPath;
+        });
+
+        // Fallback: match on Name alone if category path didn't match
+        if (!result) {
+            result = this.queries.find(q => q.Name === queryName);
+        }
+
+        return result ?? null;
+    }
+
+    /**
+     * Expand category tree nodes to reveal a specific query.
+     */
+    private expandTreeToQuery(query: QueryInfo): void {
+        const expandInNodes = (nodes: CategoryNode[]): boolean => {
+            for (const node of nodes) {
+                // Check if this node directly contains the query
+                if (node.queries.some(q => UUIDsEqual(q.ID, query.ID))) {
+                    node.expanded = true;
+                    return true;
+                }
+                // Check children recursively
+                if (expandInNodes(node.children)) {
+                    node.expanded = true;
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        expandInNodes(this.categoryTree);
+        this.cdr.markForCheck();
     }
 
     public openQueryDetails(query: QueryInfo, event: Event): void {
