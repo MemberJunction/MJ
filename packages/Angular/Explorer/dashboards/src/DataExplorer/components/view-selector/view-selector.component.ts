@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy, ViewEncapsulation } from '@angular/core';
-import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { EntityInfo, Metadata } from '@memberjunction/core';
+import { MJUserViewEntityExtended, UserViewEngine, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a view in the dropdown
@@ -164,32 +165,24 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
 
     try {
       const userId = this.metadata.CurrentUser?.ID;
-      const rv = new RunView();
 
-      // Load all views for this entity that the user owns OR that are shared
-      const result = await rv.RunView<MJUserViewEntityExtended>({
-        EntityName: 'MJ: User Views',
-        ExtraFilter: `EntityID = '${this.entity.ID}' AND (UserID = '${userId}' OR IsShared = 1)`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      });
+      // Use UserViewEngine cache instead of a direct RunView to avoid redundant DB calls.
+      // The engine is initialized once and caches all views; GetAccessibleViewsForEntity()
+      // already filters by owned + shared and checks UserCanView.
+      await UserViewEngine.Instance.Config(false);
+      const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(this.entity.ID);
 
-      if (result.Success && result.Results) {
-        // Filter views the user can actually view
-        const accessibleViews = result.Results.filter(v => v.UserCanView);
+      // Separate into owned and shared
+      this.myViews = accessibleViews
+        .filter(v => UUIDsEqual(v.UserID, userId))
+        .map(v => this.mapViewToListItem(v, true));
 
-        // Separate into owned and shared
-        this.myViews = accessibleViews
-          .filter(v => v.UserID === userId)
-          .map(v => this.mapViewToListItem(v, true));
+      this.sharedViews = accessibleViews
+        .filter(v => !UUIDsEqual(v.UserID, userId))
+        .map(v => this.mapViewToListItem(v, false));
 
-        this.sharedViews = accessibleViews
-          .filter(v => v.UserID !== userId)
-          .map(v => this.mapViewToListItem(v, false));
-
-        // Update selected view reference
-        this.updateSelectedViewFromId();
-      }
+      // Update selected view reference
+      this.updateSelectedViewFromId();
     } catch (error) {
       console.error('Failed to load views:', error);
     } finally {

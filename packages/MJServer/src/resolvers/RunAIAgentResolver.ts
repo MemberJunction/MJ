@@ -10,7 +10,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { getAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -676,7 +676,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Get agent info for notification message
             await AIEngine.Instance.Config(false, contextUser);
-            const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+            const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
             const agentName = agent?.Name || 'Agent';
 
             // Load conversation detail to get conversation info

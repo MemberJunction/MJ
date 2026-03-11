@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import {
     BaseImageGenerator,
     ImageGenerationParams,
@@ -276,7 +276,7 @@ export class GenerateImageAction extends BaseAction {
 
         if (!apiKey) {
             // Try getting by vendor name as fallback
-            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === inferenceProvider.VendorID);
+            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
             const vendorApiKey = vendor ? GetAIAPIKey(vendor.Name) : null;
             if (!vendorApiKey) {
                 throw new Error(`No API key found for ${driverClass} or vendor ${vendor?.Name || 'unknown'}`);

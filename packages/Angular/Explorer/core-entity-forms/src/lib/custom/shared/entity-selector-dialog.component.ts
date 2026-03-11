@@ -2,6 +2,7 @@ import { Component, Input, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface EntitySelectorConfig {
     entityName: string;
@@ -58,7 +59,7 @@ export interface EntitySelectorConfig {
                   <div class="entity-list">
                     @for (entity of filteredEntities; track entity.ID) {
                       <div class="entity-item"
-                        [class.selected]="selectedEntity?.ID === entity.ID"
+                        [class.selected]="IsEntitySelected(entity)"
                         (click)="selectEntity(entity)">
                         <div class="item-icon">
                           <i [class]="config.icon || 'fa-solid fa-file'"></i>
@@ -311,6 +312,10 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     createNew() {
         this.dialogRef.close({ createNew: true });
+    }
+
+    IsEntitySelected(entity: Record<string, unknown>): boolean {
+        return UUIDsEqual(this.selectedEntity?.ID, entity.ID as string);
     }
 
     onCancel() {

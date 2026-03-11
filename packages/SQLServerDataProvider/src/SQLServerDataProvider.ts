@@ -29,7 +29,6 @@ import {
   ProviderType,
   UserInfo,
   RecordChange,
-  ILocalStorageProvider,
   IFileSystemProvider,
   TransactionGroupBase,
   TransactionItem,
@@ -59,7 +58,6 @@ import {
   RunQueryWithCacheCheckParams,
   RunQueriesWithCacheCheckResponse,
   RunQueryWithCacheCheckResult,
-  InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
@@ -85,28 +83,94 @@ import {
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
-import { SQLExpressionValidator } from '@memberjunction/global';
+import { SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 /**
- * Core SQL execution function - handles the actual database query execution
+ * Checks whether an error indicates a stale/dead database connection that
+ * could be resolved by retrying with a fresh connection from the pool.
+ * Common in Azure environments where load balancers or SQL connection
+ * governance drop idle TCP connections.
+ */
+function isStaleConnectionError(error: { message?: string; code?: string }): boolean {
+  const message = error.message ?? '';
+  const code = error.code ?? '';
+  return (
+    // tedious connection state errors (e.g. "Requests can only be made in the LoggedIn state, not the Final state")
+    message.includes('not the Final state') ||
+    message.includes('not the SentClientRequest state') ||
+    // General connection-dropped errors
+    message.includes('Connection lost') ||
+    message.includes('Connection closed') ||
+    message.includes('socket hang up') ||
+    code === 'ESOCKET' ||
+    code === 'ECONNRESET'
+  );
+}
+
+/**
+ * Builds a sql.Request, binds parameters, and processes positional placeholders.
+ */
+function buildRequest(
+  connectionSource: sql.ConnectionPool | sql.Transaction,
+  query: string,
+  parameters: any
+): { request: sql.Request; processedQuery: string } {
+  // Note: The branch looks redundant but is required for TypeScript type narrowing.
+  // The sql.Request constructor has overloads for ConnectionPool and Transaction,
+  // but TypeScript can't resolve the overload with a union type parameter.
+  let request: sql.Request;
+  if (connectionSource instanceof sql.Transaction) {
+    request = new sql.Request(connectionSource);
+  } else {
+    request = new sql.Request(connectionSource);
+  }
+
+  let processedQuery = query;
+  if (parameters) {
+    if (Array.isArray(parameters)) {
+      // Handle positional parameters (legacy TypeORM style)
+      parameters.forEach((value, index) => {
+        request.input(`p${index}`, value);
+      });
+      let paramIndex = 0;
+      processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
+    } else if (typeof parameters === 'object') {
+      for (const [key, value] of Object.entries(parameters)) {
+        request.input(key, value);
+      }
+    }
+  }
+
+  return { request, processedQuery };
+}
+
+/**
+ * Core SQL execution function - handles the actual database query execution.
  * This is outside the class to allow both static and instance methods to use it
- * without creating circular dependencies or forcing everything to be static
+ * without creating circular dependencies or forcing everything to be static.
+ *
+ * Includes automatic retry logic for stale connection errors: when Azure drops
+ * idle TCP connections, the pool may hand out dead connections that fail on first
+ * use. For non-transactional queries, we retry once so the pool can evict the
+ * dead connection and provide a fresh one.
  */
 async function executeSQLCore(
   query: string,
   parameters: any,
   context: SQLExecutionContext,
-  options?: InternalSQLOptions
+  options?: InternalSQLOptions,
+  isRetry = false
 ): Promise<sql.IResult<any>> {
   // Determine which connection source to use
   let connectionSource: sql.ConnectionPool | sql.Transaction;
-  
-  if (context.transaction) {
+  const isTransaction = !!context.transaction;
+
+  if (isTransaction) {
     // Use the transaction if provided
     // Note: We no longer test the transaction validity here because:
     // 1. It could cause race conditions with concurrent queries
     // 2. If the transaction is invalid, we'll get a proper error when trying to use it
     // 3. We should never silently fall back to the pool when a transaction is expected
-    connectionSource = context.transaction;
+    connectionSource = context.transaction!;
   } else {
     connectionSource = context.pool;
   }
@@ -136,44 +200,27 @@ async function executeSQLCore(
   }
 
   try {
-    // Create a new request object for this query
-    // Note: This looks redundant but is required for TypeScript type narrowing.
-    // The sql.Request constructor has overloads for ConnectionPool and Transaction,
-    // but TypeScript can't resolve the overload with a union type parameter.
-    let request: sql.Request;
-    if (connectionSource instanceof sql.Transaction) {
-      request = new sql.Request(connectionSource);
-    } else {
-      request = new sql.Request(connectionSource);
-    }
-
-    // Add parameters if provided
-    let processedQuery = query;
-    if (parameters) {
-      if (Array.isArray(parameters)) {
-        // Handle positional parameters (legacy TypeORM style)
-        parameters.forEach((value, index) => {
-          request.input(`p${index}`, value);
-        });
-        // Replace ? with @p0, @p1, etc. in the query
-        let paramIndex = 0;
-        processedQuery = query.replace(/\?/g, () => `@p${paramIndex++}`);
-      } else if (typeof parameters === 'object') {
-        // Handle named parameters
-        for (const [key, value] of Object.entries(parameters)) {
-          request.input(key, value);
-        }
-      }
-    }
+    const { request, processedQuery } = buildRequest(connectionSource, query, parameters);
 
     // Execute query and logging in parallel
     const [result] = await Promise.all([
       request.query(processedQuery),
       logPromise
     ]);
-    
+
     return result;
   } catch (error: any) {
+    // Retry once for stale connection errors on non-transactional queries.
+    // Transactions cannot be retried because the connection state is already
+    // corrupted and the caller must handle rollback/retry at a higher level.
+    if (!isRetry && !isTransaction && isStaleConnectionError(error)) {
+      console.warn(
+        `[SQLServerDataProvider] Stale connection detected, retrying query once. ` +
+        `Original error: ${error.message}`
+      );
+      return executeSQLCore(query, parameters, context, options, true);
+    }
+
     // Build detailed error message with query and parameters
     const errorMessage = `Error executing SQL
     Error: ${error?.message ? error.message : error}
@@ -247,7 +294,6 @@ export class SQLServerDataProvider
   private queryCache = new QueryCache();
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
-  private _localStorageProvider: ILocalStorageProvider;
   private _fileSystemProvider: IFileSystemProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
@@ -482,7 +528,7 @@ export class SQLServerDataProvider
           } else if (CategoryPath) {
             const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
             if (resolvedCategoryId) {
-              matches = matches && q.CategoryID === resolvedCategoryId;
+              matches = matches && UUIDsEqual(q.CategoryID, resolvedCategoryId);
             } else {
               matches = matches && q.Category.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
             }
@@ -644,15 +690,9 @@ export class SQLServerDataProvider
       throw new Error(errorDetails);
     }
     
-    // Check permissions and status
-    if (!query.UserCanRun(contextUser)) {
-      if (!query.UserHasRunPermissions(contextUser)) {
-        throw new Error('User does not have permission to run this query');
-      } else {
-        throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
-      }
-    }
-    
+    // Validate permissions and status via shared base class method
+    this.ValidateQueryForExecution(query, contextUser);
+
     return query;
   }
 
@@ -2563,12 +2603,6 @@ IF ${varName} IS NOT NULL
     }
     
     LogStatus(`Completed processing deferred tasks`);
-  }
-
-  get LocalStorageProvider(): ILocalStorageProvider {
-    if (!this._localStorageProvider) this._localStorageProvider = new InMemoryLocalStorageProvider();
-
-    return this._localStorageProvider;
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

@@ -15,6 +15,7 @@ import { Metadata, LogError, CompositeKey } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 type ActionType = 'Custom' | 'Generated';
 
@@ -201,7 +202,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
     let currentParentId = category.ParentID;
 
     while (currentParentId) {
-      const parent = this.Categories.find(c => c.ID === currentParentId);
+      const parent = this.Categories.find(c => UUIDsEqual(c.ID, currentParentId));
       if (parent) {
         path.unshift(parent.Name);
         currentParentId = parent.ParentID || null;

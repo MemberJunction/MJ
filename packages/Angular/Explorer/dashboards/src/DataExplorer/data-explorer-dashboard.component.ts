@@ -5,7 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
@@ -139,7 +139,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Currently selected view entity (for view data loading)
   public selectedViewEntity: MJUserViewEntityExtended | null = null;
 
-  // Debounced filter text (synced with mj-entity-viewer)
+  // Live filter text (what the user sees in the input, updates immediately)
+  public liveFilterText: string = '';
+  // Debounced filter text (synced with mj-entity-viewer, updates after delay)
   public debouncedFilterText: string = '';
   private filterInput$ = new Subject<string>();
 
@@ -296,7 +298,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get recentEntities(): EntityInfo[] {
     return this.state.recentEntityAccesses
       .slice(0, 5)
-      .map(r => this.entities.find(e => e.ID === r.entityId))
+      .map(r => this.entities.find(e => UUIDsEqual(e.ID, r.entityId)))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -305,7 +307,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get favoriteEntities(): EntityInfo[] {
     return this.state.favoriteEntities
-      .map(f => this.entities.find(e => e.ID === f.entityId))
+      .map(f => this.entities.find(e => UUIDsEqual(e.ID, f.entityId)))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -581,6 +583,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.state = this.stateService.CurrentState;
 
     // User search text starts empty - it's separate from smart filter
+    this.liveFilterText = '';
     this.debouncedFilterText = '';
 
     // Load available entities (async to support applicationId filter)
@@ -606,6 +609,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         // When entity changes, clear user search text
         if (entityChanged) {
+          this.liveFilterText = '';
           this.debouncedFilterText = '';
         }
 
@@ -627,10 +631,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
-    // Setup debounced filter
+    // Setup debounced filter - 500ms delay allows comfortable typing before triggering search
+    // IMPORTANT: Do NOT call setSmartFilterPrompt here. Updating the state service triggers
+    // URL updates via the shell's workspace sync, which fires NavigationEnd, which triggers
+    // applyUrlState, which clears the filter text. The debouncedFilterText flows directly
+    // to the entity-viewer via [filterText] binding — no state service involvement needed.
     this.filterInput$
       .pipe(
-        debounceTime(250),
+        debounceTime(500),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
@@ -909,6 +917,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.entityViewerRef?.EnsurePendingChangesSaved();
 
     this.resetRecordCounts();
+    // Clear the previous entity's view — it belongs to the old entity and its sort/filter
+    // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
+    this.selectedViewEntity = null;
     this.selectedEntity = entity;
     // Load user's saved default grid state for this entity (if any)
     // This ensures formatting and column settings persist across sessions
@@ -969,17 +980,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.stateService.setSmartFilterPrompt('');
       }
       // Always clear user search text when switching views - smart filter is separate
+      this.liveFilterText = '';
       this.debouncedFilterText = '';
     } else {
       // Switching to default view - load user's saved defaults from UserInfoEngine
       this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
+      this.liveFilterText = '';
       this.debouncedFilterText = '';
     }
 
-    // Force refresh to ensure the grid reloads with the new view configuration
+    // detectChanges pushes the new bindings to entity-viewer; its viewEntity setter
+    // already calls deferReload() so no explicit refresh() is needed.
     this.cdr.detectChanges();
-    this.entityViewerRef?.refresh();
   }
 
   /**
@@ -996,10 +1009,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       if (savedState) {
         const gridState = JSON.parse(savedState);
         if (gridState && Array.isArray(gridState.columnSettings)) {
-          return {
-            columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
-          };
+          // Validate columns and sorts against current entity to prevent stale
+          // fields from a previously viewed entity leaking into the query
+          const validColumns = gridState.columnSettings.filter(
+            (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+          );
+          const validSorts = (gridState.sortSettings || []).filter(
+            (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+          );
+          if (validColumns.length > 0) {
+            return {
+              columnSettings: validColumns,
+              sortSettings: validSorts
+            };
+          }
         }
       }
     } catch (error) {
@@ -1023,11 +1046,27 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       // Validate structure - expect columnSettings array
       if (parsed && Array.isArray(parsed.columnSettings)) {
-        return {
-          columnSettings: parsed.columnSettings,
-          sortSettings: parsed.sortSettings || [],
-          aggregates: parsed.aggregates || undefined
-        };
+        // Validate columns and sorts against current entity to prevent stale
+        // fields from a previously viewed entity leaking into the query
+        const validColumns = this.selectedEntity
+          ? parsed.columnSettings.filter(
+              (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+            )
+          : parsed.columnSettings;
+        const validSorts = this.selectedEntity
+          ? (parsed.sortSettings || []).filter(
+              (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+            )
+          : parsed.sortSettings || [];
+
+        if (validColumns.length > 0) {
+          return {
+            columnSettings: validColumns,
+            sortSettings: validSorts,
+            aggregates: parsed.aggregates || undefined
+          };
+        }
+        return null;
       }
 
       return null;
@@ -1759,11 +1798,34 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle direct keyboard input in the filter text box.
+   * Only updates the live display text and pushes to the debounce subject.
+   * Does NOT trigger state changes or URL updates — those happen after the debounce.
+   */
+  public onFilterInputChanged(filterText: string): void {
+    this.liveFilterText = filterText;
+    this.filterInput$.next(filterText);
+  }
+
+  /**
+   * Clear the record filter (called by the X button).
+   */
+  public clearRecordFilter(): void {
+    this.liveFilterText = '';
+    this.debouncedFilterText = '';
+    this.stateService.setSmartFilterPrompt('');
+    this.filterInput$.next('');
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Handle filter text change from mj-entity-viewer (two-way binding)
    */
   public onFilterTextChanged(filterText: string): void {
+    this.liveFilterText = filterText;
+    this.debouncedFilterText = filterText;
     this.stateService.setSmartFilterPrompt(filterText);
-    this.filterInput$.next(filterText);
+    this.cdr.detectChanges();
   }
 
   // ========================================
@@ -2461,6 +2523,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.setSmartFilterPrompt('');
         }
         // User search text is always cleared when applying URL state
+        this.liveFilterText = '';
         this.debouncedFilterText = '';
 
         // Handle record selection
@@ -2771,7 +2834,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onRecentRecordClick(record: RecentRecordAccess): void {
-    const entity = this.entities.find(e => e.ID === record.entityId);
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2785,7 +2848,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * and open the detail panel once data loads.
    */
   public onFavoriteRecordClick(record: FavoriteRecord): void {
-    const entity = this.entities.find(e => e.ID === record.entityId);
+    const entity = this.entities.find(e => UUIDsEqual(e.ID, record.entityId));
     if (entity) {
       // Set pending record selection - will be resolved in onDataLoaded
       this.pendingRecordSelection = record.recordId;
@@ -2797,7 +2860,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Get the icon for an entity by ID (for recent records)
    */
   public getEntityIconById(entityId: string): string {
-    const entity = this.metadata.Entities.find(e => e.ID === entityId);
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
     if (entity) {
       return this.getEntityIcon(entity);
     }

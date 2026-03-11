@@ -168,6 +168,17 @@
     background: #fff;
 }
 
+/* Technical Description Markdown */
+.technical-description-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.technical-description-content :host ::ng-deep .mj-markdown-container {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 /* Info Rows */
 .info-row {
     display: flex;

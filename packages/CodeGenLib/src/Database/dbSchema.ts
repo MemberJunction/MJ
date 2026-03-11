@@ -70,7 +70,8 @@ export class DBSchemaGeneratorBase {
                 if (!schemas.includes(e.SchemaName) && (excludeSchemas === null || !excludeSchemas.includes(e.SchemaName)))
                     schemas.push(e.SchemaName);
             });
-        
+            schemas.sort(); // ensure deterministic schema ordering across CodeGen runs
+
             // now, generate a separate JSON file for each schema
             const allSchemas = {
                 fullJSON: '[', 

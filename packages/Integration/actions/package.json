@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/integration-actions",
+  "type": "module",
+  "version": "5.10.1",
+  "description": "MemberJunction Integration Engine Actions - MJ Actions for triggering and managing integration syncs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/actions": "5.10.1",
+    "@memberjunction/actions-base": "5.10.1",
+    "@memberjunction/core": "5.10.1",
+    "@memberjunction/global": "5.10.1",
+    "@memberjunction/integration-engine": "5.10.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC"
+}

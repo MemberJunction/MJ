@@ -6,6 +6,7 @@ import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;
@@ -130,8 +131,8 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
 
     // Check for conflicts with other sub-agents under the same parent (excluding current one)
     const conflictingAgent = this.allSubAgents.find(agent => 
-      agent.ID !== this.subAgent.ID && 
-      agent.ParentID === this.subAgent.ParentID &&
+      !UUIDsEqual(agent.ID, this.subAgent.ID) && 
+      UUIDsEqual(agent.ParentID, this.subAgent.ParentID) &&
       agent.ExecutionOrder === order
     );
 

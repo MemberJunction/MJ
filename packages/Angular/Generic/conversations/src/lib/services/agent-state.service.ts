@@ -2,6 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
@@ -74,7 +75,7 @@ export class AgentStateService implements OnDestroy {
   getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
     if (conversationId) {
       return this.activeAgents$.pipe(
-        map(agents => agents.filter(a => a.run.ConversationID === conversationId)),
+        map(agents => agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId))),
         shareReplay(1)
       );
     }
@@ -86,7 +87,7 @@ export class AgentStateService implements OnDestroy {
    * @param agentRunId The agent run ID
    */
   getAgent(agentRunId: string): AgentWithStatus | undefined {
-    return this._activeAgents$.value.find(a => a.run.ID === agentRunId);
+    return this._activeAgents$.value.find(a => UUIDsEqual(a.run.ID, agentRunId));
   }
 
   /**

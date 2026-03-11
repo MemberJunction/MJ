@@ -34,7 +34,7 @@ import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
 import mssql from 'mssql';
 import { registerAccessToken, GetDataAccessToken } from '../resolvers/GetDataResolver.js';
 import { BehaviorSubject } from 'rxjs';
@@ -141,6 +141,13 @@ export interface SkipCallOptions {
      * the client should pass that payload back in the next request.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip via SkipProxyAgent, this contains the MJ-side Agent Run ID for cross-system
+     * correlation and debugging.
+     */
+    externalReferenceID?: string;
 }
 
 /**
@@ -255,6 +262,19 @@ export class SkipSDK {
             if (responses && responses.length > 0) {
                 const finalResponse = responses[responses.length - 1].value as SkipAPIResponse;
 
+                // Check if Skip itself reported an error (success: false in the response body)
+                if (finalResponse.success === false) {
+                    const skipError = finalResponse.error || 'Skip API returned an error response';
+                    LogError(`[SkipSDK] Skip API error: ${skipError}`);
+                    return {
+                        success: false,
+                        response: finalResponse,
+                        responsePhase: finalResponse.responsePhase,
+                        error: skipError,
+                        allResponses: responses
+                    };
+                }
+
                 return {
                     success: true,
                     response: finalResponse,
@@ -307,7 +327,8 @@ export class SkipSDK {
             includeRequests = false,
             forceEntityRefresh = false,
             includeCallbackAuth = true,
-            payload
+            payload,
+            externalReferenceID
         } = options;
 
         // Build base request with metadata
@@ -347,7 +368,8 @@ export class SkipSDK {
             apiKeys: baseRequest.apiKeys,
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
-            callingServerAccessToken: baseRequest.callingServerAccessToken
+            callingServerAccessToken: baseRequest.callingServerAccessToken,
+            externalReferenceID
         };
 
         return request;
@@ -449,6 +471,7 @@ export class SkipSDK {
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -484,7 +507,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }
@@ -493,7 +516,7 @@ export class SkipSDK {
      * Recursively build category path for a query
      */
     private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);

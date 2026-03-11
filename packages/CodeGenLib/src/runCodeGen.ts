@@ -21,7 +21,7 @@ import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { SQLLogging } from './Misc/sql_logging';
 import { SQLServerCodeGenConnection } from './Database/providers/sqlserver/SQLServerCodeGenConnection';
@@ -137,7 +137,7 @@ export class RunCodeGenBase {
 
     const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
       (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-        (role: Record<string, unknown>) => role.UserID === user.ID
+        (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)
       );
       return new UserInfo(provider, user);
     });

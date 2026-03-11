@@ -2,7 +2,7 @@ import { BaseEmbeddings, GetAIAPIKey } from "@memberjunction/ai";
 import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, RecordMergeRequest, EntityInfo, PotentialDuplicate } from "@memberjunction/core";
 import { LogStatus } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase } from "@memberjunction/ai-vectordb";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { MJAIModelEntity, MJDuplicateRunDetailEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunEntity, MJEntityDocumentEntity, MJListDetailEntity, MJListEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
@@ -138,7 +138,7 @@ export class DuplicateRecordDetector extends VectorBase {
             results.push(queryResult);
 
             //now update all of the dupe run detail records
-            let dupeRunDetail: MJDuplicateRunDetailEntity = duplicateRunDetails.find((detail: MJDuplicateRunDetailEntity) => detail.RecordID === compositeKey.Values());
+            let dupeRunDetail: MJDuplicateRunDetailEntity = duplicateRunDetails.find((detail: MJDuplicateRunDetailEntity) => UUIDsEqual(detail.RecordID, compositeKey.Values()));
             if(dupeRunDetail){
                 const matchRecords = await this.createDuplicateRunDetailMatchesForRecord(dupeRunDetail.ID, queryResult);
                 queryResult.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);

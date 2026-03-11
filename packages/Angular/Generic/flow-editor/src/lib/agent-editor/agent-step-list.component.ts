@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Tabular list view of agent steps and paths.
@@ -30,7 +31,7 @@ import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/co
               <tbody>
                 @for (step of Steps; track step) {
                   <tr
-                    [class.mj-step-list-row--selected]="SelectedStepID === step.ID"
+                    [class.mj-step-list-row--selected]="IsStepSelected(step)"
                     (click)="StepClicked.emit(step)">
                     <td class="mj-step-list-name">{{ step.Name }}</td>
                     <td>
@@ -218,6 +219,10 @@ export class AgentStepListComponent {
   @Input() SelectedStepID: string | null = null;
 
   @Output() StepClicked = new EventEmitter<MJAIAgentStepEntity>();
+
+  IsStepSelected(step: MJAIAgentStepEntity): boolean {
+    return UUIDsEqual(this.SelectedStepID, step.ID);
+  }
 
   getConfiguredItem(step: MJAIAgentStepEntity): string {
     switch (step.StepType) {

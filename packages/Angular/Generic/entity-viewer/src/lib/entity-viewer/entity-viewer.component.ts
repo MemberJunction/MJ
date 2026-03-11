@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -89,6 +90,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   private _timelineConfig: TimelineState | null = null;
   private _initialized = false;
 
+  /** Whether a deferred reload has been queued via deferReload() */
+  private _reloadDeferred = false;
+
   /**
    * The entity to display records for
    */
@@ -97,18 +101,34 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     return this._entity;
   }
   set entity(value: EntityInfo | null) {
+    const previousEntity = this._entity;
     this._entity = value;
 
     // Detect date fields for timeline support
     this.detectDateFields();
 
     if (this._initialized) {
+      // If entity changed to a different entity, clear all stale state from the old entity
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+          this._viewEntity = null;
+        }
+        // Clear sort state — it references fields from the old entity (e.g., FirstName)
+        // and would produce invalid ORDER BY on the new entity
+        this.internalSortState = null;
+      }
+
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display
         this.resetPaginationState();
+        this.internalRecords = [];
+        this.totalRecordCount = 0;
+        this.filteredRecordCount = 0;
         this.cdr.detectChanges();
-        this.loadData();
+        // Defer the actual load so all input bindings (viewEntity, gridState, etc.)
+        // complete before we fire the RunView — prevents duplicate loads with stale state
+        this.deferReload();
       } else if (!value) {
         this.internalRecords = [];
         this.totalRecordCount = 0;
@@ -253,10 +273,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     this._viewEntity = value;
 
     if (this._initialized && this._entity && !this._records) {
-      // Apply view's sort state if available, then reset pagination and reload
+      // Apply view's sort state if available, then defer the reload.
+      // Deferring ensures all sibling input bindings (gridState, etc.) are
+      // updated before we fire the RunView — prevents duplicate loads.
       this.applySortStateFromView(value);
       this.resetPaginationState();
-      this.loadData();
+      this.deferReload();
     }
   }
 
@@ -553,7 +575,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Third try: Look up by EntityID
     if (viewEntity.EntityID) {
-      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
       if (entityById) {
         return entityById;
       }
@@ -845,10 +867,34 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       this.applySortStateFromView(this._viewEntity);
     }
 
-    // If entity was set before initialization, load data now
+    // If entity was set before initialization, load data now.
+    // Use deferReload so all inputs are settled before the first RunView.
     if (this._entity && !this._records) {
-      this.loadData();
+      this.deferReload();
     }
+  }
+
+  /**
+   * Defers a data reload to a microtask so that all Angular input bindings
+   * (entity, viewEntity, gridState, etc.) complete before we fire a RunView.
+   * Multiple calls within the same change detection cycle collapse into one load.
+   */
+  private deferReload(): void {
+    if (this._reloadDeferred) {
+      return; // already queued or in-flight
+    }
+    this._reloadDeferred = true;
+    Promise.resolve().then(async () => {
+      try {
+        if (this._initialized && this._entity && !this._records) {
+          await this.loadData();
+        }
+      } finally {
+        // Clear only after loadData fully completes (including the async RunView).
+        // This prevents any re-entry via deferReload() during the entire load cycle.
+        this._reloadDeferred = false;
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -976,7 +1022,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
   // Sequence counter for tracking load requests and detecting stale responses
   private _loadSequence = 0;
-  // Flag to indicate a reload is pending (requested while another load was in progress)
+  // Flag: a reload was requested while a load was already in progress
   private _pendingReload = false;
 
   /**
@@ -994,8 +1040,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Increment sequence to track this load request
     const loadId = ++this._loadSequence;
 
-    // If a load is already in progress, mark that we need to reload when it completes
-    // This handles the case where view/filter changes occur during an active load
+    // If a load is already in progress, set a flag so we reload once the current
+    // load completes. We can't use deferReload() here because the microtask would
+    // fire while isLoading is still true, causing an infinite loop.
     if (this.isLoading) {
       this._pendingReload = true;
       return;
@@ -1015,13 +1062,18 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       const rv = new RunView();
 
       // Build OrderBy clause
-      // Priority: 1) External sort state 2) View's OrderByClause 3) undefined
+      // Priority: 1) External/internal sort state  2) View's OrderByClause
+      //           3) GridState.sortSettings (saved user defaults)  4) undefined
       let orderBy: string | undefined;
       const sortState = this.effectiveSortState;
       if (config.serverSideSorting && sortState?.field && sortState.direction) {
         orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
       } else if (this.viewEntity?.OrderByClause) {
         orderBy = this.viewEntity.OrderByClause;
+      } else if (this.gridState?.sortSettings?.length) {
+        orderBy = this.gridState.sortSettings
+          .map(s => `${s.field} ${(s.dir || 'asc').toUpperCase()}`)
+          .join(', ');
       }
 
       // Calculate StartRow for pagination
@@ -1105,12 +1157,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       });
 
-      // If a reload was requested while we were loading, trigger it now
+      // If a reload was requested while we were loading, trigger it now.
+      // isLoading is false at this point so loadData() won't re-enter the pending path.
       if (this._pendingReload) {
         this._pendingReload = false;
         this.resetPaginationState();
-        // Use setTimeout to break the call stack and allow Angular to process
-        setTimeout(() => this.loadData(), 0);
+        this.loadData();
       }
     }
   }
@@ -1282,11 +1334,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     this.internalSortState = newSort;
     this.sortChanged.emit({ sort: newSort });
 
-    // If server-side sorting, reload from page 1
-    // Keep existing records visible during refresh for better UX
+    // If server-side sorting, reload from page 1.
+    // Use deferReload() so that if a view-switch reload is already in-flight
+    // (e.g., AG Grid fired an async sortChanged from applySortStateToGrid),
+    // we don't trigger a redundant second RunView.
+    // For normal user-initiated column-header clicks, no deferred reload is
+    // pending so deferReload() fires immediately — no UX difference.
     if (this.effectiveConfig.serverSideSorting && !this.records) {
       this.resetPaginationState(false);
-      this.loadData();
+      this.deferReload();
     }
   }
 
@@ -1303,14 +1359,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
-      : md.Entities.find(e => e.ID === event.relatedEntityId);
+      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
 
     if (!relatedEntity) {
       return;
     }
 
-    // Create composite key from the FK value using the static factory method
-    const compositeKey = CompositeKey.FromID(event.recordId);
+    // Create composite key using the target entity's actual primary key field name
+    const pkFieldName = relatedEntity.FirstPrimaryKey?.Name || 'ID';
+    const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
 
     // Emit recordOpened for the related entity (record is undefined since it's not loaded)
     this.recordOpened.emit({

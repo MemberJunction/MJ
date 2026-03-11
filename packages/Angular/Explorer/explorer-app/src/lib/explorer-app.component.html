@@ -14,9 +14,17 @@
       <div><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
     }
   </div>
+  <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
+       The shell manages all visible content rendering through its tab system, not through routing.
+       Without this outlet, router.navigateByUrl() fails silently and the URL stays at '/'. -->
+  <div style="display:none;position:absolute;width:0;height:0;overflow:hidden">
+    <router-outlet></router-outlet>
+  </div>
 }
 <!-- Login - shows when NOT authenticated AND not on OAuth callback -->
 @if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {
+  <!-- Show environment validation errors on login page -->
+  <mj-system-validation-banner></mj-system-validation-banner>
   <div class="login-wrapper">
     <button class="theme-toggle" (click)="ToggleTheme()" [attr.aria-label]="IsDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
       <i class="fa-solid" [class.fa-sun]="IsDarkMode" [class.fa-moon]="!IsDarkMode"></i>

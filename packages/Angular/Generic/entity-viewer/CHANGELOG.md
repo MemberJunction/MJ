@@ -1,5 +1,113 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-export-service@5.10.1
+- @memberjunction/ng-filter-builder@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-timeline@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/export-engine@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-filter-builder@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-timeline@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/export-engine@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [89b6abe]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/ng-filter-builder@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/ng-timeline@5.9.0
+  - @memberjunction/ng-export-service@5.9.0
+  - @memberjunction/export-engine@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-filter-builder@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/ng-timeline@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/ng-export-service@5.8.0
+  - @memberjunction/export-engine@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-filter-builder@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/ng-timeline@5.7.0
+  - @memberjunction/ng-export-service@5.7.0
+  - @memberjunction/export-engine@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-filter-builder@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-timeline@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/ng-export-service@5.6.0
+  - @memberjunction/export-engine@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-export-service@5.5.0
+  - @memberjunction/ng-filter-builder@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-timeline@5.5.0
+  - @memberjunction/export-engine@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 import { ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -67,7 +67,7 @@ export abstract class BaseLMSAction extends BaseAction {
     const safeIntegrationName = this.validateIntegrationName(this.integrationName);
 
     // Check cache first
-    if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
+    if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
       return this._companyIntegration;
     }
 
@@ -75,7 +75,7 @@ export abstract class BaseLMSAction extends BaseAction {
     const result = await rv.RunView<MJCompanyIntegrationEntity>(
       {
         EntityName: 'MJ: Company Integrations',
-        ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${safeIntegrationName}'`,
+        ExtraFilter: `CompanyID = '${companyId}' AND Integration = '${safeIntegrationName}'`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -99,8 +99,14 @@ export abstract class BaseLMSAction extends BaseAction {
    * Example: BIZAPPS_LEARNWORLDS_12345_API_KEY
    */
   protected getCredentialFromEnv(companyId: string, credentialType: string): string | undefined {
-    const envKey = `BIZAPPS_${this.lmsProvider.toUpperCase().replace(/\s+/g, '_')}_${companyId}_${credentialType.toUpperCase()}`;
-    return process.env[envKey];
+    const provider = this.lmsProvider.toUpperCase().replace(/\s+/g, '_');
+    const credential = credentialType.toUpperCase();
+    const envKey = `BIZAPPS_${provider}_${companyId}_${credential}`;
+    const value = process.env[envKey];
+    if (value !== undefined) return value;
+    // Fallback: try lowercase companyId (SQL Server returns uppercase UUIDs)
+    const lowerKey = `BIZAPPS_${provider}_${companyId.toLowerCase()}_${credential}`;
+    return process.env[lowerKey];
   }
 
   /**

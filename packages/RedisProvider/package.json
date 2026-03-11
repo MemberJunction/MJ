@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/redis-provider",
+  "type": "module",
+  "version": "5.10.1",
+  "description": "Redis-backed ILocalStorageProvider for MemberJunction — enables shared, persistent server-side caching via any Redis-compatible service (Azure Managed Redis, AWS ElastiCache, self-hosted, etc.)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.10.1",
+    "@memberjunction/global": "5.10.1",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

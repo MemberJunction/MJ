@@ -1,6 +1,6 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity } from "@memberjunction/core-entities";
-import { RegisterClass, MJGlobal } from "@memberjunction/global";
+import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
@@ -736,7 +736,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                         const sourceEntityInfo = md.Entities.find(e =>
                             e.Name.toLowerCase() === extractedField.sourceEntity!.toLowerCase()
                         );
-                        if (sourceEntityInfo && existingField.SourceEntityID !== sourceEntityInfo.ID) {
+                        if (sourceEntityInfo && !UUIDsEqual(existingField.SourceEntityID, sourceEntityInfo.ID)) {
                             existingField.SourceEntityID = sourceEntityInfo.ID;
                             hasChanges = true;
                         }
@@ -826,11 +826,11 @@ export class MJQueryEntityServer extends MJQueryEntity {
             
             // Find entities to add or remove
             const entitiesToAdd = entityMappings.filter(mapping => 
-                !existingEntities.some(ee => ee.EntityID === mapping!.entityID)
+                !existingEntities.some(ee => UUIDsEqual(ee.EntityID, mapping!.entityID))
             );
             
             const entitiesToRemove = existingEntities.filter(ee =>
-                !entityMappings.some(mapping => mapping!.entityID === ee.EntityID)
+                !entityMappings.some(mapping => UUIDsEqual(mapping!.entityID, ee.EntityID))
             );
             
             // Prepare all save/delete operations
@@ -943,7 +943,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
             // Determine source dialect from query's SQLDialectID
             const sourceDialect = this.SQLDialectID
-                ? dialects.find(d => d.ID === this.SQLDialectID)
+                ? dialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID))
                 : dialects.find(d => d.PlatformKey === 'sqlserver'); // Default to T-SQL
 
             if (!sourceDialect) {
@@ -1109,10 +1109,10 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 await md.Refresh(); // will refresh FROM the global provider, meaning we do NOT hit the DB again, we just copy the data into our MD instance that is part of our trans scope
             }
         }
-        this._queryPermissions = md.QueryPermissions.filter(p => p.QueryID === this.ID);
-        this._queryEntities = md.QueryEntities.filter(e => e.QueryID === this.ID);
-        this._queryFields = md.QueryFields.filter(f => f.QueryID === this.ID);
-        this._queryParameters = md.QueryParameters.filter(p => p.QueryID === this.ID);
+        this._queryPermissions = md.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
+        this._queryEntities = md.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
+        this._queryFields = md.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
+        this._queryParameters = md.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
     }
 
 }

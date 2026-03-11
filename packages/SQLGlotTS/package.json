@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/sqlglot-ts",
-  "version": "5.0.0",
+  "version": "5.10.1",
   "description": "TypeScript wrapper for Python's sqlglot SQL transpiler. Manages a local Python FastAPI microservice to provide deterministic SQL dialect conversion.",
   "type": "module",
   "main": "dist/index.js",
@@ -24,6 +24,10 @@
     "dialect",
     "conversion"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "license": "ISC",
   "dependencies": {},
   "devDependencies": {

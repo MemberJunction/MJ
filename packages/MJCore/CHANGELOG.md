@@ -1,5 +1,79 @@
 # Change Log - @memberjunction/core
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Minor Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+
+### Patch Changes
+
+- 75dd36b: no migration
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+
+## 5.8.0
+
+### Minor Changes
+
+- 0753249: Add metadata migration script for v5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Minor Changes
+
+- 642c4df: Remove migration script V202603021400**v5.6.x**Optimize_RecordChange_Detection_Index because it would significantly increase database size and cause migration timeouts for AIDP upgrades (it adds an index on RecordChange that included FullRecordJSON).
+
+### Patch Changes
+
+- @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Minor Changes
+
+- 4547d05: Grant UI role Create/Update permissions on 9 agent and conversation entities so end users can use agents like Sage
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

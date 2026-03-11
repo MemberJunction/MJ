@@ -4,6 +4,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating and editing collections
@@ -174,7 +175,7 @@ export class CollectionFormModalComponent implements OnChanges {
       // Validate permissions before saving
       if (this.collection) {
         // Editing existing collection - need Edit permission
-        if (this.collection.OwnerID && this.collection.OwnerID !== this.currentUser.ID) {
+        if (this.collection.OwnerID && !UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.collection.ID,
             this.currentUser.ID,
@@ -189,7 +190,7 @@ export class CollectionFormModalComponent implements OnChanges {
         }
       } else if (this.parentCollection) {
         // Creating child collection - need Edit permission on parent
-        if (this.parentCollection.OwnerID && this.parentCollection.OwnerID !== this.currentUser.ID) {
+        if (this.parentCollection.OwnerID && !UUIDsEqual(this.parentCollection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.parentCollection.ID,
             this.currentUser.ID,

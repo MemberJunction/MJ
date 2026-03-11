@@ -4,7 +4,7 @@ import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
@@ -72,7 +72,7 @@ export class Metadata {
      * @returns 
      */
     public EntityByID(entityID: string): EntityInfo {
-        return this.Entities.find(e => e.ID === entityID);
+        return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
     public get Queries(): QueryInfo[] {
@@ -134,7 +134,7 @@ export class Metadata {
      * @returns 
      */
     public EntityIDFromName(entityName: string): string {
-        let entity = this.Entities.find(e => e.Name == entityName);
+        let entity = this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
         if (entity != null)
             return entity.ID;
         else
@@ -147,7 +147,7 @@ export class Metadata {
      * @returns 
      */
     public EntityNameFromID(entityID: string): string {
-        let entity = this.Entities.find(e => e.ID == entityID);
+        let entity = this.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if(entity){
             return entity.Name;
         }
@@ -162,7 +162,7 @@ export class Metadata {
      * @param entityID
      */
     public EntityFromEntityID(entityID: string): EntityInfo | null {
-        let entity = this.Entities.find(e => e.ID == entityID);
+        let entity = this.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if(entity){
             return entity;
         }

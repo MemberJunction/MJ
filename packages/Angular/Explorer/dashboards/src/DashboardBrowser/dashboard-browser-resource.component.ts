@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity } from '@memberjunction/core-entities';
@@ -195,7 +195,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             for (const dashboard of event.Dashboards) {
                 const deleted = await dashboard.Delete();
                 if (deleted) {
-                    const index = this.dashboards.findIndex(d => d.ID === dashboard.ID);
+                    const index = this.dashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
                     if (index >= 0) {
                         this.dashboards.splice(index, 1);
                     }
@@ -274,7 +274,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         // Check if a link already exists for this user/dashboard
         const existingLinks = DashboardEngine.Instance.DashboardCategoryLinks.filter(
-            link => link.DashboardID === dashboardId && link.UserID === userId
+            link => UUIDsEqual(link.DashboardID, dashboardId) && UUIDsEqual(link.UserID, userId)
         );
 
         let link: MJDashboardCategoryLinkEntity;
@@ -325,7 +325,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Includes extensive logging for debugging category creation issues
      */
     public async onCategoryCreate(event: CategoryCreateEvent): Promise<void> {
-        console.log('[DashboardBrowserResource] Category create requested:', {
+        console.debug('[DashboardBrowserResource] Category create requested:', {
             name: event.Name,
             parentCategoryId: event.ParentCategoryId
         });
@@ -335,14 +335,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
 
             const md = new Metadata();
-            console.log('[DashboardBrowserResource] Current user:', {
+            console.debug('[DashboardBrowserResource] Current user:', {
                 userId: md.CurrentUser?.ID,
                 userName: md.CurrentUser?.Name,
                 email: md.CurrentUser?.Email
             });
 
             const category = await md.GetEntityObject<MJDashboardCategoryEntity>('MJ: Dashboard Categories');
-            console.log('[DashboardBrowserResource] Created category entity object');
+            console.debug('[DashboardBrowserResource] Created category entity object');
 
             // Set required fields
             category.Name = event.Name;
@@ -352,7 +352,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 category.ParentID = event.ParentCategoryId;
             }
 
-            console.log('[DashboardBrowserResource] Category fields before save:', {
+            console.debug('[DashboardBrowserResource] Category fields before save:', {
                 name: category.Name,
                 userId: category.UserID,
                 parentId: category.ParentID,
@@ -361,7 +361,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             const saved = await category.Save();
 
-            console.log('[DashboardBrowserResource] Save result:', {
+            console.debug('[DashboardBrowserResource] Save result:', {
                 success: saved,
                 latestResult: category.LatestResult,
                 message: category.LatestResult?.Message,
@@ -370,7 +370,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             });
 
             if (saved) {
-                console.log('[DashboardBrowserResource] Category saved successfully, ID:', category.ID);
+                console.debug('[DashboardBrowserResource] Category saved successfully, ID:', category.ID);
                 // Add to local array - engine will self-update
                 this.categories.push(category);
                 this.categories = [...this.categories].sort((a, b) => a.Name.localeCompare(b.Name));
@@ -396,7 +396,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Performs recursive deletion of category and all children
      */
     public async onCategoryDelete(event: CategoryDeleteEvent): Promise<void> {
-        console.log('[DashboardBrowserResource] Category delete requested:', event.Category.Name);
+        console.debug('[DashboardBrowserResource] Category delete requested:', event.Category.Name);
 
         try {
             this.isLoading = true;
@@ -406,12 +406,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const categoriesToDelete = this.getChildCategoriesRecursive(event.Category.ID);
             categoriesToDelete.push(event.Category);
 
-            console.log('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
+            console.debug('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
 
             // Delete in reverse order (children first)
             for (const cat of categoriesToDelete.reverse()) {
                 // First, move any dashboards in this category to uncategorized
-                const dashboardsInCategory = this.dashboards.filter(d => d.CategoryID === cat.ID);
+                const dashboardsInCategory = this.dashboards.filter(d => UUIDsEqual(d.CategoryID, cat.ID));
                 for (const dashboard of dashboardsInCategory) {
                     dashboard.CategoryID = null!;
                     await dashboard.Save();
@@ -420,7 +420,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // Then delete the category
                 const deleted = await cat.Delete();
                 if (deleted) {
-                    const index = this.categories.findIndex(c => c.ID === cat.ID);
+                    const index = this.categories.findIndex(c => UUIDsEqual(c.ID, cat.ID));
                     if (index >= 0) {
                         this.categories.splice(index, 1);
                     }
@@ -445,7 +445,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Navigates back to list view with optional category selection
      */
     public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
-        console.log('[DashboardBrowserResource] Breadcrumb navigate:', event);
+        console.debug('[DashboardBrowserResource] Breadcrumb navigate:', event);
 
         // CategoryId is null for root, or a category ID string
         this.selectedCategoryId = event.CategoryId;
@@ -726,9 +726,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // Navigate to entity record
                 const compositeKey = new CompositeKey();
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
-                // If simple load didn't work (single ID without field name), create from ID field
+                // If simple load didn't work (single ID without field name), look up actual PK field
                 if (compositeKey.KeyValuePairs.length === 0) {
-                    compositeKey.LoadFromSingleKeyValuePair('ID', request.recordId);
+                    const md = new Metadata();
+                    const entity = md.Entities.find(e => e.Name === request.entityName);
+                    const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+                    compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
                 }
                 this.navigationService.OpenEntityRecord(
                     request.entityName,
@@ -739,7 +742,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
             case 'OpenDashboard': {
                 // Navigate to another dashboard
-                const targetDashboard = this.dashboards.find(d => d.ID === request.dashboardId);
+                const targetDashboard = this.dashboards.find(d => UUIDsEqual(d.ID, request.dashboardId));
                 if (targetDashboard) {
                     if (openInNewTab) {
                         this.navigationService.OpenDashboard(
@@ -756,7 +759,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             case 'OpenQuery': {
                 // Navigate to query viewer
                 const md = new Metadata();
-                const queryInfo = md.Queries.find(q => q.ID === request.queryId);
+                const queryInfo = md.Queries.find(q => UUIDsEqual(q.ID, request.queryId));
                 if (queryInfo) {
                     this.navigationService.OpenQuery(
                         request.queryId,
@@ -941,7 +944,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             // Get category links for current user (from engine's cached data)
             const userCategoryLinks = engine.DashboardCategoryLinks.filter(
-                link => link.UserID === currentUserId
+                link => UUIDsEqual(link.UserID, currentUserId)
             );
 
             for (const dashboard of this.dashboards) {
@@ -952,7 +955,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 if (!perms.IsOwner) {
                     // Look for a category link for this dashboard
                     const categoryLink = userCategoryLinks.find(
-                        link => link.DashboardID === dashboard.ID
+                        link => UUIDsEqual(link.DashboardID, dashboard.ID)
                     );
 
                     if (categoryLink) {
@@ -967,7 +970,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // so the browser will use the dashboard's actual CategoryID
             }
 
-            console.log('[DashboardBrowserResource] Loaded from DashboardEngine:', {
+            console.debug('[DashboardBrowserResource] Loaded from DashboardEngine:', {
                 dashboardCount: this.dashboards.length,
                 categoryCount: this.categories.length,
                 sharedDashboardsInEffectiveMap: this.effectiveCategoryMap.size,
@@ -1004,7 +1007,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 if (dashboardId !== currentDashboardId) {
                     if (dashboardId) {
                         // Find and open the dashboard
-                        const dashboard = this.dashboards.find(d => d.ID === dashboardId);
+                        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
                         if (dashboard) {
                             this.selectedDashboard = dashboard;
                             this.mode = 'view';
@@ -1057,7 +1060,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     private getChildCategoriesRecursive(parentId: string): MJDashboardCategoryEntity[] {
         const children: MJDashboardCategoryEntity[] = [];
-        const directChildren = this.categories.filter(c => c.ParentID === parentId);
+        const directChildren = this.categories.filter(c => UUIDsEqual(c.ParentID, parentId));
 
         for (const child of directChildren) {
             children.push(child);

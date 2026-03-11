@@ -5,8 +5,8 @@
  * so it is only included by the consumer of the entities library if they want to use it.
 **************************************************************************************************************/
 
-import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
-         EntityInfo, EntityFieldInfo, EntityFieldTSType,
+import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
+         EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
@@ -16,6 +16,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+import { MJGlobal, MJEventType, UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -137,6 +138,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _sessionId: string;
     private _aiClient: GraphQLAIClient;
     private _refreshPromise: Promise<void> | null = null;
+    private _dynamicHeaders: Map<string, string> = new Map();
 
     public get ConfigData(): GraphQLProviderConfigData {
         return this._configData;
@@ -309,6 +311,62 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
+    /**
+     * Sets a dynamic header that will be included in all subsequent GraphQL requests.
+     * Dynamic headers survive token refreshes and client re-creation.
+     *
+     * This is useful for passing per-session context (e.g., organization selection)
+     * that the server needs on every request but isn't part of the auth token.
+     *
+     * @param key The header name (e.g., 'x-organization-id')
+     * @param value The header value
+     */
+    public SetDynamicHeader(key: string, value: string): void {
+        this._dynamicHeaders.set(key, value);
+        if (this._client) {
+            this._client.setHeader(key, value);
+        }
+        // Also update the singleton's client if this instance is the singleton
+        if (GraphQLDataProvider.Instance &&
+            GraphQLDataProvider.Instance !== this &&
+            GraphQLDataProvider.Instance._configData === this._configData) {
+            GraphQLDataProvider.Instance._dynamicHeaders.set(key, value);
+            if (GraphQLDataProvider.Instance._client) {
+                GraphQLDataProvider.Instance._client.setHeader(key, value);
+            }
+        }
+    }
+
+    /**
+     * Removes a previously set dynamic header. The header will no longer be
+     * included in subsequent GraphQL requests.
+     *
+     * @param key The header name to remove
+     */
+    public RemoveDynamicHeader(key: string): void {
+        this._dynamicHeaders.delete(key);
+        if (this._client) {
+            // graphql-request's setHeader with empty string effectively removes it;
+            // but to be safe, we recreate with all current headers
+            this._client.setHeader(key, '');
+        }
+        if (GraphQLDataProvider.Instance &&
+            GraphQLDataProvider.Instance !== this &&
+            GraphQLDataProvider.Instance._configData === this._configData) {
+            GraphQLDataProvider.Instance._dynamicHeaders.delete(key);
+            if (GraphQLDataProvider.Instance._client) {
+                GraphQLDataProvider.Instance._client.setHeader(key, '');
+            }
+        }
+    }
+
+    /**
+     * Returns a read-only copy of all currently set dynamic headers.
+     */
+    public GetDynamicHeaders(): ReadonlyMap<string, string> {
+        return this._dynamicHeaders;
+    }
+
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
@@ -316,7 +374,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const u = this.ConvertBackToMJFields(d.CurrentUser);
             const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
             u.MJUserRoles_UserIDArray = roles;
-            return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
+            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+
+            // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
+            // The server serializes whatever TenantContext the middleware set.
+            // This makes plugins stack-layer agnostic — no client-side code needed.
+            if (d.CurrentUserTenantContext && typeof d.CurrentUserTenantContext === 'object') {
+                userInfo.TenantContext = d.CurrentUserTenantContext as TenantContext;
+            }
+
+            return userInfo;
         }
     }
 
@@ -1482,7 +1549,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = '';
                     }
                 }
-                vars.input[f.CodeName] = val;
+                vars.input[mapper.MapFieldName(f.CodeName)] = val;
             }
 
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
@@ -1501,7 +1568,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         else
                             val = f.OldValue;
                     }
-                    ov.push({Key: f.CodeName, Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    ov.push({Key: mapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -1649,7 +1716,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
+                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
@@ -2211,9 +2278,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (userAPIKey)
             headers['x-api-key'] = userAPIKey;
 
-        return new GraphQLClient(url, {
+        const client = new GraphQLClient(url, {
             headers
         });
+
+        // Re-apply any dynamic headers so they survive client re-creation (e.g., token refresh)
+        for (const [key, value] of this._dynamicHeaders) {
+            client.setHeader(key, value);
+        }
+
+        return client;
     }
 
     private _innerCurrentUserQueryString = `CurrentUser {
@@ -2227,6 +2301,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _currentUserQuery = gql`query CurrentUserAndRoles {
         ${this._innerCurrentUserQueryString}
+        CurrentUserTenantContext
     }`
 
 
@@ -2657,6 +2732,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._subscriptionCleanupTimer = null;
         }
 
+        // Unsubscribe from cache invalidation
+        this.UnsubscribeFromCacheInvalidation();
+
         // Complete all subjects and clear cache
         this.completeAllSubjects();
 
@@ -2665,6 +2743,107 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /**************************************************************************
+     * Cache Invalidation Subscription
+     *
+     * Subscribes to server-side cache invalidation events broadcast via
+     * GraphQL subscriptions. When a remote server updates an entity (via
+     * Redis pub/sub), the MJAPI server publishes a CACHE_INVALIDATION event.
+     * This client subscribes and fires MJGlobal BaseEntityEvent with
+     * type='remote-invalidate' so BaseEngine instances can re-fetch data.
+     **************************************************************************/
+
+    private _cacheInvalidationSubscription: Subscription | null = null;
+
+    /**
+     * Subscribes to server-side cache invalidation events and raises MJGlobal
+     * BaseEntityEvent with type='remote-invalidate' for each notification.
+     * This enables BaseEngine instances to automatically re-fetch stale data
+     * when another server modifies entities.
+     *
+     * Call this after the provider is configured and WebSocket URL is available.
+     * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
+     */
+    public SubscribeToCacheInvalidation(): void {
+        if (this._cacheInvalidationSubscription) {
+            return; // Already subscribed
+        }
+
+        if (!this.ConfigData?.WSURL) {
+            return; // No WebSocket URL configured, skip
+        }
+
+        const CACHE_INVALIDATION_SUB = gql`subscription CacheInvalidation {
+            cacheInvalidation {
+                EntityName
+                PrimaryKeyValues
+                Action
+                SourceServerID
+                Timestamp
+                OriginSessionID
+                RecordData
+            }
+        }`;
+
+        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+
+        this._cacheInvalidationSubscription = observable.subscribe({
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
+                const event = data?.cacheInvalidation;
+                if (!event) return;
+
+                // Skip events that originated from this browser session — we already
+                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+                    console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    return;
+                }
+
+                console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+
+                // Raise a MJGlobal event so BaseEngine instances can react
+                const baseEntityEvent: BaseEntityEvent = {
+                    type: 'remote-invalidate',
+                    entityName: event.EntityName,
+                    baseEntity: null,
+                    payload: {
+                        primaryKeyValues: event.PrimaryKeyValues,
+                        action: event.Action,
+                        sourceServerId: event.SourceServerID,
+                        timestamp: event.Timestamp,
+                        recordData: event.RecordData,
+                    },
+                };
+
+                MJGlobal.Instance.RaiseEvent({
+                    event: MJEventType.ComponentEvent,
+                    eventCode: BaseEntity.BaseEventCode,
+                    args: baseEntityEvent,
+                    component: this,
+                });
+            },
+            error: (error: unknown) => {
+                console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
+                // Clear the subscription so it can be re-established
+                this._cacheInvalidationSubscription = null;
+            },
+            complete: () => {
+                console.log('[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation');
+                this._cacheInvalidationSubscription = null;
+            },
+        });
+    }
+
+    /**
+     * Unsubscribes from cache invalidation events. Called during cleanup/logout.
+     */
+    public UnsubscribeFromCacheInvalidation(): void {
+        if (this._cacheInvalidationSubscription) {
+            this._cacheInvalidationSubscription.unsubscribe();
+            this._cacheInvalidationSubscription = null;
+        }
     }
 
     /**************************************************************************

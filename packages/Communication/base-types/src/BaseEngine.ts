@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { MJCommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
@@ -15,58 +16,84 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
       return super.getInstance<CommunicationEngineBase>();
    }
    
-   private _Metadata: {
-      BaseMessageTypes: MJCommunicationBaseMessageTypeEntity[],
-      Providers: MJCommunicationProviderEntityExtended[],
-      ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[],
-      EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntity[],
-      EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
-   } = {
-      BaseMessageTypes: [],
-      Providers: [],
-      ProviderMessageTypes: [],
-      EntityCommunicationMessageTypes: [],
-      EntityCommunicationFields: []
-   };
+   private _baseMessageTypes: MJCommunicationBaseMessageTypeEntity[] = [];
+   private _providers: MJCommunicationProviderEntityExtended[] = [];
+   private _providerMessageTypes: MJCommunicationProviderMessageTypeEntity[] = [];
+   private _entityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntity[] = [];
+   private _entityCommunicationFields: MJEntityCommunicationFieldEntity[] = [];
 
    /**
     * This method is called to configure the engine. It loads the metadata and caches it in the GlobalObjectStore. You must call this method before doing anything else with the engine.
     * If this method was previously run on the instance of the engine, it will return immediately without re-loading the metadata. If you want to force a reload of the metadata, you can pass true for the forceReload parameter.
     * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
-    * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
+    * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client.
     */
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
       const config: Partial<BaseEnginePropertyConfig>[] = [
          {
-               Type: 'dataset',
-               DatasetName: 'Communication_Metadata',
-               DatasetResultHandling: "single_property",
-               PropertyName: "_Metadata"
+            Type: 'entity',
+            EntityName: 'MJ: Communication Base Message Types',
+            PropertyName: '_baseMessageTypes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Providers',
+            PropertyName: '_providers',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Communication Provider Message Types',
+            PropertyName: '_providerMessageTypes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Entity Communication Message Types',
+            PropertyName: '_entityCommunicationMessageTypes',
+            CacheLocal: true
+         },
+         {
+            Type: 'entity',
+            EntityName: 'MJ: Entity Communication Fields',
+            PropertyName: '_entityCommunicationFields',
+            CacheLocal: true
          }
-      ]
+      ];
 
-      await this.Load(config, provider, forceRefresh, contextUser); 
+      await this.Load(config, provider, forceRefresh, contextUser);
    }
 
    protected override async AdditionalLoading(contextUser?: UserInfo) {
       // a little post-processing done within the context of the base classes loading architecture...
-      this._Metadata.Providers.forEach((provider) => {
-         provider.MessageTypes = this._Metadata.ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
+      this._providers.forEach((provider) => {
+         provider.MessageTypes = this._providerMessageTypes.filter((pmt) => UUIDsEqual(pmt.CommunicationProviderID, provider.ID));
       });
    }
 
    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] {
-      return this._Metadata.BaseMessageTypes;
+      return this._baseMessageTypes;
    }
    public get Providers(): MJCommunicationProviderEntityExtended[] {
-      return this._Metadata.Providers;
+      return this._providers;
    }
    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
-      return this._Metadata.ProviderMessageTypes;
+      return this._providerMessageTypes;
    }
 
+   /**
+    * Returns the communication metadata as a structured object.
+    * Maintained for backward compatibility with consumers that access Metadata.EntityCommunicationFields etc.
+    */
    public get Metadata() {
-      return this._Metadata;
+      return {
+         BaseMessageTypes: this._baseMessageTypes,
+         Providers: this._providers,
+         ProviderMessageTypes: this._providerMessageTypes,
+         EntityCommunicationMessageTypes: this._entityCommunicationMessageTypes,
+         EntityCommunicationFields: this._entityCommunicationFields
+      };
    }
  
 

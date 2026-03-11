@@ -1,6 +1,6 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -168,7 +168,7 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
             
             // Filter existing params relevant to this content
             const relevantExistingParams = existingParams.filter(p => 
-                isMultipleContents ? p.TemplateContentID === this.ID : p.TemplateContentID == null
+                isMultipleContents ? UUIDsEqual(p.TemplateContentID, this.ID) : p.TemplateContentID == null
             );
             
             // Convert extracted param names to lowercase for comparison

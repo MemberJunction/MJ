@@ -21,6 +21,10 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { UUIDsEqual } from '@memberjunction/global';
+
+/** Default width (percentage) for the artifact viewer pane */
+const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
 @Component({
   standalone: false,
@@ -134,9 +138,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
-  public artifactPaneWidth: number = 40; // Default 40% width
+  public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public isArtifactPaneMaximized: boolean = false; // Track maximize state
-  private artifactPaneWidthBeforeMaximize: number = 40; // Store width before maximizing
+  private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
@@ -292,7 +296,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const message = this.messages.find(m => m.ID === event.conversationDetailId);
+        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
@@ -307,7 +311,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
         if (!this.conversationId) return;
-        const conversationAgents = agents.filter(a => a.run.ConversationID === this.conversationId);
+        const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
           // Agents just completed — reload messages to pick up final response and any
@@ -367,7 +371,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         .find(msg =>
           msg.Role === 'AI' &&
           msg.AgentID &&
-          msg.AgentID !== this.conversationManagerAgent?.ID
+          !UUIDsEqual(msg.AgentID, this.conversationManagerAgent?.ID)
         );
 
       if (lastNonSageAgent?.AgentID) {
@@ -435,6 +439,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+    // Reset maximize state so it doesn't carry over to the next conversation
+    this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH; // restore default width
 
     // Reset poll-based completion tracking whenever we switch conversations,
     // so the first empty poll on the new conversation doesn't trigger a spurious reload.
@@ -798,7 +805,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
+    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
 
     if (existingIndex >= 0) {
       // Update existing message in place (replace with updated version)
@@ -897,7 +904,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
-      await existingAgentRun.Load(existingAgentRun.ID);
+      // duck type check to see if we have a BaseEntity or not
+      if (!!existingAgentRun.Load) {
+        await existingAgentRun.Load(existingAgentRun.ID);        
+      }
+      else {
+        // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
+        const md = new Metadata();
+        const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        newEntity.LoadFromData(existingAgentRun);
+        // swap the map entry to have this object now
+        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+      }
 
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
@@ -1701,8 +1719,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Clear permissions
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
-    // Reset maximize state when closing
+    // Reset maximize state and width when closing so the next artifact opens at default size
     this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   toggleMaximizeArtifactPane(): void {

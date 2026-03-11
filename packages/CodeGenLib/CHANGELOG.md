@@ -1,5 +1,178 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.10.1
+
+### Patch Changes
+
+- a4ac83d: no migration
+  - @memberjunction/ai@5.10.1
+  - @memberjunction/ai-core-plus@5.10.1
+  - @memberjunction/aiengine@5.10.1
+  - @memberjunction/ai-prompts@5.10.1
+  - @memberjunction/ai-provider-bundle@5.10.1
+  - @memberjunction/actions-base@5.10.1
+  - @memberjunction/actions@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/core-entities@5.10.1
+  - @memberjunction/core-entities-server@5.10.1
+  - @memberjunction/global@5.10.1
+  - @memberjunction/postgresql-dataprovider@5.10.1
+  - @memberjunction/sql-dialect@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-prompts@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/actions@5.10.0
+  - @memberjunction/core-entities-server@5.10.0
+  - @memberjunction/postgresql-dataprovider@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- f991f6d: Fix manifest generator to detect @RegisterClass in npm packages that only ship dist/ by falling back to scanning compiled JS files for \_\_decorate patterns
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/postgresql-dataprovider@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-prompts@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/core-entities-server@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/sql-dialect@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/postgresql-dataprovider@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/server-bootstrap-lite@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-prompts@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/actions@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/core-entities-server@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/global@5.8.0
+  - @memberjunction/sql-dialect@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/ai-prompts@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/core-entities-server@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/postgresql-dataprovider@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/global@5.7.0
+  - @memberjunction/sql-dialect@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/aiengine@5.6.0
+  - @memberjunction/ai-prompts@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/actions@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/core-entities-server@5.6.0
+  - @memberjunction/postgresql-dataprovider@5.6.0
+  - @memberjunction/sqlserver-dataprovider@5.6.0
+  - @memberjunction/server-bootstrap-lite@5.6.0
+  - @memberjunction/ai-provider-bundle@5.6.0
+  - @memberjunction/ai@5.6.0
+  - @memberjunction/config@5.6.0
+  - @memberjunction/global@5.6.0
+  - @memberjunction/sql-dialect@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- 6421543: migration
+
+### Patch Changes
+
+- bf2c142: no migration
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/server-bootstrap-lite@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/core-entities-server@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/postgresql-dataprovider@5.5.0
+  - @memberjunction/sql-dialect@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-prompts@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/config@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

@@ -1,4 +1,4 @@
-export * from './generated/action_subclasses';
+export * from './generated/action_subclasses.js';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
@@ -26,6 +26,7 @@ export * from './custom/utilities/ip-geolocation.action';
 export * from './custom/utilities/census-data-lookup.action';
 export * from './custom/utilities/external-change-detection.action';
 export * from './custom/utilities/qr-code.action';
+export * from './custom/utilities/address-services.action';
 
 // Web Actions
 export * from './custom/web/web-search.action';

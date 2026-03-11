@@ -12,7 +12,7 @@ import { takeUntil, filter, debounceTime, distinctUntilChanged, combineLatestWit
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
   ActionExplorerStateService,
@@ -218,7 +218,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
     const addDescendants = (parentId: string) => {
       this.Categories.forEach(c => {
-        if (c.ParentID === parentId && !descendants.has(c.ID)) {
+        if (UUIDsEqual(c.ParentID, parentId) && !descendants.has(c.ID)) {
           descendants.add(c.ID);
           addDescendants(c.ID);
         }

@@ -3,6 +3,7 @@ import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, Application
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * System application ID for non-app-specific resources (fallback only)
@@ -625,7 +626,7 @@ export class NavigationService implements OnDestroy {
   async SwitchToApp(appId: string, navItemName?: string): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
-    const app = this.appManager.GetAllApps().find(a => a.ID === appId);
+    const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
     if (!app) {
       return;
     }

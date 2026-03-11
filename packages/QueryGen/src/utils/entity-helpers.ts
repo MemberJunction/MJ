@@ -5,6 +5,7 @@
  */
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   EntityMetadataForPrompt,
   EntityFieldMetadata,
@@ -156,7 +157,7 @@ function findEntityByName(name: string, entities: EntityInfo[]): EntityInfo | un
  * Find entity by ID in array
  */
 export function findEntityById(id: string, entities: EntityInfo[]): EntityInfo | undefined {
-  return entities.find((e) => e.ID === id);
+  return entities.find((e) => UUIDsEqual(e.ID, id));
 }
 
 /**

@@ -1,4 +1,5 @@
 import { UserInfo, RunView, LogStatus, RunViewResult } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity } from "@memberjunction/core-entities";
 
 /**
@@ -52,7 +53,7 @@ export class EntityDocumentCache {
         }
 
         return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
-            ed.EntityID === EntityID && ed.Status === 'Active' && ed.TypeID === documentType.ID;
+            UUIDsEqual(ed.EntityID, EntityID) && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID);
         });
 
     }
@@ -64,7 +65,7 @@ export class EntityDocumentCache {
         }
 
         return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
-            ed.Entity === EntityName && ed.Status === 'Active' && ed.TypeID === documentType.ID;
+            ed.Entity === EntityName && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID);
         });
 
     }

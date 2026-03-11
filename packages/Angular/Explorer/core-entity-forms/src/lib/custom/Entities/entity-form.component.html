@@ -68,7 +68,7 @@
           <span class="stat-value">{{ stats.permissionCount }}</span>
           <span class="stat-label">Roles</span>
         </div>
-        <div class="stat-item">
+        <div class="stat-item" (click)="setActiveSection('data')">
           <i class="fa-solid fa-database"></i>
           @if (!isRowCountLoading) {
             <span class="stat-value">{{ formattedRowCount }}</span>
@@ -446,12 +446,13 @@
                             <div
                               class="field-item"
                               (click)="selectField(field)"
-                              [class.selected]="selectedField?.ID === field.ID">
+                              [class.selected]="IsFieldSelected(field)">
                               <div class="field-icon">
                                 <i [class]="getFieldTypeIcon(field)"></i>
                               </div>
                               <div class="field-info">
                                 <div class="field-name">{{ field.DisplayName || field.Name }}</div>
+                                <div class="field-db-name">{{ field.Name }}</div>
                                 <div class="field-meta">
                                   <span class="field-type">{{ formatFieldType(field) }}</span>
                                   @if (!field.AllowsNull) {
@@ -504,6 +505,10 @@
                       Field Name
                       <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Name' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
                     </div>
+                    <div class="list-col col-display-name sortable" (click)="sortFieldList('DisplayName')" [class.sorted]="fieldListSortColumn === 'DisplayName'">
+                      Display Name
+                      <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'DisplayName' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                    </div>
                     <div class="list-col col-type sortable" (click)="sortFieldList('Type')" [class.sorted]="fieldListSortColumn === 'Type'">
                       Type
                       <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Type' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
@@ -527,14 +532,17 @@
                     @for (field of getFilteredFieldsList(); track field; let i = $index) {
                       <div
                         class="list-row"
-                        [class.selected]="selectedField?.ID === field.ID"
+                        [class.selected]="IsFieldSelected(field)"
                         (click)="selectField(field)">
                         <div class="list-col col-seq">
                           <span class="seq-num">{{ field.Sequence }}</span>
                         </div>
                         <div class="list-col col-name">
                           <i [class]="getFieldTypeIcon(field)" class="field-type-icon"></i>
-                          <span class="field-name-text">{{ field.DisplayName || field.Name }}</span>
+                          <span class="field-name-text">{{ field.Name }}</span>
+                        </div>
+                        <div class="list-col col-display-name">
+                          <span class="display-name-text">{{ field.DisplayName || field.Name }}</span>
                         </div>
                         <div class="list-col col-type">
                           <span class="type-tag">{{ field.Type }}</span>
@@ -837,6 +845,21 @@
           </section>
         }
         <!-- ============================================================ -->
+        <!-- DATA SECTION -->
+        <!-- ============================================================ -->
+        @if (activeSection === 'data') {
+          <section class="section data-section">
+            <div class="data-viewer-container">
+              @if (entity) {
+                <mj-entity-viewer
+                  [entity]="entity"
+                  [showGridToolbar]="true">
+                </mj-entity-viewer>
+              }
+            </div>
+          </section>
+        }
+                <!-- ============================================================ -->
         <!-- LINEAGE SECTION -->
         <!-- ============================================================ -->
         @if (activeSection === 'lineage') {
@@ -1190,6 +1213,7 @@
           <div class="panel-content">
             <div class="detail-section">
               <h4>{{ selectedField.DisplayName || selectedField.Name }}</h4>
+              <div class="detail-field-db-name">{{ selectedField.Name }}</div>
               @if (selectedField.Description) {
                 <p class="field-description">{{ selectedField.Description }}</p>
               }

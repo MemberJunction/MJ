@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 
 import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity, IMetadataProvider } from "@memberjunction/core";
 import { MJLibraryEntity, MJLibraryItemEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 
 /**
@@ -82,7 +82,7 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Load the items for each library using the comma delimited list of included items in the Library metadata
         for (const library of this.Libraries) {
-            const items: MJLibraryItemEntityExtended[] = this.LibraryItems.filter((item: MJLibraryItemEntityExtended) => item.LibraryID === library.ID);
+            const items: MJLibraryItemEntityExtended[] = this.LibraryItems.filter((item: MJLibraryItemEntityExtended) => UUIDsEqual(item.LibraryID, library.ID));
             for (const item of items) {
 
                 // lib code name is replace all instances of @ . and / or \ in the library name with _

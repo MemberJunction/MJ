@@ -2,7 +2,7 @@ import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, Sev
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
 import { MJActionEntityServer } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
@@ -20,7 +20,7 @@ export class ActionSubClassGeneratorBase {
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
             action.Libraries.forEach(lib => {
-                if (!allActionLibraries.find(l => l.LibraryID === lib.LibraryID)) {
+                if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
                         Library: lib.Library,
                         LibraryID: lib.LibraryID,
@@ -30,7 +30,7 @@ export class ActionSubClassGeneratorBase {
                 else {
                     // lib already in array, make sure the ItemsUsed for this paritcular Action are merged in to the ItemsUsed array in the entry
                     // in the allActionLibraries array element
-                    const existingLib = allActionLibraries.find(l => l.LibraryID === lib.LibraryID);
+                    const existingLib = allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID));
                     if(existingLib && lib.ItemsUsed && lib.ItemsUsed.length > 0) {
                         const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
                         if(itemsUsed.length > 0) {

@@ -88,31 +88,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Test Rubrics Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTestRubrics"
-        SectionName="Test Rubrics"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTestRubrics')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Rubrics','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Rubrics')"
-                [AllowLoad]="IsSectionExpanded('mJTestRubrics')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTestRubrics', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Tests Section -->
     <mj-collapsible-panel
         SectionKey="mJTests"
@@ -132,6 +107,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTests', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Test Rubrics Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTestRubrics"
+        SectionName="Test Rubrics"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTestRubrics')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Rubrics','TypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Rubrics')"
+                [AllowLoad]="IsSectionExpanded('mJTestRubrics')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTestRubrics', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

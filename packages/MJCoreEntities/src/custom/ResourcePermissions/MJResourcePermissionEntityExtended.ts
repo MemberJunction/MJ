@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJUserEntity, MJUserNotificationEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
 
@@ -27,7 +27,7 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             // just in case, config the engine but it probably already has been configured in which case nothing will happen 
             const engine = <ResourcePermissionEngine> ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(p, ResourcePermissionEngine);
             await engine.Config(false, this.ContextCurrentUser);
-            const rt = engine.ResourceTypes.find((rt: any) => rt.ID === this.ResourceTypeID);
+            const rt = engine.ResourceTypes.find((rt: any) => UUIDsEqual(rt.ID, this.ResourceTypeID));
             const rtEntityRecord = engine.ResourceTypes.find((rt: any) => rt.Name.trim().toLowerCase() === "records")
 
             // now get the field names for the given resource type based on its entity metadata with this helper method in the engine

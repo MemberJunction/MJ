@@ -14,6 +14,7 @@
     "credential-categories",
     "credential-types",
     "resource-types",
+    "integration-source-types",
     "ai-vendors",
     "ai-models",
     "ai-configurations",
@@ -38,7 +39,8 @@
     "test-types",
     "tests",
     "test-suites",
-    "entities"
+    "entities",
+    "entity-settings"
   ],
   "sqlLogging": {
     "enabled": true,

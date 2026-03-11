@@ -17,6 +17,7 @@ import { LogError, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
+import { SystemValidationService } from '@memberjunction/ng-explorer-core';
 
 @Component({
   standalone: false,
@@ -46,7 +47,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     @Inject(DOCUMENT) public document: Document,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig,
     public authBase: MJAuthBase,
-    private workspaceInit: WorkspaceInitializerService
+    private workspaceInit: WorkspaceInitializerService,
+    private validationService: SystemValidationService
   ) {}
 
   /**
@@ -116,7 +118,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
             const token = await this.authBase.getIdToken();
 
             if (token) {
-              this.handleLogin(token, userInfo);
+              await this.handleLogin(token, userInfo);
             } else {
               console.error('User info available but no token found');
               // Auth state is managed by the provider itself via observables
@@ -178,6 +180,14 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         }
       });
 
+    // Validate environment before attempting auth setup
+    const envValid = this.validateEnvironment();
+    if (!envValid) {
+      this.HasError = true;
+      this.ErrorMessage = 'Environment configuration is incomplete. See errors above.';
+      return;
+    }
+
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
     this.setupAuth();
@@ -186,6 +196,96 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /**
+   * Validates that required environment variables are present before auth initialization.
+   * Surfaces clear error messages via SystemValidationService instead of letting the app
+   * crash with cryptic runtime errors like "can't read endsWith() on undefined".
+   */
+  private validateEnvironment(): boolean {
+    const env = this.environment;
+    let valid = true;
+
+    const requiredFields: { key: keyof MJEnvironmentConfig; label: string }[] = [
+      { key: 'GRAPHQL_URI', label: 'GraphQL HTTP endpoint URL' },
+      { key: 'GRAPHQL_WS_URI', label: 'GraphQL WebSocket endpoint URL' },
+      { key: 'AUTH_TYPE', label: 'Authentication provider type (msal or auth0)' },
+      { key: 'MJ_CORE_SCHEMA_NAME', label: 'MJ Core schema name' },
+    ];
+
+    for (const field of requiredFields) {
+      if (!env[field.key]) {
+        this.validationService.addIssue({
+          id: `env-missing-${String(field.key)}`,
+          message: `Missing required environment variable: ${String(field.key)}`,
+          severity: 'error',
+          details: `The "${String(field.key)}" property is empty or missing in your environment configuration file.`,
+          help: `Add ${String(field.key)} (${field.label}) to your environment.ts file. Example files are in src/environments/.`
+        });
+        valid = false;
+      }
+    }
+
+    // Conditionally required based on AUTH_TYPE
+    const authType = env.AUTH_TYPE?.toLowerCase();
+    if (authType === 'msal') {
+      valid = this.validateMsalFields(env) && valid;
+    } else if (authType === 'auth0') {
+      valid = this.validateAuth0Fields(env) && valid;
+    }
+
+    return valid;
+  }
+
+  private validateMsalFields(env: MJEnvironmentConfig): boolean {
+    let valid = true;
+    if (!env.CLIENT_ID) {
+      this.validationService.addIssue({
+        id: 'env-missing-CLIENT_ID',
+        message: 'Missing required environment variable: CLIENT_ID',
+        severity: 'error',
+        details: 'MSAL authentication requires CLIENT_ID (Azure AD/Entra Application Client ID).',
+        help: 'Add your Azure AD Application (client) ID to the environment file.'
+      });
+      valid = false;
+    }
+    if (!env.TENANT_ID) {
+      this.validationService.addIssue({
+        id: 'env-missing-TENANT_ID',
+        message: 'Missing required environment variable: TENANT_ID',
+        severity: 'error',
+        details: 'MSAL authentication requires TENANT_ID (Azure AD/Entra Tenant ID).',
+        help: 'Add your Azure AD Directory (tenant) ID to the environment file.'
+      });
+      valid = false;
+    }
+    return valid;
+  }
+
+  private validateAuth0Fields(env: MJEnvironmentConfig): boolean {
+    let valid = true;
+    if (!env.AUTH0_DOMAIN) {
+      this.validationService.addIssue({
+        id: 'env-missing-AUTH0_DOMAIN',
+        message: 'Missing required environment variable: AUTH0_DOMAIN',
+        severity: 'error',
+        details: 'Auth0 authentication requires AUTH0_DOMAIN.',
+        help: 'Add your Auth0 domain (e.g. myapp.us.auth0.com) to the environment file.'
+      });
+      valid = false;
+    }
+    if (!env.AUTH0_CLIENTID) {
+      this.validationService.addIssue({
+        id: 'env-missing-AUTH0_CLIENTID',
+        message: 'Missing required environment variable: AUTH0_CLIENTID',
+        severity: 'error',
+        details: 'Auth0 authentication requires AUTH0_CLIENTID.',
+        help: 'Add your Auth0 Client ID to the environment file.'
+      });
+      valid = false;
+    }
+    return valid;
   }
 
   /**

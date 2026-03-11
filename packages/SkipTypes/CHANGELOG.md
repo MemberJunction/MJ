@@ -1,5 +1,81 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/data-context@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/data-context@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/data-context@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/data-context@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/interactive-component-types@5.7.0
+  - @memberjunction/data-context@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/data-context@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+  - @memberjunction/data-context@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

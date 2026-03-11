@@ -1,6 +1,6 @@
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -68,7 +68,7 @@ export abstract class BaseAccountingAction extends BaseAction {
      */
     protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
         // Check cache first
-        if (this._companyIntegration && this._companyIntegration.CompanyID === companyId) {
+        if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
             return this._companyIntegration;
         }
 

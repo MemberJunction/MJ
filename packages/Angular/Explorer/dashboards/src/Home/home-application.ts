@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, WorkspaceTab } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, FieldValueCollection } from '@memberjunction/core';
@@ -219,7 +219,7 @@ export class HomeApplication extends BaseApplication {
     }
 
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
-    if (!activeTab || activeTab.applicationId !== this.ID) {
+    if (!activeTab || !UUIDsEqual(activeTab.applicationId, this.ID)) {
       return;
     }
 

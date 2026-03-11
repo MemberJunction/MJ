@@ -4,6 +4,7 @@ import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService as KendoDialogService } from '@progress/kendo-angular-dialog';
 import { DialogService } from '../../services/dialog.service';
 import { ProjectFormModalComponent } from './project-form-modal.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface ProjectWithStats extends MJProjectEntity {
   conversationCount?: number;
@@ -176,7 +177,7 @@ export class ProjectSelectorComponent implements OnInit {
         });
 
         if (this.selectedProjectId) {
-          this.selectedProject = this.projectsWithStats.find(p => p.ID === this.selectedProjectId) || null;
+          this.selectedProject = this.projectsWithStats.find(p => UUIDsEqual(p.ID, this.selectedProjectId)) || null;
         }
       }
     } catch (error) {

@@ -1,5 +1,51 @@
 # @memberjunction/scheduling-base-types
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

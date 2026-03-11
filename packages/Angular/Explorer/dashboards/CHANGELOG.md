@@ -1,5 +1,330 @@
 # @memberjunction/ng-dashboards
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/api-keys-base@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/ng-base-application@5.10.1
+- @memberjunction/ng-core-entity-forms@5.10.1
+- @memberjunction/ng-explorer-settings@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-testing@5.10.1
+- @memberjunction/ng-action-gallery@5.10.1
+- @memberjunction/ng-actions@5.10.1
+- @memberjunction/ng-agents@5.10.1
+- @memberjunction/ng-ai-test-harness@5.10.1
+- @memberjunction/ng-code-editor@5.10.1
+- @memberjunction/ng-container-directives@5.10.1
+- @memberjunction/ng-credentials@5.10.1
+- @memberjunction/ng-dashboard-viewer@5.10.1
+- @memberjunction/ng-entity-relationship-diagram@5.10.1
+- @memberjunction/ng-entity-viewer@5.10.1
+- @memberjunction/ng-export-service@5.10.1
+- @memberjunction/ng-filter-builder@5.10.1
+- @memberjunction/ng-list-management@5.10.1
+- @memberjunction/ng-markdown@5.10.1
+- @memberjunction/ng-notifications@5.10.1
+- @memberjunction/ng-query-viewer@5.10.1
+- @memberjunction/ng-react@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-trees@5.10.1
+- @memberjunction/ng-versions@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/integration-engine-base@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/export-engine@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/skip-types@5.10.1
+- @memberjunction/templates-base-types@5.10.1
+- @memberjunction/testing-engine-base@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- 3df5e4b: no migration
+- Updated dependencies [f2df653]
+- Updated dependencies [3df5e4b]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/skip-types@5.10.0
+  - @memberjunction/ng-core-entity-forms@5.10.0
+  - @memberjunction/ng-query-viewer@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/api-keys-base@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/ng-base-application@5.10.0
+  - @memberjunction/ng-explorer-settings@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-testing@5.10.0
+  - @memberjunction/ng-action-gallery@5.10.0
+  - @memberjunction/ng-actions@5.10.0
+  - @memberjunction/ng-agents@5.10.0
+  - @memberjunction/ng-ai-test-harness@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-container-directives@5.10.0
+  - @memberjunction/ng-credentials@5.10.0
+  - @memberjunction/ng-dashboard-viewer@5.10.0
+  - @memberjunction/ng-entity-relationship-diagram@5.10.0
+  - @memberjunction/ng-entity-viewer@5.10.0
+  - @memberjunction/ng-filter-builder@5.10.0
+  - @memberjunction/ng-list-management@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-react@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-trees@5.10.0
+  - @memberjunction/ng-versions@5.10.0
+  - @memberjunction/integration-engine-base@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/templates-base-types@5.10.0
+  - @memberjunction/testing-engine-base@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/export-engine@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [89b6abe]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/ng-filter-builder@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai-engine-base@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/api-keys-base@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/ng-base-application@5.9.0
+  - @memberjunction/ng-core-entity-forms@5.9.0
+  - @memberjunction/ng-explorer-settings@5.9.0
+  - @memberjunction/ng-shared@5.9.0
+  - @memberjunction/ng-testing@5.9.0
+  - @memberjunction/ng-action-gallery@5.9.0
+  - @memberjunction/ng-actions@5.9.0
+  - @memberjunction/ng-agents@5.9.0
+  - @memberjunction/ng-ai-test-harness@5.9.0
+  - @memberjunction/ng-code-editor@5.9.0
+  - @memberjunction/ng-credentials@5.9.0
+  - @memberjunction/ng-dashboard-viewer@5.9.0
+  - @memberjunction/ng-entity-viewer@5.9.0
+  - @memberjunction/ng-list-management@5.9.0
+  - @memberjunction/ng-notifications@5.9.0
+  - @memberjunction/ng-query-viewer@5.9.0
+  - @memberjunction/ng-react@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/ng-trees@5.9.0
+  - @memberjunction/ng-versions@5.9.0
+  - @memberjunction/graphql-dataprovider@5.9.0
+  - @memberjunction/integration-engine-base@5.9.0
+  - @memberjunction/templates-base-types@5.9.0
+  - @memberjunction/testing-engine-base@5.9.0
+  - @memberjunction/ng-container-directives@5.9.0
+  - @memberjunction/ng-entity-relationship-diagram@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+  - @memberjunction/skip-types@5.9.0
+  - @memberjunction/ng-export-service@5.9.0
+  - @memberjunction/ng-markdown@5.9.0
+  - @memberjunction/export-engine@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [de9f2c0]
+- Updated dependencies [0753249]
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-core-entity-forms@5.8.0
+  - @memberjunction/ng-explorer-settings@5.8.0
+  - @memberjunction/ng-shared@5.8.0
+  - @memberjunction/ng-testing@5.8.0
+  - @memberjunction/ng-actions@5.8.0
+  - @memberjunction/ng-ai-test-harness@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ng-react@5.8.0
+  - @memberjunction/ng-versions@5.8.0
+  - @memberjunction/ai-engine-base@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/api-keys-base@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/ng-base-application@5.8.0
+  - @memberjunction/ng-action-gallery@5.8.0
+  - @memberjunction/ng-agents@5.8.0
+  - @memberjunction/ng-code-editor@5.8.0
+  - @memberjunction/ng-container-directives@5.8.0
+  - @memberjunction/ng-credentials@5.8.0
+  - @memberjunction/ng-dashboard-viewer@5.8.0
+  - @memberjunction/ng-entity-relationship-diagram@5.8.0
+  - @memberjunction/ng-entity-viewer@5.8.0
+  - @memberjunction/ng-filter-builder@5.8.0
+  - @memberjunction/ng-list-management@5.8.0
+  - @memberjunction/ng-query-viewer@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/skip-types@5.8.0
+  - @memberjunction/templates-base-types@5.8.0
+  - @memberjunction/testing-engine-base@5.8.0
+  - @memberjunction/ng-export-service@5.8.0
+  - @memberjunction/ng-markdown@5.8.0
+  - @memberjunction/export-engine@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/ng-core-entity-forms@5.7.0
+  - @memberjunction/ng-ai-test-harness@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-dashboard-viewer@5.7.0
+  - @memberjunction/api-keys-base@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/ng-base-application@5.7.0
+  - @memberjunction/ng-explorer-settings@5.7.0
+  - @memberjunction/ng-shared@5.7.0
+  - @memberjunction/ng-testing@5.7.0
+  - @memberjunction/ng-action-gallery@5.7.0
+  - @memberjunction/ng-actions@5.7.0
+  - @memberjunction/ng-agents@5.7.0
+  - @memberjunction/ng-code-editor@5.7.0
+  - @memberjunction/ng-container-directives@5.7.0
+  - @memberjunction/ng-credentials@5.7.0
+  - @memberjunction/ng-entity-relationship-diagram@5.7.0
+  - @memberjunction/ng-entity-viewer@5.7.0
+  - @memberjunction/ng-filter-builder@5.7.0
+  - @memberjunction/ng-list-management@5.7.0
+  - @memberjunction/ng-notifications@5.7.0
+  - @memberjunction/ng-query-viewer@5.7.0
+  - @memberjunction/ng-react@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/ng-versions@5.7.0
+  - @memberjunction/graphql-dataprovider@5.7.0
+  - @memberjunction/interactive-component-types@5.7.0
+  - @memberjunction/skip-types@5.7.0
+  - @memberjunction/templates-base-types@5.7.0
+  - @memberjunction/testing-engine-base@5.7.0
+  - @memberjunction/ng-export-service@5.7.0
+  - @memberjunction/ng-markdown@5.7.0
+  - @memberjunction/export-engine@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- d24a7ff: Implement Search and improve View Filter
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/graphql-dataprovider@5.6.0
+  - @memberjunction/ai-engine-base@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/api-keys-base@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/ng-base-application@5.6.0
+  - @memberjunction/ng-core-entity-forms@5.6.0
+  - @memberjunction/ng-explorer-settings@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-testing@5.6.0
+  - @memberjunction/ng-action-gallery@5.6.0
+  - @memberjunction/ng-actions@5.6.0
+  - @memberjunction/ng-agents@5.6.0
+  - @memberjunction/ng-ai-test-harness@5.6.0
+  - @memberjunction/ng-code-editor@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-credentials@5.6.0
+  - @memberjunction/ng-dashboard-viewer@5.6.0
+  - @memberjunction/ng-entity-relationship-diagram@5.6.0
+  - @memberjunction/ng-entity-viewer@5.6.0
+  - @memberjunction/ng-filter-builder@5.6.0
+  - @memberjunction/ng-list-management@5.6.0
+  - @memberjunction/ng-notifications@5.6.0
+  - @memberjunction/ng-query-viewer@5.6.0
+  - @memberjunction/ng-react@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-versions@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/skip-types@5.6.0
+  - @memberjunction/templates-base-types@5.6.0
+  - @memberjunction/testing-engine-base@5.6.0
+  - @memberjunction/ng-export-service@5.6.0
+  - @memberjunction/ng-markdown@5.6.0
+  - @memberjunction/export-engine@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [2973c64]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/ng-react@5.5.0
+  - @memberjunction/ng-core-entity-forms@5.5.0
+  - @memberjunction/ng-entity-viewer@5.5.0
+  - @memberjunction/ng-agents@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/api-keys-base@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/ng-base-application@5.5.0
+  - @memberjunction/ng-explorer-settings@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-testing@5.5.0
+  - @memberjunction/ng-action-gallery@5.5.0
+  - @memberjunction/ng-actions@5.5.0
+  - @memberjunction/ng-ai-test-harness@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-container-directives@5.5.0
+  - @memberjunction/ng-credentials@5.5.0
+  - @memberjunction/ng-dashboard-viewer@5.5.0
+  - @memberjunction/ng-entity-relationship-diagram@5.5.0
+  - @memberjunction/ng-export-service@5.5.0
+  - @memberjunction/ng-filter-builder@5.5.0
+  - @memberjunction/ng-list-management@5.5.0
+  - @memberjunction/ng-markdown@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-query-viewer@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-versions@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+  - @memberjunction/export-engine@5.5.0
+  - @memberjunction/skip-types@5.5.0
+  - @memberjunction/templates-base-types@5.5.0
+  - @memberjunction/testing-engine-base@5.5.0
+
 ## 5.4.1
 
 ### Patch Changes

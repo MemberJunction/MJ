@@ -26,7 +26,11 @@ To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to 
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
-### 3. NO MODIFICATIONS TO MERGED PRs
+### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
+- **NEVER run `git reset --hard`** without explicit approval
+- These commands destroy uncommitted work (staged and unstaged) and cannot be undone
+- If you need to undo YOUR changes to a file, use `git diff` to identify only your changes and reverse them with targeted `Edit` tool calls — this preserves the user's other in-progress work
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
@@ -141,6 +145,12 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 
 The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
 
+- **[UUID Comparison Guide](guides/UUID_COMPARISON_GUIDE.md)**: Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase):
+  - Always use `UUIDsEqual()` instead of `===` for UUID comparisons
+  - Use `NormalizeUUID()` for Set/Map key operations
+  - Angular template binding patterns
+  - Automated enforcement tests
+
 - **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
   - State management with getter/setters
@@ -148,7 +158,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
-When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
+When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
 
@@ -655,6 +665,17 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 **Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
 
 ## Performance Best Practices
+
+### Server-Side Caching (Critical Architecture)
+
+MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
+
+Key principles:
+- **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
+- **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries
+- **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
+- **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
+- **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls

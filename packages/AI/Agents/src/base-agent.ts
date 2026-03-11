@@ -17,7 +17,7 @@ import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogError
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, SafeExpressionEvaluator } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -156,6 +156,14 @@ export class BaseAgent {
      * @private
      */
     private static readonly MAX_VALIDATION_RETRIES = 10;
+
+    /**
+     * Maximum consecutive failed (non-terminating) steps before forcing termination.
+     * Prevents infinite retry loops when an unclassified error repeatedly returns
+     * terminate=false. Each successful step resets the counter.
+     * @private
+     */
+    private static readonly MAX_CONSECUTIVE_FAILED_STEPS = 10;
 
     /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
@@ -1181,12 +1189,13 @@ export class BaseAgent {
      * @protected
      */
     protected async executeAgentInternal<P = any>(
-        params: ExecuteAgentParams, 
+        params: ExecuteAgentParams,
         config: AgentConfiguration
     ): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
         let continueExecution = true;
-        let currentNextStep: BaseAgentNextStep<P> | null = null;        
+        let currentNextStep: BaseAgentNextStep<P> | null = null;
         let stepCount = 0;
+        let consecutiveFailedSteps = 0;
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -1207,6 +1216,31 @@ export class BaseAgent {
                 this.promoteMediaOutputs(nextStep.promoteMediaOutputs);
             }
 
+            // Track consecutive failed steps to prevent infinite retry loops.
+            // Any non-Failed step resets the counter.
+            if (nextStep.step === 'Failed' && !nextStep.terminate) {
+                consecutiveFailedSteps++;
+                if (consecutiveFailedSteps >= BaseAgent.MAX_CONSECUTIVE_FAILED_STEPS) {
+                    this.logError(
+                        `⛔ Agent '${params.agent.Name}' reached maximum consecutive failed steps ` +
+                        `(${BaseAgent.MAX_CONSECUTIVE_FAILED_STEPS}). Forcing termination to prevent infinite loop.`,
+                        {
+                            agent: params.agent,
+                            category: 'ExecutionSafetyNet',
+                            metadata: {
+                                consecutiveFailures: consecutiveFailedSteps,
+                                lastError: nextStep.errorMessage
+                            }
+                        }
+                    );
+                    nextStep.terminate = true;
+                    nextStep.errorMessage = `Agent terminated after ${consecutiveFailedSteps} consecutive failed steps. ` +
+                        `Last error: ${nextStep.errorMessage || 'Unknown'}`;
+                }
+            } else if (nextStep.step !== 'Failed') {
+                consecutiveFailedSteps = 0;
+            }
+
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
@@ -1217,7 +1251,7 @@ export class BaseAgent {
                 // the previous payload to the next step
                 if (!currentNextStep.newPayload && currentNextStep.previousPayload) {
                     currentNextStep.newPayload = currentNextStep.previousPayload;
-                }          
+                }
                 this.logStatus(`➡️ Agent '${params.agent.Name}' continuing to next step: ${nextStep.step}`, true, params);
             }
 
@@ -1643,7 +1677,7 @@ export class BaseAgent {
         }
 
         // Find the agent type
-        const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
+        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
         if (!agentType && !metadataOptional) {
             return {
                 success: false,
@@ -1656,7 +1690,7 @@ export class BaseAgent {
         const requiresAgentLevelPrompts = agentTypeInstance.RequiresAgentLevelPrompts;
 
         // Find the system prompt (optional for some agent types)
-        const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
+        const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
 
         if (!systemPrompt) {
             metadataOptional = true; // If no system prompt, we can skip some validations
@@ -1664,7 +1698,7 @@ export class BaseAgent {
 
         // Find the first active agent prompt (optional for agent types that don't require them)
         const agentPrompt = engine.AgentPrompts
-            .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
+            .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
 
         if (!agentPrompt && !metadataOptional && requiresAgentLevelPrompts) {
@@ -1675,7 +1709,7 @@ export class BaseAgent {
         }
 
         // Find the actual prompt entity (will be undefined for agent types with only step-level prompts)
-        const childPrompt = agentPrompt ? engine.Prompts.find(p => p.ID === agentPrompt.PromptID) : undefined;
+        const childPrompt = agentPrompt ? engine.Prompts.find(p => UUIDsEqual(p.ID, agentPrompt.PromptID)) : undefined;
 
         if (!childPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
@@ -2023,7 +2057,7 @@ export class BaseAgent {
 
         // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
         const dbAgentActions = AIEngine.Instance.AgentActions.filter(
-            aa => aa.AgentID === params.agent.ID && aa.Status === 'Active'
+            aa => UUIDsEqual(aa.AgentID, params.agent.ID) && aa.Status === 'Active'
         );
 
         const missingActions = nextStep.actions?.filter(action => {
@@ -2086,7 +2120,7 @@ export class BaseAgent {
                 if (!actionEntity) continue;
 
                 // Check for limit from database-configured agent action
-                const dbAgentAction = dbAgentActions.find(aa => aa.ActionID === actionEntity.ID);
+                const dbAgentAction = dbAgentActions.find(aa => UUIDsEqual(aa.ActionID, actionEntity.ID));
                 let maxExecutions: number | null = null;
 
                 if (dbAgentAction?.MaxExecutionsPerRun != null) {
@@ -2146,10 +2180,10 @@ export class BaseAgent {
 
         // Fallback: compute from database configuration
         const agentActions = AIEngine.Instance.AgentActions.filter(
-            aa => aa.AgentID === agentId && aa.Status === 'Active'
+            aa => UUIDsEqual(aa.AgentID, agentId) && aa.Status === 'Active'
         );
         return ActionEngineServer.Instance.Actions.filter(a =>
-            agentActions.some(aa => aa.ActionID === a.ID) && a.Status === 'Active'
+            agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
         );
     }
 
@@ -2680,6 +2714,14 @@ export class BaseAgent {
             if (templateErrorPattern.test(promptResult.errorMessage)) {
                 return true; // Template rendering errors are fatal
             }
+
+            // Credential/configuration errors are permanent — retrying won't help.
+            // Check by message pattern as a safety net in case errorInfo is missing.
+            if (promptResult.errorMessage.includes('No suitable model found') ||
+                promptResult.errorMessage.includes('No credentials found') ||
+                promptResult.errorMessage.includes('No valid API credentials')) {
+                return true;
+            }
         }
 
         // If no error info, not fatal (might be transient)
@@ -2699,6 +2741,7 @@ export class BaseAgent {
         const fatalErrorTypes: AIErrorType[] = [
             'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
             'Authentication',          // API key is invalid or missing
+            'NoCredentials',           // No credentials configured for any model-vendor combination
             'InvalidRequest'           // Request format or parameters are wrong
         ];
 
@@ -3536,19 +3579,19 @@ The context is now within limits. Please retry your request with the recovered c
             const engine = AIEngine.Instance;
 
             // Find sub-agents using AIEngine
-            const activeSubAgents = engine.Agents.filter(a => a.ParentID === agent.ID && a.Status === 'Active')
+            const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-            const activeAgentRelationships = engine.AgentRelationships.filter(ar => ar.AgentID === agent.ID && ar.Status === 'Active');
+            const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
             // now combine the child sub-agents from the direct parentID relationships with the agentRelationships array, distinct to not repeat
             // unique ID values
             const uniqueActiveSubAgentIDs = new Set<string>();
             activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
             activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
-            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => a.ID === id));
+            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
 
             // Load available actions from database configuration
-            const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
-            let actions: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
+            const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
+            let actions: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
 
             // Apply runtime action changes if provided
             if (actionChanges?.length) {
@@ -3563,7 +3606,7 @@ The context is now within limits. Please retry your request with the recovered c
             this._effectiveActions = activeActions;
 
             // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
-            const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
+            const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
             const agentTypePromptParams = this.buildAgentTypePromptParams(
                 agentType,
@@ -3851,7 +3894,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Check for related sub-agent configuration (AIAgentRelationship)
         const relationship = engine.AgentRelationships.find(
-            r => r.AgentID === params.agent.ID && r.SubAgentID === subAgent.ID
+            r => UUIDsEqual(r.AgentID, params.agent.ID) && UUIDsEqual(r.SubAgentID, subAgent.ID)
         );
 
         // Get MessageMode and MaxMessages from either relationship or child agent
@@ -4004,6 +4047,7 @@ The context is now within limits. Please retry your request with the recovered c
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
+                apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 data: {
                         ...params.data,
                         ...subAgentRequest.templateParameters,
@@ -4078,12 +4122,12 @@ The context is now within limits. Please retry your request with the recovered c
     protected getAgentPromptParameters(agent: MJAIAgentEntityExtended): Array<MJTemplateParamEntity> {
         const engine = AIEngine.Instance;
         const agentPrompt = engine.AgentPrompts
-            .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
+            .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
-        
+
         if (!agentPrompt) return [];
 
-        const prompt = engine.Prompts.find(p => p.ID === agentPrompt.PromptID);
+        const prompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentPrompt.PromptID));
         if (!prompt) return [];
 
         // Return parameters as key-value pairs
@@ -4194,7 +4238,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private getAgentTypeName(typeID: string): string {
-        const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === typeID);
+        const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, typeID));
         return agentType?.Name || 'Unknown';
     }
 
@@ -4252,8 +4296,8 @@ The context is now within limits. Please retry your request with the recovered c
             if (change.mode === 'add') {
                 // Add actions that aren't already present
                 for (const actionId of change.actionIds) {
-                    if (!actions.some(a => a.ID === actionId)) {
-                        const actionToAdd = ActionEngineServer.Instance.Actions.find(a => a.ID === actionId);
+                    if (!actions.some(a => UUIDsEqual(a.ID, actionId))) {
+                        const actionToAdd = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, actionId));
                         if (actionToAdd) {
                             actions.push(actionToAdd);
                             // Store execution limit if provided
@@ -4267,7 +4311,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             } else if (change.mode === 'remove') {
                 // Remove actions by ID
-                actions = actions.filter(a => !change.actionIds.includes(a.ID));
+                actions = actions.filter(a => !change.actionIds.some(id => UUIDsEqual(id, a.ID)));
             }
         }
 
@@ -5521,7 +5565,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Get sub-agent entity to access payload paths
         const subAgentEntity = AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                            a.ParentID === params.agent.ID);
+                                                            UUIDsEqual(a.ParentID, params.agent.ID));
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
@@ -5833,7 +5877,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Find the sub-agent - check both child and related agents
         const childAgents = AIEngine.Instance.Agents.filter(a =>
-            a.ParentID === params.agent.ID &&
+            UUIDsEqual(a.ParentID, params.agent.ID) &&
             a.Status === 'Active'
         );
         const childAgent = childAgents.find(a => a.Name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -5845,13 +5889,13 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Check for related agent
         const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
-            ar.AgentID === params.agent.ID &&
+            UUIDsEqual(ar.AgentID, params.agent.ID) &&
             ar.Status === 'Active'
         );
 
         for (const relationship of activeRelationships) {
             const relatedAgent = AIEngine.Instance.Agents.find(a =>
-                a.ID === relationship.SubAgentID &&
+                UUIDsEqual(a.ID, relationship.SubAgentID) &&
                 a.Status === 'Active'
             );
 
@@ -6491,14 +6535,14 @@ The context is now within limits. Please retry your request with the recovered c
 
             const actionEngine = ActionEngineServer.Instance;
             // Get the AIAgentAction metadata records for this agent (used for expiration settings)
-            const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
+            const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
             // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
             const effectiveActions = this._effectiveActions.length > 0
                 ? this._effectiveActions
                 : actionEngine.Actions.filter(a =>
-                    agentActions.some(aa => aa.ActionID === a.ID)
+                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
                   );
 
             // Call agent type's pre-processing for actions
@@ -6619,7 +6663,7 @@ The context is now within limits. Please retry your request with the recovered c
             // If multiple actions, use the most restrictive (shortest) expiration settings
             let metadata: AgentChatMessageMetadata | undefined;
             const agentActionConfigs = actionResults
-                .map(r => agentActions.find(aa => aa.ActionID === r.actionEntity.ID))
+                .map(r => agentActions.find(aa => UUIDsEqual(aa.ActionID, r.actionEntity.ID)))
                 .filter(aa => aa != null);
 
             if (agentActionConfigs.length > 0) {
@@ -6872,8 +6916,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     protected validateSubAgentInAgent(subAgentName: string): string | null {
         // check to make sure sub-agent is valid
-        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => ar.AgentID === this._agentRun!.AgentID);
-        const childAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === this._agentRun!.AgentID);
+        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, this._agentRun!.AgentID));
+        const childAgents = AIEngine.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this._agentRun!.AgentID));
 
         // now check to make sure that subAgentName is either in relatedAgents or childAgents
         let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
@@ -7723,7 +7767,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Check action minimum requirements from database-configured actions only.
         // Dynamically added actions do not have MinExecutionsPerRun requirements.
         const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
-            aa.AgentID === agent.ID &&
+            UUIDsEqual(aa.AgentID, agent.ID) &&
             aa.Status === 'Active' &&
             aa.MinExecutionsPerRun != null &&
             aa.MinExecutionsPerRun > 0
@@ -8018,7 +8062,7 @@ The context is now within limits. Please retry your request with the recovered c
                     // 3. Action.DefaultCompactPromptID
                     // 4. System default compact prompt
                     const promptId = metadata.compactPromptId || this.getSystemDefaultCompactPromptId();
-                    const prompt = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+                    const prompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, promptId));
 
                     if (!prompt) {
                         // Fallback to First N Chars if prompt not found
@@ -8173,7 +8217,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Find the vendor-specific entry
-            const vendorEntry = modelVendors.find((mv: any) => mv.VendorID === vendorSelected.ID);
+            const vendorEntry = modelVendors.find((mv: any) => UUIDsEqual(mv.VendorID, vendorSelected.ID));
             if (!vendorEntry) {
                 this.logStatus(`No matching vendor entry found in ModelVendors, using default limit: ${DEFAULT_LIMIT}`, true);
                 return DEFAULT_LIMIT;

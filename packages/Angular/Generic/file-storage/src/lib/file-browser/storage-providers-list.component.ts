@@ -1,5 +1,6 @@
 import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef } from '@angular/core';
 import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Displays a list of organizational file storage accounts.
@@ -94,7 +95,7 @@ export class StorageProvidersListComponent implements OnInit {
    * Checks if an account is currently selected.
    */
   public isSelected(accountWithProvider: StorageAccountWithProvider): boolean {
-    return this.selectedAccount?.account.ID === accountWithProvider.account.ID;
+    return UUIDsEqual(this.selectedAccount?.account.ID, accountWithProvider.account.ID);
   }
 
   /**

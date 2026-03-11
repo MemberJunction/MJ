@@ -1,8 +1,9 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
+import type { CacheChangedEvent } from '../generic/localCacheManager';
 
 /**
  * Single aggregate expression to compute alongside the main view query.
@@ -188,6 +189,39 @@ export class RunViewParams {
     Aggregates?: AggregateExpression[];
 
     /**
+     * Optional callback invoked when the cached result set for this exact query
+     * fingerprint is updated by another server instance (via Redis pub/sub).
+     *
+     * Use this to react to cross-server cache invalidation — for example, to reload
+     * data in an engine's in-memory array, refresh a UI grid, or trigger a re-fetch.
+     *
+     * **Requirements:**
+     * - A `RedisLocalStorageProvider` must be configured as the local storage provider
+     * - `RedisLocalStorageProvider.StartListening()` must have been called to enable pub/sub
+     * - Has no effect with `InMemoryLocalStorageProvider` (single-server, no pub/sub)
+     *
+     * **Lifecycle:** If the caller is short-lived (e.g., an Angular component), call
+     * `result.Unsubscribe()` during cleanup (e.g., `ngOnDestroy`) to avoid memory leaks.
+     * For long-lived callers like engines, the callback persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView<AIModelEntity>({
+     *     EntityName: 'AI Models',
+     *     ResultType: 'entity_object',
+     *     OnDataChanged: (event) => {
+     *         console.log(`AI Models cache updated by server ${event.SourceServerId}`);
+     *         this.reloadModels();
+     *     }
+     * });
+     *
+     * // Later, to stop listening:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    OnDataChanged?: (event: CacheChangedEvent) => void;
+
+    /**
      * Compares two RunViewParams objects for equality by comparing their property values.
      * This is useful for determining if params have actually changed vs just being a new object reference.
      * Note: ViewEntity comparison uses reference equality since comparing loaded entity objects deeply is expensive.
@@ -356,7 +390,7 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => e.ID === entityID);
+            const entity = p.Entities.find(e => UUIDsEqual(e.ID, entityID));
             if (entity)
                 return entity.Name
         }

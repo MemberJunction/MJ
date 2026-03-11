@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/global
 
+## 5.10.1
+
+## 5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
+## 5.8.0
+
+## 5.7.0
+
+## 5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+
 ## 5.4.1
 
 ## 5.4.0

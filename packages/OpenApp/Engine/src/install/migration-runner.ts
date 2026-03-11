@@ -21,7 +21,7 @@ interface SkywayConfig {
         Database: string;
         User: string;
         Password: string;
-        Options?: { TrustServerCertificate?: boolean };
+        Options?: { Encrypt?: boolean; TrustServerCertificate?: boolean; RequestTimeout?: number };
     };
     Migrations: {
         Locations: string[];
@@ -68,6 +68,12 @@ export interface SkywayDatabaseConfig {
     Password: string;
     /** Whether to use Windows integrated auth */
     TrustedConnection?: boolean;
+    /** Whether to encrypt the connection (required for Azure SQL, auto-detected if omitted) */
+    Encrypt?: boolean;
+    /** Whether to trust the server certificate (default: true for local, false for Azure SQL) */
+    TrustServerCertificate?: boolean;
+    /** Request timeout in milliseconds */
+    RequestTimeout?: number;
 }
 
 /**
@@ -159,6 +165,11 @@ function BuildSkywayConfig(
         ? migrationsDir
         : path.resolve(migrationsDir);
 
+    // Auto-detect Azure SQL: if host ends with .database.windows.net, encrypt is required
+    const isAzureSql = dbConfig.Host.includes('.database.windows.net');
+    const encrypt = dbConfig.Encrypt ?? isAzureSql;
+    const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
+
     return {
         Database: {
             Server: dbConfig.Host,
@@ -167,7 +178,9 @@ function BuildSkywayConfig(
             User: dbConfig.User,
             Password: dbConfig.Password,
             Options: {
-                TrustServerCertificate: true,
+                Encrypt: encrypt,
+                TrustServerCertificate: trustCert,
+                ...(dbConfig.RequestTimeout ? { RequestTimeout: dbConfig.RequestTimeout } : {}),
             },
         },
         Migrations: {

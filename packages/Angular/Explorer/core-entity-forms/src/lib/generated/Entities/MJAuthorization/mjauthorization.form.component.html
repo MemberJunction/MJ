@@ -107,81 +107,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Action Authorizations Section -->
-    <mj-collapsible-panel
-        SectionKey="mJActionAuthorizations"
-        SectionName="Action Authorizations"
-        Icon="fa fa-shield-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJActionAuthorizations')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Authorizations','AuthorizationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations')"
-                [AllowLoad]="IsSectionExpanded('mJActionAuthorizations')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJActionAuthorizations', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Audit Log Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAuditLogTypes"
-        SectionName="Audit Log Types"
-        Icon="fa fa-clipboard-list"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAuditLogTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','AuthorizationName')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
-                [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAuditLogTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Audit Logs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAuditLogs"
-        SectionName="Audit Logs"
-        Icon="fa-solid fa-fingerprint"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAuditLogs')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuthorizationName')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
-                [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAuditLogs', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Authorization Roles Section -->
     <mj-collapsible-panel
         SectionKey="mJAuthorizationRoles"
@@ -226,6 +151,81 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuthorizations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Audit Log Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAuditLogTypes"
+        SectionName="Audit Log Types"
+        Icon="fa fa-clipboard-list"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAuditLogTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
+                [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAuditLogTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAuditLogs"
+        SectionName="Audit Logs"
+        Icon="fa-solid fa-fingerprint"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
+                [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Action Authorizations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActionAuthorizations"
+        SectionName="Action Authorizations"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActionAuthorizations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Authorizations','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations')"
+                [AllowLoad]="IsSectionExpanded('mJActionAuthorizations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionAuthorizations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

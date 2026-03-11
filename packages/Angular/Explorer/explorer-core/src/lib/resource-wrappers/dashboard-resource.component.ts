@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
@@ -478,9 +478,22 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+
+        // Load on first set, or when the dashboard has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId) {
             this.dataLoaded = true;
+            // Destroy previous component before loading new one
+            if (this.componentRef) {
+                this.componentRef.destroy();
+                this.componentRef = null;
+            }
+            this.clearError();
+            this.configDashboard = null;
+            this.viewerInstance = null;
             this.loadDashboard();
         }
     }
@@ -644,7 +657,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
-            const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
+            const dashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, data.ResourceRecordID));
             if (!dashboard) {
                 throw new Error(`Dashboard with ID ${data.ResourceRecordID} not found.`);
             }
@@ -808,7 +821,7 @@ export class DashboardResource extends BaseResourceComponent {
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
         const md = new Metadata();
-        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => dus.DashboardID === dashboardId && dus.UserID === md.CurrentUser.ID)
+        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
             stateObject = stateResult[0];
@@ -912,7 +925,7 @@ export class DashboardResource extends BaseResourceComponent {
             case 'OpenDashboard': {
                 const dashRequest = request as { type: 'OpenDashboard'; dashboardId: string };
                 // Load dashboard name from engine cache
-                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === dashRequest.dashboardId);
+                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, dashRequest.dashboardId));
                 const name = targetDashboard?.Name || 'Dashboard';
                 this.navigationService.OpenDashboard(dashRequest.dashboardId, name);
                 break;

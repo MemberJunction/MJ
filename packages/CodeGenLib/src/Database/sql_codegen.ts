@@ -13,7 +13,7 @@ import { ManageMetadataBase } from './manage-metadata';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
 
@@ -159,7 +159,7 @@ export class SQLCodeGenBase {
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
-            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName)));
+            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName))).sort();
             TempBatchFile.initialize(directory, schemas);
 
             // STEP 1.5 - Check for cascade delete dependencies that require regeneration
@@ -179,7 +179,7 @@ export class SQLCodeGenBase {
             // First, separate entities that need cascade delete regeneration from others
             const entitiesWithoutCascadeRegeneration = includedEntities.filter(e => !this.entitiesNeedingDeleteSPRegeneration.has(e.ID));
             const entitiesForCascadeRegeneration = this.orderedEntitiesForDeleteSPRegeneration
-                .map(id => includedEntities.find(e => e.ID === id))
+                .map(id => includedEntities.find(e => UUIDsEqual(e.ID, id)))
                 .filter(e => e !== undefined) as EntityInfo[];
 
             // Generate SQL for entities that don't need cascade delete regeneration
@@ -464,7 +464,7 @@ export class SQLCodeGenBase {
     public deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
         try {
             // for the schemas associated with the specified entities, clean out all the generated files
-            const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
+            const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index).sort();
             for (const s of schemaNames) {
                 const fullPath = path.join(directory, s);
                 // now, within each schema directory, clean out all the generated files
@@ -493,7 +493,7 @@ export class SQLCodeGenBase {
     public createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]): string[] {
         // first, get a disinct list of schemanames from the entities
         const files: string[] = [];
-        const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
+        const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index).sort();
         for (const s of schemaNames) {
             // generate the all-entities.sql file and all-entities.permissions.sql file in each schema folder
             const fullPath = path.join(directory, s);
@@ -574,8 +574,12 @@ export class SQLCodeGenBase {
             const result = await pool.query(viewDefSQL);
             const dbDefinition = result.recordset?.[0]?.ViewDefinition;
             if (!dbDefinition) {
-                // View doesn't exist in DB yet — it's new, will be handled by existing new entity logic
-                return false;
+                // View doesn't exist in the database. This happens when:
+                // 1. The entity is brand new (handled by newEntityList — early return above)
+                // 2. A previous CodeGen run dropped the view but CREATE VIEW failed
+                // In case 2, we must return true to force-log the view (and its TVFs)
+                // so they get recreated. Case 1 never reaches here due to the early return.
+                return true;
             }
 
             // Extract the SELECT body from both: everything after "AS\n" up to the trailing GO/permissions
@@ -731,23 +735,23 @@ export class SQLCodeGenBase {
                 options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
 
-                // ROOT ID FUNCTIONS (TVFs)
-                // Generate inline Table Value Functions for recursive foreign keys
-                // These must be created BEFORE the view that references them
+                // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
+                // TVFs must be created BEFORE the view that references them.
+                // We defer TVF logging until after baseViewChanged is computed so that
+                // TVFs are force-logged to the TempBatchFile whenever the view changes.
+                // This prevents "Invalid object name" errors when the view references
+                // TVFs that haven't been executed yet (e.g., when soft FKs are newly added).
                 const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
+                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string}> = [];
                 if (recursiveFKs.length > 0) {
                     for (const field of recursiveFKs) {
                         const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
-                        const s = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
+                        const tvfSQL = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
                                   this.generateRootIDFunction(options.entity, field);
-                        const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
-                        if (options.writeFiles) {
-                            this.writeFileIfChanged(filePath, s);
-                            this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
-                            files.push(filePath);
-                        }
+                        const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
+                        tvfEntries.push({sql: tvfSQL, filePath: tvfFilePath, fieldName: field.Name});
                         // Add function SQL to output BEFORE the view
-                        sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        sRet += tvfSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
                     }
                 }
 
@@ -758,6 +762,16 @@ export class SQLCodeGenBase {
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
                 // so logging stays centralized in logSQLForNewOrModifiedEntity.
                 baseViewChanged = await this.checkBaseViewChangedInDB(options.pool, options.entity, s);
+
+                // Now log TVFs with baseViewChanged as forceLog, ensuring they're included
+                // in TempBatchFile whenever the view that depends on them is also included
+                if (options.writeFiles) {
+                    for (const tvf of tvfEntries) {
+                        this.writeFileIfChanged(tvf.filePath, tvf.sql);
+                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, `Root ID Function SQL for ${options.entity.Name}.${tvf.fieldName}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        files.push(tvf.filePath);
+                    }
+                }
 
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
@@ -1079,7 +1093,7 @@ export class SQLCodeGenBase {
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
         return entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
-            field.RelatedEntityID === entity.ID
+            UUIDsEqual(field.RelatedEntityID, entity.ID)
         );
     }
 
@@ -1346,7 +1360,7 @@ export class SQLCodeGenBase {
 
             // 2. Handle configured additional fields
             if (config.fields && config.fields.length > 0) {
-                const currentEntity = md.Entities.find(e => e.ID === ef.EntityID);
+                const currentEntity = md.Entities.find(e => UUIDsEqual(e.ID, ef.EntityID));
                 for (const fieldConfig of config.fields) {
                     const fieldName = fieldConfig.field;
                     const alias = fieldConfig.alias || this.generateDefaultAlias(ef.Name, fieldName);
@@ -1503,7 +1517,7 @@ export class SQLCodeGenBase {
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
-                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                    if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
 
                         if (cascadeSql !== '') {
@@ -1643,10 +1657,10 @@ export class SQLCodeGenBase {
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
-                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                    if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)
                         // These don't create inter-entity dependencies for ordering purposes
-                        if (e.ID === entity.ID) {
+                        if (UUIDsEqual(e.ID, entity.ID)) {
                             continue;
                         }
 
@@ -1706,9 +1720,9 @@ export class SQLCodeGenBase {
         // Log the dependency map
         logStatus(`Cascade delete dependency map built:`);
         for (const [dependedOnEntityId, dependentEntityIds] of this.cascadeDeleteDependencies) {
-            const dependedOnEntity = entities.find(e => e.ID === dependedOnEntityId);
+            const dependedOnEntity = entities.find(e => UUIDsEqual(e.ID, dependedOnEntityId));
             const dependentNames = Array.from(dependentEntityIds)
-                .map(id => entities.find(e => e.ID === id)?.Name || id)
+                .map(id => entities.find(e => UUIDsEqual(e.ID, id))?.Name || id)
                 .join(', ');
             logStatus(`  ${dependedOnEntity?.Name || dependedOnEntityId} is depended on by: ${dependentNames}`);
         }
@@ -1802,7 +1816,7 @@ export class SQLCodeGenBase {
 
                     // Store the entity IDs that need regeneration (only if spDeleteGenerated=true)
                     for (const entityId of entitiesNeedingRegeneration) {
-                        const entity = entities.find(e => e.ID === entityId);
+                        const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                         if (entity && entity.spDeleteGenerated) {
                             this.entitiesNeedingDeleteSPRegeneration.add(entityId);
                             logStatus(`  - Marked ${entity.Name} for delete SP regeneration (cascade dependency)`);
@@ -1820,7 +1834,7 @@ export class SQLCodeGenBase {
                     if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
                         logStatus(`Ordered entities for delete SP regeneration:`);
                         this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
-                            const entity = entities.find(e => e.ID === entityId);
+                            const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                             logStatus(`  ${index + 1}. ${entity?.Name || entityId}`);
                         });
                     }
@@ -1874,7 +1888,7 @@ export class SQLCodeGenBase {
 
             if (visiting.has(entityId)) {
                 // Circular dependency detected - mark it but don't fail
-                const entity = entities.find(e => e.ID === entityId);
+                const entity = entities.find(e => UUIDsEqual(e.ID, entityId));
                 logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
                 circularDeps.add(entityId);
                 return false; // Signal circular dependency but continue processing
@@ -1906,7 +1920,7 @@ export class SQLCodeGenBase {
                 if (!success && circularDeps.has(entityId)) {
                     // Entity is part of circular dependency - add it anyway in arbitrary order
                     // The SQL will still be generated, just not in perfect dependency order
-                    logStatus(`  - Adding ${entities.find(e => e.ID === entityId)?.Name || entityId} despite circular dependency`);
+                    logStatus(`  - Adding ${entities.find(e => UUIDsEqual(e.ID, entityId))?.Name || entityId} despite circular dependency`);
                     visited.add(entityId);
                     ordered.push(entityId);
                 }

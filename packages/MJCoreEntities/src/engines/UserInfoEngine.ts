@@ -7,6 +7,7 @@ import {
   RegisterForStartup,
   UserInfo,
 } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Status indicating why a user can or cannot access an application.
@@ -195,7 +196,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public get UserNotifications(): MJUserNotificationEntity[] {
     if (!this._loadedForUserId) return [];
     return (this._UserNotifications || [])
-      .filter((n) => n.UserID === this._loadedForUserId)
+      .filter((n) => UUIDsEqual(n.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
 
@@ -204,7 +205,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserSettings(): MJUserSettingEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserSettings || []).filter((s) => s.UserID === this._loadedForUserId);
+    return (this._UserSettings || []).filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
   }
 
   /**
@@ -261,7 +262,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const saved = await setting.Save();
       if (saved) {
         // If it was a new record, add to cache
-        if (!this._UserSettings.some((s) => s.ID === setting!.ID)) {
+        if (!this._UserSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
           this._UserSettings.push(setting);
         }
         return true;
@@ -292,7 +293,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const deleted = await setting.Delete();
       if (deleted) {
         // Remove from cache
-        const index = this._UserSettings.findIndex((s) => s.ID === setting.ID);
+        const index = this._UserSettings.findIndex((s) => UUIDsEqual(s.ID, setting.ID));
         if (index >= 0) {
           this._UserSettings.splice(index, 1);
         }
@@ -459,7 +460,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get Workspaces(): MJWorkspaceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._Workspaces || []).filter((w) => w.UserID === this._loadedForUserId);
+    return (this._Workspaces || []).filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
   }
 
   /**
@@ -476,7 +477,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
     return (this._UserApplications || [])
-      .filter((ua) => ua.UserID === this._loadedForUserId)
+      .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
       .sort((a, b) => {
         // Sort by Sequence first, then by Application name
         if (a.Sequence !== b.Sequence) {
@@ -492,7 +493,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
     return (this._UserFavorites || [])
-      .filter((f) => f.UserID === this._loadedForUserId)
+      .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
 
@@ -502,7 +503,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public get UserRecordLogs(): MJUserRecordLogEntity[] {
     if (!this._loadedForUserId) return [];
     return (this._UserRecordLogs || [])
-      .filter((r) => r.UserID === this._loadedForUserId)
+      .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime());
   }
 
@@ -532,7 +533,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public GetNotificationsForUser(userId: string): MJUserNotificationEntity[] {
     return (this._UserNotifications || [])
-      .filter((n) => n.UserID === userId)
+      .filter((n) => UUIDsEqual(n.UserID, userId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
 
@@ -542,7 +543,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public GetUserApplicationsForUser(userId: string): MJUserApplicationEntity[] {
     return (this._UserApplications || [])
-      .filter((ua) => ua.UserID === userId)
+      .filter((ua) => UUIDsEqual(ua.UserID, userId))
       .sort((a, b) => {
         if (a.Sequence !== b.Sequence) {
           return a.Sequence - b.Sequence;
@@ -560,7 +561,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param notificationId - The notification ID to find
    */
   public GetNotificationById(notificationId: string): MJUserNotificationEntity | undefined {
-    return this.UserNotifications.find((n) => n.ID === notificationId);
+    return this.UserNotifications.find((n) => UUIDsEqual(n.ID, notificationId));
   }
 
   /**
@@ -568,7 +569,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to find
    */
   public GetUserApplicationByAppId(applicationId: string): MJUserApplicationEntity | undefined {
-    return this.UserApplications.find((ua) => ua.ApplicationID === applicationId);
+    return this.UserApplications.find((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
   }
 
   /**
@@ -576,7 +577,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param entityId - The entity ID to filter by
    */
   public GetFavoritesForEntity(entityId: string): MJUserFavoriteEntity[] {
-    return this.UserFavorites.filter((f) => f.EntityID === entityId);
+    return this.UserFavorites.filter((f) => UUIDsEqual(f.EntityID, entityId));
   }
 
   /**
@@ -585,7 +586,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param maxItems - Maximum number of items to return (default: 10)
    */
   public GetRecentRecordsForEntity(entityId: string, maxItems: number = 10): MJUserRecordLogEntity[] {
-    return this.UserRecordLogs.filter((r) => r.EntityID === entityId).slice(0, maxItems);
+    return this.UserRecordLogs.filter((r) => UUIDsEqual(r.EntityID, entityId)).slice(0, maxItems);
   }
 
   /**
@@ -594,7 +595,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param recordId - The record ID
    */
   public IsRecordFavorite(entityId: string, recordId: string): boolean {
-    return this.UserFavorites.some((f) => f.EntityID === entityId && f.RecordID === recordId);
+    return this.UserFavorites.some((f) => UUIDsEqual(f.EntityID, entityId) && UUIDsEqual(f.RecordID, recordId));
   }
 
   /**
@@ -629,7 +630,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public IsApplicationInactive(applicationId: string): boolean {
     const md = new Metadata();
-    const appInfo = md.Applications.find((a) => a.ID === applicationId);
+    const appInfo = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
     return appInfo != null && appInfo.Status !== 'Active';
   }
 
@@ -639,7 +640,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
     const md = new Metadata();
-    return md.Applications.find((a) => a.ID === applicationId);
+    return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
   }
 
   /**
@@ -684,7 +685,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to check
    */
   public HasApplication(applicationId: string): boolean {
-    return this.UserApplications.some((ua) => ua.ApplicationID === applicationId);
+    return this.UserApplications.some((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
   }
 
   /**
@@ -852,7 +853,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const deleted = await userApp.Delete();
       if (deleted) {
         // Remove from cached array
-        const index = this._UserApplications.findIndex((ua) => ua.ApplicationID === applicationId);
+        const index = this._UserApplications.findIndex((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
         if (index >= 0) {
           this._UserApplications.splice(index, 1);
         }
@@ -910,7 +911,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     // Get existing UserApplication records for this user to prevent duplicates
-    const existingAppIds = new Set(this._UserApplications.filter((ua) => ua.UserID === userId).map((ua) => ua.ApplicationID));
+    const existingAppIds = new Set(this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).map((ua) => ua.ApplicationID));
 
     // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
     // Exclude apps that already have UserApplication records
@@ -928,7 +929,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     const createdUserApps: MJUserApplicationEntity[] = [];
 
     // Calculate starting sequence based on existing apps
-    const maxExistingSequence = this._UserApplications.filter((ua) => ua.UserID === userId).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
+    const maxExistingSequence = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
 
     for (const [index, appInfo] of defaultApps.entries()) {
       try {
@@ -960,11 +961,11 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserNotificationPreferences || []).filter((p) => p.UserID === this._loadedForUserId);
+    return (this._UserNotificationPreferences || []).filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
   public GetUserPreferenceForType(userId: string, typeId: string): MJUserNotificationPreferenceEntity | undefined {
-    return (this._UserNotificationPreferences || []).find((p) => p.UserID === userId && p.NotificationTypeID === typeId);
+    return (this._UserNotificationPreferences || []).find((p) => UUIDsEqual(p.UserID, userId) && UUIDsEqual(p.NotificationTypeID, typeId));
   }
 
   /**

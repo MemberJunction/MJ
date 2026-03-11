@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { RunView, Metadata, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MicroViewData } from '../types';
 
 interface FieldDisplay {
@@ -282,7 +283,7 @@ export class MjRecordMicroViewComponent implements OnInit {
             return this.metadata.Entities.find(e => e.Name === this.Data.EntityName);
         }
         if (this.Data.EntityID) {
-            return this.metadata.Entities.find(e => e.ID === this.Data.EntityID);
+            return this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.Data.EntityID));
         }
         return undefined;
     }
@@ -312,7 +313,7 @@ export class MjRecordMicroViewComponent implements OnInit {
             if (!field.RelatedEntityID || field.Name === 'ID') continue;
 
             // Find the related entity name
-            const relatedEntity = this.metadata.Entities.find(e => e.ID === field.RelatedEntityID);
+            const relatedEntity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
             if (!relatedEntity) continue;
 
             const fkValue = data[field.Name];

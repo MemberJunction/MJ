@@ -1,7 +1,39 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
+import { LogError } from "./logging";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
+import { UUIDsEqual } from "@memberjunction/global";
+
+/**
+ * Represents the tenant context for a given request in a multi-tenant deployment.
+ * Attached to `UserInfo.TenantContext` by server middleware when multi-tenancy is enabled.
+ *
+ * **Extensibility**: This interface is intentionally minimal. Middle-layer packages
+ * (e.g., a SaaS layer) should **extend** it with richer properties rather than
+ * widening this base:
+ *
+ * ```typescript
+ * export interface MySaaSTenantContext extends TenantContext {
+ *     organizationName: string;
+ *     contactID: string;
+ *     // ... additional fields
+ * }
+ * ```
+ *
+ * Because `UserInfo.TenantContext` is typed as `TenantContext`, any subtype satisfies
+ * it via structural typing. Hooks in the extending layer can downcast:
+ *
+ * ```typescript
+ * const ctx = contextUser.TenantContext as MySaaSTenantContext;
+ * ```
+ */
+export interface TenantContext {
+    /** The unique identifier of the tenant (e.g., OrganizationID value) */
+    TenantID: string;
+    /** How this tenant context was determined */
+    Source: 'header' | 'linkedEntity' | 'custom';
+}
 
 /**
  * A list of all users who have or had access to the system.
@@ -108,6 +140,24 @@ export class UserInfo extends BaseInfo {
      * Email address of the employee's supervisor
      */
     EmployeeSupervisorEmail: string = null
+
+    private _TenantContext?: TenantContext = undefined;
+
+    /**
+     * Tenant context for multi-tenant data isolation.
+     * Set at request time by server middleware when multi-tenancy is enabled.
+     * When undefined, no tenant filtering is applied.
+     *
+     * Uses a getter/setter so that `Object.keys()` does not enumerate it —
+     * the GraphQLDataProvider builds CurrentUser queries from `Object.keys(new UserInfo())`,
+     * and TenantContext is not a database/GraphQL field.
+     */
+    public get TenantContext(): TenantContext | undefined {
+        return this._TenantContext;
+    }
+    public set TenantContext(value: TenantContext | undefined) {
+        this._TenantContext = value;
+    }
 
     private _UserRoles: UserRoleInfo[] = []
     /**
@@ -299,11 +349,15 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
             const keys = Object.keys(user)
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
-                const val = user[key]
-                if (val && typeof val == 'string') {
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), val)
+                const val = (user as unknown as Record<string, unknown>)[key]
+                if (val !== null && typeof val !== 'object') {
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
                 }
             }
+        }
+        const unresolvedMatch = ret.match(/\{\{User\w+\}\}/);
+        if (unresolvedMatch) {
+            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
         }
         return ret;
     }
@@ -386,7 +440,7 @@ export class AuthorizationInfo extends BaseInfo {
                 const ari = new AuthorizationRoleInfo(authorizationRoles[i])
                 this._AuthorizationRoles.push(ari)
     
-                const match = mdRoles.find(r => r.ID === ari.RoleID) 
+                const match = mdRoles.find(r => UUIDsEqual(r.ID, ari.RoleID))
                 if (match)
                     ari._setRole(match)
             }
@@ -402,7 +456,7 @@ export class AuthorizationInfo extends BaseInfo {
     public UserCanExecute(user: UserInfo): boolean {
         if (this.IsActive && user && user.UserRoles) {
             for (let i = 0; i < user.UserRoles.length; i++) {
-                const matchingRole = this.Roles.find(r => r.ID === user.UserRoles[i].RoleID)
+                const matchingRole = this.Roles.find(r => UUIDsEqual(r.ID, user.UserRoles[i].RoleID))
                 if (matchingRole)
                     return true; // as soon as we find a single matching role we can bail out as the user can execute
             }
@@ -418,7 +472,7 @@ export class AuthorizationInfo extends BaseInfo {
      */
     public RoleCanExecute(role: RoleInfo): boolean {
         if (this.IsActive) {
-            return this.Roles.find(r => r.ID === role.ID) != null
+            return this.Roles.find(r => UUIDsEqual(r.ID, role.ID)) != null
         }
         return false
     }

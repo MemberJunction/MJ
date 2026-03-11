@@ -60,6 +60,27 @@ services:
         -c maintenance_work_mem=128MB
         -c max_connections=100
 
+  redis-claude:
+    image: redis:7-alpine
+    container_name: redis-claude
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis-claude-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 64m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
   claude-dev:
     build:
       context: .
@@ -80,11 +101,13 @@ services:
     ports:
       - "${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
       - "${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)
-    depends_on:
-      sql-claude:
-        condition: service_healthy
-      # postgres-claude dependency is automatic when --profile postgres is active;
-      # entrypoint.sh gracefully handles PG being absent (pg_isready check)
+      - "4002:4002"                              # MJAPI instance B (for Redis cache invalidation testing)
+      - "4202:4202"                              # Explorer instance B (for Redis cache invalidation testing)
+    # depends_on:
+    #   sql-claude:
+    #     condition: service_healthy
+    #   # postgres-claude dependency is automatic when --profile postgres is active;
+    #   # entrypoint.sh gracefully handles PG being absent (pg_isready check)
     volumes:
       - workspace:/workspace
       - ./.env.database:/workspace/.env.database:ro
@@ -93,16 +116,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8g          # Build + browser + MJAPI + Explorer need headroom
+          memory: 24g         # Full monorepo build needs significant memory
         reservations:
           memory: 2g
-    stdin_open: true
-    tty: true
+    # Override entrypoint to keep container alive for docker exec
+    entrypoint: ["tail", "-f", "/dev/null"]
     working_dir: /workspace
 
 volumes:
   workspace:
   sql-claude-data:
   postgres-claude-data:
+  redis-claude-data:
   claude-settings:
   gh-config:

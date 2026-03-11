@@ -192,31 +192,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Uses Section -->
-    <mj-collapsible-panel
-        SectionKey="mJArtifactUses"
-        SectionName="Artifact Uses"
-        Icon="fa fa-eye"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactUses')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Conversation Detail Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailArtifacts"
@@ -236,6 +211,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Artifact Uses Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifactUses"
+        SectionName="Artifact Uses"
+        Icon="fa fa-eye"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifactUses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

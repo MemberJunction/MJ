@@ -100,7 +100,7 @@
                 @else {
                     @for (artifact of artifacts; track artifact.ID) {
                         <div class="artifact-item" 
-                            [class.selected]="selectedArtifact?.ID === artifact.ID"
+                            [class.selected]="IsArtifactSelected(artifact)"
                             (click)="selectArtifact(artifact)">
                             <div class="artifact-content">
                                 <div class="artifact-main">
@@ -184,7 +184,7 @@
                                 <label>Select Version</label>
                                 @for (version of artifactVersions; track version.ID) {
                                     <label class="version-item" 
-                                           [class.selected]="selectedVersion?.ID === version.ID">
+                                           [class.selected]="IsVersionSelected(version)">
                                         <input type="radio"
                                             name="selectedVersion"
                                             [value]="version"

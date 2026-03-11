@@ -4,6 +4,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RoleInfo } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
 import { AgentPermissionsService, PermissionRow } from '../services/agent-permissions.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Simple name/ID pair for the grantee search-select */
 interface GranteeOption {
@@ -179,7 +180,7 @@ export class AgentPermissionsPanelComponent implements OnInit {
 
         try {
             const existingEntity = this.EditingRowId
-                ? this.Rows.find(r => r.ID === this.EditingRowId)?.Entity
+                ? this.Rows.find(r => UUIDsEqual(r.ID, this.EditingRowId))?.Entity
                 : undefined;
 
             const saved = await this.permsSvc.SavePermission(

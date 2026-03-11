@@ -3,6 +3,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angu
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Task detail panel showing task information, agent details, and agent run
@@ -286,7 +287,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
 
     // Get agent from AIEngineBase
     const agents = AIEngineBase.Instance.Agents;
-    this.agent = agents.find((a: MJAIAgentEntityExtended) => a.ID === this.task.AgentID) || null;
+    this.agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.task.AgentID)) || null;
   }
 
   public formatDateTime(date: Date | null): string {
