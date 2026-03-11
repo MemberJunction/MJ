@@ -118,7 +118,7 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         }
         // Secondary sort by __mj_CreatedAt for consistent ordering
         if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
-            const timeDiff = a.__mj_CreatedAt.getTime() - b.__mj_CreatedAt.getTime();
+            const timeDiff = new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
             if (timeDiff !== 0) return timeDiff;
         }
         // If one has a date and the other doesn't, prioritize the one with a date
