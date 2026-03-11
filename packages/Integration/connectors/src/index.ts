@@ -3,3 +3,4 @@ export { HubSpotConnector } from './HubSpotConnector.js';
 export { SalesforceConnector } from './SalesforceConnector.js';
 export { YourMembershipConnector, type YMConnectionConfig } from './YourMembershipConnector.js';
 export { FileFeedConnector, parseCsvLine } from './FileFeedConnector.js';
+export { RasaConnector, type RasaConnectionConfig } from './RasaConnector.js';
