@@ -77,7 +77,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #FAFAFA;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .task-header {
@@ -86,8 +86,8 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
       align-items: flex-start;
       gap: 20px;
       padding: 20px 24px;
-      background: white;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .header-left {
@@ -99,20 +99,20 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
       margin: 0 0 8px 0;
       font-size: 20px;
       font-weight: 700;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .task-description {
       margin: 0;
       font-size: 14px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       line-height: 1.5;
     }
 
     .view-toggle {
       display: flex;
       gap: 8px;
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
       padding: 4px;
       border-radius: 8px;
     }
@@ -124,7 +124,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
       padding: 8px 16px;
       border: none;
       background: transparent;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 13px;
       font-weight: 600;
       border-radius: 6px;
@@ -133,14 +133,14 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
     }
 
     .toggle-btn:hover {
-      color: #111827;
-      background: rgba(255, 255, 255, 0.5);
+      color: var(--mj-text-primary);
+      background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
     }
 
     .toggle-btn.active {
-      background: white;
-      color: #3B82F6;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .toggle-btn i {

@@ -2,8 +2,8 @@
   width: 100%;
   height: 100%;
   position: relative;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -14,11 +14,11 @@
   justify-content: center;
   height: 100%;
   gap: 0.5rem;
-  color: #666;
+  color: var(--mj-text-muted);
 }
 
 .error-state {
-  color: #c00;
+  color: var(--mj-status-error);
 }
 
 .empty-state {
@@ -39,7 +39,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--mj-bg-surface) 90%, transparent);
   padding: 1rem 2rem;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -51,7 +51,7 @@
   height: 100%;
   position: relative;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .diagram-toolbar {
@@ -62,7 +62,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
+  background: var(--mj-bg-surface);
   padding: 8px 12px;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -75,7 +75,7 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
 }
 
 .zoom-controls {
@@ -86,8 +86,8 @@
 
 .zoom-controls button {
   padding: 6px 10px;
-  border: 1px solid #ddd;
-  background: white;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
   border-radius: 3px;
   cursor: pointer;
   font-size: 12px;
@@ -97,13 +97,13 @@
 }
 
 .zoom-controls button:hover {
-  background: #f0f0f0;
-  border-color: #4a90e2;
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-brand-primary);
 }
 
 .zoom-level {
   font-size: 12px;
-  color: #666;
+  color: var(--mj-text-muted);
   margin-left: 8px;
   font-family: monospace;
 }
@@ -150,7 +150,7 @@
 }
 
 :host ::ng-deep .expand-button:hover circle {
-  fill: #e3f2fd;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 }
 
 :host ::ng-deep .connections-group path {
@@ -171,12 +171,12 @@
 }
 
 :host ::ng-deep .k-splitbar {
-  background: #e0e6ed;
+  background: var(--mj-border-default);
   width: 4px;
 }
 
 :host ::ng-deep .k-splitbar:hover {
-  background: #c1c9d2;
+  background: var(--mj-border-strong);
 }
 
 :host ::ng-deep .k-splitbar-draggable-horizontal {
@@ -185,21 +185,21 @@
 
 /* Node type colors */
 :host ::ng-deep .step-node[data-type="prompt"] rect {
-  fill: #e3f2fd;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 }
 
 :host ::ng-deep .step-node[data-type="action"] rect {
-  fill: #e8f5e9;
+  fill: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
 }
 
 :host ::ng-deep .step-node[data-type="subagent"] rect {
-  fill: #fff3e0;
+  fill: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
 }
 
 :host ::ng-deep .step-node[data-type="tool"] rect {
-  fill: #f3e5f5;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 }
 
 :host ::ng-deep .step-node[data-type="decision"] rect {
-  fill: #ffebee;
+  fill: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
 }
