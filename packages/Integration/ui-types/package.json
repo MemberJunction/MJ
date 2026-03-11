@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-ui-types",
   "type": "module",
-  "version": "5.10.0",
+  "version": "5.10.1",
   "description": "MemberJunction Integration UI Types - lightweight Angular-safe view model types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

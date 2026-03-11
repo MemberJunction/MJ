@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/core
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
 ## 5.10.0
 
 ### Minor Changes
