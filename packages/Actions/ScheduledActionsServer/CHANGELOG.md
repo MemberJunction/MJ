@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-mistral@5.10.1
+- @memberjunction/ai-openai@5.10.1
+- @memberjunction/ai-vectors-pinecone@5.10.1
+- @memberjunction/ai-vector-sync@5.10.1
+- @memberjunction/actions-apollo@5.10.1
+- @memberjunction/actions-content-autotag@5.10.1
+- @memberjunction/actions@5.10.1
+- @memberjunction/scheduled-actions@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

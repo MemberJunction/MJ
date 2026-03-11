@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-code-editor
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

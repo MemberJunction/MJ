@@ -1,5 +1,60 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.10.1
+- @memberjunction/ai-agents@5.10.1
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/ai-anthropic@5.10.1
+- @memberjunction/ai-azure@5.10.1
+- @memberjunction/ai-bedrock@5.10.1
+- @memberjunction/ai-betty-bot@5.10.1
+- @memberjunction/ai-blackforestlabs@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-cerebras@5.10.1
+- @memberjunction/ai-cohere@5.10.1
+- @memberjunction/ai-elevenlabs@5.10.1
+- @memberjunction/ai-fireworks@5.10.1
+- @memberjunction/ai-gemini@5.10.1
+- @memberjunction/ai-groq@5.10.1
+- @memberjunction/ai-heygen@5.10.1
+- @memberjunction/ai-lmstudio@5.10.1
+- @memberjunction/ai-local-embeddings@5.10.1
+- @memberjunction/ai-minimax@5.10.1
+- @memberjunction/ai-mistral@5.10.1
+- @memberjunction/ai-ollama@5.10.1
+- @memberjunction/ai-openai@5.10.1
+- @memberjunction/ai-openrouter@5.10.1
+- @memberjunction/ai-recommendations-rex@5.10.1
+- @memberjunction/ai-vectors-pinecone@5.10.1
+- @memberjunction/ai-vertex@5.10.1
+- @memberjunction/ai-zhipu@5.10.1
+- @memberjunction/ai-xai@5.10.1
+- @memberjunction/ai-reranker@5.10.1
+- @memberjunction/actions-apollo@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/actions-bizapps-accounting@5.10.1
+- @memberjunction/actions-bizapps-crm@5.10.1
+- @memberjunction/actions-bizapps-formbuilders@5.10.1
+- @memberjunction/actions-bizapps-lms@5.10.1
+- @memberjunction/actions-bizapps-social@5.10.1
+- @memberjunction/core-actions@5.10.1
+- @memberjunction/actions@5.10.1
+- @memberjunction/doc-utils@5.10.1
+- @memberjunction/encryption@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/core-entities-server@5.10.1
+- @memberjunction/data-context-server@5.10.1
+- @memberjunction/scheduling-actions@5.10.1
+- @memberjunction/scheduling-engine-base@5.10.1
+- @memberjunction/scheduling-engine@5.10.1
+- @memberjunction/templates@5.10.1
+- @memberjunction/testing-engine@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

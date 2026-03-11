@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sql-dialect@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

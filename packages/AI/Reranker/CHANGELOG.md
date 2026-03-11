@@ -1,5 +1,17 @@
 # @memberjunction/ai-reranker
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-prompts@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes
