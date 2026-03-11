@@ -16,7 +16,7 @@
  *   - @var references → local variable references
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeNPrefix, convertCommonFunctions } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
 
 export class DeclareDmlBlockRule implements IConversionRule {
@@ -51,14 +51,20 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // Convert @variable references to local variable names (without @)
     result = this.convertVariableRefs(result);
 
-    // Convert IF condition BEGIN ... END → IF condition THEN ... END IF;
-    result = this.convertIfBlocks(result);
-
-    // Convert RAISERROR to RAISE EXCEPTION (PostProcessor also does this, but handle here too)
+    // Convert RAISERROR BEFORE PascalCase quoting (prevents "RAISERROR" → "Raiserror" quoting)
     result = result.replace(
       /\bRAISERROR\s*\(\s*N?'([^']*)'\s*,\s*\d+\s*,\s*\d+\s*\)\s*;?/gi,
       "RAISE EXCEPTION '$1';"
     );
+
+    // Quote PascalCase identifiers (ID, Name, etc.) outside string literals
+    result = quotePascalCaseIdentifiers(result);
+
+    // Convert IF condition BEGIN ... END → IF condition THEN ... END IF;
+    result = this.convertIfBlocks(result);
+
+    // Convert UPDATE alias SET alias.col FROM table alias JOIN → PG UPDATE FROM
+    result = this.convertUpdateFrom(result);
 
     // Convert RETURN; to RETURN; (same in PL/pgSQL)
     // (already valid syntax)
@@ -163,6 +169,53 @@ export class DeclareDmlBlockRule implements IConversionRule {
     out.push(...bodyLines);
     out.push('END $$;');
     return out.join('\n');
+  }
+
+  /**
+   * Convert T-SQL UPDATE alias SET alias.col FROM table alias JOIN ...
+   * to PG UPDATE table SET "col" = ... FROM joinedTable WHERE ...
+   */
+  private convertUpdateFrom(sql: string): string {
+    return sql.replace(
+      /UPDATE\s+(\w+)\s+SET\s+([\s\S]+?)\s+FROM\s+([\s\S]+?)(?=\s*;|\s*$)/gi,
+      (_match, alias: string, setCols: string, fromClause: string) => {
+        // Find the table name for this alias in the FROM clause
+        const tablePattern = new RegExp(
+          `((?:\\w+\\.)?(?:"[^"]+"|\\.\\w+))\\s+${alias}\\b`, 'i'
+        );
+        const tableMatch = fromClause.match(tablePattern);
+        if (!tableMatch) return _match;
+        const fullTable = tableMatch[1];
+
+        // Remove alias prefix from SET columns
+        const cleanedSet = setCols.replace(
+          new RegExp(`${alias}\\.("?\\w+"?)`, 'gi'),
+          (_m: string, col: string) => col.startsWith('"') ? col : `"${col}"`
+        );
+
+        // Remove target table+alias from FROM
+        let remaining = fromClause.replace(tablePattern, '').trim();
+        remaining = remaining.replace(/^\s*,\s*/, '').replace(/^\s*INNER\s+/i, '');
+
+        // Convert JOIN...ON to FROM...WHERE
+        const joinMatch = remaining.match(
+          /^JOIN\s+([\s\S]+?)\s+ON\s+([\s\S]+?)(?:\s+WHERE\s+([\s\S]+))?$/i
+        );
+        if (joinMatch) {
+          const joinTable = joinMatch[1];
+          let joinCond = joinMatch[2];
+          const whereCond = joinMatch[3];
+          const aliasRe = new RegExp(`\\b${alias}\\.`, 'gi');
+          joinCond = joinCond.replace(aliasRe, `${fullTable}.`);
+          let where = `WHERE ${joinCond}`;
+          if (whereCond) {
+            where += `\n  AND ${whereCond.replace(aliasRe, `${fullTable}.`)}`;
+          }
+          return `UPDATE ${fullTable} SET ${cleanedSet}\nFROM ${joinTable}\n${where}`;
+        }
+        return _match;
+      }
+    );
   }
 
   /** Split string on delimiter at top level (respecting parens and strings) */

@@ -42,17 +42,16 @@ BEGIN
   --
   -- Closes: https://github.com/MemberJunction/MJ/issues/2048
   -- ============================================================================
-  SELECT ID INTO v_UIRoleID FROM __mj."Role" WHERE "SQLName" = 'cdp_UI';
+  SELECT "ID" INTO v_UIRoleID FROM __mj."Role" WHERE "SQLName" = 'cdp_UI';
   IF v_UIRoleID IS NULL THEN
   RAISE EXCEPTION 'UI role (cdp_UI) not found - cannot apply permission migration.';
   RETURN;
   END IF;
   -- Grant Create + Update for all affected entities
-  UPDATE ep
-  SET ep."CanCreate" = 1, ep."CanUpdate" = 1
-  FROM __mj."EntityPermission" ep
-  INNER JOIN __mj."Entity" e ON ep."EntityID" = e."ID"
-  WHERE ep."RoleID" = v_UIRoleID
+  UPDATE __mj."EntityPermission" SET "CanCreate" = 1, "CanUpdate" = 1
+  FROM __mj."Entity" e
+  WHERE __mj."EntityPermission"."EntityID" = e."ID"
+  AND __mj."EntityPermission"."RoleID" = v_UIRoleID
   AND e."Name" IN (
   'MJ: AI Agent Runs',
   'MJ: AI Agent Run Steps',

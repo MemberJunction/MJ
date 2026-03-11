@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- SQL Logging Session
@@ -538,12 +523,3 @@ BEGIN
   p_ID_f2234c67 := '140166B9-4064-4C3F-ACF1-3EB7DB2C9BD0';
   PERFORM __mj."spUpdateApplication"(p_Name := p_Name_f2234c67, p_Description := p_Description_f2234c67, p_Icon := p_Icon_f2234c67, p_DefaultForNewUser := p_DefaultForNewUser_f2234c67, p_SchemaAutoAddNewEntities := p_SchemaAutoAddNewEntities_f2234c67, p_Color := p_Color_f2234c67, p_DefaultNavItems := p_DefaultNavItems_f2234c67, p_ClassName := p_ClassName_f2234c67, p_DefaultSequence := p_DefaultSequence_f2234c67, p_Status := p_Status_f2234c67, p_NavigationStyle := p_NavigationStyle_f2234c67, p_TopNavLocation := p_TopNavLocation_f2234c67, p_HideNavBarIconWhenActive := p_HideNavBarIconWhenActive_f2234c67, p_Path := p_Path_f2234c67, p_AutoUpdatePath := p_AutoUpdatePath_f2234c67, p_ID := p_ID_f2234c67);
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================

@@ -159,6 +159,20 @@ export function postProcess(sql: string): string {
   // ISNULL → COALESCE (SQL Server function)
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
 
+  // Safety net: convert any remaining GETUTCDATE/GETDATE → NOW()
+  // Handles both bare and quoted forms (e.g. "GETUTCDATE"())
+  sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/"GETUTCDATE"\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
+  sql = sql.replace(/"GETDATE"\s*\(\s*\)/gi, 'NOW()');
+
+  // Convert UPDATE alias SET alias.col FROM table alias JOIN → PG UPDATE FROM
+  sql = convertUpdateFromAlias(sql);
+
+  // Fix ;WITH CTE → WITH CTE (remove leading semicolon from T-SQL CTE idiom)
+  // and reconnect separated CTE + DML pairs
+  sql = fixCteStatements(sql);
+
   // Convert IF OBJECT_ID(...) IS NOT NULL DROP VIEW/PROCEDURE/FUNCTION → DROP ... IF EXISTS
   sql = sql.replace(
     /IF\s+OBJECT_ID\s*\([^)]*\)\s*IS\s+NOT\s+NULL\s*\n?\s*DROP\s+(VIEW|PROCEDURE|FUNCTION)\s+(\S+)\s*;?/gi,
@@ -168,8 +182,9 @@ export function postProcess(sql: string): string {
     }
   );
 
-  // Remove orphaned EXEC statements that slipped through
-  sql = sql.replace(/^\s*EXEC\s+.*$/gm, '-- SKIPPED EXEC (not supported in PG)');
+  // Remove orphaned EXEC statements that slipped through.
+  // Multi-line EXEC calls have continuation lines starting with @param = value
+  sql = sql.replace(/^\s*EXEC\s+.*(?:\n\s+@\w+\s*=\s*[^;]*)*\s*;?/gm, '-- SKIPPED EXEC (not supported in PG)');
 
   // Convert GRANT EXEC (SQL Server shorthand) to GRANT EXECUTE
   sql = sql.replace(/GRANT\s+EXEC\s+ON\s+/gi, 'GRANT EXECUTE ON ');
@@ -212,6 +227,18 @@ export function postProcess(sql: string): string {
 
   // Fix lines starting with backslash inside string literals in INSERT data
   sql = fixBackslashLines(sql);
+
+  // Safety net: convert multi-column ALTER TABLE ADD to PG ADD COLUMN syntax
+  // Catches cases where ALTER TABLE is embedded in a CREATE_TABLE batch
+  sql = fixMultiColumnAdd(sql);
+
+  // Fix RAISERROR that was quoted as "RAISERROR" by PascalCase quoting
+  sql = sql.replace(/"RAISERROR"\s*\(/gi, 'RAISERROR(');
+  // Then convert RAISERROR → RAISE EXCEPTION
+  sql = sql.replace(
+    /\bRAISERROR\s*\(\s*N?'([^']*)'\s*,\s*\d+\s*,\s*\d+\s*\)\s*;?/gi,
+    "RAISE EXCEPTION '$1';"
+  );
 
   // Clean up excessive blank lines
   sql = sql.replace(/\n{4,}/g, '\n\n\n');
@@ -342,4 +369,316 @@ function replaceBracketsOutsideDollarBlocks(sql: string): string {
   }
 
   return result.join('');
+}
+
+/**
+ * Convert T-SQL UPDATE alias SET alias.col = ... FROM table alias JOIN ...
+ * to PostgreSQL UPDATE table SET "col" = ... FROM joinedTable WHERE ...
+ *
+ * T-SQL:  UPDATE ep SET ep.CanCreate = 1 FROM Schema.Table ep INNER JOIN ...
+ * PG:     UPDATE Schema."Table" SET "CanCreate" = 1 FROM ... WHERE ...
+ */
+function convertUpdateFromAlias(sql: string): string {
+  // Match the UPDATE alias SET ... FROM pattern (multiline)
+  const pattern = /^(\s*)UPDATE\s+(\w+)\s+SET\s+([\s\S]+?)\s+FROM\s+([\s\S]+?)$/gm;
+  return sql.replace(pattern, (_match, indent: string, alias: string, setCols: string, fromClause: string) => {
+    // Find the table name and alias in the FROM clause
+    // Pattern: schema."Table" alias or schema.Table alias
+    const tableAliasPattern = new RegExp(
+      `((?:\\w+\\.)?(?:"[^"]+"|\\.\\w+))\\s+${alias}\\b`, 'i'
+    );
+    const tableMatch = fromClause.match(tableAliasPattern);
+    if (!tableMatch) return _match; // Can't resolve alias, leave unchanged
+
+    const fullTableName = tableMatch[1];
+
+    // Remove alias prefix from SET columns: ep."Col" → "Col", ep.Col → "Col"
+    const cleanedSet = setCols.replace(
+      new RegExp(`${alias}\\.("?\\w+"?)`, 'gi'),
+      (_m: string, col: string) => col.startsWith('"') ? col : `"${col}"`
+    );
+
+    // Remove the target table+alias from FROM clause and convert JOINs to FROM + WHERE
+    let remainingFrom = fromClause.replace(tableAliasPattern, '').trim();
+    // Clean up leading INNER JOIN or comma
+    remainingFrom = remainingFrom.replace(/^\s*,\s*/, '').trim();
+    remainingFrom = remainingFrom.replace(/^\s*INNER\s+/i, '');
+
+    // Convert JOIN...ON to FROM...WHERE
+    const joinMatch = remainingFrom.match(
+      /^JOIN\s+([\s\S]+?)\s+ON\s+([\s\S]+?)(?:\s+WHERE\s+([\s\S]+))?$/i
+    );
+    if (joinMatch) {
+      const joinTable = joinMatch[1];
+      let joinCond = joinMatch[2];
+      const whereCond = joinMatch[3];
+
+      // Replace alias references in conditions with full table name
+      const aliasPattern = new RegExp(`\\b${alias}\\.`, 'gi');
+      joinCond = joinCond.replace(aliasPattern, `${fullTableName}.`);
+      let whereClause = `WHERE ${joinCond}`;
+      if (whereCond) {
+        const cleanedWhere = whereCond.replace(aliasPattern, `${fullTableName}.`);
+        whereClause += `\n${indent}  AND ${cleanedWhere}`;
+      }
+      return `${indent}UPDATE ${fullTableName} SET ${cleanedSet}\n${indent}FROM ${joinTable}\n${indent}${whereClause}`;
+    }
+
+    return _match; // Fallback — don't transform what we can't parse
+  });
+}
+
+/**
+ * Fix CTE statements that were incorrectly split.
+ * 1. Remove leading ; from ;WITH (T-SQL idiom)
+ * 2. Reconnect orphaned CTE definitions with their following DML statement
+ */
+function fixCteStatements(sql: string): string {
+  // Fix ;WITH → WITH (the leading ; is a T-SQL statement terminator idiom)
+  sql = sql.replace(/;\s*WITH\b/gi, 'WITH');
+
+  // Fix CTE definitions that end with )\n; followed by DELETE/INSERT/UPDATE/SELECT.
+  // The semicolon after the CTE's closing paren should not be there — the CTE
+  // must be directly followed by its DML statement.
+  //
+  // IMPORTANT: The old regex used [\s\S]*? which could span across function bodies,
+  // dollar-quoted blocks, and unrelated statements, incorrectly removing semicolons
+  // from statements like:
+  //   DELETE FROM t WHERE id IN (SELECT ...);
+  //   DELETE FROM t2 ...;
+  // The fix: only match CTE patterns that don't cross dollar-quoted blocks ($$)
+  // and whose body consists of balanced parentheses.
+  sql = reconnectCteDml(sql);
+
+  return sql;
+}
+
+/**
+ * Reconnect CTE definitions that were separated from their DML by a spurious semicolon.
+ * Scans for `WITH <name> AS (...);\nDML` patterns using paren-balanced matching
+ * to avoid crossing into unrelated statements or dollar-quoted function bodies.
+ */
+function reconnectCteDml(sql: string): string {
+  // Find each top-level WITH keyword that starts a CTE (not inside $$...$$ blocks)
+  const withPattern = /\bWITH\s+(?:RECURSIVE\s+)?\w+\s+AS\s*\(/gi;
+  let match: RegExpExecArray | null;
+  const edits: Array<{ start: number; end: number; replacement: string }> = [];
+
+  // First, find all dollar-quoted regions to exclude
+  const dollarRegions = findDollarQuotedRegions(sql);
+
+  while ((match = withPattern.exec(sql)) !== null) {
+    const withStart = match.index;
+
+    // Skip if this WITH is inside a dollar-quoted block (function body)
+    if (isInsideDollarBlock(withStart, dollarRegions)) continue;
+
+    // Find the opening paren position (the last char of the match)
+    const openParenPos = withStart + match[0].length - 1;
+
+    // Balance parens to find the end of the CTE definition.
+    // A CTE can have multiple CTEs separated by commas: WITH a AS (...), b AS (...)
+    const cteEnd = findCteEnd(sql, openParenPos);
+    if (cteEnd < 0) continue;
+
+    // Check if the CTE end is followed by ;\s*\n\s*DML
+    const afterCte = sql.slice(cteEnd + 1);
+    const semiDmlMatch = afterCte.match(/^(\s*;\s*\n\s*)(DELETE\s|INSERT\s|UPDATE\s|SELECT\s)/i);
+    if (semiDmlMatch) {
+      // Remove the semicolon, keep just a newline before the DML
+      const editStart = cteEnd + 1;
+      const editEnd = editStart + semiDmlMatch[1].length;
+      edits.push({ start: editStart, end: editEnd, replacement: '\n' });
+    }
+  }
+
+  // Apply edits in reverse order to preserve positions
+  if (edits.length === 0) return sql;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const edit = edits[i];
+    const before = sql.slice(0, edit.start);
+    const after = sql.slice(edit.end);
+    sql = before + edit.replacement + after;
+  }
+  return sql;
+}
+
+/** Find all dollar-quoted regions ($$...$$ or $tag$...$tag$) */
+function findDollarQuotedRegions(sql: string): Array<{ start: number; end: number }> {
+  const regions: Array<{ start: number; end: number }> = [];
+  let i = 0;
+  while (i < sql.length) {
+    if (sql[i] === '$') {
+      const tagMatch = sql.slice(i).match(/^(\$\w*\$)/);
+      if (tagMatch) {
+        const tag = tagMatch[1];
+        const endIdx = sql.indexOf(tag, i + tag.length);
+        if (endIdx >= 0) {
+          regions.push({ start: i, end: endIdx + tag.length });
+          i = endIdx + tag.length;
+          continue;
+        }
+      }
+    }
+    i++;
+  }
+  return regions;
+}
+
+/** Check if a position falls inside any dollar-quoted region */
+function isInsideDollarBlock(pos: number, regions: Array<{ start: number; end: number }>): boolean {
+  for (const r of regions) {
+    if (pos >= r.start && pos < r.end) return true;
+  }
+  return false;
+}
+
+/**
+ * Starting from an opening paren of a CTE definition, find the end of the
+ * entire CTE clause (which may include multiple CTEs: WITH a AS (...), b AS (...)).
+ * Returns the index of the final closing paren, or -1 if not found.
+ */
+function findCteEnd(sql: string, openParenPos: number): number {
+  let depth = 1;
+  let i = openParenPos + 1;
+
+  while (i < sql.length && depth > 0) {
+    const ch = sql[i];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) {
+        // Check if there's another CTE after this: ), <name> AS (
+        const afterClose = sql.slice(i + 1);
+        const nextCte = afterClose.match(/^\s*,\s*\w+\s+AS\s*\(/i);
+        if (nextCte) {
+          // Continue into the next CTE
+          i = i + 1 + nextCte[0].length - 1; // position at the opening paren
+          depth = 1;
+        } else {
+          return i;
+        }
+      }
+    } else if (ch === "'") {
+      // Skip string literals
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") break;
+        i++;
+      }
+    } else if (ch === '$') {
+      // Skip dollar-quoted blocks inside CTEs (unlikely but safe)
+      const tagMatch = sql.slice(i).match(/^(\$\w*\$)/);
+      if (tagMatch) {
+        const tag = tagMatch[1];
+        const endIdx = sql.indexOf(tag, i + tag.length);
+        if (endIdx >= 0) {
+          i = endIdx + tag.length - 1;
+        }
+      }
+    }
+    i++;
+  }
+
+  return -1; // unbalanced
+}
+
+/**
+ * Fix multi-column ALTER TABLE ADD that wasn't caught by AlterTableRule
+ * (e.g. when embedded in a CREATE_TABLE batch).
+ * Converts: ALTER TABLE t ADD col1 TYPE, col2 TYPE
+ * To:       ALTER TABLE t ADD COLUMN "col1" TYPE, ADD COLUMN "col2" TYPE
+ */
+function fixMultiColumnAdd(sql: string): string {
+  // Match ALTER TABLE ... ADD that is NOT followed by CONSTRAINT or COLUMN
+  const pattern = /^(ALTER\s+TABLE\s+\S+)\s+ADD\s+(?!CONSTRAINT\b|COLUMN\b)/gim;
+  let match: RegExpExecArray | null;
+  const edits: Array<{ start: number; end: number; replacement: string }> = [];
+
+  while ((match = pattern.exec(sql)) !== null) {
+    const matchStart = match.index;
+    const tableClause = match[1];
+    const afterAddStart = matchStart + match[0].length;
+
+    // Find the end of this statement (semicolon at depth 0, or end of line with no continuation)
+    let depth = 0;
+    let inStr = false;
+    let endPos = afterAddStart;
+    for (let i = afterAddStart; i < sql.length; i++) {
+      const ch = sql[i];
+      if (inStr) {
+        if (ch === "'" && i + 1 < sql.length && sql[i + 1] === "'") { i++; continue; }
+        if (ch === "'") inStr = false;
+        continue;
+      }
+      if (ch === "'") { inStr = true; continue; }
+      if (ch === '(') { depth++; continue; }
+      if (ch === ')') { depth--; continue; }
+      if (ch === ';' && depth === 0) { endPos = i; break; }
+      if (i === sql.length - 1) { endPos = i + 1; break; }
+    }
+
+    const addBody = sql.slice(afterAddStart, endPos);
+
+    // Split by comma at top level
+    const parts = splitTopLevelCommasStatic(addBody);
+    if (parts.length < 2) continue; // Single column ADD doesn't need fixing
+
+    // Check each part looks like a column definition
+    const colDefs: string[] = [];
+    let allValid = true;
+    for (const part of parts) {
+      const trimmed = part.trim().replace(/;?\s*$/, '');
+      if (!trimmed) { allValid = false; break; }
+      const colMatch = trimmed.match(/^("?\w+"?)(\s+.*)$/s);
+      if (!colMatch) { allValid = false; break; }
+      let colName = colMatch[1];
+      const rest = colMatch[2];
+      if (!colName.startsWith('"') && /[A-Z]/.test(colName)) {
+        colName = `"${colName}"`;
+      }
+      colDefs.push(`ADD COLUMN ${colName}${rest}`);
+    }
+
+    if (!allValid) continue;
+
+    const replacement = `${tableClause}\n ${colDefs.join(',\n ')}`;
+    edits.push({ start: matchStart, end: endPos, replacement });
+  }
+
+  // Apply edits in reverse
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const edit = edits[i];
+    sql = sql.slice(0, edit.start) + edit.replacement + sql.slice(edit.end);
+  }
+  return sql;
+}
+
+/** Split string on commas at depth 0 (respecting parens and strings) */
+function splitTopLevelCommasStatic(str: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let depth = 0;
+  let inStr = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inStr) {
+      current += ch;
+      if (ch === "'" && i + 1 < str.length && str[i + 1] === "'") { current += str[++i]; }
+      else if (ch === "'") inStr = false;
+      continue;
+    }
+    if (ch === "'") { inStr = true; current += ch; continue; }
+    if (ch === '(') { depth++; current += ch; continue; }
+    if (ch === ')') { depth--; current += ch; continue; }
+    if (ch === ',' && depth === 0) { parts.push(current); current = ''; continue; }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
 }

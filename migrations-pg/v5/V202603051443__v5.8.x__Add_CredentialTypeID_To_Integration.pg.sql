@@ -31,11 +31,11 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 -- Add CredentialTypeID (nullable FK) to Integration
 ALTER TABLE __mj."Integration"
-ADD CredentialTypeID UUID NULL;
+ ADD COLUMN "CredentialTypeID" UUID NULL;
 
 -- Add CredentialID (nullable FK) to CompanyIntegration
 ALTER TABLE __mj."CompanyIntegration"
-ADD CredentialID UUID NULL;
+ ADD COLUMN "CredentialID" UUID NULL;
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_CompanyID" ON __mj."CompanyIntegration" ("CompanyID");
 
@@ -267,136 +267,137 @@ CREATE TRIGGER "trgUpdateIntegration"
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '9a4502a9-0e22-4038-8341-01b9a9211e44' OR (EntityID = 'DD238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CredentialTypeID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '9a4502a9-0e22-4038-8341-01b9a9211e44',
---             'DD238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Integrations
---             100021,
---             'CredentialTypeID',
---             'Credential Type ID',
---             'Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.',
---             'UUID',
---             16,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             'D512FF2E-A140-45A2-979A-20657AB77137',
---             'ID',
---             0,
---             0,
---             1,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9a4502a9-0e22-4038-8341-01b9a9211e44' OR ("EntityID" = 'DD238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'CredentialTypeID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '9a4502a9-0e22-4038-8341-01b9a9211e44',
+        'DD238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Integrations"
+        100021,
+        'CredentialTypeID',
+        'Credential Type ID',
+        'Optional link to the credential type required by this integration. Used by the UI to pre-select the credential type when creating new credentials and to filter existing credentials.',
+        'UUID',
+        16,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        'D512FF2E-A140-45A2-979A-20657AB77137',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '131b9cc4-3755-46f6-925a-7e3a13bcdfd6' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CredentialID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '131b9cc4-3755-46f6-925a-7e3a13bcdfd6',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100045,
---             'CredentialID',
---             'Credential ID',
---             'Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).',
---             'UUID',
---             16,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             '7E023DDF-82C6-4B0C-9650-8D35699B9FD0',
---             'ID',
---             0,
---             0,
---             1,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- 
--- /* Create Entity Relationship: MJ: Credential Types -> MJ: Integrations (One To Many via CredentialTypeID) */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '131b9cc4-3755-46f6-925a-7e3a13bcdfd6' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'CredentialID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '131b9cc4-3755-46f6-925a-7e3a13bcdfd6',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100045,
+        'CredentialID',
+        'Credential ID',
+        'Optional reference to a Credential record that stores encrypted authentication values for this company integration. Replaces the legacy inline auth fields (AccessToken, RefreshToken, APIKey, etc.).',
+        'UUID',
+        16,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        '7E023DDF-82C6-4B0C-9650-8D35699B9FD0',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 DO $$
 BEGIN
@@ -404,7 +405,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '86c97642-5ce8-475a-b3bf-ce6e1857beb4'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('86c97642-5ce8-475a-b3bf-ce6e1857beb4', 'D512FF2E-A140-45A2-979A-20657AB77137', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialTypeID', 'One To Many', 1, 1, 4, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('86c97642-5ce8-475a-b3bf-ce6e1857beb4', 'D512FF2E-A140-45A2-979A-20657AB77137', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialTypeID', 'One To Many', 1, 1, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -414,74 +415,75 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '385afc53-989f-4fc6-924d-cec4c8a9aa21'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('385afc53-989f-4fc6-924d-cec4c8a9aa21', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', 1, 1, 6, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('385afc53-989f-4fc6-924d-cec4c8a9aa21', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', 1, 1, 6, NOW(), NOW());
     END IF;
 END $$;
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '40ad55dc-4d32-4225-bbb9-fdd3ccd62eba' OR (EntityID = 'DD238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CredentialType')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '40ad55dc-4d32-4225-bbb9-fdd3ccd62eba',
---             'DD238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Integrations
---             100023,
---             'CredentialType',
---             'Credential Type',
---             NULL,
---             'TEXT',
---             200,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* Set field properties for entity */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '40ad55dc-4d32-4225-bbb9-fdd3ccd62eba' OR ("EntityID" = 'DD238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'CredentialType')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '40ad55dc-4d32-4225-bbb9-fdd3ccd62eba',
+        'DD238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Integrations"
+        100023,
+        'CredentialType',
+        'Credential Type',
+        NULL,
+        'TEXT',
+        200,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 UPDATE __mj."EntityField"
                SET "DefaultInView" = 1

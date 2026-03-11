@@ -114,8 +114,8 @@ CREATE TABLE __mj."CompanyIntegrationSyncWatermark" (
 -- 5. Add columns to CompanyIntegration
 ----------------------------------------------------------------------
 ALTER TABLE __mj."CompanyIntegration"
- ADD SourceTypeID UUID NULL,
- Configuration TEXT NULL;
+ ADD COLUMN "SourceTypeID" UUID NULL,
+ ADD COLUMN "Configuration" TEXT NULL;
 
 ALTER TABLE __mj."CompanyIntegration"
  ADD CONSTRAINT FK_CompanyIntegration_IntegrationSourceType
@@ -125,210 +125,62 @@ ALTER TABLE __mj."CompanyIntegration"
 -- 6. Extended Properties — Table Descriptions
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description',
- @value = 'Defines categories of integration sources such as SaaS API, Relational Database, or File Feed.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description',
- @value = 'Maps an external object from a company integration to a MemberJunction entity, controlling sync direction, matching, and conflict resolution.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description',
- @value = 'Maps individual fields between an external source object and a MemberJunction entity, with optional transform pipeline.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description',
- @value = 'Tracks incremental sync progress per entity map and direction using watermarks (timestamp, cursor, change token, or version).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark';
 
 ----------------------------------------------------------------------
 -- 7. Extended Properties — IntegrationSourceType Columns
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Display name for this source type (e.g. SaaS API, Relational Database, File Feed).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType',
- @level2type = 'COLUMN', @level2name = 'Name';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Optional longer description of this source type.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType',
- @level2type = 'COLUMN', @level2name = 'Description';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Fully-qualified class name registered via @RegisterClass that implements BaseIntegrationConnector for this source type.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType',
- @level2type = 'COLUMN', @level2name = 'DriverClass';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Font Awesome icon class for UI display.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType',
- @level2type = 'COLUMN', @level2name = 'IconClass';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Whether this source type is available for use. Active or Inactive.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'IntegrationSourceType',
- @level2type = 'COLUMN', @level2name = 'Status';
 
 ----------------------------------------------------------------------
 -- 8. Extended Properties — CompanyIntegrationEntityMap Columns
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'The name of the object in the external system (e.g. table name, API resource name).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'ExternalObjectName';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Optional human-friendly label for the external object.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'ExternalObjectLabel';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Whether data flows from external to MJ (Pull), MJ to external (Push), or both.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'SyncDirection';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'When true, this entity map is included in sync runs.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'SyncEnabled';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'JSON configuration for the match engine describing how to identify existing records (key fields, fuzzy thresholds, etc.).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'MatchStrategy';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'How to handle conflicts when both source and destination have been modified. SourceWins, DestWins, MostRecent, or Manual.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'ConflictResolution';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Processing order when multiple entity maps exist. Lower numbers are processed first.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'Priority';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'How to handle records that no longer exist in the source. SoftDelete, DoNothing, or HardDelete.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'DeleteBehavior';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Whether this entity map is Active or Inactive.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'Status';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Optional JSON configuration specific to this entity mapping.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationEntityMap',
- @level2type = 'COLUMN', @level2name = 'Configuration';
 
 ----------------------------------------------------------------------
 -- 9. Extended Properties — CompanyIntegrationFieldMap Columns
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'The field/column name in the external source system.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'SourceFieldName';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Optional human-friendly label for the source field.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'SourceFieldLabel';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'The MJ entity field name this source field maps to.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'DestinationFieldName';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Optional human-friendly label for the destination field.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'DestinationFieldLabel';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Direction of field mapping: SourceToDest, DestToSource, or Both.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'Direction';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'JSON array of transform names to apply in order (e.g. ["trim", "uppercase"]). See FieldMappingEngine for available transforms.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'TransformPipeline';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'When true, this field is used by the MatchEngine to find existing records during sync.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'IsKeyField';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'When true, a sync record is rejected if this field has no value.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'IsRequired';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Default value to use when the source field is null or missing.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'DefaultValue';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Processing order for this field mapping within the entity map.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'Priority';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Whether this field mapping is Active or Inactive.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationFieldMap',
- @level2type = 'COLUMN', @level2name = 'Status';
 
 ----------------------------------------------------------------------
 -- 10. Extended Properties — CompanyIntegrationSyncWatermark Columns
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Sync direction this watermark tracks: Pull or Push.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark',
- @level2type = 'COLUMN', @level2name = 'Direction';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'The type of watermark: Timestamp, Cursor, ChangeToken, or Version.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark',
- @level2type = 'COLUMN', @level2name = 'WatermarkType';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'The serialized watermark value used to resume incremental sync.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark',
- @level2type = 'COLUMN', @level2name = 'WatermarkValue';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Timestamp of the last successful sync for this watermark.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark',
- @level2type = 'COLUMN', @level2name = 'LastSyncAt';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Cumulative count of records synced through this watermark.',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegrationSyncWatermark',
- @level2type = 'COLUMN', @level2name = 'RecordsSynced';
 
 ----------------------------------------------------------------------
 -- 11. Extended Properties — New CompanyIntegration Columns
 ----------------------------------------------------------------------
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'Links this integration to its source type (SaaS API, Database, File Feed, etc.).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegration',
- @level2type = 'COLUMN', @level2name = 'SourceTypeID';
 -- SKIPPED EXEC (not supported in PG)
- @name = 'MS_Description', @value = 'JSON configuration for the integration connection (server, database, credentials reference, etc.).',
- @level0type = 'SCHEMA', @level0name = '__mj',
- @level1type = 'TABLE', @level1name = 'CompanyIntegration',
- @level2type = 'COLUMN', @level2name = 'Configuration';
 
 
 -- CODE GEN RUN
@@ -375,30 +227,30 @@ ALTER TABLE __mj."CompanyIntegration"
  , 1
  , 1
  , 1000
- , GETUTCDATE()
- , GETUTCDATE()
+ , NOW()
+ , NOW()
  )
  
 
 /* SQL generated to add new entity MJ: Integration Source Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO __mj."ApplicationEntity"
  ("ApplicationID", "EntityID", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '57801845-6620-4cbd-993f-e4aa2d464a04', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+ ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '57801845-6620-4cbd-993f-e4aa2d464a04', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Integration Source Types for role UI */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('57801845-6620-4cbd-993f-e4aa2d464a04', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+ ('57801845-6620-4cbd-993f-e4aa2d464a04', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Integration Source Types for role Developer */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('57801845-6620-4cbd-993f-e4aa2d464a04', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+ ('57801845-6620-4cbd-993f-e4aa2d464a04', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Integration Source Types for role Integration */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('57801845-6620-4cbd-993f-e4aa2d464a04', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+ ('57801845-6620-4cbd-993f-e4aa2d464a04', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW())
 
 /* SQL generated to create new entity MJ: Company Integration Entity Maps */
 
@@ -443,30 +295,30 @@ INSERT INTO __mj."EntityPermission"
  , 1
  , 1
  , 1000
- , GETUTCDATE()
- , GETUTCDATE()
+ , NOW()
+ , NOW()
  )
  
 
 /* SQL generated to add new entity MJ: Company Integration Entity Maps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO __mj."ApplicationEntity"
  ("ApplicationID", "EntityID", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '41579cac-5ddc-48b4-8703-31292be0a414', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+ ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '41579cac-5ddc-48b4-8703-31292be0a414', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Entity Maps for role UI */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('41579cac-5ddc-48b4-8703-31292be0a414', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+ ('41579cac-5ddc-48b4-8703-31292be0a414', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Entity Maps for role Developer */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('41579cac-5ddc-48b4-8703-31292be0a414', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+ ('41579cac-5ddc-48b4-8703-31292be0a414', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Entity Maps for role Integration */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('41579cac-5ddc-48b4-8703-31292be0a414', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+ ('41579cac-5ddc-48b4-8703-31292be0a414', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW())
 
 /* SQL generated to create new entity MJ: Company Integration Field Maps */
 
@@ -511,30 +363,30 @@ INSERT INTO __mj."EntityPermission"
  , 1
  , 1
  , 1000
- , GETUTCDATE()
- , GETUTCDATE()
+ , NOW()
+ , NOW()
  )
  
 
 /* SQL generated to add new entity MJ: Company Integration Field Maps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO __mj."ApplicationEntity"
  ("ApplicationID", "EntityID", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'feca4edd-74f9-4a1c-a284-e586e76b23fe', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+ ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'feca4edd-74f9-4a1c-a284-e586e76b23fe', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Field Maps for role UI */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+ ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Field Maps for role Developer */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+ ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Field Maps for role Integration */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+ ('feca4edd-74f9-4a1c-a284-e586e76b23fe', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW())
 
 /* SQL generated to create new entity MJ: Company Integration Sync Watermarks */
 
@@ -579,30 +431,30 @@ INSERT INTO __mj."EntityPermission"
  , 1
  , 1
  , 1000
- , GETUTCDATE()
- , GETUTCDATE()
+ , NOW()
+ , NOW()
  )
  
 
 /* SQL generated to add new entity MJ: Company Integration Sync Watermarks to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO __mj."ApplicationEntity"
  ("ApplicationID", "EntityID", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd5c4fef3-21d0-4a41-893b-34f9527195f0', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+ ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd5c4fef3-21d0-4a41-893b-34f9527195f0', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Sync Watermarks for role UI */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+ ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Sync Watermarks for role Developer */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+ ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW())
 
 /* SQL generated to add new permission for entity MJ: Company Integration Sync Watermarks for role Integration */
 INSERT INTO __mj."EntityPermission"
  ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
- ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+ ('d5c4fef3-21d0-4a41-893b-34f9527195f0', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW())
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."CompanyIntegrationEntityMap" */
 ALTER TABLE __mj."CompanyIntegrationEntityMap" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()/* SQL text to add special date field __mj_UpdatedAt to entity __mj."CompanyIntegrationEntityMap" */
@@ -620,9 +472,7 @@ ALTER TABLE __mj."CompanyIntegrationFieldMap" ADD __mj_UpdatedAt TIMESTAMPTZ NOT
 CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_CompanyIntegrationEntityMap_EntityID ON __mj."CompanyIntegrationEntityMap" ("EntityID");
 
 /* SQL text to update entity field related entity name field map for entity field ID CA111FE4-61FE-49D0-9106-A75DE3035FB1 */
--- SKIPPED EXEC (not supported in PG)
-
-/* Index for Foreign Keys for CompanyIntegrationFieldMap */
+-- SKIPPED EXEC (not supported in PG)/* Index for Foreign Keys for CompanyIntegrationFieldMap */
 -----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: MJ: Company Integration Field Maps
@@ -2086,135 +1936,137 @@ CREATE TRIGGER "trgUpdateCompanyIntegrationSyncWatermark"
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '8a0e85e8-8610-4949-981f-19b0c6df658f' OR (EntityID = '41579CAC-5DDC-48B4-8703-31292BE0A414' AND Name = 'CompanyIntegration')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '8a0e85e8-8610-4949-981f-19b0c6df658f',
---             '41579CAC-5DDC-48B4-8703-31292BE0A414', -- Entity: MJ: Company Integration Entity Maps
---             100031,
---             'CompanyIntegration',
---             'Company Integration',
---             NULL,
---             'TEXT',
---             510,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8a0e85e8-8610-4949-981f-19b0c6df658f' OR ("EntityID" = '41579CAC-5DDC-48B4-8703-31292BE0A414' AND "Name" = 'CompanyIntegration')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '8a0e85e8-8610-4949-981f-19b0c6df658f',
+        '41579CAC-5DDC-48B4-8703-31292BE0A414', -- "Entity": "MJ": "Company" "Integration" "Entity" "Maps"
+        100031,
+        'CompanyIntegration',
+        'Company Integration',
+        NULL,
+        'TEXT',
+        510,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '63f97d2f-bd4d-4a08-b83f-cd6891788b76' OR (EntityID = '41579CAC-5DDC-48B4-8703-31292BE0A414' AND Name = 'Entity')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '63f97d2f-bd4d-4a08-b83f-cd6891788b76',
---             '41579CAC-5DDC-48B4-8703-31292BE0A414', -- Entity: MJ: Company Integration Entity Maps
---             100032,
---             'Entity',
---             'Entity',
---             NULL,
---             'TEXT',
---             510,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* Set field properties for entity */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '63f97d2f-bd4d-4a08-b83f-cd6891788b76' OR ("EntityID" = '41579CAC-5DDC-48B4-8703-31292BE0A414' AND "Name" = 'Entity')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '63f97d2f-bd4d-4a08-b83f-cd6891788b76',
+        '41579CAC-5DDC-48B4-8703-31292BE0A414', -- "Entity": "MJ": "Company" "Integration" "Entity" "Maps"
+        100032,
+        'Entity',
+        'Entity',
+        NULL,
+        'TEXT',
+        510,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 UPDATE __mj."EntityField"
                SET "DefaultInView" = 1
@@ -3230,7 +3082,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '77bfb3b9-ff99-4af6-92fe-5e979365052d'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('77bfb3b9-ff99-4af6-92fe-5e979365052d', '5190AF93-4C39-4429-BDAA-0AEB492A0256', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'LastRunID', 'One To Many', 1, 1, 7, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('77bfb3b9-ff99-4af6-92fe-5e979365052d', '5190AF93-4C39-4429-BDAA-0AEB492A0256', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'LastRunID', 'One To Many', 1, 1, 7, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3240,7 +3092,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '4014c078-e011-4711-9a96-101a80d62ed4'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('4014c078-e011-4711-9a96-101a80d62ed4', '73AD0238-8B56-EF11-991A-6045BDEBA539', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'ChildPromptID', 'One To Many', 1, 1, 4, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('4014c078-e011-4711-9a96-101a80d62ed4', '73AD0238-8B56-EF11-991A-6045BDEBA539', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'ChildPromptID', 'One To Many', 1, 1, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3250,7 +3102,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '818abb60-291e-4760-8a86-8da541300728'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('818abb60-291e-4760-8a86-8da541300728', '73AD0238-8B56-EF11-991A-6045BDEBA539', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'JudgeID', 'One To Many', 1, 1, 5, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('818abb60-291e-4760-8a86-8da541300728', '73AD0238-8B56-EF11-991A-6045BDEBA539', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'JudgeID', 'One To Many', 1, 1, 5, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3260,7 +3112,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'bac649b1-bbde-42b6-b8ac-64ab30e49ab3'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('bac649b1-bbde-42b6-b8ac-64ab30e49ab3', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '00248F34-2837-EF11-86D4-6045BDEE16E6', 'OutputEntityID', 'One To Many', 1, 1, 1, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('bac649b1-bbde-42b6-b8ac-64ab30e49ab3', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '00248F34-2837-EF11-86D4-6045BDEE16E6', 'OutputEntityID', 'One To Many', 1, 1, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3270,7 +3122,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '76e32992-eb0e-4a64-a0b5-6355b746c628'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('76e32992-eb0e-4a64-a0b5-6355b746c628', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E2238F34-2837-EF11-86D4-6045BDEE16E6', 'RelatedEntityID', 'One To Many', 1, 1, 1, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('76e32992-eb0e-4a64-a0b5-6355b746c628', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E2238F34-2837-EF11-86D4-6045BDEE16E6', 'RelatedEntityID', 'One To Many', 1, 1, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3280,7 +3132,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'a97c9ca4-5b00-4526-9680-f2336b43e07f'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('a97c9ca4-5b00-4526-9680-f2336b43e07f', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '0B248F34-2837-EF11-86D4-6045BDEE16E6', 'CategoryEntityID', 'One To Many', 1, 1, 5, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('a97c9ca4-5b00-4526-9680-f2336b43e07f', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '0B248F34-2837-EF11-86D4-6045BDEE16E6', 'CategoryEntityID', 'One To Many', 1, 1, 5, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3290,7 +3142,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '4d1a0628-a697-4463-95aa-69b5c5daaf7a'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('4d1a0628-a697-4463-95aa-69b5c5daaf7a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'RelatedEntityID', 'One To Many', 1, 1, 2, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('4d1a0628-a697-4463-95aa-69b5c5daaf7a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'RelatedEntityID', 'One To Many', 1, 1, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3300,7 +3152,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'e3d3e66f-4358-45e4-b1c4-34df4282d6ca'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('e3d3e66f-4358-45e4-b1c4-34df4282d6ca', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '30248F34-2837-EF11-86D4-6045BDEE16E6', 'ApprovedByUserID', 'One To Many', 1, 1, 2, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('e3d3e66f-4358-45e4-b1c4-34df4282d6ca', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '30248F34-2837-EF11-86D4-6045BDEE16E6', 'ApprovedByUserID', 'One To Many', 1, 1, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3310,7 +3162,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'd58e8135-9e85-48f8-927d-e34cae087e55'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('d58e8135-9e85-48f8-927d-e34cae087e55', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '17248F34-2837-EF11-86D4-6045BDEE16E6', 'ApprovedByUserID', 'One To Many', 1, 1, 3, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('d58e8135-9e85-48f8-927d-e34cae087e55', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '17248F34-2837-EF11-86D4-6045BDEE16E6', 'ApprovedByUserID', 'One To Many', 1, 1, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3320,7 +3172,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '186a5e2e-6d78-41ba-9184-c3ab9772d926'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('186a5e2e-6d78-41ba-9184-c3ab9772d926', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'ReadRLSFilterID', 'One To Many', 1, 1, 1, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('186a5e2e-6d78-41ba-9184-c3ab9772d926', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'ReadRLSFilterID', 'One To Many', 1, 1, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3330,7 +3182,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '7ed2faec-6136-449a-a6e5-aae4b049785d'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('7ed2faec-6136-449a-a6e5-aae4b049785d', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'CreateRLSFilterID', 'One To Many', 1, 1, 2, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('7ed2faec-6136-449a-a6e5-aae4b049785d', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'CreateRLSFilterID', 'One To Many', 1, 1, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3340,7 +3192,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'd69ece92-a003-4731-b3e7-d6fe6760466e'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('d69ece92-a003-4731-b3e7-d6fe6760466e', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'DeleteRLSFilterID', 'One To Many', 1, 1, 3, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('d69ece92-a003-4731-b3e7-d6fe6760466e', 'F7238F34-2837-EF11-86D4-6045BDEE16E6', 'EA238F34-2837-EF11-86D4-6045BDEE16E6', 'DeleteRLSFilterID', 'One To Many', 1, 1, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3350,7 +3202,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '98a4a8dd-cc85-4425-aef7-bbd762b5b0f9'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('98a4a8dd-cc85-4425-aef7-bbd762b5b0f9', 'FD238F34-2837-EF11-86D4-6045BDEE16E6', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'OriginalModelID', 'One To Many', 1, 1, 6, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('98a4a8dd-cc85-4425-aef7-bbd762b5b0f9', 'FD238F34-2837-EF11-86D4-6045BDEE16E6', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'OriginalModelID', 'One To Many', 1, 1, 6, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3360,7 +3212,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '98e22ea6-9c8e-43b2-b087-d9b6a5e3f1f8'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('98e22ea6-9c8e-43b2-b087-d9b6a5e3f1f8', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'RerunFromPromptRunID', 'One To Many', 1, 1, 7, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('98e22ea6-9c8e-43b2-b087-d9b6a5e3f1f8', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'RerunFromPromptRunID', 'One To Many', 1, 1, 7, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3452,135 +3304,137 @@ UPDATE __mj."EntityRelationship"
 
 /* SQL text to update entity field related entity name field map for entity field ID 6BEFB401-01DD-454A-BB34-D300E78AB97D */
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'c233a240-755e-4148-b635-fb22f47ecf5d' OR (EntityID = 'D5C4FEF3-21D0-4A41-893B-34F9527195F0' AND Name = 'EntityMap')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'c233a240-755e-4148-b635-fb22f47ecf5d',
---             'D5C4FEF3-21D0-4A41-893B-34F9527195F0', -- Entity: MJ: Company Integration Sync Watermarks
---             100019,
---             'EntityMap',
---             'Entity Map',
---             NULL,
---             'TEXT',
---             1000,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c233a240-755e-4148-b635-fb22f47ecf5d' OR ("EntityID" = 'D5C4FEF3-21D0-4A41-893B-34F9527195F0' AND "Name" = 'EntityMap')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'c233a240-755e-4148-b635-fb22f47ecf5d',
+        'D5C4FEF3-21D0-4A41-893B-34F9527195F0', -- "Entity": "MJ": "Company" "Integration" "Sync" "Watermarks"
+        100019,
+        'EntityMap',
+        'Entity Map',
+        NULL,
+        'TEXT',
+        1000,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '0aebc08d-8462-4897-85bf-cc4dd6b7935a' OR (EntityID = 'FECA4EDD-74F9-4A1C-A284-E586E76B23FE' AND Name = 'EntityMap')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '0aebc08d-8462-4897-85bf-cc4dd6b7935a',
---             'FECA4EDD-74F9-4A1C-A284-E586E76B23FE', -- Entity: MJ: Company Integration Field Maps
---             100031,
---             'EntityMap',
---             'Entity Map',
---             NULL,
---             'TEXT',
---             1000,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* Set field properties for entity */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0aebc08d-8462-4897-85bf-cc4dd6b7935a' OR ("EntityID" = 'FECA4EDD-74F9-4A1C-A284-E586E76B23FE' AND "Name" = 'EntityMap')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '0aebc08d-8462-4897-85bf-cc4dd6b7935a',
+        'FECA4EDD-74F9-4A1C-A284-E586E76B23FE', -- "Entity": "MJ": "Company" "Integration" "Field" "Maps"
+        100031,
+        'EntityMap',
+        'Entity Map',
+        NULL,
+        'TEXT',
+        1000,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 UPDATE __mj."EntityField"
             SET "IsNameField" = 1
@@ -3939,135 +3793,137 @@ UPDATE __mj."EntityRelationship"
 
 /* SQL text to update entity field related entity name field map for entity field ID 6BEFB401-01DD-454A-BB34-D300E78AB97D */
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'c233a240-755e-4148-b635-fb22f47ecf5d' OR (EntityID = 'D5C4FEF3-21D0-4A41-893B-34F9527195F0' AND Name = 'EntityMap')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'c233a240-755e-4148-b635-fb22f47ecf5d',
---             'D5C4FEF3-21D0-4A41-893B-34F9527195F0', -- Entity: MJ: Company Integration Sync Watermarks
---             100019,
---             'EntityMap',
---             'Entity Map',
---             NULL,
---             'TEXT',
---             1000,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c233a240-755e-4148-b635-fb22f47ecf5d' OR ("EntityID" = 'D5C4FEF3-21D0-4A41-893B-34F9527195F0' AND "Name" = 'EntityMap')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'c233a240-755e-4148-b635-fb22f47ecf5d',
+        'D5C4FEF3-21D0-4A41-893B-34F9527195F0', -- "Entity": "MJ": "Company" "Integration" "Sync" "Watermarks"
+        100019,
+        'EntityMap',
+        'Entity Map',
+        NULL,
+        'TEXT',
+        1000,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '0aebc08d-8462-4897-85bf-cc4dd6b7935a' OR (EntityID = 'FECA4EDD-74F9-4A1C-A284-E586E76B23FE' AND Name = 'EntityMap')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '0aebc08d-8462-4897-85bf-cc4dd6b7935a',
---             'FECA4EDD-74F9-4A1C-A284-E586E76B23FE', -- Entity: MJ: Company Integration Field Maps
---             100031,
---             'EntityMap',
---             'Entity Map',
---             NULL,
---             'TEXT',
---             1000,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* Set field properties for entity */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0aebc08d-8462-4897-85bf-cc4dd6b7935a' OR ("EntityID" = 'FECA4EDD-74F9-4A1C-A284-E586E76B23FE' AND "Name" = 'EntityMap')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '0aebc08d-8462-4897-85bf-cc4dd6b7935a',
+        'FECA4EDD-74F9-4A1C-A284-E586E76B23FE', -- "Entity": "MJ": "Company" "Integration" "Field" "Maps"
+        100031,
+        'EntityMap',
+        'Entity Map',
+        NULL,
+        'TEXT',
+        1000,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 UPDATE __mj."EntityField"
             SET "IsNameField" = 1

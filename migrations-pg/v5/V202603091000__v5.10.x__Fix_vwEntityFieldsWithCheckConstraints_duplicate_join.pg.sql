@@ -72,13 +72,31 @@ WHERE
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
+-- Cleanup duplicate GeneratedCode validator records.
+-- Two passes are needed:
+--   1. Dedup by Source + LinkedRecordPrimaryKey: removes records where the same constraint definition
+--      was generated multiple times with different function names (the LLM generates different names each run).
+--   2. Dedup by Name + LinkedRecordPrimaryKey: removes records where the same function name was
+--      generated multiple times (exact duplicates from repeated CodeGen runs).
+
+-- Pass 1: Keep one record per unique (Source, LinkedRecordPrimaryKey)
+WITH "Ranked" AS (
+    SELECT
+        "ID",
+        ROW_NUMBER() OVER (
+            PARTITION BY "Source", "LinkedRecordPrimaryKey"
+            ORDER BY "__mj_CreatedAt" ASC
+        ) AS "RowNum"
+    FROM "__mj"."GeneratedCode"
+    WHERE "CategoryID" = (SELECT "ID" FROM "__mj"."GeneratedCodeCategory" WHERE "Name" = 'CodeGen: Validators')
+)
 DELETE FROM "__mj"."GeneratedCode"
 WHERE "ID" IN (
     SELECT "ID" FROM "Ranked" WHERE "RowNum" > 1
 );
 
 -- Pass 2: Keep one record per unique (Name, LinkedRecordPrimaryKey)
-;WITH "Ranked" AS (
+WITH "Ranked" AS (
     SELECT
         "ID",
         ROW_NUMBER() OVER (
@@ -87,8 +105,7 @@ WHERE "ID" IN (
         ) AS "RowNum"
     FROM "__mj"."GeneratedCode"
     WHERE "CategoryID" = (SELECT "ID" FROM "__mj"."GeneratedCodeCategory" WHERE "Name" = 'CodeGen: Validators')
-);
-
+)
 DELETE FROM "__mj"."GeneratedCode"
 WHERE "ID" IN (
     SELECT "ID" FROM "Ranked" WHERE "RowNum" > 1
@@ -97,7 +114,6 @@ WHERE "ID" IN (
 
 /* Generated Validation Functions for MJ: AI Agent Run Steps */
 -- CHECK constraint for MJ: AI Agent Run Steps: Field: FinalPayloadValidationResult was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-
 UPDATE __mj."GeneratedCode" SET
                         "Source"='([FinalPayloadValidationResult] IS NULL OR [FinalPayloadValidationResult]=''Warn'' OR [FinalPayloadValidationResult]=''Fail'' OR [FinalPayloadValidationResult]=''Retry'' OR [FinalPayloadValidationResult]=''Pass'')',
                         "Code"='public ValidateFinalPayloadValidationResultStatus(result: ValidationResult) {
@@ -119,25 +135,3 @@ UPDATE __mj."GeneratedCode" SET
                         "GeneratedByModelID"='7B31F48E-EDA3-47B4-9602-D98B7EB1AF45'
                      WHERE
                         "ID"='1DC5433E-F36B-1410-867F-007B559E242F';
-
-
--- ===================== Other =====================
-
--- Cleanup duplicate GeneratedCode validator records.
--- Two passes are needed:
---   1. Dedup by Source + LinkedRecordPrimaryKey: removes records where the same constraint definition
---      was generated multiple times with different function names (the LLM generates different names each run).
---   2. Dedup by Name + LinkedRecordPrimaryKey: removes records where the same function name was
---      generated multiple times (exact duplicates from repeated CodeGen runs).
-
--- Pass 1: Keep one record per unique (Source, LinkedRecordPrimaryKey)
-;WITH Ranked AS (
-    SELECT
-        ID,
-        ROW_NUMBER() OVER (
-            PARTITION BY Source, LinkedRecordPrimaryKey
-            ORDER BY __mj_CreatedAt ASC
-        ) AS RowNum
-    FROM "__mj"."GeneratedCode"
-    WHERE CategoryID = (SELECT ID FROM "__mj"."GeneratedCodeCategory" WHERE Name = 'CodeGen: Validators')
-)

@@ -330,6 +330,18 @@ function routeToGroup(result: string, batchType: StatementType, groups: OutputGr
     groups.Data.push(result);
     return;
   }
+  // ALTER TABLE ALTER COLUMN SET NOT NULL must run AFTER backfill UPDATEs,
+  // so route to Data group instead of Tables group.
+  if (batchType === 'ALTER_TABLE' && /ALTER\s+COLUMN\s+\S+\s+SET\s+NOT\s+NULL/i.test(result)) {
+    groups.Data.push(result);
+    return;
+  }
+  // ALTER TABLE ALTER COLUMN SET DEFAULT should also go to Data group
+  // (often paired with ADD COLUMN NULL + UPDATE + SET NOT NULL + SET DEFAULT)
+  if (batchType === 'ALTER_TABLE' && /ALTER\s+COLUMN\s+\S+\s+SET\s+DEFAULT/i.test(result)) {
+    groups.Data.push(result);
+    return;
+  }
   if (TABLE_TYPES.has(batchType)) {
     groups.Tables.push(result);
   } else if (FK_TYPES.has(batchType)) {
@@ -373,7 +385,7 @@ function handleUnknownBatch(batch: string, batchType: StatementType, stats: Conv
 
   stats.Skipped++;
   stats.SkippedBatches.push(`UNKNOWN: ${batch.slice(0, 80)}...`);
-  return `-- TODO: Review this batch\n${batch};\n`;
+  return `-- NOTE: unrecognized batch type (${batchType}) — passed through as-is\n${batch};\n`;
 }
 
 /** Update conversion statistics */

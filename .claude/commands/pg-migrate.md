@@ -14,7 +14,7 @@ All heavy work runs inside Docker via Claude Code with `--dangerously-skip-permi
 4. **Poll for completion**: Check for `__DONE__` marker in `/tmp/result.txt` every 30 seconds via `docker exec claude-dev bash -c "tail -1 /tmp/result.txt 2>/dev/null"`
 5. **Read the result**: `docker exec claude-dev bash -c "cat /tmp/result.txt"`
 
-Use unique filenames per phase (e.g., `/tmp/task-phase1.txt`, `/tmp/result-phase1.txt`) to avoid collisions.
+Use unique filenames per phase (e.g., `/tmp/task-phase2.txt`, `/tmp/result-phase2.txt`) to avoid collisions.
 
 **IMPORTANT**: Each task prompt you send to CC in Docker must be fully self-contained — include all context, file paths, exact commands, and expected outcomes. CC in Docker has no memory of previous phases.
 
@@ -31,16 +31,15 @@ cd docker/workbench && docker compose --profile postgres up -d --build
 Wait for both databases to be healthy:
 ```bash
 # SQL Server
-docker compose -f docker/workbench/docker-compose.yml exec sql-claude bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; do sleep 2; done'
+docker exec sql-claude bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; do sleep 2; done'
 # PostgreSQL
-docker compose -f docker/workbench/docker-compose.yml exec postgres-claude bash -c 'until pg_isready -U mj_admin -d MJ_Workbench_PG; do sleep 2; done'
+docker exec postgres-claude bash -c 'until pg_isready -U mj_admin -d MJ_Workbench_PG; do sleep 2; done'
 ```
 
 ### Step 0b: Initialize the container environment
 
 The container entrypoint is `tail -f /dev/null` (keeps it alive). Run essential setup:
 ```bash
-# Install/update tools
 docker exec claude-dev bash -c "npm update -g @anthropic-ai/claude-code @memberjunction/cli 2>/dev/null || true"
 ```
 
@@ -60,28 +59,20 @@ docker exec claude-dev bash -c "test -d /workspace/MJ/.git || git clone https://
 docker exec claude-dev bash -c "cd /workspace/MJ && git fetch origin && git stash 2>/dev/null; git checkout $CURRENT_BRANCH 2>/dev/null || git checkout -b $CURRENT_BRANCH origin/$CURRENT_BRANCH; git reset --hard $CURRENT_SHA; git checkout -B $PG_BRANCH"
 ```
 
-This ensures:
-- Docker starts from the exact same commit as the host
-- All Docker changes are isolated on `pg-migrate/<source-branch>`
-- The host's working branch is never modified inside Docker
-- `docker cp` is used to bring results back to the host in Phase 5
-
 ### Step 0d: Check Claude Code authentication inside Docker
 
-Test if CC in Docker can run a trivial prompt:
 ```bash
 docker exec claude-dev bash -c 'echo "Reply with exactly: AUTH_OK" | claude --dangerously-skip-permissions -p 2>&1 | head -20'
 ```
 
 **If the output contains `AUTH_OK`**: CC is authenticated, continue.
 
-**If the output contains an authentication error, OAuth prompt, or doesn't contain `AUTH_OK`**: Stop and tell the user:
-
+**If not**: Stop and tell the user:
 > Claude Code inside Docker is not authenticated. Please run:
 > ```
 > docker exec -it claude-dev claude
 > ```
-> This will open an interactive session where you can complete OAuth login. Once authenticated, run `/pg-migrate` again.
+> Complete OAuth login, then run `/pg-migrate` again.
 
 **Do NOT proceed past this point if CC in Docker is not authenticated.** This is a hard gate.
 
@@ -99,18 +90,14 @@ Verify the build succeeded before continuing.
 
 Run this locally (on the host) since it's just file comparison:
 
-**Logic:**
-- For each `*.sql` file in `migrations/v5/`, check if `migrations-pg/v5/` has a file with the same base name but `.pg.sql` extension
-- Example: `V202603021058__v5.5.x__Metadata_Sync.sql` → look for `V202603021058__v5.5.x__Metadata_Sync.pg.sql`
-- Build an ordered list of missing files (sorted by filename, which is version-ordered)
-- Also note PG-only files (in `migrations-pg/v5/` with no SQL Server source) — these are intentional PG-specific patches; preserve them
-
 ```bash
 # Find SQL Server migrations with no PG equivalent
 comm -23 \
   <(ls migrations/v5/*.sql | xargs -I{} basename {} .sql | sort) \
   <(ls migrations-pg/v5/*.pg.sql | xargs -I{} basename {} .pg.sql | sort)
 ```
+
+Also note PG-only files (in `migrations-pg/v5/` with no SQL Server source) — these are intentional PG-specific patches; preserve them.
 
 Report: "Found N migrations needing PG conversion" with the full list.
 
@@ -120,52 +107,54 @@ If zero missing, skip to Phase 3. **Phase 3 and Phase 4 ALWAYS run** — even wh
 
 ## Phase 2: Convert and Validate (Delegated to CC in Docker)
 
-This is the core phase. Send a **single comprehensive task** to CC in Docker that covers all missing migrations. This allows CC in Docker to iterate autonomously without round-trips.
+This is the core phase. Build the task prompt below, substituting `{{MISSING_FILES_LIST}}` with the numbered list from Phase 1. Send to CC in Docker using the delegation pattern.
 
-Write a task prompt and send it to CC in Docker using the delegation pattern. The task prompt should be:
-
----
-
-**BEGIN TASK PROMPT FOR CC IN DOCKER** (adapt the file list dynamically):
+### Phase 2 Task Prompt
 
 ```
 You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
 
 Your job: Convert SQL Server migrations to PostgreSQL and validate them. Work through each file in order. Never manually edit converted files — always fix the toolchain and re-convert.
 
-## Tools Available
-- `npx mj sql-convert <input> --from tsql --to postgres --output <output> --schema __mj --verbose` — converts a single migration file
-- `flyway` or `npx mj migrate` — runs migrations against a database
-- Check `npx mj sql-convert --help` and `npx mj migrate --help` for exact flags
+CRITICAL: ONLY convert the files listed below. Do NOT re-convert any existing .pg.sql files that are already present in migrations-pg/v5/. Even if the toolchain has improved, re-converting old migrations is a breaking change. Only new/missing migrations should be converted.
+
+CRITICAL: Your converted output MUST NOT contain any "-- TODO:" comments. If the sql-convert tool produces TODO comments, that means the toolchain has a bug. You must fix the relevant rule in packages/SQLConverter/src/rules/, rebuild, and re-convert. Never accept TODO comments in output — they represent unconverted SQL that will be silently skipped.
 
 ## Database Connections
-- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99 (use PGPASSWORD env var)
 - SQL Server: host=sql-claude, port=1433, user=sa, password=Claude2Sql99
+  - sqlcmd: /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C
 
 ## Files to Convert (in order)
-[INSERT DYNAMIC LIST OF MISSING FILES HERE, e.g.:]
-1. V202603021058__v5.5.x__Metadata_Sync.sql
-2. V202603021401__v5.6.x__Grant_UI_Role_Agent_Permissions.sql
-...
+{{MISSING_FILES_LIST}}
 
 ## For Each File
 
 ### Step 1: Convert
-Run: npx mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
+```bash
+npx mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
+```
 
 ### Step 2: Inspect
 Read the converted file. Check for:
 - Empty output or very small output relative to input
-- Error comments or unconverted T-SQL syntax (e.g., remaining [brackets], NVARCHAR, sp_addextendedproperty)
+- `-- TODO:` comments (UNACCEPTABLE — fix the toolchain rule and re-convert)
+- Unconverted T-SQL syntax (remaining [brackets], NVARCHAR, sp_addextendedproperty)
 - Missing semicolons or malformed PL/pgSQL
 
 ### Step 3: Test on fresh PG database
-Drop and recreate a test database, then run ALL PG migrations through the current file:
+Drop and recreate a test database, then run ALL PG v5 migrations through the current file:
 
+```bash
+export PGPASSWORD=Claude2Pg99
+psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_Migrate_Test' AND pid <> pg_backend_pid();" 2>/dev/null
 psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_Migrate_Test\";"
 psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_Migrate_Test\";"
-
-Then run migrations. Try mj migrate first, fall back to flyway if needed. Discover exact syntax via --help.
+for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql | sort); do
+  echo "Running: $(basename $f)"
+  psql -h postgres-claude -U mj_admin -d MJ_Migrate_Test -f "$f" 2>&1 | tail -5
+done
+```
 
 ### Step 4: Handle failures
 If migration fails:
@@ -173,7 +162,7 @@ If migration fails:
 2. Identify which SQLConverter rule should handle the pattern
 3. Fix the rule in packages/SQLConverter/src/rules/ or ExpressionHelpers.ts or PostProcessor.ts
 4. Rebuild: cd packages/SQLConverter && npm run build
-5. Run tests: cd packages/SQLConverter && npm run test (tests must pass)
+5. Run tests: cd packages/SQLConverter && npm run test (ALL tests must pass)
 6. Re-convert the file (back to Step 1)
 7. Re-test migrations (back to Step 3)
 8. If still failing after 3 attempts for the same pattern, log it as MANUAL_REVIEW_NEEDED and move on
@@ -183,10 +172,16 @@ For each file, record: filename, status (PASS/FAIL), error details if any, toolc
 
 ## After All Files
 
+Verify zero TODO comments:
+```bash
+grep -c "TODO:" /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v ':0$'
+```
+If any remain, fix the toolchain and re-convert the affected files.
+
 Write a JSON summary to /tmp/phase2-result.json:
 {
   "files": [
-    {"name": "filename.sql", "status": "PASS|FAIL", "attempts": N, "error": "...", "toolchainFixes": ["description of fix 1", ...]},
+    {"name": "filename.sql", "status": "PASS|FAIL", "attempts": N, "error": "...", "toolchainFixes": ["description"]},
     ...
   ],
   "toolchainChanges": [
@@ -200,69 +195,107 @@ Write a JSON summary to /tmp/phase2-result.json:
 }
 
 Also write a human-readable summary to /tmp/phase2-summary.txt.
+
+IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the very last line of your output.
 ```
 
-**END TASK PROMPT**
+After sending this task, poll for completion. When done, read `/tmp/phase2-result.json` and `/tmp/phase2-summary.txt` from the container. Report progress to the user.
 
----
-
-After sending this task, poll for completion. CC in Docker may run for a long time (minutes to hours depending on how many files and how many toolchain fixes are needed).
-
-When done, read `/tmp/phase2-result.json` and `/tmp/phase2-summary.txt` from the container:
-```bash
-docker exec claude-dev cat /tmp/phase2-result.json
-docker exec claude-dev cat /tmp/phase2-summary.txt
-```
-
-Report progress to the user.
+**Orchestrator validation after Phase 2**: Before proceeding, the orchestrator MUST verify zero TODOs by running `grep -r "TODO:" migrations-pg/v5/*.pg.sql` on the Docker container. If any remain, send a follow-up fix task to CC in Docker.
 
 ---
 
 ## Phase 3: Full Parity Comparison
 
-Send another task to CC in Docker:
-
-**Task prompt:**
+### Phase 3 Task Prompt
 
 ```
-You are running inside claude-dev with MJ at /workspace/MJ.
+You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
 
-Run a full schema parity comparison between SQL Server and PostgreSQL after all migrations.
+Your job: Run a schema parity comparison between SQL Server and PostgreSQL using ONLY v5 migrations.
 
-## Step 1: Fresh SQL Server database
-Create a fresh SQL Server database and run all SQL Server migrations:
-- Use db-bootstrap or flyway against sql-claude
-- Database name: MJ_Compare_SQL
-- Migrations location: migrations/v5
+## Database Connections
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99 (use PGPASSWORD)
+- SQL Server: host=sql-claude, port=1433, user=sa, password=Claude2Sql99
+  - sqlcmd: /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C
 
-## Step 2: Fresh PostgreSQL database
-Create a fresh PG database and run all PG migrations:
-- Drop/create MJ_Compare_PG on postgres-claude
-- Run: psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_Compare_PG\";" && psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_Compare_PG\";"
-- Run all migrations from migrations-pg/v5 against MJ_Compare_PG
+## Step 1: Fresh SQL Server database with v5 migrations
 
-## Step 3: Compare
-Run comparison queries on both databases and compare:
-1. Table count (INFORMATION_SCHEMA.TABLES where schema = '__mj')
-2. Column count per table
-3. View count
-4. Stored procedure count (SQL Server) vs function count (PostgreSQL)
-5. Row count per table (for tables with data)
-6. Index count per table
-7. Foreign key count per table
+```bash
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_Compare_SQL') IS NOT NULL BEGIN ALTER DATABASE MJ_Compare_SQL SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_Compare_SQL; END; CREATE DATABASE MJ_Compare_SQL;"
+```
 
-## Step 4: Produce report
-Write results to /tmp/phase3-result.json:
+Then create __mj schema and run v5 migrations:
+```bash
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_Compare_SQL -Q "CREATE SCHEMA __mj;"
+for f in $(ls /workspace/MJ/migrations/v5/*.sql | sort); do
+  echo "Running: $(basename $f)"
+  /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_Compare_SQL -i "$f" 2>&1 | tail -3
+done
+```
+
+## Step 2: Fresh PostgreSQL database with v5 PG migrations
+
+```bash
+export PGPASSWORD=Claude2Pg99
+psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_Compare_PG' AND pid <> pg_backend_pid();" 2>/dev/null
+psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_Compare_PG\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_Compare_PG\";"
+
+for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql | sort); do
+  echo "Running: $(basename $f)"
+  psql -h postgres-claude -U mj_admin -d MJ_Compare_PG -f "$f" 2>&1 | tail -3
+done
+```
+
+NOTE: Some PG migrations may produce errors for columns/tables that already exist from the baseline. Log these but continue — they're expected for idempotent migrations running after a baseline.
+
+## Step 3: Compare schemas
+
+Run these comparison queries:
+
+### Tables
+SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'BASE TABLE'
+PostgreSQL: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'
+
+### Views
+SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'VIEW'
+PostgreSQL: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'VIEW'
+
+### Routines
+SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA = '__mj'
+PostgreSQL: SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj'
+
+### Tables in one but not the other
+Get table lists from both and compare.
+
+### Column count per table
+SQL Server: SELECT TABLE_NAME, COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '__mj' GROUP BY TABLE_NAME ORDER BY TABLE_NAME
+PostgreSQL: SELECT table_name, COUNT(*) FROM information_schema.columns WHERE table_schema = '__mj' GROUP BY table_name ORDER BY table_name
+
+### Foreign keys
+SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = '__mj' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+PostgreSQL: SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = '__mj' AND constraint_type = 'FOREIGN KEY'
+
+## Step 4: Write results
+
+Write to /tmp/phase3-result.json:
+```json
 {
-  "sqlServer": {"tables": N, "views": N, "procedures": N, "totalRows": N},
-  "postgres": {"tables": N, "views": N, "functions": N, "totalRows": N},
-  "match": true/false,
-  "variances": [
-    {"type": "table|view|procedure|rows|columns", "object": "name", "sqlServer": "value", "postgres": "value", "likelyCause": "..."},
-    ...
-  ]
+  "sqlServer": {"tables": N, "views": N, "routines": N, "foreignKeys": N},
+  "postgres": {"tables": N, "views": N, "routines": N, "foreignKeys": N},
+  "tablesOnlyInSqlServer": [],
+  "tablesOnlyInPostgres": [],
+  "viewsOnlyInSqlServer": [],
+  "viewsOnlyInPostgres": [],
+  "columnMismatches": [{"table": "name", "sqlServer": N, "postgres": N}],
+  "migrationErrors": {"sqlServer": [], "postgres": []}
 }
-Also write human-readable summary to /tmp/phase3-summary.txt.
+```
+
+Also write to /tmp/phase3-summary.txt.
+
+IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the very last line of your output.
 ```
 
 Poll for completion, read results, report to user.
@@ -271,62 +304,132 @@ Poll for completion, read results, report to user.
 
 ## Phase 4: Smoke Testing
 
-**ALWAYS run this phase** regardless of Phase 3 results. Even with perfect parity, smoke tests validate end-to-end functionality.
+**ALWAYS run this phase** regardless of Phase 3 results. Even with perfect parity, smoke tests validate end-to-end functionality with the application layer.
 
-Send a task to CC in Docker:
-
-**Task prompt:**
+### Phase 4 Task Prompt
 
 ```
-You are running inside claude-dev with MJ at /workspace/MJ.
+You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
 
-Start MJAPI and MJExplorer against the PostgreSQL database and run headless browser smoke tests.
+Your job: Start MJAPI against the PostgreSQL database and run smoke tests to validate the PG migration stack works end-to-end with the application layer.
 
-## Step 1: Configure and start MJAPI for PostgreSQL
-Modify or override the .env to point to PostgreSQL:
+## Database
+The Phase 3 database MJ_Compare_PG on postgres-claude already has all v5 migrations applied. Use it.
+
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database=MJ_Compare_PG
+
+## Step 1: Build MJAPI and dependencies
+
+```bash
+cd /workspace/MJ
+npx turbo build --filter=@memberjunction/server --filter=@memberjunction/server-bootstrap --filter=@memberjunction/mjapi
+```
+
+## Step 2: Configure MJAPI for PostgreSQL
+
+Read the existing .env at /workspace/MJ/packages/MJAPI/.env to understand the variable names used. Then override the database connection settings to point to PostgreSQL (MJ_Compare_PG). Also check mj.config.cjs at the repo root.
+
+Key settings to configure (adapt variable names to match what the .env uses):
 - DB_HOST=postgres-claude
 - DB_PORT=5432
-- DB_USER=mj_admin
+- DB_USERNAME=mj_admin
 - DB_PASSWORD=Claude2Pg99
 - DB_DATABASE=MJ_Compare_PG
 
-Start MJAPI (port 4000) and wait for it to be listening.
-Start MJExplorer (port 4200) and wait for compilation to complete.
+## Step 3: Start MJAPI
 
-## Step 2: Browser smoke tests
-Use playwright-cli for headless browser testing.
+```bash
+cd /workspace/MJ/packages/MJAPI
+npm run start &
+MJAPI_PID=$!
+```
 
-Load credentials from .env (TEST_UID, TEST_PWD) for the da-robot-tester account.
+Wait up to 120 seconds for MJAPI to be listening. Check for "listening" or "ready" in output, or poll localhost:4000.
 
-Open http://localhost:4200 and run these tests:
+If MJAPI fails to start, capture the full error output — that IS the smoke test result.
 
-1. LOGIN: Fill in test credentials on Auth0 login page, submit, verify redirect to app
-2. DATA_EXPLORER: Navigate to Data Explorer, verify grid loads with data
-3. OPEN_ACTION: Open an Action record, verify form fields display correctly
-4. EDIT_ACTION: Make a small edit to an Action, save, verify save succeeds
-5. OPEN_CATEGORY: Open an Action Category record, verify it loads
-6. EDIT_CATEGORY: Edit and save, verify Record Changes are tracked
-7. ADMIN_ERD: Navigate to Admin area, verify ERD diagram renders
-8. CHAT_SAGE: Open Chat/Sage, verify interface loads, send "hello" message
-9. ENTITY_LISTS: Navigate to 3-4 different entity lists, verify grids render
-10. CONSOLE_ERRORS: Check browser console for JavaScript errors throughout
+## Step 4: Smoke Tests via GraphQL
 
-For each test, record PASS/FAIL with details.
+Once MJAPI is running, test the GraphQL API directly with curl:
 
-## Step 3: Cleanup
-Kill MJAPI and Explorer processes. Close the browser.
+### Test 1: GraphQL Introspection
+```bash
+curl -s -X POST http://localhost:4000/ \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ __schema { queryType { name } mutationType { name } } }"}' | head -200
+```
+Expected: Returns schema info with query and mutation types.
 
-## Step 4: Results
+### Test 2: Entity Metadata Query
+```bash
+curl -s -X POST http://localhost:4000/ \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ GetEntityByName(EntityName: \"Actions\") { ID Name SchemaName } }"}' | head -200
+```
+Expected: Returns entity metadata for Actions.
+
+### Test 3: RunViewByName (read data)
+```bash
+curl -s -X POST http://localhost:4000/ \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ RunViewByName(input: { ViewName: \"All Actions\", MaxRows: 5 }) { TotalRowCount Results } }"}' | head -500
+```
+Expected: Returns rows from the Actions table.
+
+### Test 4: List Entities
+```bash
+curl -s -X POST http://localhost:4000/ \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ AllEntities { ID Name Description } }"}' | head -500
+```
+Expected: Returns list of all entities.
+
+### Test 5: Multiple entity views
+```bash
+for entity in "Users" "Entities" "Applications" "AI Models"; do
+  echo "--- Testing: $entity ---"
+  curl -s -X POST http://localhost:4000/ \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":\"{ RunViewByName(input: { ViewName: \\\"All ${entity}\\\", MaxRows: 3 }) { TotalRowCount } }\"}" | head -100
+  echo
+done
+```
+
+### Test 6: Health endpoint
+```bash
+curl -s http://localhost:4000/health 2>/dev/null || echo "No health endpoint"
+```
+
+NOTE: Some tests may require authentication. If you get auth errors, document which tests need auth and which work without it. The key test is whether MJAPI starts successfully and can connect to the PG database.
+
+## Step 5: Cleanup
+```bash
+kill $MJAPI_PID 2>/dev/null
+```
+
+## Step 6: Write Results
+
 Write to /tmp/phase4-result.json:
+```json
 {
+  "mjapiStarted": true/false,
+  "startupError": "error message if failed to start",
   "tests": [
-    {"name": "LOGIN", "status": "PASS|FAIL|SKIP", "details": "..."},
-    ...
+    {"name": "GRAPHQL_INTROSPECTION", "status": "PASS|FAIL|SKIP", "details": "..."},
+    {"name": "ENTITY_METADATA", "status": "PASS|FAIL|SKIP", "details": "..."},
+    {"name": "RUN_VIEW", "status": "PASS|FAIL|SKIP", "details": "..."},
+    {"name": "LIST_ENTITIES", "status": "PASS|FAIL|SKIP", "details": "..."},
+    {"name": "ENTITY_VIEWS", "status": "PASS|FAIL|SKIP", "details": "..."},
+    {"name": "HEALTH_CHECK", "status": "PASS|FAIL|SKIP", "details": "..."}
   ],
-  "consoleErrors": ["error1", "error2"],
-  "overallPass": true/false
+  "overallPass": true/false,
+  "notes": "any additional observations"
 }
+```
+
 Also write human-readable summary to /tmp/phase4-summary.txt.
+
+IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the very last line of your output.
 ```
 
 Poll for completion, read results.
@@ -340,7 +443,7 @@ Poll for completion, read results.
 The Docker workspace is a named volume, so files don't automatically appear on the host. Copy them:
 
 ```bash
-# For each newly converted file, copy from Docker to host
+# Copy only NEW .pg.sql files (don't overwrite existing ones unless they were converted this run)
 docker cp claude-dev:/workspace/MJ/migrations-pg/v5/ /path/to/host/MJ/migrations-pg/v5/
 ```
 
@@ -348,7 +451,10 @@ Use the actual host repo path. Only copy `.pg.sql` files that are new or changed
 
 Also copy any toolchain changes (SQLConverter rule fixes) back:
 ```bash
-docker cp claude-dev:/workspace/MJ/packages/SQLConverter/src/ /path/to/host/MJ/packages/SQLConverter/src/
+# Copy individual changed files, not the whole directory (to avoid nested directory issues)
+for f in $(docker exec claude-dev bash -c "ls /workspace/MJ/packages/SQLConverter/src/rules/"); do
+  docker cp "claude-dev:/workspace/MJ/packages/SQLConverter/src/rules/$f" "/path/to/host/MJ/packages/SQLConverter/src/rules/$f"
+done
 ```
 
 ### Step 5b: Generate the final report
@@ -364,19 +470,19 @@ Branch: [current branch]
 Host: Docker workbench (claude-dev)
 
 ## Summary
-- Total SQL Server migrations: X
+- Total SQL Server v5 migrations: X
 - Previously converted: Y
 - Newly converted this run: Z
 - Conversion failures (manual review): N
-- Schema parity: PASS/FAIL (N variances)
+- TODO comments remaining: 0 (MUST be zero)
+- SQLConverter tests: N/N passing
+- Schema parity: Tables X/X, Views X/X
+- Column mismatches: N tables (see details)
 - Smoke tests: X/Y passed
 
 ## Migration Conversion Results
 | # | Migration File | Status | Attempts | Notes |
 |---|---------------|--------|----------|-------|
-| 1 | V20260302... | PASS | 1 | Converted cleanly |
-| 2 | V20260304... | PASS | 3 | Required toolchain fix |
-| 3 | V20260308... | FAIL | 3 | Manual review needed |
 
 ## Toolchain Fixes Applied
 [List any changes made to SQLConverter rules, with file paths and descriptions]
@@ -384,26 +490,24 @@ Host: Docker workbench (claude-dev)
 ## Schema Parity Comparison
 | Metric | SQL Server | PostgreSQL | Match |
 |--------|-----------|-----------|-------|
-| Tables | 150 | 150 | YES |
-| Views | 200 | 198 | NO |
-| Procedures/Functions | 300 | 298 | NO |
-| Total Data Rows | 5000 | 5000 | YES |
 
-## Variances Detail
-[For each variance: object name, difference, likely cause, suggested resolution]
+## Column Mismatches
+| Table | SQL Server | PostgreSQL | Cause |
+|-------|-----------|-----------|-------|
 
-## Manual Review Needed
-[For each unresolved item: file, error, SQL pattern, what was attempted]
+## Known Migration Errors (non-blocking)
+**PostgreSQL:** [list]
+**SQL Server:** [list]
 
 ## Smoke Test Results
 | Test | Result | Details |
 |------|--------|---------|
-| Login | PASS | |
-| Data Explorer | PASS | |
-| ... | ... | ... |
 
 ## PG-Only Migrations (Preserved)
-[List any migrations in migrations-pg/ that have no SQL Server source — these are intentional]
+[List any migrations in migrations-pg/ that have no SQL Server source]
+
+## Action Items
+[Prioritized list of issues to resolve]
 ```
 
 ### Step 5c: Present summary to user
@@ -425,11 +529,34 @@ Print a concise summary in chat with:
 3. **Always use a fresh database** for migration testing — drop and recreate each time
 4. **All heavy work happens inside Docker** — never run migrations, SQL, or conversion on the host
 5. **Preserve existing PG-only migrations** — files in `migrations-pg/v5/` with no SQL Server source are intentional
-6. **Copy results back to host** — Docker uses a named volume, so `docker cp` is needed to get files onto the host filesystem
-7. **Discover CLI syntax dynamically** — if `mj sql-convert` or `mj migrate` flags differ from examples, use `--help` first
-8. **Run SQLConverter unit tests** after any toolchain fix to prevent regressions
-9. **Idempotent** — running again only processes migrations still missing PG equivalents
-10. **Log everything** — all command output feeds into the final report
-11. **Auth gate** — if CC in Docker isn't authenticated, stop immediately and tell the user how to fix it
-12. **Self-contained task prompts** — each prompt sent to CC in Docker must include ALL context; it has no memory between phases
-13. **Poll patiently** — CC in Docker may take hours for large conversion runs; poll every 30-60 seconds without timeout
+6. **NEVER re-convert existing migrations without explicit user approval** — Only convert NEW migrations (those discovered in Phase 1 as missing PG equivalents). Existing `.pg.sql` files that already work MUST NOT be re-run through the toolchain, even if the toolchain has improved. Re-converting old migrations is a breaking change once they've been deployed to any environment. If toolchain improvements would benefit old files, flag this to the user and let them decide.
+7. **Copy results back to host** — Docker uses a named volume, so `docker cp` is needed to get files onto the host filesystem
+8. **Discover CLI syntax dynamically** — if `mj sql-convert` or `mj migrate` flags differ from examples, use `--help` first
+9. **Run SQLConverter unit tests** after any toolchain fix to prevent regressions
+10. **Idempotent** — running again only processes migrations still missing PG equivalents
+11. **Log everything** — all command output feeds into the final report
+12. **Auth gate** — if CC in Docker isn't authenticated, stop immediately and tell the user how to fix it
+13. **Self-contained task prompts** — each prompt sent to CC in Docker must include ALL context; it has no memory between phases
+14. **Poll patiently** — CC in Docker may take hours for large conversion runs; poll every 30-60 seconds without timeout
+
+## Quality Gates (CRITICAL)
+
+### Zero TODO Comments Allowed
+**Converted `.pg.sql` files MUST NOT contain any `-- TODO:` comments.** TODO comments indicate the SQLConverter failed to convert a SQL pattern and commented it out instead. This is unacceptable — every T-SQL statement must be properly converted to working PostgreSQL.
+
+**After Phase 2 conversion, the orchestrator (you) MUST run this validation:**
+```bash
+docker exec claude-dev bash -c 'grep -c "TODO:" /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v ":0$"'
+```
+
+If ANY TODO comments are found:
+1. **Do NOT proceed to Phase 3** — the conversions are incomplete
+2. Identify the SQLConverter rule producing the TODO (search `packages/SQLConverter/src/rules/` for the TODO text)
+3. Send a follow-up fix task to CC in Docker with the specific TODO patterns to eliminate
+4. Re-convert ALL affected files
+5. Re-run the full migration set on a fresh PG database
+6. Re-check for TODO comments
+7. Only proceed when zero TODOs remain
+
+### Full Migration Stack Validation
+After all conversions pass the TODO check, the full PG migration set (baseline + all migrations) must run on a fresh database as part of Phase 3. Phase 3 ALWAYS runs, even when Phase 2 has zero new files.

@@ -31,13 +31,13 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 -- =============================================================================
 
 -- Add scheduling fields to Company Integrations
-ALTER TABLE __mj."CompanyIntegration" ADD
-    ScheduleEnabled BOOLEAN NOT NULL DEFAULT 0,
-    ScheduleType VARCHAR(20) NOT NULL DEFAULT 'Manual',
-    ScheduleIntervalMinutes INTEGER NULL,
-    CronExpression VARCHAR(200) NULL,
-    NextScheduledRunAt TIMESTAMPTZ NULL,
-    LastScheduledRunAt TIMESTAMPTZ NULL;
+ALTER TABLE __mj."CompanyIntegration"
+ ADD COLUMN "ScheduleEnabled" BOOLEAN NOT NULL DEFAULT 0,
+ ADD COLUMN "ScheduleType" VARCHAR(20) NOT NULL DEFAULT 'Manual',
+ ADD COLUMN "ScheduleIntervalMinutes" INTEGER NULL,
+ ADD COLUMN "CronExpression" VARCHAR(200) NULL,
+ ADD COLUMN "NextScheduledRunAt" TIMESTAMPTZ NULL,
+ ADD COLUMN "LastScheduledRunAt" TIMESTAMPTZ NULL;
 
 CREATE TABLE __mj."IntegrationObject" (
  "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -108,19 +108,23 @@ CREATE TABLE __mj."IntegrationObjectField" (
 -- EXTENDED PROPERTIES: IntegrationObject
 -- =============================================================================;
 
-ALTER TABLE __mj."IntegrationObjectField" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."IntegrationObjectField"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObjectField" */;
 
-ALTER TABLE __mj."IntegrationObjectField" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."IntegrationObjectField"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."IntegrationObject" */;
 
-ALTER TABLE __mj."IntegrationObject" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."IntegrationObject"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObject" */;
 
-ALTER TABLE __mj."IntegrationObject" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."IntegrationObject"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to insert new entity field */;
 
@@ -802,3385 +806,3437 @@ INSERT INTO __mj."EntityPermission"
                                                    ('3630cbfd-4c85-4b24-8a51-88d67389373e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
 /* SQL text to add special date field "__mj_CreatedAt" to entity __mj."IntegrationObjectField" */
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '4d811e36-6c67-4927-957c-cf3692941c43' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleEnabled')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '4d811e36-6c67-4927-957c-cf3692941c43',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100046,
---             'ScheduleEnabled',
---             'Schedule Enabled',
---             'Whether automatic sync scheduling is enabled for this integration',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '91e87b89-a40e-49ce-8464-75ec06bff1a7' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleType')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '91e87b89-a40e-49ce-8464-75ec06bff1a7',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100047,
---             'ScheduleType',
---             'Schedule Type',
---             'Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)',
---             'TEXT',
---             40,
---             0,
---             0,
---             0,
---             'Manual',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '801d0e7d-4fcb-4249-9052-4e929307f070' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduleIntervalMinutes')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '801d0e7d-4fcb-4249-9052-4e929307f070',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100048,
---             'ScheduleIntervalMinutes',
---             'Schedule Interval Minutes',
---             'Interval in minutes for Interval schedule type',
---             'INTEGER',
---             4,
---             10,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'fa43cb1d-7a04-40d8-ac9a-2036e3f06252' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CronExpression')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'fa43cb1d-7a04-40d8-ac9a-2036e3f06252',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100049,
---             'CronExpression',
---             'Cron Expression',
---             'Cron expression for Cron schedule type (e.g., "0 */6 * * *" for every 6 hours)',
---             'TEXT',
---             400,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '45e7c880-19c4-45fb-ba3c-9ffd9533fb12' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'NextScheduledRunAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '45e7c880-19c4-45fb-ba3c-9ffd9533fb12',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100050,
---             'NextScheduledRunAt',
---             'Next Scheduled Run At',
---             'When the next scheduled sync should run. Updated after each run based on schedule config.',
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'cac39331-fa43-46bd-abc0-11ae683ea5ec' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LastScheduledRunAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'cac39331-fa43-46bd-abc0-11ae683ea5ec',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100051,
---             'LastScheduledRunAt',
---             'Last Scheduled Run At',
---             'When the last scheduled sync was initiated',
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsLocked')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100052,
---             'IsLocked',
---             'Is Locked',
---             'Whether a sync is currently locked/running for this integration',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '8b9edf01-96fe-4506-97d8-1971830f101e' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockedAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '8b9edf01-96fe-4506-97d8-1971830f101e',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100053,
---             'LockedAt',
---             'Locked At',
---             'When the lock was acquired',
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '186eb537-b916-46ac-82f3-dce1789b572f' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockedByInstance')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '186eb537-b916-46ac-82f3-dce1789b572f',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100054,
---             'LockedByInstance',
---             'Locked By Instance',
---             'Server instance identifier that holds the lock (hostname-pid)',
---             'TEXT',
---             400,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'f9e35f33-7ed2-4413-922f-12ba98e60355' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'LockExpiresAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'f9e35f33-7ed2-4413-922f-12ba98e60355',
---             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
---             100055,
---             'LockExpiresAt',
---             'Lock Expires At',
---             'When the lock should be considered stale and eligible for cleanup',
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'c29bac47-fd92-4209-b600-998618c2a052' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'ID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'c29bac47-fd92-4209-b600-998618c2a052',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100001,
---             'ID',
---             'ID',
---             'Primary key',
---             'UUID',
---             16,
---             0,
---             0,
---             0,
---             'newsequentialid()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             1,
---             0,
---             0,
---             1,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '8ea456ad-785f-4e37-b397-8ff6f2040810' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IntegrationObjectID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '8ea456ad-785f-4e37-b397-8ff6f2040810',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100002,
---             'IntegrationObjectID',
---             'Integration Object ID',
---             'Foreign key to the IntegrationObject this field belongs to',
---             'UUID',
---             16,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
---             'ID',
---             0,
---             0,
---             1,
---             0,
---             0,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'f087bb9d-a16e-4778-a711-026b5cdb5ecb' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Name')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'f087bb9d-a16e-4778-a711-026b5cdb5ecb',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100003,
---             'Name',
---             'Name',
---             'Field name as returned by the external API',
---             'TEXT',
---             510,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             1,
---             1,
---             0,
---             1,
---             0,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'c0279d61-5dd7-4636-acaf-3c07b4ebf599' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'DisplayName')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'c0279d61-5dd7-4636-acaf-3c07b4ebf599',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100004,
---             'DisplayName',
---             'Display Name',
---             'Human-friendly display label for the field',
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'eb935245-a13b-46ba-b54c-bede08fafec0' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Description')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'eb935245-a13b-46ba-b54c-bede08fafec0',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100005,
---             'Description',
---             'Description',
---             'Description of what this field represents',
---             'TEXT',
---             -1,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Category')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100006,
---             'Category',
---             'Category',
---             'UI grouping category within the object',
---             'TEXT',
---             200,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'fe592595-e4fd-458a-a892-918db3abc0b8' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Type')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'fe592595-e4fd-458a-a892-918db3abc0b8',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100007,
---             'Type',
---             'Type',
---             'Data type of the field (e.g., TEXT, INTEGER, TIMESTAMPTZ, decimal, BOOLEAN). Uses same type vocabulary as EntityField.',
---             'TEXT',
---             200,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'a184fa33-d1e3-4341-854a-63ba62571622' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Length')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'a184fa33-d1e3-4341-854a-63ba62571622',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100008,
---             'Length',
---             'Length',
---             'Maximum length for string types',
---             'INTEGER',
---             4,
---             10,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'fc62f3d1-514c-4850-a884-098accea440c' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Precision')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'fc62f3d1-514c-4850-a884-098accea440c',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100009,
---             'Precision',
---             'Precision',
---             'Numeric precision',
---             'INTEGER',
---             4,
---             10,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'a27f5839-ca61-42fc-b724-c4f885fb5fa0' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Scale')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'a27f5839-ca61-42fc-b724-c4f885fb5fa0',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100010,
---             'Scale',
---             'Scale',
---             'Numeric scale',
---             'INTEGER',
---             4,
---             10,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '4f48e0a4-576c-4746-af78-0ced62880881' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'AllowsNull')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '4f48e0a4-576c-4746-af78-0ced62880881',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100011,
---             'AllowsNull',
---             'Allows Null',
---             'Whether the field can contain NULL values',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(1)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '1e996e3e-68a6-468d-92b5-b1e7d905ab64' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'DefaultValue')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '1e996e3e-68a6-468d-92b5-b1e7d905ab64',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100012,
---             'DefaultValue',
---             'Default Value',
---             'Default value from the source system',
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'a41406ef-d751-4e1d-8b03-537ec3f5ed26' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsPrimaryKey')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'a41406ef-d751-4e1d-8b03-537ec3f5ed26',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100013,
---             'IsPrimaryKey',
---             'Is Primary Key',
---             'Whether this field is part of the object primary key',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsUniqueKey')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100014,
---             'IsUniqueKey',
---             'Is Unique Key',
---             'Whether values must be unique across all records',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '6b8579c3-5351-4263-aef4-bb44e30d4b4d' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsReadOnly')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '6b8579c3-5351-4263-aef4-bb44e30d4b4d',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100015,
---             'IsReadOnly',
---             'Is Read Only',
---             'Whether this field cannot be written back to the source system',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'da3bc5ce-671c-48ac-9cd5-497ca602d0e5' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsRequired')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'da3bc5ce-671c-48ac-9cd5-497ca602d0e5',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100016,
---             'IsRequired',
---             'Is Required',
---             'Whether this field is required for create/update operations',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '22a62bf2-861b-4b29-a7e1-b69b476e706e' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObjectID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '22a62bf2-861b-4b29-a7e1-b69b476e706e',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100017,
---             'RelatedIntegrationObjectID',
---             'Related Integration Object ID',
---             'Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.',
---             'UUID',
---             16,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
---             'ID',
---             0,
---             0,
---             1,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObjectFieldName')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100018,
---             'RelatedIntegrationObjectFieldName',
---             'Related Integration Object Field Name',
---             'The field name on the related IntegrationObject that this FK points to (typically the PK field)',
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '5bc346a1-8015-4f20-9247-cb0039ee14e4' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Sequence')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '5bc346a1-8015-4f20-9247-cb0039ee14e4',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100019,
---             'Sequence',
---             'Sequence',
---             'Display and processing order within the object. Lower numbers appear first.',
---             'INTEGER',
---             4,
---             10,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '2efa2d36-459b-4433-bfbc-4e76e8a5a461' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Configuration')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '2efa2d36-459b-4433-bfbc-4e76e8a5a461',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100020,
---             'Configuration',
---             'Configuration',
---             'Freeform JSON for connector-specific field configuration',
---             'TEXT',
---             -1,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'Status')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100021,
---             'Status',
---             'Status',
---             'Active, Deprecated, or Disabled. Mirrors EntityField status values.',
---             'TEXT',
---             50,
---             0,
---             0,
---             0,
---             'Active',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'a40b0908-76cc-4d93-b7ff-659d450cdf19' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = '__mj_CreatedAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'a40b0908-76cc-4d93-b7ff-659d450cdf19',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100022,
---             '__mj_CreatedAt',
---             'Created At',
---             NULL,
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             0,
---             'getutcdate()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '1e19f566-6ffb-4b64-96c9-8ea44b3dae08' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = '__mj_UpdatedAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '1e19f566-6ffb-4b64-96c9-8ea44b3dae08',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100023,
---             '__mj_UpdatedAt',
---             'Updated At',
---             NULL,
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             0,
---             'getutcdate()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'ID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100001,
---             'ID',
---             'ID',
---             'Primary key',
---             'UUID',
---             16,
---             0,
---             0,
---             0,
---             'newsequentialid()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             1,
---             0,
---             0,
---             1,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'a0eab738-4bb1-499f-80fc-aa8a0b46b389' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'IntegrationID')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'a0eab738-4bb1-499f-80fc-aa8a0b46b389',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100002,
---             'IntegrationID',
---             'Integration ID',
---             'Foreign key to the Integration that owns this object',
---             'UUID',
---             16,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             'DD238F34-2837-EF11-86D4-6045BDEE16E6',
---             'ID',
---             0,
---             0,
---             1,
---             0,
---             0,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '7f19f87b-4609-4738-97d6-8627de23af4b' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Name')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '7f19f87b-4609-4738-97d6-8627de23af4b',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100003,
---             'Name',
---             'Name',
---             'Internal/programmatic name of the external object (e.g., Members, Events)',
---             'TEXT',
---             510,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             1,
---             1,
---             0,
---             1,
---             0,
---             1,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DisplayName')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100004,
---             'DisplayName',
---             'Display Name',
---             'Human-friendly display label',
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'dbfed2a5-355d-4617-b4f8-237b4d3b2365' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Description')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'dbfed2a5-355d-4617-b4f8-237b4d3b2365',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100005,
---             'Description',
---             'Description',
---             'Description of what this external object represents',
---             'TEXT',
---             -1,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '0f0f0147-386f-45c8-aa9f-021c26b634a5' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Category')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '0f0f0147-386f-45c8-aa9f-021c26b634a5',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100006,
---             'Category',
---             'Category',
---             'UI grouping category (e.g., Membership, Events, Finance)',
---             'TEXT',
---             200,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '1cfa6c37-9057-4662-8c40-f835aa972edf' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'APIPath')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '1cfa6c37-9057-4662-8c40-f835aa972edf',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100007,
---             'APIPath',
---             'API Path',
---             'API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records',
---             'TEXT',
---             1000,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'ade52a5e-adba-4414-aae2-12b535f85ac3' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'ResponseDataKey')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'ade52a5e-adba-4414-aae2-12b535f85ac3',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100008,
---             'ResponseDataKey',
---             'Response Data Key',
---             'JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.',
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '85d95d3f-dad6-492d-90af-5207d16780ee' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DefaultPageSize')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '85d95d3f-dad6-492d-90af-5207d16780ee',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100009,
---             'DefaultPageSize',
---             'Default Page Size',
---             'Number of records to request per page from the API',
---             'INTEGER',
---             4,
---             10,
---             0,
---             0,
---             '(100)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '27719863-6129-44d5-a77c-7827db58bd91' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsPagination')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '27719863-6129-44d5-a77c-7827db58bd91',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100010,
---             'SupportsPagination',
---             'Supports Pagination',
---             'Whether this endpoint supports paginated fetching',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(1)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '248dbcef-e551-4913-8579-200b33459e16' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'PaginationType')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '248dbcef-e551-4913-8579-200b33459e16',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100011,
---             'PaginationType',
---             'Pagination Type',
---             'Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None',
---             'TEXT',
---             40,
---             0,
---             0,
---             0,
---             'PageNumber',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'c73a053e-44e2-40a8-9a0a-899e6e28af4d' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsIncrementalSync')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'c73a053e-44e2-40a8-9a0a-899e6e28af4d',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100012,
---             'SupportsIncrementalSync',
---             'Supports Incremental Sync',
---             'Whether this object supports watermark-based incremental sync',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'e48963cb-3027-4554-bf48-52eca282d983' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'SupportsWrite')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'e48963cb-3027-4554-bf48-52eca282d983',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100013,
---             'SupportsWrite',
---             'Supports Write',
---             'Whether data can be pushed back to this object via the API',
---             'BOOLEAN',
---             1,
---             1,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '38708eac-bec9-4bd1-afa5-af93a00f0fea' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'DefaultQueryParams')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '38708eac-bec9-4bd1-afa5-af93a00f0fea',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100014,
---             'DefaultQueryParams',
---             'Default Query Params',
---             'JSON object of default query parameters to include with every API request for this object',
---             'TEXT',
---             -1,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'ed9326f4-6377-4fb3-84fa-ebcc9859fc07' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Configuration')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'ed9326f4-6377-4fb3-84fa-ebcc9859fc07',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100015,
---             'Configuration',
---             'Configuration',
---             'Freeform JSON for connector-specific configuration not covered by standard columns',
---             'TEXT',
---             -1,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '9057e47c-7633-4b86-8adf-f09044fe4470' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Sequence')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '9057e47c-7633-4b86-8adf-f09044fe4470',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100016,
---             'Sequence',
---             'Sequence',
---             'Processing and display order. Lower numbers are processed first.',
---             'INTEGER',
---             4,
---             10,
---             0,
---             0,
---             '(0)',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '027bc6fb-ac73-41c5-8856-981fb0031897' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Status')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '027bc6fb-ac73-41c5-8856-981fb0031897',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100017,
---             'Status',
---             'Status',
---             'Active, Deprecated, or Disabled. Mirrors EntityField status values.',
---             'TEXT',
---             50,
---             0,
---             0,
---             0,
---             'Active',
---             0,
---             1,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '4c7b2511-b32a-4e05-ad8f-71a8d7438e96' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = '__mj_CreatedAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '4c7b2511-b32a-4e05-ad8f-71a8d7438e96',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100018,
---             '__mj_CreatedAt',
---             'Created At',
---             NULL,
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             0,
---             'getutcdate()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '17416191-6ba9-4d7d-b38d-5d32220c994e' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = '__mj_UpdatedAt')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '17416191-6ba9-4d7d-b38d-5d32220c994e',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100019,
---             '__mj_UpdatedAt',
---             'Updated At',
---             NULL,
---             'TIMESTAMPTZ',
---             10,
---             34,
---             7,
---             0,
---             'getutcdate()',
---             0,
---             0,
---             0,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert entity field value with ID b598a04e-5f57-4ae2-91aa-54bbafe86032 */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4d811e36-6c67-4927-957c-cf3692941c43' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'ScheduleEnabled')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '4d811e36-6c67-4927-957c-cf3692941c43',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100046,
+        'ScheduleEnabled',
+        'Schedule Enabled',
+        'Whether automatic sync scheduling is enabled for this integration',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '91e87b89-a40e-49ce-8464-75ec06bff1a7' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'ScheduleType')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '91e87b89-a40e-49ce-8464-75ec06bff1a7',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100047,
+        'ScheduleType',
+        'Schedule Type',
+        'Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)',
+        'TEXT',
+        40,
+        0,
+        0,
+        0,
+        'Manual',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '801d0e7d-4fcb-4249-9052-4e929307f070' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'ScheduleIntervalMinutes')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '801d0e7d-4fcb-4249-9052-4e929307f070',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100048,
+        'ScheduleIntervalMinutes',
+        'Schedule Interval Minutes',
+        'Interval in minutes for Interval schedule type',
+        'INTEGER',
+        4,
+        10,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'fa43cb1d-7a04-40d8-ac9a-2036e3f06252' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'CronExpression')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'fa43cb1d-7a04-40d8-ac9a-2036e3f06252',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100049,
+        'CronExpression',
+        'Cron Expression',
+        'Cron expression for Cron schedule type (e.g., "0 */6 * * *" for every 6 hours)',
+        'TEXT',
+        400,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '45e7c880-19c4-45fb-ba3c-9ffd9533fb12' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'NextScheduledRunAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '45e7c880-19c4-45fb-ba3c-9ffd9533fb12',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100050,
+        'NextScheduledRunAt',
+        'Next Scheduled Run At',
+        'When the next scheduled sync should run. Updated after each run based on schedule config.',
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cac39331-fa43-46bd-abc0-11ae683ea5ec' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'LastScheduledRunAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'cac39331-fa43-46bd-abc0-11ae683ea5ec',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100051,
+        'LastScheduledRunAt',
+        'Last Scheduled Run At',
+        'When the last scheduled sync was initiated',
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'IsLocked')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '6e0a21b0-0039-4acc-b40a-3b8e1767d4d4',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100052,
+        'IsLocked',
+        'Is Locked',
+        'Whether a sync is currently locked/running for this integration',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8b9edf01-96fe-4506-97d8-1971830f101e' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'LockedAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '8b9edf01-96fe-4506-97d8-1971830f101e',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100053,
+        'LockedAt',
+        'Locked At',
+        'When the lock was acquired',
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '186eb537-b916-46ac-82f3-dce1789b572f' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'LockedByInstance')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '186eb537-b916-46ac-82f3-dce1789b572f',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100054,
+        'LockedByInstance',
+        'Locked By Instance',
+        'Server instance identifier that holds the lock (hostname-pid)',
+        'TEXT',
+        400,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f9e35f33-7ed2-4413-922f-12ba98e60355' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'LockExpiresAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'f9e35f33-7ed2-4413-922f-12ba98e60355',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100055,
+        'LockExpiresAt',
+        'Lock Expires At',
+        'When the lock should be considered stale and eligible for cleanup',
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c29bac47-fd92-4209-b600-998618c2a052' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'ID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'c29bac47-fd92-4209-b600-998618c2a052',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100001,
+        'ID',
+        'ID',
+        'Primary key',
+        'UUID',
+        16,
+        0,
+        0,
+        0,
+        'gen_random_uuid()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8ea456ad-785f-4e37-b397-8ff6f2040810' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IntegrationObjectID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '8ea456ad-785f-4e37-b397-8ff6f2040810',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100002,
+        'IntegrationObjectID',
+        'Integration Object ID',
+        'Foreign key to the IntegrationObject this field belongs to',
+        'UUID',
+        16,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f087bb9d-a16e-4778-a711-026b5cdb5ecb' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Name')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'f087bb9d-a16e-4778-a711-026b5cdb5ecb',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100003,
+        'Name',
+        'Name',
+        'Field name as returned by the external API',
+        'TEXT',
+        510,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c0279d61-5dd7-4636-acaf-3c07b4ebf599' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'DisplayName')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'c0279d61-5dd7-4636-acaf-3c07b4ebf599',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100004,
+        'DisplayName',
+        'Display Name',
+        'Human-friendly display label for the field',
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'eb935245-a13b-46ba-b54c-bede08fafec0' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Description')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'eb935245-a13b-46ba-b54c-bede08fafec0',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100005,
+        'Description',
+        'Description',
+        'Description of what this field represents',
+        'TEXT',
+        -1,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Category')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'cc99e8ba-ddb8-4cfb-8f0a-a4a68769a942',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100006,
+        'Category',
+        'Category',
+        'UI grouping category within the object',
+        'TEXT',
+        200,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'fe592595-e4fd-458a-a892-918db3abc0b8' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Type')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'fe592595-e4fd-458a-a892-918db3abc0b8',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100007,
+        'Type',
+        'Type',
+        'Data type of the field (e.g., TEXT, INTEGER, TIMESTAMPTZ, decimal, BOOLEAN). Uses same type vocabulary as EntityField.',
+        'TEXT',
+        200,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a184fa33-d1e3-4341-854a-63ba62571622' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Length')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'a184fa33-d1e3-4341-854a-63ba62571622',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100008,
+        'Length',
+        'Length',
+        'Maximum length for string types',
+        'INTEGER',
+        4,
+        10,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'fc62f3d1-514c-4850-a884-098accea440c' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Precision')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'fc62f3d1-514c-4850-a884-098accea440c',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100009,
+        'Precision',
+        'Precision',
+        'Numeric precision',
+        'INTEGER',
+        4,
+        10,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a27f5839-ca61-42fc-b724-c4f885fb5fa0' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Scale')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'a27f5839-ca61-42fc-b724-c4f885fb5fa0',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100010,
+        'Scale',
+        'Scale',
+        'Numeric scale',
+        'INTEGER',
+        4,
+        10,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4f48e0a4-576c-4746-af78-0ced62880881' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'AllowsNull')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '4f48e0a4-576c-4746-af78-0ced62880881',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100011,
+        'AllowsNull',
+        'Allows Null',
+        'Whether the field can contain NULL values',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(1)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '1e996e3e-68a6-468d-92b5-b1e7d905ab64' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'DefaultValue')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '1e996e3e-68a6-468d-92b5-b1e7d905ab64',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100012,
+        'DefaultValue',
+        'Default Value',
+        'Default value from the source system',
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a41406ef-d751-4e1d-8b03-537ec3f5ed26' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IsPrimaryKey')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'a41406ef-d751-4e1d-8b03-537ec3f5ed26',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100013,
+        'IsPrimaryKey',
+        'Is Primary Key',
+        'Whether this field is part of the object primary key',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IsUniqueKey')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'db6d509c-4ddc-4f2b-a2ed-6abdefd210a5',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100014,
+        'IsUniqueKey',
+        'Is Unique Key',
+        'Whether values must be unique across all records',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '6b8579c3-5351-4263-aef4-bb44e30d4b4d' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IsReadOnly')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '6b8579c3-5351-4263-aef4-bb44e30d4b4d',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100015,
+        'IsReadOnly',
+        'Is Read Only',
+        'Whether this field cannot be written back to the source system',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'da3bc5ce-671c-48ac-9cd5-497ca602d0e5' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IsRequired')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'da3bc5ce-671c-48ac-9cd5-497ca602d0e5',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100016,
+        'IsRequired',
+        'Is Required',
+        'Whether this field is required for create/update operations',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '22a62bf2-861b-4b29-a7e1-b69b476e706e' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'RelatedIntegrationObjectID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '22a62bf2-861b-4b29-a7e1-b69b476e706e',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100017,
+        'RelatedIntegrationObjectID',
+        'Related Integration Object ID',
+        'Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.',
+        'UUID',
+        16,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'RelatedIntegrationObjectFieldName')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'efd4b858-690a-4ad6-9bce-dacbe0f0bdf3',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100018,
+        'RelatedIntegrationObjectFieldName',
+        'Related Integration Object Field Name',
+        'The field name on the related IntegrationObject that this FK points to (typically the PK field)',
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5bc346a1-8015-4f20-9247-cb0039ee14e4' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Sequence')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '5bc346a1-8015-4f20-9247-cb0039ee14e4',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100019,
+        'Sequence',
+        'Sequence',
+        'Display and processing order within the object. Lower numbers appear first.',
+        'INTEGER',
+        4,
+        10,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '2efa2d36-459b-4433-bfbc-4e76e8a5a461' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Configuration')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '2efa2d36-459b-4433-bfbc-4e76e8a5a461',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100020,
+        'Configuration',
+        'Configuration',
+        'Freeform JSON for connector-specific field configuration',
+        'TEXT',
+        -1,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'Status')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '82d4929e-1bbf-4eb5-afc4-40d1da3d01d4',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100021,
+        'Status',
+        'Status',
+        'Active, Deprecated, or Disabled. Mirrors EntityField status values.',
+        'TEXT',
+        50,
+        0,
+        0,
+        0,
+        'Active',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a40b0908-76cc-4d93-b7ff-659d450cdf19' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = '__mj_CreatedAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'a40b0908-76cc-4d93-b7ff-659d450cdf19',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100022,
+        '__mj_CreatedAt',
+        'Created At',
+        NULL,
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        0,
+        'NOW()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '1e19f566-6ffb-4b64-96c9-8ea44b3dae08' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = '__mj_UpdatedAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '1e19f566-6ffb-4b64-96c9-8ea44b3dae08',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100023,
+        '__mj_UpdatedAt',
+        'Updated At',
+        NULL,
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        0,
+        'NOW()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'ID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'f5f7651f-56e2-4e92-a9fe-cfcd61b58b25',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100001,
+        'ID',
+        'ID',
+        'Primary key',
+        'UUID',
+        16,
+        0,
+        0,
+        0,
+        'gen_random_uuid()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a0eab738-4bb1-499f-80fc-aa8a0b46b389' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'IntegrationID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'a0eab738-4bb1-499f-80fc-aa8a0b46b389',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100002,
+        'IntegrationID',
+        'Integration ID',
+        'Foreign key to the Integration that owns this object',
+        'UUID',
+        16,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        'DD238F34-2837-EF11-86D4-6045BDEE16E6',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7f19f87b-4609-4738-97d6-8627de23af4b' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Name')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '7f19f87b-4609-4738-97d6-8627de23af4b',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100003,
+        'Name',
+        'Name',
+        'Internal/programmatic name of the external object (e.g., Members, Events)',
+        'TEXT',
+        510,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'DisplayName')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '8b3f3dff-3e46-4db2-9fc6-d5b764d80b7e',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100004,
+        'DisplayName',
+        'Display Name',
+        'Human-friendly display label',
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'dbfed2a5-355d-4617-b4f8-237b4d3b2365' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Description')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'dbfed2a5-355d-4617-b4f8-237b4d3b2365',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100005,
+        'Description',
+        'Description',
+        'Description of what this external object represents',
+        'TEXT',
+        -1,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0f0f0147-386f-45c8-aa9f-021c26b634a5' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Category')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '0f0f0147-386f-45c8-aa9f-021c26b634a5',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100006,
+        'Category',
+        'Category',
+        'UI grouping category (e.g., Membership, Events, Finance)',
+        'TEXT',
+        200,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '1cfa6c37-9057-4662-8c40-f835aa972edf' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'APIPath')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '1cfa6c37-9057-4662-8c40-f835aa972edf',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100007,
+        'APIPath',
+        'API Path',
+        'API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records',
+        'TEXT',
+        1000,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ade52a5e-adba-4414-aae2-12b535f85ac3' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'ResponseDataKey')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'ade52a5e-adba-4414-aae2-12b535f85ac3',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100008,
+        'ResponseDataKey',
+        'Response Data Key',
+        'JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.',
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '85d95d3f-dad6-492d-90af-5207d16780ee' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'DefaultPageSize')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '85d95d3f-dad6-492d-90af-5207d16780ee',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100009,
+        'DefaultPageSize',
+        'Default Page Size',
+        'Number of records to request per page from the API',
+        'INTEGER',
+        4,
+        10,
+        0,
+        0,
+        '(100)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '27719863-6129-44d5-a77c-7827db58bd91' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'SupportsPagination')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '27719863-6129-44d5-a77c-7827db58bd91',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100010,
+        'SupportsPagination',
+        'Supports Pagination',
+        'Whether this endpoint supports paginated fetching',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(1)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '248dbcef-e551-4913-8579-200b33459e16' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'PaginationType')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '248dbcef-e551-4913-8579-200b33459e16',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100011,
+        'PaginationType',
+        'Pagination Type',
+        'Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None',
+        'TEXT',
+        40,
+        0,
+        0,
+        0,
+        'PageNumber',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c73a053e-44e2-40a8-9a0a-899e6e28af4d' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'SupportsIncrementalSync')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'c73a053e-44e2-40a8-9a0a-899e6e28af4d',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100012,
+        'SupportsIncrementalSync',
+        'Supports Incremental Sync',
+        'Whether this object supports watermark-based incremental sync',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'e48963cb-3027-4554-bf48-52eca282d983' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'SupportsWrite')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'e48963cb-3027-4554-bf48-52eca282d983',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100013,
+        'SupportsWrite',
+        'Supports Write',
+        'Whether data can be pushed back to this object via the API',
+        'BOOLEAN',
+        1,
+        1,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '38708eac-bec9-4bd1-afa5-af93a00f0fea' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'DefaultQueryParams')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '38708eac-bec9-4bd1-afa5-af93a00f0fea',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100014,
+        'DefaultQueryParams',
+        'Default Query Params',
+        'JSON object of default query parameters to include with every API request for this object',
+        'TEXT',
+        -1,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ed9326f4-6377-4fb3-84fa-ebcc9859fc07' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Configuration')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'ed9326f4-6377-4fb3-84fa-ebcc9859fc07',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100015,
+        'Configuration',
+        'Configuration',
+        'Freeform JSON for connector-specific configuration not covered by standard columns',
+        'TEXT',
+        -1,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9057e47c-7633-4b86-8adf-f09044fe4470' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Sequence')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '9057e47c-7633-4b86-8adf-f09044fe4470',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100016,
+        'Sequence',
+        'Sequence',
+        'Processing and display order. Lower numbers are processed first.',
+        'INTEGER',
+        4,
+        10,
+        0,
+        0,
+        '(0)',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '027bc6fb-ac73-41c5-8856-981fb0031897' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Status')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '027bc6fb-ac73-41c5-8856-981fb0031897',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100017,
+        'Status',
+        'Status',
+        'Active, Deprecated, or Disabled. Mirrors EntityField status values.',
+        'TEXT',
+        50,
+        0,
+        0,
+        0,
+        'Active',
+        0,
+        1,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4c7b2511-b32a-4e05-ad8f-71a8d7438e96' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = '__mj_CreatedAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '4c7b2511-b32a-4e05-ad8f-71a8d7438e96',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100018,
+        '__mj_CreatedAt',
+        'Created At',
+        NULL,
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        0,
+        'NOW()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '17416191-6ba9-4d7d-b38d-5d32220c994e' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = '__mj_UpdatedAt')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '17416191-6ba9-4d7d-b38d-5d32220c994e',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100019,
+        '__mj_UpdatedAt',
+        'Updated At',
+        NULL,
+        'TIMESTAMPTZ',
+        10,
+        34,
+        7,
+        0,
+        'NOW()',
+        0,
+        0,
+        0,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 INSERT INTO __mj."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
@@ -4278,7 +4334,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f9f16e5b-2784-4682-aaac-df0f98e7a2c0'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('f9f16e5b-2784-4682-aaac-df0f98e7a2c0', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', 'IntegrationID', 'One To Many', 1, 1, 1, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('f9f16e5b-2784-4682-aaac-df0f98e7a2c0', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', 'IntegrationID', 'One To Many', 1, 1, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4288,7 +4344,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'eaf27ef3-7e36-41ad-a878-cf636ea412e8'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('eaf27ef3-7e36-41ad-a878-cf636ea412e8', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'IntegrationObjectID', 'One To Many', 1, 1, 1, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('eaf27ef3-7e36-41ad-a878-cf636ea412e8', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'IntegrationObjectID', 'One To Many', 1, 1, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4298,204 +4354,207 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'c13b39a7-b4c6-4e0f-8b91-761e40d40ef6'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('c13b39a7-b4c6-4e0f-8b91-761e40d40ef6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'RelatedIntegrationObjectID', 'One To Many', 1, 1, 2, "GETUTCDATE"(), "GETUTCDATE"());
+        VALUES ('c13b39a7-b4c6-4e0f-8b91-761e40d40ef6', '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', '3630CBFD-4C85-4B24-8A51-88D67389373E', 'RelatedIntegrationObjectID', 'One To Many', 1, 1, 2, NOW(), NOW());
     END IF;
 END $$;
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '0dcda729-db83-421e-b5ec-1b1636c7bc1e' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IntegrationObject')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '0dcda729-db83-421e-b5ec-1b1636c7bc1e',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100047,
---             'IntegrationObject',
---             'Integration Object',
---             NULL,
---             'TEXT',
---             510,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0dcda729-db83-421e-b5ec-1b1636c7bc1e' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'IntegrationObject')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '0dcda729-db83-421e-b5ec-1b1636c7bc1e',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100047,
+        'IntegrationObject',
+        'Integration Object',
+        NULL,
+        'TEXT',
+        510,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'e1ed4d02-2463-457c-9c8d-761d24cc5288' OR ("EntityID" = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND "Name" = 'RelatedIntegrationObject')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'e1ed4d02-2463-457c-9c8d-761d24cc5288',
+        '3630CBFD-4C85-4B24-8A51-88D67389373E', -- "Entity": "MJ": "Integration" "Object" "Fields"
+        100048,
+        'RelatedIntegrationObject',
+        'Related Integration Object',
+        NULL,
+        'TEXT',
+        510,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = 'e1ed4d02-2463-457c-9c8d-761d24cc5288' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'RelatedIntegrationObject')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             'e1ed4d02-2463-457c-9c8d-761d24cc5288',
---             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
---             100048,
---             'RelatedIntegrationObject',
---             'Related Integration Object',
---             NULL,
---             'TEXT',
---             510,
---             0,
---             0,
---             1,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* SQL text to insert new entity field */
-
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE ID = '8defcead-c227-45e0-af79-6b3318c563c7' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'Integration')) BEGIN
---          INSERT INTO __mj."EntityField"
---          (
---             "ID",
---             "EntityID",
---             "Sequence",
---             "Name",
---             "DisplayName",
---             "Description",
---             "Type",
---             "Length",
---             "Precision",
---             "Scale",
---             "AllowsNull",
---             "DefaultValue",
---             "AutoIncrement",
---             "AllowUpdateAPI",
---             "IsVirtual",
---             "RelatedEntityID",
---             "RelatedEntityFieldName",
---             "IsNameField",
---             "IncludeInUserSearchAPI",
---             "IncludeRelatedEntityNameFieldInBaseView",
---             "DefaultInView",
---             "IsPrimaryKey",
---             "IsUnique",
---             "RelatedEntityDisplayType",
---             "__mj_CreatedAt",
---             "__mj_UpdatedAt"
---          )
---          VALUES
---          (
---             '8defcead-c227-45e0-af79-6b3318c563c7',
---             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
---             100039,
---             'Integration',
---             'Integration',
---             NULL,
---             'TEXT',
---             200,
---             0,
---             0,
---             0,
---             NULL,
---             0,
---             0,
---             1,
---             NULL,
---             NULL,
---             0,
---             0,
---             0,
---             0,
---             0,
---             0,
---             'Search',
---             GETUTCDATE(),
---             GETUTCDATE()
---          )
---       END
--- 
--- /* Set field properties for entity */
-
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8defcead-c227-45e0-af79-6b3318c563c7' OR ("EntityID" = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND "Name" = 'Integration')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '8defcead-c227-45e0-af79-6b3318c563c7',
+        '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- "Entity": "MJ": "Integration" "Objects"
+        100039,
+        'Integration',
+        'Integration',
+        NULL,
+        'TEXT',
+        200,
+        0,
+        0,
+        0,
+        NULL,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
 
 UPDATE __mj."EntityField"
                SET "DefaultInView" = 1
@@ -5451,11 +5510,11 @@ ALTER TABLE __mj."CompanyIntegration"
     CHECK ("ScheduleType" IN ('Manual', 'Interval', 'Cron'));
 
 -- Add distributed locking fields to prevent concurrent execution
-ALTER TABLE __mj."CompanyIntegration" ADD
-    IsLocked BOOLEAN NOT NULL DEFAULT 0,
-    LockedAt TIMESTAMPTZ NULL,
-    LockedByInstance VARCHAR(200) NULL,
-    LockExpiresAt TIMESTAMPTZ NULL NOT VALID;
+ALTER TABLE __mj."CompanyIntegration"
+ ADD COLUMN "IsLocked" BOOLEAN NOT NULL DEFAULT 0,
+ ADD COLUMN "LockedAt" TIMESTAMPTZ NULL,
+ ADD COLUMN "LockedByInstance" VARCHAR(200) NULL,
+ ADD COLUMN "LockExpiresAt" TIMESTAMPTZ NULL NOT VALID;
 
 
 -- ===================== Grants =====================
