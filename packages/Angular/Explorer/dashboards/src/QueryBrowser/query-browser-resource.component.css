@@ -506,6 +506,13 @@
     opacity: 0.7;
 }
 
+.query-viewer-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 /* Query Viewer fills remaining space */
 mj-query-viewer {
     flex: 1;
@@ -549,5 +556,357 @@ mj-query-viewer {
 
     .query-viewer-panel {
         height: 60%;
+    }
+}
+
+/* ─── Right-panel icon button override (white background context) ─────── */
+.query-viewer-header .icon-btn {
+    background: transparent;
+    color: #555;
+}
+
+.query-viewer-header .icon-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+/* ─── No-selection create button ─────────────────────────────────────── */
+.no-selection-create-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 8px 20px;
+    background: #5c6bc0;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.no-selection-create-btn:hover {
+    background: #3949ab;
+}
+
+/* ─── Drawer Backdrop ─────────────────────────────────────────────────── */
+.query-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 1100;
+    animation: backdropFadeIn 0.22s ease-out;
+}
+
+@keyframes backdropFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ─── Drawer Panel ────────────────────────────────────────────────────── */
+.query-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 480px;
+    max-width: 96vw;
+    background: #fff;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+    z-index: 1101;
+    display: flex;
+    flex-direction: column;
+    animation: drawerSlideIn 0.22s ease-out;
+}
+
+@keyframes drawerSlideIn {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+
+/* ─── Drawer Header ───────────────────────────────────────────────────── */
+.query-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.query-drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.query-drawer-title > i {
+    font-size: 18px;
+    opacity: 0.9;
+    flex-shrink: 0;
+}
+
+.query-drawer-title-main {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.query-drawer-title-sub {
+    font-size: 12px;
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 360px;
+    margin-top: 2px;
+}
+
+.query-drawer-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.query-drawer-close:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+/* ─── Drawer Body ─────────────────────────────────────────────────────── */
+.query-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.query-drawer-body::-webkit-scrollbar { width: 6px; }
+.query-drawer-body::-webkit-scrollbar-track { background: #f1f1f1; }
+.query-drawer-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.query-drawer-body::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* ─── Drawer Form Fields ──────────────────────────────────────────────── */
+.drawer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.drawer-row {
+    display: flex;
+    gap: 12px;
+}
+
+.drawer-field-flex {
+    flex: 1;
+    min-width: 0;
+}
+
+.drawer-field-sql {
+    flex: 1;
+}
+
+.drawer-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+
+.drawer-required {
+    color: #e53e3e;
+    margin-left: 2px;
+}
+
+.drawer-input,
+.drawer-select,
+.drawer-textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    outline: none;
+    font-family: inherit;
+}
+
+.drawer-input:focus,
+.drawer-select:focus,
+.drawer-textarea:focus {
+    border-color: #5c6bc0;
+    box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.15);
+}
+
+.drawer-input:disabled,
+.drawer-select:disabled,
+.drawer-textarea:disabled {
+    background: #f9f9f9;
+    color: #999;
+    cursor: not-allowed;
+}
+
+.drawer-textarea {
+    resize: vertical;
+    min-height: 70px;
+}
+
+.drawer-sql {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 220px;
+    tab-size: 4;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.drawer-field-error .drawer-input,
+.drawer-field-error .drawer-select {
+    border-color: #e53e3e;
+    box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.12);
+}
+
+.drawer-field-hint {
+    font-size: 12px;
+    color: #e53e3e;
+}
+
+/* ─── Open Full Record link ───────────────────────────────────────────── */
+.drawer-full-record {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #f0f4ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #4338ca;
+    flex-wrap: wrap;
+}
+
+.drawer-full-record > i {
+    flex-shrink: 0;
+    color: #6366f1;
+}
+
+.drawer-link-btn {
+    background: none;
+    border: none;
+    color: #4338ca;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.drawer-link-btn:hover {
+    color: #3730a3;
+}
+
+/* ─── Drawer Footer ───────────────────────────────────────────────────── */
+.query-drawer-footer {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.drawer-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #c53030;
+}
+
+.drawer-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* ─── Drawer Buttons ──────────────────────────────────────────────────── */
+.drawer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.drawer-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.drawer-btn-primary {
+    background: #5c6bc0;
+    color: #fff;
+    border-color: #5c6bc0;
+}
+
+.drawer-btn-primary:hover:not(:disabled) {
+    background: #3949ab;
+    border-color: #3949ab;
+}
+
+.drawer-btn-secondary {
+    background: #fff;
+    color: #555;
+    border-color: #d1d5db;
+}
+
+.drawer-btn-secondary:hover:not(:disabled) {
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* ─── Responsive drawer ───────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .query-drawer {
+        width: 100vw;
+        max-width: 100vw;
+    }
+
+    .drawer-row {
+        flex-direction: column;
     }
 }

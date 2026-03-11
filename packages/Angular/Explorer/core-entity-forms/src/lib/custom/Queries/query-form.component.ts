@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -56,9 +56,25 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
         { text: 'Approved', value: 'Approved' },
+        { text: 'In-Review', value: 'In-Review' },
         { text: 'Rejected', value: 'Rejected' },
-        { text: 'Expired', value: 'Expired' }
+        { text: 'Expired', value: 'Expired' },
+        { text: 'Obsolete', value: 'Obsolete' }
     ];
+
+    // Toolbar config: hide non-functional buttons (delete/favorite/history are not wired
+    // in legacy [Form] mode) and section controls (custom form uses its own panel state).
+    public readonly ToolbarConfig: FormToolbarConfig = {
+        ...DEFAULT_TOOLBAR_CONFIG,
+        ShowDeleteButton: false,
+        ShowFavoriteButton: false,
+        ShowHistoryButton: false,
+        ShowListButton: false,
+        ShowSectionControls: false,
+        ShowSectionFilter: false,
+        AllowSectionReorder: false,
+        ShowSectionManager: false,
+    };
 
     @ViewChild('sqlEditor') sqlEditor: CodeEditorComponent | null = null;
     
