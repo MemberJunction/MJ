@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: Integration Scheduled Job Support
--- Version:   5.10.x
+-- Version:   5.11.x
 -- Purpose:   1. Add ScheduledJobRunID FK to CompanyIntegrationRun for traceability
 --            2. Add ScheduledJobID FK to CompanyIntegration for association
 -- =============================================================================
