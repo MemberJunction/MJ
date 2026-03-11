@@ -1,5 +1,5 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
-import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryCompositionEngine, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity, MJQueryDependencyEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -278,6 +278,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
             if (entityMetadata.length > 0) {
                 syncPromises.push(this.syncQueryEntities(entityMetadata));
             }
+
+            // Sync query dependencies from {{query:"..."}} composition tokens (deterministic, no LLM)
+            syncPromises.push(this.extractAndSyncQueryDependencies());
 
             await Promise.all(syncPromises);
 
@@ -916,6 +919,344 @@ export class MJQueryEntityServer extends MJQueryEntity {
             
         } catch (e) {
             LogError('Failed to remove query entities:', e);
+            throw e;
+        }
+    }
+
+    /**
+     * Deterministically extracts {{query:"..."}} composition references from this query's SQL
+     * and syncs the QueryDependency records accordingly. No LLM needed — uses regex parsing.
+     */
+    private async extractAndSyncQueryDependencies(): Promise<void> {
+        const compositionEngine = new QueryCompositionEngine();
+        const sql = this.SQL;
+
+        if (!sql || !compositionEngine.HasCompositionTokens(sql)) {
+            // No composition tokens — remove any stale dependency records
+            await this.removeAllQueryDependencies();
+            return;
+        }
+
+        // Parse all {{query:"..."}} tokens
+        const tokens = compositionEngine.ParseCompositionTokens(sql);
+        if (tokens.length === 0) {
+            await this.removeAllQueryDependencies();
+            return;
+        }
+
+        // Resolve each token to a QueryInfo to get its ID
+        const extractedDeps = this.resolveTokensToQueryDependencies(tokens);
+
+        // Check for cycles before syncing
+        const cycleError = await this.detectDependencyCycles(extractedDeps);
+        if (cycleError) {
+            LogError(`Query "${this.Name}" creates circular dependency: ${cycleError}. Dependencies will not be synced.`);
+            return;
+        }
+
+        await this.syncQueryDependencies(extractedDeps);
+    }
+
+    /**
+     * Resolves parsed composition tokens to dependency records with QueryIDs.
+     */
+    private resolveTokensToQueryDependencies(tokens: ReturnType<QueryCompositionEngine['ParseCompositionTokens']>): Array<{
+        dependsOnQueryID: string;
+        referencePath: string;
+        alias: string | null;
+        parameterMapping: Record<string, string> | null;
+    }> {
+        const allQueries = Metadata.Provider.Queries;
+        const deps: Array<{
+            dependsOnQueryID: string;
+            referencePath: string;
+            alias: string | null;
+            parameterMapping: Record<string, string> | null;
+        }> = [];
+
+        for (const token of tokens) {
+            const queryName = token.QueryName.toLowerCase();
+
+            // Try category-qualified lookup first
+            let matchedQuery: typeof allQueries[number] | undefined;
+            if (token.CategorySegments.length > 0) {
+                const expectedPath = `/${token.CategorySegments.join('/')}/`;
+                matchedQuery = allQueries.find(q =>
+                    q.Name.toLowerCase() === queryName &&
+                    q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
+                );
+            }
+
+            // Fall back to name-only
+            if (!matchedQuery) {
+                const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryName);
+                if (nameMatches.length === 1) {
+                    matchedQuery = nameMatches[0];
+                }
+            }
+
+            if (!matchedQuery) {
+                LogError(`Query "${this.Name}": Referenced query not found: "${token.FullPath}". Dependency will not be tracked.`);
+                continue;
+            }
+
+            // Validate the referenced query is marked Reusable
+            if (!matchedQuery.Reusable) {
+                throw new Error(
+                    `Query "${this.Name}" references "${token.FullPath}" via composition syntax, ` +
+                    `but "${matchedQuery.Name}" is not marked as Reusable. ` +
+                    `Set Reusable=true on "${matchedQuery.Name}" before using it in {{query:"..."}} references.`
+                );
+            }
+
+            // Extract alias from SQL context (look for the token followed by whitespace + identifier)
+            const alias = this.extractAliasFromSQL(token.FullToken);
+
+            // Build parameter mapping
+            let parameterMapping: Record<string, string> | null = null;
+            if (token.Parameters.length > 0) {
+                parameterMapping = {};
+                for (const param of token.Parameters) {
+                    if (param.StaticValue !== null) {
+                        parameterMapping[param.Name] = param.StaticValue;
+                    } else if (param.PassThroughName !== null) {
+                        parameterMapping[param.Name] = `@${param.PassThroughName}`;
+                    }
+                }
+            }
+
+            deps.push({
+                dependsOnQueryID: matchedQuery.ID,
+                referencePath: token.FullPath,
+                alias,
+                parameterMapping
+            });
+        }
+
+        return deps;
+    }
+
+    /**
+     * Extracts the SQL alias following a {{query:"..."}} token from this query's SQL.
+     */
+    private extractAliasFromSQL(fullToken: string): string | null {
+        if (!this.SQL) return null;
+
+        const tokenIndex = this.SQL.indexOf(fullToken);
+        if (tokenIndex < 0) return null;
+
+        const afterToken = this.SQL.substring(tokenIndex + fullToken.length);
+        const aliasMatch = /^\s+(\w+)/i.exec(afterToken);
+
+        // Make sure it's not a SQL keyword
+        if (aliasMatch) {
+            const keywords = new Set(['ON', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'GROUP', 'ORDER', 'HAVING', 'UNION', 'EXCEPT', 'INTERSECT', 'LIMIT', 'OFFSET', 'FETCH']);
+            if (!keywords.has(aliasMatch[1].toUpperCase())) {
+                return aliasMatch[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detects circular dependencies by walking the dependency graph.
+     * Returns a descriptive error string if a cycle is found, or null if clean.
+     */
+    private async detectDependencyCycles(
+        proposedDeps: Array<{ dependsOnQueryID: string }>
+    ): Promise<string | null> {
+        const allDependencies = Metadata.Provider.QueryDependencies;
+
+        const visited = new Set<string>();
+        const stack = new Set<string>();
+
+        const hasCycle = (queryID: string, path: string[]): string | null => {
+            if (stack.has(queryID)) {
+                const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+                return [...path, queryName].join(' → ');
+            }
+            if (visited.has(queryID)) return null;
+
+            visited.add(queryID);
+            stack.add(queryID);
+            const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+            path.push(queryName);
+
+            // Get existing dependencies for this query
+            const deps = allDependencies.filter(d => d.QueryID === queryID);
+            for (const dep of deps) {
+                const result = hasCycle(dep.DependsOnQueryID, [...path]);
+                if (result) return result;
+            }
+
+            stack.delete(queryID);
+            return null;
+        };
+
+        // Check each proposed dependency
+        for (const dep of proposedDeps) {
+            // Simulate: dep.dependsOnQueryID → (its dependencies) → ... → back to this.ID?
+            const visited2 = new Set<string>();
+            const stack2 = new Set<string>([this.ID]);
+
+            const checkFromDep = (queryID: string, path: string[]): string | null => {
+                if (queryID === this.ID) {
+                    return [...path, this.Name].join(' → ');
+                }
+                if (visited2.has(queryID)) return null;
+                visited2.add(queryID);
+
+                const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+                path.push(queryName);
+
+                const deps = allDependencies.filter(d => d.QueryID === queryID);
+                for (const d of deps) {
+                    const result = checkFromDep(d.DependsOnQueryID, [...path]);
+                    if (result) return result;
+                }
+
+                return null;
+            };
+
+            const result = checkFromDep(dep.dependsOnQueryID, [this.Name]);
+            if (result) return result;
+        }
+
+        return null;
+    }
+
+    /**
+     * Syncs extracted query dependencies against existing QueryDependency records.
+     * Follows the same add/update/delete pattern as syncQueryParameters/Fields/Entities.
+     */
+    private async syncQueryDependencies(extractedDeps: Array<{
+        dependsOnQueryID: string;
+        referencePath: string;
+        alias: string | null;
+        parameterMapping: Record<string, string> | null;
+    }>): Promise<void> {
+        const md = new Metadata();
+
+        try {
+            const existingDeps: MJQueryDependencyEntity[] = [];
+            if (this.IsSaved) {
+                const rv = this.RunViewProviderToUse;
+                const existingResult = await rv.RunView<MJQueryDependencyEntity>({
+                    EntityName: 'MJ: Query Dependencies',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+
+                if (!existingResult.Success) {
+                    throw new Error(`Failed to load existing query dependencies: ${existingResult.ErrorMessage}`);
+                }
+                existingDeps.push(...(existingResult.Results || []));
+            }
+
+            // Compare: match on DependsOnQueryID + ReferencePath for uniqueness
+            const depsToAdd = extractedDeps.filter(d =>
+                !existingDeps.some(ed =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const depsToUpdate = existingDeps.filter(ed =>
+                extractedDeps.some(d =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const depsToRemove = existingDeps.filter(ed =>
+                !extractedDeps.some(d =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const promises: Promise<boolean>[] = [];
+
+            // Add new dependencies
+            for (const dep of depsToAdd) {
+                const newDep = await md.GetEntityObject<MJQueryDependencyEntity>('MJ: Query Dependencies', this.ContextCurrentUser);
+                newDep.QueryID = this.ID;
+                newDep.DependsOnQueryID = dep.dependsOnQueryID;
+                newDep.ReferencePath = dep.referencePath;
+                newDep.Alias = dep.alias;
+                newDep.ParameterMapping = dep.parameterMapping ? JSON.stringify(dep.parameterMapping) : null;
+                newDep.DetectionMethod = 'Auto';
+                promises.push(newDep.Save());
+            }
+
+            // Update existing dependencies (check for changes)
+            for (const existingDep of depsToUpdate) {
+                const extractedDep = extractedDeps.find(d =>
+                    UUIDsEqual(existingDep.DependsOnQueryID, d.dependsOnQueryID) &&
+                    existingDep.ReferencePath === d.referencePath
+                );
+                if (extractedDep) {
+                    let hasChanges = false;
+
+                    if (existingDep.Alias !== extractedDep.alias) {
+                        existingDep.Alias = extractedDep.alias;
+                        hasChanges = true;
+                    }
+
+                    const newMapping = extractedDep.parameterMapping ? JSON.stringify(extractedDep.parameterMapping) : null;
+                    if (existingDep.ParameterMapping !== newMapping) {
+                        existingDep.ParameterMapping = newMapping;
+                        hasChanges = true;
+                    }
+
+                    if (hasChanges) {
+                        promises.push(existingDep.Save());
+                    }
+                }
+            }
+
+            // Remove stale dependencies
+            for (const depToRemove of depsToRemove) {
+                promises.push(depToRemove.Delete());
+            }
+
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+
+        } catch (e) {
+            LogError(`Query "${this.Name}" - Failed to sync dependencies:`, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Removes all QueryDependency records for this query.
+     */
+    private async removeAllQueryDependencies(): Promise<void> {
+        try {
+            if (!this.IsSaved) return;
+
+            const rv = this.RunViewProviderToUse;
+            const existingResult = await rv.RunView({
+                EntityName: 'MJ: Query Dependencies',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+
+            if (!existingResult.Success) {
+                throw new Error(`Failed to load existing query dependencies: ${existingResult.ErrorMessage}`);
+            }
+
+            const existingDeps = existingResult.Results || [];
+            const deletePromises = existingDeps.map(dep => dep.Delete());
+
+            if (deletePromises.length > 0) {
+                await Promise.all(deletePromises);
+            }
+        } catch (e) {
+            LogError('Failed to remove query dependencies:', e);
             throw e;
         }
     }

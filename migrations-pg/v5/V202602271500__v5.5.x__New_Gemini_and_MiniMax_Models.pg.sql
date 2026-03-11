@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- SQL Logging Session
@@ -657,12 +642,3 @@ BEGIN
   p_Comments_80592c5c := 'Gemini 3.1 Pro Preview pricing on Vertex AI as of February 2026. Standard tier: $2.00/$12.00 per 1M tokens (<=200K), $4.00/$18.00 (>200K). Priority tier: $3.60/$21.60 (<=200K). Flex/Batch: $1.00/$6.00 (<=200K). Cached input: $0.20/1M. Base standard tier pricing shown.';
   PERFORM __mj."spCreateAIModelCost"(p_ID := p_ID_80592c5c, p_ModelID := p_ModelID_80592c5c, p_VendorID := p_VendorID_80592c5c, p_StartedAt := p_StartedAt_80592c5c, p_EndedAt := p_EndedAt_80592c5c, p_Status := p_Status_80592c5c, p_Currency := p_Currency_80592c5c, p_PriceTypeID := p_PriceTypeID_80592c5c, p_InputPricePerUnit := p_InputPricePerUnit_80592c5c, p_OutputPricePerUnit := p_OutputPricePerUnit_80592c5c, p_UnitTypeID := p_UnitTypeID_80592c5c, p_ProcessingType := p_ProcessingType_80592c5c, p_Comments := p_Comments_80592c5c);
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================

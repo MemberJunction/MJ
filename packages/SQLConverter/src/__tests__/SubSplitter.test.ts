@@ -41,15 +41,17 @@ describe('subSplitCompoundBatch', () => {
   // ============================================================
   // 4. ALTER TABLE + INSERT → 2 statements
   // ============================================================
-  it('should not split a batch starting with ALTER TABLE (returned as single)', () => {
-    // ALTER TABLE at the start triggers the early return — it's treated as a single block
+  it('should split a compound ALTER TABLE + INSERT batch into two statements', () => {
+    // Compound ALTER TABLE + INSERT batches should now be split so each
+    // statement is classified and converted separately
     const batch = [
       'ALTER TABLE __mj.Users ADD COLUMN Age INTEGER;',
       "INSERT INTO __mj.Users (ID, Name) VALUES ('c3', 'Carol');",
     ].join('\n');
     const result = subSplitCompoundBatch(batch);
-    // ALTER TABLE is in the early-return list, so it stays as one block
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toContain('ALTER TABLE');
+    expect(result[1]).toContain('INSERT INTO');
   });
 
   // ============================================================
