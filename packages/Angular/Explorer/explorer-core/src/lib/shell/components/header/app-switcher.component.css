@@ -51,6 +51,14 @@
   width: max-content;
   overflow: hidden;
   z-index: 10000;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.app-switcher-list {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .app-switcher-dropdown .app-switcher-item {
   display: flex;
@@ -166,5 +174,10 @@
   .app-switcher-dropdown .app-switcher-item i {
     font-size: 20px;
     width: 24px;
+  }
+
+  .app-switcher-list {
+    overflow-y: visible;
+    flex: none;
   }
 }
