@@ -74,6 +74,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequence: AnimationStep[] = [];
   private currentAnimationIndex = 0;
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Loading recovery reset
+  ShowResetOption = false;
+  private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
   currentLoadingColor: string;
   currentLoadingTextColor: string;
@@ -1251,6 +1255,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cycleToNextMessage();
       this.cdr.detectChanges();
     }, this.messageIntervalMs);
+
+    // Start the recovery reset timer - if loading hasn't completed after
+    // the delay, offer the user an option to clear cached data and reload
+    this.startLoadingResetTimer();
   }
 
   /**
@@ -1266,6 +1274,69 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       clearTimeout(this.animationSequenceTimeout);
       this.animationSequenceTimeout = null;
     }
+    // Cancel the recovery reset timer since loading completed successfully
+    this.cancelLoadingResetTimer();
+  }
+
+  /**
+   * Start a timer that shows a recovery reset option if loading takes too long.
+   * This helps users recover from stuck loading states caused by upgrades,
+   * corrupted cache, or bad stored state.
+   */
+  private startLoadingResetTimer(): void {
+    this.cancelLoadingResetTimer();
+    this.loadingResetTimeout = setTimeout(() => {
+      if (this.loading) {
+        this.ShowResetOption = true;
+        this.cdr.detectChanges();
+      }
+    }, this.loadingResetDelayMs);
+  }
+
+  /**
+   * Cancel the recovery reset timer.
+   */
+  private cancelLoadingResetTimer(): void {
+    if (this.loadingResetTimeout) {
+      clearTimeout(this.loadingResetTimeout);
+      this.loadingResetTimeout = null;
+    }
+    this.ShowResetOption = false;
+  }
+
+  /**
+   * Nuclear recovery: clear all browser-side cached data and reload the page.
+   * This clears localStorage, sessionStorage, and IndexedDB to recover
+   * from stuck loading states caused by corrupted or stale cached data.
+   */
+  ResetApplication(): void {
+    try {
+      // 1. Clear localStorage
+      localStorage.clear();
+
+      // 2. Clear sessionStorage
+      sessionStorage.clear();
+
+      // 3. Delete all IndexedDB databases
+      if (window.indexedDB?.databases) {
+        window.indexedDB.databases().then(databases => {
+          for (const db of databases) {
+            if (db.name) {
+              window.indexedDB.deleteDatabase(db.name);
+            }
+          }
+        }).catch(() => {
+          // databases() not supported in all browsers - proceed with reload
+        });
+      }
+    } catch (e) {
+      console.warn('Error during cache reset:', e);
+    }
+
+    // Give IndexedDB deletions a moment to initiate, then hard reload
+    setTimeout(() => {
+      location.reload();
+    }, 100);
   }
 
   /**
