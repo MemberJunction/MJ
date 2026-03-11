@@ -302,21 +302,31 @@ Poll for completion, read results, report to user.
 
 ---
 
-## Phase 4: Smoke Testing
+## Phase 4: Smoke Testing (Full Stack)
 
-**ALWAYS run this phase** regardless of Phase 3 results. Even with perfect parity, smoke tests validate end-to-end functionality with the application layer.
+**ALWAYS run this phase** regardless of Phase 3 results. This phase validates the FULL application stack — API server, frontend UI, and browser interaction — all running against the PostgreSQL database.
+
+Phase 4 has two tiers:
+- **Tier 1 (API)**: Build and start MJAPI, run GraphQL smoke tests via curl
+- **Tier 2 (Browser)**: Build and start MJExplorer, run Playwright headless browser tests
+
+Both tiers MUST run. If Tier 1 fails (MJAPI won't start), skip Tier 2 but report the failure.
 
 ### Phase 4 Task Prompt
 
 ```
 You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
 
-Your job: Start MJAPI against the PostgreSQL database and run smoke tests to validate the PG migration stack works end-to-end with the application layer.
+Your job: Run FULL STACK smoke tests against the PostgreSQL database — both API-level and browser-level. This validates that the PG migration stack works end-to-end with the complete application.
 
 ## Database
 The Phase 3 database MJ_Compare_PG on postgres-claude already has all v5 migrations applied. Use it.
 
 - PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database=MJ_Compare_PG
+
+## ================================================================
+## TIER 1: API Smoke Tests
+## ================================================================
 
 ## Step 1: Build MJAPI and dependencies
 
@@ -325,112 +335,267 @@ cd /workspace/MJ
 npx turbo build --filter=@memberjunction/server --filter=@memberjunction/server-bootstrap --filter=@memberjunction/mjapi
 ```
 
-## Step 2: Configure MJAPI for PostgreSQL
+## Step 2: Configure and start MJAPI for PostgreSQL
 
-Read the existing .env at /workspace/MJ/packages/MJAPI/.env to understand the variable names used. Then override the database connection settings to point to PostgreSQL (MJ_Compare_PG). Also check mj.config.cjs at the repo root.
+Read the existing .env at /workspace/MJ/packages/MJAPI/.env to understand the variable names. Override database connection settings to point to PostgreSQL (MJ_Compare_PG). Also check mj.config.cjs at the repo root.
 
-Key settings to configure (adapt variable names to match what the .env uses):
-- DB_HOST=postgres-claude
-- DB_PORT=5432
-- DB_USERNAME=mj_admin
-- DB_PASSWORD=Claude2Pg99
-- DB_DATABASE=MJ_Compare_PG
+Key settings (adapt variable names to match what the .env uses):
+- DB_HOST=postgres-claude / PG_HOST=postgres-claude
+- DB_PORT=5432 / PG_PORT=5432
+- DB_USERNAME=mj_admin / PG_USERNAME=mj_admin
+- DB_PASSWORD=Claude2Pg99 / PG_PASSWORD=Claude2Pg99
+- DB_DATABASE=MJ_Compare_PG / PG_DATABASE=MJ_Compare_PG
+- DB_TYPE=pg (if applicable)
+- GRAPHQL_PORT=4000
 
-## Step 3: Start MJAPI
-
+Start MJAPI and wait up to 120 seconds for it to be listening:
 ```bash
 cd /workspace/MJ/packages/MJAPI
-npm run start &
+npm run start > /tmp/mjapi.log 2>&1 &
 MJAPI_PID=$!
+for i in $(seq 1 60); do
+  sleep 2
+  curl -s http://localhost:4000/ > /dev/null 2>&1 && break
+done
 ```
 
-Wait up to 120 seconds for MJAPI to be listening. Check for "listening" or "ready" in output, or poll localhost:4000.
+If MJAPI fails to start, capture /tmp/mjapi.log — that IS a Tier 1 failure. Skip to results.
 
-If MJAPI fails to start, capture the full error output — that IS the smoke test result.
+## Step 3: API Smoke Tests via curl
 
-## Step 4: Smoke Tests via GraphQL
-
-Once MJAPI is running, test the GraphQL API directly with curl:
-
-### Test 1: GraphQL Introspection
+### Test API_INTROSPECTION: GraphQL schema available
 ```bash
 curl -s -X POST http://localhost:4000/ \
   -H "Content-Type: application/json" \
-  -d '{"query":"{ __schema { queryType { name } mutationType { name } } }"}' | head -200
+  -d '{"query":"{ __schema { queryType { name } mutationType { name } } }"}'
 ```
-Expected: Returns schema info with query and mutation types.
+Expected: Returns schema with query and mutation types.
 
-### Test 2: Entity Metadata Query
+### Test API_ENTITY_METADATA: Entity metadata loads
 ```bash
 curl -s -X POST http://localhost:4000/ \
   -H "Content-Type: application/json" \
-  -d '{"query":"{ GetEntityByName(EntityName: \"Actions\") { ID Name SchemaName } }"}' | head -200
+  -d '{"query":"{ GetEntityByName(EntityName: \"Actions\") { ID Name SchemaName } }"}'
 ```
 Expected: Returns entity metadata for Actions.
 
-### Test 3: RunViewByName (read data)
+### Test API_RUN_VIEW: Data queries work
 ```bash
 curl -s -X POST http://localhost:4000/ \
   -H "Content-Type: application/json" \
-  -d '{"query":"{ RunViewByName(input: { ViewName: \"All Actions\", MaxRows: 5 }) { TotalRowCount Results } }"}' | head -500
+  -d '{"query":"{ RunViewByName(input: { ViewName: \"All Actions\", MaxRows: 5 }) { TotalRowCount Results } }"}'
 ```
 Expected: Returns rows from the Actions table.
 
-### Test 4: List Entities
+### Test API_LIST_ENTITIES: Full entity list
 ```bash
 curl -s -X POST http://localhost:4000/ \
   -H "Content-Type: application/json" \
-  -d '{"query":"{ AllEntities { ID Name Description } }"}' | head -500
+  -d '{"query":"{ AllEntities { ID Name Description } }"}'
 ```
 Expected: Returns list of all entities.
 
-### Test 5: Multiple entity views
+### Test API_MULTI_VIEW: Multiple entity views
 ```bash
 for entity in "Users" "Entities" "Applications" "AI Models"; do
   echo "--- Testing: $entity ---"
   curl -s -X POST http://localhost:4000/ \
     -H "Content-Type: application/json" \
-    -d "{\"query\":\"{ RunViewByName(input: { ViewName: \\\"All ${entity}\\\", MaxRows: 3 }) { TotalRowCount } }\"}" | head -100
+    -d "{\"query\":\"{ RunViewByName(input: { ViewName: \\\"All ${entity}\\\", MaxRows: 3 }) { TotalRowCount } }\"}"
   echo
 done
 ```
 
-### Test 6: Health endpoint
+NOTE: Some queries may require authentication. Document which need auth and which work without it.
+
+## ================================================================
+## TIER 2: Browser Smoke Tests (Playwright) — MANDATORY, NO SKIPPING
+## ================================================================
+
+Only proceed to Tier 2 if MJAPI started successfully in Tier 1.
+
+**🚨 CRITICAL: SKIPPING IS NOT ALLOWED 🚨**
+- Every test in Tier 2 MUST be attempted and result in PASS or FAIL
+- SKIP status is NOT acceptable for any test
+- Auth0 login MUST be completed — it is a standard HTML form that Playwright can fill
+- If login fails after genuine attempts, mark as FAIL with detailed error, NOT SKIP
+- The orchestrator MUST reject any Phase 4 result containing SKIP statuses and re-run
+
+## Step 4: Ensure Playwright browsers are installed
+
 ```bash
-curl -s http://localhost:4000/health 2>/dev/null || echo "No health endpoint"
+npx playwright install chromium 2>/dev/null || npx playwright install --with-deps chromium
 ```
 
-NOTE: Some tests may require authentication. If you get auth errors, document which tests need auth and which work without it. The key test is whether MJAPI starts successfully and can connect to the PG database.
+## Step 5: Ensure da-robot-tester has roles in PG database
 
-## Step 5: Cleanup
+Before browser testing, verify the test user has all required roles. Run this SQL against postgres-claude:
 ```bash
-kill $MJAPI_PID 2>/dev/null
+psql -h postgres-claude -U mj_admin -d MJ_Compare_PG -c "
+INSERT INTO __mj.\"UserRole\" (\"UserID\", \"RoleID\")
+SELECT '3e5ac17f-0b2c-4aca-878f-9f744f2168f4', \"ID\"
+FROM __mj.\"Role\"
+ON CONFLICT DO NOTHING;"
+```
+If the user ID differs, look it up: `SELECT "ID" FROM __mj."User" WHERE "Email" = 'da-robot-tester@bluecypress.io';`
+
+## Step 6: Build and start MJExplorer (if not already running)
+
+```bash
+cd /workspace/MJ
+npx turbo build --filter=@memberjunction/ng-explorer
+cd /workspace/MJ/packages/MJExplorer
+npm run start > /tmp/mjexplorer.log 2>&1 &
+EXPLORER_PID=$!
 ```
 
-## Step 6: Write Results
+Wait for MJExplorer to be ready (compilation complete, serving on port 4200):
+```bash
+for i in $(seq 1 90); do
+  sleep 2
+  if curl -s http://localhost:4200/ > /dev/null 2>&1; then break; fi
+done
+```
+
+If MJExplorer fails to compile/start, capture /tmp/mjexplorer.log and report as Tier 2 failure.
+
+## Step 7: Playwright browser smoke tests
+
+Use playwright-cli for all browser interactions:
+```bash
+npx playwright-cli open http://localhost:4200
+npx playwright-cli snapshot
+npx playwright-cli click <ref>
+npx playwright-cli fill '<selector>' '<value>'
+npx playwright-cli type '<text>'
+npx playwright-cli press Enter
+npx playwright-cli screenshot /tmp/screenshot.png
+npx playwright-cli console error
+npx playwright-cli console info
+npx playwright-cli close
+```
+
+Also available: Playwright MCP tools (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_type, browser_press_key, browser_take_screenshot, browser_console_messages, browser_wait_for).
+
+Run these tests IN ORDER:
+
+### Test BROWSER_LOAD: App loads in browser
+Navigate to http://localhost:4200. Take a snapshot. Verify the page loads (login page or app shell).
+
+### Test BROWSER_LOGIN: Authentication works (MANDATORY — DO NOT SKIP)
+Auth0 login credentials:
+- Email: da-robot-tester@bluecypress.io
+- Password: !!SoDamnSecureItHurt$
+
+Auth0 Universal Login is a STANDARD HTML FORM. Playwright CAN and MUST fill it:
+1. Open http://localhost:4200 — you'll see MJExplorer's login page
+2. Click the "Log In" button to initiate Auth0 redirect
+3. Auth0 Universal Login page loads — take a snapshot to see the form fields
+4. Auth0 login flow (may be single-page or multi-step):
+   a. Find the email input field (name="email" or similar). Fill it with: da-robot-tester@bluecypress.io
+   b. Find the password input (name="password" or similar). Fill it with: !!SoDamnSecureItHurt$
+   c. NOTE: Auth0 may show email first, then password after clicking Continue
+   d. Click the submit/continue/login button
+5. Wait for redirect back to http://localhost:4200
+6. Take a snapshot to confirm logged-in app shell (NOT login page)
+
+If Auth0 shows a consent/authorize screen, click Accept/Authorize.
+
+### Test BROWSER_DATA_EXPLORER: Data Explorer loads
+Navigate to Data Explorer (look for nav item or route). Verify a grid/list loads with data.
+
+### Test BROWSER_ENTITY_LIST: Entity lists render
+Navigate to 2-3 different entity lists. Verify grids render with rows.
+
+### Test BROWSER_OPEN_RECORD: Record form loads
+Open any record from a list. Verify form fields display correctly.
+
+### Test BROWSER_ADMIN: Admin area accessible
+Navigate to Admin area. Verify it loads (ERD diagram, settings, or entity management).
+
+### Test BROWSER_CONSOLE: No critical JS errors
+Check browser console for JavaScript errors throughout all tests.
+Report any errors found.
+
+## Step 7: Cleanup
+
+```bash
+kill $MJAPI_PID $EXPLORER_PID 2>/dev/null
+npx playwright-cli close 2>/dev/null
+```
+
+## Step 9: Write Results
 
 Write to /tmp/phase4-result.json:
 ```json
 {
-  "mjapiStarted": true/false,
-  "startupError": "error message if failed to start",
-  "tests": [
-    {"name": "GRAPHQL_INTROSPECTION", "status": "PASS|FAIL|SKIP", "details": "..."},
-    {"name": "ENTITY_METADATA", "status": "PASS|FAIL|SKIP", "details": "..."},
-    {"name": "RUN_VIEW", "status": "PASS|FAIL|SKIP", "details": "..."},
-    {"name": "LIST_ENTITIES", "status": "PASS|FAIL|SKIP", "details": "..."},
-    {"name": "ENTITY_VIEWS", "status": "PASS|FAIL|SKIP", "details": "..."},
-    {"name": "HEALTH_CHECK", "status": "PASS|FAIL|SKIP", "details": "..."}
-  ],
+  "tier1": {
+    "mjapiStarted": true/false,
+    "startupError": "error message if failed",
+    "tests": [
+      {"name": "API_INTROSPECTION", "status": "PASS|FAIL", "details": "..."},
+      {"name": "API_ENTITY_METADATA", "status": "PASS|FAIL", "details": "..."},
+      {"name": "API_RUN_VIEW", "status": "PASS|FAIL", "details": "..."},
+      {"name": "API_LIST_ENTITIES", "status": "PASS|FAIL", "details": "..."},
+      {"name": "API_MULTI_VIEW", "status": "PASS|FAIL", "details": "..."}
+    ]
+  },
+  "tier2": {
+    "explorerStarted": true/false,
+    "startupError": "error message if failed",
+    "loginSucceeded": true/false,
+    "tests": [
+      {"name": "BROWSER_LOAD", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_LOGIN", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_DATA_EXPLORER", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_ENTITY_LIST", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_OPEN_RECORD", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_ADMIN", "status": "PASS|FAIL", "details": "..."},
+      {"name": "BROWSER_CONSOLE", "status": "PASS|FAIL", "details": "..."}
+    ],
+    "consoleErrors": ["error1", "error2"],
+    "screenshots": ["/tmp/screenshot-login.png", "/tmp/screenshot-app.png"]
+  },
   "overallPass": true/false,
   "notes": "any additional observations"
 }
 ```
 
+**IMPORTANT: Status must be PASS or FAIL only. SKIP is NOT allowed.**
+
 Also write human-readable summary to /tmp/phase4-summary.txt.
+Take screenshots at key points and save to /tmp/screenshot-*.png.
 
 IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the very last line of your output.
 ```
+
+### Orchestrator Validation (CRITICAL)
+
+After reading Phase 4 results, the orchestrator (local Claude Code) MUST validate:
+
+1. **No SKIP statuses**: Parse phase4-result.json and check every test status. If ANY test has status "SKIP", reject the result and re-send the Phase 4 task with explicit instructions to complete skipped tests.
+2. **Login succeeded**: tier2.loginSucceeded must be true. If false, debug why (check MJAPI logs, Auth0 config, user roles in PG) and re-run.
+3. **All tests attempted**: Every test in the schema must be present in results. Missing tests = incomplete run = re-run required.
+
+```bash
+# Validation check
+docker exec claude-dev bash -c 'python3 -c "
+import json
+r = json.load(open(\"/tmp/phase4-result.json\"))
+skips = []
+for tier in [\"tier1\", \"tier2\"]:
+    for t in r.get(tier, {}).get(\"tests\", []):
+        if t[\"status\"] == \"SKIP\":
+            skips.append(t[\"name\"])
+if skips:
+    print(f\"REJECTED: {len(skips)} tests were skipped: {skips}\")
+    exit(1)
+else:
+    print(\"VALIDATED: All tests attempted (no skips)\")
+"'
+```
+
+If validation fails, do NOT proceed to Phase 5. Re-run Phase 4 with fixes.
 
 Poll for completion, read results.
 
