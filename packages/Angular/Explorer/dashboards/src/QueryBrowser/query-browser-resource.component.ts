@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
+import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, filter } from 'rxjs/operators';
@@ -90,6 +91,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public DrawerQueryId: string | null = null;
     public DrawerName = '';
     public DrawerSQL = '';
+    @ViewChild('drawerSqlEditor') private drawerSqlEditor: CodeEditorComponent | null = null;
     public DrawerDescription = '';
     public DrawerCategoryID = '';
     public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = 'Pending';
@@ -532,6 +534,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
+        setTimeout(() => this.drawerSqlEditor?.setValue(''), 0);
     }
 
     /**
@@ -552,6 +555,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
+        setTimeout(() => this.drawerSqlEditor?.setValue(this.DrawerSQL), 0);
     }
 
     /**
@@ -574,20 +578,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Drawer — Form Helpers
     // ========================================
 
-    /** Handle Tab key inside the SQL textarea to insert spaces instead of shifting focus. */
-    public OnSQLKeyDown(event: KeyboardEvent): void {
-        if (event.key !== 'Tab') return;
-        event.preventDefault();
-        const textarea = event.target as HTMLTextAreaElement;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        this.DrawerSQL =
-            this.DrawerSQL.substring(0, start) + '    ' + this.DrawerSQL.substring(end);
-        // Restore cursor after Angular re-renders
-        Promise.resolve().then(() => {
-            textarea.selectionStart = textarea.selectionEnd = start + 4;
-        });
-        this.cdr.markForCheck();
+    /** Update DrawerSQL when the code editor emits a change. */
+    public OnDrawerSQLChange(value: string): void {
+        this.DrawerSQL = value;
     }
 
     private get currentDrawerSnapshot(): string {

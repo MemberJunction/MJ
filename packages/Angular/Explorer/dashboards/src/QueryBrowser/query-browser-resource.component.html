@@ -303,13 +303,13 @@
       <!-- SQL -->
       <div class="drawer-field drawer-field-sql">
         <label class="drawer-label">SQL</label>
-        <textarea class="drawer-textarea drawer-sql"
-          rows="12"
-          [(ngModel)]="DrawerSQL"
-          (keydown)="OnSQLKeyDown($event)"
-          placeholder="SELECT ..."
-          spellcheck="false"
-          [disabled]="IsSavingDrawer"></textarea>
+        <mj-code-editor #drawerSqlEditor
+          [language]="'sql'"
+          [indentWithTab]="true"
+          [readonly]="IsSavingDrawer"
+          (change)="OnDrawerSQLChange($event)"
+          class="drawer-sql-editor">
+        </mj-code-editor>
       </div>
 
       <!-- Open Full Record link (edit mode only) -->

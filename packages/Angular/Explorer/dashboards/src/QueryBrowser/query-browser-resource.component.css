@@ -769,14 +769,12 @@ mj-query-viewer {
     min-height: 70px;
 }
 
-.drawer-sql {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.5;
+.drawer-sql-editor {
+    display: block;
     min-height: 220px;
-    tab-size: 4;
-    white-space: pre;
-    overflow-x: auto;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    overflow: hidden;
 }
 
 .drawer-field-error .drawer-input,
