@@ -16,32 +16,16 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
-import { ymMembersFormComponent } from "./Entities/ymMembers/ymmembers.form.component";
+
    
 
+
+
 @NgModule({
 declarations: [
-    ymMembersFormComponent],
-imports: [
-    CommonModule,
-    FormsModule,
-    LayoutModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
 ],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_0 { }
+imports: [
     
-
-
-@NgModule({
-declarations: [
-],
-imports: [
-    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
