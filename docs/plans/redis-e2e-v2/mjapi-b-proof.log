@@ -1,0 +1,12 @@
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"

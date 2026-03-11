@@ -208,5 +208,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Integration Objects Section -->
+    <mj-collapsible-panel
+        SectionKey="mJIntegrationObjects"
+        SectionName="Integration Objects"
+        Icon="fa fa-plug"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJIntegrationObjects')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Integration Objects','IntegrationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Integration Objects')"
+                [AllowLoad]="IsSectionExpanded('mJIntegrationObjects')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJIntegrationObjects', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

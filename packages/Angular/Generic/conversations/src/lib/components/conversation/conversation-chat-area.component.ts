@@ -904,7 +904,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
-      await existingAgentRun.Load(existingAgentRun.ID);
+      // duck type check to see if we have a BaseEntity or not
+      if (!!existingAgentRun.Load) {
+        await existingAgentRun.Load(existingAgentRun.ID);        
+      }
+      else {
+        // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
+        const md = new Metadata();
+        const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        newEntity.LoadFromData(existingAgentRun);
+        // swap the map entry to have this object now
+        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+      }
 
       // Trigger re-render to show updated status
       this.messages = [...this.messages];

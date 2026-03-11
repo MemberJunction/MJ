@@ -11,6 +11,7 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { MJEntityActionFormComponentExtended } from "./EntityActions/entityaction.form.component";
@@ -57,6 +58,7 @@ import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
+import { MarkdownModule } from "@memberjunction/ng-markdown";
 import { MJTestRunFormComponentExtended } from "./Tests/test-run-form.component";
 import { MJTestFormComponentExtended } from "./Tests/test-form.component";
 import { MJTestSuiteRunFormComponentExtended } from "./Tests/test-suite-run-form.component";
@@ -149,7 +151,9 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         EntityRelationshipDiagramModule,
         ListManagementModule,
         ActionsModule,
-        AgentsModule
+        AgentsModule,
+        EntityViewerModule,
+        MarkdownModule
     ],
     exports: [
         MJEntityFormComponentExtended,

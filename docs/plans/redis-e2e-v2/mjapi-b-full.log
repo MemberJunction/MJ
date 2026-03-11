@@ -1,0 +1,100 @@
+Redis pub/sub: published set event for key "MJ: AI Configuration Params|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Steps|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Step Paths|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Permissions|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Data Sources|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Configurations|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Credential Bindings|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Modalities|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Agent Modalities|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+Redis pub/sub: published set event for key "MJ: AI Model Modalities|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
+LocalCacheManager.SetStorageProvider: Migrated 64/64 entries to new storage provider
+LocalCacheManager: storage provider swapped to Redis
+[OAuth] publicUrl: http://localhost:4002/
+[OAuth] Callback route registered at /oauth/callback
+[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange
+REST API endpoints are disabled
+Redis pub/sub: published set event for key "__MJ_CACHE_REGISTRY__" on channel "mj:__pubsub__"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Scheduled Job Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Scheduled Job Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Scheduled Job Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Scheduled Jobs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Scheduled Jobs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Scheduled Jobs|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: published set event for key "__MJ_CACHE_REGISTRY__" on channel "mj:__pubsub__"
+📅 Scheduled Jobs: 2 active job(s), polling every 10 second(s)
+  🔍 Checking for stale locks (current time: 2026-03-07T23:36:00.879Z)...
+  ✓ No stale locks found
+📦 Connected to database: sql-claude:1433/MJ_Workbench
+🚀 Server ready at http://localhost:4002/
+⚠️ [Telemetry/Redundancy] Duplicate RunView Detected
+   Identical RunView (MJ: Scheduled Job Types, MJ: Scheduled Jobs, same filter/orderBy) called 2 times
+   💡 Cache the result or use an engine to avoid redundant database queries
+📅 Polling: Checking 2 job(s) at 2026-03-07T23:36:00.885Z
+  - Agent Memory Manager - Every 15 Minutes: NextRunAt=2026-03-07T23:45:00.000Z, Status=Active
+    ⊗ Job is not due yet
+  - Agent Memory Cleanup - Daily at 3 AM UTC: NextRunAt=2026-03-08T03:00:00.000Z, Status=Active
+    ⊗ Job is not due yet
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Entity Action Invocation Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Entity Action Invocation Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Entity Action Invocation Types|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Entity Action Filters|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Entity Action Filters|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Entity Action Filters|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Entity Action Invocations|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Entity Action Invocations|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Entity Action Invocations|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Entity Actions|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Entity Actions|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Entity Actions|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: Entity Action Params|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: Entity Action Params|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: Entity Action Params|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+{ operationName: undefined, variables: {} }
+(node:27741) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Redis pub/sub: received set event for key "MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: User Record Logs|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Valid token: da-robot-tester@bluecypress.io (da-robot-tester@bluecypress.io)
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+{ operationName: undefined, variables: {} }
+⚠️ [Telemetry/Redundancy] Duplicate RunView Detected
+   Identical RunView (MJ: AI Models, same filter/orderBy) called 2 times
+   💡 Cache the result or use an engine to avoid redundant database queries
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+Redis pub/sub: received set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/", source="7adab6cc"
+Redis pub/sub: received set event for key "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+[MJAPI] Redis pub/sub → DispatchCacheChange: set for "__MJ_CACHE_REGISTRY__" from server 7adab6cc
+LocalCacheManager: DispatchCacheChange received — action="set", key="__MJ_CACHE_REGISTRY__", source="7adab6cc"
+{ operationName: undefined, variables: {} }

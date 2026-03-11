@@ -1,5 +1,39 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/generic-database-provider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/query-processor@5.10.1
+- @memberjunction/sql-dialect@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/generic-database-provider@5.10.0
+  - @memberjunction/query-processor@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/generic-database-provider@5.9.0
+  - @memberjunction/query-processor@5.9.0
+  - @memberjunction/sql-dialect@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

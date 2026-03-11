@@ -3,6 +3,7 @@ import { Subject, ReplaySubject, Observable } from 'rxjs';
 import { ClassFactory } from './ClassFactory'
 import { ObjectCache } from './ObjectCache';
 import { BaseSingleton } from './BaseSingleton';
+import { uuidv4 } from './util';
 
 /**
  * Global class used for coordinating events, creating class instances, and managing components across MemberJunction
@@ -27,11 +28,32 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
 
     private _properties: MJ.MJGlobalProperty[] = [];
 
+    private _processUUID: string | null = null;
+
     /**
      * Returns the global instance of the MJGlobal class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of MJGlobal, always use this method to get the instance.
      */
     public static get Instance(): MJGlobal {
         return super.getInstance<MJGlobal>();
+    }
+
+    /**
+     * A unique identifier for this process instance, generated once on first access
+     * using a v4 UUID. Used to distinguish this server from others in distributed
+     * cache invalidation scenarios (e.g., Redis pub/sub). The value persists for
+     * the lifetime of the process and is stable across multiple accesses.
+     *
+     * @example
+     * ```typescript
+     * const serverId = MJGlobal.Instance.ProcessUUID;
+     * // e.g., "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+     * ```
+     */
+    public get ProcessUUID(): string {
+        if (!this._processUUID) {
+            this._processUUID = uuidv4();
+        }
+        return this._processUUID;
     }
 
     public RegisterComponent(component: MJ.IMJComponent) {

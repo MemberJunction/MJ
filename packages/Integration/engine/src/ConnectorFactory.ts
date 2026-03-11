@@ -1,38 +1,28 @@
 import { MJGlobal } from '@memberjunction/global';
 import type { MJIntegrationEntity } from '@memberjunction/core-entities';
-import type { IIntegrationSourceType } from './entity-types.js';
 import { BaseIntegrationConnector } from './BaseIntegrationConnector.js';
 
 /**
  * Factory for resolving integration connectors using MJGlobal.ClassFactory.
  * Connectors register themselves via `@RegisterClass(BaseIntegrationConnector, 'DriverClassName')`.
+ *
+ * Resolution uses the `ClassName` field on the Integration entity directly —
+ * IntegrationSourceType is a general category (SaaS API, Database, File Feed)
+ * and is NOT used for connector lookup.
  */
 export class ConnectorFactory {
     /**
      * Resolves and instantiates the appropriate connector for an integration.
-     * Looks up the DriverClass from the integration's source type and uses
-     * MJGlobal.ClassFactory to create the connector instance.
+     * Uses `integration.ClassName` to look up the registered connector class
+     * in MJGlobal.ClassFactory.
      *
      * @param integration - The integration entity defining which external system to connect to
-     * @param sourceTypes - Array of available integration source type entities
      * @returns An instance of the appropriate BaseIntegrationConnector subclass
-     * @throws Error if no source type matches or no connector is registered for the driver class
+     * @throws Error if ClassName is missing or no connector is registered for it
      */
     public static Resolve(
-        integration: MJIntegrationEntity,
-        sourceTypes: IIntegrationSourceType[]
+        integration: MJIntegrationEntity
     ): BaseIntegrationConnector {
-        const driverClass = ConnectorFactory.FindDriverClass(integration, sourceTypes);
-        return ConnectorFactory.CreateConnectorInstance(driverClass);
-    }
-
-    /**
-     * Finds the DriverClass name from the source types that matches the integration's ClassName.
-     */
-    private static FindDriverClass(
-        integration: MJIntegrationEntity,
-        sourceTypes: IIntegrationSourceType[]
-    ): string {
         const className = integration.ClassName;
         if (!className) {
             throw new Error(
@@ -40,14 +30,7 @@ export class ConnectorFactory {
             );
         }
 
-        const sourceType = sourceTypes.find(st => st.DriverClass === className);
-        if (!sourceType) {
-            throw new Error(
-                `No IntegrationSourceType found with DriverClass "${className}" for integration "${integration.Name}".`
-            );
-        }
-
-        return sourceType.DriverClass;
+        return ConnectorFactory.CreateConnectorInstance(className);
     }
 
     /**

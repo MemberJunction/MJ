@@ -1,5 +1,35 @@
 # @memberjunction/db-auto-doc
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

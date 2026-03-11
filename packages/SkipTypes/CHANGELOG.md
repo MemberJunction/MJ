@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/data-context@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/data-context@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/data-context@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

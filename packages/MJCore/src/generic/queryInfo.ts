@@ -120,6 +120,11 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public SQL: string = null
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    public TechnicalDescription: string | null = null
+    /**
      * The original SQL before any optimization or modification, kept for reference and comparison
      */
     public OriginalSQL: string = null
@@ -130,7 +135,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    public Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete' = null
+    public Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = null
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */
@@ -404,21 +409,21 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     }
 
     /**
-     * Checks if a user can run this query, considering both permissions and query status.
-     * A query can be run if:
-     * 1. The user has permission to run it (via UserHasRunPermissions)
-     * 2. The query status is 'Approved'
-     * 
+     * Checks if a user can run this query based on permissions.
+     * Non-approved queries are allowed to execute (with a server-side warning)
+     * to enable testing before formal approval.
+     *
      * @param user The user to check
-     * @returns true if the user can run the query right now
+     * @returns true if the user has permission to run the query
      */
     public UserCanRun(user: UserInfo): boolean {
-        // First check permissions
-        if (!this.UserHasRunPermissions(user)) {
-            return false;
-        }
+        return this.UserHasRunPermissions(user);
+    }
 
-        // Then check status - only approved queries can be run
+    /**
+     * Whether this query has been formally approved for production use.
+     */
+    public get IsApproved(): boolean {
         return this.Status === 'Approved';
     }
 

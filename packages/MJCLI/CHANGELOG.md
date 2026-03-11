@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/cli
 
+## 5.10.1
+
+### Patch Changes
+
+- Updated dependencies [a4ac83d]
+  - @memberjunction/codegen-lib@5.10.1
+  - @memberjunction/ai-cli@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/db-auto-doc@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/installer@5.10.1
+  - @memberjunction/metadata-sync@5.10.1
+  - @memberjunction/query-gen@5.10.1
+  - @memberjunction/sql-converter@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+  - @memberjunction/testing-cli@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/codegen-lib@5.10.0
+  - @memberjunction/ai-cli@5.10.0
+  - @memberjunction/db-auto-doc@5.10.0
+  - @memberjunction/metadata-sync@5.10.0
+  - @memberjunction/query-gen@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/testing-cli@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/installer@5.10.0
+  - @memberjunction/sql-converter@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 6214edf: feat: Provider-agnostic OpenApp Engine with configurable project layouts, package manager auto-detection, Azure SQL support, and MJ version fallback detection
+
+### Patch Changes
+
+- Updated dependencies [f991f6d]
+- Updated dependencies [194ddf2]
+  - @memberjunction/codegen-lib@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-cli@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/metadata-sync@5.9.0
+  - @memberjunction/query-gen@5.9.0
+  - @memberjunction/testing-cli@5.9.0
+  - @memberjunction/db-auto-doc@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/installer@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

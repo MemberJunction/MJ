@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider } from "@memberjunction/core";
 import { MJUserViewEntity } from "../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissionEngine";
 
@@ -62,6 +62,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * @memberof UserViewEntitySubclass
      */
     public get ViewEntityInfo(): EntityInfo {
+        if (!this._ViewEntityInfo && this.EntityID) {
+            // Lazily resolve when _ViewEntityInfo hasn't been set yet.
+            // This can happen when the entity is loaded via InnerLoad() → SetMany() → SetLocal(),
+            // which bypasses both the Load() and LoadFromData() overrides that normally set this.
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            this._ViewEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
+        }
         return this._ViewEntityInfo
     }
 
