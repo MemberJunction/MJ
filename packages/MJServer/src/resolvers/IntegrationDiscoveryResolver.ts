@@ -10,7 +10,6 @@ import {
     IntegrationEngine,
     SourceSchemaInfo
 } from "@memberjunction/integration-engine";
-import type { SyncResult } from "@memberjunction/integration-engine";
 import {
     SchemaBuilder,
     TypeMapper,
@@ -20,6 +19,7 @@ import {
 } from "@memberjunction/integration-schema-builder";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
+import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -221,6 +221,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Discovers available objects/tables in the external system.
      */
+    @RequireSystemUser()
     @Query(() => DiscoverObjectsOutput)
     async IntegrationDiscoverObjects(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -254,6 +255,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Discovers fields on a specific external object.
      */
+    @RequireSystemUser()
     @Query(() => DiscoverFieldsOutput)
     async IntegrationDiscoverFields(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -289,6 +291,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Tests connectivity to the external system.
      */
+    @RequireSystemUser()
     @Query(() => ConnectionTestOutput)
     async IntegrationTestConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -322,6 +325,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Returns the connector's default configuration for quick setup.
      * Not all connectors provide defaults — returns Success: false if unavailable.
      */
+    @RequireSystemUser()
     @Query(() => DefaultConfigOutput)
     async IntegrationGetDefaultConfig(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -369,6 +373,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Generates a DDL preview for creating tables from discovered external objects.
      * Introspects the source schema and runs SchemaBuilder to produce migration SQL.
      */
+    @RequireSystemUser()
     @Query(() => SchemaPreviewOutput)
     async IntegrationSchemaPreview(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -449,6 +454,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Fetches a small sample of records from an external object for preview purposes.
      * Uses the connector's FetchChanges with a small batch size and no watermark.
      */
+    @RequireSystemUser()
     @Query(() => PreviewDataOutput)
     async IntegrationPreviewData(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -595,6 +601,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Creates a CompanyIntegration with a linked Credential entity for encrypted credential storage.
      */
+    @RequireSystemUser()
     @Mutation(() => CreateConnectionOutput)
     async IntegrationCreateConnection(
         @Arg("input") input: CreateConnectionInput,
@@ -646,6 +653,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Updates credential values and/or configuration on an existing CompanyIntegration.
      */
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationUpdateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -689,6 +697,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Soft-deletes a CompanyIntegration by setting IsActive=false.
      */
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationDeactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -715,6 +724,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Batch creates entity maps by entity name (resolved by lookup).
      * Call AFTER the schema pipeline has created the target entities.
      */
+    @RequireSystemUser()
     @Mutation(() => CreateEntityMapsOutput)
     async IntegrationCreateEntityMaps(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -810,6 +820,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Writes schema files (migration SQL + metadata JSON) to disk.
      * Step 1 of the schema pipeline.
      */
+    @RequireSystemUser()
     @Mutation(() => WriteSchemaFilesOutput)
     async IntegrationWriteSchemaFiles(
         @Arg("files", () => [SchemaFileInput]) files: SchemaFileInput[],
@@ -855,6 +866,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Starts an async integration sync. Returns immediately with the run ID.
      * Sends a webhook to the registered callback when complete.
      */
+    @RequireSystemUser()
     @Mutation(() => StartSyncOutput)
     async IntegrationStartSync(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -928,6 +940,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Cancels a running sync by marking its status as Cancelled.
      */
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationCancelSync(
         @Arg("runID") runID: string,
@@ -955,6 +968,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     // ── SCHEDULE ────────────────────────────────────────────────────────
 
+    @RequireSystemUser()
     @Mutation(() => CreateScheduleOutput)
     async IntegrationCreateSchedule(
         @Arg("input") input: CreateScheduleInput,
@@ -1009,6 +1023,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationUpdateSchedule(
         @Arg("scheduledJobID") scheduledJobID: string,
@@ -1036,6 +1051,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationToggleSchedule(
         @Arg("scheduledJobID") scheduledJobID: string,
@@ -1057,6 +1073,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationDeleteSchedule(
         @Arg("scheduledJobID") scheduledJobID: string,
@@ -1092,6 +1109,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     // ── ENTITY MAP MANAGEMENT ──────────────────────────────────────────
 
+    @RequireSystemUser()
     @Query(() => ListEntityMapsOutput)
     async IntegrationListEntityMaps(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -1120,6 +1138,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationUpdateEntityMaps(
         @Arg("updates", () => [EntityMapUpdateInput]) updates: EntityMapUpdateInput[],
@@ -1150,6 +1169,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Mutation(() => MutationResultOutput)
     async IntegrationDeleteEntityMaps(
         @Arg("entityMapIDs", () => [String]) entityMapIDs: string[],
@@ -1192,6 +1212,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     // ── STATUS & HISTORY (not polling — for page loads) ─────────────────
 
+    @RequireSystemUser()
     @Query(() => IntegrationStatusOutput)
     async IntegrationGetStatus(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -1243,6 +1264,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @RequireSystemUser()
     @Query(() => SyncHistoryOutput)
     async IntegrationGetSyncHistory(
         @Arg("companyIntegrationID") companyIntegrationID: string,
