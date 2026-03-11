@@ -121,11 +121,6 @@
 /* SVG Styles */
 :host ::ng-deep .step-node {
   cursor: pointer;
-  transition: transform 0.2s;
-}
-
-:host ::ng-deep .step-node:hover {
-  transform: scale(1.02);
 }
 
 :host ::ng-deep .step-node.dragging {
@@ -139,6 +134,54 @@
 
 :host ::ng-deep .step-node:hover rect {
   filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+}
+
+/* SVG structural colors — adapt to light/dark theme via CSS classes */
+:host ::ng-deep .node-bg {
+  fill: var(--mj-bg-surface-card);
+}
+
+:host ::ng-deep .node-title {
+  fill: var(--mj-text-primary);
+}
+
+:host ::ng-deep .node-subtitle {
+  fill: var(--mj-text-secondary);
+}
+
+:host ::ng-deep .node-meta {
+  fill: var(--mj-text-muted);
+}
+
+:host ::ng-deep .connection-line {
+  stroke: var(--mj-text-secondary);
+  opacity: 0.5;
+}
+
+:host ::ng-deep .arrowhead-polygon {
+  fill: var(--mj-text-secondary);
+}
+
+:host ::ng-deep .scope-bg {
+  fill: var(--mj-bg-surface-sunken);
+  stroke: var(--mj-brand-primary);
+}
+
+:host ::ng-deep .scope-header {
+  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+}
+
+:host ::ng-deep .scope-title {
+  fill: var(--mj-brand-primary);
+}
+
+:host ::ng-deep .expand-button .expand-bg {
+  fill: var(--mj-bg-surface-card);
+  stroke: var(--mj-brand-primary);
+}
+
+:host ::ng-deep .expand-button .expand-icon {
+  fill: var(--mj-brand-primary);
 }
 
 :host ::ng-deep .scope-container {

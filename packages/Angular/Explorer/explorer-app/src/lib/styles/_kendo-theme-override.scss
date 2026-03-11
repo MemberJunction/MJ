@@ -37,6 +37,8 @@
   // Primary
   --kendo-color-primary: var(--mj-brand-primary);
   --kendo-color-primary-hover: var(--mj-brand-primary-hover);
+  --kendo-color-primary-active: var(--mj-brand-primary-hover);
+  --kendo-color-primary-focus: var(--mj-brand-primary);
   --kendo-color-on-primary: var(--mj-text-inverse);
   --kendo-color-primary-subtle: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 
