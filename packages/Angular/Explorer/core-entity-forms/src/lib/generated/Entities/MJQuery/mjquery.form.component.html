@@ -89,6 +89,14 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Reusable"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -341,6 +349,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Query Dependencies (Depends On Query) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJQueryDependenciesDependsOnQueryID"
+        SectionName="Query Dependencies (Depends On Query)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJQueryDependenciesDependsOnQueryID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Dependencies','DependsOnQueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJQueryDependenciesDependsOnQueryID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJQueryDependenciesDependsOnQueryID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Query Entities Section -->
     <mj-collapsible-panel
         SectionKey="mJQueryEntities"
@@ -385,6 +418,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQuerySQLs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Query Dependencies (Query) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJQueryDependenciesQueryID"
+        SectionName="Query Dependencies (Query)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJQueryDependenciesQueryID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Dependencies','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies')"
+                [AllowLoad]="IsSectionExpanded('mJQueryDependenciesQueryID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJQueryDependenciesQueryID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

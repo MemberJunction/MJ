@@ -56,9 +56,11 @@ import {
     LogStatus,
     LogStatusEx,
     StripStopWords,
+    QueryCache,
 } from '@memberjunction/core';
 
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
@@ -1910,6 +1912,330 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**************************************************************************/
+    // InternalRunQuery — Shared Pipeline Implementation
+    /**************************************************************************/
+
+    /**
+     * Query cache instance for caching query results with TTL.
+     * Shared across all platform providers.
+     */
+    private _queryCache = new QueryCache();
+
+    /**
+     * Full query execution pipeline: resolve → validate → compose → template → cache check →
+     * execute → paginate → audit → cache store. Platform providers inherit this; only
+     * `ExecuteSQL()` is platform-specific.
+     */
+    protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // Route ad-hoc SQL queries to dedicated handler
+        if (params.SQL) {
+            return this.ExecuteAdhocQuery(params, contextUser);
+        }
+
+        try {
+            // Find and validate query
+            const query = this.findAndValidateQuery(params, contextUser);
+
+            // Process parameters (composition + Nunjucks templates)
+            const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
+
+            // Check cache if enabled
+            const cachedResult = this.checkQueryCache(query, params, appliedParameters);
+            if (cachedResult) {
+                return cachedResult;
+            }
+
+            // Execute query and measure performance
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+
+            // Apply pagination
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+
+            // Handle audit logging (fire-and-forget)
+            this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
+
+            // Cache results if enabled
+            this.cacheQueryResults(query, params.Parameters || {}, result);
+
+            return {
+                Success: true,
+                QueryID: query.ID,
+                QueryName: query.Name,
+                Results: paginatedResult,
+                RowCount: paginatedResult.length,
+                TotalRowCount: totalRowCount,
+                ExecutionTime: executionTime,
+                ErrorMessage: '',
+                AppliedParameters: appliedParameters,
+                CacheHit: false
+            };
+        } catch (e) {
+            LogError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            return {
+                Success: false,
+                QueryID: params.QueryID ?? '',
+                QueryName: params.QueryName ?? '',
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: errorMessage,
+            };
+        }
+    }
+
+    /**
+     * Batch query execution — runs all queries in parallel.
+     */
+    protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        return Promise.all(params.map(p => this.InternalRunQuery(p, contextUser)));
+    }
+
+    /**
+     * Executes an ad-hoc SQL query directly, with security validation.
+     * SQL must be a SELECT or WITH (CTE) statement — mutations are rejected.
+     */
+    protected async ExecuteAdhocQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        try {
+            const validator = SQLExpressionValidator.Instance;
+            const validation = validator.validateFullQuery(params.SQL!);
+            if (!validation.valid) {
+                return {
+                    Success: false,
+                    QueryID: '',
+                    QueryName: 'Ad-Hoc Query',
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: validation.error || 'SQL validation failed',
+                };
+            }
+
+            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+
+            return {
+                Success: true,
+                QueryID: '',
+                QueryName: 'Ad-Hoc Query',
+                Results: paginatedResult,
+                RowCount: paginatedResult.length,
+                TotalRowCount: totalRowCount,
+                ExecutionTime: executionTime,
+                ErrorMessage: '',
+            };
+        } catch (e) {
+            LogError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            return {
+                Success: false,
+                QueryID: '',
+                QueryName: 'Ad-Hoc Query',
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
+            };
+        }
+    }
+
+    /**
+     * Finds a query from RunQueryParams and validates user permissions.
+     * Uses `resolveQueryInfo()` for lookup and `ValidateQueryForExecution()` for permissions.
+     */
+    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
+        const query = this.resolveQueryInfo(params);
+        if (!query) {
+            let errorDetails = 'Query not found';
+            if (params.QueryName) {
+                errorDetails = `Query '${params.QueryName}' not found`;
+                if (params.CategoryPath) {
+                    errorDetails += ` in category path '${params.CategoryPath}'`;
+                } else if (params.CategoryID) {
+                    errorDetails += ` in category ID '${params.CategoryID}'`;
+                }
+            } else if (params.QueryID) {
+                errorDetails = `Query with ID '${params.QueryID}' not found`;
+            }
+            throw new Error(errorDetails);
+        }
+
+        this.ValidateQueryForExecution(query, contextUser);
+        return query;
+    }
+
+    /**
+     * Processes query parameters: resolves `{{query:"..."}}` composition tokens,
+     * then applies Nunjucks template substitution for `{{param}}` tokens.
+     */
+    protected processQueryParameters(
+        query: QueryInfo,
+        parameters?: Record<string, string>,
+        contextUser?: UserInfo,
+    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        let finalSQL = query.GetPlatformSQL(this.PlatformKey);
+        let appliedParameters: Record<string, string> = {};
+
+        // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
+        finalSQL = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+
+        // Step 2: Process Nunjucks template parameters
+        if (query.UsesTemplate) {
+            const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters, finalSQL);
+
+            if (!processingResult.success) {
+                throw new Error(processingResult.error);
+            }
+
+            finalSQL = processingResult.processedSQL;
+            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
+        } else if (parameters && Object.keys(parameters).length > 0) {
+            LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+        }
+
+        return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Checks the query cache for existing results and returns them if valid.
+     */
+    protected checkQueryCache(
+        query: QueryInfo,
+        params: RunQueryParams,
+        appliedParameters: Record<string, string>,
+    ): RunQueryResult | null {
+        const cacheConfig = query.CacheConfig;
+        if (!cacheConfig?.enabled) {
+            return null;
+        }
+
+        const cachedEntry = this._queryCache.get(query.ID, params.Parameters || {}, cacheConfig);
+        if (!cachedEntry) {
+            return null;
+        }
+
+        LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
+
+        const { paginatedResult, totalRowCount } = this.applyQueryPagination(cachedEntry.results, params);
+        const remainingTTL = (cachedEntry.timestamp + (cachedEntry.ttlMinutes * 60 * 1000)) - Date.now();
+
+        return {
+            Success: true,
+            QueryID: query.ID,
+            QueryName: query.Name,
+            Results: paginatedResult,
+            RowCount: paginatedResult.length,
+            TotalRowCount: totalRowCount,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            AppliedParameters: appliedParameters,
+            CacheHit: true,
+            CacheTTLRemaining: remainingTTL,
+        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+    }
+
+    /**
+     * Executes the query SQL and tracks execution time.
+     */
+    protected async executeQueryWithTiming(
+        sql: string,
+        contextUser?: UserInfo,
+    ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
+        const start = Date.now();
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+        const executionTime = Date.now() - start;
+
+        if (!result) {
+            throw new Error('Error executing query SQL');
+        }
+
+        return { result, executionTime };
+    }
+
+    /**
+     * Applies in-memory pagination to query results based on StartRow and MaxRows parameters.
+     */
+    protected applyQueryPagination(
+        results: Record<string, unknown>[],
+        params: RunQueryParams,
+    ): { paginatedResult: Record<string, unknown>[]; totalRowCount: number } {
+        const totalRowCount = results.length;
+        const startRow = params.StartRow || 0;
+
+        let paginatedResult = results;
+        if (startRow > 0) {
+            paginatedResult = paginatedResult.slice(startRow);
+        }
+        if (params.MaxRows && params.MaxRows > 0) {
+            paginatedResult = paginatedResult.slice(0, params.MaxRows);
+        }
+
+        return { paginatedResult, totalRowCount };
+    }
+
+    /**
+     * Creates an audit log record for query execution (fire-and-forget).
+     * Only logs if the query has `AuditQueryRuns` enabled or `ForceAuditLog` is set.
+     */
+    protected auditQueryExecution(
+        query: QueryInfo,
+        params: RunQueryParams,
+        finalSQL: string,
+        rowCount: number,
+        totalRowCount: number,
+        executionTime: number,
+        contextUser?: UserInfo,
+    ): void {
+        if (!params.ForceAuditLog && !query.AuditQueryRuns) {
+            return;
+        }
+
+        const user = contextUser || this.CurrentUser;
+        if (!user) return;
+
+        this.CreateAuditLogRecord(
+            user,
+            'Run Query',
+            'Run Query',
+            'Success',
+            JSON.stringify({
+                QueryID: query.ID,
+                QueryName: query.Name,
+                CategoryPath: query.CategoryPath,
+                Description: params.AuditLogDescription,
+                Parameters: params.Parameters,
+                RowCount: rowCount,
+                TotalRowCount: totalRowCount,
+                ExecutionTime: executionTime,
+                SQL: finalSQL,
+            }),
+            '',
+            query.ID,
+            params.AuditLogDescription ?? null,
+            { IgnoreDirtyState: true },
+        ).catch(error => {
+            console.error('Error creating audit log:', error);
+        });
+    }
+
+    /**
+     * Caches query results if caching is enabled for the query.
+     * Caches the full result set (before pagination).
+     */
+    protected cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): void {
+        const cacheConfig = query.CacheConfig;
+        if (!cacheConfig?.enabled) {
+            return;
+        }
+
+        this._queryCache.set(query.ID, parameters, results, cacheConfig);
+        LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
+    }
+
+    /**************************************************************************/
     // Load — Shared Implementation
     /**************************************************************************/
 
@@ -2097,6 +2423,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         itemFilters?: DatasetItemFilterType[],
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
+        forceRefresh?: boolean,
     ): Promise<DatasetResultType> {
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
@@ -2126,9 +2453,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         // Phase 1: Check LocalCacheManager for each item, build SQL only for cache misses
+        // When forceRefresh is true (e.g. from a hard Refresh() call), skip the cache entirely
+        // so we get fresh data from the database.
         const overallStart = performance.now();
         const cache = LocalCacheManager.Instance;
-        const cacheAvailable = cache.IsInitialized && this.TrustLocalCacheCompletely;
+        const cacheAvailable = !forceRefresh && cache.IsInitialized && this.TrustLocalCacheCompletely;
 
         const errorResults: DatasetItemResultType[] = [];
         const cachedResults: DatasetItemResultType[] = [];

@@ -30,6 +30,12 @@ import { languages } from '@codemirror/language-data';
 // Import toolbar configuration
 import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } from './toolbar-config';
 
+// Import composition token extension for SQL highlighting
+import { compositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
+
+// Import MJ Metadata for default hover resolution
+import { Metadata } from '@memberjunction/core';
+
 export type Setup = 'basic' | 'minimal' | null;
 
 export const External = Annotation.define<boolean>();
@@ -238,6 +244,9 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   /** Event emitted when a toolbar button is clicked */
   @Output() toolbarAction = new EventEmitter<ToolbarActionEvent>();
 
+  /** Event emitted when a {{query:"..."}} composition token is clicked in SQL mode */
+  @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
+
   /** Reference to the editor content container */
   @ViewChild('editorContent', { static: true }) editorContent!: ElementRef;
 
@@ -292,6 +301,14 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
 
       // Add built-in language support if no custom language is loaded
       this._getBuiltInLanguageExtension(),
+
+      // Add composition token highlighting for SQL mode
+      ...(this._language.toLowerCase() === 'sql'
+        ? compositionTokenExtension({
+            OnTokenClick: (event) => this.CompositionTokenClick.emit(event),
+            OnTokenHover: (fullPath) => this.resolveCompositionToken(fullPath)
+          })
+        : []),
 
       ...this._extensions,
     ];
@@ -384,6 +401,48 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
       buttonId: button.id,
       editor: this.view
     });
+  }
+
+  /**
+   * Resolves a composition token path to query metadata for the hover tooltip.
+   * Uses Metadata.Provider.Queries to look up the referenced query.
+   */
+  private resolveCompositionToken(fullPath: string): CompositionTokenInfo | null {
+    try {
+      const allQueries = Metadata.Provider.Queries;
+      const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      if (segments.length === 0) return null;
+
+      const queryName = segments[segments.length - 1];
+      const categorySegments = segments.slice(0, -1);
+
+      // First try: exact match on Name + CategoryPath
+      let query = allQueries.find(q => {
+        if (q.Name !== queryName) return false;
+        if (categorySegments.length === 0) return true;
+        const expectedPath = '/' + categorySegments.join('/') + '/';
+        return q.CategoryPath === expectedPath;
+      });
+
+      // Second try: match on Name alone (ignore category) if no exact match
+      if (!query) {
+        query = allQueries.find(q => q.Name === queryName);
+      }
+
+      if (!query) return null;
+
+      return {
+        Name: query.Name,
+        Description: query.Description ?? undefined,
+        Status: query.Status,
+        Category: query.CategoryPath ? query.CategoryPath.replace(/^\/|\/$/g, '').replace(/\//g, ' / ') : undefined,
+        HasParameters: query.Parameters.length > 0,
+        Reusable: query.Reusable
+      };
+    } catch (e) {
+      console.warn('[composition-token] Error resolving token:', e);
+      return null;
+    }
   }
 
   /**

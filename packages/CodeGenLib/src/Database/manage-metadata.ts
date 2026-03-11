@@ -1721,9 +1721,16 @@ export class ManageMetadataBase {
     * Builds SQL to INSERT a new EntityRelationship record for a discovered FK field.
     */
    protected buildInsertRelationshipSQL(f: Record<string, unknown>, md: Metadata, relationshipCountMap: Map<number, number>): string {
-      const e = md.Entities.find(e => UUIDsEqual(e.ID, (f.EntityID as string)))!;
+      const e = md.Entities.find(e => UUIDsEqual(e.ID, (f.EntityID as string)));
+      if (!e) {
+         logError(`      > buildInsertRelationshipSQL: child entity not found in metadata — EntityID=${f.EntityID}, field=${f.Name}, RelatedEntityID=${f.RelatedEntityID}. This can happen when a new entity was just created and metadata hasn't been refreshed yet. Skipping relationship creation.`);
+         return '';
+      }
       const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, (f.RelatedEntityID as string)));
-      const parentEntityName = parentEntity ? parentEntity.Name : String(f.RelatedEntityID);
+      if (!parentEntity) {
+         logError(`      > buildInsertRelationshipSQL: parent entity not found in metadata — RelatedEntityID=${f.RelatedEntityID}, child entity=${e.Name}, field=${f.Name}. Skipping relationship creation.`);
+         return '';
+      }
       const relCount = relationshipCountMap.get(f.EntityID as number) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
@@ -1732,7 +1739,7 @@ export class ManageMetadataBase {
                     VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
       relationshipCountMap.set(f.EntityID as number, sequence);
       return `
-/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
+/* Create Entity Relationship: ${parentEntity.Name} -> ${e.Name} (One To Many via ${f.Name}) */
    ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
                     `;
    }
