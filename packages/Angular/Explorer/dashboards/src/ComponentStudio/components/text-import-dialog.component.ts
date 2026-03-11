@@ -47,50 +47,50 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       flex-direction: column;
       height: 100%;
     }
-    
+
     .dialog-header {
       margin-bottom: 15px;
     }
-    
+
     .dialog-header h3 {
       margin: 0 0 10px 0;
-      color: #333;
+      color: var(--mj-text-primary);
     }
-    
+
     .dialog-header p {
       margin: 0;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
     }
-    
+
     .editor-container {
       flex: 1;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       overflow: hidden;
       margin-bottom: 15px;
     }
-    
+
     .error-message {
-      background-color: #fff5f5;
-      border: 1px solid #feb2b2;
-      color: #c53030;
+      background-color: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-error);
+      color: var(--mj-status-error);
       padding: 10px;
       border-radius: 4px;
       margin-bottom: 15px;
       font-size: 14px;
     }
-    
+
     .error-message i {
       margin-right: 8px;
     }
-    
+
     .dialog-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
       padding-top: 15px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--mj-border-default);
     }
   `]
 })

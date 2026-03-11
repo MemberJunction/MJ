@@ -686,8 +686,8 @@ interface ReviewFormState {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      border: 2px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
+      border: 2px solid var(--mj-border-strong);
+      background: var(--mj-bg-surface-card);
       color: var(--mj-text-disabled);
       font-size: 13px;
       font-weight: 700;
@@ -738,9 +738,9 @@ interface ReviewFormState {
       justify-content: center;
       gap: 8px;
       padding: 12px 20px;
-      border: 2px solid var(--mj-border-default);
+      border: 2px solid var(--mj-border-strong);
       border-radius: 10px;
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-card);
       font-size: 14px;
       font-weight: 600;
       color: var(--mj-text-muted);
@@ -767,14 +767,14 @@ interface ReviewFormState {
       width: 100%;
       max-width: 500px;
       padding: 12px;
-      border: 1px solid var(--mj-border-default);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
       resize: vertical;
       min-height: 72px;
       box-sizing: border-box;
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-card);
       color: var(--mj-text-primary);
     }
 
