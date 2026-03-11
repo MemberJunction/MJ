@@ -278,4 +278,74 @@ export abstract class BaseIntegrationConnector {
 
         return result;
     }
+
+    // ── Optional write-back interface ──────────────────────────────────────
+    // Connectors that support write operations implement these methods.
+    // They are optional; connectors that are read-only can leave them undefined.
+
+    /**
+     * Creates a new record in the external system for the given object type.
+     * Implement in subclasses that support write-back.
+     * @param objectType - Name of the external object (e.g., "contacts", "members")
+     * @param data - Field name → value map for the new record
+     * @param companyIntegration - The company integration entity with connection credentials
+     * @param contextUser - User context for authorization
+     * @returns The created record as returned by the external API (including generated ID)
+     */
+    public CreateRecord?(
+        objectType: string,
+        data: Record<string, unknown>,
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<Record<string, unknown>>;
+
+    /**
+     * Updates an existing record in the external system.
+     * Implement in subclasses that support write-back.
+     * @param objectType - Name of the external object
+     * @param externalId - The external system's ID for the record to update
+     * @param data - Field name → value map of fields to update
+     * @param companyIntegration - The company integration entity with connection credentials
+     * @param contextUser - User context for authorization
+     * @returns The updated record as returned by the external API
+     */
+    public UpdateRecord?(
+        objectType: string,
+        externalId: string,
+        data: Record<string, unknown>,
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<Record<string, unknown>>;
+
+    /**
+     * Deletes a record from the external system.
+     * Implement in subclasses that support write-back.
+     * @param objectType - Name of the external object
+     * @param externalId - The external system's ID for the record to delete
+     * @param companyIntegration - The company integration entity with connection credentials
+     * @param contextUser - User context for authorization
+     * @returns True if the record was deleted successfully
+     */
+    public DeleteRecord?(
+        objectType: string,
+        externalId: string,
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<boolean>;
+
+    /**
+     * Searches records in the external system.
+     * Implement in subclasses that support read-by-filter operations.
+     * @param objectType - Name of the external object
+     * @param filter - Field name → value map of search criteria
+     * @param companyIntegration - The company integration entity with connection credentials
+     * @param contextUser - User context for authorization
+     * @returns Array of matching records
+     */
+    public SearchRecords?(
+        objectType: string,
+        filter: Record<string, unknown>,
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<Record<string, unknown>[]>;
 }
