@@ -336,6 +336,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let hasMore = true;
         let currentWatermark = initialWatermark;
         let recordsInMap = 0;
+        let currentPage: number | undefined;
+        let currentOffset: number | undefined;
 
         while (hasMore) {
             const ctx: FetchContext = {
@@ -344,29 +346,40 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 WatermarkValue: currentWatermark,
                 BatchSize: this.MaxBatchSize,
                 ContextUser: contextUser,
+                CurrentPage: currentPage,
+                CurrentOffset: currentOffset,
             };
 
             const batch = await config.connector.FetchChanges(ctx);
 
-            // A7: Batch size enforcement — truncate if connector returns more than MaxBatchSize
-            let batchRecords = batch.Records;
-            if (batchRecords.length > this.MaxBatchSize) {
-                console.warn(
-                    `[IntegrationEngine] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
-                );
-                batchRecords = batchRecords.slice(0, this.MaxBatchSize);
-            }
-
             const mapped = this.fieldMappingEngine.Apply(
-                batchRecords, fieldMaps, entityMap.Entity
+                batch.Records, fieldMaps, entityMap.Entity
             );
             const resolved = await this.matchEngine.Resolve(
                 mapped, entityMap, fieldMaps, contextUser
             );
 
+            const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+            const afterApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
 
-            recordsInMap += batchRecords.length;
+            if (batch.Records.length > 0) {
+                const written = afterApply - beforeApply;
+                const offsetInfo = currentOffset != null ? ` (offset ${currentOffset})` : '';
+                console.log(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: wrote ${written} records to DB` +
+                    `${offsetInfo} — running totals: ${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+                    `${result.RecordsSkipped} skipped, ${result.RecordsErrored} errored` +
+                    (batch.HasMore ? ` | more batches pending` : ` | batch complete`)
+                );
+
+                // Update progress on the watermark record so the DB reflects live sync state
+                if (batch.HasMore) {
+                    await this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser);
+                }
+            }
+
+            recordsInMap += batch.Records.length;
 
             // A8: Progress tracking
             if (onProgress) {
@@ -376,6 +389,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (batch.NewWatermarkValue) {
                 currentWatermark = batch.NewWatermarkValue;
             }
+            currentPage = batch.NextPage;
+            currentOffset = batch.NextOffset;
             hasMore = batch.HasMore;
         }
 

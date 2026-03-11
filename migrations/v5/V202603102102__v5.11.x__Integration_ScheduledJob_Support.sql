@@ -1,6 +1,125 @@
+-- =============================================================================
+-- Migration: Integration Scheduled Job Support
+-- Version:   5.10.x
+-- Purpose:   1. Add ScheduledJobRunID FK to CompanyIntegrationRun for traceability
+--            2. Add ScheduledJobID FK to CompanyIntegration for association
+-- =============================================================================
+
+-- 1a. Add ScheduledJobRunID to CompanyIntegrationRun
+ALTER TABLE ${flyway:defaultSchema}.CompanyIntegrationRun
+ADD ScheduledJobRunID UNIQUEIDENTIFIER NULL;
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.CompanyIntegrationRun
+ADD CONSTRAINT FK_CompanyIntegrationRun_ScheduledJobRun
+    FOREIGN KEY (ScheduledJobRunID)
+    REFERENCES ${flyway:defaultSchema}.ScheduledJobRun(ID);
+GO
+
+-- 1b. Add ScheduledJobID to CompanyIntegration
+ALTER TABLE ${flyway:defaultSchema}.CompanyIntegration
+ADD ScheduledJobID UNIQUEIDENTIFIER NULL;
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.CompanyIntegration
+ADD CONSTRAINT FK_CompanyIntegration_ScheduledJob
+    FOREIGN KEY (ScheduledJobID)
+    REFERENCES ${flyway:defaultSchema}.ScheduledJob(ID);
+GO
+
+-- CompanyIntegration has a custom base view, refresh it so CodeGen picks up the changes
+EXEC sp_refreshview '${flyway:defaultSchema}.vwCompanyIntegrations'
+GO
+
+-- Extended properties
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CompanyIntegrationRun',
+    @level2type = N'COLUMN', @level2name = N'ScheduledJobRunID';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CompanyIntegration',
+    @level2type = N'COLUMN', @level2name = N'ScheduledJobID';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------- Codegen Output ----------------------
+
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '54e30e5e-b128-4637-be27-b2ebae568c42' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduledJobID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df93b894-b6db-4928-825f-3ec8efbc9521' OR (EntityID = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduledJobID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -32,7 +151,7 @@
          )
          VALUES
          (
-            '54e30e5e-b128-4637-be27-b2ebae568c42',
+            'df93b894-b6db-4928-825f-3ec8efbc9521',
             'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integrations
             100067,
             'ScheduledJobID',
@@ -63,7 +182,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2ebe8384-c49f-4cf1-8c8b-d9b7681c2745' OR (EntityID = 'E5238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduledJobRunID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '98758b73-bcf9-4f1d-84d2-5c897f46eff3' OR (EntityID = 'E5238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ScheduledJobRunID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -95,7 +214,7 @@
          )
          VALUES
          (
-            '2ebe8384-c49f-4cf1-8c8b-d9b7681c2745',
+            '98758b73-bcf9-4f1d-84d2-5c897f46eff3',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
             100029,
             'ScheduledJobRunID',
@@ -124,25 +243,34 @@
          )
       END
 
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=3 WHERE ID='5978FE3A-1BE9-4CFB-83B6-E9B34CBB587E'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=4 WHERE ID='EA37F71B-6463-4D68-996C-BD69CC10EC21'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=5 WHERE ID='7DDC2EF5-7E08-490C-8409-F576A303E3DE'
+
 
 /* Create Entity Relationship: MJ: Scheduled Job Runs -> MJ: Company Integration Runs (One To Many via ScheduledJobRunID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e151e509-9760-4109-914c-e1f2caa58352'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f63d8578-c310-4de2-9bf2-15b047c0397f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('e151e509-9760-4109-914c-e1f2caa58352', '05853432-5E13-4F2A-8618-77857ADF17FA', 'E5238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobRunID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f63d8578-c310-4de2-9bf2-15b047c0397f', '05853432-5E13-4F2A-8618-77857ADF17FA', 'E5238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobRunID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
    END;
                     
 
 
 /* Create Entity Relationship: MJ: Scheduled Jobs -> MJ: Company Integrations (One To Many via ScheduledJobID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '577aea3a-6f5b-4df4-b3ed-eed62b12bb7f'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('577aea3a-6f5b-4df4-b3ed-eed62b12bb7f', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
    END;
                     
 
@@ -172,15 +300,6 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegrationRun]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_RunByUserID ON [${flyway:defaultSchema}].[CompanyIntegrationRun] ([RunByUserID]);
-
--- Index for foreign key ScheduledJobRunID in table CompanyIntegrationRun
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_ScheduledJobRunID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegrationRun]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_ScheduledJobRunID ON [${flyway:defaultSchema}].[CompanyIntegrationRun] ([ScheduledJobRunID]);
 
 /* Base View Permissions SQL for MJ: Company Integration Runs */
 -----------------------------------------------------------------
@@ -221,8 +340,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateCompanyIntegrationRun]
     @Comments nvarchar(MAX),
     @Status nvarchar(20) = NULL,
     @ErrorLog nvarchar(MAX),
-    @ConfigData nvarchar(MAX),
-    @ScheduledJobRunID uniqueidentifier
+    @ConfigData nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -242,8 +360,7 @@ BEGIN
                 [Comments],
                 [Status],
                 [ErrorLog],
-                [ConfigData],
-                [ScheduledJobRunID]
+                [ConfigData]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -257,8 +374,7 @@ BEGIN
                 @Comments,
                 ISNULL(@Status, 'Pending'),
                 @ErrorLog,
-                @ConfigData,
-                @ScheduledJobRunID
+                @ConfigData
             )
     END
     ELSE
@@ -274,8 +390,7 @@ BEGIN
                 [Comments],
                 [Status],
                 [ErrorLog],
-                [ConfigData],
-                [ScheduledJobRunID]
+                [ConfigData]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -288,8 +403,7 @@ BEGIN
                 @Comments,
                 ISNULL(@Status, 'Pending'),
                 @ErrorLog,
-                @ConfigData,
-                @ScheduledJobRunID
+                @ConfigData
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -332,8 +446,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateCompanyIntegrationRun]
     @Comments nvarchar(MAX),
     @Status nvarchar(20),
     @ErrorLog nvarchar(MAX),
-    @ConfigData nvarchar(MAX),
-    @ScheduledJobRunID uniqueidentifier
+    @ConfigData nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -348,8 +461,7 @@ BEGIN
         [Comments] = @Comments,
         [Status] = @Status,
         [ErrorLog] = @ErrorLog,
-        [ConfigData] = @ConfigData,
-        [ScheduledJobRunID] = @ScheduledJobRunID
+        [ConfigData] = @ConfigData
     WHERE
         [ID] = @ID
 
@@ -448,15 +560,6 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_CredentialID ON [${flyway:defaultSchema}].[CompanyIntegration] ([CredentialID]);
 
--- Index for foreign key ScheduledJobID in table CompanyIntegration
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegration_ScheduledJobID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CompanyIntegration]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegration_ScheduledJobID ON [${flyway:defaultSchema}].[CompanyIntegration] ([ScheduledJobID]);
-
 /* Base View Permissions SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -513,8 +616,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateCompanyIntegration]
     @IsLocked bit = NULL,
     @LockedAt datetimeoffset,
     @LockedByInstance nvarchar(200),
-    @LockExpiresAt datetimeoffset,
-    @ScheduledJobID uniqueidentifier
+    @LockExpiresAt datetimeoffset
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -551,8 +653,7 @@ BEGIN
                 [IsLocked],
                 [LockedAt],
                 [LockedByInstance],
-                [LockExpiresAt],
-                [ScheduledJobID]
+                [LockExpiresAt]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -583,8 +684,7 @@ BEGIN
                 ISNULL(@IsLocked, 0),
                 @LockedAt,
                 @LockedByInstance,
-                @LockExpiresAt,
-                @ScheduledJobID
+                @LockExpiresAt
             )
     END
     ELSE
@@ -617,8 +717,7 @@ BEGIN
                 [IsLocked],
                 [LockedAt],
                 [LockedByInstance],
-                [LockExpiresAt],
-                [ScheduledJobID]
+                [LockExpiresAt]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -648,8 +747,7 @@ BEGIN
                 ISNULL(@IsLocked, 0),
                 @LockedAt,
                 @LockedByInstance,
-                @LockExpiresAt,
-                @ScheduledJobID
+                @LockExpiresAt
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -709,8 +807,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateCompanyIntegration]
     @IsLocked bit,
     @LockedAt datetimeoffset,
     @LockedByInstance nvarchar(200),
-    @LockExpiresAt datetimeoffset,
-    @ScheduledJobID uniqueidentifier
+    @LockExpiresAt datetimeoffset
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -742,8 +839,7 @@ BEGIN
         [IsLocked] = @IsLocked,
         [LockedAt] = @LockedAt,
         [LockedByInstance] = @LockedByInstance,
-        [LockExpiresAt] = @LockExpiresAt,
-        [ScheduledJobID] = @ScheduledJobID
+        [LockExpiresAt] = @LockExpiresAt
     WHERE
         [ID] = @ID
 
@@ -897,9 +993,159 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCompanyIntegration] TO [cdp_
 
                   UPDATE [${flyway:defaultSchema}].[EntityField]
                   SET IncludeInUserSearchAPI = 1
-                  WHERE ID = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6'
+                  WHERE ID = '385817F0-6F36-EF11-86D4-6045BDEE16E6'
                   AND AutoUpdateIncludeInUserSearchAPI = 1
                
+
+/* Set categories for 16 fields */
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.CompanyIntegrationID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.RunByUserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Run By User ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.Integration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1C2E756D-4457-495D-B7BF-43402A1E4E4E' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.Company 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2C8D1AD8-7743-46C2-9B40-A7C6C9F0765B' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.RunByUser 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C55717F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.ScheduledJobRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Run Overview',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Scheduled Job Run',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '98758B73-BCF9-4F1D-84D2-5C897F46EFF3' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.StartedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.EndedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '704D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.TotalRecords 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '714D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7D91381D-ABC9-46DD-AA66-3E1909BE1CB2' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.Comments 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '724D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.ErrorLog 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '429C9B37-8575-4F2D-9E19-F39378EC3A12' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.ConfigData 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Configuration Data',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'CB3F1399-7741-4882-99D6-F6CDE80E3897' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
 /* Set categories for 37 fields */
 
@@ -934,21 +1180,10 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Active',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integrations.IsExternalSystemReadOnly 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Read Only External System',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Company Integrations.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -967,6 +1202,16 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'F647023E-D909-4ECB-B59D-EE477C274827' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Company Integrations.IsExternalSystemReadOnly 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Is Read Only',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Company Integrations.Company 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -1073,8 +1318,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '987EAF20-227F-4043-BD87-06C9E01598F4' AND AutoUpdateCategory = 1
 
@@ -1159,7 +1404,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '54E30E5E-B128-4637-BE27-B2EBAE568C42' AND AutoUpdateCategory = 1
+   ID = 'DF93B894-B6DB-4928-825F-3EC8EFBC9521' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Company Integrations.IsLocked 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -1242,153 +1487,4 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
-/* Set categories for 16 fields */
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.CompanyIntegrationID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.RunByUserID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.Integration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1C2E756D-4457-495D-B7BF-43402A1E4E4E' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.Company 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2C8D1AD8-7743-46C2-9B40-A7C6C9F0765B' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.RunByUser 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C55717F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.ScheduledJobRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Run Overview',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Scheduled Job Run',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2EBE8384-C49F-4CF1-8C8B-D9B7681C2745' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.StartedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.EndedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '704D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.TotalRecords 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '714D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7D91381D-ABC9-46DD-AA66-3E1909BE1CB2' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.Comments 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '724D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.ErrorLog 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '429C9B37-8575-4F2D-9E19-F39378EC3A12' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.ConfigData 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Configuration Data',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
-WHERE 
-   ID = 'CB3F1399-7741-4882-99D6-F6CDE80E3897' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
-
--- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1
 

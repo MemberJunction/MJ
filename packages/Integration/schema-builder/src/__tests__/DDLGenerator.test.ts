@@ -86,6 +86,28 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('[FirstName] NVARCHAR(100) NOT NULL');
         });
 
+        it('should cap NVARCHAR(MAX) PK columns to NVARCHAR(450) for SQL Server indexability', () => {
+            const config = MakeTableConfig({
+                PrimaryKeyFields: ['ProfileID'],
+                Columns: [MakeColumn({ TargetColumnName: 'ProfileID', TargetSqlType: 'NVARCHAR(MAX)', IsNullable: false })],
+            });
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            expect(sql).toContain('[ProfileID] NVARCHAR(450) NOT NULL');
+            expect(sql).not.toContain('[ProfileID] NVARCHAR(MAX)');
+        });
+
+        it('should not cap non-PK NVARCHAR(MAX) columns', () => {
+            const config = MakeTableConfig({
+                PrimaryKeyFields: ['ID'],
+                Columns: [
+                    MakeColumn({ TargetColumnName: 'ID', TargetSqlType: 'NVARCHAR(255)', IsNullable: false }),
+                    MakeColumn({ TargetColumnName: 'Notes', TargetSqlType: 'NVARCHAR(MAX)', IsNullable: true }),
+                ],
+            });
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            expect(sql).toContain('[Notes] NVARCHAR(MAX) NULL');
+        });
+
         it('should include UNIQUE constraint on PK fields', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'sqlserver');

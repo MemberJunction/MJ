@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -493,8 +493,8 @@ export const MJActionParamSchema = z.object({
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -8341,7 +8341,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -8536,7 +8536,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: The company's identifier in the external system, used for API calls.`),
     IsExternalSystemReadOnly: z.boolean().describe(`
         * * Field Name: IsExternalSystemReadOnly
-        * * Display Name: Read Only External System
+        * * Display Name: Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if data can only be read from the external system, not written back.`),
@@ -8578,7 +8578,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: Links this integration to its source type (SaaS API, Database, File Feed, etc.).`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for the integration connection (server, database, credentials reference, etc.).`),
     CredentialID: z.string().nullable().describe(`
@@ -8606,7 +8606,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: Type of schedule: Manual (no auto-sync), Interval (every N minutes), Cron (cron expression)`),
     ScheduleIntervalMinutes: z.number().nullable().describe(`
         * * Field Name: ScheduleIntervalMinutes
-        * * Display Name: Schedule Interval (Minutes)
+        * * Display Name: Interval (Minutes)
         * * SQL Data Type: int
         * * Description: Interval in minutes for Interval schedule type`),
     CronExpression: z.string().nullable().describe(`
@@ -8626,7 +8626,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: When the last scheduled sync was initiated`),
     IsLocked: z.boolean().describe(`
         * * Field Name: IsLocked
-        * * Display Name: Is Locked
+        * * Display Name: Locked
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether a sync is currently locked/running for this integration`),
@@ -8669,7 +8669,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run
+        * * Display Name: Last Run ID
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -24249,8 +24249,8 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -24258,10 +24258,10 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -45107,7 +45107,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -45590,7 +45590,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsExternalSystemReadOnly
-    * * Display Name: Read Only External System
+    * * Display Name: Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if data can only be read from the external system, not written back.
@@ -45690,7 +45690,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration for the integration connection (server, database, credentials reference, etc.).
     */
@@ -45750,7 +45750,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: ScheduleIntervalMinutes
-    * * Display Name: Schedule Interval (Minutes)
+    * * Display Name: Interval (Minutes)
     * * SQL Data Type: int
     * * Description: Interval in minutes for Interval schedule type
     */
@@ -45802,7 +45802,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsLocked
-    * * Display Name: Is Locked
+    * * Display Name: Locked
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether a sync is currently locked/running for this integration
@@ -45905,7 +45905,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run
+    * * Display Name: Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {

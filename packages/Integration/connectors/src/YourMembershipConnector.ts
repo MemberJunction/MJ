@@ -53,7 +53,10 @@ const MAX_RETRIES = 5;
 const REQUEST_TIMEOUT_MS = 30000;
 
 /** Minimum milliseconds between API requests to avoid rate limiting */
-const MIN_REQUEST_INTERVAL_MS = 350;
+const MIN_REQUEST_INTERVAL_MS = 600;
+
+/** Number of members to enrich per batch before writing to DB */
+const ENRICH_BATCH_SIZE = 500;
 
 /** JSON parsing timeout in milliseconds */
 const JSON_TIMEOUT_MS = 30000;
@@ -90,12 +93,22 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
 
+    /** Current adaptive request interval — increases on 429, recovers toward MIN on success */
+    private currentRequestIntervalMs = MIN_REQUEST_INTERVAL_MS;
+
+    /** Cache of the filtered member list pending enrichment, shared across batch calls */
+    private memberFetchCache: {
+        changedRecords: ExternalRecord[];
+        newWatermark: string | null;
+    } | null = null;
+
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
     protected async Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
     ): Promise<RESTAuthContext> {
-        const config = await this.ParseConfig(companyIntegration);
+        const config = await this.ParseConfig(companyIntegration, contextUser);
         const sessionId = await this.GetSession(config);
         const auth: YMAuthContext = { SessionID: sessionId, Config: config };
         return auth;
@@ -115,10 +128,10 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         const ymAuth = auth as YMAuthContext;
         const currentHeaders = { ...headers };
 
-        // Throttle: ensure minimum interval between requests
+        // Throttle: ensure adaptive minimum interval between requests
         const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < MIN_REQUEST_INTERVAL_MS) {
-            await this.Sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
+        if (elapsed < this.currentRequestIntervalMs) {
+            await this.Sleep(this.currentRequestIntervalMs - elapsed);
         }
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -141,12 +154,20 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
             if (response.status === 429) {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
-                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                this.currentRequestIntervalMs = Math.min(this.currentRequestIntervalMs * 2, 10000);
+                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
                 await this.Sleep(delayMs);
                 continue;
             }
 
             this.lastRequestTime = Date.now();
+            // Gradually recover interval toward minimum on successful requests
+            if (this.currentRequestIntervalMs > MIN_REQUEST_INTERVAL_MS) {
+                this.currentRequestIntervalMs = Math.max(
+                    this.currentRequestIntervalMs - 50,
+                    MIN_REQUEST_INTERVAL_MS
+                );
+            }
             const body = await this.JsonWithTimeout(response, JSON_TIMEOUT_MS);
             return this.BuildRESTResponse(response, body);
         }
@@ -201,7 +222,11 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         };
     }
 
-    protected GetBaseURL(companyIntegration: MJCompanyIntegrationEntity): string {
+    protected GetBaseURL(companyIntegration: MJCompanyIntegrationEntity, auth: RESTAuthContext): string {
+        const ymAuth = auth as YMAuthContext;
+        if (ymAuth.Config?.ClientID) {
+            return `${YM_API_BASE}/Ams/${ymAuth.Config.ClientID}`;
+        }
         const configJson = companyIntegration.Get('Configuration') as string | null;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
@@ -247,43 +272,62 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /**
      * Overrides base FetchChanges to handle YM-specific edge cases:
      * - Groups/GroupTypes: nested GroupTypeList response needs custom flattening
-     * - Members: client-side watermark filtering + selective detail enrichment
+     * - Members: client-side watermark filtering + batched detail enrichment
      *
      * The MemberList API returns all members every time (no server-side date filter),
-     * but each record includes a `LastUpdated` field. We pull the full list, filter
-     * to only records changed since the watermark, and only call the expensive
-     * per-member detail endpoint for those changed records.
+     * but each record includes a `LastUpdated` field. We pull the full list once,
+     * filter to only records changed since the watermark, cache that filtered list,
+     * and enrich + return ENRICH_BATCH_SIZE records per FetchChanges call so the
+     * engine writes each batch to the database before moving to the next.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         if (ctx.ObjectName === 'Groups' || ctx.ObjectName === 'GroupTypes') {
             return this.FetchGroups(ctx);
         }
 
-        const result = await super.FetchChanges(ctx);
-
-        if (ctx.ObjectName === 'Members' && result.Records.length > 0) {
-            return this.FetchMembersWithWatermark(ctx, result);
+        if (ctx.ObjectName === 'Members') {
+            return this.FetchMemberBatch(ctx);
         }
 
-        return result;
+        return super.FetchChanges(ctx);
     }
 
     /**
-     * Filters the full member list to only records changed since the watermark,
-     * then enriches only those changed records via the detail endpoint.
-     * Returns a new watermark based on the latest LastUpdated value seen.
+     * Fetches and enriches members in batches of ENRICH_BATCH_SIZE.
+     *
+     * On the first call (CurrentOffset = 0 or undefined), fetches the full member
+     * list via the base class, filters by watermark, and caches the result.
+     * On subsequent calls, uses the cached list and enriches the next slice.
+     * Returns HasMore=true until all records are enriched.
+     * Only sets NewWatermarkValue on the final batch so the watermark is only
+     * updated once all records have been written to the database.
      */
-    private async FetchMembersWithWatermark(
-        ctx: FetchContext,
-        fullResult: FetchBatchResult
-    ): Promise<FetchBatchResult> {
-        const { changedRecords, newWatermark } = this.FilterByWatermark(
-            fullResult.Records,
-            ctx.WatermarkValue,
-            'LastUpdated'
-        );
+    private async FetchMemberBatch(ctx: FetchContext): Promise<FetchBatchResult> {
+        const offset = ctx.CurrentOffset ?? 0;
 
-        if (changedRecords.length === 0) {
+        // Fresh start: fetch full member list and cache the filtered result
+        if (offset === 0 || !this.memberFetchCache) {
+            this.memberFetchCache = null;
+
+            const fullResult = await super.FetchChanges(ctx);
+            const { changedRecords, newWatermark } = this.FilterByWatermark(
+                fullResult.Records,
+                ctx.WatermarkValue,
+                'LastUpdated'
+            );
+
+            console.log(
+                `[YM Members] ${changedRecords.length} of ${fullResult.Records.length} records changed since watermark`
+            );
+
+            this.memberFetchCache = { changedRecords, newWatermark };
+        }
+
+        const { changedRecords, newWatermark } = this.memberFetchCache;
+        const total = changedRecords.length;
+
+        if (total === 0) {
+            this.memberFetchCache = null;
             return {
                 Records: [],
                 HasMore: false,
@@ -291,18 +335,25 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             };
         }
 
-        console.log(
-            `[YM Members] ${changedRecords.length} of ${fullResult.Records.length} records changed since watermark`
-        );
+        const batchSlice = changedRecords.slice(offset, offset + ENRICH_BATCH_SIZE);
+        const nextOffset = offset + batchSlice.length;
+        const hasMore = nextOffset < total;
 
-        const enriched = await this.EnrichMembersWithDetails(ctx, {
-            Records: changedRecords,
-            HasMore: false,
-        });
+        console.log(`[YM Members] Enriching records ${offset + 1}–${nextOffset} of ${total}`);
+
+        const enrichedBatch = await this.EnrichMembersWithDetails(ctx, batchSlice, offset, total);
+
+        // Clear cache after the final batch
+        if (!hasMore) {
+            this.memberFetchCache = null;
+        }
 
         return {
-            ...enriched,
-            NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
+            Records: enrichedBatch,
+            HasMore: hasMore,
+            NextOffset: hasMore ? nextOffset : undefined,
+            // Only advance the watermark after all records are written
+            NewWatermarkValue: !hasMore ? (newWatermark ?? ctx.WatermarkValue ?? undefined) : undefined,
         };
     }
 
@@ -486,7 +537,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      * the type entries. When 'Groups', flattens into individual group records.
      */
     private async FetchGroups(ctx: FetchContext): Promise<FetchBatchResult> {
-        const auth = await this.Authenticate(ctx.CompanyIntegration) as YMAuthContext;
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
         const json = await this.MakeYMRequest(auth, 'Groups');
         const typeList = json['GroupTypeList'] as GroupTypeListItem[] | undefined;
 
@@ -536,27 +587,42 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     // ─── Detail enrichment (Members) ─────────────────────────────────
 
     /**
-     * Enriches Members records with full profile data from the detail endpoint.
+     * Enriches a slice of member records with full profile data from the detail endpoint.
      * The list endpoint returns sparse data (name, email); the detail endpoint
      * returns full address, phone, custom fields, etc.
+     *
+     * @param ctx - Fetch context for auth
+     * @param records - The slice of records to enrich
+     * @param batchOffset - Starting index of this slice within the overall set (for progress logging)
+     * @param overallTotal - Total number of records being enriched across all batches (for progress logging)
      */
     private async EnrichMembersWithDetails(
         ctx: FetchContext,
-        result: FetchBatchResult
-    ): Promise<FetchBatchResult> {
-        const auth = await this.Authenticate(ctx.CompanyIntegration) as YMAuthContext;
+        records: ExternalRecord[],
+        batchOffset: number,
+        overallTotal: number
+    ): Promise<ExternalRecord[]> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
         const concurrency = 3;
         const enriched: ExternalRecord[] = [];
+        let lastLoggedPct = Math.floor((batchOffset / overallTotal) * 100);
 
-        for (let i = 0; i < result.Records.length; i += concurrency) {
-            const batch = result.Records.slice(i, i + concurrency);
+        for (let i = 0; i < records.length; i += concurrency) {
+            const chunk = records.slice(i, i + concurrency);
             const results = await Promise.all(
-                batch.map(record => this.EnrichSingleMember(auth, record))
+                chunk.map(record => this.EnrichSingleMember(auth, record))
             );
             enriched.push(...results);
+
+            const doneOverall = batchOffset + enriched.length;
+            const pct = Math.floor((doneOverall / overallTotal) * 100);
+            if (pct >= lastLoggedPct + 1) {
+                lastLoggedPct = pct;
+                console.log(`[YM Members] Enriched ${doneOverall}/${overallTotal} (${pct}%)`);
+            }
         }
 
-        return { ...result, Records: enriched };
+        return enriched;
     }
 
     /**
@@ -576,8 +642,9 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             const json = await Promise.race([fetchPromise, timeoutPromise]);
             const normalized = this.NormalizeMemberDetail(json);
             record.Fields = { ...record.Fields, ...normalized };
-        } catch {
-            // Keep list data if detail fetch fails
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM Members] Failed to enrich member ${record.ExternalID}: ${message}`);
         }
 
         return record;

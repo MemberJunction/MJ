@@ -82,6 +82,7 @@
     "@memberjunction/doc-utils": "5.10.1",
     "@memberjunction/encryption": "5.10.1",
     "@memberjunction/entity-communications-base": "5.10.1",
+    "@memberjunction/integration-actions": "5.10.1",
     "@memberjunction/integration-connectors": "5.10.1",
     "@memberjunction/integration-engine": "5.10.1",
     "@memberjunction/queue": "5.10.1",

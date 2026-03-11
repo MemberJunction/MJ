@@ -14,7 +14,6 @@ export type {
     ColumnModification,
     TypeMappingEntry,
     EmittedFile,
-    EmittedFileCategory,
     MigrationMetadata,
     SchemaBuilderInput,
     SchemaBuilderOutput,

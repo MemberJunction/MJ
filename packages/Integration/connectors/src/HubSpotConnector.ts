@@ -172,7 +172,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
     protected async Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        _contextUser: UserInfo
     ): Promise<RESTAuthContext> {
         const credentials = await this.LoadCredentials(companyIntegration);
         const auth: HubSpotAuthContext = {
@@ -263,7 +264,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         return { HasMore: false };
     }
 
-    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity): string {
+    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity, _auth: RESTAuthContext): string {
         return HUBSPOT_API_BASE;
     }
 
@@ -300,7 +301,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         _contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const auth = await this.Authenticate(companyIntegration);
+            const auth = await this.Authenticate(companyIntegration, _contextUser);
             const headers = this.BuildHeaders(auth);
             const response = await this.MakeHTTPRequest(
                 auth,
