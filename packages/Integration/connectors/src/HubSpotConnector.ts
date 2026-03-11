@@ -173,9 +173,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     protected async Authenticate(
         companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<RESTAuthContext> {
-        const credentials = await this.LoadCredentials(companyIntegration);
+        const credentials = await this.LoadCredentials(companyIntegration, contextUser);
         const auth: HubSpotAuthContext = {
             Token: credentials.AccessToken,
             Credentials: credentials,
@@ -427,12 +427,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      * or falls back to CompanyIntegration Configuration JSON for backwards compat.
      */
     private async LoadCredentials(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
     ): Promise<HubSpotCredentials> {
         // Try loading from linked Credential entity first
         const credentialID = companyIntegration.Get('CredentialID') as string | null;
         if (credentialID) {
-            const creds = await this.LoadFromCredentialEntity(credentialID);
+            const creds = await this.LoadFromCredentialEntity(credentialID, contextUser);
             if (creds) return creds;
         }
 
@@ -450,9 +451,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /** Loads credentials from a Credential entity by ID. */
-    private async LoadFromCredentialEntity(credentialID: string): Promise<HubSpotCredentials | null> {
+    private async LoadFromCredentialEntity(credentialID: string, contextUser: UserInfo): Promise<HubSpotCredentials | null> {
         const md = new Metadata();
-        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
 
