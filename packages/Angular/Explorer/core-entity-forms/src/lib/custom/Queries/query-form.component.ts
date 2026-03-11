@@ -56,10 +56,8 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
         { text: 'Approved', value: 'Approved' },
-        { text: 'In-Review', value: 'In-Review' },
         { text: 'Rejected', value: 'Rejected' },
-        { text: 'Expired', value: 'Expired' },
-        { text: 'Obsolete', value: 'Obsolete' }
+        { text: 'Expired', value: 'Expired' }
     ];
 
     // Toolbar config: hide non-functional buttons (delete/favorite/history are not wired

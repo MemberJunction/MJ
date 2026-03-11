@@ -92,14 +92,14 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public DrawerSQL = '';
     public DrawerDescription = '';
     public DrawerCategoryID = '';
-    public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' | 'In-Review' | 'Obsolete' = 'Pending';
+    public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = 'Pending';
     public IsSavingDrawer = false;
     public DrawerNameError = false;
     public DrawerSaveError: string | null = null;
 
     /** Ordered status options for the drawer dropdown — all valid Query statuses */
-    public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired' | 'In-Review' | 'Obsolete'> =
-        ['Pending', 'Approved', 'In-Review', 'Rejected', 'Expired', 'Obsolete'];
+    public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
+        ['Pending', 'Approved', 'Rejected', 'Expired'];
 
     private initialDrawerSnapshot = '';
 
