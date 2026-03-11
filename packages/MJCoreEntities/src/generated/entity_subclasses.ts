@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -493,8 +493,8 @@ export const MJActionParamSchema = z.object({
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -17154,6 +17154,12 @@ export const MJQuerySchema = z.object({
         * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
         * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
         * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`),
+    Reusable: z.boolean().describe(`
+        * * Field Name: Reusable
+        * * Display Name: Is Reusable
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -17244,6 +17250,74 @@ export const MJQueryCategorySchema = z.object({
 });
 
 export type MJQueryCategoryEntityType = z.infer<typeof MJQueryCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Query Dependencies
+ */
+export const MJQueryDependencySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    QueryID: z.string().describe(`
+        * * Field Name: QueryID
+        * * Display Name: Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the query that contains the composition reference.`),
+    DependsOnQueryID: z.string().describe(`
+        * * Field Name: DependsOnQueryID
+        * * Display Name: Depends On Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the referenced (depended-upon) query.`),
+    ReferencePath: z.string().describe(`
+        * * Field Name: ReferencePath
+        * * Display Name: Reference Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The full composition reference path as written in the SQL.`),
+    Alias: z.string().nullable().describe(`
+        * * Field Name: Alias
+        * * Display Name: Alias
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SQL alias used for the composed CTE in the referencing query.`),
+    ParameterMapping: z.string().nullable().describe(`
+        * * Field Name: ParameterMapping
+        * * Display Name: Parameter Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object mapping parameter names to values or pass-through parameter names.`),
+    DetectionMethod: z.union([z.literal('Auto'), z.literal('Manual')]).describe(`
+        * * Field Name: DetectionMethod
+        * * Display Name: Detection Method
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+        * * Description: How the dependency was detected: Auto (parsed from SQL) or Manual (user-specified).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Source Query Name
+        * * SQL Data Type: nvarchar(255)`),
+    DependsOnQuery: z.string().describe(`
+        * * Field Name: DependsOnQuery
+        * * Display Name: Target Query Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJQueryDependencyEntityType = z.infer<typeof MJQueryDependencySchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Entities
@@ -24237,8 +24311,8 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -24246,10 +24320,10 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -67748,6 +67822,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: Reusable
+    * * Display Name: Is Reusable
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.
+    */
+    get Reusable(): boolean {
+        return this.Get('Reusable');
+    }
+    set Reusable(value: boolean) {
+        this.Set('Reusable', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -67968,6 +68056,174 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Query Dependencies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: QueryDependency
+ * * Base View: vwQueryDependencies
+ * * @description Tracks which queries reference other queries via composition syntax. Auto-populated by the query save pipeline.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Query Dependencies')
+export class MJQueryDependencyEntity extends BaseEntity<MJQueryDependencyEntityType> {
+    /**
+    * Loads the MJ: Query Dependencies record from the database
+    * @param ID: string - primary key value to load the MJ: Query Dependencies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJQueryDependencyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: QueryID
+    * * Display Name: Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the query that contains the composition reference.
+    */
+    get QueryID(): string {
+        return this.Get('QueryID');
+    }
+    set QueryID(value: string) {
+        this.Set('QueryID', value);
+    }
+
+    /**
+    * * Field Name: DependsOnQueryID
+    * * Display Name: Depends On Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the referenced (depended-upon) query.
+    */
+    get DependsOnQueryID(): string {
+        return this.Get('DependsOnQueryID');
+    }
+    set DependsOnQueryID(value: string) {
+        this.Set('DependsOnQueryID', value);
+    }
+
+    /**
+    * * Field Name: ReferencePath
+    * * Display Name: Reference Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The full composition reference path as written in the SQL.
+    */
+    get ReferencePath(): string {
+        return this.Get('ReferencePath');
+    }
+    set ReferencePath(value: string) {
+        this.Set('ReferencePath', value);
+    }
+
+    /**
+    * * Field Name: Alias
+    * * Display Name: Alias
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SQL alias used for the composed CTE in the referencing query.
+    */
+    get Alias(): string | null {
+        return this.Get('Alias');
+    }
+    set Alias(value: string | null) {
+        this.Set('Alias', value);
+    }
+
+    /**
+    * * Field Name: ParameterMapping
+    * * Display Name: Parameter Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object mapping parameter names to values or pass-through parameter names.
+    */
+    get ParameterMapping(): string | null {
+        return this.Get('ParameterMapping');
+    }
+    set ParameterMapping(value: string | null) {
+        this.Set('ParameterMapping', value);
+    }
+
+    /**
+    * * Field Name: DetectionMethod
+    * * Display Name: Detection Method
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+    * * Description: How the dependency was detected: Auto (parsed from SQL) or Manual (user-specified).
+    */
+    get DetectionMethod(): 'Auto' | 'Manual' {
+        return this.Get('DetectionMethod');
+    }
+    set DetectionMethod(value: 'Auto' | 'Manual') {
+        this.Set('DetectionMethod', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Source Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: DependsOnQuery
+    * * Display Name: Target Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DependsOnQuery(): string {
+        return this.Get('DependsOnQuery');
     }
 }
 
