@@ -150,7 +150,7 @@
 }
 
 .copy-button-in-bubble:hover {
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--mj-text-muted);
 }
 
@@ -234,7 +234,7 @@
 
 .agent-details i {
     font-size: 28px;
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
 }
 
 .agent-details .entity-logo {
@@ -376,7 +376,7 @@
 }
 
 .message-assistant .message-role {
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
 }
 
 .message-time {
@@ -418,7 +418,7 @@
 }
 
 .raw-toggle:hover {
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+    background: rgba(0, 0, 0, 0.05);
     color: var(--mj-text-secondary);
 }
 
@@ -821,7 +821,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    background-color: color-mix(in srgb, var(--mj-color-info-500) 8%, var(--mj-bg-surface));
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
     border-radius: 8px;
     gap: 16px;
 }
@@ -830,7 +830,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
     font-size: 14px;
 }
 

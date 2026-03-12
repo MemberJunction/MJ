@@ -12,7 +12,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -34,7 +34,7 @@
     flex-direction: column;
     background: var(--mj-bg-surface);
     border-radius: 16px;
-    box-shadow: 0 25px 80px color-mix(in srgb, var(--mj-color-neutral-900) 35%, transparent);
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
     width: 520px;
     max-width: 90vw;
     max-height: 85vh;
@@ -103,7 +103,7 @@
 }
 
 .close-button:hover {
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--mj-text-primary);
 }
 
@@ -329,8 +329,8 @@
 }
 
 .radio-badge.secure {
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
-    color: var(--mj-color-info-500);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 .radio-badge.warning {

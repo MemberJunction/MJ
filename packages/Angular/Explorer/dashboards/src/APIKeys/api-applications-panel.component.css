@@ -32,7 +32,7 @@
 }
 
 .panel-title i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .panel-subtitle {
@@ -46,7 +46,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, var(--mj-color-violet-500) 0%, var(--mj-color-violet-600) 100%);
+    background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
@@ -58,7 +58,7 @@
 
 .btn-create:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-violet-500) 40%, transparent);  /* violet shadow for create button */
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 /* Messages */
@@ -80,7 +80,7 @@
 
 .message.error {
     background: var(--mj-color-error-100);
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     border: 1px solid var(--mj-status-error-border);
 }
 
@@ -147,8 +147,8 @@
 }
 
 .app-edit-btn:hover {
-    background: var(--mj-color-violet-500);
-    border-color: var(--mj-color-violet-500);
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
 }
 
@@ -158,7 +158,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--mj-color-violet-500) 0%, var(--mj-color-violet-600) 100%);
+    background: var(--mj-brand-primary);
     border-radius: 10px;
     margin-right: 16px;
     flex-shrink: 0;
@@ -225,7 +225,7 @@
 }
 
 .scope-count i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .expand-icon {
@@ -326,7 +326,7 @@
 
 .priority {
     font-size: 11px;
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .empty-scopes {
@@ -433,7 +433,7 @@
 
 .slideout-resize-handle:hover,
 .slideout-resize-handle.resizing {
-    background: color-mix(in srgb, var(--mj-color-violet-500) 30%, transparent);
+    background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 .slideout-resize-handle::after {
@@ -477,7 +477,7 @@
 }
 
 .slideout-title i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
     font-size: 18px;
     flex-shrink: 0;
 }
@@ -554,7 +554,7 @@
 }
 
 .slideout-tab.active {
-    background: var(--mj-color-violet-500);
+    background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
 }
 
@@ -643,7 +643,7 @@
 
 :host ::ng-deep .form-input:focus-within,
 :host ::ng-deep .form-textarea:focus-within {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-color-violet-500) 10%, transparent);  /* violet focus ring */
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 /* Slideout Footer */
@@ -665,14 +665,14 @@
 }
 
 :host ::ng-deep .slideout-footer .k-button-solid-primary {
-    background: linear-gradient(135deg, var(--mj-color-violet-500) 0%, var(--mj-color-violet-600) 100%);
+    background: var(--mj-brand-primary);
     border: none;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-violet-500) 30%, transparent);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 :host ::ng-deep .slideout-footer .k-button-solid-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-violet-500) 40%, transparent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 .checkbox-label {
@@ -907,7 +907,7 @@
 
 .pattern-tag.exclude {
     background: var(--mj-color-error-100);
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
 }
 
 .pattern-tag i {

@@ -392,7 +392,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     getTypeColor(): string {
-        return this.record.Type === 'Generated' ? 'var(--mj-color-violet-500)' : 'var(--mj-brand-primary)';
+        return this.record.Type === 'Generated' ? 'var(--mj-brand-primary)' : 'var(--mj-brand-primary)';
     }
 
     getTypeIcon(): string {
@@ -430,7 +430,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         switch (type) {
             case 'Input': return 'var(--mj-brand-primary)';
             case 'Output': return 'var(--mj-status-success)';
-            case 'Both': return 'var(--mj-color-violet-500)';
+            case 'Both': return 'var(--mj-brand-primary)';
             default: return 'var(--mj-text-muted)';
         }
     }

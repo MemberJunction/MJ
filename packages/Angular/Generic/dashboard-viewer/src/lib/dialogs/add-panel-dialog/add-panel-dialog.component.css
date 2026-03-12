@@ -12,7 +12,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -34,7 +34,7 @@
     flex-direction: column;
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 20px 60px color-mix(in srgb, var(--mj-color-neutral-900) 30%, transparent);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     width: 560px;
     max-width: 90vw;
     max-height: 85vh;
@@ -99,7 +99,7 @@
 
 .back-button:hover,
 .close-button:hover {
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--mj-text-primary);
 }
 

@@ -61,7 +61,7 @@ export interface KPICardData {
       background: var(--mj-bg-surface);
       border-radius: 16px;
       padding: 20px;
-      box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
       border: 1px solid var(--mj-border-default);
       border-left: 4px solid transparent;
       transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -72,7 +72,7 @@ export interface KPICardData {
     }
 
     .kpi-card:hover {
-      box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
       transform: translateY(-3px);
       border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
     }

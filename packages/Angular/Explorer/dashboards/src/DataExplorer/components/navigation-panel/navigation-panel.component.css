@@ -5,7 +5,7 @@
   min-height: 0; /* Critical for nested flex scrolling */
   position: relative;
   background: var(--mj-bg-surface);
-  box-shadow: 1px 0 3px color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.05);
 }
 .navigation-panel-container.collapsed {
   align-items: center;

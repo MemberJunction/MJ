@@ -56,7 +56,7 @@ export interface HeatmapConfig {
     .performance-heatmap {
       background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       padding: 20px;
       height: 100%;
       display: flex;
@@ -114,14 +114,14 @@ export interface HeatmapConfig {
 
     .chart-tooltip {
       position: absolute;
-      background: color-mix(in srgb, var(--mj-color-neutral-900) 85%, transparent);
+      background: rgba(0, 0, 0, 0.85);
       color: var(--mj-text-inverse);
       padding: 10px 12px;
       border-radius: 4px;
       font-size: 12px;
       pointer-events: none;
       z-index: 1000;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 30%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       max-width: 250px;
     }
 

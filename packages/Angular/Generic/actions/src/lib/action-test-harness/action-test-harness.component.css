@@ -35,7 +35,7 @@
 }
 
 .harness-header h3 i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .header-actions {
@@ -81,7 +81,7 @@
 }
 
 .toggle-checkbox:checked + .toggle-slider {
-    background: var(--mj-color-violet-500);
+    background: var(--mj-brand-primary);
 }
 
 .toggle-checkbox:checked + .toggle-slider::before {
@@ -200,7 +200,7 @@
 }
 
 .array-badge {
-    background: var(--mj-color-violet-500);
+    background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
     padding: 2px 6px;
     border-radius: 10px;
@@ -296,14 +296,14 @@ textarea.param-input {
 }
 
 .btn-primary {
-    background: var(--mj-color-violet-500);
+    background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
-    border-color: var(--mj-color-violet-500);
+    border-color: var(--mj-brand-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--mj-color-violet-500) 80%, black);
-    border-color: color-mix(in srgb, var(--mj-color-violet-500) 80%, black);
+    background: color-mix(in srgb, var(--mj-brand-primary) 80%, black);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 80%, black);
 }
 
 .btn-outline {
@@ -460,7 +460,7 @@ textarea.param-input {
 }
 
 .result-message h5 i {
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
 }
 
 .result-message p {
@@ -494,7 +494,7 @@ textarea.param-input {
 }
 
 .result-data h5 i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .toggle-view-btn {
@@ -600,7 +600,7 @@ textarea.param-input {
 }
 
 .output-param label i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
     font-size: 0.9em;
 }
 

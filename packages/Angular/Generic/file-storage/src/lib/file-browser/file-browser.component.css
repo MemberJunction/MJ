@@ -161,7 +161,7 @@
     width: 280px;
     min-width: 280px;
     z-index: 1000;
-    box-shadow: 2px 0 8px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
   }
 
   .sidebar.collapsed {

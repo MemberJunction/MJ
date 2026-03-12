@@ -43,7 +43,7 @@
 }
 
 .dialog-title i {
-    color: var(--mj-color-violet-500);
+    color: var(--mj-brand-primary);
 }
 
 .dialog-close-btn {

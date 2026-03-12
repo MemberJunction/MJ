@@ -25,7 +25,7 @@
 
 /* Dialog Container */
 .dialog-container {
-  background: white;
+  background: var(--mj-bg-surface);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   display: flex;
@@ -54,8 +54,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-bottom: 1px solid #e0e6ed;
+  background: linear-gradient(135deg, var(--mj-bg-surface) 0%, var(--mj-bg-surface-sunken) 100%);
+  border-bottom: 1px solid var(--mj-border-default);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
 }
@@ -64,14 +64,14 @@
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .dialog-title i {
-  color: #3498db;
+  color: var(--mj-brand-primary);
 }
 
 .dialog-actions {
@@ -82,22 +82,22 @@
 .dialog-btn {
   width: 36px;
   height: 36px;
-  border: 1px solid #dee2e6;
-  background: white;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 14px;
 }
 
 .dialog-btn:hover {
-  background: #f8f9fa;
-  border-color: #adb5bd;
-  color: #495057;
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-secondary);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -105,14 +105,14 @@
 .dialog-btn.close-btn:hover {
   background: #dc3545;
   border-color: #dc3545;
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 /* Dialog Content */
 .dialog-content {
   flex: 1;
   overflow: hidden;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .dialog-content mj-deep-diff {

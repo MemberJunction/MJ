@@ -57,7 +57,7 @@ export interface DataPointClickEvent {
     .time-series-chart {
       background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       padding: 12px;
       height: 100%;
       display: flex;
@@ -126,7 +126,7 @@ export interface DataPointClickEvent {
 
     .chart-tooltip {
       position: absolute;
-      background: color-mix(in srgb, var(--mj-color-neutral-900) 80%, transparent);
+      background: rgba(0, 0, 0, 0.8);
       color: var(--mj-text-inverse);
       padding: 8px 12px;
       border-radius: 4px;
@@ -152,7 +152,7 @@ export interface DataPointClickEvent {
     }
 
     :host ::ng-deep .chart-dot:hover {
-      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-color-neutral-900) 30%, transparent));
+      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
     }
 
     :host ::ng-deep .grid-line {
@@ -244,7 +244,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       style.getPropertyValue('--mj-status-success').trim() || '#22c55e',
       style.getPropertyValue('--mj-status-warning').trim() || '#f59e0b',
       style.getPropertyValue('--mj-status-error').trim() || '#ef4444',
-      style.getPropertyValue('--mj-color-violet-500').trim() || '#8b5cf6',
+      style.getPropertyValue('--mj-brand-primary').trim() || '#8b5cf6',
     ];
   }
 

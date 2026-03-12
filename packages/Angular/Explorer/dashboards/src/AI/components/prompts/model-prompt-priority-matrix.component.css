@@ -245,7 +245,7 @@
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-3 {
   background: var(--mj-status-warning);
-  color: var(--mj-color-neutral-900);
+  color: black;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-4 {
   background: var(--mj-status-warning);
@@ -277,14 +277,14 @@
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.modified {
   background: var(--mj-status-warning);
-  color: var(--mj-color-neutral-900);
+  color: black;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .performance-overlay {
   position: absolute;
   bottom: 2px;
   left: 2px;
   right: 2px;
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 80%, transparent);
+  background: rgba(0, 0, 0, 0.8);
   color: var(--mj-text-inverse);
   border-radius: 0.25rem;
   padding: 0.125rem;
@@ -339,7 +339,7 @@
   transition: all 0.2s ease;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item:hover {
-  box-shadow: 0 0.125rem 0.25rem color-mix(in srgb, var(--mj-color-neutral-900) 7.5%, transparent);
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
   transform: translateY(-1px);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item.inactive {
@@ -412,7 +412,7 @@
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-3 {
   background: var(--mj-status-warning);
-  color: var(--mj-color-neutral-900);
+  color: black;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-4 {
   background: var(--mj-status-warning);

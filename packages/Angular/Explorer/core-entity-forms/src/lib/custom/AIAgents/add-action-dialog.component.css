@@ -211,7 +211,7 @@
   padding: 1.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card:hover {
@@ -239,7 +239,7 @@
 
 .add-action-dialog .actions-container .actions-grid .action-card.existing:hover {
   transform: none;
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card .selection-indicator {

@@ -396,7 +396,7 @@
 .alert.alert-error {
   background: var(--mj-color-error-100);
   border: 1px solid rgba(211, 47, 47, 0.2);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 
 .alert.alert-error i {
@@ -876,7 +876,7 @@
 
 .btn-icon.btn-danger {
   background: var(--mj-color-error-100);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 
 .btn-icon.btn-danger:hover:not(:disabled) {

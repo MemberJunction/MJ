@@ -121,8 +121,8 @@ export class PillColorUtil {
     }
 
     .pill-info {
-      background-color: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
-      color: var(--mj-color-info-500);
+      background-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .pill-neutral {

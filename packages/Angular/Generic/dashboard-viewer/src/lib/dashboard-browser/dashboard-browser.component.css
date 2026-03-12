@@ -98,7 +98,7 @@
 .toggle-btn.active {
     background: var(--mj-bg-surface);
     color: var(--mj-brand-primary);
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Selection Mode Button */
@@ -131,7 +131,7 @@
     align-items: center;
     gap: 8px;
     padding: 4px 12px;
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     border-radius: 6px;
 }
 
@@ -147,7 +147,7 @@
 
 .selected-count {
     font-size: 13px;
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
     font-weight: 500;
     min-width: 70px;
 }
@@ -325,7 +325,7 @@
 .dashboard-card {
     background: var(--mj-bg-surface);
     border-radius: 8px;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     cursor: pointer;
     transition: all 0.2s;
     border: 2px solid transparent;
@@ -333,7 +333,7 @@
 }
 
 .dashboard-card:hover {
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 12%, transparent);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     transform: translateY(-2px);
 }
 
@@ -372,7 +372,7 @@
     right: 8px;
     z-index: 2;
     padding: 10px;
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     border-radius: 8px;
     cursor: pointer;
     display: flex;
@@ -382,7 +382,7 @@
 }
 
 .card-select-area:hover {
-    background: color-mix(in srgb, var(--mj-color-info-500) 20%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
 }
 
 .dashboard-card.selected .card-select-area {
@@ -433,8 +433,8 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
-    color: var(--mj-color-info-500);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
     font-size: 10px;
     flex-shrink: 0;
 }
@@ -470,7 +470,7 @@
     background: var(--mj-bg-surface);
     margin: 16px 24px;
     border-radius: 8px;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .list-header {
@@ -618,11 +618,11 @@
 }
 
 .empty-icon.search-empty {
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .empty-icon.search-empty i {
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
 }
 
 /* Welcome illustration for first-time users */
@@ -662,7 +662,7 @@
     justify-content: center;
     background: var(--mj-bg-surface);
     border-radius: 50%;
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .illustration-accent i {
@@ -784,7 +784,7 @@
     transform: translateX(-50%);
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     padding: 16px;
     z-index: 1000;
 }
@@ -819,7 +819,7 @@
 
 .drop-zone:hover,
 .drop-zone.active {
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     border-color: var(--mj-brand-primary);
     color: var(--mj-text-primary);
 }
@@ -828,7 +828,7 @@
 .move-dialog-overlay {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -843,7 +843,7 @@
     max-height: 80vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 16px 48px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
 }
 
 .dialog-header {
@@ -937,7 +937,7 @@
     min-width: 160px;
     background: var(--mj-bg-surface);
     border-radius: 8px;
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     z-index: 1001;
     overflow: hidden;
 }
@@ -977,7 +977,7 @@
 .create-category-dialog-overlay {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -989,7 +989,7 @@
     border-radius: 12px;
     width: 400px;
     max-width: 90%;
-    box-shadow: 0 16px 48px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
 }
 
 .create-category-dialog .dialog-header {
@@ -1152,7 +1152,7 @@
 /* Drop target highlighting for category cards/rows */
 .dashboard-card.category-card.drop-target,
 .list-row.category-row.drop-target {
-    background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     border-color: var(--mj-brand-primary);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
@@ -1169,7 +1169,7 @@ mark {
 .delete-category-dialog-overlay {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1181,7 +1181,7 @@ mark {
     border-radius: 12px;
     width: 480px;
     max-width: 90%;
-    box-shadow: 0 16px 48px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
 }
 
 .delete-category-dialog .dialog-header {
@@ -1307,7 +1307,7 @@ mark {
 }
 
 .btn-danger:hover {
-    background: color-mix(in srgb, var(--mj-status-error) 85%, var(--mj-color-neutral-900));
+    background: color-mix(in srgb, var(--mj-status-error) 85%, black);
 }
 
 .btn-danger:disabled {

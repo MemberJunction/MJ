@@ -410,8 +410,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             'var(--mj-brand-primary)',
             'var(--mj-status-warning)',
             'var(--mj-status-success)',
-            'var(--mj-color-info-500)',
-            'var(--mj-color-info-500)'
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)'
         ];
         return colors[index % colors.length];
     }

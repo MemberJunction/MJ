@@ -19,7 +19,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   position: relative;
   z-index: 10;
 }
@@ -114,7 +114,7 @@
 .view-btn.active {
   background: var(--mj-bg-surface);
   color: var(--mj-brand-primary);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .control-btn {
@@ -389,7 +389,7 @@ kendo-splitter {
   border-color: var(--mj-border-strong);
   color: var(--mj-text-secondary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-actions .reset-btn .fa-solid {
@@ -433,7 +433,7 @@ kendo-splitter {
 .prompt-card {
   background: var(--mj-bg-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent), 0 2px 4px -1px color-mix(in srgb, var(--mj-color-neutral-900) 3%, transparent);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   border: 1px solid var(--mj-border-default);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -706,7 +706,7 @@ kendo-splitter {
 .prompts-list {
   background: var(--mj-bg-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--mj-border-default);
   overflow: hidden;
 }
@@ -1020,7 +1020,7 @@ kendo-splitter {
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 40%, transparent);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 1000;
   animation: fadeIn 0.25s ease-out;
@@ -1038,7 +1038,7 @@ kendo-splitter {
   width: 480px;
   height: 100vh;
   background: var(--mj-bg-surface);
-  box-shadow: -8px 0 32px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
   z-index: 1001;
   display: flex;
   flex-direction: column;

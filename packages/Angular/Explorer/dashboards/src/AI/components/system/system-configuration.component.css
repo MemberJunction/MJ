@@ -21,7 +21,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   position: relative;
   z-index: 10;
 }
@@ -66,7 +66,7 @@
   background: var(--mj-border-default);
   border-color: var(--mj-border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .filter-toggle-btn i {
@@ -117,7 +117,7 @@
 .view-btn.active {
   background: var(--mj-bg-surface);
   color: var(--mj-brand-primary);
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 .control-btn {
@@ -139,7 +139,7 @@
   background: var(--mj-bg-surface-card);
   border-color: var(--mj-border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .control-btn i {
@@ -208,7 +208,7 @@
   background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
   border-radius: 12px;
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
   font-size: 15px;
   font-weight: 500;
 }
@@ -264,7 +264,7 @@
 .config-card {
   background: var(--mj-bg-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   border: 1px solid var(--mj-border-default);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -284,7 +284,7 @@
 }
 
 .config-card:hover {
-  box-shadow: 0 8px 32px color-mix(in srgb, var(--mj-color-neutral-900) 12%, transparent);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
 }
@@ -389,7 +389,7 @@
 
 .status-badge.status-preview {
   background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
-  color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-color-neutral-900));
+  color: color-mix(in srgb, var(--mj-status-warning) 70%, black);
   border: 1px solid color-mix(in srgb, var(--mj-status-warning) 40%, var(--mj-bg-surface));
 }
 
@@ -401,7 +401,7 @@
 
 .status-badge.status-deprecated {
   background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
   border: 1px solid color-mix(in srgb, var(--mj-status-error) 35%, var(--mj-bg-surface));
 }
 
@@ -574,8 +574,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--mj-color-info-500) 15%, var(--mj-bg-surface));
-  color: var(--mj-color-info-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   flex-shrink: 0;
 }
 
@@ -751,7 +751,7 @@
   background: var(--mj-bg-surface-card);
   border-color: var(--mj-border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .action-btn i {
@@ -772,7 +772,7 @@
 .action-btn-warning {
   background: color-mix(in srgb, var(--mj-status-warning) 80%, var(--mj-bg-surface));
   border-color: var(--mj-status-warning);
-  color: color-mix(in srgb, var(--mj-status-warning) 60%, var(--mj-color-neutral-900));
+  color: color-mix(in srgb, var(--mj-status-warning) 60%, black);
 }
 
 .action-btn-warning:hover {
@@ -796,7 +796,7 @@
 .configurations-list {
   background: var(--mj-bg-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   border: 1px solid var(--mj-border-default);
   overflow: hidden;
 }
@@ -1045,7 +1045,7 @@ kendo-splitter {
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 40%, transparent);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 1000;
   animation: fadeIn 0.25s ease-out;
@@ -1063,7 +1063,7 @@ kendo-splitter {
   width: 480px;
   height: 100vh;
   background: var(--mj-bg-surface);
-  box-shadow: -8px 0 32px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
   z-index: 1001;
   display: flex;
   flex-direction: column;

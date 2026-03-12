@@ -16,12 +16,12 @@
 }
 
 .new-agent-dialog .parent-info i {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   font-size: 1.1rem;
 }
 
 .new-agent-dialog .parent-info strong {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .new-agent-dialog .loading-overlay {
@@ -140,7 +140,7 @@
 
 .new-agent-dialog .advanced-settings .k-expander-header i {
   margin-right: 0.5rem;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .new-agent-dialog .advanced-settings .advanced-grid {
@@ -170,7 +170,7 @@
   min-width: 3rem;
   text-align: right;
   font-weight: 600;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .new-agent-dialog .advanced-settings .advanced-grid .setting-group.checkbox-group label {

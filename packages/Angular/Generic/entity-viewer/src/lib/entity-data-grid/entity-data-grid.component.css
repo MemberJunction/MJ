@@ -29,16 +29,16 @@
   --grid-cell-border-color: var(--mj-border-subtle);
 
   /* Selection - mellow yellow to avoid conflict with blue hyperlinks */
-  --grid-checkbox-color: var(--mj-color-info-500);
+  --grid-checkbox-color: var(--mj-brand-primary);
   --grid-selection-indicator-color: var(--mj-status-warning);
 
   /* Editing */
   --grid-edit-cell-bg: var(--mj-bg-surface);
-  --grid-edit-cell-border: var(--mj-color-info-500);
-  --grid-edit-cell-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-color-info-500) 10%, transparent);
+  --grid-edit-cell-border: var(--mj-brand-primary);
+  --grid-edit-cell-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 
   /* Sorting */
-  --grid-sort-indicator-color: var(--mj-color-info-500);
+  --grid-sort-indicator-color: var(--mj-brand-primary);
 
   /* Toolbar */
   --grid-toolbar-bg: var(--mj-bg-surface);
@@ -125,7 +125,7 @@
 .search-input:focus {
   outline: none;
   border-color: var(--grid-selection-indicator-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-color-info-500) 10%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .search-clear {
@@ -306,7 +306,7 @@
 }
 
 .mj-grid-header-cell.sortable:hover {
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .header-text {
@@ -523,7 +523,7 @@
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-color-neutral-900) 12%, transparent), 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   overflow: hidden;
 }
@@ -580,7 +580,7 @@
 
 /* Entity Actions submenu styling */
 .overflow-item.action-item i {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 /* ========================================
@@ -616,7 +616,7 @@
 }
 
 ::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
-  color: var(--grid-checkbox-color, var(--mj-color-info-500));
+  color: var(--grid-checkbox-color, var(--mj-brand-primary));
 }
 
 /* ========================================
@@ -636,7 +636,7 @@
 }
 
 .header-style-elevated.header-shadow ::ng-deep .ag-header {
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent), 0 1px 2px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* Gradient header (more prominent) */
@@ -646,7 +646,7 @@
 }
 
 .header-style-gradient.header-shadow ::ng-deep .ag-header {
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Bold header (high contrast) */
@@ -671,7 +671,7 @@
 /* Header sort icons enhancement */
 ::ng-deep .ag-header-cell-sorted-asc .ag-icon-asc,
 ::ng-deep .ag-header-cell-sorted-desc .ag-icon-desc {
-  color: var(--grid-accent-color, var(--grid-sort-indicator-color, var(--mj-color-info-500)));
+  color: var(--grid-accent-color, var(--grid-sort-indicator-color, var(--mj-brand-primary)));
 }
 
 /* ========================================
@@ -680,7 +680,7 @@
 
 /* Subtle contrast */
 .alternate-rows-subtle ::ng-deep .ag-row-odd {
-  background-color: color-mix(in srgb, var(--mj-color-neutral-900) 1.5%, transparent);
+  background-color: rgba(0, 0, 0, 0.015);
 }
 
 .alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
@@ -689,7 +689,7 @@
 
 /* Medium contrast (default) */
 .alternate-rows-medium ::ng-deep .ag-row-odd {
-  background-color: color-mix(in srgb, var(--mj-color-neutral-900) 2.5%, transparent);
+  background-color: rgba(0, 0, 0, 0.025);
 }
 
 .alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
@@ -698,7 +698,7 @@
 
 /* Strong contrast */
 .alternate-rows-strong ::ng-deep .ag-row-odd {
-  background-color: color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent);
+  background-color: rgba(0, 0, 0, 0.04);
 }
 
 .alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
@@ -766,8 +766,8 @@
 
 /* Filled checkbox */
 .checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked {
-  background-color: var(--grid-checkbox-color, var(--mj-color-info-500));
-  border-color: var(--grid-checkbox-color, var(--mj-color-info-500));
+  background-color: var(--grid-checkbox-color, var(--mj-brand-primary));
+  border-color: var(--grid-checkbox-color, var(--mj-brand-primary));
 }
 
 .checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
@@ -807,7 +807,7 @@
 
 /* Clickable links */
 ::ng-deep .cell-link {
-  color: var(--grid-accent-color, var(--mj-color-info-500));
+  color: var(--grid-accent-color, var(--mj-brand-primary));
   text-decoration: none;
   transition: color 0.15s;
   font-size: inherit;
@@ -930,7 +930,7 @@
 }
 
 ::ng-deep .ag-theme-alpine .ag-header-cell:focus {
-  outline: 2px solid var(--grid-accent-color, var(--mj-color-info-500));
+  outline: 2px solid var(--grid-accent-color, var(--mj-brand-primary));
   outline-offset: -2px;
 }
 
@@ -982,11 +982,11 @@
 }
 
 ::ng-deep .ag-theme-alpine .ag-header-cell:hover {
-  background-color: color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent);
+  background-color: rgba(0, 0, 0, 0.04);
 }
 
 ::ng-deep .ag-theme-alpine .ag-header-cell-sortable:hover .ag-header-cell-label {
-  color: var(--grid-accent-color, var(--mj-color-info-500));
+  color: var(--grid-accent-color, var(--mj-brand-primary));
 }
 
 /* Sort icon animation */
@@ -1085,7 +1085,7 @@
 
 /* Hover state for sortable headers */
 :host ::ng-deep .ag-header-cell-sortable:hover {
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 :host ::ng-deep .ag-header-cell-sortable:hover .ag-header-cell-text {
@@ -1122,7 +1122,7 @@
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 6px;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--mj-color-neutral-900) 4%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .aggregate-summary-item i {
@@ -1173,14 +1173,14 @@
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 10px;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   min-width: 140px;
   transition: all 0.15s ease;
 }
 
 .aggregate-card:hover {
   border-color: var(--mj-border-strong);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .aggregate-card-icon {
@@ -1189,9 +1189,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: color-mix(in srgb, var(--mj-color-info-500) 12%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
   border-radius: 10px;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   font-size: 16px;
   flex-shrink: 0;
 }

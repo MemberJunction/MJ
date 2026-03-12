@@ -3,7 +3,7 @@
 /* Window Styling - use specific class to override Kendo defaults */
 .mj-share-dialog-window.k-window {
     border-radius: 12px !important;
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
     overflow: hidden !important;
 }
 
@@ -228,7 +228,7 @@
 }
 
 .share-person-modified {
-    background: color-mix(in srgb, var(--mj-color-info-500) 5%, transparent);
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
     margin: 0 -20px;
     padding: 10px 20px;
 }

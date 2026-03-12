@@ -130,20 +130,20 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    INHERITED VARIANT (IS-A parent fields)
    ============================================ */
 .mj-forms-panel--inherited {
-  border-left: 3px solid var(--mj-color-violet-500);
+  border-left: 3px solid var(--mj-brand-primary);
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-header {
-  background: color-mix(in srgb, var(--mj-color-violet-500) 8%, var(--mj-bg-surface-elevated));
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-header:hover {
-  background: color-mix(in srgb, var(--mj-color-violet-500) 14%, var(--mj-bg-surface-elevated));
-  border-bottom-color: var(--mj-color-violet-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface-elevated));
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 .mj-forms-panel--inherited .mj-forms-panel-icon {
-  color: var(--mj-color-violet-500);
+  color: var(--mj-brand-primary);
 }
 
 .mj-forms-inherited-badge {
@@ -154,18 +154,18 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--mj-color-violet-500) 10%, var(--mj-bg-surface));
-  color: var(--mj-color-violet-500);
-  border: 1px solid color-mix(in srgb, var(--mj-color-violet-500) 25%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
   cursor: pointer;
   transition: all var(--mj-transition-base) ease;
   text-decoration: none;
 }
 
 .mj-forms-inherited-badge:hover {
-  background: color-mix(in srgb, var(--mj-color-violet-500) 18%, var(--mj-bg-surface));
-  border-color: var(--mj-color-violet-500);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-color-violet-500) 20%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .mj-forms-inherited-badge i {
@@ -176,20 +176,20 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    RELATED ENTITY VARIANT
    ============================================ */
 .mj-forms-panel--related {
-  border-left: 3px solid var(--mj-color-info-500);
+  border-left: 3px solid var(--mj-brand-primary);
 }
 
 .mj-forms-panel--related .mj-forms-panel-header {
-  background: color-mix(in srgb, var(--mj-color-info-500) 8%, var(--mj-bg-surface-elevated));
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-elevated));
 }
 
 .mj-forms-panel--related .mj-forms-panel-header:hover {
-  background: color-mix(in srgb, var(--mj-color-info-500) 14%, var(--mj-bg-surface-elevated));
-  border-bottom-color: var(--mj-color-info-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface-elevated));
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 .mj-forms-panel--related .mj-forms-panel-icon {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 /* Related entity content — 400px default, user can drag-resize vertically */

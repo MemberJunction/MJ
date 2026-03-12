@@ -6,7 +6,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -22,7 +22,7 @@
 .edit-part-dialog {
     background: var(--mj-bg-surface);
     border-radius: 12px;
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     width: 90%;
     max-width: 540px;
     max-height: 85vh;
@@ -88,7 +88,7 @@
 }
 
 .close-button:hover {
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
     color: var(--mj-text-primary);
 }
 

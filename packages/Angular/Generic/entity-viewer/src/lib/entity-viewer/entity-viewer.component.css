@@ -114,7 +114,7 @@ mj-pagination {
 .toggle-btn.active {
   background: var(--mj-bg-surface);
   color: var(--mj-brand-primary);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Timeline Date Field Selector */

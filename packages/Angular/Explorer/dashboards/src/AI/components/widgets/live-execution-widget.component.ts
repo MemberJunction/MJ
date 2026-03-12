@@ -101,7 +101,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     .live-execution-widget {
       background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       height: 400px;
       display: flex;
       flex-direction: column;

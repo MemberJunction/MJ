@@ -629,7 +629,7 @@ export interface ExecutionMonitoringState {
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 6%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
       border-bottom: 1px solid var(--mj-border-default);
       position: relative;
       z-index: 10;
@@ -1022,7 +1022,7 @@ export interface ExecutionMonitoringState {
       left: 0;
       width: 100%;
       height: 100%;
-      background: color-mix(in srgb, var(--mj-color-neutral-900) 50%, transparent);
+      background: rgba(0, 0, 0, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1177,7 +1177,7 @@ export interface ExecutionMonitoringState {
       border-radius: 4px;
       padding: 12px;
       font-size: 12px;
-      color: var(--mj-color-error-700);
+      color: var(--mj-status-error);
       font-family: monospace;
     }
 
@@ -1312,7 +1312,7 @@ export interface ExecutionMonitoringState {
     }
 
     .tab-close:hover {
-      background: color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+      background: rgba(0, 0, 0, 0.1);
       color: var(--mj-text-primary);
     }
 
@@ -1579,7 +1579,7 @@ export interface ExecutionMonitoringState {
 
     .clickable:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     /* Collapsible Panel Styles */

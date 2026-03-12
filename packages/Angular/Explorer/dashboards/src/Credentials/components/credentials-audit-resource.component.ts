@@ -313,7 +313,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             case 'update': return 'var(--mj-status-warning)';
             case 'delete': return 'var(--mj-status-error)';
             case 'rotate': return 'var(--mj-brand-primary)';
-            case 'validate': return 'var(--mj-color-info-500)';
+            case 'validate': return 'var(--mj-brand-primary)';
             default: return 'var(--mj-text-secondary)';
         }
     }

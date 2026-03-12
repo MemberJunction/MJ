@@ -501,7 +501,7 @@
     border-radius: 10px;
     margin-top: 16px;
     font-size: 13px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
 }
 
 .no-scopes-warning i {
@@ -513,7 +513,7 @@
 
 .no-scopes-warning strong {
     display: block;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     font-size: 14px;
     margin-bottom: 4px;
 }

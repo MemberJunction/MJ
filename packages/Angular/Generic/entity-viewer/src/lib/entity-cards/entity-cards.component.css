@@ -23,7 +23,7 @@ mj-entity-cards .data-card {
 /* Hover state for unselected cards */
 mj-entity-cards .data-card:hover:not(.selected) {
   border-color: var(--mj-border-strong);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 mj-entity-cards .data-card:hover .card-open-btn {
@@ -42,7 +42,7 @@ mj-entity-cards .data-card.selected .card-title {
 /* Selected + hover state - same as regular hover */
 mj-entity-cards .data-card.selected:hover {
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 

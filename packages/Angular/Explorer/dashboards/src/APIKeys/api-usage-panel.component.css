@@ -143,7 +143,7 @@
 
 .kpi-icon.endpoints {
     background: linear-gradient(135deg, var(--mj-color-violet-50) 0%, var(--mj-color-violet-200) 100%);
-    color: var(--mj-color-violet-600);
+    color: var(--mj-brand-primary);
 }
 
 .kpi-content {

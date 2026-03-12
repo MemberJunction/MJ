@@ -156,7 +156,7 @@
 }
 
 .linked-item:hover {
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .item-info {

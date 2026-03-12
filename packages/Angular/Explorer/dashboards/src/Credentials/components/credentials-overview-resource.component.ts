@@ -78,7 +78,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     // These are semantic fallback values; the actual tokens are resolved from the theme
     private categoryColors: Record<string, string> = {
         'AI': 'var(--mj-brand-primary)',
-        'Communication': 'var(--mj-color-info-500)',
+        'Communication': 'var(--mj-brand-primary)',
         'Storage': 'var(--mj-status-success)',
         'Database': 'var(--mj-status-warning)',
         'Authentication': 'var(--mj-status-error)',

@@ -7,7 +7,7 @@
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 /* Position variants */
@@ -78,7 +78,7 @@
 }
 
 .collapse-toggle:hover {
-  background: color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+  background: rgba(0, 0, 0, 0.05);
   color: var(--mj-text-primary);
 }
 
@@ -233,16 +233,16 @@
 }
 
 .style-info {
-  border-left: 4px solid var(--mj-color-info-500);
+  border-left: 4px solid var(--mj-brand-primary);
 }
 
 .style-info .card-value {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .style-info .card-icon {
-  background: color-mix(in srgb, var(--mj-color-info-500) 10%, var(--mj-bg-surface));
-  color: var(--mj-color-info-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .style-muted {

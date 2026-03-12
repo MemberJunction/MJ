@@ -320,8 +320,8 @@ export class CredentialTypeEditPanelComponent implements OnInit {
     public getCategoryColor(category: string): string {
         const colorMap: Record<string, string> = {
             'AI': 'var(--mj-brand-primary)',
-            'Communication': 'var(--mj-color-info-500)',
-            'Storage': 'var(--mj-color-info-500)',
+            'Communication': 'var(--mj-brand-primary)',
+            'Storage': 'var(--mj-brand-primary)',
             'Database': 'var(--mj-status-warning)',
             'Authentication': 'var(--mj-status-success)',
             'Integration': 'var(--mj-brand-primary)'

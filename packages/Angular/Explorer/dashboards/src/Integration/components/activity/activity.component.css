@@ -149,7 +149,7 @@
   flex-shrink: 0;
 }
 
-.dot-blue { background: var(--mj-color-info-500); }
+.dot-blue { background: var(--mj-brand-primary); }
 .dot-green { background: var(--mj-color-success-600); }
 .dot-red { background: var(--mj-status-error); }
 .dot-amber { background: var(--mj-status-warning); }
@@ -537,7 +537,7 @@
 
 .duration-bar-value {
   font-weight: 700;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   font-size: 12px;
 }
 

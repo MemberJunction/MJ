@@ -100,7 +100,7 @@
   transition: all 0.2s ease;
 }
 .prompt-version-control .timeline-container .version-timeline .timeline-item:hover .timeline-content {
-  box-shadow: 0 0.25rem 0.5rem color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
 .prompt-version-control .timeline-container .version-timeline .timeline-item.selected .timeline-content {
@@ -357,7 +357,7 @@
 .prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value.old-value {
   background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 .prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-old .diff-value.new-value,
 .prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .side-by-side-diff .diff-new .diff-value.new-value {
@@ -401,7 +401,7 @@
 .prompt-version-control .comparison-container .comparison-results .differences-list .difference-item .diff-content .diff-removed .diff-value {
   background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 .prompt-version-control .comparison-container .comparison-results .no-differences {
   text-align: center;
@@ -583,7 +583,7 @@
     background: var(--mj-bg-surface);
     border-radius: 8px;
     margin: 1rem;
-    box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-color-neutral-900) 10%, transparent);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   .prompt-selector-section .section-title {
     color: var(--mj-text-secondary);

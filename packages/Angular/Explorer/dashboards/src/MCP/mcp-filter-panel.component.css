@@ -36,18 +36,18 @@
   margin-right: 16px;
   font-size: 13px;
   padding: 6px 12px;
-  background: color-mix(in srgb, var(--mj-color-info-500) 15%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
   border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--mj-color-info-500) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 .filter-panel-header .filter-summary-inline .summary-value {
   font-weight: 700;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .filter-panel-header .filter-summary-inline .summary-label {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   font-weight: 500;
 }
 
@@ -100,7 +100,7 @@
 
 .filter-group .filter-label .fa-solid {
   font-size: 13px;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   width: 16px;
 }
 
@@ -120,8 +120,8 @@
 .filter-group .filter-input:focus,
 .filter-group .filter-select:focus {
   outline: none;
-  border-color: var(--mj-color-info-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-color-info-500) 15%, transparent);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .filter-group .filter-input::placeholder {
@@ -167,19 +167,19 @@
   border-color: var(--mj-border-strong);
   color: var(--mj-text-secondary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-color-neutral-900) 8%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-actions .reset-btn.has-filters {
-  background: color-mix(in srgb, var(--mj-color-info-500) 15%, var(--mj-bg-surface));
-  border-color: color-mix(in srgb, var(--mj-color-info-500) 40%, transparent);
-  color: var(--mj-color-info-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .filter-actions .reset-btn.has-filters:hover {
-  background: color-mix(in srgb, var(--mj-color-info-500) 25%, var(--mj-bg-surface));
-  border-color: color-mix(in srgb, var(--mj-color-info-500) 50%, transparent);
-  color: var(--mj-color-info-500);
+  background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .filter-actions .reset-btn .fa-solid {

@@ -53,7 +53,7 @@
     border-radius: 16px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--mj-color-info-500);
+    color: var(--mj-brand-primary);
     white-space: nowrap;
 }
 

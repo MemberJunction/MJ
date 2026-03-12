@@ -9,7 +9,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 40%, transparent);
+    background: rgba(0, 0, 0, 0.4);
     z-index: 1000;
     animation: fadeIn 0.2s ease-out;
 }
@@ -28,7 +28,7 @@
     right: 0;
     bottom: 0;
     background: var(--mj-bg-surface);
-    box-shadow: -4px 0 20px color-mix(in srgb, var(--mj-color-neutral-900) 15%, transparent);
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -532,7 +532,7 @@
 
 .result-header.error {
     background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
 }
 
 .result-header.error i {
@@ -549,7 +549,7 @@
     font-size: 13px;
     font-weight: normal;
     color: var(--mj-text-muted);
-    background: color-mix(in srgb, var(--mj-color-neutral-900) 5%, transparent);
+    background: rgba(0, 0, 0, 0.05);
     padding: 4px 8px;
     border-radius: 4px;
 }
@@ -567,7 +567,7 @@
     gap: 8px;
     margin: 0 0 12px 0;
     font-size: 14px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
 }
 
 .error-message {
@@ -578,7 +578,7 @@
     font-family: monospace;
     font-size: 13px;
     line-height: 1.5;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     white-space: pre-wrap;
     word-break: break-word;
 }

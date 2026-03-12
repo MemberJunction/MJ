@@ -128,7 +128,7 @@ label {
 }
 
 .disabled-hint i {
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
 }
 
 .field-error {

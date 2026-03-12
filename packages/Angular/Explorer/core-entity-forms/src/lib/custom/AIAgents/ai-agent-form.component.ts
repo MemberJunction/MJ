@@ -2269,7 +2269,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the badge color for a sub-agent based on its type
      */
     public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
-        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-color-violet-600)';
+        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
     }
 
     /**

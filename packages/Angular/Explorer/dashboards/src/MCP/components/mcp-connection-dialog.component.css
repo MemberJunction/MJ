@@ -12,7 +12,7 @@
     background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
     border: 1px solid var(--mj-status-error);
     border-radius: 6px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     font-size: 14px;
 }
 

@@ -92,7 +92,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .nav-bar-app-btn {
-  --app-color: #757575;
+  --app-color: var(--mj-text-muted);
   width: 40px;
   height: 40px;
   border-radius: 10px;
@@ -181,7 +181,7 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 16px;
   padding: 0 4px;
   background: #e53935;
-  color: white;
+  color: var(--mj-text-inverse);
   font-size: 10px;
   font-weight: 600;
   border-radius: 8px;
@@ -229,7 +229,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .user-menu .avatar-btn:hover .icon-fallback {
-  border-color: #1976d2;
+  border-color: var(--mj-brand-primary);
 }
 
 .user-menu .avatar-btn .icon-fallback i {
@@ -712,8 +712,8 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .search-input:focus {
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .search-submit-btn {
@@ -721,8 +721,8 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 40px;
   border-radius: 8px;
   border: none;
-  background: #1976d2;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -733,11 +733,11 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .search-submit-btn:hover {
-  background: #1565c0;
+  background: var(--mj-brand-primary-hover);
 }
 
 .search-submit-btn:active {
-  background: #0d47a1;
+  background: var(--mj-brand-primary-hover);
 }
 
 /* Mobile notification badge */
@@ -749,7 +749,7 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 18px;
   padding: 0 5px;
   background: #e53935;
-  color: white;
+  color: var(--mj-text-inverse);
   font-size: 11px;
   font-weight: 600;
   border-radius: 9px;
