@@ -30,6 +30,10 @@
   height: 100%;
 }
 
+.mj-logo-svg path {
+  fill: var(--mj-logo-color);
+}
+
 /* Size presets */
 .mj-loading-logo.size-small {
   width: 40px;

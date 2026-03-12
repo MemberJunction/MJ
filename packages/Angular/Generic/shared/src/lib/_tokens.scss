@@ -219,6 +219,12 @@
   --mj-login-wave-2:     var(--mj-color-accent-400);
   --mj-login-wave-3:     var(--mj-color-brand-300);
 
+  /* Logo Tokens — override these for white-labeling */
+  --mj-logo-mark: url('/assets/mj-mark.svg');
+  --mj-logo-mark-inverse: url('/assets/mj-mark-white.svg');
+  --mj-logo-wordmark: url('/assets/MJ_logo.svg');
+  --mj-logo-color: #264FAF;
+
   /* ========================================
      TYPOGRAPHY
      ======================================== */
@@ -434,4 +440,8 @@
   --mj-login-wave-1:     var(--mj-color-accent-500);
   --mj-login-wave-2:     var(--mj-color-tertiary-400);
   --mj-login-wave-3:     var(--mj-color-brand-400);
+
+  /* Logo — lighter mark for dark header backgrounds */
+  --mj-logo-mark: url('/assets/mj-mark-dark.svg');
+  --mj-logo-color: #4dabd5;
 }

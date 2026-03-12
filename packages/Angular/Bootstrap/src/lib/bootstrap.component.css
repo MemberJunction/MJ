@@ -92,6 +92,20 @@
   font-size: x-large;
 }
 
-.app-logo {
+.mj-logo-mark-login {
+  width: 62px;
+  height: 35px;
+  background-image: var(--mj-logo-mark-inverse);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.mj-logo-wordmark-login {
   width: 297px;
+  height: 45px;
+  background-image: var(--mj-logo-wordmark);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
