@@ -853,7 +853,9 @@
               @if (entity) {
                 <mj-entity-viewer
                   [entity]="entity"
-                  [showGridToolbar]="true">
+                  [showGridToolbar]="true"
+                  (recordOpened)="OnRecordOpened($event)"
+                  (addRequested)="OnAddRequested()">
                 </mj-entity-viewer>
               }
             </div>
