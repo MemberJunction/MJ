@@ -435,6 +435,24 @@ export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unord
 
 
 /**
+ * Creates a human-readable display name from a database identifier. Handles both snake_case
+ * (e.g. "organization_email" -> "Organization Email") and PascalCase/camelCase
+ * (e.g. "OrganizationEmail" -> "Organization Email"). Snake_case identifiers are split on
+ * underscores and title-cased first, then fed through the existing camelCase logic to handle
+ * mixed conventions like "org_emailAddress" -> "Org Email Address".
+ */
+export function createDisplayName(s: string): string {
+    if (s.includes('_')) {
+        // Split on underscores, capitalize each segment, rejoin as PascalCase
+        s = s.split('_')
+             .filter(part => part.length > 0)
+             .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+             .join('');
+    }
+    return convertCamelCaseToHaveSpaces(s);
+}
+
+/**
 * Converts a string that uses camel casing or contains consecutive uppercase letters to have spaces between words.
 * For example:
 * "DatabaseVersion" -> "Database Version"
