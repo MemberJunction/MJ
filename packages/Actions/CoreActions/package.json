@@ -46,6 +46,7 @@
     "@memberjunction/export-engine": "5.10.1",
     "@memberjunction/external-change-detection": "5.10.1",
     "@memberjunction/global": "5.10.1",
+    "@memberjunction/schema-engine": "5.10.1",
     "@memberjunction/sqlserver-dataprovider": "5.10.1",
     "@memberjunction/storage": "5.10.1",
     "@types/d3-cloud": "^1.2.9",

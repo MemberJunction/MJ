@@ -115,3 +115,6 @@ export * from './custom/visualization/shared/mermaid-types';
 // MCP Actions
 export * from './custom/mcp';
 
+// Schema Creation Actions
+export * from './custom/schema/create-table.action';
+

@@ -18,9 +18,12 @@ import {
     SchemaEngine,
     DDLGenerator as GenericDDLGenerator,
     MigrationFileWriter as GenericMigrationWriter,
+    RuntimeSchemaManager,
     type TableDefinition,
     type ColumnDefinition,
     type SchemaFieldType,
+    type RSUPipelineInput,
+    type RSUPipelineResult,
 } from '@memberjunction/schema-engine';
 import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
@@ -149,6 +152,102 @@ export class SchemaBuilder {
         }
 
         return output;
+    }
+
+    // ─── RSU Pipeline Integration ──────────────────────────────────────
+
+    /**
+     * Build schema artifacts AND execute the full Runtime Schema Update pipeline.
+     *
+     * This is the end-to-end integration flow:
+     *   1. Call BuildSchema() to generate migration SQL, soft FK config, and metadata
+     *   2. Feed the output into RuntimeSchemaManager.RunPipeline()
+     *   3. Pipeline executes: migration → CodeGen → compile → restart MJAPI → git commit/PR
+     *
+     * Returns both the SchemaBuilderOutput and the RSU pipeline result.
+     *
+     * @param input — Standard SchemaBuilderInput
+     * @param rsuOptions — Optional overrides for the RSU pipeline (e.g., SkipGitCommit, SkipRestart)
+     */
+    async RunSchemaPipeline(
+        input: SchemaBuilderInput,
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+    ): Promise<{ SchemaOutput: SchemaBuilderOutput; PipelineResult: RSUPipelineResult }> {
+        // Step 1: Generate all schema artifacts
+        const schemaOutput = this.BuildSchema(input);
+
+        // If BuildSchema produced errors, return immediately without running pipeline
+        if (schemaOutput.Errors.length > 0) {
+            return {
+                SchemaOutput: schemaOutput,
+                PipelineResult: {
+                    Success: false,
+                    APIRestarted: false,
+                    GitCommitSuccess: false,
+                    Steps: [],
+                    ErrorMessage: `Schema generation failed: ${schemaOutput.Errors.join('; ')}`,
+                    ErrorStep: 'BuildSchema',
+                },
+            };
+        }
+
+        // If no migration files were produced, nothing to execute
+        if (schemaOutput.MigrationFiles.length === 0) {
+            return {
+                SchemaOutput: schemaOutput,
+                PipelineResult: {
+                    Success: true,
+                    APIRestarted: false,
+                    GitCommitSuccess: false,
+                    Steps: [{ Name: 'BuildSchema', Status: 'skipped', DurationMs: 0, Message: 'No migration SQL produced — no schema changes needed' }],
+                },
+            };
+        }
+
+        // Step 2: Build RSU pipeline input from SchemaBuilder output
+        const rsuInput = this.BuildRSUInput(schemaOutput, input, rsuOptions);
+
+        // Step 3: Execute the RSU pipeline
+        const rsm = RuntimeSchemaManager.Instance;
+        const pipelineResult = await rsm.RunPipeline(rsuInput);
+
+        return { SchemaOutput: schemaOutput, PipelineResult: pipelineResult };
+    }
+
+    /**
+     * Convert SchemaBuilderOutput into an RSUPipelineInput suitable for
+     * RuntimeSchemaManager.RunPipeline().
+     */
+    private BuildRSUInput(
+        schemaOutput: SchemaBuilderOutput,
+        input: SchemaBuilderInput,
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+    ): RSUPipelineInput {
+        // Combine all migration file contents into a single SQL block
+        const migrationSQL = schemaOutput.MigrationFiles
+            .map(f => f.Content)
+            .join('\n\n');
+
+        // Collect affected table names from the target configs
+        const affectedTables = input.TargetConfigs.map(
+            c => `${c.SchemaName}.${c.TableName}`
+        );
+
+        // Build metadata files array for the pipeline
+        const metadataFiles: Array<{ Path: string; Content: string }> = [];
+        for (const mf of schemaOutput.MetadataFiles) {
+            metadataFiles.push({ Path: mf.FilePath, Content: mf.Content });
+        }
+
+        return {
+            MigrationSQL: migrationSQL,
+            Description: `Integration: ${input.SourceType} — ${affectedTables.join(', ')}`,
+            AffectedTables: affectedTables,
+            AdditionalSchemaInfo: schemaOutput.AdditionalSchemaInfoUpdate?.Content,
+            MetadataFiles: metadataFiles.length > 0 ? metadataFiles : undefined,
+            SkipGitCommit: rsuOptions?.SkipGitCommit,
+            SkipRestart: rsuOptions?.SkipRestart,
+        };
     }
 
     // ─── Conversion: Integration types → SchemaEngine types ─────────────
