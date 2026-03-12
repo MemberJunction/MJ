@@ -242,8 +242,8 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     return `status-badge status-badge-${badge.toLowerCase()}`;
   }
 
-  GetIntegrationIcon(name: string): string {
-    return this.resolveIconByName(name);
+  GetIntegrationIcon(name: string, icon?: string | null): string {
+    return ResolveIntegrationIcon(name, icon);
   }
 
   GetIconBrandColor(name: string): string {
@@ -1105,10 +1105,6 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       counts.set(map.CompanyIntegrationID, current + 1);
     }
     return counts;
-  }
-
-  private resolveIconByName(name: string): string {
-    return ResolveIntegrationIcon(name);
   }
 
   private resolveBrandColor(name: string): string {

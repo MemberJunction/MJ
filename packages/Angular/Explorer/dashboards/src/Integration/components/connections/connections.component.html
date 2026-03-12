@@ -47,7 +47,7 @@
             <div class="card-clickable" (click)="SelectIntegrationCard(summary)">
               <div class="card-header">
                 <div class="icon-circle" [style.background-color]="GetIconBrandColor(summary.Integration.Integration)">
-                  <i [class]="GetIntegrationIcon(summary.Integration.Integration)" class="icon-large"></i>
+                  <i [class]="GetIntegrationIcon(summary.Integration.Integration, summary.Icon)" class="icon-large"></i>
                 </div>
                 <span [class]="GetStatusBadgeClass(summary)">{{ GetStatusBadge(summary) }}</span>
               </div>
@@ -449,7 +449,7 @@
                        [class.picker-selected]="IsSelectedIntegration(def)"
                        (click)="SelectIntegration(def)">
                     <div class="picker-icon-circle" [style.background-color]="GetIconBrandColor(def.Name)">
-                      <i [class]="GetIntegrationIcon(def.Name)"></i>
+                      <i [class]="GetIntegrationIcon(def.Name, def.Get('Icon'))"></i>
                     </div>
                     <div class="picker-name">{{ def.Name }}</div>
                     @if (def.Description) {
@@ -639,7 +639,7 @@
       <div class="edit-panel-title">
         <div class="edit-icon-circle"
              [style.background-color]="GetIconBrandColor(EditingSummary.Integration.Integration)">
-          <i [class]="GetIntegrationIcon(EditingSummary.Integration.Integration)"></i>
+          <i [class]="GetIntegrationIcon(EditingSummary.Integration.Integration, EditingSummary.Icon)"></i>
         </div>
         <span>Configure Integration</span>
       </div>

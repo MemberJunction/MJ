@@ -133,6 +133,8 @@ export interface IntegrationDefinitionRow {
 export interface IntegrationSummary {
   Integration: MJCompanyIntegrationEntity;
   SourceType: MJIntegrationSourceTypeEntity | null;
+  /** Icon from the Integration entity — FA class, URL, or base64 */
+  Icon: string | null;
   LatestRun: IntegrationRunRow | null;
   RecentRuns: IntegrationRunRow[];
   StatusColor: 'green' | 'amber' | 'red' | 'gray';
@@ -219,10 +221,29 @@ const INTEGRATION_ICON_MAP: Array<{ Pattern: RegExp; Icon: string }> = [
   { Pattern: /calendar|event/i, Icon: 'fa-solid fa-calendar' }
 ];
 
-/** Resolve an integration name to a Font Awesome icon class */
-export function ResolveIntegrationIcon(name: string): string {
+/**
+ * Resolve an integration icon. Checks the entity's Icon field first (supports
+ * Font Awesome classes, URLs, and base64), then falls back to pattern-based
+ * name matching, then to a generic plug icon.
+ */
+export function ResolveIntegrationIcon(name: string, entityIcon?: string | null): string {
+  // If the Integration entity has an Icon value that looks like a FA class, use it directly
+  if (entityIcon && entityIcon.startsWith('fa-')) {
+    return entityIcon;
+  }
+  // Fall back to pattern-based name matching
   const match = INTEGRATION_ICON_MAP.find(m => m.Pattern.test(name));
   return match ? match.Icon : 'fa-solid fa-plug';
+}
+
+/**
+ * Check if the Icon field contains an image URL or base64 data URI
+ * (as opposed to a Font Awesome class). Used by templates to decide
+ * whether to render an <i> or an <img>.
+ */
+export function IsImageIcon(icon: string | null | undefined): boolean {
+  if (!icon) return false;
+  return icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/');
 }
 
 @Injectable({
@@ -251,7 +272,8 @@ export class IntegrationDataService {
     const runs = runsResult.Results;
     const sourceTypes = engine.SourceTypes;
 
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes));
+    const integrationDefs = engine.Integrations;
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs));
   }
 
   async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
@@ -772,7 +794,8 @@ export class IntegrationDataService {
   private buildSummary(
     integration: MJCompanyIntegrationEntity,
     allRuns: IntegrationRunRow[],
-    sourceTypes: MJIntegrationSourceTypeEntity[]
+    sourceTypes: MJIntegrationSourceTypeEntity[],
+    integrationDefs: MJIntegrationEntity[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
@@ -783,10 +806,14 @@ export class IntegrationDataService {
     const totalErrors = integrationRuns.filter(r => r.Status === 'Failed').length;
     const durationMs = this.computeDuration(latestRun);
     const sourceType = this.resolveSourceType(integration, sourceTypes);
+    const integrationName = integration.Integration ?? '';
+    const def = integrationDefs.find(d => d.Name === integrationName);
+    const icon = (def?.Get('Icon') as string | null) ?? null;
 
     return {
       Integration: integration,
       SourceType: sourceType,
+      Icon: icon,
       LatestRun: latestRun,
       RecentRuns: recentRuns,
       StatusColor: statusColor,

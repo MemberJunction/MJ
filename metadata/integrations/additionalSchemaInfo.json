@@ -3,21 +3,28 @@
         {
             "TableName": "Person",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket person UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
             "TableName": "Organization",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket organization UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
             "TableName": "Connection",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket connection UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -35,22 +42,27 @@
             ]
         },
         {
-            "TableName": "Group",
+            "TableName": "WicketGroup",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket group UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
             "TableName": "GroupMember",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket group member UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
                     "FieldName": "group_id",
                     "SchemaName": "wicket",
-                    "RelatedTable": "Group",
+                    "RelatedTable": "WicketGroup",
                     "RelatedField": "uuid"
                 },
                 {
@@ -64,14 +76,19 @@
         {
             "TableName": "Membership",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket membership tier UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
             "TableName": "PersonMembership",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket person membership UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -97,7 +114,10 @@
         {
             "TableName": "OrganizationMembership",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket org membership UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -117,7 +137,10 @@
         {
             "TableName": "PersonEmail",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket email UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -131,7 +154,10 @@
         {
             "TableName": "PersonPhone",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket phone UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -145,7 +171,10 @@
         {
             "TableName": "PersonAddress",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket address UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -159,7 +188,10 @@
         {
             "TableName": "OrganizationEmail",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket email UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -173,7 +205,10 @@
         {
             "TableName": "OrganizationPhone",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket phone UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -187,7 +222,10 @@
         {
             "TableName": "OrganizationAddress",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket address UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -201,7 +239,10 @@
         {
             "TableName": "Touchpoint",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket touchpoint UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -215,14 +256,19 @@
         {
             "TableName": "Role",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket role UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
             "TableName": "UserIdentity",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket user identity UUID (natural key from source)" }
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
             ],
             "ForeignKeys": [
                 {
@@ -236,9 +282,11 @@
         {
             "TableName": "ResourceTag",
             "PrimaryKey": [
-                { "FieldName": "uuid", "Description": "Wicket resource tag UUID (natural key from source)" }
-            ],
-            "ForeignKeys": []
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         }
     ]
 }
