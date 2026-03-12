@@ -202,7 +202,7 @@ No specific competitor tools to study beyond what's listed above. The "What it i
 |----------|----------|---------|
 | Product vision | `vision.md` | Full vision, capabilities, success metrics |
 | Roadmap | `roadmap.md` | Phased delivery plan with milestones, data model requirements, and risks |
-| Backlog | [GitHub Project: Marketing Agent](https://github.com/orgs/BlueCypress/projects/) | 53-feature prioritized backlog organized by sprint |
+| Backlog | [GitHub Project: Marketing Agent](https://github.com/users/johnhuisBC/projects/1) | 53-feature prioritized backlog organized by sprint |
 | Marketing agent templates | `metadata/prompts/templates/marketing/` | Agent prompt templates (brand guardian, copywriter, editor, publisher, SEO) |
 
 ---
