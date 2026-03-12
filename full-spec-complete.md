@@ -106,7 +106,8 @@
 | `@memberjunction/schema-engine` | 110 | All passing |
 | `@memberjunction/integration-schema-builder` | 87 | All passing |
 | `@memberjunction/core-actions` | 29 | All passing |
-| **Total** | **226** | **All passing** |
+| `@memberjunction/server` (MJServer) | 160 (56 skipped) | All passing |
+| **Total** | **386** | **All passing** |
 
 ## Build Results
 
@@ -164,7 +165,7 @@ RuntimeSchemaManager (Pipeline Orchestration)
 
 ---
 
-*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 226 tests pass.*
+*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 386 tests pass.*
 *E2E database testing requires a running SQL Server instance (sql-claude container in Docker workbench).*
 
 ## Verification Checklist
@@ -172,7 +173,8 @@ RuntimeSchemaManager (Pipeline Orchestration)
 - [x] SchemaEngine: 110 tests pass, builds clean
 - [x] Integration schema-builder: 87 tests pass, builds clean
 - [x] MJServer (RSUResolver): builds clean, exported from index.ts
-- [x] CoreActions (CreateDatabaseTableAction): builds clean, 12 tests pass (+ 17 existing)
+- [x] CoreActions (CreateDatabaseTableAction): builds clean, 29 tests pass (12 action + 17 existing)
+- [x] CoreActions tsconfig.json excludes __tests__ from build (vitest handles test transpilation)
 - [x] SchemaBuilder has `RunSchemaPipeline()` wired to RuntimeSchemaManager
 - [x] UserTablePipeline creates `custom.UD_*` tables with `User: *` entity names
 - [x] CreateDatabaseTableAction registered as `__CreateDatabaseTable`
