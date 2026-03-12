@@ -1,10 +1,10 @@
 .suggested-responses {
   margin-top: 16px;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--mj-border-default);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
 }
 
 .suggested-responses-header {
@@ -13,7 +13,7 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--mj-text-secondary);
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -21,7 +21,7 @@
 
 .suggested-responses-header i {
   font-size: 13px;
-  color: #f59e0b;
+  color: var(--mj-status-warning);
 }
 
 .suggested-responses-buttons {
@@ -36,15 +36,15 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: white;
-  border: 1px solid #cbd5e1;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
-  color: #334155;
+  color: var(--mj-text-primary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
 }
 
 .suggested-response-btn i {
@@ -52,17 +52,16 @@
 }
 
 .suggested-response-btn:hover:not(:disabled) {
-  background: #0076B6;
-  color: white;
-  border-color: #0076B6;
-  /* box-shadow: 0 2px 6px rgba(0, 118, 182, 0.3); */
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
 }
- 
+
 
 .suggested-response-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f1f5f9;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .suggested-response-input-container {
@@ -72,22 +71,22 @@
   flex: 1;
   min-width: 250px;
   max-width: 500px;
-  background: white;
-  border: 2px solid #cbd5e1;
+  background: var(--mj-bg-surface-card);
+  border: 2px solid var(--mj-border-default);
   border-radius: 8px;
   padding: 6px 8px 6px 12px;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
 }
 
 .suggested-response-input-container:focus-within {
-  border-color: #0076B6;
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.12);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
 }
 
 .suggested-response-input-container .input-icon {
   font-size: 16px;
-  color: #94a3b8;
+  color: var(--mj-text-muted);
   flex-shrink: 0;
 }
 
@@ -98,11 +97,11 @@
   font-size: 14px;
   padding: 6px 8px;
   background: transparent;
-  color: #1e293b;
+  color: var(--mj-text-primary);
 }
 
 .suggested-response-input::placeholder {
-  color: #94a3b8;
+  color: var(--mj-text-muted);
   font-style: italic;
   opacity: 1;
 }
@@ -117,14 +116,14 @@
   align-items: center;
   justify-content: center;
   padding: 8px 14px;
-  background: #0076B6;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0, 118, 182, 0.3);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 .suggested-response-submit i {
@@ -132,18 +131,18 @@
 }
 
 .suggested-response-submit:hover:not(:disabled) {
-  background: #005a8f;
-  box-shadow: 0 2px 6px rgba(0, 118, 182, 0.4);
+  background: var(--mj-brand-primary-hover);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 .suggested-response-submit:active:not(:disabled) {
-  box-shadow: 0 1px 3px rgba(0, 118, 182, 0.5);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
 }
 
 .suggested-response-submit:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: #94a3b8;
+  background: var(--mj-text-muted);
   box-shadow: none;
 }
 

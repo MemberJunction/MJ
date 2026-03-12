@@ -2812,7 +2812,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         applicationId: '__system_other__',
         applicationName: 'System & Other',
         applicationIcon: 'fa-solid fa-ellipsis',
-        applicationColor: '#9e9e9e',
+        applicationColor: 'var(--mj-text-disabled)',
         entities: ungroupedEntities,
         isExpanded: this.state.expandedAppGroups.includes('__system_other__')
       });

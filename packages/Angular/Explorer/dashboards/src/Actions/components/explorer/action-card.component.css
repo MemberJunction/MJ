@@ -1,6 +1,6 @@
 .action-card {
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -8,13 +8,13 @@
 }
 
 .action-card:hover {
-  border-color: var(--kendo-color-primary);
+  border-color: var(--mj-brand-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 
 .action-card.expanded {
-  border-color: var(--kendo-color-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .card-main {
@@ -32,21 +32,21 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--kendo-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   flex-shrink: 0;
 }
 
 .action-icon i {
   font-size: 20px;
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .action-icon.ai-generated {
-  background: linear-gradient(135deg, var(--kendo-color-info-subtle), var(--kendo-color-primary-subtle));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface)), color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)));
 }
 
 .action-icon.ai-generated i {
-  background: linear-gradient(135deg, var(--kendo-color-info), var(--kendo-color-primary));
+  background: linear-gradient(135deg, var(--mj-status-info), var(--mj-brand-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -70,7 +70,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,7 +95,7 @@
 .action-description {
   margin: 0 0 12px 0;
   font-size: 13px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -114,7 +114,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   background: none;
   border: none;
   padding: 0;
@@ -129,25 +129,25 @@
 }
 
 .meta-item.category:hover {
-  background: var(--kendo-color-base-hover);
-  color: var(--kendo-color-primary);
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-brand-primary);
 }
 
 .meta-item i {
   font-size: 11px;
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .meta-item[data-status="Approved"] i {
-  color: var(--kendo-color-success);
+  color: var(--mj-status-success);
 }
 
 .meta-item[data-status="Pending"] i {
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 
 .meta-item[data-status="Rejected"] i {
-  color: var(--kendo-color-error);
+  color: var(--mj-status-error);
 }
 
 /* Action Buttons */
@@ -170,10 +170,10 @@
 /* Expanded Section */
 .card-expanded {
   padding: 0 20px 20px 20px;
-  border-top: 1px solid var(--kendo-color-border);
+  border-top: 1px solid var(--mj-border-default);
   margin-top: -1px;
   padding-top: 16px;
-  background: var(--kendo-color-app-surface);
+  background: var(--mj-bg-page);
 }
 
 .stats-loading {
@@ -182,7 +182,7 @@
   justify-content: center;
   gap: 12px;
   padding: 20px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   font-size: 13px;
 }
 
@@ -196,32 +196,32 @@
 .stat-item {
   text-align: center;
   padding: 12px 8px;
-  background: var(--kendo-color-surface);
+  background: var(--mj-bg-surface-card);
   border-radius: 8px;
 }
 
 .stat-value {
   font-size: 20px;
   font-weight: 700;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   margin-bottom: 4px;
 }
 
 .stat-value.success {
-  color: var(--kendo-color-success);
+  color: var(--mj-status-success);
 }
 
 .stat-value.warning {
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 
 .stat-value.error {
-  color: var(--kendo-color-error);
+  color: var(--mj-status-error);
 }
 
 .stat-label {
   font-size: 11px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -229,14 +229,14 @@
 /* Params Preview */
 .params-preview {
   padding: 12px;
-  background: var(--kendo-color-surface);
+  background: var(--mj-bg-surface-card);
   border-radius: 8px;
 }
 
 .params-header {
   font-size: 11px;
   font-weight: 600;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -260,26 +260,26 @@
   align-items: center;
   gap: 2px;
   padding: 4px 10px;
-  background: var(--kendo-color-base-subtle);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 14px;
   font-size: 12px;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 
 .param-tag.required {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .required-marker {
-  color: var(--kendo-color-error);
+  color: var(--mj-status-error);
   font-weight: 600;
 }
 
 .param-more {
   padding: 4px 10px;
   font-size: 12px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 /* Responsive */

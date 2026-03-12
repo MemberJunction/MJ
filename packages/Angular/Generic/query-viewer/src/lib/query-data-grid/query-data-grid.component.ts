@@ -28,6 +28,7 @@ import {
     GetRowIdParams,
     themeAlpine,
     SortChangedEvent as AgSortChangedEvent,
+    type Theme,
     ColumnResizedEvent,
     ColumnMovedEvent,
     SelectionChangedEvent,
@@ -287,7 +288,24 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     public Columns: QueryGridColumnConfig[] = [];
     public SortState: QueryGridSortState[] = [];
     public SelectedRows: Record<string, unknown>[] = [];
-    public Theme = themeAlpine;
+    public Theme: Theme = themeAlpine.withParams({
+        backgroundColor: 'var(--mj-bg-surface)',
+        foregroundColor: 'var(--mj-text-primary)',
+        textColor: 'var(--mj-text-primary)',
+        borderColor: 'var(--mj-border-default)',
+        chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerTextColor: 'var(--mj-text-secondary)',
+        cellTextColor: 'var(--mj-text-primary)',
+        subtleTextColor: 'var(--mj-text-muted)',
+        dataBackgroundColor: 'var(--mj-bg-surface)',
+        oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+        rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+        selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+        accentColor: 'var(--mj-brand-primary)',
+        borderRadius: 'var(--mj-radius-sm)',
+        browserColorScheme: 'inherit',
+    });
 
     private destroy$ = new Subject<void>();
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();

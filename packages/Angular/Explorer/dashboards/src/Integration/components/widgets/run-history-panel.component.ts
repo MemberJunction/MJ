@@ -113,7 +113,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
   `,
   styles: [`
     .history-loading, .history-empty {
-      padding: 24px; text-align: center; color: #888;
+      padding: 24px; text-align: center; color: var(--mj-text-muted);
     }
     .history-empty i { font-size: 24px; margin-bottom: 8px; display: block; }
 
@@ -124,12 +124,12 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
     }
     .history-table th {
       text-align: left; padding: 6px 8px;
-      border-bottom: 2px solid #eee; color: #666; font-weight: 600;
+      border-bottom: 2px solid var(--mj-border-default); color: var(--mj-text-secondary); font-weight: 600;
     }
     .run-row { cursor: pointer; }
-    .run-row:hover { background: #f8f9fa; }
-    .run-row.selected { background: #f0f4ff; }
-    .run-row td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+    .run-row:hover { background: var(--mj-bg-surface-sunken); }
+    .run-row.selected { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); }
+    .run-row td { padding: 6px 8px; border-bottom: 1px solid var(--mj-border-default); }
 
     /* Status Chips with icon */
     .run-status-chip {
@@ -143,16 +143,16 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
 
     .duration-cell {
       font-variant-numeric: tabular-nums;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
 
-    .detail-arrow { transition: transform 0.2s; font-size: 11px; color: #999; }
+    .detail-arrow { transition: transform 0.2s; font-size: 11px; color: var(--mj-text-muted); }
     .detail-arrow.rotated { transform: rotate(90deg); }
 
     .detail-row td { padding: 0; }
     .detail-panel {
-      padding: 12px 16px; background: #fafbfc;
-      border-left: 3px solid var(--primary-color, #4a6cf7);
+      padding: 12px 16px; background: var(--mj-bg-surface-sunken);
+      border-left: 3px solid var(--mj-brand-primary);
     }
     .detail-panel h4 { margin: 0 0 8px 0; font-size: 13px; }
 
@@ -160,7 +160,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
       width: 100%; border-collapse: collapse; font-size: 12px;
     }
     .detail-table th {
-      text-align: left; padding: 4px 6px; color: #888; font-weight: 500;
+      text-align: left; padding: 4px 6px; color: var(--mj-text-muted); font-weight: 500;
     }
     .detail-table td { padding: 4px 6px; }
     .error-count { color: #c62828; font-weight: 600; }
@@ -168,7 +168,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
     /* Error Details */
     .error-details-section {
       margin-top: 12px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--mj-border-default);
       padding-top: 8px;
     }
     .error-toggle {

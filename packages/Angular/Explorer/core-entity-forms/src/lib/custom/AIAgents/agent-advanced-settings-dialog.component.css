@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .loading-spinner {
@@ -20,7 +20,7 @@
 }
 
 .loading-spinner i {
-  color: #2196f3;
+  color: var(--mj-brand-primary);
 }
 
 .loading-state p {
@@ -37,18 +37,18 @@
 
 .form-section {
   margin-bottom: 2rem;
-  background: white;
+  background: var(--mj-bg-surface);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mj-border-default);
   overflow: hidden;
 }
 
 .section-title {
   margin: 0;
   padding: 1rem 1.5rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
-  color: #495057;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
   display: flex;
@@ -57,7 +57,7 @@
 }
 
 .section-title i {
-  color: #2196f3;
+  color: var(--mj-brand-primary);
 }
 
 .form-grid {
@@ -80,7 +80,7 @@
 /* === Form Controls === */
 label {
   font-weight: 600;
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-size: 0.9rem;
 }
 
@@ -89,7 +89,7 @@ label {
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--mj-text-secondary);
   cursor: pointer;
 }
 
@@ -113,14 +113,14 @@ label {
 }
 
 .field-hint {
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 0.8rem;
   margin-top: 0.25rem;
   line-height: 1.3;
 }
 
 .field-error {
-  color: #dc3545;
+  color: var(--mj-status-error);
   font-size: 0.8rem;
   margin-top: 0.25rem;
 }
@@ -136,8 +136,8 @@ label {
 }
 
 .json-field textarea.json-invalid {
-  border-color: #dc3545;
-  background-color: #fff5f5;
+  border-color: var(--mj-status-error);
+  background-color: color-mix(in srgb, var(--mj-status-error) 4%, var(--mj-bg-surface));
 }
 
 .json-actions {
@@ -152,11 +152,11 @@ label {
 
 /* === Validation States === */
 .form-control.ng-invalid.ng-touched {
-  border-color: #dc3545;
+  border-color: var(--mj-status-error);
 }
 
 .form-control.ng-valid.ng-touched {
-  border-color: #28a745;
+  border-color: var(--mj-status-success);
 }
 
 /* === Dialog Footer === */
@@ -165,8 +165,8 @@ label {
   justify-content: flex-end;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .dialog-footer button {
@@ -184,25 +184,25 @@ label {
     gap: 1rem;
     padding: 1rem;
   }
-  
+
   .form-field.full-width {
     grid-column: 1;
   }
-  
+
   .advanced-form {
     padding: 1rem;
   }
-  
+
   .section-title {
     padding: 0.75rem 1rem;
     font-size: 1rem;
   }
-  
+
   .dialog-footer {
     padding: 1rem;
     flex-direction: column;
   }
-  
+
   .dialog-footer button {
     width: 100%;
   }
@@ -212,22 +212,22 @@ label {
 
 /* Identity & Behavior */
 .form-section:first-child .section-title {
-  background: linear-gradient(135deg, #e3f2fd, #f8f9fa);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
 }
 
 /* Hierarchy & Organization */
 .form-section:nth-child(2) .section-title {
-  background: linear-gradient(135deg, #f3e5f5, #f8f9fa);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
 }
 
 /* Context Compression */
 .form-section:nth-child(3) .section-title {
-  background: linear-gradient(135deg, #e8f5e8, #f8f9fa);
+  background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
 }
 
 /* Payload Control */
 .form-section:nth-child(4) .section-title {
-  background: linear-gradient(135deg, #fff3e0, #f8f9fa);
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
 }
 
 /* === Advanced Form Features === */
@@ -250,13 +250,13 @@ label {
   right: 0;
   width: 4px;
   height: 100%;
-  background: linear-gradient(to bottom, #28a745, #17a2b8);
+  background: var(--mj-status-success);
   border-radius: 0 4px 4px 0;
   opacity: 0.3;
 }
 
 .json-field textarea.json-invalid::before {
-  background: #dc3545;
+  background: var(--mj-status-error);
 }
 
 /* === Prompt Selector Field === */
@@ -269,9 +269,9 @@ label {
 .selected-prompt-display {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--mj-border-strong);
   border-radius: 4px;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -285,13 +285,13 @@ label {
 
 .prompt-name {
   font-weight: 500;
-  color: #333;
+  color: var(--mj-text-primary);
   font-size: 0.9rem;
 }
 
 .prompt-description {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--mj-text-secondary);
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -300,7 +300,7 @@ label {
 }
 
 .no-prompt-selected {
-  color: #999;
+  color: var(--mj-text-disabled);
   font-style: italic;
   font-size: 0.9rem;
 }

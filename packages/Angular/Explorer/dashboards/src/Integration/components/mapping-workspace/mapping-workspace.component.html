@@ -210,7 +210,7 @@
           @if (AllMaps.length === 0 && !ShowAddPanel) {
             <p class="empty-hint">
               No entity maps configured.
-              <a href="javascript:void(0)" (click)="OpenAddPanel()" style="color: #4a6cf7;">Add one</a>
+              <a href="javascript:void(0)" (click)="OpenAddPanel()" style="color: var(--mj-brand-primary);">Add one</a>
             </p>
           } @else if (FilteredMaps.length === 0 && AllMaps.length > 0) {
             <p class="empty-hint">No matches for "{{ EntityMapSearchText }}".</p>
@@ -325,7 +325,7 @@
               <div class="pending-fields-section">
                 <h4 style="font-size: 14px; margin: 16px 0 8px;">
                   <i class="fa-solid fa-list"></i> Source Fields
-                  <span style="color: #999; font-weight: 400;">({{ SelectedPendingMap.SourceFields.length }})</span>
+                  <span style="color: var(--mj-text-muted); font-weight: 400;">({{ SelectedPendingMap.SourceFields.length }})</span>
                 </h4>
                 <div class="pending-fields-list">
                   @for (field of SelectedPendingMap.SourceFields; track field.Name) {
@@ -404,7 +404,7 @@
           @if (ActiveEditableFields.length === 0) {
             <p class="empty-hint">
               No field mappings yet.
-              <a href="javascript:void(0)" (click)="AddFieldMapping()" style="color: #4a6cf7;">Add one</a>
+              <a href="javascript:void(0)" (click)="AddFieldMapping()" style="color: var(--mj-brand-primary);">Add one</a>
             </p>
           } @else {
             <div class="field-map-cards">
