@@ -318,6 +318,7 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
+- **Migration folder**: Always use the highest-numbered `migrations/v*/` folder (currently `migrations/v5/`). Check `ls migrations/v*/` if unsure.
 - Key points:
   - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
   - Always use hardcoded UUIDs (not NEWID())
@@ -1264,7 +1265,7 @@ MemberJunction includes a powerful code generation system that automatically cre
    - Foreign key relationships and computed fields
    - Value list enums from database constraints
 
-2. **Database Objects** (`migrations/v2/CodeGen_Run_*.sql`)
+2. **Database Objects** (`migrations/v5/CodeGen_Run_*.sql`)
    - Stored procedures (spCreate, spUpdate, spDelete) 
    - Database views with proper joins and computed fields
    - Foreign key indexes for performance
@@ -1326,7 +1327,7 @@ When you add fields like `PromptRole` and `PromptPosition`:
 - **Entity Classes**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
 - **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
 - **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
-- **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+- **Migration SQL**: `migrations/v5/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
 
 ## AI Model and Vendor Configuration
 
