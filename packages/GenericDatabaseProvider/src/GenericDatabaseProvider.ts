@@ -1919,9 +1919,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Query cache instance for caching query results with TTL.
-     * Shared across all platform providers.
+     * Static so the cache persists across per-request provider instances.
      */
-    private _queryCache = new QueryCache();
+    private static _queryCache = new QueryCache();
 
     /**
      * Full query execution pipeline: resolve → validate → compose → template → cache check →
@@ -1941,20 +1941,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Process parameters (composition + Nunjucks templates)
             const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
 
-            // Check cache if enabled
-            const cachedResult = this.checkQueryCache(query, params, appliedParameters);
-            if (cachedResult) {
-                return cachedResult;
-            }
-
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+            const cacheConfig = query.CacheConfig;
             let paginatedResult: Record<string, unknown>[];
             let totalRowCount: number;
             let executionTime: number;
             let fullResult: Record<string, unknown>[] | undefined;
 
             if (useSQLPaging) {
+                // Check paged cache before executing SQL
+                const pagedCacheHit = this.checkPagedQueryCache(query, params, appliedParameters);
+                if (pagedCacheHit) {
+                    return pagedCacheHit;
+                }
+
                 const paging = QueryPagingEngine.WrapWithPaging(
                     finalSQL,
                     params.StartRow!,
@@ -1962,23 +1963,51 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     this.PlatformKey as DatabasePlatform,
                 );
 
-                // Execute data + count queries in parallel
-                const start = Date.now();
-                const [dataResult, countResult] = await Promise.all([
-                    this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
-                    this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
-                ]);
-                executionTime = Date.now() - start;
+                // Check count cache — skip COUNT SQL if we have a cached total
+                const cachedCount = cacheConfig?.enabled
+                    ? GenericDatabaseProvider._queryCache.GetTotalRowCount(query.ID, params.Parameters || {}, cacheConfig)
+                    : null;
 
-                if (!dataResult) {
-                    throw new Error('Error executing paged query SQL');
+                const start = Date.now();
+                if (cachedCount != null) {
+                    // Only execute data query — count is cached
+                    const dataResult = await this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser);
+                    executionTime = Date.now() - start;
+                    if (!dataResult) throw new Error('Error executing paged query SQL');
+                    paginatedResult = dataResult;
+                    totalRowCount = cachedCount;
+                } else {
+                    // Execute data + count queries in parallel
+                    const [dataResult, countResult] = await Promise.all([
+                        this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                        this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                    ]);
+                    executionTime = Date.now() - start;
+                    if (!dataResult) throw new Error('Error executing paged query SQL');
+
+                    paginatedResult = dataResult;
+                    totalRowCount = countResult?.[0]?.TotalRowCount != null
+                        ? Number(countResult[0].TotalRowCount)
+                        : paginatedResult.length;
+
+                    // Cache the count for subsequent page requests
+                    if (cacheConfig?.enabled) {
+                        GenericDatabaseProvider._queryCache.SetTotalRowCount(query.ID, params.Parameters || {}, totalRowCount, cacheConfig);
+                    }
                 }
 
-                paginatedResult = dataResult;
-                totalRowCount = countResult?.[0]?.TotalRowCount != null
-                    ? Number(countResult[0].TotalRowCount)
-                    : paginatedResult.length;
+                // Cache the paged results
+                if (cacheConfig?.enabled) {
+                    GenericDatabaseProvider._queryCache.SetPaged(query.ID, params.Parameters || {}, params.StartRow!, params.MaxRows!, paginatedResult, cacheConfig);
+                    this.invalidateDependentCaches(query);
+                }
             } else {
+                // Check full-result cache before executing
+                const cachedResult = this.checkQueryCache(query, params, appliedParameters);
+                if (cachedResult) {
+                    return cachedResult;
+                }
+
                 // No paging requested — execute full query, apply in-memory pagination as fallback
                 const timing = await this.executeQueryWithTiming(finalSQL, contextUser);
                 executionTime = timing.executionTime;
@@ -1987,15 +2016,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 const paginated = this.applyQueryPagination(fullResult, params);
                 paginatedResult = paginated.paginatedResult;
                 totalRowCount = paginated.totalRowCount;
+
+                // Cache full (unpaginated) results if enabled
+                this.cacheQueryResults(query, params.Parameters || {}, fullResult);
             }
 
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
-
-            // Cache full (unpaginated) results if enabled — only when we have the full result set
-            if (fullResult) {
-                this.cacheQueryResults(query, params.Parameters || {}, fullResult);
-            }
 
             return {
                 Success: true,
@@ -2053,7 +2080,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
+            // Check ad-hoc cache if opt-in TTL is provided
+            const adhocTTL = params.AdhocCacheTTLMinutes;
+            if (adhocTTL != null && adhocTTL > 0) {
+                const adhocKey = QueryCache.GenerateAdhocCacheKey(params.SQL!);
+                const adhocConfig = { enabled: true, ttlMinutes: adhocTTL };
+                const cachedEntry = GenericDatabaseProvider._queryCache.get(adhocKey, {}, adhocConfig);
+                if (cachedEntry) {
+                    const { paginatedResult, totalRowCount } = this.applyQueryPagination(
+                        cachedEntry.results as Record<string, unknown>[], params,
+                    );
+                    return {
+                        Success: true,
+                        QueryID: '',
+                        QueryName: 'Ad-Hoc Query',
+                        Results: paginatedResult,
+                        RowCount: paginatedResult.length,
+                        TotalRowCount: totalRowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        CacheHit: true,
+                    };
+                }
+            }
+
             const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+
+            // Store in ad-hoc cache if opt-in
+            if (adhocTTL != null && adhocTTL > 0) {
+                const adhocKey = QueryCache.GenerateAdhocCacheKey(params.SQL!);
+                const adhocConfig = { enabled: true, ttlMinutes: adhocTTL };
+                GenericDatabaseProvider._queryCache.set(adhocKey, {}, result, adhocConfig);
+            }
+
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
             return {
@@ -2152,7 +2211,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return null;
         }
 
-        const cachedEntry = this._queryCache.get(query.ID, params.Parameters || {}, cacheConfig);
+        const cachedEntry = GenericDatabaseProvider._queryCache.get(query.ID, params.Parameters || {}, cacheConfig);
         if (!cachedEntry) {
             return null;
         }
@@ -2168,6 +2227,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             QueryName: query.Name,
             Results: paginatedResult,
             RowCount: paginatedResult.length,
+            TotalRowCount: totalRowCount,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            AppliedParameters: appliedParameters,
+            CacheHit: true,
+            CacheTTLRemaining: remainingTTL,
+        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+    }
+
+    /**
+     * Checks the paged cache for a specific page of query results.
+     * Returns a full RunQueryResult on hit, null on miss.
+     */
+    protected checkPagedQueryCache(
+        query: QueryInfo,
+        params: RunQueryParams,
+        appliedParameters: Record<string, string>,
+    ): RunQueryResult | null {
+        const cacheConfig = query.CacheConfig;
+        if (!cacheConfig?.enabled) return null;
+
+        const cachedEntry = GenericDatabaseProvider._queryCache.GetPaged(
+            query.ID, params.Parameters || {}, params.StartRow!, params.MaxRows!, cacheConfig,
+        );
+        if (!cachedEntry) return null;
+
+        // Also try to get the cached count
+        const cachedCount = GenericDatabaseProvider._queryCache.GetTotalRowCount(query.ID, params.Parameters || {}, cacheConfig);
+        const totalRowCount = cachedCount ?? cachedEntry.results.length;
+        const remainingTTL = (cachedEntry.timestamp + (cachedEntry.ttlMinutes * 60 * 1000)) - Date.now();
+
+        LogStatus(`Paged cache hit for query ${query.Name} (${query.ID}) page ${params.StartRow}+${params.MaxRows}`);
+
+        return {
+            Success: true,
+            QueryID: query.ID,
+            QueryName: query.Name,
+            Results: cachedEntry.results as Record<string, unknown>[],
+            RowCount: cachedEntry.results.length,
             TotalRowCount: totalRowCount,
             ExecutionTime: 0,
             ErrorMessage: '',
@@ -2271,8 +2369,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return;
         }
 
-        this._queryCache.set(query.ID, parameters, results, cacheConfig);
+        GenericDatabaseProvider._queryCache.set(query.ID, parameters, results, cacheConfig);
+        this.invalidateDependentCaches(query);
         LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
+    }
+
+    /**
+     * Invalidates cached results for all queries that directly depend on the given query
+     * via the composable query dependency graph. Single-level only (not transitive).
+     */
+    private invalidateDependentCaches(query: QueryInfo): void {
+        const dependents = query.Dependents;
+        if (!dependents || dependents.length === 0) return;
+
+        for (const dep of dependents) {
+            GenericDatabaseProvider._queryCache.clear(dep.QueryID);
+        }
+        LogStatus(`Invalidated cache for ${dependents.length} dependent(s) of query ${query.Name}`);
     }
 
     /**************************************************************************/
