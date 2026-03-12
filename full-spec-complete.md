@@ -163,8 +163,8 @@ RuntimeSchemaManager (Pipeline Orchestration)
 
 ---
 
-*Implementation verified on 2026-03-12 inside Docker Workbench (sql-claude / MJTest database).*
-*All phases implemented, all packages build, all 190 tests pass.*
+*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 190 tests pass.*
+*E2E database testing requires a running SQL Server instance (sql-claude container in Docker workbench).*
 
 ## Verification Checklist
 
