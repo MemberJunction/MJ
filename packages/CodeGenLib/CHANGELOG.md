@@ -1,5 +1,75 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/postgresql-dataprovider@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-prompts@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/actions@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/core-entities-server@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/ai-provider-bundle@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/global@5.11.0
+  - @memberjunction/sql-dialect@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- a4ac83d: no migration
+  - @memberjunction/ai@5.10.1
+  - @memberjunction/ai-core-plus@5.10.1
+  - @memberjunction/aiengine@5.10.1
+  - @memberjunction/ai-prompts@5.10.1
+  - @memberjunction/ai-provider-bundle@5.10.1
+  - @memberjunction/actions-base@5.10.1
+  - @memberjunction/actions@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/core-entities@5.10.1
+  - @memberjunction/core-entities-server@5.10.1
+  - @memberjunction/global@5.10.1
+  - @memberjunction/postgresql-dataprovider@5.10.1
+  - @memberjunction/sql-dialect@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-prompts@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/actions@5.10.0
+  - @memberjunction/core-entities-server@5.10.0
+  - @memberjunction/postgresql-dataprovider@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes

@@ -539,6 +539,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       }
 
       query.SQL = this.spec.metadata.sql;
+      if (this.spec.plan?.trim()) {
+        query.TechnicalDescription = this.spec.plan.trim();
+      }
       const saved = await query.Save();
 
       if (saved) {

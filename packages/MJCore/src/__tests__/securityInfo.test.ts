@@ -173,6 +173,62 @@ describe('RowLevelSecurityFilterInfo', () => {
 
             expect(result).toBe("A = 'u-123' OR B = 'u-123'");
         });
+
+        it('should replace numeric tokens like EmployeeID', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: 'EmployeeID = {{UserEmployeeID}}'
+            });
+            const user = new UserInfo(null, { EmployeeID: 42 });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe('EmployeeID = 42');
+        });
+
+        it('should replace boolean tokens', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: 'IsActive = {{UserIsActive}}'
+            });
+            const user = new UserInfo(null, { IsActive: true });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe('IsActive = true');
+        });
+
+        it('should replace mixed string and numeric tokens', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "UserID = '{{UserID}}' AND EmpID = {{UserEmployeeID}}"
+            });
+            const user = new UserInfo(null, { ID: 'uuid-1', EmployeeID: 7 });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe("UserID = 'uuid-1' AND EmpID = 7");
+        });
+
+        it('should skip null values leaving token unresolved', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "X = '{{UserID}}'"
+            });
+            const user = new UserInfo(null, { ID: null });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe("X = '{{UserID}}'");
+        });
+
+        it('should skip object values (arrays, dates) leaving token unresolved', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "X = '{{User__mj_CreatedAt}}'"
+            });
+            const user = new UserInfo(null, { __mj_CreatedAt: new Date() });
+
+            const result = filter.MarkupFilterText(user);
+
+            // Date is typeof 'object', so it should be skipped
+            expect(result).toBe("X = '{{User__mj_CreatedAt}}'");
+        });
     });
 });
 

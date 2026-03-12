@@ -3,8 +3,13 @@ import { Metadata, RunView, IRunViewProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJCompanyIntegrationEntityMapEntity,
-  MJCompanyIntegrationFieldMapEntity
+  MJCompanyIntegrationFieldMapEntity,
+  MJCompanyIntegrationEntity,
+  MJIntegrationEntity,
+  MJIntegrationSourceTypeEntity,
+  MJCompanyIntegrationSyncWatermarkEntity,
 } from '@memberjunction/core-entities';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   GraphQLDataProvider,
   GraphQLIntegrationClient,
@@ -126,8 +131,8 @@ export interface IntegrationDefinitionRow {
 
 /** Aggregated summary for a single integration, used by the Control Tower UI */
 export interface IntegrationSummary {
-  Integration: IntegrationRow;
-  SourceType: SourceTypeRow | null;
+  Integration: MJCompanyIntegrationEntity;
+  SourceType: MJIntegrationSourceTypeEntity | null;
   LatestRun: IntegrationRunRow | null;
   RecentRuns: IntegrationRunRow[];
   StatusColor: 'green' | 'amber' | 'red' | 'gray';
@@ -226,78 +231,37 @@ export function ResolveIntegrationIcon(name: string): string {
 export class IntegrationDataService {
 
   async LoadIntegrationSummaries(provider?: IRunViewProvider | null): Promise<IntegrationSummary[]> {
+    const engine = IntegrationEngineBase.Instance;
     const rv = this.createRunView(provider);
-    const [integrationsResult, runsResult, sourceTypesResult, defsResult] = await rv.RunViews([
-      {
-        EntityName: 'MJ: Company Integrations',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        Fields: ['ID', 'Name', 'IsActive', 'LastRunID',
-                 'LastRunStartedAt', 'LastRunEndedAt', 'Company', 'Integration',
-                 'DriverClassName'],
-        ResultType: 'simple'
-      },
-      {
+
+    // Engine provides cached metadata; only runs are dynamic and need a RunView call
+    const [, runsResult] = await Promise.all([
+      engine.Config(false),
+      rv.RunView<IntegrationRunRow>({
         EntityName: 'MJ: Company Integration Runs',
         ExtraFilter: '',
         OrderBy: 'StartedAt DESC',
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: Integration Source Types',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        Fields: ['ID', 'Name', 'Description', 'DriverClass', 'IconClass', 'Status'],
-        ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: Integrations',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
-                 'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
-                 'CredentialTypeID', 'SourceTypeID'],
-        ResultType: 'simple'
-      }
+      })
     ]);
 
-    const integrations = integrationsResult.Results as IntegrationRow[];
-    const runs = runsResult.Results as IntegrationRunRow[];
-    const sourceTypes = sourceTypesResult.Results as SourceTypeRow[];
-    const defs = defsResult.Results as IntegrationDefinitionRow[];
+    const integrations = engine.CompanyIntegrations;
+    const runs = runsResult.Results;
+    const sourceTypes = engine.SourceTypes;
 
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, defs));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes));
   }
 
-  async LoadEntityMaps(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<EntityMapRow[]> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<EntityMapRow>({
-      EntityName: 'MJ: Company Integration Entity Maps',
-      ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
-      OrderBy: 'Priority, ExternalObjectName',
-      Fields: ['ID', 'CompanyIntegrationID', 'ExternalObjectName', 'ExternalObjectLabel',
-               'EntityID', 'SyncDirection', 'SyncEnabled', 'MatchStrategy',
-               'ConflictResolution', 'Priority', 'DeleteBehavior', 'Status', 'Entity'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    return IntegrationEngineBase.Instance.GetEntityMapsForCompanyIntegration(companyIntegrationID);
   }
 
-  async LoadFieldMaps(entityMapID: string, provider?: IRunViewProvider | null): Promise<FieldMapRow[]> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<FieldMapRow>({
-      EntityName: 'MJ: Company Integration Field Maps',
-      ExtraFilter: `EntityMapID='${entityMapID}'`,
-      OrderBy: 'Priority, SourceFieldName',
-      Fields: ['ID', 'EntityMapID', 'SourceFieldName', 'SourceFieldLabel',
-               'DestinationFieldName', 'DestinationFieldLabel', 'Direction',
-               'TransformPipeline', 'IsKeyField', 'IsRequired', 'DefaultValue',
-               'Priority', 'Status'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadFieldMaps(entityMapID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    return IntegrationEngineBase.Instance.GetFieldMapsForEntityMap(entityMapID);
   }
 
   async LoadRunHistory(companyIntegrationID: string, limit: number = 10, provider?: IRunViewProvider | null): Promise<IntegrationRunRow[]> {
@@ -369,30 +333,14 @@ export class IntegrationDataService {
     return Array.from(entityMap.values()).sort((a, b) => a.Entity.localeCompare(b.Entity));
   }
 
-  async LoadIntegrationDefinitions(provider?: IRunViewProvider | null): Promise<IntegrationDefinitionRow[]> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<IntegrationDefinitionRow>({
-      EntityName: 'MJ: Integrations',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      Fields: ['ID', 'Name', 'Description', 'ClassName', 'ImportPath',
-               'NavigationBaseURL', 'BatchMaxRequestCount', 'BatchRequestWaitTime',
-               'CredentialTypeID', 'SourceTypeID'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadIntegrationDefinitions(_provider?: IRunViewProvider | null): Promise<MJIntegrationEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    return IntegrationEngineBase.Instance.Integrations;
   }
 
-  async LoadSourceTypes(provider?: IRunViewProvider | null): Promise<SourceTypeRow[]> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<SourceTypeRow>({
-      EntityName: 'MJ: Integration Source Types',
-      ExtraFilter: 'Status=\'Active\'',
-      OrderBy: 'Name',
-      Fields: ['ID', 'Name', 'Description', 'DriverClass', 'IconClass', 'Status'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadSourceTypes(_provider?: IRunViewProvider | null): Promise<MJIntegrationSourceTypeEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    return IntegrationEngineBase.Instance.SourceTypes.filter(st => st.Status === 'Active');
   }
 
   async LoadRecentRuns(limit: number = 20, provider?: IRunViewProvider | null): Promise<ActivityFeedItem[]> {
@@ -586,29 +534,21 @@ export class IntegrationDataService {
   }
 
   /** Load available MJ entities for mapping target selection */
-  async LoadMJEntities(provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string }>> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<{ ID: string; Name: string }>({
-      EntityName: 'MJ: Entities',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      Fields: ['ID', 'Name'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadMJEntities(_provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string }>> {
+    const md = new Metadata();
+    return md.Entities
+      .map(e => ({ ID: e.ID, Name: e.Name }))
+      .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
   /** Load entity fields for a given entity (for field mapping destination picker) */
-  async LoadEntityFields(entityID: string, provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string; Type: string; IsRequired: boolean }>> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<{ ID: string; Name: string; Type: string; IsRequired: boolean }>({
-      EntityName: 'MJ: Entity Fields',
-      ExtraFilter: `EntityID='${entityID}'`,
-      OrderBy: 'Sequence',
-      Fields: ['ID', 'Name', 'Type', 'IsRequired'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadEntityFields(entityID: string, _provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string; Type: string; IsRequired: boolean }>> {
+    const md = new Metadata();
+    const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    if (!entity) return [];
+    return entity.Fields
+      .sort((a, b) => a.Sequence - b.Sequence)
+      .map(f => ({ ID: f.ID, Name: f.Name, Type: f.Type, IsRequired: !f.AllowsNull }));
   }
 
   // --- Discovery (via GraphQL) ---
@@ -780,52 +720,30 @@ export class IntegrationDataService {
   }
 
   /** Load schedule data for all company integrations (includes new scheduling fields) */
-  async LoadSchedules(provider?: IRunViewProvider | null): Promise<ScheduleRow[]> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<ScheduleRow>({
-      EntityName: 'MJ: Company Integrations',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      Fields: ['ID', 'Name', 'Integration', 'Company', 'IsActive',
-               'ScheduleEnabled', 'ScheduleType', 'ScheduleIntervalMinutes',
-               'CronExpression', 'NextScheduledRunAt', 'LastScheduledRunAt',
-               'IsLocked', 'LockedAt'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+  async LoadSchedules(_provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    return IntegrationEngineBase.Instance.CompanyIntegrations;
   }
 
   /** Load sync watermarks for a specific company integration's entity maps */
-  async LoadWatermarks(companyIntegrationID: string, provider?: IRunViewProvider | null): Promise<WatermarkRow[]> {
-    const rv = this.createRunView(provider);
-    // First get entity maps for this integration, then load their watermarks
-    const entityMaps = await this.LoadEntityMaps(companyIntegrationID, provider);
+  async LoadWatermarks(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationSyncWatermarkEntity[]> {
+    await IntegrationEngineBase.Instance.Config(false);
+    const entityMaps = IntegrationEngineBase.Instance.GetEntityMapsForCompanyIntegration(companyIntegrationID);
     if (entityMaps.length === 0) return [];
 
-    const mapIDs = entityMaps.map(em => `'${em.ID}'`).join(',');
-    const result = await rv.RunView<WatermarkRow>({
-      EntityName: 'MJ: Company Integration Sync Watermarks',
-      ExtraFilter: `EntityMapID IN (${mapIDs})`,
-      OrderBy: 'EntityMap',
-      Fields: ['ID', 'EntityMapID', 'WatermarkType', 'WatermarkValue', 'Direction', 'EntityMap'],
-      ResultType: 'simple'
-    });
-    return result.Results;
+    const mapIDSet = new Set(entityMaps.map(em => em.ID.toLowerCase()));
+    return IntegrationEngineBase.Instance.Watermarks.filter(w => mapIDSet.has(w.EntityMapID.toLowerCase()));
   }
 
   /** Load entity map count per company integration (used by Overview cards) */
-  async LoadEntityMapCounts(provider?: IRunViewProvider | null): Promise<Map<string, number>> {
-    const rv = this.createRunView(provider);
-    const result = await rv.RunView<{ CompanyIntegrationID: string }>({
-      EntityName: 'MJ: Company Integration Entity Maps',
-      ExtraFilter: 'SyncEnabled=1',
-      Fields: ['CompanyIntegrationID'],
-      ResultType: 'simple'
-    });
+  async LoadEntityMapCounts(_provider?: IRunViewProvider | null): Promise<Map<string, number>> {
+    await IntegrationEngineBase.Instance.Config(false);
     const counts = new Map<string, number>();
-    for (const row of result.Results) {
-      const key = row.CompanyIntegrationID.toLowerCase();
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+    for (const em of IntegrationEngineBase.Instance.EntityMaps) {
+      if (em.SyncEnabled) {
+        const key = em.CompanyIntegrationID.toLowerCase();
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
     }
     return counts;
   }
@@ -852,10 +770,9 @@ export class IntegrationDataService {
   }
 
   private buildSummary(
-    integration: IntegrationRow,
+    integration: MJCompanyIntegrationEntity,
     allRuns: IntegrationRunRow[],
-    sourceTypes: SourceTypeRow[],
-    defs: IntegrationDefinitionRow[]
+    sourceTypes: MJIntegrationSourceTypeEntity[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
@@ -865,7 +782,7 @@ export class IntegrationDataService {
     const totalRecordsSyncedToday = this.computeRecordsSyncedToday(integrationRuns);
     const totalErrors = integrationRuns.filter(r => r.Status === 'Failed').length;
     const durationMs = this.computeDuration(latestRun);
-    const sourceType = this.resolveSourceType(integration, defs, sourceTypes);
+    const sourceType = this.resolveSourceType(integration, sourceTypes);
 
     return {
       Integration: integration,
@@ -881,14 +798,11 @@ export class IntegrationDataService {
   }
 
   private resolveSourceType(
-    integration: IntegrationRow,
-    defs: IntegrationDefinitionRow[],
-    sourceTypes: SourceTypeRow[]
-  ): SourceTypeRow | null {
-    // Match CompanyIntegration.Integration (name) to Integration definition, then look up SourceTypeID
-    const def = defs.find(d => d.Name === integration.Integration);
-    if (!def?.SourceTypeID) return null;
-    return sourceTypes.find(st => UUIDsEqual(st.ID, def.SourceTypeID)) ?? null;
+    integration: MJCompanyIntegrationEntity,
+    sourceTypes: MJIntegrationSourceTypeEntity[]
+  ): MJIntegrationSourceTypeEntity | null {
+    if (!integration.SourceTypeID) return null;
+    return sourceTypes.find(st => UUIDsEqual(st.ID, integration.SourceTypeID)) ?? null;
   }
 
   private buildActivityFeedItem(run: IntegrationRunRow): ActivityFeedItem {

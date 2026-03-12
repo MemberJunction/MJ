@@ -113,103 +113,52 @@ CREATE TABLE __mj."OpenAppDependency" (
  ))
 );
 
-ALTER TABLE __mj."OpenAppDependency" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenAppDependency"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppDependency" */;
 
-ALTER TABLE __mj."OpenAppDependency" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenAppDependency"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenApp" */;
 
-ALTER TABLE __mj."OpenApp" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenApp"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenApp" */;
 
-ALTER TABLE __mj."OpenApp" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenApp"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppInstallHistory" */;
 
-ALTER TABLE __mj."OpenAppInstallHistory" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenAppInstallHistory"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppInstallHistory" */;
 
-ALTER TABLE __mj."OpenAppInstallHistory" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."OpenAppInstallHistory"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to insert new entity field */;
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID' 
---     AND object_id = OBJECT_ID('[__mj].[OpenAppDependency]')
--- )
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID" ON __mj."OpenAppDependency" ("OpenAppID");
 
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID" ON __mj."OpenAppDependency" ("DependsOnAppID");
 
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID ON __mj."OpenAppDependency" ("OpenAppID");
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID" ON __mj."OpenAppInstallHistory" ("OpenAppID");
 
--- Index for foreign key DependsOnAppID in table OpenAppDependency;
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID" ON __mj."OpenAppInstallHistory" ("ExecutedByUserID");
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID' 
---     AND object_id = OBJECT_ID('[__mj].[OpenAppDependency]')
--- )
-
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppDependency_DependsOnAppID ON __mj."OpenAppDependency" ("DependsOnAppID");
-
-/* SQL text to update entity field related entity name field map for entity field ID 5C270696-51C2-451F-88B4-8E99F1DE57FA */;
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID' 
---     AND object_id = OBJECT_ID('[__mj].[OpenAppInstallHistory]')
--- )
-
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_OpenAppID ON __mj."OpenAppInstallHistory" ("OpenAppID");
-
--- Index for foreign key ExecutedByUserID in table OpenAppInstallHistory;
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID' 
---     AND object_id = OBJECT_ID('[__mj].[OpenAppInstallHistory]')
--- )
-
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenAppInstallHistory_ExecutedByUserID ON __mj."OpenAppInstallHistory" ("ExecutedByUserID");
-
-/* SQL text to update entity field related entity name field map for entity field ID 2EFCED4C-6D5D-44E5-94D6-579D5A9AB715 */;
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID' 
---     AND object_id = OBJECT_ID('[__mj].[OpenApp]')
--- )
-
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID ON __mj."OpenApp" ("InstalledByUserID");
-
-/* SQL text to update entity field related entity name field map for entity field ID A47E36F4-7942-4A8B-9735-72F74B07C618 */;
-
-
--- ===================== Helper Functions (fn*) =====================
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenApp_InstalledByUserID" ON __mj."OpenApp" ("InstalledByUserID");
 
 
 -- ===================== Views =====================
 
-DROP VIEW IF EXISTS __mj."vwOpenAppDependencies" CASCADE;
-CREATE VIEW __mj."vwOpenAppDependencies"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwOpenAppDependencies"
 AS SELECT
     o.*,
     "MJOpenApp_OpenAppID"."Name" AS "OpenApp",
@@ -223,10 +172,18 @@ INNER JOIN
 LEFT OUTER JOIN
     __mj."OpenApp" AS "MJOpenApp_DependsOnAppID"
   ON
-    o."DependsOnAppID" = "MJOpenApp_DependsOnAppID"."ID";
+    o."DependsOnAppID" = "MJOpenApp_DependsOnAppID"."ID"$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwOpenAppDependencies" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
-DROP VIEW IF EXISTS __mj."vwOpenApps" CASCADE;
-CREATE VIEW __mj."vwOpenApps"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwOpenApps"
 AS SELECT
     o.*,
     "MJUser_InstalledByUserID"."Name" AS "InstalledByUser"
@@ -235,10 +192,18 @@ FROM
 INNER JOIN
     __mj."User" AS "MJUser_InstalledByUserID"
   ON
-    o."InstalledByUserID" = "MJUser_InstalledByUserID"."ID";
+    o."InstalledByUserID" = "MJUser_InstalledByUserID"."ID"$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwOpenApps" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
-DROP VIEW IF EXISTS __mj."vwOpenAppInstallHistories" CASCADE;
-CREATE VIEW __mj."vwOpenAppInstallHistories"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwOpenAppInstallHistories"
 AS SELECT
     o.*,
     "MJOpenApp_OpenAppID"."Name" AS "OpenApp",
@@ -252,7 +217,14 @@ INNER JOIN
 INNER JOIN
     __mj."User" AS "MJUser_ExecutedByUserID"
   ON
-    o."ExecutedByUserID" = "MJUser_ExecutedByUserID"."ID";
+    o."ExecutedByUserID" = "MJUser_ExecutedByUserID"."ID"$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwOpenAppInstallHistories" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
@@ -827,34 +799,28 @@ INSERT INTO "__mj"."Entity" (
          , 1
          , 1
          , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Open Apps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */;
+      );
+/* SQL generated to add new entity MJ: Open Apps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 
 INSERT INTO __mj."ApplicationEntity"
                                        ("ApplicationID", "EntityID", "Sequence") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ac4a2799-454b-4395-aa56-a42241f32c12', (SELECT COALESCE(MAX("Sequence"),0)||1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Open Apps for role UI */;
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Open Apps for role Developer */;
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ac4a2799-454b-4395-aa56-a42241f32c12', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'));
+/* SQL generated to add new permission for entity MJ: Open Apps for role UI */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Open Apps for role Integration */;
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+/* SQL generated to add new permission for entity MJ: Open Apps for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+/* SQL generated to add new permission for entity MJ: Open Apps for role Integration */
 
-/* SQL generated to create new entity MJ: Open App Install Histories */;
+INSERT INTO __mj."EntityPermission"
+                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+/* SQL generated to create new entity MJ: Open App Install Histories */
 
 INSERT INTO "__mj"."Entity" (
          "ID",
@@ -895,34 +861,28 @@ INSERT INTO "__mj"."Entity" (
          , 1
          , 1
          , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Open App Install Histories to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */;
+      );
+/* SQL generated to add new entity MJ: Open App Install Histories to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 
 INSERT INTO __mj."ApplicationEntity"
                                        ("ApplicationID", "EntityID", "Sequence") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0fcff292-3e37-42bb-b5c3-e7751ef9b875', (SELECT COALESCE(MAX("Sequence"),0)||1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Open App Install Histories for role UI */;
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Developer */;
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0fcff292-3e37-42bb-b5c3-e7751ef9b875', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'));
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role UI */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Integration */;
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+/* SQL generated to add new permission for entity MJ: Open App Install Histories for role Integration */
 
-/* SQL generated to create new entity MJ: Open App Dependencies */;
+INSERT INTO __mj."EntityPermission"
+                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+/* SQL generated to create new entity MJ: Open App Dependencies */
 
 INSERT INTO "__mj"."Entity" (
          "ID",
@@ -963,34 +923,28 @@ INSERT INTO "__mj"."Entity" (
          , 1
          , 1
          , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Open App Dependencies to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */;
+      );
+/* SQL generated to add new entity MJ: Open App Dependencies to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 
 INSERT INTO __mj."ApplicationEntity"
                                        ("ApplicationID", "EntityID", "Sequence") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '57a740fa-ce0f-440b-8b90-6bf2bb9440de', (SELECT COALESCE(MAX("Sequence"),0)||1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Open App Dependencies for role UI */;
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Developer */;
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '57a740fa-ce0f-440b-8b90-6bf2bb9440de', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'));
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role UI */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Integration */;
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+/* SQL generated to add new permission for entity MJ: Open App Dependencies for role Integration */
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppDependency" */;
+INSERT INTO __mj."EntityPermission"
+                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."OpenAppDependency" */
 
 DO $$
 BEGIN
@@ -1040,7 +994,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -1495,7 +1449,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1560,7 +1514,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1625,7 +1579,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -2795,7 +2749,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -2860,7 +2814,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -2925,7 +2879,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -3835,7 +3789,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -3900,7 +3854,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -3920,151 +3874,128 @@ END $$;
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('4dabd128-c970-4fe9-aa10-42dcdef3e687', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 1, 'Active', 'Active')
-
-/* SQL text to insert entity field value with ID 89e0c912-ed96-4005-915a-6c88e1bbdbab */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('89e0c912-ed96-4005-915a-6c88e1bbdbab', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 2, 'Disabled', 'Disabled')
-
-/* SQL text to insert entity field value with ID d62f5ca8-0c50-439d-9afa-7d74ad3e55b3 */;
+                                       ('4dabd128-c970-4fe9-aa10-42dcdef3e687', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 1, 'Active', 'Active');
+/* SQL text to insert entity field value with ID 89e0c912-ed96-4005-915a-6c88e1bbdbab */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('d62f5ca8-0c50-439d-9afa-7d74ad3e55b3', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 3, 'Error', 'Error')
-
-/* SQL text to insert entity field value with ID dc4fd238-6204-430a-b095-950c93c1ecd9 */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('dc4fd238-6204-430a-b095-950c93c1ecd9', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 4, 'Installing', 'Installing')
-
-/* SQL text to insert entity field value with ID 370e4855-bc2e-46c2-b57c-5b7aa38f8474 */;
+                                       ('89e0c912-ed96-4005-915a-6c88e1bbdbab', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 2, 'Disabled', 'Disabled');
+/* SQL text to insert entity field value with ID d62f5ca8-0c50-439d-9afa-7d74ad3e55b3 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('370e4855-bc2e-46c2-b57c-5b7aa38f8474', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 5, 'Removed', 'Removed')
-
-/* SQL text to insert entity field value with ID f4dcc7a8-6ca6-4508-af98-60fde4fadb1c */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('f4dcc7a8-6ca6-4508-af98-60fde4fadb1c', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 6, 'Removing', 'Removing')
-
-/* SQL text to insert entity field value with ID 26ed1bb0-ee7c-4553-a227-b02028687b5f */;
+                                       ('d62f5ca8-0c50-439d-9afa-7d74ad3e55b3', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 3, 'Error', 'Error');
+/* SQL text to insert entity field value with ID dc4fd238-6204-430a-b095-950c93c1ecd9 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('26ed1bb0-ee7c-4553-a227-b02028687b5f', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 7, 'Upgrading', 'Upgrading')
-
-/* SQL text to update ValueListType for entity field ID F96177D9-9802-44F6-A6C4-9E8BA2116BAB */;
-
-UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F96177D9-9802-44F6-A6C4-9E8BA2116BAB'
-
-/* SQL text to insert entity field value with ID 6071c527-a0fc-4b5b-a157-b774b8afbc88 */;
+                                       ('dc4fd238-6204-430a-b095-950c93c1ecd9', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 4, 'Installing', 'Installing');
+/* SQL text to insert entity field value with ID 370e4855-bc2e-46c2-b57c-5b7aa38f8474 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('6071c527-a0fc-4b5b-a157-b774b8afbc88', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 1, 'Install', 'Install')
-
-/* SQL text to insert entity field value with ID ec783aa6-9671-4969-b1ca-6e0143a63ce5 */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('ec783aa6-9671-4969-b1ca-6e0143a63ce5', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 2, 'Remove', 'Remove')
-
-/* SQL text to insert entity field value with ID 0199797e-c718-4b05-bb0e-7316c093b330 */;
+                                       ('370e4855-bc2e-46c2-b57c-5b7aa38f8474', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 5, 'Removed', 'Removed');
+/* SQL text to insert entity field value with ID f4dcc7a8-6ca6-4508-af98-60fde4fadb1c */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('0199797e-c718-4b05-bb0e-7316c093b330', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 3, 'Upgrade', 'Upgrade')
-
-/* SQL text to update ValueListType for entity field ID 418E9648-0EAA-4D37-AEE2-49B204C8AD89 */;
-
-UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='418E9648-0EAA-4D37-AEE2-49B204C8AD89'
-
-/* SQL text to insert entity field value with ID 6d50c950-5c3b-4acc-93c9-1d458ee5c415 */;
+                                       ('f4dcc7a8-6ca6-4508-af98-60fde4fadb1c', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 6, 'Removing', 'Removing');
+/* SQL text to insert entity field value with ID 26ed1bb0-ee7c-4553-a227-b02028687b5f */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('6d50c950-5c3b-4acc-93c9-1d458ee5c415', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 1, 'Config', 'Config')
+                                       ('26ed1bb0-ee7c-4553-a227-b02028687b5f', 'F96177D9-9802-44F6-A6C4-9E8BA2116BAB', 7, 'Upgrading', 'Upgrading');
+/* SQL text to update ValueListType for entity field ID F96177D9-9802-44F6-A6C4-9E8BA2116BAB */
 
-/* SQL text to insert entity field value with ID d9d4fe80-1357-432d-844f-5ad6d8f0b23f */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('d9d4fe80-1357-432d-844f-5ad6d8f0b23f', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 2, 'Hooks', 'Hooks')
-
-/* SQL text to insert entity field value with ID d4de62a4-4a8d-4df9-bb38-0d5384afb5c1 */;
+UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F96177D9-9802-44F6-A6C4-9E8BA2116BAB';
+/* SQL text to insert entity field value with ID 6071c527-a0fc-4b5b-a157-b774b8afbc88 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('d4de62a4-4a8d-4df9-bb38-0d5384afb5c1', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 3, 'Migration', 'Migration')
-
-/* SQL text to insert entity field value with ID 69113e75-7abe-42c2-b758-a8a5dcdf29b6 */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('69113e75-7abe-42c2-b758-a8a5dcdf29b6', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 4, 'Packages', 'Packages')
-
-/* SQL text to insert entity field value with ID 27cac7fb-02c9-4439-822f-bb7401c1b82f */;
+                                       ('6071c527-a0fc-4b5b-a157-b774b8afbc88', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 1, 'Install', 'Install');
+/* SQL text to insert entity field value with ID ec783aa6-9671-4969-b1ca-6e0143a63ce5 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('27cac7fb-02c9-4439-822f-bb7401c1b82f', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 5, 'Record', 'Record')
-
-/* SQL text to insert entity field value with ID 0d45f847-99a0-4461-9633-58aa6ce7e26b */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('0d45f847-99a0-4461-9633-58aa6ce7e26b', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 6, 'Schema', 'Schema')
-
-/* SQL text to update ValueListType for entity field ID F26B581D-F6E3-47BA-BBBC-167E0F8E5867 */;
-
-UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F26B581D-F6E3-47BA-BBBC-167E0F8E5867'
-
-/* SQL text to insert entity field value with ID 10438f88-7021-4cda-86d3-8f9d38cf9383 */;
+                                       ('ec783aa6-9671-4969-b1ca-6e0143a63ce5', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 2, 'Remove', 'Remove');
+/* SQL text to insert entity field value with ID 0199797e-c718-4b05-bb0e-7316c093b330 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('10438f88-7021-4cda-86d3-8f9d38cf9383', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 1, 'Incompatible', 'Incompatible')
+                                       ('0199797e-c718-4b05-bb0e-7316c093b330', '418E9648-0EAA-4D37-AEE2-49B204C8AD89', 3, 'Upgrade', 'Upgrade');
+/* SQL text to update ValueListType for entity field ID 418E9648-0EAA-4D37-AEE2-49B204C8AD89 */
 
-/* SQL text to insert entity field value with ID 643db15e-a984-44e8-8c37-88031a81f3a2 */;
-
-INSERT INTO "__mj"."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
-                                    VALUES
-                                       ('643db15e-a984-44e8-8c37-88031a81f3a2', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 2, 'Missing', 'Missing')
-
-/* SQL text to insert entity field value with ID 247e3736-bc93-42e5-9dd5-f649d8af9b3a */;
+UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='418E9648-0EAA-4D37-AEE2-49B204C8AD89';
+/* SQL text to insert entity field value with ID 6d50c950-5c3b-4acc-93c9-1d458ee5c415 */
 
 INSERT INTO "__mj"."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code")
                                     VALUES
-                                       ('247e3736-bc93-42e5-9dd5-f649d8af9b3a', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 3, 'Satisfied', 'Satisfied')
+                                       ('6d50c950-5c3b-4acc-93c9-1d458ee5c415', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 1, 'Config', 'Config');
+/* SQL text to insert entity field value with ID d9d4fe80-1357-432d-844f-5ad6d8f0b23f */
 
-/* SQL text to update ValueListType for entity field ID F6BCA0FE-D58B-4356-9C80-F0468FD9398E */;
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('d9d4fe80-1357-432d-844f-5ad6d8f0b23f', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 2, 'Hooks', 'Hooks');
+/* SQL text to insert entity field value with ID d4de62a4-4a8d-4df9-bb38-0d5384afb5c1 */
 
-UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F6BCA0FE-D58B-4356-9C80-F0468FD9398E'
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('d4de62a4-4a8d-4df9-bb38-0d5384afb5c1', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 3, 'Migration', 'Migration');
+/* SQL text to insert entity field value with ID 69113e75-7abe-42c2-b758-a8a5dcdf29b6 */
 
-/* SQL text to create Entitiy Relationships */;
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('69113e75-7abe-42c2-b758-a8a5dcdf29b6', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 4, 'Packages', 'Packages');
+/* SQL text to insert entity field value with ID 27cac7fb-02c9-4439-822f-bb7401c1b82f */
+
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('27cac7fb-02c9-4439-822f-bb7401c1b82f', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 5, 'Record', 'Record');
+/* SQL text to insert entity field value with ID 0d45f847-99a0-4461-9633-58aa6ce7e26b */
+
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('0d45f847-99a0-4461-9633-58aa6ce7e26b', 'F26B581D-F6E3-47BA-BBBC-167E0F8E5867', 6, 'Schema', 'Schema');
+/* SQL text to update ValueListType for entity field ID F26B581D-F6E3-47BA-BBBC-167E0F8E5867 */
+
+UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F26B581D-F6E3-47BA-BBBC-167E0F8E5867';
+/* SQL text to insert entity field value with ID 10438f88-7021-4cda-86d3-8f9d38cf9383 */
+
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('10438f88-7021-4cda-86d3-8f9d38cf9383', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 1, 'Incompatible', 'Incompatible');
+/* SQL text to insert entity field value with ID 643db15e-a984-44e8-8c37-88031a81f3a2 */
+
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('643db15e-a984-44e8-8c37-88031a81f3a2', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 2, 'Missing', 'Missing');
+/* SQL text to insert entity field value with ID 247e3736-bc93-42e5-9dd5-f649d8af9b3a */
+
+INSERT INTO "__mj"."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code")
+                                    VALUES
+                                       ('247e3736-bc93-42e5-9dd5-f649d8af9b3a', 'F6BCA0FE-D58B-4356-9C80-F0468FD9398E', 3, 'Satisfied', 'Satisfied');
+/* SQL text to update ValueListType for entity field ID F6BCA0FE-D58B-4356-9C80-F0468FD9398E */
+
+UPDATE "__mj"."EntityField" SET "ValueListType"='List' WHERE "ID"='F6BCA0FE-D58B-4356-9C80-F0468FD9398E';
+/* SQL text to create Entitiy Relationships */
 
 DO $$
 BEGIN
@@ -4450,9 +4381,6 @@ BEGIN
         );
     END IF;
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
 
 
 -- ===================== Grants =====================

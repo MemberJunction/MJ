@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { IntegrationDataService, IntegrationSummary, IntegrationRunRow } from '../Integration/services/integration-data.service';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 
 function createService(): IntegrationDataService {
   return new IntegrationDataService();
@@ -15,7 +16,7 @@ function createSummary(overrides: Partial<IntegrationSummary> = {}): Integration
       ID: '1', Name: 'Test', IsActive: true, LastRunID: null,
       LastRunStartedAt: null, LastRunEndedAt: null, Company: 'TestCo',
       Integration: 'Test', DriverClassName: null
-    },
+    } as unknown as MJCompanyIntegrationEntity,
     SourceType: null,
     LatestRun: null,
     RecentRuns: [],

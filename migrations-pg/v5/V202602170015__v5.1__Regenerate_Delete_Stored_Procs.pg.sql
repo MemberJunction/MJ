@@ -21,15 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
 -- ===================== Stored Procedures (sp*) =====================
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteAction"(
@@ -733,15 +724,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- ===================== Triggers =====================
-
-
--- ===================== Data (INSERT/UPDATE/DELETE) =====================
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
 -- ===================== Grants =====================
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
@@ -765,4 +747,3 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfiguration" TO "cdp_Int
 /* spDelete Permissions for MJ: AI Configurations */;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfiguration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
--- ===================== Comments =====================

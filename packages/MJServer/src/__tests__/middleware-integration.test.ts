@@ -264,8 +264,9 @@ describe.skipIf(!HAS_SERVER)('Tier 1: Unauthenticated Middleware Behavior', () =
       });
 
       expect(status).toBe(401);
-      expect(body.code).toBe('JWT_EXPIRED');
-      expect(body.error).toBe('Token expired');
+      expect(body.errors).toBeDefined();
+      expect(body.errors[0].message).toBe('Token expired');
+      expect(body.errors[0].extensions.code).toBe('JWT_EXPIRED');
     });
 
     it('should return 401 for invalid bearer token format', async () => {
