@@ -58,5 +58,35 @@
       "lastModified": "2026-02-13T21:09:25.558Z",
       "checksum": "6673d98d1d35b7e5e29696fb117166a3a7a4d42924c6ff2c73ebb5cda894f533"
     }
+  },
+  {
+    "fields": {
+      "Name": "Demos",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Demonstration queries showcasing MemberJunction query composition features. These reusable queries serve as examples for building composable query pipelines.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "AE8F2E3D-B5C3-4181-B00A-5C0107D377DB"
+    },
+    "sync": {
+      "lastModified": "2026-03-11T20:52:35.187Z",
+      "checksum": "e28cc17d63c29cc6111f39ffa382b3bf714a97e616169bfa6340eefaed5e7795"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Admin",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Administrative queries for system monitoring, configuration, and maintenance.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "C8342F82-898A-40CB-B55A-522BAB580803"
+    },
+    "sync": {
+      "lastModified": "2026-03-11T20:52:35.200Z",
+      "checksum": "0f2b8f7b20598d44397e27a1c8049b5f73fd0654757cfce55a8600378cc8ea5b"
+    }
   }
 ]

@@ -1,12 +1,13 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
-import { RunViewParams, CompositeKey, Metadata } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/core';
 import {
     EntityDataGridComponent,
     AfterRowDoubleClickEventArgs,
     AfterRowClickEventArgs,
     AfterDataLoadEventArgs,
     GridToolbarConfig,
-    GridSelectionMode
+    GridSelectionMode,
+    buildCompositeKey
 } from '@memberjunction/ng-entity-viewer';
 import { FormNavigationEvent } from './types/navigation-events';
 
@@ -74,27 +75,17 @@ export class ExplorerEntityDataGridComponent {
 
         // Emit navigation event if enabled
         if (this.NavigateOnDoubleClick && event.row) {
-            const entity = event.row;
+            // Use the inner grid's resolved EntityInfo - works for both ViewID and EntityName params
+            const entityInfo = this.innerGrid?.EntityInfo;
+            if (!entityInfo) return;
 
-            const entityName = this.Params?.EntityName;
-            if (!entityName) 
-                throw new Error('Misconfiguration of ExplorerEntityDataGrid - no Params.EntityName')
+            const pkey = buildCompositeKey(event.row, entityInfo);
 
-            const md = new Metadata();
-            const entityInfo = md.EntityByName(entityName);
-            if (entityName) {
-                const pkey: CompositeKey = new CompositeKey();
-                const pkeyVals: Record<string, unknown> = {};
-                entityInfo.PrimaryKeys.forEach(pk => pkeyVals[pk.Name] = entity[pk.Name])
-                
-                pkey.LoadFromSimpleObject(pkeyVals);
-
-                this.Navigate.emit({
-                    Kind: 'record',
-                    EntityName: entityName,
-                    PrimaryKey: pkey
-                });
-            }
+            this.Navigate.emit({
+                Kind: 'record',
+                EntityName: entityInfo.Name,
+                PrimaryKey: pkey
+            });
         }
     }
 

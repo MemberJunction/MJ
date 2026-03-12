@@ -24,6 +24,7 @@ import {
   ViewConfigPanelComponent,
   ViewConfigSummary,
   QuickSaveEvent,
+  QuickSaveAdvancedEvent,
   DuplicateViewEvent,
   SharedViewAction,
   buildCompositeKey,
@@ -190,6 +191,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Quick Save Dialog state (F-001)
   public showQuickSaveDialog: boolean = false;
   public quickSaveSummary: ViewConfigSummary | null = null;
+
+  // Pending new-view context: carries name/description/sharing from quick save dialog
+  // to the config panel when user clicks "Customize columns, filters & sorting..."
+  public pendingNewViewName: string = '';
+  public pendingNewViewDescription: string = '';
+  public pendingNewViewIsShared: boolean = false;
 
   // Duplicate View Dialog state (F-005)
   public showDuplicateDialog: boolean = false;
@@ -1134,6 +1141,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onCloseViewConfigPanel(): void {
     this.stateService.closeViewConfigPanel();
+    this.clearPendingNewViewState();
+  }
+
+  private clearPendingNewViewState(): void {
+    this.pendingNewViewName = '';
+    this.pendingNewViewDescription = '';
+    this.pendingNewViewIsShared = false;
+    this.defaultSaveAsNew = false;
   }
 
   // ========================================
@@ -1235,6 +1250,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.closeViewConfigPanel();
           // BUG-002: Show success notification
           this.showNotification(`View "${newView.Name}" created successfully`, 'success', 2500);
+          this.clearPendingNewViewState();
         } else {
           // BUG-001: Panel stays open on failure
           // BUG-002: Show error notification
@@ -1589,7 +1605,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Handle quick save "Open Advanced" - close dialog and open full config panel
    */
-  public onQuickSaveOpenAdvanced(): void {
+  public onQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
+    // Carry form data from quick save dialog to the config panel
+    this.pendingNewViewName = event.Name;
+    this.pendingNewViewDescription = event.Description;
+    this.pendingNewViewIsShared = event.IsShared;
+    this.defaultSaveAsNew = true;
     this.showQuickSaveDialog = false;
     this.stateService.openViewConfigPanel();
     this.cdr.detectChanges();

@@ -29,6 +29,7 @@
     "@memberjunction/core-entities": "5.10.1",
     "@memberjunction/encryption": "5.10.1",
     "@memberjunction/global": "5.10.1",
+    "@memberjunction/query-processor": "5.10.1",
     "@memberjunction/queue": "5.10.1",
     "sql-formatter": "^15.7.0",
     "uuid": "^13.0.0"
