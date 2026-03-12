@@ -7,7 +7,7 @@
 
 feat: Integration scheduled job type, YM/HubSpot connector improvements, CodeGen custom view refresh
 
-- Add ScheduledJobRunID FK to CompanyIntegrationRun and ScheduledJobID FK to CompanyIntegration (migration)
+- Add ScheduledJobRunID FK to CompanyIntegrationRun and ScheduledJobID FK to CompanyIntegration (migration v5.12.x)
 - Add Integration Sync scheduled job type metadata
 - Pass contextUser through HubSpot credential loading for proper server-side data isolation
 - Make YM connector performance defaults (retries, timeouts, batch size, throttle) overrideable per Configuration JSON
