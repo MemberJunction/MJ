@@ -535,6 +535,9 @@
     [externalFilterState]="filterDialogState"
     [isSaving]="isSavingView"
     [DefaultSaveAsNew]="defaultSaveAsNew"
+    [PendingNewViewName]="pendingNewViewName"
+    [PendingNewViewDescription]="pendingNewViewDescription"
+    [PendingNewViewIsShared]="pendingNewViewIsShared"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (saveDefaults)="onSaveDefaultViewSettings($event)"
@@ -580,7 +583,7 @@
     [DefaultSaveAsNew]="defaultSaveAsNew"
     (Save)="onQuickSave($event)"
     (Close)="onQuickSaveClose()"
-    (OpenAdvanced)="onQuickSaveOpenAdvanced()">
+    (OpenAdvanced)="onQuickSaveOpenAdvanced($event)">
   </mj-quick-save-dialog>
 
   <!-- Duplicate View Dialog (F-005) -->

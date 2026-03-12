@@ -235,6 +235,21 @@
       [animation]="currentLoadingAnimation"
       size="large">
     </mj-loading>
+    @if (ShowResetOption) {
+      <div class="loading-reset-panel">
+        <p class="loading-reset-message">
+          <i class="fa-regular fa-clock"></i>
+          Taking longer than expected
+        </p>
+        <p class="loading-reset-hint">
+          This can happen after updates or due to cached data issues.
+        </p>
+        <button class="loading-reset-btn" (click)="ResetApplication()">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          Clear cache &amp; reload
+        </button>
+      </div>
+    }
   </div>
 }
 

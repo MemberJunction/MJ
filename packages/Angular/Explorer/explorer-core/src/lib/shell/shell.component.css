@@ -427,10 +427,95 @@ mj-tab-container ::ng-deep .lm_stack {
 
 .shell-loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100vh;
   background: var(--mj-bg-page);
+}
+
+/* Loading Recovery Reset Panel */
+.loading-reset-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-8);
+  padding: var(--mj-space-6);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+  max-width: 360px;
+  animation: resetPanelFadeIn 0.4s ease-out;
+}
+
+.loading-reset-message {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+}
+
+.loading-reset-message i {
+  font-size: var(--mj-text-base);
+  color: var(--mj-status-warning);
+}
+
+.loading-reset-hint {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  text-align: center;
+  line-height: var(--mj-leading-relaxed);
+}
+
+.loading-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  font-family: var(--mj-font-family);
+  color: var(--mj-brand-primary);
+  background: var(--mj-brand-primary-light);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  transition: var(--mj-transition-colors);
+}
+
+.loading-reset-btn:hover {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-md);
+}
+
+.loading-reset-btn:active {
+  background: var(--mj-brand-primary-active);
+  color: var(--mj-brand-on-primary);
+  transform: scale(0.98);
+}
+
+.loading-reset-btn i {
+  font-size: var(--mj-text-xs);
+}
+
+@keyframes resetPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Hamburger button - hidden on desktop */

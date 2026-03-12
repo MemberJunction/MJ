@@ -485,7 +485,7 @@ export const MJActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -493,8 +493,8 @@ export const MJActionParamSchema = z.object({
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -2429,7 +2429,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Reference to the AIAgent that is being executed in this run`),
     ParentRunID: z.string().nullable().describe(`
         * * Field Name: ParentRunID
-        * * Display Name: Parent Run ID
+        * * Display Name: Parent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.`),
@@ -2523,27 +2523,27 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens Used Rollup
+        * * Display Name: Total Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens Used Rollup
+        * * Display Name: Total Prompt Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens Used Rollup
+        * * Display Name: Total Completion Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
         * * Field Name: TotalCostRollup
-        * * Display Name: Total Cost Rollup
+        * * Display Name: Total Cost (Rollup)
         * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
     ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail ID
+        * * Display Name: Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
@@ -2589,7 +2589,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.`),
@@ -2607,19 +2607,19 @@ export const MJAIAgentRunSchema = z.object({
 each time the agent processes a prompt step.`),
     ConfigurationID: z.string().nullable().describe(`
         * * Field Name: ConfigurationID
-        * * Display Name: Configuration ID
+        * * Display Name: Configuration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
     OverrideModelID: z.string().nullable().describe(`
         * * Field Name: OverrideModelID
-        * * Display Name: Override Model ID
+        * * Display Name: Override Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
     OverrideVendorID: z.string().nullable().describe(`
         * * Field Name: OverrideVendorID
-        * * Display Name: Override Vendor ID
+        * * Display Name: Override Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
@@ -2630,7 +2630,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
         * * Field Name: Verbose
-        * * Display Name: Verbose
+        * * Display Name: Verbose Logging
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
@@ -2651,25 +2651,25 @@ each time the agent processes a prompt step.`),
         * * Description: Human-readable notes and comments about this agent run`),
     ScheduledJobRunID: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRunID
-        * * Display Name: Scheduled Job Run ID
+        * * Display Name: Scheduled Job Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
         * * Description: Links to the scheduled job run that triggered this agent execution. NULL for manually-triggered agent runs. Enables tracking which scheduled jobs spawned which agent executions.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`),
     PrimaryScopeEntityID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntityID
-        * * Display Name: Primary Scope Entity ID
+        * * Display Name: Primary Scope Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record ID
+        * * Display Name: Primary Scope Record
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
     SecondaryScopes: z.string().nullable().describe(`
@@ -2677,61 +2677,66 @@ each time the agent processes a prompt step.`),
         * * Display Name: Secondary Scopes
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
+    ExternalReferenceID: z.string().nullable().describe(`
+        * * Field Name: ExternalReferenceID
+        * * Display Name: External Reference ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run
+        * * Display Name: Parent Run Name
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation
+        * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail Name
         * * SQL Data Type: nvarchar(MAX)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run
+        * * Display Name: Last Run Name
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration Name
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model
+        * * Display Name: Override Model Name
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor
+        * * Display Name: Override Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run
+        * * Display Name: Scheduled Job Run Name
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity
+        * * Display Name: Primary Scope Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
-        * * Display Name: Root Parent Run ID
+        * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
     RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
-        * * Display Name: Root Last Run ID
+        * * Display Name: Root Last Run
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -17149,6 +17154,12 @@ export const MJQuerySchema = z.object({
         * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
         * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
         * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`),
+    Reusable: z.boolean().describe(`
+        * * Field Name: Reusable
+        * * Display Name: Is Reusable
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -17239,6 +17250,74 @@ export const MJQueryCategorySchema = z.object({
 });
 
 export type MJQueryCategoryEntityType = z.infer<typeof MJQueryCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Query Dependencies
+ */
+export const MJQueryDependencySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    QueryID: z.string().describe(`
+        * * Field Name: QueryID
+        * * Display Name: Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the query that contains the composition reference.`),
+    DependsOnQueryID: z.string().describe(`
+        * * Field Name: DependsOnQueryID
+        * * Display Name: Depends On Query
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the referenced (depended-upon) query.`),
+    ReferencePath: z.string().describe(`
+        * * Field Name: ReferencePath
+        * * Display Name: Reference Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The full composition reference path as written in the SQL.`),
+    Alias: z.string().nullable().describe(`
+        * * Field Name: Alias
+        * * Display Name: Alias
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SQL alias used for the composed CTE in the referencing query.`),
+    ParameterMapping: z.string().nullable().describe(`
+        * * Field Name: ParameterMapping
+        * * Display Name: Parameter Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object mapping parameter names to values or pass-through parameter names.`),
+    DetectionMethod: z.union([z.literal('Auto'), z.literal('Manual')]).describe(`
+        * * Field Name: DetectionMethod
+        * * Display Name: Detection Method
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+        * * Description: How the dependency was detected: Auto (parsed from SQL) or Manual (user-specified).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Source Query Name
+        * * SQL Data Type: nvarchar(255)`),
+    DependsOnQuery: z.string().describe(`
+        * * Field Name: DependsOnQuery
+        * * Display Name: Target Query Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJQueryDependencyEntityType = z.infer<typeof MJQueryDependencySchema>;
 
 /**
  * zod schema definition for the entity MJ: Query Entities
@@ -24232,8 +24311,8 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     * * Possible Values 
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
-    *   * Other
     *   * MediaOutput
+    *   * Other
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -24241,10 +24320,10 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'MediaOutput' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -28891,7 +28970,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -28899,7 +28978,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateFinalPayloadValidationResultAllowedValues(result);
+        this.ValidateFinalPayloadValidationResultStatus(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -28907,24 +28986,22 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
-    * The FinalPayloadValidationResult field can be empty, but if a value is set it must be one of the allowed outcomes: Warn, Fail, Retry, or Pass. This ensures that only valid validation results are stored.
+    * The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	// Ensure the value is either null or one of the permitted statuses
-    	if (this.FinalPayloadValidationResult != null &&
-    		!(this.FinalPayloadValidationResult === 'Warn' ||
-    		  this.FinalPayloadValidationResult === 'Fail' ||
-    		  this.FinalPayloadValidationResult === 'Retry' ||
-    		  this.FinalPayloadValidationResult === 'Pass')) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FinalPayloadValidationResult",
-    			"FinalPayloadValidationResult must be one of: Warn, Fail, Retry, Pass, or left empty.",
-    			this.FinalPayloadValidationResult,
-    			ValidationErrorType.Failure
-    		));
+    public ValidateFinalPayloadValidationResultStatus(result: ValidationResult) {
+    	if (this.FinalPayloadValidationResult != null) {
+    		const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    		if (allowedValues.indexOf(this.FinalPayloadValidationResult) === -1) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalPayloadValidationResult",
+    				"The validation result must be one of the following values: " + allowedValues.join(", ") + ".",
+    				this.FinalPayloadValidationResult,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -29430,7 +29507,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ParentRunID
-    * * Display Name: Parent Run ID
+    * * Display Name: Parent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.
@@ -29647,7 +29724,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens Used Rollup
+    * * Display Name: Total Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -29660,7 +29737,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens Used Rollup
+    * * Display Name: Total Prompt Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -29673,7 +29750,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens Used Rollup
+    * * Display Name: Total Completion Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -29686,7 +29763,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCostRollup
-    * * Display Name: Total Cost Rollup
+    * * Display Name: Total Cost (Rollup)
     * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.
     */
@@ -29699,7 +29776,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail ID
+    * * Display Name: Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run
@@ -29793,7 +29870,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy.
@@ -29835,7 +29912,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConfigurationID
-    * * Display Name: Configuration ID
+    * * Display Name: Configuration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.
@@ -29849,7 +29926,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModelID
-    * * Display Name: Override Model ID
+    * * Display Name: Override Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
@@ -29863,7 +29940,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendorID
-    * * Display Name: Override Vendor ID
+    * * Display Name: Override Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
@@ -29890,7 +29967,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Verbose
-    * * Display Name: Verbose
+    * * Display Name: Verbose Logging
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
@@ -29943,7 +30020,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRunID
-    * * Display Name: Scheduled Job Run ID
+    * * Display Name: Scheduled Job Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
     * * Description: Links to the scheduled job run that triggered this agent execution. NULL for manually-triggered agent runs. Enables tracking which scheduled jobs spawned which agent executions.
@@ -29957,7 +30034,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.
@@ -29971,7 +30048,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntityID
-    * * Display Name: Primary Scope Entity ID
+    * * Display Name: Primary Scope Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)
@@ -29985,7 +30062,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record ID
+    * * Display Name: Primary Scope Record
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
     */
@@ -30010,8 +30087,21 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ExternalReferenceID
+    * * Display Name: External Reference ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
+    */
+    get ExternalReferenceID(): string | null {
+        return this.Get('ExternalReferenceID');
+    }
+    set ExternalReferenceID(value: string | null) {
+        this.Set('ExternalReferenceID', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -30020,7 +30110,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run
+    * * Display Name: Parent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -30029,7 +30119,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation
+    * * Display Name: Conversation Name
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -30038,7 +30128,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -30047,7 +30137,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -30056,7 +30146,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run
+    * * Display Name: Last Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -30065,7 +30155,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -30074,7 +30164,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model
+    * * Display Name: Override Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -30083,7 +30173,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor
+    * * Display Name: Override Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -30092,7 +30182,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run
+    * * Display Name: Scheduled Job Run Name
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -30101,7 +30191,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -30110,7 +30200,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity
+    * * Display Name: Primary Scope Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -30119,7 +30209,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootParentRunID
-    * * Display Name: Root Parent Run ID
+    * * Display Name: Root Parent Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentRunID(): string | null {
@@ -30128,7 +30218,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootLastRunID
-    * * Display Name: Root Last Run ID
+    * * Display Name: Root Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastRunID(): string | null {
@@ -67732,6 +67822,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: Reusable
+    * * Display Name: Is Reusable
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.
+    */
+    get Reusable(): boolean {
+        return this.Get('Reusable');
+    }
+    set Reusable(value: boolean) {
+        this.Set('Reusable', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -67952,6 +68056,174 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Query Dependencies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: QueryDependency
+ * * Base View: vwQueryDependencies
+ * * @description Tracks which queries reference other queries via composition syntax. Auto-populated by the query save pipeline.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Query Dependencies')
+export class MJQueryDependencyEntity extends BaseEntity<MJQueryDependencyEntityType> {
+    /**
+    * Loads the MJ: Query Dependencies record from the database
+    * @param ID: string - primary key value to load the MJ: Query Dependencies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJQueryDependencyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: QueryID
+    * * Display Name: Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the query that contains the composition reference.
+    */
+    get QueryID(): string {
+        return this.Get('QueryID');
+    }
+    set QueryID(value: string) {
+        this.Set('QueryID', value);
+    }
+
+    /**
+    * * Field Name: DependsOnQueryID
+    * * Display Name: Depends On Query
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the referenced (depended-upon) query.
+    */
+    get DependsOnQueryID(): string {
+        return this.Get('DependsOnQueryID');
+    }
+    set DependsOnQueryID(value: string) {
+        this.Set('DependsOnQueryID', value);
+    }
+
+    /**
+    * * Field Name: ReferencePath
+    * * Display Name: Reference Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The full composition reference path as written in the SQL.
+    */
+    get ReferencePath(): string {
+        return this.Get('ReferencePath');
+    }
+    set ReferencePath(value: string) {
+        this.Set('ReferencePath', value);
+    }
+
+    /**
+    * * Field Name: Alias
+    * * Display Name: Alias
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SQL alias used for the composed CTE in the referencing query.
+    */
+    get Alias(): string | null {
+        return this.Get('Alias');
+    }
+    set Alias(value: string | null) {
+        this.Set('Alias', value);
+    }
+
+    /**
+    * * Field Name: ParameterMapping
+    * * Display Name: Parameter Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object mapping parameter names to values or pass-through parameter names.
+    */
+    get ParameterMapping(): string | null {
+        return this.Get('ParameterMapping');
+    }
+    set ParameterMapping(value: string | null) {
+        this.Set('ParameterMapping', value);
+    }
+
+    /**
+    * * Field Name: DetectionMethod
+    * * Display Name: Detection Method
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+    * * Description: How the dependency was detected: Auto (parsed from SQL) or Manual (user-specified).
+    */
+    get DetectionMethod(): 'Auto' | 'Manual' {
+        return this.Get('DetectionMethod');
+    }
+    set DetectionMethod(value: 'Auto' | 'Manual') {
+        this.Set('DetectionMethod', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Source Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+
+    /**
+    * * Field Name: DependsOnQuery
+    * * Display Name: Target Query Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DependsOnQuery(): string {
+        return this.Get('DependsOnQuery');
     }
 }
 

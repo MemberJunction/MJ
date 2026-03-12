@@ -24,6 +24,7 @@ import {
   ViewConfigPanelComponent,
   ViewConfigSummary,
   QuickSaveEvent,
+  QuickSaveAdvancedEvent,
   DuplicateViewEvent,
   SharedViewAction,
   buildCompositeKey,
@@ -190,6 +191,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Quick Save Dialog state (F-001)
   public showQuickSaveDialog: boolean = false;
   public quickSaveSummary: ViewConfigSummary | null = null;
+
+  // Pending new-view context: carries name/description/sharing from quick save dialog
+  // to the config panel when user clicks "Customize columns, filters & sorting..."
+  public pendingNewViewName: string = '';
+  public pendingNewViewDescription: string = '';
+  public pendingNewViewIsShared: boolean = false;
 
   // Duplicate View Dialog state (F-005)
   public showDuplicateDialog: boolean = false;
@@ -917,6 +924,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.entityViewerRef?.EnsurePendingChangesSaved();
 
     this.resetRecordCounts();
+    // Clear the previous entity's view — it belongs to the old entity and its sort/filter
+    // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
+    this.selectedViewEntity = null;
     this.selectedEntity = entity;
     // Load user's saved default grid state for this entity (if any)
     // This ensures formatting and column settings persist across sessions
@@ -987,9 +997,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.debouncedFilterText = '';
     }
 
-    // Force refresh to ensure the grid reloads with the new view configuration
+    // detectChanges pushes the new bindings to entity-viewer; its viewEntity setter
+    // already calls deferReload() so no explicit refresh() is needed.
     this.cdr.detectChanges();
-    this.entityViewerRef?.refresh();
   }
 
   /**
@@ -1006,10 +1016,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       if (savedState) {
         const gridState = JSON.parse(savedState);
         if (gridState && Array.isArray(gridState.columnSettings)) {
-          return {
-            columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || []
-          };
+          // Validate columns and sorts against current entity to prevent stale
+          // fields from a previously viewed entity leaking into the query
+          const validColumns = gridState.columnSettings.filter(
+            (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+          );
+          const validSorts = (gridState.sortSettings || []).filter(
+            (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+          );
+          if (validColumns.length > 0) {
+            return {
+              columnSettings: validColumns,
+              sortSettings: validSorts
+            };
+          }
         }
       }
     } catch (error) {
@@ -1033,11 +1053,27 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       // Validate structure - expect columnSettings array
       if (parsed && Array.isArray(parsed.columnSettings)) {
-        return {
-          columnSettings: parsed.columnSettings,
-          sortSettings: parsed.sortSettings || [],
-          aggregates: parsed.aggregates || undefined
-        };
+        // Validate columns and sorts against current entity to prevent stale
+        // fields from a previously viewed entity leaking into the query
+        const validColumns = this.selectedEntity
+          ? parsed.columnSettings.filter(
+              (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+            )
+          : parsed.columnSettings;
+        const validSorts = this.selectedEntity
+          ? (parsed.sortSettings || []).filter(
+              (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+            )
+          : parsed.sortSettings || [];
+
+        if (validColumns.length > 0) {
+          return {
+            columnSettings: validColumns,
+            sortSettings: validSorts,
+            aggregates: parsed.aggregates || undefined
+          };
+        }
+        return null;
       }
 
       return null;
@@ -1105,6 +1141,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public onCloseViewConfigPanel(): void {
     this.stateService.closeViewConfigPanel();
+    this.clearPendingNewViewState();
+  }
+
+  private clearPendingNewViewState(): void {
+    this.pendingNewViewName = '';
+    this.pendingNewViewDescription = '';
+    this.pendingNewViewIsShared = false;
+    this.defaultSaveAsNew = false;
   }
 
   // ========================================
@@ -1206,6 +1250,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.closeViewConfigPanel();
           // BUG-002: Show success notification
           this.showNotification(`View "${newView.Name}" created successfully`, 'success', 2500);
+          this.clearPendingNewViewState();
         } else {
           // BUG-001: Panel stays open on failure
           // BUG-002: Show error notification
@@ -1560,7 +1605,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Handle quick save "Open Advanced" - close dialog and open full config panel
    */
-  public onQuickSaveOpenAdvanced(): void {
+  public onQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
+    // Carry form data from quick save dialog to the config panel
+    this.pendingNewViewName = event.Name;
+    this.pendingNewViewDescription = event.Description;
+    this.pendingNewViewIsShared = event.IsShared;
+    this.defaultSaveAsNew = true;
     this.showQuickSaveDialog = false;
     this.stateService.openViewConfigPanel();
     this.cdr.detectChanges();

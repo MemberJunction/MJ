@@ -197,6 +197,7 @@
       [QueryName]="spec?.title || 'Untitled Query'"
       [QueryDescription]="''"
       [SQL]="spec?.metadata?.sql || ''"
+      [Plan]="spec?.plan || ''"
       (Saved)="OnQuerySaved($event)"
       (Cancelled)="ShowSaveDialog = false">
     </mj-save-query-panel>

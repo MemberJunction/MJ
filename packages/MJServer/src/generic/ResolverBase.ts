@@ -66,12 +66,17 @@ export class ResolverBase {
    * @returns The processed data object
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo): Promise<any> {
+    // Return null for empty objects (e.g. when no rows found due to RLS filtering)
+    if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
     // fields, iterate through the dataObject and REPLACE the property that has the field name
     // with the CodeName, because we can't transfer those via GraphQL as they are not
     // valid property names in GraphQL
-    if (dataObject) {
+    {
       const md = new Metadata();
       const entityInfo = md.Entities.find((e) => e.Name === entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
@@ -1116,8 +1121,9 @@ export class ResolverBase {
             entityObject.SetMany(input);
           }
         } else {
-          // save failed, return null
-          throw new GraphQLError(`Record not found for ${entityName} with key ${JSON.stringify(cKey)}`, {
+          // Use a generic message to avoid leaking whether a record exists — distinguishing
+          // "not found" from "access denied" would let an attacker enumerate valid record IDs.
+          throw new GraphQLError(`Record not found or access denied`, {
             extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
           });
         }
@@ -1352,7 +1358,14 @@ export class ResolverBase {
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
-      await entityObject.InnerLoad(key);
+      const loadSuccess = await entityObject.InnerLoad(key);
+      if (!loadSuccess) {
+        // Use a generic message to avoid leaking whether a record exists — distinguishing
+        // "not found" from "access denied" would let an attacker enumerate valid record IDs.
+        throw new GraphQLError(`Record not found or access denied`, {
+          extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
+        });
+      }
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);

@@ -1,6 +1,21 @@
+/* Override shared form-styles to enable flex layout */
+:host {
+    display: block;
+    height: 100%;
+}
+
 .record-form-container {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     padding: 10px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.record-form {
+    min-height: 0 !important;
 }
 
 .custom-toolbar-actions {

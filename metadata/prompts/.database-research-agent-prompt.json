@@ -56,6 +56,36 @@
             "lastModified": "2026-02-13T20:48:56.684Z",
             "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 15
+          },
+          "primaryKey": {
+            "ID": "0CA11D35-8641-46A8-AC8E-3D388985E7C3"
+          },
+          "sync": {
+            "lastModified": "2026-03-11T21:21:19.103Z",
+            "checksum": "be351745fd5a0ea6310d65bb442a21d90c96deda88206cff4ab854a3c902e0ec"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "88F113B1-9B41-41B4-B097-A7DA279F7243"
+          },
+          "sync": {
+            "lastModified": "2026-03-11T21:21:19.118Z",
+            "checksum": "f5ed20b3feebae35f0c06a6fafa3f7506f6e4728dbd0c55082ef1ba8d5d85b1b"
+          }
         }
       ]
     },

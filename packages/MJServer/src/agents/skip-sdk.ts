@@ -141,6 +141,13 @@ export interface SkipCallOptions {
      * the client should pass that payload back in the next request.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip via SkipProxyAgent, this contains the MJ-side Agent Run ID for cross-system
+     * correlation and debugging.
+     */
+    externalReferenceID?: string;
 }
 
 /**
@@ -320,7 +327,8 @@ export class SkipSDK {
             includeRequests = false,
             forceEntityRefresh = false,
             includeCallbackAuth = true,
-            payload
+            payload,
+            externalReferenceID
         } = options;
 
         // Build base request with metadata
@@ -360,7 +368,8 @@ export class SkipSDK {
             apiKeys: baseRequest.apiKeys,
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
-            callingServerAccessToken: baseRequest.callingServerAccessToken
+            callingServerAccessToken: baseRequest.callingServerAccessToken,
+            externalReferenceID
         };
 
         return request;
@@ -462,6 +471,7 @@ export class SkipSDK {
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -497,7 +507,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }

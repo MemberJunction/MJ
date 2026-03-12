@@ -168,6 +168,28 @@
     background: var(--mj-bg-surface);
 }
 
+/* Technical Description Markdown */
+.technical-description-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.technical-description-content :host ::ng-deep .mj-markdown-container {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Technical Description Markdown */
+.technical-description-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.technical-description-content :host ::ng-deep .mj-markdown-container {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 /* Info Rows */
 .info-row {
     display: flex;
@@ -314,16 +336,10 @@
     overflow: hidden;
 }
 
-.sql-code {
-    margin: 0;
-    padding: 16px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: var(--mj-text-xs);
-    line-height: 1.5;
-    color: #d4d4d4;
-    white-space: pre-wrap;
-    word-break: break-word;
-    overflow-x: auto;
+.sql-container mj-code-editor {
+    display: block;
+    max-height: 400px;
+    overflow: auto;
 }
 
 /* Empty State */
@@ -402,4 +418,122 @@
 
 .panel-content::-webkit-scrollbar-thumb:hover {
     background: var(--mj-text-disabled);
+}
+
+/* Dependent Queries */
+.dependents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dependent-item {
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #ef6c00;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dependent-item:hover {
+    background: #fff3e0;
+    border-left-color: #e65100;
+}
+
+.dependent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dependent-icon {
+    color: #ef6c00;
+    font-size: 11px;
+}
+
+.dependent-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+}
+
+.dependent-ref-path {
+    display: block;
+    margin-top: 4px;
+    margin-left: 19px;
+    font-size: 11px;
+    color: #888;
+}
+
+.dependents-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 0;
+    font-size: 11px;
+    color: #999;
+}
+
+.dependents-hint i {
+    font-size: 10px;
+}
+
+/* Dependent Queries */
+.dependents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dependent-item {
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #ef6c00;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dependent-item:hover {
+    background: #fff3e0;
+    border-left-color: #e65100;
+}
+
+.dependent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dependent-icon {
+    color: #ef6c00;
+    font-size: 11px;
+}
+
+.dependent-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+}
+
+.dependent-ref-path {
+    display: block;
+    margin-top: 4px;
+    margin-left: 19px;
+    font-size: 11px;
+    color: #888;
+}
+
+.dependents-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 0;
+    font-size: 11px;
+    color: #999;
+}
+
+.dependents-hint i {
+    font-size: 10px;
 }

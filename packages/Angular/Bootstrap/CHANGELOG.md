@@ -1,5 +1,80 @@
 # @memberjunction/ng-bootstrap
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+- Updated dependencies [fc2bd47]
+- Updated dependencies [457afcf]
+  - @memberjunction/graphql-dataprovider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-explorer-core@5.11.0
+  - @memberjunction/ng-core-entity-forms@5.11.0
+  - @memberjunction/ng-dashboards@5.11.0
+  - @memberjunction/ng-artifacts@5.11.0
+  - @memberjunction/ng-dashboard-viewer@5.11.0
+  - @memberjunction/ng-explorer-settings@5.11.0
+  - @memberjunction/ng-shared@5.11.0
+  - @memberjunction/ng-file-storage@5.11.0
+  - @memberjunction/ai-engine-base@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/ng-auth-services@5.11.0
+  - @memberjunction/communication-types@5.11.0
+  - @memberjunction/entity-communications-base@5.11.0
+  - @memberjunction/core-entities@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/ng-auth-services@5.10.1
+- @memberjunction/ng-core-entity-forms@5.10.1
+- @memberjunction/ng-dashboards@5.10.1
+- @memberjunction/ng-explorer-core@5.10.1
+- @memberjunction/ng-explorer-settings@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-artifacts@5.10.1
+- @memberjunction/ng-dashboard-viewer@5.10.1
+- @memberjunction/ng-file-storage@5.10.1
+- @memberjunction/communication-types@5.10.1
+- @memberjunction/entity-communications-base@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [3df5e4b]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-core-entity-forms@5.10.0
+  - @memberjunction/ng-dashboards@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/ng-auth-services@5.10.0
+  - @memberjunction/ng-explorer-core@5.10.0
+  - @memberjunction/ng-explorer-settings@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-artifacts@5.10.0
+  - @memberjunction/ng-dashboard-viewer@5.10.0
+  - @memberjunction/ng-file-storage@5.10.0
+  - @memberjunction/communication-types@5.10.0
+  - @memberjunction/entity-communications-base@5.10.0
+
 ## 5.9.0
 
 ### Patch Changes

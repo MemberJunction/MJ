@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- SQL Logging Session
@@ -1599,7 +1584,7 @@ erDiagram
 ```
 
 ## Filters & Conditions
-- Runs filtered to last 30 days (`StartedAt >= DATEADD(DAY, -30, GETDATE())`)
+- Runs filtered to last 30 days (`StartedAt >= DATEADD(DAY, -30, NOW())`)
 - Grouped by agent name
 - Sorted by total runs descending
 ````
@@ -1855,7 +1840,7 @@ FROM [__mj].vwAIAgents a
         ON r."AgentID" = a."ID"
 
 WHERE
-    r."StartedAt" >= DATEADD(DAY, -30, GETDATE())   -- Last 30 days
+    r."StartedAt" >= DATEADD(DAY, -30, NOW())   -- Last 30 days
 
 GROUP BY
     a."Name"
@@ -2993,12 +2978,3 @@ BEGIN
   p_Status_ebb552cc := 'Active';
   PERFORM __mj."spCreateTestType"(p_ID := p_ID_ebb552cc, p_Name := p_Name_ebb552cc, p_Description := p_Description_ebb552cc, p_DriverClass := p_DriverClass_ebb552cc, p_Status := p_Status_ebb552cc, p_VariablesSchema := p_VariablesSchema_ebb552cc);
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================
