@@ -28,7 +28,6 @@ import {
   RowSelectionOptions,
   GetRowIdParams,
   themeAlpine,
-  colorSchemeVariable,
   SortChangedEvent as AgSortChangedEvent,
   type Theme,
   ColumnResizedEvent,
@@ -1217,10 +1216,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private gridApi: GridApi | null = null;
 
   /** AG Grid theme (v34+) with custom selection colors */
-  public agGridTheme: Theme = themeAlpine.withPart(colorSchemeVariable).withParams({
-    headerBackgroundColor: 'var(--mj-bg-surface-card)',
-    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+  public agGridTheme: Theme = themeAlpine.withParams({
+    backgroundColor: 'var(--mj-bg-surface)',
+    foregroundColor: 'var(--mj-text-primary)',
+    textColor: 'var(--mj-text-primary)',
     borderColor: 'var(--mj-border-default)',
+    chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerTextColor: 'var(--mj-text-secondary)',
+    cellTextColor: 'var(--mj-text-primary)',
+    subtleTextColor: 'var(--mj-text-muted)',
+    dataBackgroundColor: 'var(--mj-bg-surface)',
+    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+    rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+    selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+    accentColor: 'var(--mj-brand-primary)',
+    borderRadius: 'var(--mj-radius-sm)',
+    browserColorScheme: 'inherit',
   });
 
   /** AG Grid row selection configuration */

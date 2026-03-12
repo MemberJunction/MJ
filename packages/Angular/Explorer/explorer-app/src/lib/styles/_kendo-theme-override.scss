@@ -1280,7 +1280,7 @@ kendo-buttongroup {
   background: var(--mj-bg-surface-card) !important;
   border-color: var(--mj-border-default) !important;
   color: var(--mj-text-primary) !important;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-color-neutral-900) 20%, transparent);
+  box-shadow: var(--mj-shadow-lg);
 }
 
 // List container

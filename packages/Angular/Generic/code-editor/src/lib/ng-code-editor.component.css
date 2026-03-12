@@ -102,57 +102,13 @@
 .mj-code-editor-content.has-toolbar-bottom {
   border-bottom: none;
 }
-.mj-code-editor-content ::ng-deep .cm-editor {
+/* CodeMirror editor surface, gutters, cursor, selection, and syntax highlighting
+   are all themed programmatically via EditorView.theme() + HighlightStyle.define()
+   in the component TypeScript. This uses MJ design tokens (CSS custom properties)
+   so the editor adapts automatically to dark mode. See _buildMjTheme() and
+   _buildMjHighlightStyle() in ng-code-editor.component.ts. */
+.mj-code-editor-content .cm-editor {
   height: 100%;
-  background: var(--mj-bg-surface) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-editor.cm-focused {
-  outline: none;
-}
-.mj-code-editor-content ::ng-deep .cm-scroller {
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: var(--mj-text-sm);
-}
-.mj-code-editor-content ::ng-deep .cm-content {
-  min-height: 100%;
-  color: var(--mj-text-primary) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-gutters {
-  background: var(--mj-bg-surface-sunken) !important;
-  border-right: 1px solid var(--mj-border-default) !important;
-  color: var(--mj-text-muted) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-gutter.cm-lineNumbers .cm-gutterElement {
-  color: var(--mj-text-muted) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-activeLineGutter,
-.mj-code-editor-content ::ng-deep .cm-activeLine {
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent) !important;
-}
-/* JSON syntax highlighting — dark-mode safe colors */
-.mj-code-editor-content ::ng-deep .cm-string {
-  color: var(--mj-color-success-400, #4ade80) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-number {
-  color: var(--mj-color-warning-400, #facc15) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-property {
-  color: var(--mj-color-info-400, #60a5fa) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-keyword {
-  color: var(--mj-color-error-400, #f87171) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-atom {
-  color: var(--mj-color-warning-400, #facc15) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-punctuation {
-  color: var(--mj-text-secondary) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-cursor {
-  border-left-color: var(--mj-text-primary) !important;
-}
-.mj-code-editor-content ::ng-deep .cm-selectionBackground {
-  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) !important;
 }
 
 @media (max-width: 576px) {
