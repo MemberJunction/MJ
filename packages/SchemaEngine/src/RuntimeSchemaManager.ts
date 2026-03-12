@@ -546,29 +546,70 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     /**
      * Restart MJAPI via PM2.
+     *
+     * If MJAPI isn't currently managed by PM2, starts it using the ecosystem
+     * config. After restart, polls the GraphQL endpoint until the server is
+     * ready to accept requests.
      */
     private async restartMJAPI(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
+        const workDir = process.env.RSU_WORK_DIR || process.cwd();
         const processName = process.env.RSU_PM2_PROCESS_NAME || 'mjapi';
 
-        await execAsync(`pm2 restart ${processName}`, { timeout: 30_000 });
+        // Check if MJAPI is already managed by PM2
+        const isManaged = await this.isPM2ProcessRunning(processName);
 
-        // Poll health endpoint until MJAPI is ready
-        const maxWaitMs = 30_000;
+        if (isManaged) {
+            await execAsync(`pm2 restart ${processName}`, { timeout: 30_000 });
+        } else {
+            // First time: start via ecosystem config
+            await execAsync(`cd ${workDir} && pm2 start ecosystem.config.cjs`, { timeout: 30_000 });
+        }
+
+        // Poll the GraphQL endpoint until MJAPI is ready
+        return this.waitForMJAPI();
+    }
+
+    /**
+     * Check if a PM2 process exists (running or stopped).
+     */
+    private async isPM2ProcessRunning(processName: string): Promise<boolean> {
+        const { execAsync } = await this.getExecAsync();
+        try {
+            const { stdout } = await execAsync(`pm2 jlist`, { timeout: 10_000 });
+            const processes: Array<{ name: string }> = JSON.parse(stdout);
+            return processes.some(p => p.name === processName);
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Poll the MJAPI GraphQL endpoint until the server responds.
+     * Uses a simple GET to the server root — Apollo Server returns a landing
+     * page or 400 (both indicate the server is up and accepting connections).
+     */
+    private async waitForMJAPI(): Promise<boolean> {
+        const maxWaitMs = 120_000; // 2 minutes — MJAPI can be slow to start
         const startTime = Date.now();
         const port = process.env.GRAPHQL_PORT || '4000';
+        const url = `http://localhost:${port}/`;
 
         while (Date.now() - startTime < maxWaitMs) {
             try {
-                const response = await fetch(`http://localhost:${port}/health`);
-                if (response.ok) return true;
+                const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+                // Any HTTP response means the server is up
+                if (response.status < 500) return true;
             } catch {
                 /* server not ready yet */
             }
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2_000));
         }
 
-        throw new RSUError('RESTART_TIMEOUT', `MJAPI did not become healthy within ${maxWaitMs / 1000}s`);
+        throw new RSUError(
+            'RESTART_TIMEOUT',
+            `MJAPI did not become healthy within ${maxWaitMs / 1000}s on port ${port}`
+        );
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────
