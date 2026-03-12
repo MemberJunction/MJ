@@ -7,6 +7,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 @Component({
   standalone: false,
     selector: 'mj-record-resource',
+    styles: [`:host { display: block; height: 100%; width: 100%; }`],
     template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" ></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {

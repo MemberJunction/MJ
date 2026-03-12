@@ -1,3 +1,4 @@
+import { UUIDsEqual } from "@memberjunction/global";
 import { Metadata } from "./metadata";
 import { QueryInfo } from "./queryInfo";
 import { DatabasePlatform } from "./platformSQL";
@@ -276,7 +277,7 @@ export class QueryCompositionEngine {
 
             // Track dependency
             const parentDeps = dependencyGraph.get('__current__') || [];
-            if (!parentDeps.includes(referencedQuery.ID)) {
+            if (!parentDeps.some(id => UUIDsEqual(id, referencedQuery.ID))) {
                 parentDeps.push(referencedQuery.ID);
                 dependencyGraph.set('__current__', parentDeps);
             }
