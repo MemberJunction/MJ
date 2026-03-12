@@ -120,7 +120,7 @@ Also note PG-only files (in `migrations-pg/v5/` with no SQL Server source) — t
 
 Report: "Found N migrations needing PG conversion" with the full list.
 
-If zero missing, skip to Phase 3. **Phase 3 and Phase 4 ALWAYS run** — even when all conversions succeed perfectly, these phases provide essential confidence that the full migration stack works end-to-end.
+If zero missing, skip to Phase 3. **Phase 3, Phase 4, and Phase 4b ALWAYS run** — even when all conversions succeed perfectly, these phases provide essential confidence that the full migration stack works end-to-end.
 
 ---
 
@@ -622,6 +622,146 @@ Poll for completion, read results.
 
 ---
 
+## Phase 4b: Deep CRUD Workflow Testing
+
+**ALWAYS run this phase** after Phase 4 passes. Phase 4 validates that the app loads and renders; Phase 4b validates that **data mutation, navigation, and audit tracking** work correctly against PostgreSQL. This catches subtle issues like trigger failures, Record Changes tracking, and save/update operations that smoke tests miss.
+
+Phase 4b reuses the MJAPI and MJExplorer instances started in Phase 4. If they were stopped, restart them with the same configuration.
+
+### Phase 4b Task Prompt
+
+```
+You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
+
+Your job: Run a DEEP CRUD workflow test against the PostgreSQL database {{PG_DB_NAME}} using Playwright. MJAPI and MJExplorer should already be running from Phase 4. If not, start them.
+
+## Prerequisites Check
+
+Check if MJAPI is running on port 4000 and MJExplorer on port 4200:
+```bash
+curl -s http://localhost:4000/ > /dev/null 2>&1 && echo "MJAPI: UP" || echo "MJAPI: DOWN"
+curl -s http://localhost:4200/ > /dev/null 2>&1 && echo "Explorer: UP" || echo "Explorer: DOWN"
+```
+
+If either is down, start them:
+- MJAPI: `cd /workspace/MJ/packages/MJAPI && DB_TYPE=postgresql PG_HOST=postgres-claude PG_PORT=5432 PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 PG_DATABASE={{PG_DB_NAME}} DB_HOST=postgres-claude DB_PORT=5432 DB_USERNAME=mj_admin DB_PASSWORD=Claude2Pg99 DB_DATABASE={{PG_DB_NAME}} GRAPHQL_PORT=4000 npm run start > /tmp/mjapi.log 2>&1 &`
+- MJExplorer: Kill port 4200 first (`fuser -k 4200/tcp 2>/dev/null`), then `cd /workspace/MJ/packages/MJExplorer && NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 > /tmp/mjexplorer.log 2>&1 &`
+- Wait for both to be ready before proceeding.
+
+## Auth0 Credentials
+- Email: da-robot-tester@bluecypress.io
+- Password: !!SoDamnSecureItHurt$
+
+## Database
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database={{PG_DB_NAME}}
+
+## Playwright Tools
+Use Playwright MCP tools (browser_navigate, browser_snapshot, browser_click, browser_fill_form, browser_type, browser_press_key, browser_take_screenshot, browser_console_messages, browser_wait_for) for all browser interactions.
+
+## ================================================================
+## DEEP CRUD WORKFLOW TESTS
+## ================================================================
+
+### Test CRUD_LOGIN: Log in to the app
+1. Navigate to http://localhost:4200
+2. Complete Auth0 login (email first, then password, click Continue/Submit)
+3. Wait for redirect back to app
+4. Verify logged-in state (greeting message or app shell)
+
+### Test CRUD_NAVIGATE_TO_ACTIONS: Navigate to Data Explorer → Actions
+1. From the home page, navigate to the "Data Explorer" application (click on it)
+2. In Data Explorer, find and navigate to the "Actions" entity list
+3. Take a snapshot — verify a grid/table of Action records is displayed
+4. Note how many rows are showing
+
+### Test CRUD_OPEN_ACTION_RECORD: Open an Action record
+1. Click on the first Action record in the grid to open its detail form
+2. Take a snapshot — verify the form loaded with fields populated
+3. Note the record's Name and other key fields
+4. Note the Action's Category field value
+
+### Test CRUD_NAVIGATE_TO_CATEGORY: Navigate to the Action's Category
+1. From the Action record, find and click on the Action Category link/reference
+   - This might be a clickable link on the Category field, or you may need to navigate to "Action Categories" entity list and find it there
+2. Take a snapshot — verify the Action Category record loaded
+3. Note the current Name of the category
+
+### Test CRUD_EDIT_CATEGORY_NAME: Edit the Category name
+1. Find the "Name" field on the Action Category form
+2. Append " - PG Test" to the existing name (e.g., "My Category" → "My Category - PG Test")
+3. Save the record (click Save button or use keyboard shortcut)
+4. Wait for save confirmation
+5. Take a snapshot — verify the save succeeded (no error messages)
+6. Note the new name
+
+### Test CRUD_VERIFY_NAME_CHANGED: Verify the name change persisted
+1. Navigate away from the record (go back to the Action Categories list)
+2. Find the record you just edited
+3. Verify the updated name shows in the grid with " - PG Test" appended
+4. Take a snapshot
+
+### Test CRUD_CHECK_RECORD_CHANGES: Verify Record Changes tracked the edit
+1. Go back to the Action Category record you edited
+2. Look for a "Record Changes" or "History" or "Audit" tab/section on the record
+   - In MJ, record changes are tracked automatically. Look for a tab, panel, or link that shows change history
+3. Take a snapshot — verify that a Record Change entry exists showing:
+   - The Name field was changed
+   - The old and new values are visible
+   - The timestamp is recent
+
+### Test CRUD_REVERT_NAME: Revert the category name (cleanup)
+1. Edit the Name field again — remove " - PG Test" to restore the original name
+2. Save the record
+3. Verify the original name is restored
+4. Take a snapshot
+
+### Test CRUD_CONSOLE_CHECK: Check for critical errors
+Check browser console for any critical JavaScript errors during the entire workflow.
+Critical errors include: _mj__CreatedAt, Cannot return null, non-nullable field, save failures.
+
+## Write Results
+
+Write to /tmp/phase4b-result.json:
+```json
+{
+  "tests": [
+    {"name": "CRUD_LOGIN", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_NAVIGATE_TO_ACTIONS", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_OPEN_ACTION_RECORD", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_NAVIGATE_TO_CATEGORY", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_EDIT_CATEGORY_NAME", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_VERIFY_NAME_CHANGED", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_CHECK_RECORD_CHANGES", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_REVERT_NAME", "status": "PASS|FAIL", "details": "..."},
+    {"name": "CRUD_CONSOLE_CHECK", "status": "PASS|FAIL", "details": "..."}
+  ],
+  "overallPass": true/false,
+  "categoryEdited": {"original": "...", "modified": "...", "reverted": true/false},
+  "recordChangeDetected": true/false,
+  "consoleErrors": [],
+  "notes": "any additional observations"
+}
+```
+
+**IMPORTANT: Status must be PASS or FAIL only. SKIP is NOT allowed.**
+
+Also write human-readable summary to /tmp/phase4b-summary.txt.
+
+IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the very last line of your output.
+```
+
+### Orchestrator Validation
+
+After reading Phase 4b results:
+1. **No SKIP statuses**: All 9 tests must be PASS or FAIL
+2. **Record Changes detected**: `recordChangeDetected` must be true — this validates PG triggers and audit tracking
+3. **Category reverted**: `categoryEdited.reverted` must be true — test data was cleaned up
+4. **No critical console errors**: No `_mj__CreatedAt`, `Cannot return null`, or save-related errors
+
+If validation fails, debug and re-run before proceeding to Phase 5.
+
+---
+
 ## Phase 5: Report Generation and File Sync
 
 ### Step 5a: Copy converted migrations back to host
@@ -685,7 +825,11 @@ Host: Docker workbench (claude-dev)
 **PostgreSQL:** [list]
 **SQL Server:** [list]
 
-## Smoke Test Results
+## Smoke Test Results (Phase 4)
+| Test | Result | Details |
+|------|--------|---------|
+
+## CRUD Workflow Results (Phase 4b)
 | Test | Result | Details |
 |------|--------|---------|
 
