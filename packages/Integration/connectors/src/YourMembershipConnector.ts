@@ -27,6 +27,20 @@ export interface YMConnectionConfig {
     APIKey: string;
     /** YM API password (used as Password for session auth) */
     APIPassword: string;
+
+    // ── Optional performance overrides (all have defaults) ──────────
+    /** Maximum retries for rate-limited or failed requests. Default: 5 */
+    MaxRetries?: number;
+    /** HTTP request timeout in milliseconds. Default: 30000 */
+    RequestTimeoutMs?: number;
+    /** Minimum milliseconds between API requests to avoid rate limiting. Default: 600 */
+    MinRequestIntervalMs?: number;
+    /** Number of members to enrich per batch before writing to DB. Default: 500 */
+    EnrichBatchSize?: number;
+    /** JSON parsing timeout in milliseconds. Default: 30000 */
+    JsonTimeoutMs?: number;
+    /** Detail enrichment timeout per record in milliseconds. Default: 45000 */
+    EnrichTimeoutMs?: number;
 }
 
 /** Extended auth context with YM-specific session and config data */
@@ -83,7 +97,18 @@ const METADATA_KEYS = new Set([
  *   2. Receive SessionId
  *   3. Pass SessionId as X-SS-ID header on all data requests
  *
- * Configuration JSON: { "ClientID": "25363", "APIKey": "...", "APIPassword": "..." }
+ * Configuration JSON (required + optional overrides):
+ * {
+ *   "ClientID": "25363",
+ *   "APIKey": "...",
+ *   "APIPassword": "...",
+ *   "MaxRetries": 5,             // optional, default: 5
+ *   "RequestTimeoutMs": 30000,   // optional, default: 30000
+ *   "MinRequestIntervalMs": 600, // optional, default: 600
+ *   "EnrichBatchSize": 500,      // optional, default: 500
+ *   "JsonTimeoutMs": 30000,      // optional, default: 30000
+ *   "EnrichTimeoutMs": 45000     // optional, default: 45000
+ * }
  */
 @RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')
 export class YourMembershipConnector extends BaseRESTIntegrationConnector {
@@ -93,8 +118,19 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
 
-    /** Current adaptive request interval — increases on 429, recovers toward MIN on success */
+    /** Resolved config (populated after first Authenticate call) */
+    private _config: YMConnectionConfig | null = null;
+
+    /** Current adaptive request interval — increases on 429, recovers toward resolved MIN */
     private currentRequestIntervalMs = MIN_REQUEST_INTERVAL_MS;
+
+    // ── Per-instance config accessors (fall back to module-level defaults) ──
+    private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
+    private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
+    private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
+    private get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
+    private get effectiveJsonTimeoutMs(): number { return this._config?.JsonTimeoutMs ?? JSON_TIMEOUT_MS; }
+    private get effectiveEnrichTimeoutMs(): number { return this._config?.EnrichTimeoutMs ?? ENRICH_TIMEOUT_MS; }
 
     /** Cache of the filtered member list pending enrichment, shared across batch calls */
     private memberFetchCache: {
@@ -109,6 +145,10 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<RESTAuthContext> {
         const config = await this.ParseConfig(companyIntegration, contextUser);
+        // Store config so per-instance performance overrides take effect immediately
+        this._config = config;
+        // Sync the adaptive interval to the configured minimum on every fresh auth
+        this.currentRequestIntervalMs = this.effectiveMinRequestIntervalMs;
         const sessionId = await this.GetSession(config);
         const auth: YMAuthContext = { SessionID: sessionId, Config: config };
         return auth;
@@ -134,13 +174,14 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             await this.Sleep(this.currentRequestIntervalMs - elapsed);
         }
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const maxRetries = this.effectiveMaxRetries;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             let response: Response;
             try {
                 response = await this.FetchWithTimeout(url, method, currentHeaders);
             } catch (err) {
                 if (this.IsTimeoutError(err)) {
-                    console.warn(`YM timeout on ${url}, re-authenticating (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                    console.warn(`YM timeout on ${url}, re-authenticating (attempt ${attempt + 1}/${maxRetries})`);
                     await this.RefreshSession(ymAuth, currentHeaders);
                     continue;
                 }
@@ -155,24 +196,25 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             if (response.status === 429) {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
                 this.currentRequestIntervalMs = Math.min(this.currentRequestIntervalMs * 2, 10000);
-                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
+                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
                 await this.Sleep(delayMs);
                 continue;
             }
 
             this.lastRequestTime = Date.now();
-            // Gradually recover interval toward minimum on successful requests
-            if (this.currentRequestIntervalMs > MIN_REQUEST_INTERVAL_MS) {
+            // Gradually recover interval toward configured minimum on successful requests
+            const minInterval = this.effectiveMinRequestIntervalMs;
+            if (this.currentRequestIntervalMs > minInterval) {
                 this.currentRequestIntervalMs = Math.max(
                     this.currentRequestIntervalMs - 50,
-                    MIN_REQUEST_INTERVAL_MS
+                    minInterval
                 );
             }
-            const body = await this.JsonWithTimeout(response, JSON_TIMEOUT_MS);
+            const body = await this.JsonWithTimeout(response, this.effectiveJsonTimeoutMs);
             return this.BuildRESTResponse(response, body);
         }
 
-        throw new Error(`YM API request failed after ${MAX_RETRIES} retries: ${url}`);
+        throw new Error(`YM API request failed after ${maxRetries} retries: ${url}`);
     }
 
     protected NormalizeResponse(
@@ -335,7 +377,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             };
         }
 
-        const batchSlice = changedRecords.slice(offset, offset + ENRICH_BATCH_SIZE);
+        const batchSlice = changedRecords.slice(offset, offset + this.effectiveEnrichBatchSize);
         const nextOffset = offset + batchSlice.length;
         const hasMore = nextOffset < total;
 
@@ -637,7 +679,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             const detailPath = `Members/${record.ExternalID}`;
             const fetchPromise = this.MakeYMRequest(auth, detailPath);
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(`Detail fetch timed out for ${record.ExternalID}`)), ENRICH_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(`Detail fetch timed out for ${record.ExternalID}`)), this.effectiveEnrichTimeoutMs)
             );
             const json = await Promise.race([fetchPromise, timeoutPromise]);
             const normalized = this.NormalizeMemberDetail(json);
@@ -736,7 +778,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     }
 
     private ParseConfigJson(json: string): YMConnectionConfig {
-        const parsed = JSON.parse(json) as Record<string, string>;
+        const parsed = JSON.parse(json) as Record<string, unknown>;
         const clientId = parsed['ClientID'] || parsed['clientId'] || parsed['ClientId'];
         const apiKey = parsed['APIKey'] || parsed['apiKey'] || parsed['ApiKey'];
         const apiPassword = parsed['APIPassword'] || parsed['apiPassword'] || parsed['ApiPassword'];
@@ -745,7 +787,24 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             throw new Error('Configuration JSON must contain ClientID, APIKey, and APIPassword (any casing)');
         }
 
-        return { ClientID: String(clientId), APIKey: apiKey, APIPassword: apiPassword };
+        const parseOptionalInt = (key: string): number | undefined => {
+            const v = parsed[key];
+            if (v == null) return undefined;
+            const n = Number(v);
+            return isNaN(n) ? undefined : Math.floor(n);
+        };
+
+        return {
+            ClientID: String(clientId),
+            APIKey: String(apiKey),
+            APIPassword: String(apiPassword),
+            MaxRetries: parseOptionalInt('MaxRetries'),
+            RequestTimeoutMs: parseOptionalInt('RequestTimeoutMs'),
+            MinRequestIntervalMs: parseOptionalInt('MinRequestIntervalMs'),
+            EnrichBatchSize: parseOptionalInt('EnrichBatchSize'),
+            JsonTimeoutMs: parseOptionalInt('JsonTimeoutMs'),
+            EnrichTimeoutMs: parseOptionalInt('EnrichTimeoutMs'),
+        };
     }
 
     // ─── Session management ──────────────────────────────────────────
@@ -839,12 +898,13 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         headers: Record<string, string>
     ): Promise<Response> {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutMs = this.effectiveRequestTimeoutMs;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(url, { method, headers, signal: controller.signal });
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
-                throw new Error(`YM API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${url}`);
+                throw new Error(`YM API request timed out after ${timeoutMs / 1000}s: ${url}`);
             }
             throw err;
         } finally {

@@ -794,8 +794,16 @@ export class SQLCodeGenBase {
 
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
-            if (!options.entity.BaseViewGenerated)
+            if (!options.entity.BaseViewGenerated) {
+                // For custom base views (BaseViewGenerated=false), emit sp_refreshview before permissions
+                // so that SQL Server picks up schema changes (new columns from migrations) before we
+                // grant permissions. Developers no longer need to remember to add this manually.
+                if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
+                    const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
+                    sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
+                }
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+            }
 
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
