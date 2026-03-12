@@ -363,9 +363,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * (which defaults to 'migrations/v2'). Full git-based file management is Phase 2.
      */
     private async writeMigrationFile(input: RSUPipelineInput): Promise<string> {
-        // This is a placeholder — in the Docker workbench environment,
-        // migration files are written alongside the repo.
-        // Full implementation writes to RSU_GIT_LOCAL_PATH in Phase 2.
+        const { writeFileSync, mkdirSync } = await import('node:fs');
         const migrationsPath = process.env.RSU_MIGRATIONS_PATH || 'migrations/v2';
         const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
         const tableSlug = input.AffectedTables
@@ -375,8 +373,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const fileName = `V${timestamp}__RSU_${tableSlug}.sql`;
         const filePath = `${migrationsPath}/${fileName}`;
 
-        // In a real environment this would use fs.writeFileSync
-        // For Phase 1, the migration SQL is executed directly — the file is informational
+        // Ensure the migrations directory exists
+        mkdirSync(migrationsPath, { recursive: true });
+
+        // Build file content with header comment
+        const header = [
+            `-- RSU Migration: ${input.Description}`,
+            `-- Generated: ${new Date().toISOString()}`,
+            `-- Affected tables: ${input.AffectedTables.join(', ')}`,
+            '',
+        ].join('\n');
+        writeFileSync(filePath, header + input.MigrationSQL, 'utf-8');
+
         return filePath;
     }
 
@@ -394,10 +402,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
         // Use sqlcmd to execute the migration (available in Docker workbench)
-        const server = process.env.DB_HOST || 'sql-claude';
-        const database = process.env.DB_DATABASE || 'MJTest';
+        const server = process.env.DB_HOST || 'localhost';
+        const database = process.env.DB_DATABASE || '';
         const user = process.env.DB_USER || 'sa';
-        const password = process.env.DB_PASSWORD || 'Claude2Sql99';
+        const password = process.env.DB_PASSWORD || '';
+
+        if (!database) {
+            throw new RSUError('CONFIG', 'DB_DATABASE environment variable is required for ExecuteMigration');
+        }
+
+        // Resolve sqlcmd path — prefer env override, then PATH, then common install location
+        const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
 
         // Write SQL to temp file, then execute via sqlcmd
         const tmpFile = `/tmp/rsu_migration_${Date.now()}.sql`;
@@ -405,10 +420,14 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         writeFileSync(tmpFile, resolvedSQL, 'utf-8');
 
         try {
-            await execAsync(
-                `sqlcmd -S ${server} -d ${database} -U ${user} -P ${password} -i ${tmpFile} -C`,
+            const { stdout, stderr } = await execAsync(
+                `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
                 { timeout: 120_000 }
             );
+            // sqlcmd writes errors to stdout, not stderr. Check for Msg/Level patterns.
+            if (stdout && /Msg \d+, Level (1[1-9]|[2-9]\d)/.test(stdout)) {
+                throw new RSUError('SQL_EXEC', `sqlcmd reported errors: ${stdout.trim()}`);
+            }
         } finally {
             try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
         }
@@ -418,34 +437,67 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     /**
      * Run CodeGen programmatically (excluding __mj schema).
+     *
+     * Requires the MJ CodeGen API package to be built and the `mj codegen` CLI
+     * command to be available. The command path can be overridden via the
+     * RSU_CODEGEN_COMMAND env var.
+     *
+     * If CodeGen is not available (e.g. CLI not built), the step fails with a
+     * descriptive error so callers can decide whether to continue.
      */
     private async runCodeGen(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
 
-        // Run CodeGen via CLI — the standard way in the workbench
-        await execAsync(
-            'cd /workspace/MJ && npx mj codegen',
-            { timeout: 300_000 } // 5 minute timeout for CodeGen
-        );
+        const codegenCmd = process.env.RSU_CODEGEN_COMMAND || 'npx mj codegen';
+        const workDir = process.env.RSU_WORK_DIR || process.cwd();
+
+        try {
+            await execAsync(
+                `cd ${workDir} && ${codegenCmd}`,
+                { timeout: 300_000 } // 5 minute timeout for CodeGen
+            );
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // Provide a clearer error when the CLI command is missing
+            if (msg.includes('not found') || msg.includes('ENOENT')) {
+                throw new RSUError(
+                    'CODEGEN_NOT_AVAILABLE',
+                    `CodeGen command not available: "${codegenCmd}". ` +
+                    'Ensure @memberjunction/cli is built with the codegen command, or ' +
+                    'set RSU_CODEGEN_COMMAND to a custom command. ' +
+                    `Original error: ${msg}`
+                );
+            }
+            throw err;
+        }
 
         return true;
     }
 
     /**
      * Compile affected TypeScript packages after CodeGen.
+     *
+     * By default compiles MJCoreEntities and MJAPI (the primary CodeGen outputs).
+     * Override via RSU_COMPILE_PACKAGES (comma-separated relative paths from work dir).
      */
     private async compileTypeScript(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
+        const workDir = process.env.RSU_WORK_DIR || process.cwd();
 
-        // Build core entities (CodeGen output) and MJAPI
-        await execAsync(
-            'cd /workspace/MJ/packages/MJCoreEntities && npm run build',
-            { timeout: 120_000 }
-        );
-        await execAsync(
-            'cd /workspace/MJ/packages/MJAPI && npm run build',
-            { timeout: 120_000 }
-        );
+        const defaultPackages = 'packages/MJCoreEntities,packages/MJAPI';
+        const envPackages = process.env.RSU_COMPILE_PACKAGES;
+        const rawPackages = envPackages !== undefined ? envPackages : defaultPackages;
+        const packagePaths = rawPackages
+            .split(',')
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+
+        for (const pkg of packagePaths) {
+            await execAsync(
+                `cd ${workDir}/${pkg} && npm run build`,
+                { timeout: 120_000 }
+            );
+        }
 
         return true;
     }
