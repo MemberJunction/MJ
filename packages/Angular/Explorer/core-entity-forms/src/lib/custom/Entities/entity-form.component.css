@@ -304,6 +304,8 @@
     flex: 1;
     overflow: auto;
     transition: margin-right var(--transition-normal);
+    display: flex;
+    flex-direction: column;
 }
 
 .main-canvas.panel-open {
@@ -2401,9 +2403,12 @@
    DATA SECTION
    ============================================================ */
 .data-section {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    padding: 0;
+    overflow: hidden;
 }
 
 .data-viewer-container {
