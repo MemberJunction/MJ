@@ -9,7 +9,7 @@
 ## Phase Summary
 
 ### Phase 0: SchemaEngine Package (Foundation)
-**Status**: Complete (103 tests passing)
+**Status**: Complete (110 tests passing)
 **Package**: `@memberjunction/schema-engine` (`packages/SchemaEngine/`)
 
 - Extracted and generalized DDL generation from integration `schema-builder`
@@ -19,7 +19,7 @@
 - No integration-specific assumptions — consumers inject their own columns
 
 ### Phase 1: RuntimeSchemaManager (Core Pipeline)
-**Status**: Complete (27 RSM tests + 80+ total)
+**Status**: Complete (34 RSM tests + 110 total)
 **Location**: `packages/SchemaEngine/src/RuntimeSchemaManager.ts`
 
 - 9-step pipeline: ValidateEnvironment → AcquireLock → ValidateSQL → WriteMigrationFile → ExecuteMigration → RunCodeGen → CompileTypeScript → RestartMJAPI → MarkOutOfSync
@@ -103,9 +103,9 @@
 
 | Package | Tests | Status |
 |---------|-------|--------|
-| `@memberjunction/schema-engine` | 103 | All passing |
+| `@memberjunction/schema-engine` | 110 | All passing |
 | `@memberjunction/integration-schema-builder` | 87 | All passing |
-| **Total** | **190** | **All passing** |
+| **Total** | **197** | **All passing** |
 
 ## Build Results
 
@@ -163,7 +163,7 @@ RuntimeSchemaManager (Pipeline Orchestration)
 
 ---
 
-*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 190 tests pass.*
+*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 197 tests pass.*
 *E2E database testing requires a running SQL Server instance (sql-claude container in Docker workbench).*
 
 ## Verification Checklist
