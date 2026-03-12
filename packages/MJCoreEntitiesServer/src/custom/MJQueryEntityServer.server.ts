@@ -1073,14 +1073,14 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
         const hasCycle = (queryID: string, path: string[]): string | null => {
             if (stack.has(queryID)) {
-                const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+                const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
                 return [...path, queryName].join(' → ');
             }
             if (visited.has(queryID)) return null;
 
             visited.add(queryID);
             stack.add(queryID);
-            const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+            const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
             path.push(queryName);
 
             // Get existing dependencies for this query
@@ -1101,13 +1101,13 @@ export class MJQueryEntityServer extends MJQueryEntity {
             const stack2 = new Set<string>([this.ID]);
 
             const checkFromDep = (queryID: string, path: string[]): string | null => {
-                if (queryID === this.ID) {
+                if (UUIDsEqual(queryID, this.ID)) {
                     return [...path, this.Name].join(' → ');
                 }
                 if (visited2.has(queryID)) return null;
                 visited2.add(queryID);
 
-                const queryName = Metadata.Provider.Queries.find(q => q.ID === queryID)?.Name || queryID;
+                const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
                 path.push(queryName);
 
                 const deps = allDependencies.filter(d => d.QueryID === queryID);
