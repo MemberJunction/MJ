@@ -272,9 +272,19 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
                 this.MarkOutOfSync();
                 steps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'API marked as out-of-sync with git repo' });
 
-                // Git commit/push — Phase 2 (not yet implemented)
+                // Phase 2: Git commit/push/PR
                 if (!input.SkipGitCommit) {
-                    steps.push({ Name: 'GitCommit', Status: 'skipped', DurationMs: 0, Message: 'Git integration not yet implemented (Phase 2)' });
+                    const gitStep = await this.runStep(
+                        'GitCommitAndPR',
+                        () => this.gitCommitAndPR(input, result.MigrationFilePath ?? ''),
+                        steps
+                    );
+                    if (gitStep) {
+                        result.GitCommitSuccess = true;
+                        result.BranchName = gitStep as string;
+                        this.ClearOutOfSync();
+                    }
+                    // Git failure is non-fatal — pipeline still succeeds
                 }
 
                 result.Success = true;
@@ -611,6 +621,193 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             'RESTART_TIMEOUT',
             `MJAPI did not become healthy within ${maxWaitMs / 1000}s on port ${port}`
         );
+    }
+
+    // ─── Phase 2: Git Integration ───────────────────────────────────
+
+    /**
+     * Create a branch, commit all RSU artifacts, push, and open a PR.
+     * Returns the branch name on success.
+     *
+     * Files committed:
+     *   - Migration SQL file
+     *   - CodeGen outputs (entity subclasses, GraphQL resolvers, SQL scripts, etc.)
+     *   - Any metadata files provided in the input
+     *
+     * Environment variables:
+     *   RSU_GIT_TARGET_BRANCH — PR target branch (default: 'next')
+     *   RSU_GIT_USER_NAME — git user.name for commits
+     *   RSU_GIT_USER_EMAIL — git user.email for commits
+     */
+    private async gitCommitAndPR(input: RSUPipelineInput, migrationFilePath: string): Promise<string> {
+        const { execAsync } = await this.getExecAsync();
+        const workDir = process.env.RSU_WORK_DIR || process.cwd();
+        const targetBranch = process.env.RSU_GIT_TARGET_BRANCH || 'next';
+
+        // 1. Generate branch name
+        const branchName = this.generateBranchName(input.AffectedTables);
+
+        // 2. Stash any unrelated changes, create branch from target
+        const originalBranch = await this.gitCurrentBranch(workDir);
+        await this.gitExec(workDir, `checkout -b ${branchName}`);
+
+        try {
+            // 3. Configure git user if provided
+            await this.configureGitUser(workDir);
+
+            // 4. Stage all RSU artifacts
+            await this.stageRSUArtifacts(workDir, migrationFilePath, input);
+
+            // 5. Commit
+            const commitMsg = this.buildCommitMessage(input);
+            await this.gitExec(workDir, `commit -m "${commitMsg}"`);
+
+            // 6. Push
+            await this.gitExec(workDir, `push -u origin ${branchName}`);
+
+            // 7. Create PR via gh CLI
+            const prUrl = await this.createPullRequest(workDir, branchName, targetBranch, input);
+
+            // 8. Switch back to original branch
+            await this.gitExec(workDir, `checkout ${originalBranch}`);
+
+            return branchName;
+        } catch (err) {
+            // On failure, try to switch back to the original branch
+            try { await this.gitExec(workDir, `checkout ${originalBranch}`); } catch { /* best effort */ }
+            throw err;
+        }
+    }
+
+    /**
+     * Generate a branch name from affected table names.
+     * Format: rsu/{YYYYMMDDHHmm}-{table-slugs}
+     */
+    private generateBranchName(affectedTables: string[]): string {
+        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+        const tableSlug = affectedTables
+            .slice(0, 3)
+            .map(t => t.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase())
+            .join('-');
+        return `rsu/${timestamp}-${tableSlug}`;
+    }
+
+    /**
+     * Get the current git branch name.
+     */
+    private async gitCurrentBranch(workDir: string): Promise<string> {
+        const { stdout } = await this.gitExec(workDir, 'rev-parse --abbrev-ref HEAD');
+        return stdout.trim();
+    }
+
+    /**
+     * Execute a git command in the work directory.
+     */
+    private async gitExec(workDir: string, gitArgs: string): Promise<{ stdout: string; stderr: string }> {
+        const { execAsync } = await this.getExecAsync();
+        return execAsync(`cd ${workDir} && git ${gitArgs}`, { timeout: 60_000 });
+    }
+
+    /**
+     * Configure git user name/email if RSU_GIT_USER_NAME/EMAIL are set.
+     */
+    private async configureGitUser(workDir: string): Promise<void> {
+        const userName = process.env.RSU_GIT_USER_NAME;
+        const userEmail = process.env.RSU_GIT_USER_EMAIL;
+        if (userName) await this.gitExec(workDir, `config user.name "${userName}"`);
+        if (userEmail) await this.gitExec(workDir, `config user.email "${userEmail}"`);
+    }
+
+    /**
+     * Stage all files produced by the RSU pipeline:
+     * - Migration file
+     * - CodeGen output directories (entity subclasses, GraphQL resolvers, SQL scripts)
+     * - Metadata files if provided
+     */
+    private async stageRSUArtifacts(
+        workDir: string,
+        migrationFilePath: string,
+        input: RSUPipelineInput
+    ): Promise<void> {
+        // Stage the migration file
+        if (migrationFilePath) {
+            await this.gitExec(workDir, `add "${migrationFilePath}"`);
+        }
+
+        // Stage CodeGen output files — these directories contain generated code
+        const codegenOutputPaths = [
+            'packages/MJCoreEntities/src/generated/',
+            'packages/MJServer/src/generated/',
+            'packages/MJAPI/src/generated/',
+            'packages/Angular/Explorer/core-entity-forms/src/lib/generated/',
+            'packages/Actions/CoreActions/src/generated/',
+            'packages/GeneratedEntities/src/generated/',
+            'packages/GeneratedActions/src/generated/',
+            'SQL Scripts/generated/',
+        ];
+        for (const p of codegenOutputPaths) {
+            // Use --ignore-errors in case the path doesn't exist in this repo layout
+            try { await this.gitExec(workDir, `add "${p}"`); } catch { /* path may not exist */ }
+        }
+
+        // Stage metadata files if provided
+        if (input.MetadataFiles) {
+            for (const mf of input.MetadataFiles) {
+                await this.gitExec(workDir, `add "${mf.Path}"`);
+            }
+        }
+
+        // Stage additionalSchemaInfo if provided
+        if (input.AdditionalSchemaInfo) {
+            const { writeFileSync } = await import('node:fs');
+            const schemaInfoPath = 'metadata/integrations/additionalSchemaInfo.json';
+            writeFileSync(`${workDir}/${schemaInfoPath}`, input.AdditionalSchemaInfo, 'utf-8');
+            await this.gitExec(workDir, `add "${schemaInfoPath}"`);
+        }
+    }
+
+    /**
+     * Build a descriptive commit message for the RSU changes.
+     */
+    private buildCommitMessage(input: RSUPipelineInput): string {
+        const tables = input.AffectedTables.join(', ');
+        // Escape double quotes in the description for the git commit -m
+        const desc = input.Description.replace(/"/g, '\\"');
+        return `RSU: ${desc}\\n\\nTables affected: ${tables}\\nGenerated by Runtime Schema Update pipeline`;
+    }
+
+    /**
+     * Create a pull request via the GitHub CLI (gh).
+     * Returns the PR URL.
+     */
+    private async createPullRequest(
+        workDir: string,
+        branchName: string,
+        targetBranch: string,
+        input: RSUPipelineInput
+    ): Promise<string> {
+        const { execAsync } = await this.getExecAsync();
+        const tables = input.AffectedTables.join(', ');
+        const title = `RSU: ${input.Description}`.substring(0, 70);
+        const body = [
+            '## Runtime Schema Update',
+            '',
+            `**Tables affected:** ${tables}`,
+            '',
+            '### What changed',
+            `- Migration SQL executed against the database`,
+            '- CodeGen re-generated entity metadata, TypeScript classes, and SQL objects',
+            '- MJAPI restarted with updated schema',
+            '',
+            '### Generated by',
+            'Runtime Schema Update (RSU) pipeline — auto-generated PR.',
+        ].join('\\n');
+
+        const { stdout } = await execAsync(
+            `cd ${workDir} && gh pr create --base "${targetBranch}" --head "${branchName}" --title "${title}" --body "${body}"`,
+            { timeout: 30_000 }
+        );
+        return stdout.trim();
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────
