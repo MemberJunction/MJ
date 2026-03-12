@@ -9,7 +9,8 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
+import { QueryCompositionEngine } from "./queryCompositionEngine";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -90,6 +91,7 @@ export const AllMetadataArrays = [
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllQueryEntities', class: QueryEntityInfo },
     { key: 'AllQueryParameters', class: QueryParameterInfo },
+    { key: 'AllQueryDependencies', class: QueryDependencyInfo },
     { key: 'AllSQLDialects', class: SQLDialectInfo },
     { key: 'AllQuerySQLs', class: QuerySQLInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
@@ -1315,6 +1317,39 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - Optional user context
      * @returns Pre-processing result with cache status and optional cached result
      */
+    /**
+     * Shared composition engine instance for resolving {{query:"..."}} tokens.
+     * Available to all provider subclasses so composition works identically
+     * across SQL Server, PostgreSQL, and any future database providers.
+     */
+    private _compositionEngine = new QueryCompositionEngine();
+
+    /**
+     * Resolves {{query:"..."}} composition tokens in SQL, converting referenced
+     * queries into CTEs. Call this BEFORE Nunjucks template processing.
+     *
+     * If the SQL contains no composition tokens, returns it unchanged.
+     *
+     * @param sql - The SQL that may contain composition tokens
+     * @param contextUser - User context for permission checks on referenced queries
+     * @param parameters - Optional parameter values from the outer query (for pass-through resolution)
+     * @returns The SQL with composition tokens resolved to CTEs
+     */
+    protected ResolveQueryComposition(sql: string, contextUser?: UserInfo, parameters?: Record<string, string>): string {
+        if (!this._compositionEngine.HasCompositionTokens(sql)) {
+            return sql;
+        }
+
+        const result = this._compositionEngine.ResolveComposition(
+            sql,
+            this.PlatformKey,
+            contextUser,
+            parameters
+        );
+
+        return result.ResolvedSQL;
+    }
+
     protected async PreRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<typeof this._preRunQueryResultType> {
         // Start telemetry tracking
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
@@ -1933,7 +1968,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        if (this._refresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
+            // Capture the hard-refresh flag before resetting it — when true, we must bypass all
+        // caching (including LocalCacheManager) so GetDatasetByName hits the actual database.
+        const hardRefresh = this._refresh;
+        if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -1943,7 +1981,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Fetch new metadata without clearing current metadata
             // This ensures readers always see valid data (old until new is ready)
             const start = new Date().getTime();
-            const res = await this.GetAllMetadata(providerToUse);
+            const res = await this.GetAllMetadata(providerToUse, hardRefresh);
             const end = new Date().getTime();
             LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
             if (res) {
@@ -2038,14 +2076,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Uses the MJ_Metadata dataset for efficient bulk loading.
      * @returns Complete metadata collection with all relationships
      */
-    protected async GetAllMetadata(providerToUse?: IMetadataProvider): Promise<AllMetadata> {
+    protected async GetAllMetadata(providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             // NOTE: Schema filters (IncludeSchemas/ExcludeSchemas) are for CodeGen only, not for runtime
             // metadata loading. We always load all schemas — there are no sys/staging entities in metadata anyway.
 
             // Get the dataset and cache it for anyone else who wants to use it
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse);
+            // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh);
             if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
@@ -2238,6 +2277,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
+    }
+    /**
+     * Gets all query dependency records tracking composition references between queries.
+     * @returns Array of QueryDependencyInfo objects representing query-to-query dependencies
+     */
+    public get QueryDependencies(): QueryDependencyInfo[] {
+        return this._localMetadata.AllQueryDependencies;
     }
     /**
      * Gets all SQL dialect definitions.
@@ -2481,11 +2527,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
 
     /**
-     * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
-     * @param datasetName 
-     * @param itemFilters 
+     * Retrieves a dataset by name. When `forceRefresh` is true, bypasses any in-memory or local cache
+     * and fetches directly from the database. When false (default), server-side providers may serve
+     * from LocalCacheManager if `TrustLocalCacheCompletely` is true.
+     * @param datasetName
+     * @param itemFilters
+     * @param contextUser
+     * @param providerToUse
+     * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
      */
-    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
+    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 

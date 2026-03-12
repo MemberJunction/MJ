@@ -1,5 +1,21 @@
 # @memberjunction/testing-engine
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+- Updated dependencies [0dca9db]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ai-agents@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-prompts@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/testing-engine-base@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/global@5.11.0
+
 ## 5.10.1
 
 ### Patch Changes

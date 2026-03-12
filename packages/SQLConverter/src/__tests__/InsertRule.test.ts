@@ -235,5 +235,25 @@ WHERE e.ID = '123'`;
       expect(result).toContain('"__mj_UpdatedAt"');
       expect(result).not.toContain('""__mj_UpdatedAt""');
     });
+
+    it('should not quote __mj_ inside string literal values', () => {
+      const sql = `INSERT INTO __mj."EntityField" ("ID", "Name", "__mj_CreatedAt") VALUES ('abc', '__mj_CreatedAt', NOW())`;
+      const result = convert(sql);
+      // The column name __mj_CreatedAt in the column list should be quoted
+      expect(result).toContain('"__mj_CreatedAt"');
+      // But the string value '__mj_CreatedAt' should remain unquoted inside the string literal
+      expect(result).toContain("'__mj_CreatedAt'");
+      expect(result).not.toContain("'\"__mj_CreatedAt\"'");
+    });
+
+    it('should not quote __mj_ inside string literal values in UPDATE SET', () => {
+      const sql = `UPDATE __mj."EntityField" SET "Name" = '__mj_UpdatedAt', "__mj_UpdatedAt" = NOW() WHERE "ID" = '123'`;
+      const result = convert(sql);
+      // Column reference should be quoted
+      expect(result).toContain('"__mj_UpdatedAt"');
+      // String value should remain unquoted
+      expect(result).toContain("'__mj_UpdatedAt'");
+      expect(result).not.toContain("'\"__mj_UpdatedAt\"'");
+    });
   });
 });

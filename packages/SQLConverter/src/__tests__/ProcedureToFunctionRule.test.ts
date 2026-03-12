@@ -415,12 +415,12 @@ END`;
   });
 
   describe('edge cases', () => {
-    it('should return TODO comment for unparseable proc', () => {
+    it('should return SKIPPED comment for unparseable proc', () => {
       const input = `CREATE PROCEDURE someWeirdFormat
         that does not match any pattern`;
 
       const result = convert(input);
-      expect(result).toContain('TODO');
+      expect(result).toContain('SKIPPED: procedure (auto-conversion not supported)');
     });
 
     it('should handle COLLATE removal in body', () => {
