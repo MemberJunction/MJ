@@ -168,7 +168,7 @@ RuntimeSchemaManager (Pipeline Orchestration)
 
 ## Verification Checklist
 
-- [x] SchemaEngine: 103 tests pass, builds clean
+- [x] SchemaEngine: 110 tests pass, builds clean
 - [x] Integration schema-builder: 87 tests pass, builds clean
 - [x] MJServer (RSUResolver): builds clean, exported from index.ts
 - [x] CoreActions (CreateDatabaseTableAction): builds clean
