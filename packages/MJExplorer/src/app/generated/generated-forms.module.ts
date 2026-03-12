@@ -16,16 +16,32 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
-
+import { dboRSU_TestGadgetFormComponent } from "./Entities/dboRSU_TestGadget/dborsu_testgadget.form.component";
    
 
+@NgModule({
+declarations: [
+    dboRSU_TestGadgetFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    BaseFormsModule,
+    EntityViewerModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
+    
 
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }

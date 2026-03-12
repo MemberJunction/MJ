@@ -1,140 +1,101 @@
-# Runtime Schema Update (RSU) — Full Spec Implementation Complete
+# Runtime Schema Update — Full Spec Complete
 
-> **Date**: March 12, 2026
-> **Branch**: `feature/runtime-schema-update`
-> **Phases Completed**: 0–6 (all)
-> **Verified**: All packages compile, 190 tests passing, commit `395163783b`
-
----
-
-## Summary
-
-All six phases of the Runtime Schema Update plan have been implemented. The RSU system enables MemberJunction to create and modify database tables, run CodeGen, restart MJAPI, and commit artifacts to git — all programmatically and in-process.
+**Branch**: `feature/runtime-schema-update`
+**Date**: 2026-03-12
+**Status**: All 7 phases complete (Phase 0 through Phase 6)
 
 ---
 
-## Phase 0: SchemaEngine Package ✅
+## Phase Summary
 
+### Phase 0: SchemaEngine Package (Foundation)
+**Status**: Complete (103 tests passing)
 **Package**: `@memberjunction/schema-engine` (`packages/SchemaEngine/`)
 
-- Generic, platform-aware DDL generation (SQL Server + PostgreSQL)
-- `SchemaEngine` orchestrator: `GenerateMigration()`, `GenerateEvolutionMigration()`, `GenerateCreateSchema()`
-- `DDLGenerator`: CREATE TABLE, ALTER TABLE, extended properties
-- `TypeMapper`: Abstract types → platform SQL types (12 types)
-- `SchemaValidator`: Table definition validation (__mj protection, identifier checks)
-- `SchemaEvolution`: Diff engine for ALTER TABLE generation
-- `MigrationFileWriter`: Flyway-compatible file naming and wrapping
-- **80 unit tests** — all passing
+- Extracted and generalized DDL generation from integration `schema-builder`
+- Platform-aware SQL generation (SQL Server + PostgreSQL)
+- Classes: `SchemaEngine`, `DDLGenerator`, `TypeMapper`, `MigrationFileWriter`, `SchemaValidator`, `SchemaEvolution`
+- Generic `TableDefinition` / `ColumnDefinition` / `MigrationOutput` interfaces
+- No integration-specific assumptions — consumers inject their own columns
 
-## Phase 1: RuntimeSchemaManager Pipeline ✅
+### Phase 1: RuntimeSchemaManager (Core Pipeline)
+**Status**: Complete (27 RSM tests + 80+ total)
+**Location**: `packages/SchemaEngine/src/RuntimeSchemaManager.ts`
 
-**Class**: `RuntimeSchemaManager` (singleton, in `@memberjunction/schema-engine`)
+- 9-step pipeline: ValidateEnvironment → AcquireLock → ValidateSQL → WriteMigrationFile → ExecuteMigration → RunCodeGen → CompileTypeScript → RestartMJAPI → MarkOutOfSync
+- Gated by `ALLOW_RUNTIME_SCHEMA_UPDATE=1` environment variable
+- Hard-blocks CREATE/ALTER/DROP in `__mj` schema (regex SQL validation)
+- In-memory concurrency mutex + optional DB-backed lock (`RSULock` table)
+- Audit logging to `RSUAuditLog` table
+- `RSUError` class with typed error codes (DISABLED, CONCURRENT, VALIDATION, SQL_EXEC, etc.)
+- Preview mode via `Preview()` method
+- Out-of-sync flag management (`GetStatus()`, `MarkOutOfSync()`, `ClearOutOfSync()`)
 
-9-step pipeline:
-1. ValidateEnvironment (check `ALLOW_RUNTIME_SCHEMA_UPDATE=1`)
-2. AcquireLock (concurrency mutex)
-3. ValidateSQL (schema protection — __mj always blocked)
-4. WriteMigrationFile (Flyway format)
-5. ExecuteMigration (via sqlcmd)
-6. RunCodeGen (temporary .mjs script)
-7. CompileTypeScript (via turbo)
-8. RestartMJAPI (via PM2 with health polling)
-9. MarkOutOfSync
+### Phase 2: Git Integration
+**Status**: Complete
+**Location**: `packages/SchemaEngine/src/RuntimeSchemaManager.ts` (git methods)
 
-Plus: `Preview()` dry-run, `GetStatus()`, env var gating.
+- Branch creation: `rsu/{YYYYMMDDHHMM}-{table-slugs}`
+- Artifact collection: migration files, CodeGen output, metadata
+- Git commit with descriptive messages
+- Push to remote
+- PR creation via `gh` CLI with auto-merge
 
-**27 unit tests** — all passing.
+### Phase 3: Integration SchemaBuilder Conversion
+**Status**: Complete (87 tests passing)
+**Location**: `packages/Integration/schema-builder/src/SchemaBuilder.ts`
 
-## Phase 2: Git Integration ✅
+- `BuildSchema()` delegates DDL generation to `SchemaEngine.GenerateMigration()`
+- Integration-specific columns (`__mj_integration_SyncStatus`, `__mj_integration_LastSyncedAt`) injected via `AdditionalColumns`
+- `RunSchemaPipeline()` method wires SchemaBuilder output directly to `RuntimeSchemaManager.RunPipeline()`
+- `BuildRSUInput()` helper converts `SchemaBuilderOutput` → `RSUPipelineInput`
+- Soft FK config and metadata emission remain in the integration layer
 
-Added to step 9 of the pipeline (non-fatal on failure):
-- Create feature branch: `rsu/{timestamp}-{table-slugs}`
-- Stage RSU artifacts (migration, CodeGen output, metadata)
-- Commit with descriptive message
-- Push with upstream tracking
-- Create PR via `gh` CLI
+### Phase 4: User Defined Tables (UDT) Pipeline
+**Status**: Complete (23 tests passing)
+**Location**: `packages/SchemaEngine/src/UserTablePipeline.ts`
 
-## Phase 3: Integration SchemaBuilder Wiring ✅
+- `UserTablePipeline` class: user-friendly table creation → full MJ entity
+- Naming conventions: `custom.UD_{PascalCase}` (SQL), `User: {DisplayName}` (entity)
+- `ValidateUserTableDefinition()`: DisplayName, column names, reserved prefix checks, max 50 columns
+- Rate limiting: max 1 table creation per minute (configurable via `RSU_UDT_RATE_LIMIT_MS`)
+- `CreateTable()` → validates → converts to `TableDefinition` → SchemaEngine → RSU pipeline
+- `Preview()` → dry-run without execution
 
-**File**: `packages/Integration/schema-builder/src/SchemaBuilder.ts`
+### Phase 5: Agent-Driven Schema Creation (Action)
+**Status**: Complete
+**Location**: `packages/Actions/CoreActions/src/custom/schema/create-table.action.ts`
 
-Added `RunSchemaPipeline()` method that:
-1. Calls `BuildSchema()` to generate migration SQL, soft FKs, metadata
-2. Converts output to `RSUPipelineInput` via `BuildRSUInput()`
-3. Feeds into `RuntimeSchemaManager.RunPipeline()`
-4. Returns both `SchemaBuilderOutput` and `RSUPipelineResult`
+- `CreateDatabaseTableAction` (`@RegisterClass(BaseAction, "__CreateDatabaseTable")`)
+  - Accepts structured `TableDefinition` object or JSON string
+  - Preview mode via `Preview=true` parameter
+  - Full pipeline execution with output parameters: SqlTableName, EntityName, MigrationSQL, PipelineSteps
+  - Safety: all RSU rules enforced (__mj protection, rate limiting, env gating)
+- `PreviewDatabaseTableAction` (`@RegisterClass(BaseAction, "__PreviewDatabaseTable")`)
+  - Convenience wrapper that always runs in preview mode
 
-Handles error cases: schema errors, no migration produced, pipeline failures.
+### Phase 6: Polish & Hardening
+**Status**: Complete
+**Location**: Multiple files
 
-**3 new tests** (87 total in schema-builder) — all passing.
-
-## Phase 4: User Defined Tables (UDT) Pipeline ✅
-
-**File**: `packages/SchemaEngine/src/UserTablePipeline.ts`
-
-`UserTablePipeline` class with:
-- `CreateTable(def)`: Full pipeline — validate → SchemaEngine → RSU
-- `Preview(def)`: Dry-run — validate and return SQL
-- Naming conventions: `custom.UD_{PascalName}` / `User: {Display Name}`
-- Rate limiting: configurable via `RSU_UDT_RATE_LIMIT_MS` (default: 60s)
-- Validation: max 50 columns, reserved name checks, duplicate detection
-- Helper functions: `DisplayNameToSqlName()`, `GenerateUDTTableName()`, `GenerateUDTEntityName()`
-
-Exported types: `UserTableDefinition`, `UserColumnDefinition`, `UserForeignKeyDefinition`, `UserTablePipelineResult`
-
-**23 new tests** (103 total in SchemaEngine) — all passing.
-
-## Phase 5: Agent-Driven Schema Creation Action ✅
-
-**File**: `packages/Actions/CoreActions/src/custom/schema/create-table.action.ts`
-
-Two actions registered:
-
-### `__CreateDatabaseTable`
-- Input: `TableDefinition` (object or JSON), `Preview`, `SkipRestart`, `SkipGitCommit`
-- Wraps `UserTablePipeline` for structured table creation
-- Preview mode validates and returns SQL without executing
-- Output params: `SqlTableName`, `EntityName`, `MigrationSQL`, `PipelineSteps`
-- Enforces all RSU safety rules via the pipeline
-
-### `__PreviewDatabaseTable`
-- Convenience action that always runs in preview mode
-- Delegates to `CreateDatabaseTableAction` with `Preview=true`
-
-Added `@memberjunction/schema-engine` dependency to CoreActions.
-
-## Phase 6: Polish & Hardening ✅
-
-### DB-Backed Mutex (Multi-Instance Safety)
-**In**: `RuntimeSchemaManager.ts`
-
+#### DB-Backed Mutex
+- `RSULock` table in `__mj` schema (auto-created on first use)
+- 30-minute lock expiration with automatic cleanup
 - Enabled via `RSU_DB_LOCK_ENABLED=1`
-- Creates `[__mj].[RSULock]` table on first use (auto-DDL)
-- Lock expires after 30 minutes (auto-cleanup of stale locks)
-- Falls back to in-memory mutex if DB is unavailable
-- Released in `finally` block (always cleaned up)
+- Falls back to in-memory mutex when disabled
 
-### Pipeline Audit Logging
-**In**: `RuntimeSchemaManager.ts`
+#### Audit Logging
+- `RSUAuditLog` table in `__mj` schema (auto-created on first use)
+- Records: Description, AffectedTables, Success, APIRestarted, GitCommitSuccess, BranchName, ErrorMessage, StepsJSON, TotalDurationMs
+- Enabled by default (disable with `RSU_AUDIT_LOG_ENABLED=0`)
+- Fires asynchronously after pipeline completion (failures silently ignored)
 
-- Creates `[__mj].[RSUAuditLog]` table on first use (auto-DDL)
-- Logs every pipeline run: description, affected tables, success/failure, steps, timing
-- Best-effort (non-blocking) — failures don't affect the pipeline
-- Disable via `RSU_AUDIT_LOG_ENABLED=0`
-
-### GraphQL API
-**File**: `packages/MJServer/src/resolvers/RSUResolver.ts`
-
-Three endpoints:
-
-| Endpoint | Type | Auth | Description |
-|----------|------|------|-------------|
-| `RuntimeSchemaUpdateStatus` | Query | Authenticated user | Status: enabled, running, out-of-sync, last run |
-| `RunRuntimeSchemaUpdate` | Mutation | System user only | Execute full RSU pipeline |
-| `PreviewRuntimeSchemaUpdate` | Mutation | System user only | Dry-run: validate SQL, return plan |
-
-Input/output types fully defined as GraphQL types (InputType/ObjectType).
-Added `@memberjunction/schema-engine` dependency to MJServer.
+#### GraphQL API
+- **RSUResolver** (`packages/MJServer/src/resolvers/RSUResolver.ts`)
+  - Query: `RuntimeSchemaUpdateStatus` → `RSUStatusGQL` (Enabled, Running, OutOfSync, timestamps)
+  - Mutation: `RunRuntimeSchemaUpdate(input: RSUPipelineInputGQL!)` → `RSUPipelineResultGQL` (requires system user)
+  - Mutation: `PreviewRuntimeSchemaUpdate(input: RSUPipelineInputGQL!)` → `RSUPreviewResultGQL` (requires system user)
+- **Exported** from `packages/MJServer/src/index.ts` for GraphQL schema discovery
 
 ---
 
@@ -142,78 +103,82 @@ Added `@memberjunction/schema-engine` dependency to MJServer.
 
 | Package | Tests | Status |
 |---------|-------|--------|
-| `@memberjunction/schema-engine` | 103 | ✅ All passing |
-| `@memberjunction/integration-schema-builder` | 87 | ✅ All passing |
-| **Total** | **190** | **✅ All passing** |
+| `@memberjunction/schema-engine` | 103 | All passing |
+| `@memberjunction/integration-schema-builder` | 87 | All passing |
+| **Total** | **190** | **All passing** |
 
----
+## Build Results
 
-## Files Modified/Created
-
-### New Files
-- `packages/SchemaEngine/src/UserTablePipeline.ts` — UDT pipeline
-- `packages/SchemaEngine/src/__tests__/UserTablePipeline.test.ts` — UDT tests
-- `packages/Actions/CoreActions/src/custom/schema/create-table.action.ts` — Agent action
-- `packages/MJServer/src/resolvers/RSUResolver.ts` — GraphQL API
-
-### Modified Files
-- `packages/SchemaEngine/src/RuntimeSchemaManager.ts` — DB mutex, audit logging
-- `packages/SchemaEngine/src/index.ts` — UDT exports
-- `packages/Integration/schema-builder/src/SchemaBuilder.ts` — `RunSchemaPipeline()`
-- `packages/Integration/schema-builder/src/index.ts` — RSU type re-exports
-- `packages/Integration/schema-builder/src/__tests__/integration.test.ts` — New tests
-- `packages/Actions/CoreActions/src/index.ts` — Schema action export
-- `packages/Actions/CoreActions/package.json` — schema-engine dependency
-- `packages/MJServer/package.json` — schema-engine dependency
-
----
+| Package | Status |
+|---------|--------|
+| `@memberjunction/schema-engine` | Builds clean |
+| `@memberjunction/integration-schema-builder` | Builds clean |
+| `@memberjunction/server` (MJServer) | Builds clean |
+| `@memberjunction/core-actions` (CoreActions) | Builds clean |
 
 ## Environment Variables
 
-| Variable | Default | Phase | Description |
-|----------|---------|-------|-------------|
-| `ALLOW_RUNTIME_SCHEMA_UPDATE` | — | 1 | Master switch (must be `1`) |
-| `RSU_MIGRATIONS_PATH` | `migrations/v2` | 1 | Migration file directory |
-| `RSU_DEFAULT_SCHEMA` | `__mj` | 1 | Flyway placeholder schema |
-| `RSU_CODEGEN_COMMAND` | — | 1 | Custom CodeGen command |
-| `RSU_COMPILE_PACKAGES` | MJCoreEntities,MJServer,MJAPI | 1 | Packages to compile |
-| `RSU_PM2_PROCESS_NAME` | `mjapi` | 1 | PM2 process name |
-| `RSU_PROTECTED_SCHEMAS` | — | 1 | Additional protected schemas |
-| `RSU_GIT_TARGET_BRANCH` | `next` | 2 | Git PR target branch |
-| `RSU_GIT_USER_NAME` | — | 2 | Git commit author name |
-| `RSU_GIT_USER_EMAIL` | — | 2 | Git commit author email |
-| `RSU_UDT_RATE_LIMIT_MS` | `60000` | 4 | UDT rate limit (ms) |
-| `RSU_DB_LOCK_ENABLED` | — | 6 | Enable DB-backed mutex (`1`) |
-| `RSU_AUDIT_LOG_ENABLED` | — | 6 | Disable audit log (`0`) |
-
----
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ALLOW_RUNTIME_SCHEMA_UPDATE` | Yes | (none) | Must be `1` to enable |
+| `DB_HOST` | Yes | `localhost` | Database server |
+| `DB_DATABASE` | Yes | (none) | Database name |
+| `DB_USER` | Yes | `sa` | Database user |
+| `DB_PASSWORD` | Yes | (none) | Database password |
+| `RSU_MIGRATIONS_PATH` | No | `migrations/v2` | Migration file directory |
+| `RSU_DB_LOCK_ENABLED` | No | (disabled) | Set `1` for DB-backed mutex |
+| `RSU_AUDIT_LOG_ENABLED` | No | (enabled) | Set `0` to disable |
+| `RSU_UDT_RATE_LIMIT_MS` | No | `60000` | UDT creation rate limit |
+| `RSU_PM2_PROCESS_NAME` | No | `mjapi` | PM2 process name |
+| `GRAPHQL_PORT` | No | `4000` | MJAPI health check port |
+| `RSU_GIT_TARGET_BRANCH` | No | `next` | PR target branch |
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│  CONSUMERS                                                             │
-│                                                                        │
-│  ┌──────────────┐  ┌─────────────┐  ┌──────────────┐  ┌────────────┐ │
-│  │ Integration   │  │ UDT         │  │ AI Agent     │  │ GraphQL    │ │
-│  │ SchemaBuilder │  │ Pipeline    │  │ Action       │  │ Mutation   │ │
-│  │ (Phase 3)     │  │ (Phase 4)   │  │ (Phase 5)    │  │ (Phase 6)  │ │
-│  └──────┬───────┘  └──────┬──────┘  └──────┬───────┘  └─────┬──────┘ │
-│         │                 │                 │                 │        │
-│         ▼                 ▼                 ▼                 ▼        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  @memberjunction/schema-engine  (Phase 0)                        │  │
-│  │                                                                  │  │
-│  │  TableDefinition → DDLGenerator → Migration SQL                  │  │
-│  │  TypeMapper · SchemaValidator · SchemaEvolution                   │  │
-│  └──────────────────────────┬───────────────────────────────────────┘  │
-│                              │                                         │
-│                              ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  RuntimeSchemaManager  (Phase 1 + 2 + 6)                        │  │
-│  │                                                                  │  │
-│  │  1. Validate   2. DB Lock   3. Execute SQL   4. CodeGen          │  │
-│  │  5. Compile    6. Restart   7. Git PR        8. Audit Log        │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
+Consumer Layer
+├── Integration SchemaBuilder → RunSchemaPipeline()
+├── UserTablePipeline → CreateTable()
+├── CreateDatabaseTableAction → Agent/Workflow interface
+└── GraphQL Mutations → RSUResolver
+
+            ↓
+
+SchemaEngine (Pure DDL Generation)
+├── SchemaEngine.GenerateMigration()
+├── DDLGenerator (SQL Server + PostgreSQL)
+├── TypeMapper (abstract → SQL types)
+├── SchemaValidator (input validation)
+└── SchemaEvolution (ALTER TABLE diffs)
+
+            ↓
+
+RuntimeSchemaManager (Pipeline Orchestration)
+├── ValidateEnvironment → AcquireLock → ValidateSQL
+├── WriteMigrationFile → ExecuteMigration → RunCodeGen
+├── CompileTypeScript → RestartMJAPI → MarkOutOfSync
+├── Git: Branch → Commit → Push → PR
+└── Audit: RSUAuditLog table
 ```
+
+---
+
+*Implementation verified on 2026-03-12 inside Docker Workbench (sql-claude / MJTest database).*
+*All phases implemented, all packages build, all 190 tests pass.*
+
+## Verification Checklist
+
+- [x] SchemaEngine: 103 tests pass, builds clean
+- [x] Integration schema-builder: 87 tests pass, builds clean
+- [x] MJServer (RSUResolver): builds clean, exported from index.ts
+- [x] CoreActions (CreateDatabaseTableAction): builds clean
+- [x] SchemaBuilder has `RunSchemaPipeline()` wired to RuntimeSchemaManager
+- [x] UserTablePipeline creates `custom.UD_*` tables with `User: *` entity names
+- [x] CreateDatabaseTableAction registered as `__CreateDatabaseTable`
+- [x] PreviewDatabaseTableAction registered as `__PreviewDatabaseTable`
+- [x] RSUResolver exposes RuntimeSchemaUpdateStatus query
+- [x] RSUResolver exposes RunRuntimeSchemaUpdate mutation (requires system user)
+- [x] RSUResolver exposes PreviewRuntimeSchemaUpdate mutation (requires system user)
+- [x] DB-backed mutex via RSULock table (optional, enabled via RSU_DB_LOCK_ENABLED=1)
+- [x] Audit logging via RSUAuditLog table (enabled by default)
+- [x] CodeGen artifacts generated for test entity (dbo.RSU_TestGadget)
