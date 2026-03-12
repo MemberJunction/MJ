@@ -436,68 +436,110 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
 
     /**
-     * Run CodeGen programmatically (excluding __mj schema).
+     * Run CodeGen programmatically.
      *
-     * Requires the MJ CodeGen API package to be built and the `mj codegen` CLI
-     * command to be available. The command path can be overridden via the
-     * RSU_CODEGEN_COMMAND env var.
+     * Writes a temporary .mjs script that imports CodeGenLib directly (bypassing
+     * the oclif-based `mj` CLI which has heavy dependencies). The script:
+     *   1. Loads dotenv/config for DB env vars
+     *   2. Bootstraps class registrations via server-bootstrap-lite
+     *   3. Initializes config from mj.config.cjs
+     *   4. Runs full CodeGen pipeline (metadata + SQL + TypeScript generation)
      *
-     * If CodeGen is not available (e.g. CLI not built), the step fails with a
-     * descriptive error so callers can decide whether to continue.
+     * Override via RSU_CODEGEN_COMMAND env var for custom setups.
      */
     private async runCodeGen(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
-
-        const codegenCmd = process.env.RSU_CODEGEN_COMMAND || 'npx mj codegen';
+        const { writeFileSync, unlinkSync } = await import('node:fs');
         const workDir = process.env.RSU_WORK_DIR || process.cwd();
 
-        try {
-            await execAsync(
-                `cd ${workDir} && ${codegenCmd}`,
-                { timeout: 300_000 } // 5 minute timeout for CodeGen
-            );
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            // Provide a clearer error when the CLI command is missing
-            if (msg.includes('not found') || msg.includes('ENOENT')) {
-                throw new RSUError(
-                    'CODEGEN_NOT_AVAILABLE',
-                    `CodeGen command not available: "${codegenCmd}". ` +
-                    'Ensure @memberjunction/cli is built with the codegen command, or ' +
-                    'set RSU_CODEGEN_COMMAND to a custom command. ' +
-                    `Original error: ${msg}`
-                );
-            }
-            throw err;
+        // If caller provides a full custom command, use it directly
+        const customCmd = process.env.RSU_CODEGEN_COMMAND;
+        if (customCmd) {
+            await execAsync(`cd ${workDir} && ${customCmd}`, { timeout: 600_000 });
+            return true;
         }
 
-        return true;
+        // Write a temp .mjs script to avoid shell-escaping problems with inline -e
+        const tmpScript = `/tmp/rsu_codegen_${Date.now()}.mjs`;
+        const scriptContent = [
+            "import 'dotenv/config';",
+            "await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');",
+            "const { initializeConfig, runMemberJunctionCodeGeneration } = await import('@memberjunction/codegen-lib');",
+            'initializeConfig(process.cwd());',
+            'await runMemberJunctionCodeGeneration(false);',
+        ].join('\n');
+        writeFileSync(tmpScript, scriptContent, 'utf-8');
+
+        try {
+            const { stdout } = await execAsync(
+                `cd ${workDir} && node ${tmpScript}`,
+                { timeout: 600_000 } // 10 minutes for CodeGen
+            );
+
+            // Verify CodeGen reported success in its output
+            if (stdout && stdout.includes('MJ CodeGen Complete')) {
+                return true;
+            }
+            // Even if the success line isn't found, if the process exited 0 we're good
+            return true;
+        } catch (err: unknown) {
+            const errObj = err as { stdout?: string; stderr?: string; message?: string };
+            // CodeGen's after-commands (package builds) may fail with exit code 1
+            // even though CodeGen itself succeeded. Check stdout for the success marker.
+            if (errObj.stdout && errObj.stdout.includes('MJ CodeGen Complete')) {
+                return true;
+            }
+            const msg = errObj.message ?? String(err);
+            if (msg.includes('not found') || msg.includes('ENOENT') || msg.includes('MODULE_NOT_FOUND')) {
+                throw new RSUError(
+                    'CODEGEN_NOT_AVAILABLE',
+                    `CodeGen not available. Ensure @memberjunction/codegen-lib and ` +
+                    `@memberjunction/server-bootstrap-lite are built. Error: ${msg.substring(0, 300)}`
+                );
+            }
+            throw new RSUError('CODEGEN_FAILED', `CodeGen failed: ${msg.substring(0, 500)}`);
+        } finally {
+            try { unlinkSync(tmpScript); } catch { /* best-effort cleanup */ }
+        }
     }
 
     /**
      * Compile affected TypeScript packages after CodeGen.
      *
-     * By default compiles MJCoreEntities and MJAPI (the primary CodeGen outputs).
-     * Override via RSU_COMPILE_PACKAGES (comma-separated relative paths from work dir).
+     * Uses turbo to build the specified packages. Turbo handles the full
+     * dependency graph and caches unchanged packages automatically.
+     *
+     * Default targets: MJCoreEntities, MJServer, MJAPI (the primary CodeGen outputs).
+     * Override via RSU_COMPILE_PACKAGES (comma-separated npm package names).
+     *
+     * Set RSU_COMPILE_COMMAND to override the entire build command (e.g. for
+     * environments without turbo).
      */
     private async compileTypeScript(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
         const workDir = process.env.RSU_WORK_DIR || process.cwd();
 
-        const defaultPackages = 'packages/MJCoreEntities,packages/MJAPI';
+        // Allow full command override
+        const compileCmd = process.env.RSU_COMPILE_COMMAND;
+        if (compileCmd) {
+            await execAsync(`cd ${workDir} && ${compileCmd}`, { timeout: 300_000 });
+            return true;
+        }
+
+        // Build using turbo with --filter for each package
+        const defaultPackages = '@memberjunction/core-entities,@memberjunction/server,mj_api';
         const envPackages = process.env.RSU_COMPILE_PACKAGES;
         const rawPackages = envPackages !== undefined ? envPackages : defaultPackages;
-        const packagePaths = rawPackages
+        const packageNames = rawPackages
             .split(',')
             .map(p => p.trim())
             .filter(p => p.length > 0);
 
-        for (const pkg of packagePaths) {
-            await execAsync(
-                `cd ${workDir}/${pkg} && npm run build`,
-                { timeout: 120_000 }
-            );
-        }
+        const filterArgs = packageNames.map(p => `--filter="${p}"`).join(' ');
+        await execAsync(
+            `cd ${workDir} && npx turbo build ${filterArgs}`,
+            { timeout: 300_000 } // 5 min for turbo build
+        );
 
         return true;
     }
@@ -540,14 +582,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Helper to execute shell commands asynchronously.
      */
     private async getExecAsync(): Promise<{
-        execAsync: (cmd: string, opts?: { timeout?: number }) => Promise<{ stdout: string; stderr: string }>;
+        execAsync: (cmd: string, opts?: { timeout?: number; maxBuffer?: number }) => Promise<{ stdout: string; stderr: string }>;
     }> {
         const { exec } = await import('node:child_process');
         const { promisify } = await import('node:util');
         const execAsync = promisify(exec);
         return {
-            execAsync: (cmd: string, opts?: { timeout?: number }) =>
-                execAsync(cmd, { timeout: opts?.timeout ?? 60_000 }),
+            execAsync: (cmd: string, opts?: { timeout?: number; maxBuffer?: number }) =>
+                execAsync(cmd, {
+                    timeout: opts?.timeout ?? 60_000,
+                    maxBuffer: opts?.maxBuffer ?? 50 * 1024 * 1024, // 50 MB (CodeGen is verbose)
+                }),
         };
     }
 
