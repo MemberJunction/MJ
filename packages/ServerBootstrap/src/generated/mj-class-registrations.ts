@@ -839,11 +839,12 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/integration-connectors (4 classes)
+// @memberjunction/integration-connectors (5 classes)
 import {
     FileFeedConnector,
     HubSpotConnector,
     SalesforceConnector,
+    WicketConnector,
     YourMembershipConnector,
 } from '@memberjunction/integration-connectors';
 
@@ -1543,6 +1544,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FileFeedConnector,
     HubSpotConnector,
     SalesforceConnector,
+    WicketConnector,
     YourMembershipConnector,
     AIActionQueue,
     EntityAIActionQueue,
@@ -1573,7 +1575,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 659;
+export const CLASS_REGISTRATIONS_COUNT = 660;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -958,6 +958,21 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 25
+          },
+          "primaryKey": {
+            "ID": "3480E500-DEF7-4C35-81BD-4CBFF73B4D5B"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T20:29:09.580Z",
+            "checksum": "afe6e28eba228132e11532a0326d1156577c35039ad1fc50748213613e5a19d5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Kimi K2",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 6

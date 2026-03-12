@@ -1,0 +1,244 @@
+{
+    "wicket": [
+        {
+            "TableName": "Person",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket person UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        },
+        {
+            "TableName": "Organization",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket organization UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        },
+        {
+            "TableName": "Connection",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket connection UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "Group",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket group UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        },
+        {
+            "TableName": "GroupMember",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket group member UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "group_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Group",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "Membership",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket membership tier UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        },
+        {
+            "TableName": "PersonMembership",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket person membership UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Membership",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "organization_membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "OrganizationMembership",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "OrganizationMembership",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket org membership UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Membership",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "PersonEmail",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket email UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "PersonPhone",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket phone UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "PersonAddress",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket address UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "OrganizationEmail",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket email UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "OrganizationPhone",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket phone UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "OrganizationAddress",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket address UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "Touchpoint",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket touchpoint UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "Role",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket role UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        },
+        {
+            "TableName": "UserIdentity",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket user identity UUID (natural key from source)" }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
+        {
+            "TableName": "ResourceTag",
+            "PrimaryKey": [
+                { "FieldName": "uuid", "Description": "Wicket resource tag UUID (natural key from source)" }
+            ],
+            "ForeignKeys": []
+        }
+    ]
+}
