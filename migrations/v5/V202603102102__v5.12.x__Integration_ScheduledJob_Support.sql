@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: Integration Scheduled Job Support
--- Version:   5.11.x
+-- Version:   5.12.x
 -- Purpose:   1. Add ScheduledJobRunID FK to CompanyIntegrationRun for traceability
 --            2. Add ScheduledJobID FK to CompanyIntegration for association
 -- =============================================================================
@@ -25,10 +25,6 @@ ALTER TABLE ${flyway:defaultSchema}.CompanyIntegration
 ADD CONSTRAINT FK_CompanyIntegration_ScheduledJob
     FOREIGN KEY (ScheduledJobID)
     REFERENCES ${flyway:defaultSchema}.ScheduledJob(ID);
-GO
-
--- CompanyIntegration has a custom base view, refresh it so CodeGen picks up the changes
-EXEC sp_refreshview '${flyway:defaultSchema}.vwCompanyIntegrations'
 GO
 
 -- Extended properties
