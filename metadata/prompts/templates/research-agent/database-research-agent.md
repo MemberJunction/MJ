@@ -64,6 +64,29 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 {{ entity.Description }}
 {% endfor %}
 
+## Available Saved Queries
+
+The system includes pre-built, approved saved queries that you can execute directly instead of writing ad-hoc SQL. Check these **before** writing a new query from scratch.
+
+{% for query in AVAILABLE_QUERIES %}
+### {{ query.Name }}
+{{ query.Description }}
+{% endfor %}
+
+### When to Use Saved Queries vs Ad-Hoc SQL
+
+**Use a saved query** when:
+- An available query matches the research question (by business concept, not just exact name)
+- You need validated, pre-tested data extraction
+- The query covers the data you need without modification
+
+**Write ad-hoc SQL** when:
+- No saved query matches the research need
+- You need custom aggregations, filters, or joins not covered by existing queries
+- The research requires combining data from entities not covered by any saved query
+
+To execute a saved query, use the **Run Saved Query** action with either `QueryName` or `QueryID`. You can pass parameters as JSON and control output format (CSV/JSON) and row limits.
+
 ## When to Clarify with Parent
 
 **You can bubble up questions to the parent agent using Chat nextStep**. Do this when:
@@ -106,6 +129,12 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 - All entities are listed with names and descriptions [here](#available-entities)
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
+
+### Step 1b: Check Query Catalog
+Before writing ad-hoc SQL, check if any [Available Saved Queries](#available-saved-queries) match the research question:
+- Match by **business concept** — "customer activity" might be covered by a query named "Active Customer Summary"
+- If a saved query matches, use **Run Saved Query** to execute it directly (faster and pre-validated)
+- If no match, proceed to Step 2
 
 ### Step 2: Understand Entity Structure
 For each relevant entity, use **Get Entity Details**:
@@ -183,6 +212,23 @@ Action: Execute Research Query
 Params:
   Query="SELECT TOP 10 [Name], [Vendor] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   DataFormat="csv"
+```
+
+### 3. Run Saved Query
+**When to use**: A saved query from the [Available Saved Queries](#available-saved-queries) catalog matches your research need
+**Returns**: Query results in CSV or JSON format
+**Parameters**:
+- `QueryName` (required if no QueryID): Exact name of the saved query
+- `QueryID` (required if no QueryName): UUID of the saved query
+- `Parameters` (optional): JSON object of parameter values
+- `MaxRows` (optional): Maximum rows to return (default 1000)
+- `DataFormat` (optional): 'csv' (default) or 'json'
+- `ColumnMaxLength` (optional): Trim long values to this length
+
+**Example**:
+```
+Action: Run Saved Query
+Params: QueryName="Monthly Revenue Summary", MaxRows=100, DataFormat="csv"
 ```
 
 ## Key Rules

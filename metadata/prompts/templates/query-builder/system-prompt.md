@@ -112,6 +112,8 @@ Example messages to the Strategist:
 
 **Always include the plan or SQL context** — never assume the Strategist remembers anything from before.
 
+**Saved query context:** When the current payload has `savedQueryId` and `savedQueryName` set, always include this in your message to the Strategist: "The current results come from the saved query '[savedQueryName]' (ID: [savedQueryId])." This helps the Strategist use composition syntax instead of rewriting existing query logic.
+
 ### Step 3: Present Results (THIS IS THE IMPORTANT STEP)
 
 When the Strategist returns results (in `payloadChangeRequest`), the **artifact viewer automatically renders** the data grid, plan diagrams, and SQL. Your `message` should NOT duplicate any of that. Instead:
@@ -238,6 +240,15 @@ The DataArtifactSpec JSON format used by the viewer **MUST** follow this exact s
 - Keep messages **brief and narrative** — the artifact viewer renders all data grids, plan diagrams, and SQL
 - Highlight key findings: trends, outliers, totals
 - Always offer next actions via `responseForm`
+
+## Query Composition
+
+The Query Strategist can **compose new queries from existing reusable queries** using `{% raw %}{{query:"..."}}{% endraw %}` macro syntax. When the Strategist returns results that use composition:
+- Mention that the query builds on existing saved queries (if applicable)
+- When presenting results, note if the data leverages pre-validated building blocks
+- After showing results, consider offering: "Would you like to mark this query as reusable for future composition?"
+
+You don't need to understand the composition syntax — the Strategist handles all technical details. Just be aware that queries can reference other queries, and this is a feature worth surfacing to users.
 
 ## Data Sources Available
 

@@ -73,11 +73,12 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "ALL_QUERIES",
-            "Description": "Complete list of existing queries for reference and composition",
+            "Description": "Complete list of existing queries for reference and composition. Includes Reusable flag and SQL for composition planning.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
+            "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Status\"]",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Status\", \"Reusable\", \"SQL\"]",
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -90,8 +91,8 @@
             "ID": "87D8E91D-A10C-43A8-91D2-694819E422C3"
           },
           "sync": {
-            "lastModified": "2026-02-19T02:31:20.515Z",
-            "checksum": "4c9476d9b4fb3172cac3fed3d515fbe787ae64a6b9b3a68b9805149847df1d03"
+            "lastModified": "2026-03-12T17:31:34.098Z",
+            "checksum": "4e83b122eef5f1e4584f80c33a99151058d44a6f54a5213a624ef882f1b3bd76"
           }
         },
         {
@@ -245,6 +246,32 @@
                   "lastModified": "2026-02-19T02:31:20.836Z",
                   "checksum": "2e4ca340b49e365ea51bbf154dc2743aa323a2784cbbaa9a5dffea29007f3852"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "REUSABLE_QUERIES",
+                  "Description": "Catalog of reusable queries that can be composed into new queries via {{query:\"Category/Name(params)\"}} syntax. Only approved, reusable queries are shown.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Queries",
+                  "ExtraFilter": "Reusable = 1 AND Status = 'Approved'",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"SQL\", \"Reusable\"]",
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 2,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "51E37233-0205-4AA8-A03E-954FEBEF6D85"
+                },
+                "sync": {
+                  "lastModified": "2026-03-12T17:31:34.197Z",
+                  "checksum": "620440ac4302504605e9542d429898365fda5be4b0db636383316dc2d5a7f467"
+                }
               }
             ],
             "MJ: AI Agent Actions": [
@@ -274,6 +301,20 @@
                 "sync": {
                   "lastModified": "2026-02-19T02:31:20.904Z",
                   "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Run Saved Query",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D0B4388C-2290-4D35-BCC6-C31E085B33A4"
+                },
+                "sync": {
+                  "lastModified": "2026-03-12T17:31:34.254Z",
+                  "checksum": "bdbab426010f42174d113eb012dada96b843d5128bf73ea51238c922bf8ee008"
                 }
               }
             ]

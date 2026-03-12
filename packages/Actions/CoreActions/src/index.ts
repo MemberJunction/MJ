@@ -46,6 +46,7 @@ export * from './custom/data/explore-database-schema.action';
 export * from './custom/data/execute-research-query.action';
 export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
+export * from './custom/data/run-saved-query.action';
 
 // Code Execution Actions
 export * from './custom/code-execution/execute-code.action';

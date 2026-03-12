@@ -54,6 +54,32 @@
             "lastModified": "2026-02-25T23:25:50.117Z",
             "checksum": "bba158c2c079b16504175a9cb0e16bd25892cb6863e16ce82a49286791b0a0ee"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "AVAILABLE_QUERIES",
+            "Description": "Catalog of approved saved queries available for execution via Run Saved Query action. Check here before writing ad-hoc SQL — saved queries are pre-validated and optimized.",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Queries",
+            "ExtraFilter": "Status = 'Approved'",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 2,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "3E1E5505-B357-4D01-A604-8821050F3147"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:34.469Z",
+            "checksum": "bc2b4a9c8162e1f5ddd62dce16d9c0a9ff60ed4bad98c34e55b2187b2d731eaa"
+          }
         }
       ],
       "MJ: AI Agent Actions": [
@@ -83,6 +109,20 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.782Z",
             "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Saved Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6F8DCEE-A64B-49CC-893F-EE8A969F5CBD"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:34.498Z",
+            "checksum": "bdbab426010f42174d113eb012dada96b843d5128bf73ea51238c922bf8ee008"
           }
         }
       ],

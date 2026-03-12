@@ -202,10 +202,12 @@ export class MJQueryEntityServer extends MJQueryEntity {
     private async extractAndSyncData(): Promise<void> {
         try {
             // Check if SQL contains Nunjucks syntax (determines if query uses templates/parameters)
-            const hasNunjucksSyntax = this.SQL && (
-                this.SQL.includes('{{') ||
-                this.SQL.includes('{%') ||
-                this.SQL.includes('{#')
+            // Strip out {{query:"..."}} composition tokens first — they are NOT Nunjucks parameters
+            const sqlWithoutCompositionTokens = this.SQL ? this.SQL.replace(/\{\{query:"[^"]+"\}\}/g, '') : '';
+            const hasNunjucksSyntax = sqlWithoutCompositionTokens && (
+                sqlWithoutCompositionTokens.includes('{{') ||
+                sqlWithoutCompositionTokens.includes('{%') ||
+                sqlWithoutCompositionTokens.includes('{#')
             );
 
             // Ensure AIEngine is configured
@@ -268,8 +270,14 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 syncPromises.push(this.removeAllQueryParameters());
             }
 
-            // Always sync query fields if we got a selectClause back
-            if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
+            // For SELECT * queries, use deterministic field extraction from entity metadata
+            // instead of the AI (which can't enumerate all columns from *)
+            // For SELECT * queries, use deterministic field extraction from entity metadata
+            // instead of the AI (which can't enumerate all columns from *)
+            const selectStarFields = this.buildFieldsForSelectStar();
+            if (selectStarFields) {
+                syncPromises.push(this.syncQueryFields(selectStarFields));
+            } else if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
                 syncPromises.push(this.syncQueryFields(result.result.selectClause));
             }
 
@@ -376,6 +384,17 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     private async syncQueryParameters(extractedParams: ExtractedParameter[]): Promise<void> {
+        // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens.
+        // The AI extraction prompt should skip these, but this is a safety net.
+        const compositionTokenRegex = /\{\{query:"[^"]+"\}\}/;
+        const filteredParams = extractedParams.filter(p => {
+            if (p.name === 'query' && this.SQL && compositionTokenRegex.test(this.SQL)) {
+                return false;
+            }
+            return true;
+        });
+        extractedParams = filteredParams;
+
         // Use the entity's provider instead of creating new Metadata instance
         // Use same casting pattern as RefreshRelatedMetadata method
         const md = this.ProviderToUse as any as IMetadataProvider;
@@ -553,59 +572,183 @@ export class MJQueryEntityServer extends MJQueryEntity {
         }
     }
     
+    private mapSqlTypeToFieldType(sqlType: string | null): 'number' | 'string' | 'date' | 'boolean' {
+        if (!sqlType) return 'string';
+        const lower = sqlType.toLowerCase();
+        if (lower.includes('int') || lower.includes('decimal') || lower.includes('numeric') ||
+            lower.includes('float') || lower.includes('real') || lower.includes('money')) {
+            return 'number';
+        } else if (lower.includes('date') || lower.includes('time')) {
+            return 'date';
+        } else if (lower.includes('bit')) {
+            return 'boolean';
+        }
+        return 'string';
+    }
+
+    /**
+     * Detects if the SQL uses SELECT * and if so, builds the complete field list deterministically
+     * from entity metadata without relying on the AI (which can't enumerate * columns).
+     * Returns null if the SQL doesn't use SELECT * or if entities can't be resolved.
+     */
+    private buildFieldsForSelectStar(): ExtractedField[] | null {
+        if (!this.SQL) return null;
+
+        // Check if SELECT clause contains * (possibly with table alias like "a.*")
+        // Use a simple regex that matches SELECT ... * ... FROM (ignoring subqueries)
+        const selectStarRegex = /\bSELECT\s+(?:(?:TOP\s+\d+|DISTINCT)\s+)?(\*|[\w.]+\.\*)\s+FROM\b/i;
+        if (!selectStarRegex.test(this.SQL)) return null;
+
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+
+        try {
+            const parseResult = SQLParser.ParseWithTemplatePreprocessing(this.SQL);
+            const expandedFields: ExtractedField[] = [];
+
+            for (const tableRef of parseResult.Tables) {
+                const matchingEntity = md.Entities.find(e =>
+                    (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
+                     e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+                    e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+                );
+
+                if (matchingEntity) {
+                    for (const entityField of matchingEntity.Fields) {
+                        if (!expandedFields.some(f => f.name === entityField.Name)) {
+                            expandedFields.push({
+                                name: entityField.Name,
+                                description: entityField.Description || `${entityField.Name} field from ${matchingEntity.Name}`,
+                                type: this.mapSqlTypeToFieldType(entityField.Type),
+                                optional: false,
+                                sourceEntity: matchingEntity.Name,
+                                sourceFieldName: entityField.Name,
+                                isComputed: false,
+                                isSummary: false
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Also check for {{query:"..."}} composition tokens in FROM clause
+            if (expandedFields.length === 0) {
+                const compositionTokenRegex = /\{\{query:"([^"]+)"\}\}/g;
+                let match: RegExpExecArray | null;
+
+                while ((match = compositionTokenRegex.exec(this.SQL)) !== null) {
+                    const tokenContent = match[1];
+                    const parenIdx = tokenContent.indexOf('(');
+                    const pathPart = parenIdx >= 0 ? tokenContent.substring(0, parenIdx) : tokenContent;
+                    const segments = pathPart.split('/');
+                    const queryName = segments[segments.length - 1].trim();
+
+                    const referencedQuery = Metadata.Provider.Queries.find(q =>
+                        q.Name.toLowerCase() === queryName.toLowerCase()
+                    );
+
+                    if (referencedQuery && referencedQuery.Fields.length > 0) {
+                        for (const qField of referencedQuery.Fields) {
+                            if (!expandedFields.some(f => f.name === qField.Name)) {
+                                expandedFields.push({
+                                    name: qField.Name,
+                                    description: qField.Description || `${qField.Name} from query "${referencedQuery.Name}"`,
+                                    type: this.mapSqlTypeToFieldType(qField.SQLBaseType),
+                                    optional: false,
+                                    sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
+                                    sourceFieldName: qField.SourceFieldName || null,
+                                    isComputed: qField.IsComputed || false,
+                                    isSummary: qField.IsSummary || false
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return expandedFields.length > 0 ? expandedFields : null;
+        } catch (error) {
+            console.warn(`Query "${this.Name}" - Error in buildFieldsForSelectStar:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Finds an entity by name, checking both Name (which may have "MJ: " prefix) and DisplayName.
+     * The AI often returns entity names without the "MJ: " prefix, so we need to match both.
+     */
+    private findEntityByName(md: IMetadataProvider, name: string): ReturnType<typeof md.Entities.find> {
+        const lower = name.toLowerCase();
+        return md.Entities.find(e =>
+            e.Name.toLowerCase() === lower || (e.DisplayName && e.DisplayName.toLowerCase() === lower)
+        );
+    }
+
     /**
      * Expands wildcard (*) entries in the extracted fields list.
-     * When AI returns a field with sourceFieldName="*", it indicates a SELECT table.* pattern.
-     * We expand this into individual field entries by looking up the entity's fields from metadata.
+     * When AI returns a field with name="*" or sourceFieldName="*", we expand it into
+     * individual field entries by looking up the source from metadata.
+     * If the AI didn't provide a sourceEntity, we parse the SQL's FROM clause to find it.
      */
     private expandWildcardFields(extractedFields: ExtractedField[], md: IMetadataProvider): ExtractedField[] {
+        // Check if any field is a wildcard that needs expansion
+        const hasWildcard = extractedFields.some(f => f.name === '*' || f.sourceFieldName === '*');
+        if (!hasWildcard) return extractedFields;
+
         const expandedFields: ExtractedField[] = [];
 
         for (const field of extractedFields) {
-            // Check if this is a wildcard entry: sourceFieldName is "*" and sourceEntity is set
-            if (field.sourceFieldName === '*' && field.sourceEntity) {
-                // Look up the entity in metadata
-                const sourceEntityInfo = md.Entities.find(e =>
-                    e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
-                );
+            const isWildcard = field.name === '*' || field.sourceFieldName === '*';
+            if (!isWildcard) {
+                expandedFields.push(field);
+                continue;
+            }
+
+            // If we have a sourceEntity, try to resolve from it
+            if (field.sourceEntity) {
+                const sourceEntityInfo = this.findEntityByName(md, field.sourceEntity!);
 
                 if (sourceEntityInfo) {
-                    // Expand the wildcard into individual fields from the entity
                     for (const entityField of sourceEntityInfo.Fields) {
-                        // Map SQL type to our simplified type system
-                        let fieldType: 'number' | 'string' | 'date' | 'boolean' = 'string';
-                        const sqlTypeLower = entityField.Type.toLowerCase();
-                        if (sqlTypeLower.includes('int') || sqlTypeLower.includes('decimal') ||
-                            sqlTypeLower.includes('numeric') || sqlTypeLower.includes('float') ||
-                            sqlTypeLower.includes('real') || sqlTypeLower.includes('money')) {
-                            fieldType = 'number';
-                        } else if (sqlTypeLower.includes('date') || sqlTypeLower.includes('time')) {
-                            fieldType = 'date';
-                        } else if (sqlTypeLower.includes('bit')) {
-                            fieldType = 'boolean';
-                        }
-
                         expandedFields.push({
-                            name: entityField.Name, // SQL Server returns original column names for *
-                            description: entityField.Description || `${entityField.Name} field from ${field.sourceEntity}`,
-                            type: fieldType,
-                            optional: field.optional, // Inherit from the wildcard entry
-                            sourceEntity: field.sourceEntity,
+                            name: entityField.Name,
+                            description: entityField.Description || `${entityField.Name} field from ${sourceEntityInfo.Name}`,
+                            type: this.mapSqlTypeToFieldType(entityField.Type),
+                            optional: field.optional,
+                            sourceEntity: sourceEntityInfo.Name,
                             sourceFieldName: entityField.Name,
                             isComputed: false,
                             isSummary: false
                         });
                     }
-                } else {
-                    // Entity not found in metadata - keep the original entry as-is
-                    // but log a warning
-                    console.warn(`Query "${this.Name}" - Could not expand wildcard for entity "${field.sourceEntity}" - entity not found in metadata`);
-                    expandedFields.push(field);
+                    continue;
                 }
-            } else {
-                // Not a wildcard entry - keep as-is
+
+                // sourceEntity didn't match an entity — try as a query name
+                const composedQuery = Metadata.Provider.Queries.find(q =>
+                    q.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
+                );
+                if (composedQuery && composedQuery.Fields.length > 0) {
+                    for (const qField of composedQuery.Fields) {
+                        expandedFields.push({
+                            name: qField.Name,
+                            description: qField.Description || `${qField.Name} from query "${composedQuery.Name}"`,
+                            type: this.mapSqlTypeToFieldType(qField.SQLBaseType),
+                            optional: field.optional,
+                            sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
+                            sourceFieldName: qField.SourceFieldName || null,
+                            isComputed: qField.IsComputed || false,
+                            isSummary: qField.IsSummary || false
+                        });
+                    }
+                    continue;
+                }
+
                 expandedFields.push(field);
+                continue;
             }
+
+            // No sourceEntity and no match — keep the raw entry as-is
+            expandedFields.push(field);
         }
 
         return expandedFields;
@@ -693,10 +836,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
                 // Set source entity tracking
                 if (field.sourceEntity) {
-                    // Look up entity ID from entity name
-                    const sourceEntityInfo = md.Entities.find(e =>
-                        e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
-                    );
+                    // Look up entity ID from entity name (check both Name and DisplayName for "MJ: " prefix)
+                    const sourceEntityInfo = this.findEntityByName(md, field.sourceEntity);
                     if (sourceEntityInfo) {
                         newField.SourceEntityID = sourceEntityInfo.ID;
                     }
@@ -736,9 +877,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
                     // Update source entity tracking
                     if (extractedField.sourceEntity) {
-                        const sourceEntityInfo = md.Entities.find(e =>
-                            e.Name.toLowerCase() === extractedField.sourceEntity!.toLowerCase()
-                        );
+                        const sourceEntityInfo = this.findEntityByName(md, extractedField.sourceEntity);
                         if (sourceEntityInfo && !UUIDsEqual(existingField.SourceEntityID, sourceEntityInfo.ID)) {
                             existingField.SourceEntityID = sourceEntityInfo.ID;
                             hasChanges = true;
@@ -774,7 +913,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             if (promises.length > 0) {
                 await Promise.all(promises);
             }
-            
+
         } catch (e) {
             LogError(`Query "${this.Name}" - Failed to sync fields:`, e);
             throw e;
