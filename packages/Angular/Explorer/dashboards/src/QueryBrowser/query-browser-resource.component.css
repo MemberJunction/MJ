@@ -562,12 +562,12 @@ mj-query-viewer {
 /* ─── Right-panel icon button override (white background context) ─────── */
 .query-viewer-header .icon-btn {
     background: transparent;
-    color: #555;
+    color: var(--mj-text-secondary);
 }
 
 .query-viewer-header .icon-btn:hover {
-    background: #f0f0f0;
-    color: #333;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
 }
 
 /* ─── No-selection create button ─────────────────────────────────────── */
@@ -577,8 +577,8 @@ mj-query-viewer {
     gap: 6px;
     margin-top: 16px;
     padding: 8px 20px;
-    background: #5c6bc0;
-    color: #fff;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -588,14 +588,14 @@ mj-query-viewer {
 }
 
 .no-selection-create-btn:hover {
-    background: #3949ab;
+    background: var(--mj-brand-primary-hover);
 }
 
 /* ─── Drawer Backdrop ─────────────────────────────────────────────────── */
 .query-drawer-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--mj-bg-overlay);
     z-index: 1100;
     animation: backdropFadeIn 0.22s ease-out;
 }
@@ -613,7 +613,7 @@ mj-query-viewer {
     bottom: 0;
     width: 480px;
     max-width: 96vw;
-    background: #fff;
+    background: var(--mj-bg-surface);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
     z-index: 1101;
     display: flex;
@@ -632,8 +632,8 @@ mj-query-viewer {
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
-    background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-hover) 100%);
+    color: var(--mj-text-inverse);
     flex-shrink: 0;
 }
 
@@ -674,7 +674,7 @@ mj-query-viewer {
     height: 32px;
     border: none;
     background: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    color: var(--mj-text-inverse);
     border-radius: 6px;
     cursor: pointer;
     font-size: 16px;
@@ -697,9 +697,9 @@ mj-query-viewer {
 }
 
 .query-drawer-body::-webkit-scrollbar { width: 6px; }
-.query-drawer-body::-webkit-scrollbar-track { background: #f1f1f1; }
-.query-drawer-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
-.query-drawer-body::-webkit-scrollbar-thumb:hover { background: #aaa; }
+.query-drawer-body::-webkit-scrollbar-track { background: var(--mj-bg-surface-sunken); }
+.query-drawer-body::-webkit-scrollbar-thumb { background: var(--mj-border-strong); border-radius: 3px; }
+.query-drawer-body::-webkit-scrollbar-thumb:hover { background: var(--mj-text-disabled); }
 
 /* ─── Drawer Form Fields ──────────────────────────────────────────────── */
 .drawer-field {
@@ -725,11 +725,11 @@ mj-query-viewer {
 .drawer-label {
     font-size: 13px;
     font-weight: 500;
-    color: #555;
+    color: var(--mj-text-secondary);
 }
 
 .drawer-required {
-    color: #e53e3e;
+    color: var(--mj-status-error);
     margin-left: 2px;
 }
 
@@ -738,11 +738,11 @@ mj-query-viewer {
 .drawer-textarea {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
     font-size: 14px;
-    color: #333;
-    background: #fff;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
     box-sizing: border-box;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     outline: none;
@@ -752,15 +752,15 @@ mj-query-viewer {
 .drawer-input:focus,
 .drawer-select:focus,
 .drawer-textarea:focus {
-    border-color: #5c6bc0;
-    box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.15);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .drawer-input:disabled,
 .drawer-select:disabled,
 .drawer-textarea:disabled {
-    background: #f9f9f9;
-    color: #999;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-disabled);
     cursor: not-allowed;
 }
 
@@ -772,20 +772,20 @@ mj-query-viewer {
 .drawer-sql-editor {
     display: block;
     min-height: 220px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
     overflow: hidden;
 }
 
 .drawer-field-error .drawer-input,
 .drawer-field-error .drawer-select {
-    border-color: #e53e3e;
-    box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.12);
+    border-color: var(--mj-status-error);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-error) 12%, transparent);
 }
 
 .drawer-field-hint {
     font-size: 12px;
-    color: #e53e3e;
+    color: var(--mj-status-error);
 }
 
 /* ─── Open Full Record link ───────────────────────────────────────────── */
@@ -794,23 +794,23 @@ mj-query-viewer {
     align-items: center;
     gap: 6px;
     padding: 10px 14px;
-    background: #f0f4ff;
-    border: 1px solid #c7d2fe;
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
     border-radius: 6px;
     font-size: 13px;
-    color: #4338ca;
+    color: var(--mj-brand-primary-hover);
     flex-wrap: wrap;
 }
 
 .drawer-full-record > i {
     flex-shrink: 0;
-    color: #6366f1;
+    color: var(--mj-brand-primary);
 }
 
 .drawer-link-btn {
     background: none;
     border: none;
-    color: #4338ca;
+    color: var(--mj-brand-primary-hover);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -823,15 +823,15 @@ mj-query-viewer {
 }
 
 .drawer-link-btn:hover {
-    color: #3730a3;
+    color: var(--mj-brand-primary-active);
 }
 
 /* ─── Drawer Footer ───────────────────────────────────────────────────── */
 .query-drawer-footer {
     flex-shrink: 0;
     padding: 16px 20px;
-    border-top: 1px solid #e5e7eb;
-    background: #fafafa;
+    border-top: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -842,11 +842,11 @@ mj-query-viewer {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
+    background: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
     border-radius: 6px;
     font-size: 13px;
-    color: #c53030;
+    color: var(--mj-status-error-text);
 }
 
 .drawer-footer-actions {
@@ -876,25 +876,25 @@ mj-query-viewer {
 }
 
 .drawer-btn-primary {
-    background: #5c6bc0;
-    color: #fff;
-    border-color: #5c6bc0;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
 }
 
 .drawer-btn-primary:hover:not(:disabled) {
-    background: #3949ab;
-    border-color: #3949ab;
+    background: var(--mj-brand-primary-hover);
+    border-color: var(--mj-brand-primary-hover);
 }
 
 .drawer-btn-secondary {
-    background: #fff;
-    color: #555;
-    border-color: #d1d5db;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border-color: var(--mj-border-default);
 }
 
 .drawer-btn-secondary:hover:not(:disabled) {
-    background: #f5f5f5;
-    color: #333;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-primary);
 }
 
 /* ─── Responsive drawer ───────────────────────────────────────────────── */

@@ -735,14 +735,14 @@
 
 .technical-description-preview {
     margin-top: 16px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--mj-border-default);
     padding-top: 12px;
 }
 
 .preview-label {
     font-size: 12px;
     font-weight: 600;
-    color: #666;
+    color: var(--mj-text-muted);
     margin-bottom: 8px;
     display: flex;
     align-items: center;
@@ -757,17 +757,17 @@
 
 /* Dependent Queries */
 .dependents-icon {
-    color: #ef6c00;
+    color: var(--mj-status-warning);
 }
 
 .dependents-description {
     padding: 0 20px 12px;
     font-size: 13px;
-    color: #666;
+    color: var(--mj-text-muted);
 }
 
 .dependents-description code {
-    background: #f0f0f0;
+    background: var(--mj-bg-surface-sunken);
     padding: 1px 5px;
     border-radius: 3px;
     font-size: 12px;
@@ -775,21 +775,21 @@
 
 .dependent-card {
     cursor: pointer;
-    border-left: 3px solid #ef6c00 !important;
+    border-left: 3px solid var(--mj-status-warning) !important;
 }
 
 .dependent-card:hover {
-    border-left-color: #e65100 !important;
-    background: #fff8f0 !important;
+    border-left-color: var(--mj-status-warning-text) !important;
+    background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface)) !important;
 }
 
 .dependent-query-icon {
-    color: #ef6c00 !important;
+    color: var(--mj-status-warning) !important;
 }
 
 .item-card-footer {
     padding-top: 8px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--mj-bg-surface-sunken);
     margin-top: 8px;
 }
 
@@ -798,10 +798,10 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
     font-weight: 500;
 }
 
 .dependent-card:hover .open-link {
-    color: #3949ab;
+    color: var(--mj-brand-primary-hover);
 }
