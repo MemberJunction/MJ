@@ -4,13 +4,14 @@
 
 1. [Status Summary](#1-status-summary)
 2. [What's Complete](#2-whats-complete)
-3. [Sub-Phase B: Server-Side Paging for Queries](#3-sub-phase-b-server-side-paging-for-queries)
-4. [Sub-Phase C: Query Caching with TTL](#4-sub-phase-c-query-caching-with-ttl)
-5. [Sub-Phase D: PostgreSQL Query Variants](#5-sub-phase-d-postgresql-query-variants)
-6. [Future Phase: View-Query Bridge](#6-future-phase-view-query-bridge)
-7. [Cross-Cutting Concerns](#7-cross-cutting-concerns)
-8. [File Inventory](#8-file-inventory)
-9. [Remaining Task List](#9-remaining-task-list)
+3. [Sub-Phase E: Agent Query Awareness](#3-sub-phase-e-agent-query-awareness) **(NEXT)**
+4. [Sub-Phase B: Server-Side Paging for Queries](#4-sub-phase-b-server-side-paging-for-queries)
+5. [Sub-Phase C: Query Caching with TTL](#5-sub-phase-c-query-caching-with-ttl)
+6. [Sub-Phase D: PostgreSQL Query Variants](#6-sub-phase-d-postgresql-query-variants)
+7. [Future Phase: View-Query Bridge](#7-future-phase-view-query-bridge)
+8. [Cross-Cutting Concerns](#8-cross-cutting-concerns)
+9. [File Inventory](#9-file-inventory)
+10. [Remaining Task List](#10-remaining-task-list)
 
 ---
 
@@ -30,6 +31,7 @@ This plan tracks remaining work for the Composable Queries feature set. It super
 | Sub-Phase | Status | Notes |
 |-----------|--------|-------|
 | **A — Composable Query Engine** | **COMPLETE** | Schema, engine, dependency sync, UI, metadata dataset fix — all 21 tasks done |
+| **E — Agent Query Awareness** | **NOT STARTED** | Teach Query Builder + Database Research agents about composable queries, existing query catalog, and RunQuery |
 | **B — Server-Side Paging** | **NOT STARTED** | CTE-wrapped `OFFSET/FETCH` paging for all query execution |
 | **C — Query Caching with TTL** | **PARTIALLY DONE** | QueryCache infrastructure exists; needs PG integration, dependency-graph invalidation, page-aware keys |
 | **D — PostgreSQL Variants** | **WIRED UP** | `GetPlatformSQL()` wired through composition chain; PG provider has `PlatformKey` override; needs integration testing |
@@ -103,7 +105,242 @@ This plan tracks remaining work for the Composable Queries feature set. It super
 
 ---
 
-## 3. Sub-Phase B: Server-Side Paging for Queries
+## 3. Sub-Phase E: Agent Query Awareness
+
+**Status: NOT STARTED — Recommended Next Phase**
+
+### 3.1 Overview
+
+Now that the composable query engine is built, our AI agents need to know about it. Two agents need updates with different scopes:
+
+- **Query Builder Agent + Query Strategist**: Full composer — can create new queries that reference existing ones via `{{query:"..."}}` syntax, search the query catalog semantically, understand the full query lifecycle (Reusable, Status, Dependencies), and leverage composition for modular SQL design.
+- **Database Research Agent**: Consumer — gains knowledge of the existing query catalog and the ability to run saved queries via RunQuery (instead of always writing ad-hoc SQL), but does NOT create or save new queries.
+
+### 3.2 Query Builder Agent Changes
+
+#### 3.2.1 Enhanced ALL_QUERIES Data Source
+
+The existing `ALL_QUERIES` data source provides basic query metadata (ID, Name, Description, CategoryID, Status). It needs enrichment:
+
+**Add fields:**
+- `Reusable` — so the agent knows which queries can be composed
+- `SQL` — so the agent can inspect what a reusable query does (needed for composition planning)
+- `Parameters` — JSON summary of query parameters (name, type, default) so the agent knows what params to pass
+- `Fields` — JSON summary of query output fields (name, type) so the agent knows what columns a composed CTE will expose
+- `DependencyCount` — number of queries this one depends on (indicates composition depth)
+
+**Filter to useful queries:** Consider filtering to `Status = 'Approved'` to avoid showing the agent pending/rejected queries that can't be composed.
+
+#### 3.2.2 New Data Source: REUSABLE_QUERIES
+
+A focused data source specifically for composition candidates:
+
+```
+Entity: Queries
+Filter: Reusable = 1 AND Status = 'Approved'
+Fields: ID, Name, Description, CategoryPath, SQL, Parameters (summary), Fields (summary)
+```
+
+This gives the Query Strategist a clean catalog of building blocks. The category path enables the `{{query:"Category/Name"}}` reference syntax.
+
+#### 3.2.3 Query Strategist Prompt Updates
+
+The Query Strategist prompt (`templates/query-builder/query-strategist-prompt.md`) needs significant additions:
+
+**New section: "Composable Query Architecture"**
+- Explain `{{query:"Category/SubCat/Name(params)"}}` syntax
+- Explain that referenced queries resolve to CTEs at execution time
+- Explain parameter modes: static (`param='value'`) vs pass-through (`param=paramName`)
+- Explain that only `Reusable = true` + `Status = 'Approved'` queries can be referenced
+- Explain deduplication: same query+params referenced multiple times → one CTE
+
+**New section: "When to Compose vs Write Fresh"**
+- Compose when: an existing reusable query already captures the business logic needed (e.g., "Active Customers", "Revenue By Region")
+- Write fresh when: the needed logic is unique to this query and unlikely to be reused
+- Compose for layered analysis: e.g., "Top Spenders" = compose "Active Customers" + join with orders
+- Don't over-compose: if the existing query is trivially simple (single table, simple filter), just write the SQL inline
+
+**New section: "Searching the Query Catalog"**
+- Before writing SQL from scratch, check REUSABLE_QUERIES for existing building blocks
+- Match by business concept, not just name (e.g., user asks about "customer churn" → check for "Active Customers", "Customer Retention", "Churned Accounts")
+- When composing, always verify the referenced query's output fields match what you need
+
+**New section: "Composition Examples"**
+```sql
+-- Simple composition: reuse Active Customers
+SELECT ac.Name, ac.Email, SUM(o.Total) as TotalSpend
+FROM {{query:"Sales/Customers/Active Customers"}} ac
+JOIN [__mj].[vwOrders] o ON o.CustomerID = ac.ID
+GROUP BY ac.Name, ac.Email
+ORDER BY TotalSpend DESC
+
+-- Parameterized composition: pass region through
+SELECT r.*, p.ProductName
+FROM {{query:"Analytics/Revenue By Region(region=region)"}} r
+JOIN [__mj].[vwProducts] p ON p.ID = r.TopProductID
+WHERE r.Total > {{minRevenue}}
+
+-- Multi-composition: combine two reusable queries
+SELECT ac.Name, rev.TotalRevenue, rev.OrderCount
+FROM {{query:"Sales/Active Customers"}} ac
+JOIN {{query:"Analytics/Revenue By Customer(year='2024')"}} rev ON rev.CustomerID = ac.ID
+WHERE rev.TotalRevenue > 10000
+```
+
+**Update existing SQL generation rules:**
+- After Step 1 (Explore Schema), add Step 1b: "Search Query Catalog" — check REUSABLE_QUERIES for relevant building blocks before writing SQL
+- In Step 3 (Write SQL), add composition as a first-class option alongside direct entity queries
+
+**New guidance: "Making Queries Reusable"**
+- When creating a query that captures a broadly useful business concept, suggest setting `Reusable = true`
+- Good reusable candidates: filtered entity sets ("Active Customers"), computed metrics ("Monthly Revenue"), complex joins that multiple analyses would need
+- Poor reusable candidates: one-off exploratory queries, highly parameterized ad-hoc filters
+
+#### 3.2.4 Query Builder Orchestrator Prompt Updates
+
+The Query Builder orchestrator prompt (`templates/query-builder/system-prompt.md`) needs lighter-touch updates:
+
+- Add awareness that the Strategist can now compose queries from existing reusable queries
+- When presenting results to user, mention if composition was used (e.g., "This query builds on your existing 'Active Customers' query")
+- Add a `responseForm` option: "Would you like to mark this query as reusable for future composition?"
+- When user asks about existing queries, the agent can reference the catalog and suggest running or composing from them
+
+#### 3.2.5 RunQuery Action for Query Builder
+
+Currently the Query Builder tests queries via `Execute Research Query` (ad-hoc SQL). Add the ability to run saved queries by ID:
+
+- Add a new action or extend existing: **Run Saved Query** — executes a saved query by ID with parameter values
+- This lets the Strategist test a composed query end-to-end (composition engine resolves `{{query:"..."}}` server-side)
+- Parameters: `QueryID` (required), `Parameters` (optional key-value map), `MaxRows` (default 10)
+
+### 3.3 Database Research Agent Changes
+
+#### 3.3.1 New Data Source: AVAILABLE_QUERIES
+
+Add a data source to the Database Research agent providing the query catalog:
+
+```
+Entity: Queries
+Filter: Status = 'Approved'
+Fields: ID, Name, Description, CategoryPath, Parameters (summary), Fields (summary)
+```
+
+Unlike the Query Builder, the Research Agent does NOT need the SQL — it treats queries as black boxes it can run and get results from.
+
+#### 3.3.2 New Action: Run Saved Query
+
+Give the Database Research Agent the ability to execute saved queries:
+
+- Action: **Run Saved Query** — executes a query by ID, returns results in the same format as Execute Research Query
+- Parameters: `QueryID`, `Parameters` (key-value map), `MaxRows`, `DataFormat` ('csv' or 'json'), `AnalysisRequest`, `ReturnType`
+- The agent chooses between ad-hoc SQL and saved queries based on what's available
+
+#### 3.3.3 Database Research Agent Prompt Updates
+
+The Database Research prompt (`templates/research-agent/database-research-agent.md`) needs additions:
+
+**New section: "Available Saved Queries"**
+- Before writing ad-hoc SQL, check AVAILABLE_QUERIES for pre-built queries that answer the research question
+- Saved queries are pre-validated, optimized, and may use composition (referencing other queries)
+- Running a saved query is preferred over writing ad-hoc SQL when a good match exists
+
+**New decision tree addition (before Step 3: Write SQL):**
+```
+Step 2b: Check Query Catalog
+- Review AVAILABLE_QUERIES for relevant saved queries
+- If a saved query matches the research need:
+  → Use Run Saved Query action instead of writing ad-hoc SQL
+  → Pass appropriate parameter values
+- If no good match:
+  → Proceed to Step 3 (Write SQL) as before
+```
+
+**When to use saved queries vs ad-hoc SQL:**
+- Use saved query when: it directly answers the research question, or answers a significant part of it
+- Use ad-hoc SQL when: no saved query matches, or the research needs a unique perspective on the data
+- Can mix: run a saved query for the core data, then write ad-hoc SQL for additional context
+
+**Context efficiency benefit:**
+- Saved queries are often well-optimized with proper joins and filters
+- Using them reduces the chance of schema errors (wrong field names, missing joins)
+- The agent doesn't need to explore entity structure for data already captured by a saved query
+
+### 3.4 Semantic Query Search
+
+#### 3.4.1 Overview
+
+Both agents need to find relevant queries by business concept, not just exact name match. This requires semantic search over the query catalog.
+
+#### 3.4.2 Approach Options
+
+**Option A: LLM-based matching (simpler, immediate)**
+- Include full REUSABLE_QUERIES / AVAILABLE_QUERIES in agent context
+- Let the LLM's own reasoning match user intent to query descriptions
+- Pro: No infrastructure needed, works with existing agent architecture
+- Con: Scales poorly beyond ~200 queries (context window pressure)
+
+**Option B: Vector search action (scalable, future)**
+- Create a **Search Query Catalog** action that uses MJ's vector/embedding infrastructure
+- Input: natural language description of what data is needed
+- Output: ranked list of matching queries with relevance scores
+- Pro: Scales to thousands of queries, precise matching
+- Con: Requires vector embeddings on queries (setup work)
+
+**Recommendation:** Start with Option A (LLM matching via data sources). Move to Option B when query catalogs exceed ~100 reusable queries per organization.
+
+### 3.5 Implementation Considerations
+
+#### 3.5.1 Data Source Enrichment
+
+The ALL_QUERIES and new REUSABLE_QUERIES data sources need query parameters and fields as inline summaries. Two approaches:
+
+**Approach A: Denormalized in data source query**
+- JOIN QueryParameter and QueryField into the data source SQL
+- Aggregate as JSON arrays per query
+- Pro: Single data source load, no extra round-trips
+- Con: Large payload if many queries with many params/fields
+
+**Approach B: On-demand via Get Query Details action**
+- Keep data sources lightweight (ID, Name, Description, Category)
+- Add a **Get Query Details** action that returns full metadata for a specific query
+- Pro: Only loads details for queries the agent is interested in
+- Con: Extra action call per query investigated
+
+**Recommendation:** Approach A for REUSABLE_QUERIES (typically small catalog), Approach B as a supplemental action for deep inspection.
+
+#### 3.5.2 Run Saved Query Action Implementation
+
+The Run Saved Query action wraps the existing `RunQuery` server-side pipeline:
+
+```typescript
+// Simplified action implementation
+const result = await provider.RunQuery({
+    QueryID: params.QueryID,
+    Parameters: params.Parameters,
+    MaxRows: params.MaxRows ?? 1000
+}, contextUser);
+```
+
+This automatically invokes the composition engine, parameter resolution, Nunjucks templating, caching, and audit logging — the agent gets all of that for free.
+
+#### 3.5.3 Category Path for Composition References
+
+The `{{query:"Category/Name"}}` syntax requires the full category path. The REUSABLE_QUERIES data source should include a computed `CategoryPath` field that concatenates the category hierarchy:
+
+```sql
+-- Example: "Sales/Customers/Active Customers"
+SELECT q.ID, q.Name,
+       dbo.fn_GetQueryCategoryPath(q.CategoryID) + '/' + q.Name AS CategoryPath,
+       ...
+FROM __mj.vwQueries q
+WHERE q.Reusable = 1 AND q.Status = 'Approved'
+```
+
+This gives the Query Strategist the exact string to use in `{{query:"..."}}` tokens.
+
+---
+
+## 4. Sub-Phase B: Server-Side Paging for Queries
 
 **Status: NOT STARTED**
 
@@ -181,7 +418,7 @@ Remove `TOP 100` requirement from Query Builder and Query Strategist prompts. Se
 
 ---
 
-## 4. Sub-Phase C: Query Caching with TTL
+## 5. Sub-Phase C: Query Caching with TTL
 
 **Status: PARTIALLY DONE**
 
@@ -208,7 +445,7 @@ Remove `TOP 100` requirement from Query Builder and Query Strategist prompts. Se
 
 ---
 
-## 5. Sub-Phase D: PostgreSQL Query Variants
+## 6. Sub-Phase D: PostgreSQL Query Variants
 
 **Status: WIRED UP — Needs Integration Testing**
 
@@ -235,7 +472,7 @@ Remove `TOP 100` requirement from Query Builder and Query Strategist prompts. Se
 
 ---
 
-## 6. Future Phase: View-Query Bridge
+## 7. Future Phase: View-Query Bridge
 
 > **This section is design-only — not part of the current implementation.**
 
@@ -277,7 +514,7 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 
 ---
 
-## 7. Cross-Cutting Concerns
+## 8. Cross-Cutting Concerns
 
 ### 7.1 Security
 
@@ -314,9 +551,9 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 
 ---
 
-## 8. File Inventory
+## 9. File Inventory
 
-### 8.1 Files Created in Sub-Phase A (COMPLETE)
+### 9.1 Files Created in Sub-Phase A (COMPLETE)
 
 | File | Purpose |
 |------|---------|
@@ -325,7 +562,7 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 | `packages/MJCore/src/generic/queryCompositionEngine.ts` | Composition resolution engine |
 | `packages/MJCore/src/__tests__/queryCompositionEngine.test.ts` | Unit tests for composition |
 
-### 8.2 Files Modified in Sub-Phase A (COMPLETE)
+### 9.2 Files Modified in Sub-Phase A (COMPLETE)
 
 | File | Changes |
 |------|---------|
@@ -340,14 +577,25 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 | `packages/Angular/Explorer/core-entity-forms/.../query-form.component.ts` | Dependent Queries panel, accordion headers |
 | `packages/Angular/Explorer/core-entity-forms/.../query-form.component.html` | UI for dependency display |
 
-### 8.3 New Files for Remaining Sub-Phases
+### 9.3 Files for Sub-Phase E (Agent Query Awareness)
+
+| File | Purpose |
+|------|---------|
+| `metadata/agents/.query-builder-agent.json` | Add REUSABLE_QUERIES data source, Run Saved Query action |
+| `metadata/agents/.research-agent.json` | Add AVAILABLE_QUERIES data source, Run Saved Query action to DB Research sub-agent |
+| `metadata/prompts/templates/query-builder/query-strategist-prompt.md` | Composition syntax, catalog search, when-to-compose, examples |
+| `metadata/prompts/templates/query-builder/system-prompt.md` | Composition awareness, reusable suggestion in responseForm |
+| `metadata/prompts/templates/research-agent/database-research-agent.md` | Query catalog check, Run Saved Query guidance |
+| `metadata/actions/.run-saved-query.json` (NEW) | Action definition for running saved queries by ID |
+
+### 9.4 New Files for Remaining Sub-Phases
 
 | File | Sub-Phase | Purpose |
 |------|-----------|---------|
 | `packages/MJCore/src/generic/queryPagingEngine.ts` | B | CTE-wrap paging engine |
 | `packages/MJCore/src/__tests__/queryPagingEngine.test.ts` | B | Unit tests for paging |
 
-### 8.4 Files to Modify for Remaining Sub-Phases
+### 9.5 Files to Modify for Remaining Sub-Phases
 
 | File | Sub-Phase | Changes |
 |------|-----------|---------|
@@ -364,7 +612,26 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 
 ---
 
-## 9. Remaining Task List
+## 10. Remaining Task List
+
+### Sub-Phase E: Agent Query Awareness (NEXT — 14 tasks)
+
+| # | Task | Files | Depends On | Complexity |
+|---|------|-------|------------|------------|
+| E.1 | Enrich ALL_QUERIES data source with Reusable, Parameters summary, Fields summary | `.query-builder-agent.json` data sources | — | Medium |
+| E.2 | Create REUSABLE_QUERIES data source with CategoryPath, SQL, Params, Fields | `.query-builder-agent.json` data sources | E.1 | Medium |
+| E.3 | Create AVAILABLE_QUERIES data source for Database Research Agent | `.research-agent.json` data sources | — | Low |
+| E.4 | Create/extend Run Saved Query action (wraps RunQuery pipeline) | `metadata/actions/` | — | Medium |
+| E.5 | Add Run Saved Query action to Query Builder agent config | `.query-builder-agent.json` | E.4 | Low |
+| E.6 | Add Run Saved Query action to Database Research agent config | `.research-agent.json` | E.4 | Low |
+| E.7 | Update Query Strategist prompt: Composable Query Architecture section | `query-strategist-prompt.md` | E.2 | High |
+| E.8 | Update Query Strategist prompt: "Search Query Catalog" step before writing SQL | `query-strategist-prompt.md` | E.7 | Medium |
+| E.9 | Update Query Strategist prompt: composition examples and when-to-compose guidance | `query-strategist-prompt.md` | E.7 | Medium |
+| E.10 | Update Query Strategist prompt: "Making Queries Reusable" guidance | `query-strategist-prompt.md` | E.7 | Low |
+| E.11 | Update Query Builder orchestrator prompt: composition awareness, reusable suggestion | `system-prompt.md` | E.7 | Low |
+| E.12 | Update Database Research Agent prompt: query catalog check before ad-hoc SQL | `database-research-agent.md` | E.3, E.6 | Medium |
+| E.13 | Compute CategoryPath for queries (SQL function or view-level computation) | Migration or view update | — | Medium |
+| E.14 | End-to-end testing: Query Builder composes from existing, Research Agent runs saved queries | Manual testing | E.1-E.12 | High |
 
 ### Sub-Phase B: Server-Side Paging (17 tasks)
 
@@ -414,10 +681,15 @@ Further extension: wrap a query as a SQL view and register as a read-only MJ ent
 ### Execution Order
 
 Recommended implementation sequence:
-1. **B.1-B.5** — Paging engine core (can start immediately)
-2. **B.6-B.8** — API/GraphQL changes (parallel with B.1)
-3. **B.9-B.10** — Provider integration (after B.1 + B.6)
-4. **B.11-B.13** — Angular pager component (can start in parallel with B.1)
-5. **B.14-B.17** — Prompt updates, tests, entity-data-grid migration
-6. **C.1-C.8** — Caching enhancements (after B complete, or C.1-C.2 + C.4-C.5 can start in parallel)
-7. **D.3-D.5** — PG integration testing (after B + C)
+1. **E.1-E.4** — Data sources + Run Saved Query action (start here)
+2. **E.5-E.6** — Wire action into both agent configs (after E.4)
+3. **E.7-E.12** — Prompt updates for all three prompts (after E.1-E.6, can parallelize across agents)
+4. **E.13** — CategoryPath computation (can start in parallel with E.1)
+5. **E.14** — End-to-end testing (after all E tasks)
+6. **B.1-B.5** — Paging engine core
+7. **B.6-B.8** — API/GraphQL changes (parallel with B.1)
+8. **B.9-B.10** — Provider integration (after B.1 + B.6)
+9. **B.11-B.13** — Angular pager component (can start in parallel with B.1)
+10. **B.14-B.17** — Prompt updates, tests, entity-data-grid migration
+11. **C.1-C.8** — Caching enhancements (after B complete, or C.1-C.2 + C.4-C.5 can start in parallel)
+12. **D.3-D.5** — PG integration testing (after B + C)
