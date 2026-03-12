@@ -134,14 +134,14 @@ mj-filter-group .add-btn i {
 }
 
 mj-filter-group .add-group {
-  border-color: #a855f7;
-  color: #a855f7;
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
 }
 
 mj-filter-group .add-group:hover:not(:disabled) {
-  border-color: #9333ea;
-  color: #9333ea;
-  background: color-mix(in srgb, #9333ea 10%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary-hover);
+  color: var(--mj-brand-primary-hover);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 mj-filter-group .delete-group-btn {

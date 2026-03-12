@@ -57,7 +57,7 @@
 
 .query-name-display {
     margin: 0;
-    color: #fff;
+    color: var(--mj-text-inverse, white);
     font-weight: 600;
     font-size: 1.2em;
     flex: 1;
@@ -112,7 +112,7 @@
     gap: 6px;
     padding: 4px 12px;
     border-radius: var(--mj-radius-xl);
-    color: #fff;
+    color: var(--mj-text-inverse, white);
     font-size: var(--mj-text-sm);
     font-weight: 600;
     text-transform: uppercase;

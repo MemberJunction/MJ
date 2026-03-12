@@ -339,8 +339,8 @@
 }
 
 .nav-item[aria-controls="panel-applications"] {
-  --item-color: #9C27B0;
-  --item-container: color-mix(in srgb, #9C27B0 15%, var(--mj-bg-surface));
+  --item-color: var(--mj-brand-primary);
+  --item-container: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 }
 
 .nav-item[aria-controls="panel-permissions"] {

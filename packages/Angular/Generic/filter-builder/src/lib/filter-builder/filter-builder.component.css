@@ -235,7 +235,7 @@
 }
 
 .expression-text .value-number {
-  color: #7c3aed;
+  color: var(--mj-brand-primary);
 }
 
 .expression-text .value-boolean {
@@ -251,7 +251,7 @@
 }
 
 .expression-text .value-date {
-  color: #c2410c;
+  color: var(--mj-status-error);
   font-weight: 500;
 }
 
@@ -272,11 +272,11 @@
 
 .expression-text .logic-or {
   background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-  color: #b45309;
+  color: var(--mj-status-warning);
 }
 
 .expression-text .group-bracket {
-  color: #9333ea;
+  color: var(--mj-brand-primary);
   font-weight: 700;
   font-size: 15px;
 }
