@@ -24,40 +24,54 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
 CREATE UNIQUE INDEX IF NOT EXISTS "UQ_SchemaInfo_EntityNamePrefixSuffix" ON "__mj"."SchemaInfo" (
-        EntityNamePrefix,
-        EntityNameSuffix
-    ) WHERE E;
+        "EntityNamePrefix",
+        "EntityNameSuffix"
+    ) WHERE "EntityNamePrefix" IS NOT NULL;
 
 
 -- ===================== Helper Functions (fn*) =====================
 
-CREATE OR REPLACE FUNCTION __mj."StripToAlphanumeric"(
-    IN "p_InputString" TEXT
+CREATE OR REPLACE FUNCTION __mj."GetClassNameSchemaPrefix"(
+    IN "p_SchemaName" VARCHAR(255)
 )
-RETURNS TEXT AS $$
+RETURNS VARCHAR(255) AS $$
 DECLARE
-    p_Result TEXT := '';
-    p_i INTEGER;
-    p_c CHAR(1);
+    p_trimmed VARCHAR(255);
+    p_cleaned VARCHAR(255);
 BEGIN
-    IF "p_InputString" IS NULL THEN
-        RETURN NULL;
+    p_trimmed := TRIM("p_SchemaName");
+
+    -- Core MJ schema: __mj -> 'MJ'
+    IF LOWER(p_trimmed) = '__mj' THEN
+        RETURN 'MJ';
     END IF;
-    FOR p_i IN 1..LENGTH("p_InputString") LOOP
-        p_c := SUBSTRING("p_InputString" FROM p_i FOR 1);
-        IF p_c ~ '[A-Za-z0-9]' THEN
-            p_Result := p_Result || p_c;
-        END IF;
-    END LOOP;
-    RETURN p_Result;
+
+    -- Guard: a schema literally named 'MJ' would collide with __mj's prefix
+    IF LOWER(p_trimmed) = 'mj' THEN
+        RETURN 'MJCustom';
+    END IF;
+
+    -- Default: strip to alphanumeric, guard against leading digit
+    p_cleaned := __mj."StripToAlphanumeric"(p_trimmed);
+
+    IF LENGTH(p_cleaned) = 0 OR p_cleaned IS NULL THEN
+        RETURN '';
+    END IF;
+
+    IF LEFT(p_cleaned, 1) ~ '[0-9]' THEN
+        RETURN '_' || p_cleaned;
+    END IF;
+
+    RETURN p_cleaned;
 END;
 $$ LANGUAGE plpgsql;
 
 
 -- ===================== Views =====================
 
-DROP VIEW IF EXISTS __mj."vwEntities" CASCADE;
-CREATE VIEW __mj."vwEntities"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwEntities"
 AS SELECT
     e.*,
     /* CodeName: Schema-prefixed programmatic name derived from entity Name.
@@ -94,70 +108,23 @@ ON
 LEFT OUTER JOIN
     __mj."SchemaInfo" si
 ON
-    e."SchemaName" = si."SchemaName";
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
--- ===================== Data (INSERT/UPDATE/DELETE) =====================
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
+    e."SchemaName" = si."SchemaName"$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwEntities" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
 
 -- ===================== Comments =====================
 
--- Extended property (could not parse)
--- -- Drop old description if it exists, then re-add
--- IF EXISTS (
---     SELECT 1 FROM sys.extended_properties ep
---     INNER JOIN sys.views v ON ep.major_id = v.object_id
---     INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
---     INNER JOIN sys.columns c ON c.object_id = v.object_id AND ep.minor_id = c.column_id
---     WHERE s.name = '__mj' AND v.name = 'vwEntities' AND c.name = 'ClassName'
---       AND ep.name = 'MS_Description'
--- )
--- BEGIN
---     EXEC sp_dropextendedproperty
---         @name = N'MS_Description',
---         @level0type = N'SCHEMA', @level0name = N'__mj',
---         @level1type = N'VIEW',   @level1name = N'vwEntities',
---         @level2type = N'COLUMN', @level2name = N'ClassName';
--- END
-
 COMMENT ON COLUMN __mj."vwEntities"."ClassName" IS 'Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().';
-
--- Extended property (could not parse)
--- -- Update CodeName description too
--- IF EXISTS (
---     SELECT 1 FROM sys.extended_properties ep
---     INNER JOIN sys.views v ON ep.major_id = v.object_id
---     INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
---     INNER JOIN sys.columns c ON c.object_id = v.object_id AND ep.minor_id = c.column_id
---     WHERE s.name = '__mj' AND v.name = 'vwEntities' AND c.name = 'CodeName'
---       AND ep.name = 'MS_Description'
--- )
--- BEGIN
---     EXEC sp_dropextendedproperty
---         @name = N'MS_Description',
---         @level0type = N'SCHEMA', @level0name = N'__mj',
---         @level1type = N'VIEW',   @level1name = N'vwEntities',
---         @level2type = N'COLUMN', @level2name = N'CodeName';
--- END
 
 COMMENT ON COLUMN __mj."vwEntities"."CodeName" IS 'Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.';
 
 
 -- ===================== Other =====================
-
--- TODO: Review this batch
-DROP VIEW IF EXISTS "__mj".vwEntities;
 
 /* SQL text to recompile all views */

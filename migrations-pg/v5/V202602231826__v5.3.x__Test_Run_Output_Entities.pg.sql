@@ -72,63 +72,51 @@ CREATE TABLE __mj."TestRunOutput" (
  REFERENCES __mj."TestRunOutputType"("ID")
 );
 
-ALTER TABLE __mj."TestRunOutput" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."TestRunOutput"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutput" */;
 
-ALTER TABLE __mj."TestRunOutput" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."TestRunOutput"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutputType" */;
 
-ALTER TABLE __mj."TestRunOutputType" ADD __mj_CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."TestRunOutputType"
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutputType" */;
 
-ALTER TABLE __mj."TestRunOutputType" ADD __mj_UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ALTER TABLE __mj."TestRunOutputType"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 /* SQL text to insert new entity field */;
 
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID' 
---     AND object_id = OBJECT_ID('[__mj].[TestRunOutput]')
--- )
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID" ON __mj."TestRunOutput" ("TestRunID");
 
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID ON __mj."TestRunOutput" ("TestRunID");
-
--- Index for foreign key OutputTypeID in table TestRunOutput;
-
--- TODO: Review conditional DDL
--- IF NOT EXISTS (
---     SELECT 1
---     FROM sys.indexes
---     WHERE name = 'IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID' 
---     AND object_id = OBJECT_ID('[__mj].[TestRunOutput]')
--- )
-
-
-CREATE INDEX IF NOT EXISTS IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID ON __mj."TestRunOutput" ("OutputTypeID");
-
-/* SQL text to update entity field related entity name field map for entity field ID 72663DD0-11B3-43BF-9896-29BA131291FF */;
-
-
--- ===================== Helper Functions (fn*) =====================
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID" ON __mj."TestRunOutput" ("OutputTypeID");
 
 
 -- ===================== Views =====================
 
-DROP VIEW IF EXISTS __mj."vwTestRunOutputTypes" CASCADE;
-CREATE VIEW __mj."vwTestRunOutputTypes"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTestRunOutputTypes"
 AS SELECT
     t.*
 FROM
-    __mj."TestRunOutputType" AS t;
+    __mj."TestRunOutputType" AS t$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwTestRunOutputTypes" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
-DROP VIEW IF EXISTS __mj."vwTestRunOutputs" CASCADE;
-CREATE VIEW __mj."vwTestRunOutputs"
+DO $do$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTestRunOutputs"
 AS SELECT
     t.*,
     "MJTestRun_TestRunID"."Test" AS "TestRun",
@@ -142,7 +130,14 @@ INNER JOIN
 INNER JOIN
     __mj."TestRunOutputType" AS "MJTestRunOutputType_OutputTypeID"
   ON
-    t."OutputTypeID" = "MJTestRunOutputType_OutputTypeID"."ID";
+    t."OutputTypeID" = "MJTestRunOutputType_OutputTypeID"."ID"$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS __mj."vwTestRunOutputs" CASCADE;
+  EXECUTE vsql;
+END;
+$do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
@@ -492,34 +487,28 @@ INSERT INTO "__mj"."Entity" (
          , 1
          , 1
          , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Test Run Output Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */;
+      );
+/* SQL generated to add new entity MJ: Test Run Output Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 
 INSERT INTO __mj."ApplicationEntity"
                                        ("ApplicationID", "EntityID", "Sequence") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', (SELECT COALESCE(MAX("Sequence"),0)||1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Test Run Output Types for role UI */;
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Developer */;
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'));
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role UI */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Integration */;
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+/* SQL generated to add new permission for entity MJ: Test Run Output Types for role Integration */
 
-/* SQL generated to create new entity MJ: Test Run Outputs */;
+INSERT INTO __mj."EntityPermission"
+                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+/* SQL generated to create new entity MJ: Test Run Outputs */
 
 INSERT INTO "__mj"."Entity" (
          "ID",
@@ -560,34 +549,28 @@ INSERT INTO "__mj"."Entity" (
          , 1
          , 1
          , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Test Run Outputs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */;
+      );
+/* SQL generated to add new entity MJ: Test Run Outputs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 
 INSERT INTO __mj."ApplicationEntity"
                                        ("ApplicationID", "EntityID", "Sequence") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '51bc27f7-dc57-4372-8812-3f219fa762b4', (SELECT COALESCE(MAX("Sequence"),0)||1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Test Run Outputs for role UI */;
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Developer */;
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '51bc27f7-dc57-4372-8812-3f219fa762b4', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'));
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role UI */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Integration */;
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+/* SQL generated to add new permission for entity MJ: Test Run Outputs for role Integration */
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutput" */;
+INSERT INTO __mj."EntityPermission"
+                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."TestRunOutput" */
 
 DO $$
 BEGIN
@@ -637,7 +620,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -1547,7 +1530,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1612,7 +1595,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1677,7 +1660,7 @@ BEGIN
         0,
         0,
         0,
-        'newsequentialid()',
+        'gen_random_uuid()',
         0,
         0,
         0,
@@ -1872,7 +1855,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -1937,7 +1920,7 @@ BEGIN
         34,
         7,
         0,
-        'getutcdate()',
+        'NOW()',
         0,
         0,
         0,
@@ -2126,10 +2109,8 @@ UPDATE "__mj"."EntityField"
 UPDATE "__mj"."EntityField"
                SET "IncludeInUserSearchAPI" = 1
                WHERE "ID" = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1
-            
-
-/* Set field properties for entity */;
+               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+/* Set field properties for entity */
 
 UPDATE "__mj"."EntityField"
             SET "IsNameField" = 1
@@ -2189,10 +2170,8 @@ UPDATE "__mj"."EntityField"
 UPDATE "__mj"."EntityField"
                SET "IncludeInUserSearchAPI" = 1
                WHERE "ID" = '44B424A4-928A-4479-881B-CA8EAA53F130'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1
-            
-
-/* Set categories for 5 fields */;
+               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+/* Set categories for 5 fields */
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2237,35 +2216,26 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '97AC25D1-088E-4FC5-A3FF-7C7355BE483E'
-   AND "AutoUpdateCategory" = 1
-
-/* Set entity icon to fa fa-file-code */;
+   AND "AutoUpdateCategory" = 1;
+/* Set entity icon to fa fa-file-code */
 
 UPDATE "__mj"."Entity"
-               SET "Icon" = 'fa fa-file-code', __mj_UpdatedAt = NOW()
-               WHERE "ID" = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6'
-            
-
-/* Insert FieldCategoryInfo setting for entity */;
+               SET "Icon" = 'fa fa-file-code', "__mj_UpdatedAt" = NOW()
+               WHERE "ID" = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6';
+/* Insert FieldCategoryInfo setting for entity */
 
 INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-            VALUES ('e097f582-b6fb-4444-b9e1-cd7d289afe59', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryInfo', '{"Output Type Details":{"icon":"fa fa-vial","description":"Core information defining the specific type of test output such as logs, screenshots, or video."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', NOW(), NOW())
-         
-
-/* Insert FieldCategoryIcons setting (legacy) */;
+            VALUES ('e097f582-b6fb-4444-b9e1-cd7d289afe59', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryInfo', '{"Output Type Details":{"icon":"fa fa-vial","description":"Core information defining the specific type of test output such as logs, screenshots, or video."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', NOW(), NOW());
+/* Insert FieldCategoryIcons setting (legacy) */
 
 INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-            VALUES ('7abda917-5743-4a36-a5e5-4f68808ee748', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryIcons', '{"Output Type Details":"fa fa-vial","System Metadata":"fa fa-cog"}', NOW(), NOW())
-         
-
-/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */;
+            VALUES ('7abda917-5743-4a36-a5e5-4f68808ee748', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', 'FieldCategoryIcons', '{"Output Type Details":"fa fa-vial","System Metadata":"fa fa-cog"}', NOW(), NOW());
+/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
 
 UPDATE "__mj"."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, __mj_UpdatedAt = NOW()
-         WHERE "EntityID" = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6'
-      
-
-/* Set categories for 18 fields */;
+         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         WHERE "EntityID" = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6';
+/* Set categories for 18 fields */
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2427,35 +2397,25 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'EAFB19AC-10B4-432D-8F35-46E0F75294C1'
-   AND "AutoUpdateCategory" = 1
-
-/* Set entity icon to fa fa-file-image */;
+   AND "AutoUpdateCategory" = 1;
+/* Set entity icon to fa fa-file-image */
 
 UPDATE "__mj"."Entity"
-               SET "Icon" = 'fa fa-file-image', __mj_UpdatedAt = NOW()
-               WHERE "ID" = '51BC27F7-DC57-4372-8812-3F219FA762B4'
-            
-
-/* Insert FieldCategoryInfo setting for entity */;
+               SET "Icon" = 'fa fa-file-image', "__mj_UpdatedAt" = NOW()
+               WHERE "ID" = '51BC27F7-DC57-4372-8812-3F219FA762B4';
+/* Insert FieldCategoryInfo setting for entity */
 
 INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-            VALUES ('a2225df6-d49a-4079-8e48-029ee82bee9d', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryInfo', '{"Test Context":{"icon":"fa fa-flask","description":"Information linking this output to the specific test run, step, and execution sequence"},"Output Information":{"icon":"fa fa-info-circle","description":"Basic identification and categorization of the test artifact"},"Data and Media":{"icon":"fa fa-photo-video","description":"The actual content, dimensions, and technical properties of the test output"},"System Metadata":{"icon":"fa fa-cog","description":"Internal identifiers and audit timestamps managed by the system"}}', NOW(), NOW())
-         
-
-/* Insert FieldCategoryIcons setting (legacy) */;
+            VALUES ('a2225df6-d49a-4079-8e48-029ee82bee9d', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryInfo', '{"Test Context":{"icon":"fa fa-flask","description":"Information linking this output to the specific test run, step, and execution sequence"},"Output Information":{"icon":"fa fa-info-circle","description":"Basic identification and categorization of the test artifact"},"Data and Media":{"icon":"fa fa-photo-video","description":"The actual content, dimensions, and technical properties of the test output"},"System Metadata":{"icon":"fa fa-cog","description":"Internal identifiers and audit timestamps managed by the system"}}', NOW(), NOW());
+/* Insert FieldCategoryIcons setting (legacy) */
 
 INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-            VALUES ('9b139486-7c93-4fe9-9209-bb5e9f43bc21', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryIcons', '{"Test Context":"fa fa-flask","Output Information":"fa fa-info-circle","Data and Media":"fa fa-photo-video","System Metadata":"fa fa-cog"}', NOW(), NOW())
-         
-
-/* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */;
+            VALUES ('9b139486-7c93-4fe9-9209-bb5e9f43bc21', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'FieldCategoryIcons', '{"Test Context":"fa fa-flask","Output Information":"fa fa-info-circle","Data and Media":"fa fa-photo-video","System Metadata":"fa fa-cog"}', NOW(), NOW());
+/* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE "__mj"."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, __mj_UpdatedAt = NOW()
+         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '51BC27F7-DC57-4372-8812-3F219FA762B4';
-
-
--- ===================== FK & CHECK Constraints =====================
 
 
 -- ===================== Grants =====================
