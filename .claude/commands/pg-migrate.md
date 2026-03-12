@@ -4,6 +4,25 @@ Fully automated, unattended pipeline that converts SQL Server migrations to Post
 
 **You (local Claude Code) are the orchestrator.** You manage Docker, delegate all heavy work to Claude Code running autonomously inside the `claude-dev` container, and report results to the user. You NEVER manually edit migration files or fix SQL — all fixes go through the toolchain. If the toolchain can't handle a pattern, you document it for user review.
 
+## Database Naming Convention
+
+All PostgreSQL databases follow a **versioned naming convention** to avoid confusion about which schema version a database contains:
+
+- **`MJ_PG_X_Y_Z`** — The primary versioned database created by each migration run (e.g., `MJ_PG_5_11_0`, `MJ_PG_5_12_0`). The version comes from the latest migration file's version tag (e.g., `v5.11.x` → `5_11_0`).
+- **`MJ_PG_Migrate_Test`** — Scratch database for Phase 2 migration testing (dropped/recreated each run).
+- **`MJ_PG_Compare_SQL`** — SQL Server comparison database for Phase 3 parity checks.
+
+### Determining the Version
+At the start of each run, determine the target version from the latest migration file:
+```bash
+# Get version from the latest migration filename (e.g., V202603111750__v5.11.x__... → 5_11_0)
+LATEST_VERSION=$(ls migrations/v5/*.sql migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | sort | tail -1 | grep -oP 'v(\d+)\.(\d+)' | sed 's/v//' | sed 's/\./_/')
+PG_DB_NAME="MJ_PG_${LATEST_VERSION}_0"
+echo "Target PG database: $PG_DB_NAME"
+```
+
+This version is used throughout all phases. Pass it to CC in Docker task prompts as `{{PG_DB_NAME}}`.
+
 ## Delegation Pattern
 
 All heavy work runs inside Docker via Claude Code with `--dangerously-skip-permissions`. The pattern for delegating a task:
@@ -33,7 +52,7 @@ Wait for both databases to be healthy:
 # SQL Server
 docker exec sql-claude bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; do sleep 2; done'
 # PostgreSQL
-docker exec postgres-claude bash -c 'until pg_isready -U mj_admin -d MJ_Workbench_PG; do sleep 2; done'
+docker exec postgres-claude bash -c 'until pg_isready -U mj_admin; do sleep 2; done'
 ```
 
 ### Step 0b: Initialize the container environment
@@ -147,12 +166,12 @@ Drop and recreate a test database, then run ALL PG v5 migrations through the cur
 
 ```bash
 export PGPASSWORD=Claude2Pg99
-psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_Migrate_Test' AND pid <> pg_backend_pid();" 2>/dev/null
-psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_Migrate_Test\";"
-psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_Migrate_Test\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_PG_Migrate_Test' AND pid <> pg_backend_pid();" 2>/dev/null
+psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_PG_Migrate_Test\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_PG_Migrate_Test\";"
 for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql | sort); do
   echo "Running: $(basename $f)"
-  psql -h postgres-claude -U mj_admin -d MJ_Migrate_Test -f "$f" 2>&1 | tail -5
+  psql -h postgres-claude -U mj_admin -d MJ_PG_Migrate_Test -f "$f" 2>&1 | tail -5
 done
 ```
 
@@ -222,29 +241,31 @@ Your job: Run a schema parity comparison between SQL Server and PostgreSQL using
 ## Step 1: Fresh SQL Server database with v5 migrations
 
 ```bash
-/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_Compare_SQL') IS NOT NULL BEGIN ALTER DATABASE MJ_Compare_SQL SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_Compare_SQL; END; CREATE DATABASE MJ_Compare_SQL;"
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_SQL_Compare') IS NOT NULL BEGIN ALTER DATABASE MJ_SQL_Compare SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SQL_Compare; END; CREATE DATABASE MJ_SQL_Compare;"
 ```
 
 Then create __mj schema and run v5 migrations:
 ```bash
-/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_Compare_SQL -Q "CREATE SCHEMA __mj;"
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -Q "CREATE SCHEMA __mj;"
 for f in $(ls /workspace/MJ/migrations/v5/*.sql | sort); do
   echo "Running: $(basename $f)"
-  /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_Compare_SQL -i "$f" 2>&1 | tail -3
+  /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -i "$f" 2>&1 | tail -3
 done
 ```
 
 ## Step 2: Fresh PostgreSQL database with v5 PG migrations
 
+The database name uses the versioned convention: `{{PG_DB_NAME}}` (e.g., `MJ_PG_5_11_0`).
+
 ```bash
 export PGPASSWORD=Claude2Pg99
-psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_Compare_PG' AND pid <> pg_backend_pid();" 2>/dev/null
-psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_Compare_PG\";"
-psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_Compare_PG\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{{PG_DB_NAME}}' AND pid <> pg_backend_pid();" 2>/dev/null
+psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"{{PG_DB_NAME}}\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"{{PG_DB_NAME}}\";"
 
-for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql | sort); do
+for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql /workspace/MJ/migrations-pg/v5/*.pg-only.sql 2>/dev/null | sort); do
   echo "Running: $(basename $f)"
-  psql -h postgres-claude -U mj_admin -d MJ_Compare_PG -f "$f" 2>&1 | tail -3
+  psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -f "$f" 2>&1 | tail -3
 done
 ```
 
@@ -255,26 +276,26 @@ NOTE: Some PG migrations may produce errors for columns/tables that already exis
 Run these comparison queries:
 
 ### Tables
-SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'BASE TABLE'
+SQL Server: SELECT COUNT(*) FROM MJ_SQL_Compare.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'BASE TABLE'
 PostgreSQL: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'
 
 ### Views
-SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'VIEW'
+SQL Server: SELECT COUNT(*) FROM MJ_SQL_Compare.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj' AND TABLE_TYPE = 'VIEW'
 PostgreSQL: SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'VIEW'
 
 ### Routines
-SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA = '__mj'
+SQL Server: SELECT COUNT(*) FROM MJ_SQL_Compare.INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA = '__mj'
 PostgreSQL: SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj'
 
 ### Tables in one but not the other
 Get table lists from both and compare.
 
 ### Column count per table
-SQL Server: SELECT TABLE_NAME, COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '__mj' GROUP BY TABLE_NAME ORDER BY TABLE_NAME
+SQL Server: SELECT TABLE_NAME, COUNT(*) FROM MJ_SQL_Compare.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '__mj' GROUP BY TABLE_NAME ORDER BY TABLE_NAME
 PostgreSQL: SELECT table_name, COUNT(*) FROM information_schema.columns WHERE table_schema = '__mj' GROUP BY table_name ORDER BY table_name
 
 ### Foreign keys
-SQL Server: SELECT COUNT(*) FROM MJ_Compare_SQL.INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = '__mj' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+SQL Server: SELECT COUNT(*) FROM MJ_SQL_Compare.INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = '__mj' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
 PostgreSQL: SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = '__mj' AND constraint_type = 'FOREIGN KEY'
 
 ## Step 4: Write results
@@ -320,9 +341,9 @@ You are running inside the claude-dev Docker container with the MJ repo at /work
 Your job: Run FULL STACK smoke tests against the PostgreSQL database — both API-level and browser-level. This validates that the PG migration stack works end-to-end with the complete application.
 
 ## Database
-The Phase 3 database MJ_Compare_PG on postgres-claude already has all v5 migrations applied. Use it.
+The Phase 3 database {{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied. Use it.
 
-- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database=MJ_Compare_PG
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database={{PG_DB_NAME}}
 
 ## ================================================================
 ## TIER 1: API Smoke Tests
@@ -337,14 +358,14 @@ npx turbo build --filter=@memberjunction/server --filter=@memberjunction/server-
 
 ## Step 2: Configure and start MJAPI for PostgreSQL
 
-Read the existing .env at /workspace/MJ/packages/MJAPI/.env to understand the variable names. Override database connection settings to point to PostgreSQL (MJ_Compare_PG). Also check mj.config.cjs at the repo root.
+Read the existing .env at /workspace/MJ/packages/MJAPI/.env to understand the variable names. Override database connection settings to point to PostgreSQL ({{PG_DB_NAME}}). Also check mj.config.cjs at the repo root.
 
 Key settings (adapt variable names to match what the .env uses):
 - DB_HOST=postgres-claude / PG_HOST=postgres-claude
 - DB_PORT=5432 / PG_PORT=5432
 - DB_USERNAME=mj_admin / PG_USERNAME=mj_admin
 - DB_PASSWORD=Claude2Pg99 / PG_PASSWORD=Claude2Pg99
-- DB_DATABASE=MJ_Compare_PG / PG_DATABASE=MJ_Compare_PG
+- DB_DATABASE={{PG_DB_NAME}} / PG_DATABASE={{PG_DB_NAME}}
 - DB_TYPE=pg (if applicable)
 - GRAPHQL_PORT=4000
 
@@ -431,7 +452,7 @@ npx playwright install chromium 2>/dev/null || npx playwright install --with-dep
 
 Before browser testing, verify the test user has all required roles. Run this SQL against postgres-claude:
 ```bash
-psql -h postgres-claude -U mj_admin -d MJ_Compare_PG -c "
+psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -c "
 INSERT INTO __mj.\"UserRole\" (\"UserID\", \"RoleID\")
 SELECT '3e5ac17f-0b2c-4aca-878f-9f744f2168f4', \"ID\"
 FROM __mj.\"Role\"
