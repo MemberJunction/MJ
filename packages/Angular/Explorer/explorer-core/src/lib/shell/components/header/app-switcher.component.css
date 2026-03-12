@@ -29,7 +29,7 @@
   right: 2px;
   height: 3px;
   border-radius: 2px;
-  background-color: var(--active-color, #757575);
+  background-color: var(--active-color, var(--mj-text-muted));
 }
 .app-switcher-button:hover {
   background: var(--mj-bg-surface-hover);
@@ -80,13 +80,13 @@
   bottom: 8px;
   width: 3px;
   border-radius: 2px;
-  background-color: var(--item-color, #757575);
+  background-color: var(--item-color, var(--mj-text-muted));
   opacity: 0.8;
   transition: all 0.15s;
 }
 .app-switcher-dropdown .app-switcher-item i {
   font-size: 18px;
-  color: var(--item-color, #757575);
+  color: var(--item-color, var(--mj-text-muted));
   width: 20px;
   text-align: center;
   opacity: 1;
@@ -99,8 +99,8 @@
   opacity: 1;
 }
 .app-switcher-dropdown .app-switcher-item.active {
-  background: color-mix(in srgb, var(--item-color, #1976d2) 10%, var(--mj-bg-surface-elevated));
-  color: var(--item-color, #1976d2);
+  background: color-mix(in srgb, var(--item-color, var(--mj-brand-primary)) 10%, var(--mj-bg-surface-elevated));
+  color: var(--item-color, var(--mj-brand-primary));
   font-weight: 600;
 }
 .app-switcher-dropdown .app-switcher-item.active::before {
@@ -132,7 +132,7 @@
 
 /* Loading state for app switcher button */
 .app-switcher-button .loading-spinner {
-  color: #757575;
+  color: var(--mj-text-muted);
 }
 .app-switcher-button .loading-spinner::after {
   /* Hide the underline when showing spinner */
@@ -145,7 +145,7 @@
   opacity: 0.7;
 }
 .app-switcher-dropdown .app-switcher-item.loading i {
-  color: var(--item-color, #757575);
+  color: var(--item-color, var(--mj-text-muted));
 }
 
 /* Mobile: full-width dropdown with scroll */

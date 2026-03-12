@@ -10,23 +10,23 @@
 mj-timeline {
   /* Colors */
   --mj-timeline-bg: transparent;
-  --mj-timeline-line-color: #d0d7de;
-  --mj-timeline-marker-bg: #ffffff;
-  --mj-timeline-marker-border: #4678a8;
-  --mj-timeline-marker-fill: #4678a8;
-  --mj-timeline-card-bg: #ffffff;
-  --mj-timeline-card-border: #d0d7de;
-  --mj-timeline-card-shadow: 0 1px 3px rgba(31, 35, 40, 0.08);
-  --mj-timeline-card-shadow-hover: 0 4px 12px rgba(31, 35, 40, 0.12);
-  --mj-timeline-card-radius: 6px;
-  --mj-timeline-text-primary: #1f2328;
-  --mj-timeline-text-secondary: #656d76;
-  --mj-timeline-text-muted: #8c959f;
-  --mj-timeline-accent: #4678a8;
-  --mj-timeline-accent-light: rgba(70, 120, 168, 0.08);
-  --mj-timeline-segment-bg: #4678a8;
-  --mj-timeline-segment-text: #ffffff;
-  --mj-timeline-focus-ring: 0 0 0 2px rgba(70, 120, 168, 0.3);
+  --mj-timeline-line-color: var(--mj-border-default);
+  --mj-timeline-marker-bg: var(--mj-bg-surface);
+  --mj-timeline-marker-border: var(--mj-brand-primary);
+  --mj-timeline-marker-fill: var(--mj-brand-primary);
+  --mj-timeline-card-bg: var(--mj-bg-surface);
+  --mj-timeline-card-border: var(--mj-border-default);
+  --mj-timeline-card-shadow: var(--mj-shadow-sm);
+  --mj-timeline-card-shadow-hover: var(--mj-shadow-md);
+  --mj-timeline-card-radius: var(--mj-radius-md);
+  --mj-timeline-text-primary: var(--mj-text-primary);
+  --mj-timeline-text-secondary: var(--mj-text-muted);
+  --mj-timeline-text-muted: var(--mj-text-disabled);
+  --mj-timeline-accent: var(--mj-brand-primary);
+  --mj-timeline-accent-light: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  --mj-timeline-segment-bg: var(--mj-brand-primary);
+  --mj-timeline-segment-text: var(--mj-text-inverse);
+  --mj-timeline-focus-ring: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 
   /* Sizing */
   --mj-timeline-line-width: 2px;
@@ -46,22 +46,7 @@ mj-timeline {
   height: 100%;
 }
 
-/* Dark mode */
-.dark-theme mj-timeline,
-[data-theme="dark"] mj-timeline {
-  --mj-timeline-line-color: #3d444d;
-  --mj-timeline-card-bg: #161b22;
-  --mj-timeline-card-border: #3d444d;
-  --mj-timeline-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --mj-timeline-text-primary: #e6edf3;
-  --mj-timeline-text-secondary: #8b949e;
-  --mj-timeline-text-muted: #6e7681;
-  --mj-timeline-accent: #58a6ff;
-  --mj-timeline-accent-light: rgba(88, 166, 255, 0.1);
-  --mj-timeline-marker-border: #58a6ff;
-  --mj-timeline-marker-fill: #58a6ff;
-  --mj-timeline-segment-bg: #58a6ff;
-}
+/* Dark mode handled automatically by --mj-* semantic tokens */
 
 /* ============================================================================
    MAIN CONTAINER
@@ -118,7 +103,7 @@ mj-timeline {
   height: 24px;
   border: 2px solid var(--mj-timeline-line-color);
   border-top-color: var(--mj-timeline-accent);
-  border-radius: 50%;
+  border-radius: var(--mj-radius-full);
   animation: mj-timeline-spin 0.6s linear infinite;
 }
 
@@ -129,7 +114,7 @@ mj-timeline {
 
 .mj-timeline__loading-text {
   color: var(--mj-timeline-text-muted);
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
 }
 
 .mj-timeline__loading-more {
@@ -139,7 +124,7 @@ mj-timeline {
   padding: 16px;
   gap: 8px;
   color: var(--mj-timeline-text-muted);
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
 }
 
 @keyframes mj-timeline-spin {
@@ -164,7 +149,7 @@ mj-timeline {
 
 .mj-timeline__empty-text {
   color: var(--mj-timeline-text-secondary);
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
 }
 
 /* ============================================================================
@@ -187,9 +172,9 @@ mj-timeline {
   padding: 6px 16px;
   margin-bottom: var(--mj-timeline-gap);
   background: var(--mj-timeline-segment-bg);
-  border-radius: 4px;
+  border-radius: var(--mj-radius-sm);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
   color: var(--mj-timeline-segment-text);
   user-select: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -214,7 +199,7 @@ mj-timeline {
   width: 16px;
   height: 16px;
   color: inherit;
-  font-size: 10px;
+  font-size: var(--mj-text-xs);
   opacity: 0.9;
   transition: transform var(--mj-timeline-transition);
 }
@@ -313,7 +298,7 @@ mj-timeline {
   height: var(--mj-timeline-marker-size);
   background: var(--mj-timeline-marker-fill);
   border: 2px solid var(--mj-timeline-marker-bg);
-  border-radius: 50%;
+  border-radius: var(--mj-radius-full);
   box-shadow: 0 0 0 2px var(--mj-timeline-marker-fill);
   z-index: 5;
   transition: transform var(--mj-timeline-transition);
@@ -338,7 +323,7 @@ mj-timeline {
 .mj-timeline__date-label {
   position: absolute;
   top: 10px;
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
   font-weight: 500;
   color: var(--mj-timeline-text-secondary);
   white-space: nowrap;
@@ -411,7 +396,7 @@ mj-timeline {
   border-color: var(--mj-timeline-accent);
   box-shadow:
     0 0 0 3px var(--mj-timeline-accent),
-    0 8px 24px rgba(70, 120, 168, 0.25);
+    0 8px 24px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
   transform: scale(1.02);
 }
 
@@ -420,7 +405,7 @@ mj-timeline {
   transform: translateX(-50%) scale(1.4);
   box-shadow:
     0 0 0 3px var(--mj-timeline-marker-fill),
-    0 0 12px rgba(70, 120, 168, 0.5);
+    0 0 12px color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
 }
 
 /* Pulse animation for selected marker */
@@ -431,7 +416,7 @@ mj-timeline {
   left: -4px;
   right: -4px;
   bottom: -4px;
-  border-radius: 50%;
+  border-radius: var(--mj-radius-full);
   border: 2px solid var(--mj-timeline-accent);
   animation: mj-timeline-pulse 1.5s ease-out infinite;
 }
@@ -489,7 +474,7 @@ mj-timeline {
 
 .mj-timeline__card-title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--mj-text-base);
   font-weight: 600;
   color: var(--mj-timeline-text-primary);
   line-height: 1.35;
@@ -497,14 +482,14 @@ mj-timeline {
 
 .mj-timeline__card-subtitle {
   display: block;
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
   color: var(--mj-timeline-text-secondary);
   margin-top: 4px;
 }
 
 .mj-timeline__card-date {
   display: block;
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-timeline-text-muted);
   margin-top: 6px;
 }
@@ -526,7 +511,7 @@ mj-timeline {
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--mj-timeline-transition);
-  font-size: 14px;
+  font-size: var(--mj-text-sm);
 }
 
 .mj-timeline__card-toggle:hover {
@@ -540,7 +525,7 @@ mj-timeline {
 
 .mj-timeline__card-image {
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: var(--mj-radius-sm);
   flex-shrink: 0;
 }
 
@@ -585,7 +570,7 @@ mj-timeline {
 }
 
 .mj-timeline__card-description {
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
   line-height: 1.6;
   color: var(--mj-timeline-text-secondary);
   margin-bottom: 12px;
@@ -627,12 +612,12 @@ mj-timeline {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
 }
 
 .mj-timeline__card-field-icon {
   color: var(--mj-timeline-text-muted);
-  font-size: 10px;
+  font-size: var(--mj-text-xs);
 }
 
 .mj-timeline__card-field-label {
@@ -671,10 +656,10 @@ mj-timeline {
   align-items: center;
   gap: 5px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
   font-weight: 500;
   border: 1px solid;
-  border-radius: 4px;
+  border-radius: var(--mj-radius-sm);
   cursor: pointer;
   transition: all var(--mj-timeline-transition);
 }
@@ -685,13 +670,13 @@ mj-timeline {
 }
 
 .mj-timeline__action i {
-  font-size: 10px;
+  font-size: var(--mj-text-xs);
 }
 
 .mj-timeline__action--primary {
   background: var(--mj-timeline-accent);
   border-color: var(--mj-timeline-accent);
-  color: #ffffff;
+  color: var(--mj-text-inverse);
 }
 
 .mj-timeline__action--primary:hover:not(:disabled) {
@@ -711,9 +696,9 @@ mj-timeline {
 }
 
 .mj-timeline__action--danger {
-  background: #cf222e;
-  border-color: #cf222e;
-  color: #ffffff;
+  background: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+  color: var(--mj-text-inverse);
 }
 
 .mj-timeline__action--link {
@@ -895,7 +880,7 @@ mj-timeline {
   right: auto;
   transform: translateX(-50%);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
 }
 
 .mj-timeline--horizontal .mj-timeline__card {
@@ -1004,7 +989,7 @@ mj-timeline {
   }
 
   .mj-timeline__card-title {
-    font-size: 14px;
+    font-size: var(--mj-text-sm);
   }
 
   .mj-timeline--horizontal .mj-timeline__event {

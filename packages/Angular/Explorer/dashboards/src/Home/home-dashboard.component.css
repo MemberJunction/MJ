@@ -130,7 +130,7 @@
 
 /* App Card */
 .app-card {
-  --app-color: #757575;
+  --app-color: var(--mj-text-muted);
   display: flex;
   align-items: flex-start;
   gap: 16px;

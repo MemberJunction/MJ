@@ -140,8 +140,8 @@
 .mj-markdown-container pre {
   margin: 1em 0;
   padding: 1em;
-  background: #1e1e1e;
-  border-radius: 8px;
+  background: var(--mj-bg-code-block, #1e1e1e);
+  border-radius: var(--mj-radius-md);
   overflow-x: auto;
   position: relative;
 }
@@ -149,7 +149,7 @@
 .mj-markdown-container pre code {
   background: transparent;
   padding: 0;
-  color: #d4d4d4;
+  color: var(--mj-text-code, #d4d4d4);
   font-size: 0.875em;
   line-height: 1.5;
 }
@@ -170,7 +170,7 @@
 .mj-markdown-container .code-language-label {
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   user-select: none;
@@ -185,8 +185,8 @@
   padding: 0;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #9ca3af;
+  border-radius: var(--mj-radius-md);
+  color: var(--mj-text-disabled);
   cursor: pointer;
   transition: all 0.2s ease;
   opacity: 0;
@@ -198,19 +198,19 @@
 
 .mj-markdown-container .code-copy-btn:hover {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--mj-text-inverse);
 }
 
 .mj-markdown-container .code-copy-btn.copied {
   background: rgba(34, 197, 94, 0.2);
   border-color: rgba(34, 197, 94, 0.3);
-  color: #22c55e;
+  color: var(--mj-status-success);
 }
 
 .mj-markdown-container .code-copy-btn.error {
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  color: var(--mj-status-error);
 }
 
 /* ============================================

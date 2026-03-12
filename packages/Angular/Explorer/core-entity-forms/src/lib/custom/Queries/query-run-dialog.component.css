@@ -4,7 +4,7 @@
 }
 
 .loading-state {
-    color: #6c757d;
+    color: var(--mj-text-muted);
 }
 
 .badge {
@@ -15,8 +15,8 @@
 
 /* Professional Results Table Styling */
 .results-table-container {
-    background: white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--mj-bg-surface);
+    box-shadow: var(--mj-shadow-sm);
     display: flex;
     flex-direction: column;
 }
@@ -27,24 +27,24 @@
 }
 
 .results-table-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--mj-bg-surface-sunken);
 }
 
 .results-table-container::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
+    background: var(--mj-border-strong);
+    border-radius: var(--mj-radius-sm);
 }
 
 .results-table-container::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
+    background: var(--mj-text-disabled);
 }
 
 .results-table tbody tr:hover {
-    background-color: #f8f9fa !important;
+    background-color: var(--mj-bg-surface-card) !important;
 }
 
 .results-table tbody tr:nth-child(even) {
-    background-color: #fafbfc;
+    background-color: var(--mj-bg-surface-card);
 }
 
 .dialog-content {

@@ -687,16 +687,16 @@
   transition: stroke 200ms ease, stroke-width 200ms ease;
 }
 
-/* Transform-based line styles */
-.ve-conn-line.conn-direct { stroke: #6366f1; stroke-dasharray: none; }
-.ve-conn-line.conn-regex { stroke: #8b5cf6; stroke-dasharray: 6 3; }
-.ve-conn-line.conn-split { stroke: #f59e0b; stroke-dasharray: 8 4; }
-.ve-conn-line.conn-combine { stroke: #10b981; stroke-dasharray: 8 4; }
-.ve-conn-line.conn-lookup { stroke: #0ea5e9; stroke-dasharray: 4 4; }
-.ve-conn-line.conn-format { stroke: #ec4899; stroke-dasharray: 4 4; }
-.ve-conn-line.conn-coerce { stroke: #f97316; stroke-dasharray: 4 4; }
-.ve-conn-line.conn-substring { stroke: #14b8a6; stroke-dasharray: 4 4; }
-.ve-conn-line.conn-custom { stroke: #a855f7; stroke-dasharray: 2 3; }
+/* Transform-based line styles — categorical data-viz colors */
+.ve-conn-line.conn-direct { stroke: var(--mj-brand-primary); stroke-dasharray: none; }
+.ve-conn-line.conn-regex { stroke: var(--ve-color-regex, #8b5cf6); stroke-dasharray: 6 3; }
+.ve-conn-line.conn-split { stroke: var(--mj-status-warning); stroke-dasharray: 8 4; }
+.ve-conn-line.conn-combine { stroke: var(--mj-status-success); stroke-dasharray: 8 4; }
+.ve-conn-line.conn-lookup { stroke: var(--ve-color-lookup, #0ea5e9); stroke-dasharray: 4 4; }
+.ve-conn-line.conn-format { stroke: var(--ve-color-format, #ec4899); stroke-dasharray: 4 4; }
+.ve-conn-line.conn-coerce { stroke: var(--ve-color-coerce, #f97316); stroke-dasharray: 4 4; }
+.ve-conn-line.conn-substring { stroke: var(--ve-color-substring, #14b8a6); stroke-dasharray: 4 4; }
+.ve-conn-line.conn-custom { stroke: var(--ve-color-custom, #a855f7); stroke-dasharray: 2 3; }
 
 .ve-conn-line:hover { stroke-width: 3.5; }
 .ve-conn-line.selected { stroke-width: 3.5; filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4)); }
@@ -717,15 +717,15 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-.ve-conn-badge.badge-direct { background: #eef2ff; color: #6366f1; border: 2px solid #6366f1; }
-.ve-conn-badge.badge-regex { background: #f5f3ff; color: #8b5cf6; border: 2px solid #8b5cf6; }
-.ve-conn-badge.badge-split { background: #fffbeb; color: #f59e0b; border: 2px solid #f59e0b; }
-.ve-conn-badge.badge-combine { background: #ecfdf5; color: #10b981; border: 2px solid #10b981; }
-.ve-conn-badge.badge-lookup { background: #f0f9ff; color: #0ea5e9; border: 2px solid #0ea5e9; }
-.ve-conn-badge.badge-format { background: #fdf2f8; color: #ec4899; border: 2px solid #ec4899; }
-.ve-conn-badge.badge-coerce { background: #fff7ed; color: #f97316; border: 2px solid #f97316; }
-.ve-conn-badge.badge-substring { background: #f0fdfa; color: #14b8a6; border: 2px solid #14b8a6; }
-.ve-conn-badge.badge-custom { background: #faf5ff; color: #a855f7; border: 2px solid #a855f7; }
+.ve-conn-badge.badge-direct { background: var(--mj-brand-primary-subtle); color: var(--mj-brand-primary); border: 2px solid var(--mj-brand-primary); }
+.ve-conn-badge.badge-regex { background: color-mix(in srgb, var(--ve-color-regex, #8b5cf6) 10%, var(--mj-bg-surface)); color: var(--ve-color-regex, #8b5cf6); border: 2px solid var(--ve-color-regex, #8b5cf6); }
+.ve-conn-badge.badge-split { background: var(--mj-status-warning-subtle); color: var(--mj-status-warning); border: 2px solid var(--mj-status-warning); }
+.ve-conn-badge.badge-combine { background: var(--mj-status-success-subtle); color: var(--mj-status-success); border: 2px solid var(--mj-status-success); }
+.ve-conn-badge.badge-lookup { background: color-mix(in srgb, var(--ve-color-lookup, #0ea5e9) 10%, var(--mj-bg-surface)); color: var(--ve-color-lookup, #0ea5e9); border: 2px solid var(--ve-color-lookup, #0ea5e9); }
+.ve-conn-badge.badge-format { background: color-mix(in srgb, var(--ve-color-format, #ec4899) 10%, var(--mj-bg-surface)); color: var(--ve-color-format, #ec4899); border: 2px solid var(--ve-color-format, #ec4899); }
+.ve-conn-badge.badge-coerce { background: color-mix(in srgb, var(--ve-color-coerce, #f97316) 10%, var(--mj-bg-surface)); color: var(--ve-color-coerce, #f97316); border: 2px solid var(--ve-color-coerce, #f97316); }
+.ve-conn-badge.badge-substring { background: color-mix(in srgb, var(--ve-color-substring, #14b8a6) 10%, var(--mj-bg-surface)); color: var(--ve-color-substring, #14b8a6); border: 2px solid var(--ve-color-substring, #14b8a6); }
+.ve-conn-badge.badge-custom { background: color-mix(in srgb, var(--ve-color-custom, #a855f7) 10%, var(--mj-bg-surface)); color: var(--ve-color-custom, #a855f7); border: 2px solid var(--ve-color-custom, #a855f7); }
 
 .ve-conn-badge:hover { transform: scale(1.2); }
 .ve-conn-badge.selected { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }

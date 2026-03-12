@@ -25,7 +25,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--mj-brand-primary);
   height: 100vh;
   justify-content: center;
   padding: 50px;
@@ -42,7 +42,7 @@
   line-height: 95px;
   text-align: left;
   flex: 2;
-  color: #fff;
+  color: var(--mj-text-inverse);
 }
 
 .login-wrapper .login-btn {
@@ -58,26 +58,26 @@
   font-weight: 600;
   line-height: 42px;
   text-align: center;
-  color: #0D1621;
+  color: var(--mj-text-primary);
 }
 
 .login-wrapper .login-btn p {
-  font-size: 16px;
+  font-size: var(--mj-text-base);
   font-weight: 500;
   line-height: 22px;
   text-align: center;
-  color: #5A6A7D;
+  color: var(--mj-text-muted);
 }
 
 .login-wrapper .login-btn button {
   max-width: 450px;
   width: 100%;
-  background: #2264DC;
-  color: #fff;
-  border-radius: 10px;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-radius: var(--mj-radius-lg);
   padding: 0 25px;
   border: none;
-  font-size: 16px;
+  font-size: var(--mj-text-base);
   font-weight: 700;
   line-height: 50px;
   cursor: pointer;
@@ -85,7 +85,7 @@
 }
 
 .login-wrapper .login-btn button:hover {
-  background: #1e56bf;
+  background: var(--mj-brand-primary-hover);
 }
 
 .title {

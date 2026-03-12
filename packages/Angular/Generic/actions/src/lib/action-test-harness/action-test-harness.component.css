@@ -407,12 +407,12 @@ textarea.param-input {
 
 .error-content h5 {
     margin: 0 0 8px 0;
-    color: var(--mj-color-error-800);
+    color: var(--mj-status-error);
 }
 
 .error-content p {
     margin: 0;
-    color: var(--mj-color-error-800);
+    color: var(--mj-status-error);
 }
 
 /* Success Result */
@@ -565,7 +565,7 @@ textarea.param-input {
     padding: 16px;
     margin: 0;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
+    font-size: var(--mj-text-sm);
     line-height: 1.5;
     overflow-x: auto;
     white-space: pre-wrap;

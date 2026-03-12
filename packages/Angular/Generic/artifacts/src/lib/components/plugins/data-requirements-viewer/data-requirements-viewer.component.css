@@ -600,11 +600,11 @@
 .sql-code {
   margin: 0;
   padding: 16px;
-  background: #1e1e1e;
-  border-radius: 6px;
-  font-size: 12px;
+  background: var(--mj-bg-code-block, #1e1e1e);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-xs);
   line-height: 1.5;
-  color: #d4d4d4;
+  color: var(--mj-text-code, #d4d4d4);
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
   overflow-x: auto;
   white-space: pre-wrap;

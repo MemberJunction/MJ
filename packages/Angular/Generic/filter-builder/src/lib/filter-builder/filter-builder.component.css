@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .filter-summary {
@@ -25,18 +25,18 @@
 }
 
 .filter-icon {
-  color: #1976d2;
+  color: var(--mj-brand-primary);
   font-size: 14px;
 }
 
 .filter-count {
   font-size: 13px;
-  color: #333;
+  color: var(--mj-text-primary);
   font-weight: 500;
 }
 
 .filter-count.no-filters {
-  color: #999;
+  color: var(--mj-text-disabled);
   font-weight: 400;
 }
 
@@ -68,22 +68,22 @@
 }
 
 .clear-btn {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
 }
 
 .clear-btn:hover:not(:disabled) {
-  background: #ffebee;
-  color: #c62828;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 .apply-btn {
-  background: #1976d2;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, white);
 }
 
 .apply-btn:hover:not(:disabled) {
-  background: #1565c0;
+  background: var(--mj-brand-primary-hover);
 }
 
 /* Content */
@@ -94,41 +94,41 @@
 /* Tips */
 .filter-tips {
   padding: 12px;
-  background: #f5f9ff;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   border-radius: 6px;
-  border: 1px solid #e3edfa;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .filter-tips p {
   margin: 0;
   font-size: 13px;
-  color: #666;
+  color: var(--mj-text-secondary);
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
 .filter-tips i {
-  color: #ffc107;
+  color: var(--mj-status-warning);
   margin-top: 2px;
 }
 
 .filter-tips strong {
-  color: #333;
+  color: var(--mj-text-primary);
 }
 
 /* Collapsible Filter Expression Summary */
 .filter-expression-summary {
-  background: #f8f9fa;
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   margin-top: 8px;
   transition: all 0.2s ease;
 }
 
 .filter-expression-summary.expanded {
-  background: white;
-  border-color: #d1d5db;
+  background: var(--mj-bg-surface);
+  border-color: var(--mj-border-strong);
 }
 
 /* Toggle Button */
@@ -143,25 +143,25 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--mj-text-muted);
   text-align: left;
   transition: all 0.15s ease;
 }
 
 .expression-toggle:hover {
-  background: rgba(0, 0, 0, 0.03);
-  color: #374151;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
 }
 
 .expression-toggle i:first-child {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   width: 12px;
   transition: transform 0.2s ease;
 }
 
 .expression-icon {
-  color: #6366f1;
+  color: var(--mj-brand-primary);
   font-size: 13px;
 }
 
@@ -176,8 +176,8 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
@@ -204,11 +204,11 @@
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.8;
-  color: #374151;
+  color: var(--mj-text-primary);
   padding: 16px;
   margin: 0;
-  background: linear-gradient(135deg, #fafbfc 0%, #f3f4f6 100%);
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   overflow-x: auto;
   white-space: pre-wrap;
@@ -217,12 +217,12 @@
 
 /* Syntax Highlighting */
 .expression-text .field-name {
-  color: #0369a1;
+  color: var(--mj-brand-primary);
   font-weight: 600;
 }
 
 .expression-text .operator {
-  color: #6b7280;
+  color: var(--mj-text-muted);
   font-style: italic;
 }
 
@@ -231,7 +231,7 @@
 }
 
 .expression-text .value-string {
-  color: #059669;
+  color: var(--mj-status-success);
 }
 
 .expression-text .value-number {
@@ -243,11 +243,11 @@
 }
 
 .expression-text .value-true {
-  color: #16a34a;
+  color: var(--mj-status-success);
 }
 
 .expression-text .value-false {
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 .expression-text .value-date {
@@ -266,12 +266,12 @@
 }
 
 .expression-text .logic-and {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .expression-text .logic-or {
-  background: #fef3c7;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
   color: #b45309;
 }
 
@@ -282,7 +282,7 @@
 }
 
 .expression-text .no-filters {
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   font-style: italic;
 }
 

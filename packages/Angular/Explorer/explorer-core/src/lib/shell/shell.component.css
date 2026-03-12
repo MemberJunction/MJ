@@ -180,7 +180,7 @@ mj-tab-container ::ng-deep .lm_stack {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  background: #e53935;
+  background: var(--mj-status-error);
   color: var(--mj-text-inverse);
   font-size: 10px;
   font-weight: 600;
@@ -311,15 +311,15 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .user-menu-item.danger {
-  color: #c62828;
+  color: var(--mj-status-error);
 }
 
 .user-menu-item.danger i {
-  color: #c62828;
+  color: var(--mj-status-error);
 }
 
 .user-menu-item.danger:hover {
-  background: color-mix(in srgb, #c62828 10%, var(--mj-bg-surface-elevated));
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface-elevated));
 }
 
 .user-menu-divider {
@@ -355,7 +355,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .theme-toggle-track.dark {
-  background: #5b6abf;
+  background: var(--mj-brand-primary);
 }
 
 .theme-toggle-thumb {
@@ -383,7 +383,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .theme-toggle-track.dark .theme-toggle-icon {
-  color: #c4b5fd;
+  color: var(--mj-text-inverse);
 }
 
 /* Menu shortcut hint */
@@ -748,7 +748,7 @@ mj-tab-container ::ng-deep .lm_stack {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: #e53935;
+  background: var(--mj-status-error);
   color: var(--mj-text-inverse);
   font-size: 11px;
   font-weight: 600;

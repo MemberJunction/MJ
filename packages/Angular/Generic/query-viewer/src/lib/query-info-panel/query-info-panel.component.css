@@ -310,7 +310,7 @@
 /* SQL Section */
 .sql-container {
     background: #1e1e1e;
-    border-radius: 6px;
+    border-radius: var(--mj-radius-md);
     overflow: hidden;
 }
 
@@ -318,7 +318,7 @@
     margin: 0;
     padding: 16px;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 12px;
+    font-size: var(--mj-text-xs);
     line-height: 1.5;
     color: #d4d4d4;
     white-space: pre-wrap;

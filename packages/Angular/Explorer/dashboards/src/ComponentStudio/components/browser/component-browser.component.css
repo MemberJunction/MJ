@@ -225,7 +225,7 @@
 }
 
 .filter-checkbox .favorites-icon {
-  color: #eab308;
+  color: var(--mj-status-warning);
 }
 
 .filter-checkbox .deprecated-icon {
@@ -607,12 +607,12 @@
 }
 
 .favorite-btn:hover {
-  color: #eab308;
+  color: var(--mj-status-warning);
   background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
 }
 
 .favorite-btn.is-favorite {
-  color: #eab308;
+  color: var(--mj-status-warning);
 }
 
 .remove-btn {

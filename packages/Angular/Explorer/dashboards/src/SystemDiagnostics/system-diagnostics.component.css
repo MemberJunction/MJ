@@ -2097,7 +2097,7 @@
 }
 
 .perfmon-chart :deep(.tooltip-text) {
-    fill: #fff;
+    fill: var(--mj-bg-surface);
     font-size: 11px;
     font-family: monospace;
 }
