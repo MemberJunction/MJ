@@ -57,6 +57,8 @@ import {
     LogStatusEx,
     StripStopWords,
     QueryCache,
+    QueryPagingEngine,
+    DatabasePlatform,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -1945,17 +1947,55 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return cachedResult;
             }
 
-            // Execute query and measure performance
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+            // Execute query — use SQL-level paging when requested, else fetch all rows
+            const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+            let paginatedResult: Record<string, unknown>[];
+            let totalRowCount: number;
+            let executionTime: number;
+            let fullResult: Record<string, unknown>[] | undefined;
 
-            // Apply pagination
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            if (useSQLPaging) {
+                const paging = QueryPagingEngine.WrapWithPaging(
+                    finalSQL,
+                    params.StartRow!,
+                    params.MaxRows!,
+                    this.PlatformKey as DatabasePlatform,
+                );
+
+                // Execute data + count queries in parallel
+                const start = Date.now();
+                const [dataResult, countResult] = await Promise.all([
+                    this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                    this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                ]);
+                executionTime = Date.now() - start;
+
+                if (!dataResult) {
+                    throw new Error('Error executing paged query SQL');
+                }
+
+                paginatedResult = dataResult;
+                totalRowCount = countResult?.[0]?.TotalRowCount != null
+                    ? Number(countResult[0].TotalRowCount)
+                    : paginatedResult.length;
+            } else {
+                // No paging requested — execute full query, apply in-memory pagination as fallback
+                const timing = await this.executeQueryWithTiming(finalSQL, contextUser);
+                executionTime = timing.executionTime;
+                fullResult = timing.result;
+
+                const paginated = this.applyQueryPagination(fullResult, params);
+                paginatedResult = paginated.paginatedResult;
+                totalRowCount = paginated.totalRowCount;
+            }
 
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
 
-            // Cache results if enabled
-            this.cacheQueryResults(query, params.Parameters || {}, result);
+            // Cache full (unpaginated) results if enabled — only when we have the full result set
+            if (fullResult) {
+                this.cacheQueryResults(query, params.Parameters || {}, fullResult);
+            }
 
             return {
                 Success: true,
