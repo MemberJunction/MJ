@@ -459,8 +459,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             return true;
         }
 
-        // Write a temp .mjs script to avoid shell-escaping problems with inline -e
-        const tmpScript = `/tmp/rsu_codegen_${Date.now()}.mjs`;
+        // Write a temp .mjs script inside the work dir so Node module resolution
+        // can find dotenv, codegen-lib, etc. from node_modules
+        const tmpScript = `${workDir}/.rsu_codegen_${Date.now()}.mjs`;
         const scriptContent = [
             "import 'dotenv/config';",
             "await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');",
