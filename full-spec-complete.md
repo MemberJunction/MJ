@@ -63,7 +63,7 @@
 - `Preview()` → dry-run without execution
 
 ### Phase 5: Agent-Driven Schema Creation (Action)
-**Status**: Complete
+**Status**: Complete (12 tests passing)
 **Location**: `packages/Actions/CoreActions/src/custom/schema/create-table.action.ts`
 
 - `CreateDatabaseTableAction` (`@RegisterClass(BaseAction, "__CreateDatabaseTable")`)
@@ -105,7 +105,8 @@
 |---------|-------|--------|
 | `@memberjunction/schema-engine` | 110 | All passing |
 | `@memberjunction/integration-schema-builder` | 87 | All passing |
-| **Total** | **197** | **All passing** |
+| `@memberjunction/core-actions` | 29 | All passing |
+| **Total** | **226** | **All passing** |
 
 ## Build Results
 
@@ -163,7 +164,7 @@ RuntimeSchemaManager (Pipeline Orchestration)
 
 ---
 
-*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 197 tests pass.*
+*Implementation verified on 2026-03-12. All phases implemented, all packages build, all 226 tests pass.*
 *E2E database testing requires a running SQL Server instance (sql-claude container in Docker workbench).*
 
 ## Verification Checklist
@@ -171,7 +172,7 @@ RuntimeSchemaManager (Pipeline Orchestration)
 - [x] SchemaEngine: 110 tests pass, builds clean
 - [x] Integration schema-builder: 87 tests pass, builds clean
 - [x] MJServer (RSUResolver): builds clean, exported from index.ts
-- [x] CoreActions (CreateDatabaseTableAction): builds clean
+- [x] CoreActions (CreateDatabaseTableAction): builds clean, 12 tests pass (+ 17 existing)
 - [x] SchemaBuilder has `RunSchemaPipeline()` wired to RuntimeSchemaManager
 - [x] UserTablePipeline creates `custom.UD_*` tables with `User: *` entity names
 - [x] CreateDatabaseTableAction registered as `__CreateDatabaseTable`
