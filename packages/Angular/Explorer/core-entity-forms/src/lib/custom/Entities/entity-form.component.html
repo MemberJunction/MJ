@@ -5,7 +5,7 @@
     <!-- ============================================================ -->
     <header class="explorer-header">
       <div class="entity-identity">
-        <div class="entity-icon" [style.background-color]="'#3b82f6'">
+        <div class="entity-icon" [style.background-color]="'var(--mj-brand-primary)'">
           <i [class]="entityIcon"></i>
         </div>
         <div class="entity-info">
@@ -245,9 +245,9 @@
                                 <div class="isa-inspector-header">
                                   <span class="isa-inspector-entity">
                                     @if (group.Level === 0) {
-                                      <i class="fa-solid fa-circle" style="color: #3b82f6; font-size: 8px;"></i>
+                                      <i class="fa-solid fa-circle" style="color: var(--mj-brand-primary); font-size: 8px;"></i>
                                     } @else {
-                                      <i class="fa-solid fa-arrow-up" style="color: #6366f1; font-size: 10px;"></i>
+                                      <i class="fa-solid fa-arrow-up" style="color: var(--mj-brand-primary); font-size: 10px;"></i>
                                     }
                                     {{ group.Label }}
                                   </span>
@@ -1024,9 +1024,9 @@
                       <span class="config-label">Virtual Entity</span>
                       <span class="config-value">
                         @if (IsVirtualEntity) {
-                          <i class="fa-solid fa-circle-check" style="color: #7c3aed;"></i> Yes — read-only view
+                          <i class="fa-solid fa-circle-check" style="color: var(--mj-brand-primary);"></i> Yes — read-only view
                         } @else {
-                          <i class="fa-solid fa-circle-minus" style="color: #94a3b8;"></i> No
+                          <i class="fa-solid fa-circle-minus" style="color: var(--mj-text-muted);"></i> No
                         }
                       </span>
                     </div>

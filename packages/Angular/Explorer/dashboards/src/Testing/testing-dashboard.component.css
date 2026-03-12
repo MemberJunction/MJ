@@ -5,7 +5,7 @@
 
 .testing-dashboard-container {
   height: 100%;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+  background: var(--mj-bg-surface-sunken);
   position: relative;
   overflow: hidden;
 }
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--mj-bg-surface);
   backdrop-filter: blur(8px);
 }
 
@@ -38,10 +38,10 @@
   width: 64px;
   height: 64px;
   margin: 8px;
-  border: 8px solid #6366f1;
+  border: 8px solid var(--mj-brand-primary);
   border-radius: 50%;
   animation: spinner-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-  border-color: #6366f1 transparent transparent transparent;
+  border-color: var(--mj-brand-primary) transparent transparent transparent;
 }
 
 .spinner-ring:nth-child(1) {
@@ -68,7 +68,7 @@
 .loading-text {
   margin-top: 20px;
   font-size: 16px;
-  color: #64748b;
+  color: var(--mj-text-muted);
   font-weight: 500;
 }
 
@@ -89,9 +89,9 @@
   display: flex;
   justify-content: flex-start;
   gap: 2px;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.06);
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  box-shadow: var(--mj-shadow-sm);
   padding: 0 16px;
   position: relative;
   z-index: 10;
@@ -105,7 +105,7 @@
   gap: 10px;
   padding: 16px 24px;
   cursor: pointer;
-  color: #64748b;
+  color: var(--mj-text-muted);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   border-bottom: 3px solid transparent;
   white-space: nowrap;
@@ -126,20 +126,20 @@
 }
 
 .nav-item:hover {
-  color: #6366f1;
+  color: var(--mj-brand-primary);
 }
 
 .nav-item:hover::before {
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
 }
 
 .nav-item.active {
-  color: #6366f1;
-  border-bottom-color: #6366f1;
+  color: var(--mj-brand-primary);
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 .nav-item.active::before {
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .nav-item i {

@@ -3,10 +3,10 @@
 :host {
     display: block;
     height: 100%;
-    --grid-accent-color: #2196F3;
-    --grid-selection-indicator: #f9a825;
-    --grid-selection-bg: #fff9e6;
-    --grid-sort-indicator-color: #2196F3;
+    --grid-accent-color: var(--mj-brand-primary);
+    --grid-selection-indicator: var(--mj-status-warning);
+    --grid-selection-bg: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    --grid-sort-indicator-color: var(--mj-brand-primary);
 }
 
 .query-data-grid-container {
@@ -14,7 +14,7 @@
     flex-direction: column;
     height: 100%;
     position: relative;
-    background: #fff;
+    background: var(--mj-bg-surface);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -28,8 +28,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: #ffffff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     min-height: 48px;
     flex-shrink: 0;
 }
@@ -47,20 +47,21 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: #666;
+    color: var(--mj-text-secondary);
     font-weight: 500;
 }
 
 .row-count i,
 .selection-count i {
-    color: #888;
+    color: var(--mj-text-muted);
 }
 
 .selection-count {
     padding: 4px 8px;
-    background: var(--grid-selection-bg);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-text-primary);
     border-radius: 4px;
-    border-left: 3px solid var(--grid-selection-indicator);
+    border-left: 3px solid var(--mj-brand-primary);
 }
 
 .clear-selection-btn {
@@ -73,15 +74,15 @@
     margin-left: 4px;
     border: none;
     background: transparent;
-    color: #888;
+    color: var(--mj-text-muted);
     cursor: pointer;
     border-radius: 50%;
     transition: all 0.15s ease;
 }
 
 .clear-selection-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
+    background: color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
+    color: var(--mj-text-primary);
 }
 
 /* Toolbar buttons - consistent styling */
@@ -90,18 +91,18 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
-    color: #333;
+    color: var(--mj-text-primary);
     transition: background-color 0.2s, border-color 0.2s;
 }
 
 .toolbar-btn:hover:not(:disabled) {
-    background: #eee;
-    border-color: #ccc;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
 }
 
 .toolbar-btn:disabled {
@@ -156,7 +157,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--mj-bg-overlay);
     z-index: 100;
 }
 
@@ -175,19 +176,19 @@
 
 .empty-icon {
     font-size: 48px;
-    color: #ccc;
+    color: var(--mj-border-strong);
     margin-bottom: 16px;
 }
 
 .empty-message {
     font-size: 18px;
-    color: #666;
+    color: var(--mj-text-secondary);
     margin: 0 0 8px 0;
 }
 
 .empty-hint {
     font-size: 14px;
-    color: #999;
+    color: var(--mj-text-muted);
     margin: 0;
 }
 
@@ -209,13 +210,13 @@
 }
 
 ::ng-deep .entity-link:hover {
-    color: #1565c0;
+    color: var(--mj-brand-primary-hover);
     text-decoration: underline;
 }
 
 ::ng-deep .entity-link-icon {
     font-size: 10px;
-    color: #aaa;
+    color: var(--mj-text-disabled);
     opacity: 0;
     transition: opacity 0.15s ease;
 }
@@ -228,15 +229,6 @@
    AG Grid customizations
    ======================================== */
 
-::ng-deep .ag-theme-alpine {
-    --ag-header-background-color: #fafafa;
-    --ag-header-foreground-color: #333;
-    --ag-row-hover-color: #e8f4fd;
-    --ag-selected-row-background-color: var(--grid-selection-bg);
-    --ag-font-size: 13px;
-    --ag-row-border-color: #e8e8e8;
-}
-
 /* ========================================
    Visual Config: Zebra Striping
    (copied from entity-data-grid pattern)
@@ -244,51 +236,57 @@
 
 /* Subtle contrast */
 .alternate-rows-subtle ::ng-deep .ag-row-odd {
-    background-color: rgba(0, 0, 0, 0.015);
+    background-color: color-mix(in srgb, var(--mj-text-primary) 1.5%, transparent);
 }
 
 .alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
-    background-color: var(--grid-row-hover-bg, #f5f5f5);
+    background-color: var(--mj-bg-surface-hover);
 }
 
 /* Medium contrast (default) */
 .alternate-rows-medium ::ng-deep .ag-row-odd {
-    background-color: rgba(0, 0, 0, 0.025);
+    background-color: color-mix(in srgb, var(--mj-text-primary) 2.5%, transparent);
 }
 
 .alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
-    background-color: var(--grid-row-hover-bg, #f5f5f5);
+    background-color: var(--mj-bg-surface-hover);
 }
 
 /* Strong contrast */
 .alternate-rows-strong ::ng-deep .ag-row-odd {
-    background-color: rgba(0, 0, 0, 0.04);
+    background-color: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
 }
 
 .alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
-    background-color: var(--grid-row-hover-bg, #f5f5f5);
+    background-color: var(--mj-bg-surface-hover);
 }
 
-::ng-deep .ag-theme-alpine .ag-header-cell {
+::ng-deep .ag-header-cell {
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    color: #546e7a;
+    color: var(--mj-text-secondary);
 }
 
-::ng-deep .ag-theme-alpine .ag-header-cell:hover {
-    background-color: rgba(0, 0, 0, 0.04);
+::ng-deep .ag-header-cell:hover {
+    background-color: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
 }
 
 /* Selected row styling */
 ::ng-deep .ag-row-selected {
+    background-color: var(--grid-selection-bg) !important;
+    color: var(--mj-text-primary) !important;
     box-shadow: inset 4px 0 0 0 var(--grid-selection-indicator);
 }
 
+::ng-deep .ag-row-selected .ag-cell {
+    color: var(--mj-text-primary) !important;
+}
+
 /* Row border */
-::ng-deep .ag-theme-alpine .ag-row {
-    border-bottom: 1px solid var(--ag-row-border-color, #f0f0f0);
+::ng-deep .ag-row {
+    border-bottom: 1px solid var(--mj-border-subtle);
 }
 
 /* Header alignment */
@@ -301,19 +299,19 @@
 }
 
 /* Checkbox styling */
-::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper {
+::ng-deep .ag-checkbox-input-wrapper {
     border-radius: 4px;
     width: 18px;
     height: 18px;
 }
 
-::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked {
+::ng-deep .ag-checkbox-input-wrapper.ag-checked {
     background-color: var(--grid-accent-color);
     border-color: var(--grid-accent-color);
 }
 
-::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked::after {
-    color: #ffffff;
+::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
+    color: var(--mj-text-inverse);
 }
 
 /* ========================================
@@ -322,11 +320,11 @@
 
 /* Sort icons - colored arrows only */
 :host ::ng-deep .ag-sort-ascending-icon {
-    color: #1976d2 !important;
+    color: var(--mj-brand-primary) !important;
 }
 
 :host ::ng-deep .ag-sort-descending-icon {
-    color: #d81b60 !important;
+    color: var(--mj-status-error) !important;
 }
 
 :host ::ng-deep .ag-sort-ascending-icon .ag-icon,
@@ -339,12 +337,12 @@
     margin-left: 4px;
     font-size: 11px !important;
     font-weight: 700 !important;
-    color: #666 !important;
+    color: var(--mj-text-secondary) !important;
 }
 
 /* Hover state for sortable headers */
 :host ::ng-deep .ag-header-cell-sortable:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
 }
 
 /* ========================================
@@ -357,17 +355,17 @@
 }
 
 ::ng-deep .ag-body-viewport::-webkit-scrollbar-track {
-    background: #f5f5f5;
+    background: var(--mj-bg-surface-card);
     border-radius: 4px;
 }
 
 ::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb {
-    background: #c0c0c0;
+    background: var(--mj-border-strong);
     border-radius: 4px;
 }
 
 ::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb:hover {
-    background: #a0a0a0;
+    background: var(--mj-text-disabled);
 }
 
 /* ========================================

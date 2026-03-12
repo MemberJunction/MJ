@@ -500,7 +500,7 @@
 .alert-error {
   background: var(--mj-color-error-100);
   border-color: var(--mj-status-error);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 
 .alert-error i {

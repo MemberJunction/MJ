@@ -70,18 +70,18 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
     }
 
     .review-indicator.badge.reviewed {
-      background: #dcfce7;
-      color: #166534;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .review-indicator.badge.needs-review {
-      background: #fef3c7;
-      color: #92400e;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-text-secondary);
     }
 
     .review-indicator.badge.not-reviewed {
-      background: #f3f4f6;
-      color: #6b7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     .review-indicator.badge i {
@@ -94,15 +94,15 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
     }
 
     .review-indicator.count.complete {
-      color: #22c55e;
+      color: var(--mj-status-success);
     }
 
     .review-indicator.count.partial {
-      color: #f59e0b;
+      color: var(--mj-status-warning);
     }
 
     .review-indicator.count.none {
-      color: #9ca3af;
+      color: var(--mj-text-disabled);
     }
 
     .review-indicator.count i {
@@ -115,7 +115,7 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
 
     .review-indicator.count .label {
       font-weight: 400;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     /* Progress mode */
@@ -126,14 +126,14 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
     .progress-bar {
       width: 60px;
       height: 6px;
-      background: #e2e8f0;
+      background: var(--mj-border-default);
       border-radius: 3px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+      background: var(--mj-status-success);
       border-radius: 3px;
       transition: width 0.3s ease;
     }
@@ -141,7 +141,7 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
     .progress-text {
       font-size: 11px;
       font-weight: 600;
-      color: #475569;
+      color: var(--mj-text-secondary);
     }
   `]
 })

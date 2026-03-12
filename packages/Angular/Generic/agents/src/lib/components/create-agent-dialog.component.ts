@@ -74,7 +74,7 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
             width: 680px;
             max-width: 95vw;
             max-height: 90vh;
-            background: var(--card-background, #ffffff);
+            background: var(--mj-bg-surface-card);
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
             z-index: 1001;
@@ -93,7 +93,7 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
             align-items: center;
             justify-content: space-between;
             padding: 20px 24px 16px;
-            border-bottom: 1px solid var(--border-color, #e5e7eb);
+            border-bottom: 1px solid var(--mj-border-default);
             flex-shrink: 0;
         }
 
@@ -105,20 +105,20 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
 
         .cad-title-icon {
             font-size: 22px;
-            color: #6366f1;
+            color: var(--mj-brand-primary);
         }
 
         .cad-title {
             margin: 0;
             font-size: 18px;
             font-weight: 700;
-            color: var(--text-primary, #1f2937);
+            color: var(--mj-text-primary);
         }
 
         .cad-subtitle {
             margin: 2px 0 0 0;
             font-size: 13px;
-            color: #6b7280;
+            color: var(--mj-text-muted);
         }
 
         .cad-close-btn {
@@ -130,15 +130,15 @@ import { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.compo
             background: none;
             border: none;
             border-radius: 8px;
-            color: var(--text-secondary, #6b7280);
+            color: var(--mj-text-secondary);
             cursor: pointer;
             transition: all 0.15s ease;
             font-size: 16px;
             flex-shrink: 0;
         }
         .cad-close-btn:hover {
-            background: var(--hover-background, #f3f4f6);
-            color: var(--text-primary, #1f2937);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
         }
 
         .cad-body {

@@ -30,6 +30,10 @@
   height: 100%;
 }
 
+.mj-logo-svg path {
+  fill: var(--mj-logo-color);
+}
+
 /* Size presets */
 .mj-loading-logo.size-small {
   width: 40px;
@@ -61,7 +65,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #757575;
+  color: var(--mj-text-muted);
   text-align: center;
   transition: color 0.3s ease;
 }

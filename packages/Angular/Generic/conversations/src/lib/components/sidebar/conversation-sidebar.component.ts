@@ -46,7 +46,7 @@ import { NavigationTab } from '../../models/conversation-state.model';
     .placeholder {
       padding: 24px;
       text-align: center;
-      color: #AAA;
+      color: var(--mj-text-disabled);
       display: flex;
       flex-direction: column;
       align-items: center;

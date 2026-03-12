@@ -312,11 +312,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Get the CSS color for a query status */
     public getStatusColor(status: string): string {
         switch (status) {
-            case 'Approved':  return '#28a745';
-            case 'Pending':   return '#f59e0b';
-            case 'Rejected':  return '#dc3545';
-            case 'Expired':   return '#6c757d';
-            default:          return '#6c757d';
+            case 'Approved':  return 'var(--mj-status-success)';
+            case 'Pending':   return 'var(--mj-status-warning)';
+            case 'Rejected':  return 'var(--mj-status-error)';
+            case 'Expired':   return 'var(--mj-text-muted)';
+            default:          return 'var(--mj-text-muted)';
         }
     }
 

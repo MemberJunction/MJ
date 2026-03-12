@@ -8,18 +8,18 @@
 
 .params-header h3 {
     margin: 0 0 8px 0;
-    color: #333;
+    color: var(--mj-text-primary);
     font-size: 1.2em;
 }
 
 .params-header h3 i {
     margin-right: 8px;
-    color: #007bff;
+    color: var(--mj-brand-primary);
 }
 
 .params-description {
     margin: 0;
-    color: #666;
+    color: var(--mj-text-secondary);
     font-size: 0.9em;
 }
 
@@ -33,8 +33,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse);
     padding: 2px 8px;
     border-radius: 12px;
     font-size: 0.75em;
@@ -49,36 +49,36 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #495057;
+    color: var(--mj-text-secondary);
 }
 
 .param-type i {
-    color: #6c757d;
+    color: var(--mj-text-muted);
 }
 
 .param-description {
-    color: #666;
+    color: var(--mj-text-secondary);
     font-size: 0.9em;
     line-height: 1.4;
 }
 
 .default-value {
-    background-color: #f8f9fa;
+    background-color: var(--mj-bg-surface-card);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.85em;
-    color: #495057;
+    color: var(--mj-text-secondary);
     word-break: break-word;
 }
 
 .text-muted {
-    color: #6c757d;
+    color: var(--mj-text-muted);
     font-style: italic;
     font-size: 0.9em;
 }
 
 .text-success {
-    color: #28a745;
+    color: var(--mj-status-success);
 }
 
 .text-center {
@@ -88,13 +88,13 @@
 .no-params-message {
     text-align: center;
     padding: 40px 20px;
-    color: #6c757d;
+    color: var(--mj-text-muted);
 }
 
 .no-params-message i {
     font-size: 2em;
     margin-bottom: 10px;
-    color: #adb5bd;
+    color: var(--mj-text-muted);
 }
 
 .no-params-message p {
@@ -105,20 +105,20 @@
 .params-help {
     margin-top: 30px;
     padding: 20px;
-    background-color: #f8f9fa;
+    background-color: var(--mj-bg-surface-card);
     border-radius: 8px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--mj-border-default);
 }
 
 .params-help h4 {
     margin: 0 0 15px 0;
-    color: #333;
+    color: var(--mj-text-primary);
     font-size: 1em;
 }
 
 .params-help h4 i {
     margin-right: 6px;
-    color: #17a2b8;
+    color: var(--mj-brand-primary);
 }
 
 .params-help ul {
@@ -128,34 +128,34 @@
 
 .params-help li {
     margin-bottom: 8px;
-    color: #495057;
+    color: var(--mj-text-secondary);
     font-size: 0.9em;
 }
 
 .params-help strong {
-    color: #333;
+    color: var(--mj-text-primary);
 }
 
 .help-note {
     margin-top: 15px;
     padding: 10px 15px;
-    background-color: #e7f3ff;
-    border-left: 4px solid #007bff;
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    border-left: 4px solid var(--mj-brand-primary);
     border-radius: 4px;
     font-size: 0.9em;
 }
 
 .help-note i {
     margin-right: 6px;
-    color: #007bff;
+    color: var(--mj-brand-primary);
 }
 
 .help-note code {
-    background-color: #fff;
+    background-color: var(--mj-bg-surface);
     padding: 2px 4px;
     border-radius: 3px;
     font-family: 'Courier New', monospace;
-    color: #d73a49;
+    color: var(--mj-status-error);
 }
 
 /* Grid action buttons */
@@ -166,22 +166,22 @@
 /* Form validation */
 .k-invalid-msg {
     display: block;
-    color: #dc3545;
+    color: var(--mj-status-error);
     font-size: 0.85em;
     margin-top: 4px;
 }
 
 /* Kendo overrides for consistent styling */
 .k-grid .k-toolbar {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
     padding: 12px;
 }
 
 .k-grid-header th {
-    background-color: #f8f9fa;
+    background-color: var(--mj-bg-surface-card);
     font-weight: 600;
-    color: #495057;
+    color: var(--mj-text-secondary);
 }
 
 /* Responsive adjustments */
@@ -189,7 +189,7 @@
     .template-params-grid {
         padding: 10px;
     }
-    
+
     .params-help {
         padding: 15px;
     }
