@@ -757,6 +757,102 @@ export class IntegrationDataService {
     return IntegrationEngineBase.Instance.Watermarks.filter(w => mapIDSet.has(w.EntityMapID.toLowerCase()));
   }
 
+  /**
+   * Auto-map all entities in a given schema to a company integration.
+   * For each entity in the schema that doesn't already have an entity map,
+   * creates an entity map (ExternalObjectName = BaseTable) and 1:1 field maps
+   * for every non-system column. Returns the count of maps created.
+   */
+  async AutoMapSchema(
+    companyIntegrationID: string,
+    schemaName: string,
+    direction: 'Pull' | 'Push' | 'Bidirectional' = 'Pull'
+  ): Promise<{ EntityMapsCreated: number; FieldMapsCreated: number; Errors: string[] }> {
+    const md = new Metadata();
+    const errors: string[] = [];
+
+    // Get entities in the target schema
+    const schemaEntities = md.Entities.filter(
+      e => e.SchemaName.toLowerCase() === schemaName.toLowerCase()
+    );
+    if (schemaEntities.length === 0) {
+      return { EntityMapsCreated: 0, FieldMapsCreated: 0, Errors: [`No entities found in schema "${schemaName}"`] };
+    }
+
+    // Load existing entity maps to avoid duplicates
+    const existingMaps = await this.LoadEntityMaps(companyIntegrationID);
+    const existingEntityIDs = new Set(existingMaps.map(m => m.ID.toLowerCase()));
+
+    // Build a set of entity IDs that already have maps (by EntityID)
+    const mappedEntityIDs = new Set<string>();
+    for (const em of existingMaps) {
+      mappedEntityIDs.add((em as unknown as { EntityID: string }).EntityID?.toLowerCase() ?? '');
+    }
+    // Also load full map data to check EntityID
+    const engine = IntegrationEngineBase.Instance;
+    await engine.Config(false);
+    const allMaps = engine.GetEntityMapsForCompanyIntegration(companyIntegrationID);
+    for (const em of allMaps) {
+      mappedEntityIDs.add(em.EntityID.toLowerCase());
+    }
+
+    let entityMapsCreated = 0;
+    let fieldMapsCreated = 0;
+
+    for (const entity of schemaEntities) {
+      // Skip if already mapped
+      if (mappedEntityIDs.has(entity.ID.toLowerCase())) continue;
+
+      // Create entity map
+      const entityMap = await this.CreateEntityMap({
+        CompanyIntegrationID: companyIntegrationID,
+        ExternalObjectName: entity.BaseTable,
+        EntityID: entity.ID,
+        SyncDirection: direction
+      });
+
+      if (!entityMap) {
+        errors.push(`Failed to create entity map for ${entity.Name}`);
+        continue;
+      }
+      entityMapsCreated++;
+
+      // Create 1:1 field maps for all non-system fields
+      const fields = entity.Fields.filter(
+        f => !f.Name.startsWith('__mj')
+      );
+
+      for (const field of fields) {
+        const isKey = field.Name.toLowerCase() === 'uuid' || field.IsPrimaryKey;
+        const fm = await this.CreateFieldMap({
+          EntityMapID: entityMap.ID,
+          SourceFieldName: field.Name,
+          DestinationFieldName: field.Name,
+          IsKeyField: isKey,
+          IsRequired: isKey,
+          Direction: direction === 'Bidirectional' ? 'Both' : 'SourceToDest'
+        });
+        if (fm) {
+          fieldMapsCreated++;
+        } else {
+          errors.push(`Failed to create field map for ${entity.Name}.${field.Name}`);
+        }
+      }
+    }
+
+    return { EntityMapsCreated: entityMapsCreated, FieldMapsCreated: fieldMapsCreated, Errors: errors };
+  }
+
+  /** Load available schemas (for auto-map schema picker) */
+  LoadSchemas(): string[] {
+    const md = new Metadata();
+    const schemas = new Set<string>();
+    for (const entity of md.Entities) {
+      if (entity.SchemaName) schemas.add(entity.SchemaName);
+    }
+    return Array.from(schemas).sort();
+  }
+
   /** Load entity map count per company integration (used by Overview cards) */
   async LoadEntityMapCounts(_provider?: IRunViewProvider | null): Promise<Map<string, number>> {
     await IntegrationEngineBase.Instance.Config(false);

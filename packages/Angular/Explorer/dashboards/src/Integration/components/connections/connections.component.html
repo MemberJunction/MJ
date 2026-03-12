@@ -122,8 +122,14 @@
                 Configure
               </button>
               @if (IsConnectionActive(summary)) {
-                <button kendoButton themeColor="primary" (click)="RunSync(summary.Integration.ID)">
-                  Sync Now
+                <button kendoButton themeColor="primary"
+                        [disabled]="!!SyncingIntegrationID"
+                        (click)="RunSync(summary.Integration.ID)">
+                  @if (IsSyncing(summary.Integration.ID)) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Syncing...
+                  } @else {
+                    Sync Now
+                  }
                 </button>
               }
               <div class="card-menu-wrapper">
@@ -207,8 +213,14 @@
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
             @if (IsConnectionActive(SelectedSummary)) {
-              <button kendoButton themeColor="primary" (click)="RunSync(SelectedSummary.Integration.ID)">
-                <i class="fa-solid fa-arrows-rotate"></i> Sync Now
+              <button kendoButton themeColor="primary"
+                      [disabled]="!!SyncingIntegrationID"
+                      (click)="RunSync(SelectedSummary.Integration.ID)">
+                @if (IsSyncing(SelectedSummary.Integration.ID)) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Syncing...
+                } @else {
+                  <i class="fa-solid fa-arrows-rotate"></i> Sync Now
+                }
               </button>
             }
           </div>
@@ -231,11 +243,103 @@
                      [value]="DetailSearchTerm"
                      (input)="OnDetailSearch($event)" />
             </div>
+            <button class="add-map-btn" (click)="ToggleAutoMapPanel()" [class.active]="ShowAutoMapPanel">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map Schema
+            </button>
             <button class="add-map-btn" (click)="ToggleAddMapPanel()" [class.active]="ShowAddMapPanel">
               <i class="fa-solid fa-plus"></i> Add Map
             </button>
           </div>
         </div>
+
+        <!-- Sync result banner -->
+        @if (SyncResult) {
+          <div class="sync-result-banner" [class.sync-success]="SyncResult.Success" [class.sync-failure]="!SyncResult.Success">
+            @if (SyncResult.Success) {
+              <i class="fa-solid fa-circle-check"></i>
+            } @else {
+              <i class="fa-solid fa-circle-xmark"></i>
+            }
+            <span>{{ SyncResult.Message || (SyncResult.Success ? 'Sync completed successfully' : 'Sync failed') }}</span>
+          </div>
+        }
+
+        <!-- Auto-Map Schema panel -->
+        @if (ShowAutoMapPanel) {
+          <div class="add-map-panel">
+            <div class="auto-map-header">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Auto-map all entities in a schema to this integration with 1:1 field mappings</span>
+            </div>
+            <div class="add-map-row">
+              <div class="add-map-field">
+                <label class="add-map-label">Target Schema</label>
+                <select class="add-map-select" [(ngModel)]="AutoMapSelectedSchema">
+                  <option [ngValue]="''" disabled>Select schema...</option>
+                  @for (schema of AutoMapSchemas; track schema) {
+                    <option [value]="schema">{{ schema }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="add-map-direction-col">
+                <label class="add-map-label">Direction</label>
+                <div class="add-map-direction-btns">
+                  <button [class.active]="AutoMapDirection === 'Pull'" (click)="AutoMapDirection = 'Pull'" title="Pull from source">
+                    <i class="fa-solid fa-arrow-right"></i>
+                  </button>
+                  <button [class.active]="AutoMapDirection === 'Bidirectional'" (click)="AutoMapDirection = 'Bidirectional'" title="Bidirectional sync">
+                    <i class="fa-solid fa-right-left"></i>
+                  </button>
+                  <button [class.active]="AutoMapDirection === 'Push'" (click)="AutoMapDirection = 'Push'" title="Push to source">
+                    <i class="fa-solid fa-arrow-left"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="add-map-actions">
+                <button class="add-map-save-btn"
+                        [disabled]="!CanAutoMap"
+                        (click)="RunAutoMap()">
+                  @if (IsAutoMapping) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Mapping...
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
+                  }
+                </button>
+                <button class="add-map-cancel-btn" (click)="CloseAutoMapPanel()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+
+            @if (AutoMapResult) {
+              <div class="auto-map-result" [class.auto-map-success]="AutoMapResult.Errors.length === 0"
+                   [class.auto-map-partial]="AutoMapResult.Errors.length > 0 && AutoMapResult.EntityMapsCreated > 0"
+                   [class.auto-map-failure]="AutoMapResult.EntityMapsCreated === 0 && AutoMapResult.Errors.length > 0">
+                @if (AutoMapResult.EntityMapsCreated > 0) {
+                  <div class="auto-map-result-summary">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Created {{ AutoMapResult.EntityMapsCreated }} entity map{{ AutoMapResult.EntityMapsCreated !== 1 ? 's' : '' }}
+                    with {{ AutoMapResult.FieldMapsCreated }} field map{{ AutoMapResult.FieldMapsCreated !== 1 ? 's' : '' }}
+                  </div>
+                } @else if (AutoMapResult.Errors.length === 0) {
+                  <div class="auto-map-result-summary">
+                    <i class="fa-solid fa-circle-info"></i>
+                    All entities in this schema are already mapped.
+                  </div>
+                }
+                @if (AutoMapResult.Errors.length > 0) {
+                  <div class="auto-map-errors">
+                    @for (err of AutoMapResult.Errors; track err) {
+                      <div class="auto-map-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ err }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
 
         <!-- Add Entity Map inline form -->
         @if (ShowAddMapPanel) {

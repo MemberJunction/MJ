@@ -8,7 +8,7 @@
       "NavigationBaseURL": "https://wicket.io",
       "BatchMaxRequestCount": 100,
       "BatchRequestWaitTime": 125,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Wicket API",
       "Icon": "fa-solid fa-id-badge"
     },
     "relatedEntities": {
@@ -3704,8 +3704,8 @@
       "ID": "2F99BB74-0297-41BF-87A0-BFBDBD97BDF0"
     },
     "sync": {
-      "lastModified": "2026-03-12T21:00:30.348Z",
-      "checksum": "e1c8f4559c39bcde96158072edee665b4882cd24bdf5d28f953ec1b5f83a867a"
+      "lastModified": "2026-03-12T21:27:07.187Z",
+      "checksum": "44a54b5a19556bec3f1055f935cf199d583a8cb8cd1cce76edc956e97901c722"
     }
   }
 ]
