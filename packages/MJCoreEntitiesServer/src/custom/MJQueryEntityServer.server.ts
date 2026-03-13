@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryCompositionEngine, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryCompositionEngine, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity, MJQueryDependencyEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -572,20 +572,6 @@ export class MJQueryEntityServer extends MJQueryEntity {
         }
     }
     
-    private mapSqlTypeToFieldType(sqlType: string | null): 'number' | 'string' | 'date' | 'boolean' {
-        if (!sqlType) return 'string';
-        const lower = sqlType.toLowerCase();
-        if (lower.includes('int') || lower.includes('decimal') || lower.includes('numeric') ||
-            lower.includes('float') || lower.includes('real') || lower.includes('money')) {
-            return 'number';
-        } else if (lower.includes('date') || lower.includes('time')) {
-            return 'date';
-        } else if (lower.includes('bit')) {
-            return 'boolean';
-        }
-        return 'string';
-    }
-
     /**
      * Detects if the SQL uses SELECT * and if so, builds the complete field list deterministically
      * from entity metadata without relying on the AI (which can't enumerate * columns).
@@ -618,7 +604,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                             expandedFields.push({
                                 name: entityField.Name,
                                 description: entityField.Description || `${entityField.Name} field from ${matchingEntity.Name}`,
-                                type: this.mapSqlTypeToFieldType(entityField.Type),
+                                type: TypeScriptTypeFromSQLType(entityField.Type).toLowerCase() as ExtractedField['type'],
                                 optional: false,
                                 sourceEntity: matchingEntity.Name,
                                 sourceFieldName: entityField.Name,
@@ -652,7 +638,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                                 expandedFields.push({
                                     name: qField.Name,
                                     description: qField.Description || `${qField.Name} from query "${referencedQuery.Name}"`,
-                                    type: this.mapSqlTypeToFieldType(qField.SQLBaseType),
+                                    type: TypeScriptTypeFromSQLType(qField.SQLBaseType).toLowerCase() as ExtractedField['type'],
                                     optional: false,
                                     sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
                                     sourceFieldName: qField.SourceFieldName || null,
@@ -712,7 +698,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                         expandedFields.push({
                             name: entityField.Name,
                             description: entityField.Description || `${entityField.Name} field from ${sourceEntityInfo.Name}`,
-                            type: this.mapSqlTypeToFieldType(entityField.Type),
+                            type: TypeScriptTypeFromSQLType(entityField.Type).toLowerCase() as ExtractedField['type'],
                             optional: field.optional,
                             sourceEntity: sourceEntityInfo.Name,
                             sourceFieldName: entityField.Name,
@@ -732,7 +718,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                         expandedFields.push({
                             name: qField.Name,
                             description: qField.Description || `${qField.Name} from query "${composedQuery.Name}"`,
-                            type: this.mapSqlTypeToFieldType(qField.SQLBaseType),
+                            type: TypeScriptTypeFromSQLType(qField.SQLBaseType).toLowerCase() as ExtractedField['type'],
                             optional: field.optional,
                             sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
                             sourceFieldName: qField.SourceFieldName || null,
