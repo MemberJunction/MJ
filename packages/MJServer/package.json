@@ -67,6 +67,7 @@
     "@memberjunction/graphql-dataprovider": "5.11.0",
     "@memberjunction/integration-engine": "5.11.0",
     "@memberjunction/integration-schema-builder": "5.11.0",
+    "@memberjunction/schema-engine": "5.11.0",
     "@memberjunction/interactive-component-types": "5.11.0",
     "@memberjunction/computer-use-engine": "5.11.0",
     "@memberjunction/notifications": "5.11.0",

@@ -42,3 +42,18 @@ export type {
     RSUStatus,
     SQLValidationResult,
 } from './RuntimeSchemaManager.js';
+
+// ─── User Defined Tables (UDT) Pipeline ─────────────────────────────
+export {
+    UserTablePipeline,
+    ValidateUserTableDefinition,
+    DisplayNameToSqlName,
+    GenerateUDTTableName,
+    GenerateUDTEntityName,
+} from './UserTablePipeline.js';
+export type {
+    UserTableDefinition,
+    UserColumnDefinition,
+    UserForeignKeyDefinition,
+    UserTablePipelineResult,
+} from './UserTablePipeline.js';

@@ -290,7 +290,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
                 result.Success = true;
                 this._lastRunResult = 'success';
             } finally {
-                this.releaseLock();
+                await this.releaseLock();
             }
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -299,6 +299,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         }
 
         this._lastRunAt = new Date();
+
+        // Write audit log entry (best-effort, non-blocking)
+        this.writeAuditLog(input, result).catch(() => { /* ignore audit failures */ });
+
         return result;
     }
 
@@ -343,18 +347,36 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
 
     private async acquireLock(): Promise<boolean> {
+        // In-memory lock (always checked first for fast-path)
         if (this._isRunning) {
             throw new RSUError(
                 'CONCURRENT',
                 'Another RSU pipeline is already running. Wait for it to complete.'
             );
         }
+
+        // DB-backed lock for multi-instance safety (if DB is available)
+        if (this.IsDBLockEnabled) {
+            const acquired = await this.acquireDBLock();
+            if (!acquired) {
+                throw new RSUError(
+                    'CONCURRENT',
+                    'Another RSU pipeline is running on a different instance. Wait for it to complete.'
+                );
+            }
+        }
+
         this._isRunning = true;
         return true;
     }
 
-    private releaseLock(): void {
+    private async releaseLock(): Promise<void> {
         this._isRunning = false;
+
+        // Release DB lock if enabled
+        if (this.IsDBLockEnabled) {
+            await this.releaseDBLock();
+        }
     }
 
     private async validateSQL(sql: string): Promise<boolean> {
@@ -829,6 +851,197 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             return stdout.trim();
         } finally {
             try { unlinkSync(bodyFile); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
+
+    /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
+    private get IsDBLockEnabled(): boolean {
+        return process.env.RSU_DB_LOCK_ENABLED === '1';
+    }
+
+    /**
+     * Try to acquire a DB-backed lock by inserting a row into the RSULock table.
+     * Uses a unique constraint to ensure only one lock can exist at a time.
+     *
+     * The lock table is auto-created on first use via:
+     *   CREATE TABLE IF NOT EXISTS (for the configured default schema).
+     *
+     * Returns true if the lock was acquired, false if another instance holds it.
+     */
+    private async acquireDBLock(): Promise<boolean> {
+        try {
+            const { execAsync } = await this.getExecAsync();
+            const server = process.env.DB_HOST || 'localhost';
+            const database = process.env.DB_DATABASE || '';
+            const user = process.env.DB_USER || 'sa';
+            const password = process.env.DB_PASSWORD || '';
+            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
+            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+
+            if (!database) return true; // No DB configured — fall back to in-memory only
+
+            const lockId = `rsu-${process.pid}-${Date.now()}`;
+            this._dbLockId = lockId;
+
+            // Ensure lock table exists + try to INSERT (fails if another lock exists)
+            const sql = [
+                `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${defaultSchema}' AND t.name='RSULock')`,
+                `BEGIN`,
+                `  CREATE TABLE [${defaultSchema}].[RSULock] (`,
+                `    LockID NVARCHAR(200) NOT NULL,`,
+                `    AcquiredAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),`,
+                `    ExpiresAt DATETIMEOFFSET NOT NULL DEFAULT DATEADD(MINUTE, 30, GETUTCDATE()),`,
+                `    CONSTRAINT PK_RSULock PRIMARY KEY (LockID)`,
+                `  );`,
+                `END;`,
+                `-- Clean up expired locks`,
+                `DELETE FROM [${defaultSchema}].[RSULock] WHERE ExpiresAt < GETUTCDATE();`,
+                `-- Try to acquire (will fail if another non-expired lock exists)`,
+                `IF (SELECT COUNT(*) FROM [${defaultSchema}].[RSULock]) = 0`,
+                `  INSERT INTO [${defaultSchema}].[RSULock] (LockID) VALUES ('${lockId}');`,
+                `ELSE`,
+                `  RAISERROR('RSU lock held by another instance', 16, 1);`,
+            ].join('\n');
+
+            const tmpFile = `/tmp/rsu_lock_${Date.now()}.sql`;
+            const { writeFileSync, unlinkSync } = await import('node:fs');
+            writeFileSync(tmpFile, sql, 'utf-8');
+
+            try {
+                const { stdout } = await execAsync(
+                    `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
+                    { timeout: 15_000 }
+                );
+                // Check for the RAISERROR indicating lock is held
+                if (stdout && /Msg \d+, Level (1[1-9]|[2-9]\d)/.test(stdout)) {
+                    return false;
+                }
+                return true;
+            } finally {
+                try { unlinkSync(tmpFile); } catch { /* best-effort */ }
+            }
+        } catch {
+            // If DB lock fails (e.g., sqlcmd not available), fall through to in-memory
+            return true;
+        }
+    }
+
+    private _dbLockId: string | null = null;
+
+    /**
+     * Release the DB-backed lock by deleting the lock row.
+     */
+    private async releaseDBLock(): Promise<void> {
+        if (!this._dbLockId) return;
+
+        try {
+            const { execAsync } = await this.getExecAsync();
+            const server = process.env.DB_HOST || 'localhost';
+            const database = process.env.DB_DATABASE || '';
+            const user = process.env.DB_USER || 'sa';
+            const password = process.env.DB_PASSWORD || '';
+            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
+            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+
+            if (!database) return;
+
+            const sql = `DELETE FROM [${defaultSchema}].[RSULock] WHERE LockID = '${this._dbLockId}';`;
+            await execAsync(
+                `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -Q "${sql}" -C`,
+                { timeout: 15_000 }
+            );
+            this._dbLockId = null;
+        } catch {
+            /* best-effort release */
+        }
+    }
+
+    // ─── Audit Logging ──────────────────────────────────────────────
+
+    /**
+     * Write an audit log entry for a pipeline run to the RSUAuditLog table.
+     *
+     * This is called automatically at the end of RunPipeline() if the DB
+     * is available and RSU_AUDIT_LOG_ENABLED is not explicitly '0'.
+     */
+    private async writeAuditLog(input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
+        if (process.env.RSU_AUDIT_LOG_ENABLED === '0') return;
+
+        try {
+            const { execAsync } = await this.getExecAsync();
+            const server = process.env.DB_HOST || 'localhost';
+            const database = process.env.DB_DATABASE || '';
+            const user = process.env.DB_USER || 'sa';
+            const password = process.env.DB_PASSWORD || '';
+            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
+            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+
+            if (!database) return;
+
+            const { writeFileSync, unlinkSync } = await import('node:fs');
+
+            // Ensure audit table exists
+            const createTableSQL = [
+                `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${defaultSchema}' AND t.name='RSUAuditLog')`,
+                `BEGIN`,
+                `  CREATE TABLE [${defaultSchema}].[RSUAuditLog] (`,
+                `    ID INT IDENTITY(1,1) NOT NULL,`,
+                `    Description NVARCHAR(500) NOT NULL,`,
+                `    AffectedTables NVARCHAR(MAX) NULL,`,
+                `    Success BIT NOT NULL,`,
+                `    APIRestarted BIT NOT NULL DEFAULT 0,`,
+                `    GitCommitSuccess BIT NOT NULL DEFAULT 0,`,
+                `    BranchName NVARCHAR(200) NULL,`,
+                `    MigrationFilePath NVARCHAR(500) NULL,`,
+                `    ErrorMessage NVARCHAR(MAX) NULL,`,
+                `    ErrorStep NVARCHAR(100) NULL,`,
+                `    StepsJSON NVARCHAR(MAX) NULL,`,
+                `    TotalDurationMs INT NULL,`,
+                `    RunAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),`,
+                `    CONSTRAINT PK_RSUAuditLog PRIMARY KEY (ID)`,
+                `  );`,
+                `END;`,
+            ].join('\n');
+
+            // Escape strings for SQL
+            const esc = (s: string | undefined | null) => (s ?? '').replace(/'/g, "''");
+            const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
+            const stepsJson = JSON.stringify(result.Steps).replace(/'/g, "''");
+
+            const insertSQL = [
+                `INSERT INTO [${defaultSchema}].[RSUAuditLog]`,
+                `  (Description, AffectedTables, Success, APIRestarted, GitCommitSuccess, BranchName, MigrationFilePath, ErrorMessage, ErrorStep, StepsJSON, TotalDurationMs)`,
+                `VALUES (`,
+                `  '${esc(input.Description)}',`,
+                `  '${esc(input.AffectedTables.join(', '))}',`,
+                `  ${result.Success ? 1 : 0},`,
+                `  ${result.APIRestarted ? 1 : 0},`,
+                `  ${result.GitCommitSuccess ? 1 : 0},`,
+                `  ${result.BranchName ? `'${esc(result.BranchName)}'` : 'NULL'},`,
+                `  ${result.MigrationFilePath ? `'${esc(result.MigrationFilePath)}'` : 'NULL'},`,
+                `  ${result.ErrorMessage ? `'${esc(result.ErrorMessage).substring(0, 4000)}'` : 'NULL'},`,
+                `  ${result.ErrorStep ? `'${esc(result.ErrorStep)}'` : 'NULL'},`,
+                `  '${stepsJson.substring(0, 8000)}',`,
+                `  ${totalMs}`,
+                `);`,
+            ].join('\n');
+
+            const fullSQL = createTableSQL + '\n' + insertSQL;
+            const tmpFile = `/tmp/rsu_audit_${Date.now()}.sql`;
+            writeFileSync(tmpFile, fullSQL, 'utf-8');
+
+            try {
+                await execAsync(
+                    `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
+                    { timeout: 15_000 }
+                );
+            } finally {
+                try { unlinkSync(tmpFile); } catch { /* best-effort */ }
+            }
+        } catch {
+            /* Audit logging is best-effort — don't fail the pipeline */
         }
     }
 
