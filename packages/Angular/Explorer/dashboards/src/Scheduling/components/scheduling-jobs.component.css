@@ -32,20 +32,20 @@
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 10px;
     min-width: 240px;
     transition: border-color 0.2s;
 }
 
 .search-box:focus-within {
-    border-color: #0076b6;
-    box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+    border-color: var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-sm);
 }
 
 .search-box i {
-    color: #94a3b8;
+    color: var(--mj-text-muted);
     font-size: 0.85rem;
 }
 
@@ -54,29 +54,29 @@
     outline: none;
     background: transparent;
     font-size: 0.85rem;
-    color: #0f172a;
+    color: var(--mj-text-primary);
     width: 100%;
 }
 
 .filter-select {
     padding: 8px 14px;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 10px;
     font-size: 0.85rem;
-    color: #475569;
+    color: var(--mj-text-secondary);
     cursor: pointer;
     outline: none;
     transition: border-color 0.2s;
 }
 
 .filter-select:focus {
-    border-color: #0076b6;
+    border-color: var(--mj-brand-primary);
 }
 
 .result-count {
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: var(--mj-text-muted);
     white-space: nowrap;
 }
 
@@ -85,19 +85,19 @@
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 10px;
     cursor: pointer;
     font-size: 0.8rem;
     font-weight: 500;
-    color: #475569;
+    color: var(--mj-text-secondary);
     transition: all 0.2s ease;
 }
 
 .control-btn:hover {
-    background: #f3f4f6;
-    border-color: #999;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
 }
 
 .primary-btn {
@@ -105,8 +105,8 @@
     align-items: center;
     gap: 6px;
     padding: 8px 20px;
-    background: linear-gradient(135deg, #0076b6 0%, #005a8c 100%);
-    color: white;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -117,7 +117,7 @@
 
 .primary-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.4);
+    box-shadow: var(--mj-shadow-md);
 }
 
 /* ── Loading & Empty ─────────────────────────────────────── */
@@ -133,9 +133,9 @@
     flex-direction: column;
     align-items: center;
     padding: 64px 24px;
-    background: white;
+    background: var(--mj-bg-surface-card);
     border-radius: 16px;
-    border: 2px dashed #dee2e6;
+    border: 2px dashed var(--mj-border-default);
     text-align: center;
 }
 
@@ -143,7 +143,7 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: #f8f9fa;
+    background: var(--mj-bg-surface-sunken);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -152,18 +152,18 @@
 
 .empty-icon i {
     font-size: 2rem;
-    color: #adb5bd;
+    color: var(--mj-text-muted);
 }
 
 .empty-state h3 {
     font-size: 1.1rem;
     font-weight: 700;
-    color: #334155;
+    color: var(--mj-text-primary);
     margin: 0 0 8px;
 }
 
 .empty-state p {
-    color: #64748b;
+    color: var(--mj-text-secondary);
     margin: 0 0 16px;
     font-size: 0.9rem;
 }
@@ -177,10 +177,10 @@
 
 .job-card {
     position: relative;
-    background: white;
+    background: var(--mj-bg-surface-card);
     border-radius: 16px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -190,8 +190,8 @@
 
 .job-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1);
-    border-color: #0076b6;
+    box-shadow: var(--mj-shadow-lg);
+    border-color: var(--mj-brand-primary);
 }
 
 /* Card Header */
@@ -200,7 +200,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--mj-bg-surface-sunken);
 }
 
 .job-card-title {
@@ -212,14 +212,14 @@
 }
 
 .type-icon {
-    color: #0076b6;
+    color: var(--mj-brand-primary);
     font-size: 1rem;
     flex-shrink: 0;
 }
 
 .job-name {
     font-weight: 700;
-    color: #0f172a;
+    color: var(--mj-text-primary);
     font-size: 0.9rem;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -237,11 +237,11 @@
     margin-left: 8px;
 }
 
-.status-active { background: #dcfce7; color: #166534; }
-.status-paused { background: #fef3c7; color: #92400e; }
-.status-disabled { background: #f1f5f9; color: #64748b; }
-.status-pending { background: #dbeafe; color: #1e40af; }
-.status-expired { background: #fee2e2; color: #991b1b; }
+.status-active { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.status-paused { background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
+.status-disabled { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+.status-pending { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+.status-expired { background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface)); color: var(--mj-status-error); }
 
 /* Card Body */
 .job-card-body {
@@ -251,7 +251,7 @@
 
 .job-description {
     font-size: 0.8rem;
-    color: #64748b;
+    color: var(--mj-text-secondary);
     margin-bottom: 12px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -276,14 +276,14 @@
 .meta-label {
     font-size: 0.65rem;
     font-weight: 700;
-    color: #94a3b8;
+    color: var(--mj-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 .meta-value {
     font-size: 0.8rem;
-    color: #334155;
+    color: var(--mj-text-primary);
     font-weight: 500;
 }
 
@@ -295,7 +295,7 @@
 /* Success Rate */
 .success-section {
     padding-top: 12px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--mj-bg-surface-sunken);
 }
 
 .success-header {
@@ -308,7 +308,7 @@
 .success-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #64748b;
+    color: var(--mj-text-secondary);
 }
 
 .success-value {
@@ -318,7 +318,7 @@
 
 .success-bar-track {
     height: 6px;
-    background: #f1f5f9;
+    background: var(--mj-bg-surface-sunken);
     border-radius: 3px;
     overflow: hidden;
 }
@@ -336,17 +336,17 @@
     font-size: 0.75rem;
 }
 
-.stat-success { color: #10b981; font-weight: 600; }
-.stat-failure { color: #ef4444; font-weight: 600; }
-.stat-total { color: #94a3b8; margin-left: auto; }
+.stat-success { color: var(--mj-status-success); font-weight: 600; }
+.stat-failure { color: var(--mj-status-error); font-weight: 600; }
+.stat-total { color: var(--mj-text-muted); margin-left: auto; }
 
 /* Card Footer */
 .job-card-footer {
     display: flex;
     gap: 8px;
     padding: 12px 20px;
-    border-top: 1px solid #f1f5f9;
-    background: #fafbfc;
+    border-top: 1px solid var(--mj-bg-surface-sunken);
+    background: var(--mj-bg-surface-sunken);
 }
 
 .action-btn {
@@ -355,18 +355,71 @@
     gap: 6px;
     padding: 6px 12px;
     background: transparent;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     cursor: pointer;
     font-size: 0.75rem;
     font-weight: 500;
-    color: #475569;
+    color: var(--mj-text-secondary);
     transition: all 0.2s;
 }
 
 .action-btn:hover {
-    background: #f3f4f6;
-    border-color: #999;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
+}
+
+/* ── Slideout Panel ──────────────────────────────────────── */
+.slideout-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--mj-bg-overlay);
+    z-index: 999;
+    animation: fadeInBackdrop 0.2s ease;
+}
+
+@keyframes fadeInBackdrop {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.slideout-panel {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    height: 100vh;
+    background: var(--mj-bg-surface-card);
+    box-shadow: var(--mj-shadow-lg);
+    z-index: 1000;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+}
+
+.slideout-panel.open {
+    right: 0;
+}
+
+.slideout-resize-handle {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.slideout-resize-handle:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.slideout-resize-handle:active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
 }
 
 /* ── Delete Confirmation Overlay ─────────────────────────── */
@@ -393,13 +446,13 @@
 
 .delete-warn-icon {
     font-size: 1.5rem;
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 .delete-confirm-text {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--mj-text-primary);
 }
 
 .delete-confirm-actions {
@@ -413,8 +466,8 @@
     align-items: center;
     gap: 6px;
     padding: 6px 16px;
-    background: #ef4444;
-    color: white;
+    background: var(--mj-status-error);
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -424,7 +477,7 @@
 }
 
 .delete-confirm-btn:hover:not(:disabled) {
-    background: #dc2626;
+    background: var(--mj-status-error-text);
 }
 
 .delete-confirm-btn:disabled {
@@ -434,9 +487,9 @@
 
 .delete-cancel-btn {
     padding: 6px 16px;
-    background: white;
-    color: #475569;
-    border: 1px solid #e5e7eb;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     cursor: pointer;
     font-size: 0.8rem;
@@ -445,21 +498,21 @@
 }
 
 .delete-cancel-btn:hover {
-    background: #f3f4f6;
-    border-color: #999;
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
 }
 
 /* ── Danger Action Button ───────────────────────────────── */
 .action-btn-danger {
     margin-left: auto;
-    color: #ef4444;
-    border-color: #fecaca;
+    color: var(--mj-status-error);
+    border-color: var(--mj-status-error-border);
 }
 
 .action-btn-danger:hover {
-    background: #fef2f2;
-    border-color: #ef4444;
-    color: #dc2626;
+    background: var(--mj-status-error-bg);
+    border-color: var(--mj-status-error);
+    color: var(--mj-status-error-text);
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

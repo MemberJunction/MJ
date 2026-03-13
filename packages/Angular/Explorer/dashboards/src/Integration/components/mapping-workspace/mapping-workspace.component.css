@@ -99,7 +99,7 @@
 /* DDL preview in add panel */
 .ddl-preview-section { margin-top: 8px; }
 .ddl-preview-code {
-  background: var(--mj-color-neutral-900); color: var(--mj-color-neutral-300); padding: 10px;
+  background: var(--mj-text-primary); color: var(--mj-color-neutral-300); padding: 10px;
   border-radius: 4px; font-size: 11px; line-height: 1.5;
   max-height: 200px; overflow: auto; white-space: pre-wrap;
   word-break: break-word; margin-top: 8px;
@@ -184,7 +184,7 @@
 /* DDL in pending view */
 .ddl-preview-inline { margin-top: 16px; text-align: left; }
 .ddl-code-block {
-  background: var(--mj-color-neutral-900); color: var(--mj-color-neutral-300); padding: 12px;
+  background: var(--mj-text-primary); color: var(--mj-color-neutral-300); padding: 12px;
   border-radius: 6px; font-size: 12px; line-height: 1.5;
   max-height: 250px; overflow: auto; white-space: pre-wrap;
 }

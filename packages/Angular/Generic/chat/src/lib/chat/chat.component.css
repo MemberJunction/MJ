@@ -29,13 +29,13 @@
 /* Optional: Show scrollbar on hover */
 .chat-messages:hover::-webkit-scrollbar {
     width: 12px; /* Adjust the width of the scrollbar here */
-    background-color: #f0f0f0; /* Adjust the background color of the scrollbar here */
+    background-color: var(--mj-bg-surface-sunken); /* Adjust the background color of the scrollbar here */
 
 }
 
 /* Handle on hover */
 .chat-messages:hover::-webkit-scrollbar-thumb {
-    background-color: #888; /* Adjust the color of the scrollbar handle here */
+    background-color: var(--mj-text-muted); /* Adjust the color of the scrollbar handle here */
     opacity: 0.5; /* Adjust the opacity of the scrollbar handle here */
 }
 
@@ -46,19 +46,19 @@
 
 /* Optional: handle's hover effect */
 .chat-messages:hover::-webkit-scrollbar-thumb:hover {
-    background: #555; /* Adjust hover color here */
+    background: var(--mj-text-secondary); /* Adjust hover color here */
 }
 /* Works on Firefox */
 .chat-messages {
     scrollbar-width: thin; /* "auto" or "thin" */
-    scrollbar-color: #888 #f0f0f0; /* thumb and track color */
+    scrollbar-color: var(--mj-text-muted) var(--mj-bg-surface-sunken); /* thumb and track color */
 }
  
 
 
 
 .chat-input-area {
-    background: #fff;
+    background: var(--mj-bg-surface-card);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -82,7 +82,7 @@
 
 .text-area-wrapper {
     padding: 3px;
-    border: solid 1px rgba(0, 0, 0, 0.08) ;
+    border: solid 1px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
     border-radius: 15px;
 
     margin-top: 4px;
@@ -117,7 +117,7 @@
 }
 
 .text-area-wrapper > textarea:disabled {
-    background-color: white;
+    background-color: var(--mj-bg-surface-card);
 }
 
 
@@ -142,13 +142,13 @@
     padding-right: 7px;
     margin-bottom: 10px;
     border-radius: 5px;
-    background-color: rgb(255, 255, 240);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background-color: var(--mj-bg-surface-sunken);
+    box-shadow: var(--mj-shadow-sm);
     word-wrap: break-word;
 }
 
 ::ng-deep .chat-message-ai {
-    background-color: rgb(230, 246, 253);
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
 }
 
 .scroll-to-bottom {
@@ -165,8 +165,8 @@
     align-items: center;
     justify-content: center;
     font-size: 22px;
-    background-color: #f8f8f8;
-    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Optional: Adds a subtle shadow for better visibility */
+    background-color: var(--mj-bg-surface-sunken);
+    box-shadow: var(--mj-shadow-md); /* Optional: Adds a subtle shadow for better visibility */
     cursor: pointer;
 }
 
@@ -224,14 +224,14 @@
     width: 300px;  
     justify-content: space-between;
     margin: 5px; /* Adds some space around each question */
-    border: solid 1px rgba(41, 28, 28, 0.08);
+    border: solid 1px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
     border-radius: 15px;
     padding: 10px;
     cursor: pointer;
 }
 
 .welcome-question:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
 }
 
 

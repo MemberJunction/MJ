@@ -301,6 +301,84 @@ export interface SourceRelationshipInfo {
     TargetField: string;
 }
 
+// ─── CRUD & Search Types ─────────────────────────────────────────────
+// Standardized types for connector CRUD operations and search.
+// Connectors that support write or search operations use these types.
+
+/** Context for a CRUD operation against an external system */
+export interface CRUDContext {
+    /** The company integration entity providing connection details */
+    CompanyIntegration: unknown; // MJCompanyIntegrationEntity (avoids circular import)
+    /** External object name to operate on */
+    ObjectName: string;
+    /** User context for authorization */
+    ContextUser: unknown; // UserInfo (avoids circular import)
+}
+
+/** Context for creating a record in an external system */
+export interface CreateRecordContext extends CRUDContext {
+    /** Field values for the new record */
+    Attributes: Record<string, unknown>;
+    /** Optional relationship data (JSON:API relationships, FK references, etc.) */
+    Relationships?: Record<string, unknown>;
+}
+
+/** Context for updating a record in an external system */
+export interface UpdateRecordContext extends CRUDContext {
+    /** External ID of the record to update */
+    ExternalID: string;
+    /** Field values to update */
+    Attributes: Record<string, unknown>;
+    /** Optional relationship data to update */
+    Relationships?: Record<string, unknown>;
+}
+
+/** Context for deleting a record from an external system */
+export interface DeleteRecordContext extends CRUDContext {
+    /** External ID of the record to delete */
+    ExternalID: string;
+}
+
+/** Context for retrieving a single record from an external system */
+export interface GetRecordContext extends CRUDContext {
+    /** External ID of the record to retrieve */
+    ExternalID: string;
+}
+
+/** Result of a CRUD operation (create, update, or delete) */
+export interface CRUDResult {
+    /** Whether the operation succeeded */
+    Success: boolean;
+    /** External ID of the created/updated record */
+    ExternalID?: string;
+    /** Error message if the operation failed */
+    ErrorMessage?: string;
+    /** HTTP status code (for REST connectors) or operation-specific code */
+    StatusCode: number;
+}
+
+/** Context for searching records in an external system */
+export interface SearchContext extends CRUDContext {
+    /** Filter predicates (connector-specific format) */
+    Filters: Record<string, string>;
+    /** Sort expression (connector-specific format) */
+    Sort?: string;
+    /** Page number (1-based) */
+    Page?: number;
+    /** Maximum records per page */
+    PageSize?: number;
+}
+
+/** Result of a search operation */
+export interface SearchResult {
+    /** Matching records */
+    Records: ExternalRecord[];
+    /** Total number of matching records (may exceed returned count) */
+    TotalCount: number;
+    /** Whether more pages of results exist */
+    HasMore: boolean;
+}
+
 /** A default field mapping returned by a connector's discovery */
 export interface DefaultFieldMapping {
     /** Field name in the external system */

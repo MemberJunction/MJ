@@ -218,11 +218,11 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
 
     .context-section {
       margin-bottom: 24px;
-      background: var(--mj-card-background, #ffffff);
+      background: var(--mj-bg-surface);
       border-radius: 12px;
       padding: 20px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      border: 1px solid var(--mj-border-color, #e5e7eb);
+      box-shadow: var(--mj-shadow-sm);
+      border: 1px solid var(--mj-border-default);
     }
 
     .section-header {
@@ -231,12 +231,12 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       gap: 10px;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 1px solid var(--mj-border-color, #e5e7eb);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section-header i {
       font-size: 18px;
-      color: var(--mj-primary-color, #3b82f6);
+      color: var(--mj-brand-primary);
       width: 24px;
       text-align: center;
     }
@@ -245,7 +245,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: var(--mj-text-color, #1f2937);
+      color: var(--mj-text-primary);
     }
 
     .context-grid {
@@ -259,13 +259,13 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       align-items: flex-start;
       gap: 12px;
       padding: 12px;
-      background: var(--mj-background-subtle, #f9fafb);
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
       transition: background-color 0.2s;
     }
 
     .context-item:hover {
-      background: var(--mj-background-hover, #f3f4f6);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .context-icon {
@@ -275,8 +275,8 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       align-items: center;
       justify-content: center;
       border-radius: 8px;
-      background: var(--mj-primary-color-light, #dbeafe);
-      color: var(--mj-primary-color, #3b82f6);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       flex-shrink: 0;
     }
 
@@ -291,7 +291,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
 
     .context-label {
       font-size: 12px;
-      color: var(--mj-text-secondary, #6b7280);
+      color: var(--mj-text-muted);
       margin-bottom: 2px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -300,7 +300,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
     .context-value {
       font-size: 14px;
       font-weight: 500;
-      color: var(--mj-text-color, #1f2937);
+      color: var(--mj-text-primary);
       word-break: break-word;
     }
 
@@ -311,13 +311,13 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
 
     .context-detail {
       font-size: 12px;
-      color: var(--mj-text-secondary, #6b7280);
+      color: var(--mj-text-muted);
       margin-top: 2px;
     }
 
     /* CI/CD Section Styles */
     .ci-section .section-header i {
-      color: #f59e0b;
+      color: var(--mj-status-warning);
     }
 
     .ci-banner {
@@ -327,38 +327,38 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       padding: 12px 16px;
       border-radius: 8px;
       margin-bottom: 16px;
-      background: linear-gradient(135deg, #1f2937, #374151);
+      background: var(--mj-text-primary);
     }
 
     .ci-banner.github {
-      background: linear-gradient(135deg, #24292e, #40444d);
+      background: var(--mj-text-primary);
     }
 
     .ci-banner.azure {
-      background: linear-gradient(135deg, #0078d4, #106ebe);
+      background: var(--mj-brand-primary);
     }
 
     .ci-banner.jenkins {
-      background: linear-gradient(135deg, #d33833, #e6635c);
+      background: var(--mj-status-error);
     }
 
     .ci-banner.circleci {
-      background: linear-gradient(135deg, #343434, #4a4a4a);
+      background: var(--mj-text-secondary);
     }
 
     .ci-banner.gitlab {
-      background: linear-gradient(135deg, #fc6d26, #e24329);
+      background: var(--mj-status-warning);
     }
 
     .ci-banner.travis {
-      background: linear-gradient(135deg, #3eaaaf, #67c2b1);
+      background: var(--mj-status-success);
     }
 
     .ci-provider {
       display: flex;
       align-items: center;
       gap: 10px;
-      color: #ffffff;
+      color: var(--mj-text-inverse);
     }
 
     .ci-provider i {
@@ -374,7 +374,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
     .empty-state {
       text-align: center;
       padding: 48px 24px;
-      color: var(--mj-text-secondary, #6b7280);
+      color: var(--mj-text-muted);
     }
 
     .empty-icon {
@@ -385,19 +385,19 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
       align-items: center;
       justify-content: center;
       border-radius: 50%;
-      background: var(--mj-background-subtle, #f9fafb);
+      background: var(--mj-bg-surface-card);
     }
 
     .empty-icon i {
       font-size: 28px;
-      color: var(--mj-text-tertiary, #9ca3af);
+      color: var(--mj-text-disabled);
     }
 
     .empty-state h3 {
       margin: 0 0 8px;
       font-size: 18px;
       font-weight: 600;
-      color: var(--mj-text-color, #1f2937);
+      color: var(--mj-text-primary);
     }
 
     .empty-state p {
@@ -407,7 +407,7 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
 
     /* Node.js icon color */
     .fa-node-js {
-      color: #68a063 !important;
+      color: var(--mj-status-success) !important;
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush

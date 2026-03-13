@@ -21,9 +21,26 @@ interface HubSpotCredentials {
     ApiVersion: string;
 }
 
-/** Extended auth context carrying HubSpot credentials */
+/** Connection configuration parsed from CompanyIntegration.Configuration JSON */
+export interface HubSpotConnectionConfig {
+    /** HubSpot access token (private app key or OAuth token) */
+    AccessToken: string;
+    /** API version string. Default: 'v3' */
+    ApiVersion: string;
+
+    // ── Optional performance overrides (all have defaults) ──────────
+    /** Maximum retries for rate-limited or failed requests. Default: 5 */
+    MaxRetries?: number;
+    /** HTTP request timeout in milliseconds. Default: 30000 */
+    RequestTimeoutMs?: number;
+    /** Minimum milliseconds between API requests (HubSpot: 100 req/10s for private apps). Default: 100 */
+    MinRequestIntervalMs?: number;
+}
+
+/** Extended auth context carrying HubSpot credentials and config */
 interface HubSpotAuthContext extends RESTAuthContext {
     Credentials: HubSpotCredentials;
+    Config: HubSpotConnectionConfig;
 }
 
 /** HubSpot property definition (from /crm/v3/properties/{objectType}) */
@@ -161,6 +178,14 @@ const HUBSPOT_PROPERTIES: Record<string, string[]> = {
  * Uses Bearer token authentication (private app key or OAuth access token).
  * Supports cursor-based pagination and automatic response flattening.
  *
+ * Configuration JSON (on CompanyIntegration) supports optional rate limit overrides:
+ * {
+ *   "accessToken": "...",
+ *   "MaxRetries": 5,              // optional, default: 5
+ *   "RequestTimeoutMs": 30000,    // optional, default: 30000
+ *   "MinRequestIntervalMs": 100   // optional, default: 100
+ * }
+ *
  * DATA SAFETY: This connector is READ-ONLY. It never writes data back to HubSpot.
  */
 @RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
@@ -169,6 +194,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
 
+    /** Resolved config (populated after first Authenticate call) */
+    private _config: HubSpotConnectionConfig | null = null;
+
+    // ── Per-instance config accessors (fall back to module-level defaults) ──
+    private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
+    private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
+    private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
+
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
     protected async Authenticate(
@@ -176,9 +209,12 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<RESTAuthContext> {
         const credentials = await this.LoadCredentials(companyIntegration, contextUser);
+        const config = this.BuildConnectionConfig(credentials, companyIntegration);
+        this._config = config;
         const auth: HubSpotAuthContext = {
             Token: credentials.AccessToken,
             Credentials: credentials,
+            Config: config,
         };
         return auth;
     }
@@ -198,12 +234,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         _body?: unknown
     ): Promise<RESTResponse> {
         // Throttle: ensure minimum interval between requests
+        const minInterval = this.effectiveMinRequestIntervalMs;
         const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < MIN_REQUEST_INTERVAL_MS) {
-            await this.Sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
+        if (elapsed < minInterval) {
+            await this.Sleep(minInterval - elapsed);
         }
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const maxRetries = this.effectiveMaxRetries;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             const response = await this.FetchWithTimeout(url, method, headers);
             this.lastRequestTime = Date.now();
 
@@ -211,7 +249,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
                 console.warn(
                     `[HubSpot] Rate limited (429), retrying in ${delayMs}ms ` +
-                    `(attempt ${attempt + 1}/${MAX_RETRIES})`
+                    `(attempt ${attempt + 1}/${maxRetries})`
                 );
                 await this.Sleep(delayMs);
                 continue;
@@ -221,7 +259,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             return this.BuildRESTResponse(response, body);
         }
 
-        throw new Error(`HubSpot API request failed after ${MAX_RETRIES} retries: ${url}`);
+        throw new Error(`HubSpot API request failed after ${maxRetries} retries: ${url}`);
     }
 
     protected NormalizeResponse(
@@ -420,6 +458,51 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
     }
 
+    // ─── Configuration parsing ────────────────────────────────────
+
+    /**
+     * Builds a HubSpotConnectionConfig from credentials and optional overrides
+     * from the CompanyIntegration Configuration JSON.
+     */
+    private BuildConnectionConfig(
+        credentials: HubSpotCredentials,
+        companyIntegration: MJCompanyIntegrationEntity
+    ): HubSpotConnectionConfig {
+        const config: HubSpotConnectionConfig = {
+            AccessToken: credentials.AccessToken,
+            ApiVersion: credentials.ApiVersion,
+        };
+
+        const configJson = companyIntegration.Get('Configuration') as string | null;
+        if (configJson) {
+            this.ApplyConfigOverrides(config, configJson);
+        }
+
+        return config;
+    }
+
+    /**
+     * Parses optional performance overrides from Configuration JSON and applies
+     * them to the provided config object. Invalid/missing values are silently ignored.
+     */
+    private ApplyConfigOverrides(config: HubSpotConnectionConfig, json: string): void {
+        try {
+            const parsed = JSON.parse(json) as Record<string, unknown>;
+            const parseOptionalInt = (key: string): number | undefined => {
+                const v = parsed[key];
+                if (v == null) return undefined;
+                const n = Number(v);
+                return isNaN(n) ? undefined : Math.floor(n);
+            };
+
+            config.MaxRetries = parseOptionalInt('MaxRetries');
+            config.RequestTimeoutMs = parseOptionalInt('RequestTimeoutMs');
+            config.MinRequestIntervalMs = parseOptionalInt('MinRequestIntervalMs');
+        } catch {
+            // Configuration JSON may not be valid JSON or may only contain credentials — ignore
+        }
+    }
+
     // ─── Credential management ────────────────────────────────────
 
     /**
@@ -540,12 +623,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         headers: Record<string, string>
     ): Promise<Response> {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutMs = this.effectiveRequestTimeoutMs;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(url, { method, headers, signal: controller.signal });
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
-                throw new Error(`HubSpot API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${url}`);
+                throw new Error(`HubSpot API request timed out after ${timeoutMs / 1000}s: ${url}`);
             }
             throw err;
         } finally {

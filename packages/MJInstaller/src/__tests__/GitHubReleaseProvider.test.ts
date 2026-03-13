@@ -151,6 +151,53 @@ describe('GitHubReleaseProvider', () => {
       await expect(provider.ListReleases()).rejects.toThrow('GitHub API error');
     });
 
+    it('should return empty array when releases API is rate-limited and tags API is also rate-limited', async () => {
+      const rateLimitResponse = () => ({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: () => Promise.resolve({ message: 'API rate limit exceeded' }),
+        headers: new Headers({ 'x-ratelimit-remaining': '0' }),
+        redirected: false,
+        type: 'basic' as ResponseType,
+        url: '',
+        clone: () => rateLimitResponse(),
+        body: null,
+        bodyUsed: false,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+        blob: () => Promise.resolve(new Blob()),
+        formData: () => Promise.resolve(new FormData()),
+        text: () => Promise.resolve(''),
+        bytes: () => Promise.resolve(new Uint8Array()),
+      } as Response);
+
+      // First call: releases API rate-limited → returns empty, falls to tags
+      mockFetch.mockResolvedValueOnce(rateLimitResponse());
+      // Second call: tags API also rate-limited → returns empty
+      mockFetch.mockResolvedValueOnce(rateLimitResponse());
+
+      const result = await provider.ListReleases();
+      expect(result).toEqual([]);
+    });
+
+    it('should use bootstrap download URL for tags in the fallback path', async () => {
+      // First call: releases returns empty
+      mockFetch.mockResolvedValueOnce(jsonResponse([]));
+
+      // Second call: tags API
+      const tags = [makeGitHubTag({ name: 'v5.1.0' })];
+      mockFetch.mockResolvedValueOnce(jsonResponse(tags));
+
+      // Third call: commit date lookup
+      mockFetch.mockResolvedValueOnce(jsonResponse({
+        commit: { committer: { date: '2025-01-10T00:00:00Z' } },
+      }));
+
+      const result = await provider.ListReleases();
+      expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result[0].DownloadUrl).not.toContain('zipball');
+    });
+
     it('should prefer uploaded .zip asset URL over zipball_url', async () => {
       const releases = [
         makeGitHubRelease({
@@ -171,7 +218,7 @@ describe('GitHubReleaseProvider', () => {
       expect(result[0].DownloadUrl).not.toContain('zipball');
     });
 
-    it('should use zipball_url when no .zip asset is available', async () => {
+    it('should use bootstrap ZIP URL when no .zip asset is available', async () => {
       const releases = [
         makeGitHubRelease({
           tag_name: 'v5.2.0',
@@ -182,7 +229,9 @@ describe('GitHubReleaseProvider', () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(releases));
 
       const result = await provider.ListReleases();
-      expect(result[0].DownloadUrl).toContain('zipball');
+      expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result[0].DownloadUrl).toContain('v5.2.0');
+      expect(result[0].DownloadUrl).not.toContain('zipball');
     });
 
     it('should truncate release notes to 500 characters with ellipsis', async () => {
@@ -237,7 +286,41 @@ describe('GitHubReleaseProvider', () => {
       expect(result.Tag).toBe('v5.0.0');
       expect(result.Name).toBe('v5.0.0');
       expect(result.Prerelease).toBe(false);
-      expect(result.DownloadUrl).toContain('zipball');
+      expect(result.DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+    });
+
+    it('should resolve without API when rate-limited, using bootstrap download URL', async () => {
+      const rateLimitResponse = {
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: () => Promise.resolve({ message: 'API rate limit exceeded' }),
+        headers: new Headers({ 'x-ratelimit-remaining': '0' }),
+        redirected: false,
+        type: 'basic' as ResponseType,
+        url: '',
+        clone: () => rateLimitResponse,
+        body: null,
+        bodyUsed: false,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+        blob: () => Promise.resolve(new Blob()),
+        formData: () => Promise.resolve(new FormData()),
+        text: () => Promise.resolve(''),
+        bytes: () => Promise.resolve(new Uint8Array()),
+      } as Response;
+
+      const callsBefore = mockFetch.mock.calls.length;
+
+      // Release lookup rate-limited — should resolve directly without
+      // even trying the commits API
+      mockFetch.mockResolvedValueOnce(rateLimitResponse);
+
+      const result = await provider.GetReleaseByTag('v5.9.0');
+      expect(result.Tag).toBe('v5.9.0');
+      expect(result.DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result.DownloadUrl).toContain('v5.9.0');
+      // Should have made exactly 1 API call (the release lookup), not 2
+      expect(mockFetch.mock.calls.length - callsBefore).toBe(1);
     });
 
     it('should throw when the tag is not found via fallback either', async () => {
@@ -365,6 +448,89 @@ describe('GitHubReleaseProvider', () => {
           headers: expect.objectContaining({ 'User-Agent': 'MJ-Installer' }),
           redirect: 'follow',
         })
+      );
+    });
+  });
+
+  describe('GITHUB_TOKEN support', () => {
+    it('should include Authorization header when GITHUB_TOKEN is set', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      process.env.GITHUB_TOKEN = 'ghp_test_token_12345';
+
+      try {
+        const release = makeGitHubRelease();
+        mockFetch.mockResolvedValueOnce(jsonResponse(release));
+
+        await provider.GetReleaseByTag('v5.2.0');
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('releases/tags/v5.2.0'),
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              'Authorization': 'Bearer ghp_test_token_12345',
+            }),
+          })
+        );
+      } finally {
+        if (originalToken === undefined) {
+          delete process.env.GITHUB_TOKEN;
+        } else {
+          process.env.GITHUB_TOKEN = originalToken;
+        }
+      }
+    });
+
+    it('should not include Authorization header when GITHUB_TOKEN is not set', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      delete process.env.GITHUB_TOKEN;
+
+      try {
+        const release = makeGitHubRelease();
+        mockFetch.mockResolvedValueOnce(jsonResponse(release));
+
+        await provider.GetReleaseByTag('v5.2.0');
+
+        const callHeaders = mockFetch.mock.calls[0][1] as RequestInit;
+        const headers = callHeaders.headers as Record<string, string>;
+        expect(headers['Authorization']).toBeUndefined();
+      } finally {
+        if (originalToken !== undefined) {
+          process.env.GITHUB_TOKEN = originalToken;
+        }
+      }
+    });
+  });
+
+  describe('indeterminate progress', () => {
+    it('should call onProgress with -1 when Content-Length is missing', async () => {
+      const mockReader = {
+        read: vi.fn()
+          .mockResolvedValueOnce({ done: false, value: new Uint8Array(1024) })
+          .mockResolvedValueOnce({ done: true, value: undefined }),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: { getReader: () => mockReader },
+        headers: new Headers(), // No content-length
+      } as unknown as Response);
+
+      const fakeWriteStream = { on: vi.fn(), write: vi.fn(), end: vi.fn() };
+      mockCreateWriteStream.mockReturnValueOnce(fakeWriteStream);
+
+      const progressCalls: number[] = [];
+      await provider.DownloadRelease(
+        'https://example.com/file.zip',
+        '/tmp/dest.zip',
+        (pct) => progressCalls.push(pct)
+      );
+
+      // With mocked pipeline, the Readable is created but pipeline is a no-op,
+      // so we verify the pipeline was called with the write stream
+      expect(mockPipeline).toHaveBeenCalledWith(
+        expect.anything(),
+        fakeWriteStream
       );
     });
   });

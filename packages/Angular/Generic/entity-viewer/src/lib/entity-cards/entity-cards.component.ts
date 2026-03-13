@@ -529,8 +529,8 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   }
 
   getRecordColor(record: Record<string, unknown>): string {
-    if (!this.entity) return '#1976d2';
-    const colors = ['#1976d2', '#388e3c', '#f57c00', '#7b1fa2', '#c2185b', '#0097a7', '#5d4037', '#455a64'];
+    if (!this.entity) return 'var(--mj-brand-primary)';
+    const colors = ['var(--mj-brand-primary)', 'var(--mj-status-success)', 'var(--mj-status-warning)', 'var(--mj-brand-primary)', 'var(--mj-status-error)', 'var(--mj-brand-primary)', 'var(--mj-text-muted)', 'var(--mj-text-secondary)'];
     const pk = buildPkString(record, this.entity);
     let hash = 0;
     for (let i = 0; i < pk.length; i++) {

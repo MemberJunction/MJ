@@ -64,14 +64,14 @@ import { UUIDsEqual } from '@memberjunction/global';
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .task-detail-view {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .swoosh-in {
@@ -94,8 +94,8 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .breadcrumb-back {
@@ -104,9 +104,9 @@ import { UUIDsEqual } from '@memberjunction/global';
       gap: 8px;
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -114,8 +114,8 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .breadcrumb-back:hover {
-      background: #F3F4F6;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .breadcrumb-back i {
@@ -123,14 +123,14 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .breadcrumb-divider {
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 14px;
     }
 
     .breadcrumb-current {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
   `]
 })

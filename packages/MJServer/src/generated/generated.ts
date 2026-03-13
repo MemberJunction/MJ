@@ -43482,6 +43482,9 @@ export class MJIntegration_ {
     @MaxLength(36)
     CredentialTypeID?: string;
         
+    @Field({nullable: true, description: `Icon for the integration. Supports Font Awesome CSS classes, image URLs, or base64 data URIs.`}) 
+    Icon?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     CredentialType?: string;
@@ -43531,6 +43534,9 @@ export class CreateMJIntegrationInput {
 
     @Field({ nullable: true })
     CredentialTypeID: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
 }
     
 
@@ -43565,6 +43571,9 @@ export class UpdateMJIntegrationInput {
 
     @Field({ nullable: true })
     CredentialTypeID?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
