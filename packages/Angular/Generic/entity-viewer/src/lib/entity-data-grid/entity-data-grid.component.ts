@@ -15,7 +15,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { PageChangeEvent } from '@memberjunction/ng-shared-generic';
+import { PageChangeEvent } from '@memberjunction/ng-data-pager';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
@@ -278,9 +278,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   /**
    * Current page number for the shared pager (1-based).
-   * Updated automatically from server responses when paging is active.
+   * Set by parent when using external data with server-side paging.
    */
-  public PagerPageNumber: number = 1;
+  @Input() PagerPageNumber: number = 1;
+
+  /**
+   * Total row count from server for the shared pager.
+   * When using external data ([Data] input), the parent must set this
+   * so the pager knows the total number of rows across all pages.
+   */
+  @Input()
+  set TotalRowCount(value: number) {
+    this.totalRowCount = value;
+  }
 
   /**
    * Emits when the user navigates to a different page via the shared DataPagerComponent.

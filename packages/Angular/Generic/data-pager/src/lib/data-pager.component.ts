@@ -16,7 +16,7 @@ export interface PageChangeEvent {
 /**
  * DataPagerComponent — reusable page-based navigation for server-side paged data.
  *
- * Displays "Showing X–Y of Z" summary with first/prev/next/last navigation.
+ * Displays "Showing X-Y of Z" summary with first/prev/next/last navigation.
  * Designed for use with RunQuery's StartRow/MaxRows server-side paging.
  *
  * @example

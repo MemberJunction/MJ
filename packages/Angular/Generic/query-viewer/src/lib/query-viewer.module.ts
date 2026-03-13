@@ -6,7 +6,8 @@ import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
 
 // MJ Components
-import { SharedGenericModule, DataPagerComponent } from '@memberjunction/ng-shared-generic';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { DataPagerComponent } from '@memberjunction/ng-data-pager';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';

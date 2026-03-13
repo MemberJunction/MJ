@@ -76,14 +76,16 @@
     </ag-grid-angular>
   </div>
 
-  <!-- Data Pager (server-side paging) -->
-  <mj-data-pager
-    [TotalRowCount]="TotalRowCount"
-    [PageNumber]="PageNumber"
-    [PageSize]="PageSize"
-    [IsLoading]="IsLoading"
-    (PageChange)="PageChange.emit($event)">
-  </mj-data-pager>
+  <!-- Data Pager (only shown when server-side paging is active) -->
+  @if (TotalRowCount > 0) {
+    <mj-data-pager
+      [TotalRowCount]="TotalRowCount"
+      [PageNumber]="PageNumber"
+      [PageSize]="PageSize"
+      [IsLoading]="IsLoading"
+      (PageChange)="PageChange.emit($event)">
+    </mj-data-pager>
+  }
 
   <!-- Empty state -->
   @if (!IsLoading && RowCount === 0) {

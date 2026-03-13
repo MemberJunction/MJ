@@ -11,9 +11,9 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, Metadata, QueryInfo } from '@memberjunction/core';
+import { RunQuery, RunQueryParams, RunQueryResult, Metadata, QueryInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { RunQueryResult } from '@memberjunction/core';
+import { PageChangeEvent } from '@memberjunction/ng-data-pager';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
@@ -107,6 +107,12 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
      */
     @Input() PersistParameters: boolean = true;
 
+    /**
+     * Number of rows per page for server-side paging.
+     * Set to 0 to disable paging and load all rows at once.
+     */
+    @Input() PageSize: number = 100;
+
     // ========================================
     // Outputs
     // ========================================
@@ -173,6 +179,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public SavedGridState: QueryGridState | null = null;
     public SavedParams: QueryParameterValues = {};
 
+    /** Paging state */
+    public QueryTotalRowCount: number = 0;
+    public CurrentPageNumber: number = 1;
+
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
     private userInfoEngine = UserInfoEngine.Instance;
@@ -200,6 +210,8 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         this.SavedGridState = null;
         this.SavedParams = {};
         this.ShowParamsPanel = false;
+        this.QueryTotalRowCount = 0;
+        this.CurrentPageNumber = 1;
         this.cdr.markForCheck();
 
         if (!this._queryId) {
@@ -323,7 +335,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     // Query Execution
     // ========================================
 
-    public async RunQuery(params: QueryParameterValues): Promise<void> {
+    public async RunQuery(params: QueryParameterValues, pageNumber: number = 1): Promise<void> {
         if (!this.QueryInfo || !this._queryId) return;
 
         this.IsLoading = true;
@@ -344,6 +356,12 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
                 Parameters: params as Record<string, unknown>
             };
 
+            // Add server-side paging when PageSize > 0
+            if (this.PageSize > 0) {
+                runParams.MaxRows = this.PageSize;
+                runParams.StartRow = (pageNumber - 1) * this.PageSize;
+            }
+
             const result = await runQuery.RunQuery(runParams);
 
             this.ExecutionTimeMs = Math.round(performance.now() - startTime);
@@ -352,6 +370,11 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
                 this.QueryData = result.Results || [];
                 this.HasRun = true;
                 this.ShowParamsPanel = false;
+
+                // Update paging state from result
+                this.QueryTotalRowCount = result.TotalRowCount;
+                this.CurrentPageNumber = result.PageNumber ?? pageNumber;
+
                 this.QueryComplete.emit(result);
             } else {
                 this.LastError = result.ErrorMessage || 'Query execution failed';
@@ -407,9 +430,13 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         this.SelectionChange.emit(event);
     }
 
+    public OnPageChange(event: PageChangeEvent): void {
+        this.RunQuery(this.SavedParams, event.PageNumber);
+    }
+
     public OnRefreshRequest(): void {
         if (this.HasRun) {
-            this.RunQuery(this.SavedParams);
+            this.RunQuery(this.SavedParams, this.CurrentPageNumber);
         } else if (this.QueryInfo?.Parameters?.length) {
             this.ShowParamsPanel = true;
             this.cdr.markForCheck();

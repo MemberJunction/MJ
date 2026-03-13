@@ -5,6 +5,7 @@ import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams,
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
+import { PageChangeEvent } from '@memberjunction/ng-data-pager';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
   EntityViewMode,
@@ -1050,9 +1051,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     this.isLoading = true;
     this.pagination.isLoading = true;
-    this.loadingMessage = this.isInitialLoad
-      ? `Loading ${entity.Name}...`
-      : 'Loading more records...';
+    this.loadingMessage = `Loading ${entity.Name}...`;
     this.cdr.detectChanges();
 
     const startTime = Date.now();
@@ -1105,19 +1104,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
       if (result.Success) {
 
-        // Append or replace records based on whether this is initial load
-        if (this.isInitialLoad) {
-          this.internalRecords = result.Results;
-        } else {
-          this.internalRecords = [...this.internalRecords, ...result.Results];
-        }
+        // Always replace records (page-based navigation, not accumulation)
+        this.internalRecords = result.Results;
 
         this.totalRecordCount = result.TotalRowCount;
         this.filteredRecordCount = this.internalRecords.length;
 
         // Update pagination state
         this.pagination.totalRecords = result.TotalRowCount;
-        this.pagination.hasMore = this.internalRecords.length < result.TotalRowCount;
+        this.pagination.hasMore = false; // No longer used with page-based paging
 
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
@@ -1168,14 +1163,11 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load more records (next page)
+   * Handle page change from DataPagerComponent
    */
-  public loadMore(): void {
-    if (this.pagination.isLoading || !this.pagination.hasMore) {
-      return;
-    }
-
-    this.pagination.currentPage++;
+  public onPageChange(event: PageChangeEvent): void {
+    this.pagination.currentPage = event.PageNumber - 1; // Convert 1-based to 0-based
+    this.isInitialLoad = true; // Treat page navigation as a fresh load for loading state
     this.loadData();
   }
 
@@ -1278,10 +1270,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle load more from pagination component
+   * Handle page change from the data grid's pager
    */
-  onLoadMore(): void {
-    this.loadMore();
+  onGridPageChange(event: PageChangeEvent): void {
+    this.onPageChange(event);
   }
 
   // ========================================
